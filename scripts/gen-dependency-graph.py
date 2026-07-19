@@ -26,6 +26,7 @@ CMAKE_TARGET_TO_DIR = {
     "termin_render": "termin-render",
     "termin_render_passes": "termin-render-passes",
     "termin_display": "termin-display",
+    "termin_window": "termin-window",
     "termin_input": "termin-input",
     "termin_inspect": "termin-inspect",
     "termin_collision": "termin-collision",

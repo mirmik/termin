@@ -20,6 +20,11 @@ else()
     find_package(termin_graphics REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_window termin_window::termin_window)
+else()
+    find_package(termin_window REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_scene termin_scene::termin_scene)
 else()
     find_package(termin_scene REQUIRED)
@@ -74,43 +79,8 @@ set(TERMIN_DISPLAY_SOURCES
 if(TERMIN_DISPLAY_HAS_SDL)
     list(APPEND TERMIN_DISPLAY_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_render_surface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/platform/backend_window.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_input_bridge.cpp
     )
-endif()
-
-# Optional Vulkan path for BackendWindow. When enabled, BackendWindow
-# reads TERMIN_BACKEND=vulkan and creates a VulkanRenderDevice + swapchain;
-# without this flag it only supports the OpenGL backend (TERMIN_BACKEND=vulkan
-# then throws "Vulkan backend not compiled" at ctor time).
-#
-# Default: auto-enable if Vulkan is discoverable on the host. This way
-# pip-installed binaries Just Work under TERMIN_BACKEND=vulkan — no
-# explicit build-time flag required, and the OpenGL path is unchanged
-# when Vulkan is absent.
-find_package(Vulkan QUIET)
-if(Vulkan_FOUND)
-    option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" ON)
-else()
-    option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" OFF)
-endif()
-if(TGFX2_ENABLE_VULKAN AND NOT Vulkan_FOUND)
-    find_package(Vulkan REQUIRED)
-endif()
-
-if(DEFINED termin_graphics_TGFX2_ENABLE_D3D11)
-    set(_TERMIN_DISPLAY_D3D11_DEFAULT ${termin_graphics_TGFX2_ENABLE_D3D11})
-elseif(WIN32)
-    set(_TERMIN_DISPLAY_D3D11_DEFAULT ON)
-else()
-    set(_TERMIN_DISPLAY_D3D11_DEFAULT OFF)
-endif()
-option(TGFX2_ENABLE_D3D11 "Enable Direct3D 11 path in BackendWindow" ${_TERMIN_DISPLAY_D3D11_DEFAULT})
-if(TGFX2_ENABLE_D3D11 AND NOT WIN32)
-    message(FATAL_ERROR "TGFX2_ENABLE_D3D11 requires Windows")
-endif()
-if(TGFX2_ENABLE_D3D11 AND DEFINED termin_graphics_TGFX2_ENABLE_D3D11
-   AND NOT termin_graphics_TGFX2_ENABLE_D3D11)
-    message(FATAL_ERROR "TGFX2_ENABLE_D3D11 requires termin_graphics built with D3D11 support")
 endif()
 
 if(TERMIN_DISPLAY_BUILD_SHARED)
@@ -148,6 +118,7 @@ target_link_libraries(termin_display
         tcbase::termin_base
         tgfx::termin_graphics
         tgfx::termin_graphics2
+        termin_window::termin_window
         termin_scene::termin_scene
         termin_input::termin_input
         termin_render::termin_render
@@ -160,16 +131,6 @@ endif()
 set_property(TARGET termin_display PROPERTY
     TERMIN_DISPLAY_HAS_SDL ${TERMIN_DISPLAY_HAS_SDL}
 )
-
-if(TGFX2_ENABLE_VULKAN)
-    target_compile_definitions(termin_display PRIVATE TGFX2_HAS_VULKAN)
-    target_link_libraries(termin_display PRIVATE Vulkan::Vulkan)
-endif()
-
-if(TGFX2_ENABLE_D3D11)
-    target_compile_definitions(termin_display PRIVATE TGFX2_HAS_D3D11)
-    target_link_libraries(termin_display PRIVATE d3d11 dxgi)
-endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(termin_display PRIVATE m)
@@ -282,11 +243,11 @@ install(FILES
 install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/display_input_router.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/input_events.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/sdl_input_bridge.hpp
     DESTINATION include/termin/input
 )
 
 install(FILES
-    ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/backend_window.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/offscreen_render_surface.hpp
     DESTINATION include/termin/platform
 )
@@ -295,7 +256,6 @@ if(TERMIN_DISPLAY_HAS_SDL)
     install(FILES
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_window.hpp
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_render_surface.hpp
-        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_backend_window.hpp
         DESTINATION include/termin/platform
     )
     if(WIN32 AND SDL2_DLL)
@@ -304,10 +264,6 @@ if(TERMIN_DISPLAY_HAS_SDL)
 endif()
 
 option(TERMIN_DISPLAY_BUILD_TESTS "Build termin-display tests" OFF)
-option(TERMIN_DISPLAY_BUILD_WINDOW_TESTS "Build termin-display window smoke tests" OFF)
-option(TERMIN_DISPLAY_BUILD_D3D11_WINDOW_TEST
-       "Build termin-display D3D11 BackendWindow present smoke test"
-       ${TERMIN_DISPLAY_BUILD_WINDOW_TESTS})
 if(TERMIN_DISPLAY_BUILD_TESTS)
     add_executable(display_input_router_test tests/test_display_input_router.cpp)
     target_link_libraries(display_input_router_test PRIVATE termin_display)
@@ -317,73 +273,6 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
     target_link_libraries(viewport_input_manager_source_test PRIVATE termin_display)
     add_test(NAME viewport_input_manager_source_test COMMAND viewport_input_manager_source_test)
 
-    # Standalone smoke test: the same triangle code running on either backend.
-    if(TERMIN_DISPLAY_HAS_SDL AND TERMIN_DISPLAY_BUILD_WINDOW_TESTS)
-        add_executable(backend_window_triangle tests/test_backend_window_triangle.cpp)
-        target_link_libraries(backend_window_triangle
-            PRIVATE termin_display ${SDL2_LIBRARIES})
-        target_include_directories(backend_window_triangle
-            PRIVATE ${SDL2_INCLUDE_DIRS})
-        termin_copy_sdl2_runtime(backend_window_triangle)
-        add_test(NAME backend_window_triangle COMMAND backend_window_triangle)
-        set_tests_properties(backend_window_triangle PROPERTIES
-            TIMEOUT 10
-            ENVIRONMENT "TERMIN_BACKEND=opengl"
-            SKIP_RETURN_CODE 77
-            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
-        termin_add_test_labels(backend_window_triangle
-            "termin:capability:window")
-
-        add_test(NAME backend_window_triangle_immediate COMMAND backend_window_triangle)
-        set_tests_properties(backend_window_triangle_immediate PROPERTIES
-            TIMEOUT 10
-            ENVIRONMENT "TERMIN_BACKEND=opengl;TERMIN_TEST_PRESENTATION_MODE=immediate"
-            SKIP_RETURN_CODE 77
-            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
-        termin_add_test_labels(backend_window_triangle_immediate
-            "termin:capability:window"
-            "termin:capability:opengl")
-
-        if(TGFX2_ENABLE_VULKAN)
-            add_test(NAME backend_window_triangle_vulkan_vsync COMMAND backend_window_triangle)
-            set_tests_properties(backend_window_triangle_vulkan_vsync PROPERTIES
-                TIMEOUT 10
-                ENVIRONMENT "TERMIN_BACKEND=vulkan;TERMIN_TEST_PRESENTATION_MODE=vsync"
-                SKIP_RETURN_CODE 77
-                SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL|No Vulkan physical devices found")
-            termin_add_test_labels(backend_window_triangle_vulkan_vsync
-                "termin:capability:window"
-                "termin:capability:vulkan")
-
-            add_test(NAME backend_window_triangle_vulkan_immediate COMMAND backend_window_triangle)
-            set_tests_properties(backend_window_triangle_vulkan_immediate PROPERTIES
-                TIMEOUT 10
-                ENVIRONMENT "TERMIN_BACKEND=vulkan;TERMIN_TEST_PRESENTATION_MODE=immediate"
-                SKIP_RETURN_CODE 77
-                SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL|No Vulkan physical devices found")
-            termin_add_test_labels(backend_window_triangle_vulkan_immediate
-                "termin:capability:window"
-                "termin:capability:vulkan")
-        endif()
-    endif()
-
-    if(TERMIN_DISPLAY_HAS_SDL AND TGFX2_ENABLE_D3D11 AND TERMIN_DISPLAY_BUILD_D3D11_WINDOW_TEST)
-        add_executable(backend_window_d3d11_present
-            tests/test_backend_window_d3d11_present.cpp)
-        target_link_libraries(backend_window_d3d11_present
-            PRIVATE termin_display ${SDL2_LIBRARIES})
-        target_include_directories(backend_window_d3d11_present
-            PRIVATE ${SDL2_INCLUDE_DIRS})
-        termin_copy_sdl2_runtime(backend_window_d3d11_present)
-        add_test(NAME backend_window_d3d11_present COMMAND backend_window_d3d11_present)
-        set_tests_properties(backend_window_d3d11_present PROPERTIES
-            TIMEOUT 10
-            SKIP_RETURN_CODE 77
-            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|D3D11CreateDevice failed")
-        termin_add_test_labels(backend_window_d3d11_present
-            "termin:capability:window"
-            "termin:capability:d3d11")
-    endif()
 endif()
 
 install(EXPORT termin_displayTargets
