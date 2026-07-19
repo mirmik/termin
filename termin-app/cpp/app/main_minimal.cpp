@@ -6,8 +6,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "termin/bootstrap/bootstrap.hpp"
 #include "termin/engine/engine_core.hpp"
-#include "termin/scene/tc_scene_render_ext.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -25,6 +25,24 @@
 #endif
 
 namespace fs = std::filesystem;
+
+namespace {
+
+class RuntimeBootstrapGuard {
+public:
+    RuntimeBootstrapGuard() {
+        termin::bootstrap::bootstrap_runtime();
+    }
+
+    ~RuntimeBootstrapGuard() {
+        termin::bootstrap::shutdown_runtime();
+    }
+
+    RuntimeBootstrapGuard(const RuntimeBootstrapGuard&) = delete;
+    RuntimeBootstrapGuard& operator=(const RuntimeBootstrapGuard&) = delete;
+};
+
+} // namespace
 
 static fs::path get_executable_dir() {
 #ifdef _WIN32
@@ -226,7 +244,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Development mode, project root: " << termin_path << std::endl;
     }
 
-    termin::register_default_scene_extensions();
+    // The process runtime owns scene pools, type registries and scene-extension
+    // registration.  It must outlive EngineCore and must be initialized before
+    // the native host constructs any engine-owned subsystem.
+    RuntimeBootstrapGuard runtime_bootstrap;
 
     // The native host owns the engine. Python receives a borrowed reference
     // explicitly during frontend initialization.

@@ -30,7 +30,7 @@ from termin_assets.default_plugins import (
     register_default_import_asset_plugins,
     register_default_runtime_asset_plugins,
 )
-from termin_assets.preload import AssetRegistration, PreLoadResult
+from termin_assets.preload import AssetIdentityPolicy, AssetRegistration, PreLoadResult
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin_assets.resource_handle import (
@@ -43,7 +43,7 @@ from termin_assets.resource_manager import (
     AssetReloadSubscription,
     AssetRuntimeManager,
 )
-from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
+from termin_assets.spec_file import ensure_uuid_in_spec, get_uuid_from_spec, read_spec_file, write_spec_file
 
 __all__ = [
     "ASSET_IMPORT_PLUGIN_GROUP",
@@ -52,6 +52,7 @@ __all__ = [
     "AssetCatalog",
     "AssetContext",
     "AssetCreationPlugin",
+    "AssetIdentityPolicy",
     "AssetImportPlugin",
     "Asset",
     "AssetRegistry",
@@ -67,6 +68,7 @@ __all__ = [
     "build_import_plugin_extension_map",
     "DataAsset",
     "EmbeddedAssetSpec",
+    "ensure_uuid_in_spec",
     "Identifiable",
     "PreLoadResult",
     "AssetRegistration",
