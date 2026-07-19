@@ -35,7 +35,3 @@ class PluginPreLoader(FilePreLoader):
 
     def preload(self, path: str) -> PreLoadResult | None:
         return self._plugin.preload(path)
-
-    def on_file_removed(self, path: str) -> None:
-        self._resource_manager.external_assets.remove_path(path)
-        super().on_file_removed(path)

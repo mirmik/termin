@@ -21,7 +21,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Callable, Dict, Protocol, Set, runtime_checkable
 
 from tcbase import log
-from termin_assets.preload import PreLoadResult
+from termin_assets.preload import AssetRegistration, PreLoadResult
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 
 if TYPE_CHECKING:
@@ -33,7 +33,11 @@ DEBOUNCE_DELAY_S = 0.3
 
 @runtime_checkable
 class _ResourceFileUnregisterer(Protocol):
-    def unregister_file(self, result: PreLoadResult) -> None:
+    def unregister_file(
+        self,
+        result: PreLoadResult,
+        registration: AssetRegistration | None = None,
+    ) -> bool:
         ...
 
 
@@ -52,9 +56,11 @@ class FilePreLoader(ABC):
     ):
         self._resource_manager = resource_manager
         self._on_resource_reloaded = on_resource_reloaded
-        # file_path -> set of resource names created from this file
+        # file_path -> canonical resource identifiers created from this file.
+        # Plugin-backed assets store UUIDs; module processors store module ids.
         self._file_to_resources: Dict[str, Set[str]] = {}
         self._file_to_preload_result: Dict[str, PreLoadResult] = {}
+        self._file_to_registrations: Dict[str, Set[AssetRegistration]] = {}
         self._project_root: str | None = None
 
     def set_project_root(self, project_root: str | None) -> None:
@@ -134,18 +140,16 @@ class FilePreLoader(ABC):
             log.warn(f"[FilePreLoader] preload returned None for {path}")
             return
 
-        name = os.path.splitext(os.path.basename(path))[0]
+        registration = self._resource_manager.register_file(result)
+        if registration is None:
+            log.error(f"[FilePreLoader] Resource registration failed for added file: {path}")
+            return
 
-        # Register with ResourceManager (it will create/find Asset and call load)
-        self._resource_manager.register_file(result)
-
-        # Track file -> resource mapping
-        if path not in self._file_to_resources:
-            self._file_to_resources[path] = set()
-        self._file_to_resources[path].add(name)
+        self._file_to_resources[path] = {registration.uuid}
+        self._file_to_registrations[path] = {registration}
         self._file_to_preload_result[path] = result
 
-        self._notify_reloaded(name)
+        self._notify_reloaded(registration.name)
 
     def on_initial_file_added(self, path: str) -> None:
         """
@@ -167,15 +171,19 @@ class FilePreLoader(ABC):
             log.warn(f"[FilePreLoader] preload returned None for changed file: {path}")
             return
 
-        name = os.path.splitext(os.path.basename(path))[0]
+        registrations = self._file_to_registrations.get(path)
+        if not registrations or len(registrations) != 1:
+            log.error(f"[FilePreLoader] Missing canonical registration for changed file: {path}")
+            return
+        registration = next(iter(registrations))
 
         # ResourceManager handles reload logic
-        if not self._resource_manager.reload_file(result):
+        if not self._resource_manager.reload_file(result, registration):
             log.error(f"[FilePreLoader] Resource reload failed for changed file: {path}")
             return
         self._file_to_preload_result[path] = result
 
-        self._notify_reloaded(name)
+        self._notify_reloaded(registration.name)
 
     def on_file_removed(self, path: str) -> None:
         """
@@ -183,9 +191,15 @@ class FilePreLoader(ABC):
         Cleans up tracking.
         """
         result = self._file_to_preload_result.pop(path, None)
+        registrations = self._file_to_registrations.pop(path, set())
         if result is not None:
             if isinstance(self._resource_manager, _ResourceFileUnregisterer):
-                self._resource_manager.unregister_file(result)
+                for registration in registrations:
+                    if not self._resource_manager.unregister_file(result, registration):
+                        log.error(
+                            f"[FilePreLoader] Resource unregister failed for "
+                            f"{registration.type_id} UUID '{registration.uuid}' from {path}"
+                        )
             else:
                 log.error(
                     f"[FilePreLoader] Resource manager does not support unregister_file for {path}"

@@ -160,7 +160,7 @@ def _write_project(project_root: Path) -> Path:
     return project_file
 
 
-def _write_probe(tmp_dir: Path) -> Path:
+def _write_status_probe(tmp_dir: Path) -> Path:
     probe = tmp_dir / "probe_editor_hot_reload.py"
     probe.write_text(
         textwrap.dedent(
@@ -178,14 +178,6 @@ def _write_probe(tmp_dir: Path) -> Path:
             components = None
             component = None
             gc.collect()
-
-            poll_error = None
-            prepare_success = None
-            try:
-                project_file_watcher.poll()
-                prepare_success = runtime.prepare_changed_modules_for_play()
-            except Exception as exc:
-                poll_error = f"{type(exc).__name__}: {exc}"
 
             record = runtime.find("gameplay")
             component_count = 0
@@ -219,10 +211,42 @@ def _write_probe(tmp_dir: Path) -> Path:
                 "unknown_count": unknown_count,
                 "component_type_counts": counts,
                 "dirty_modules": runtime.dirty_modules(),
-                "poll_error": poll_error,
-                "prepare_success": prepare_success,
             }
             print(json.dumps(status, sort_keys=True))
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return probe
+
+
+def _write_reload_probe(tmp_dir: Path, source_path: Path) -> Path:
+    probe = tmp_dir / "probe_editor_explicit_reload.py"
+    probe.write_text(
+        textwrap.dedent(
+            f"""
+            import gc
+            import json
+
+            from termin.project_modules import get_project_modules_runtime
+
+            # The editor executor keeps globals between calls. Drop wrappers
+            # retained by the status probe before starting semantic unload.
+            components = None
+            component = None
+            gc.collect()
+
+            runtime = get_project_modules_runtime()
+            marked = runtime.mark_modules_dirty_for_path({str(source_path)!r})
+            success = runtime.prepare_changed_modules_for_play()
+            record = runtime.find("gameplay")
+            print(json.dumps({{
+                "marked": marked,
+                "success": bool(success),
+                "state": None if record is None else record.state.name,
+                "error": "" if record is None else record.error_message,
+            }}, sort_keys=True))
             """
         ).strip()
         + "\n",
@@ -296,8 +320,6 @@ def _read_probe_status(
         status = json.loads(lines[-1])
     except json.JSONDecodeError as exc:
         raise SmokeError(f"Probe returned non-JSON output:\n{result.stdout}") from exc
-    if status.get("poll_error"):
-        raise SmokeError(f"Editor watcher poll failed: {status['poll_error']}")
     return status
 
 
@@ -388,13 +410,18 @@ def main() -> int:
     if not helper.exists():
         raise SmokeError(f"Editor MCP helper not found: {helper}")
 
-    tmp_handle = tempfile.TemporaryDirectory(prefix="termin-hot-reload-smoke-")
-    tmp_dir = Path(tmp_handle.name)
+    tmp_handle = None if args.keep_temp else tempfile.TemporaryDirectory(prefix="termin-hot-reload-smoke-")
+    tmp_dir = (
+        Path(tempfile.mkdtemp(prefix="termin-hot-reload-smoke-"))
+        if tmp_handle is None
+        else Path(tmp_handle.name)
+    )
     project_root = tmp_dir / "project"
     session_file = tmp_dir / "editor-mcp.json"
     editor_log = tmp_dir / "editor.log"
     project_file = _write_project(project_root)
-    probe = _write_probe(tmp_dir)
+    status_probe = _write_status_probe(tmp_dir)
+    reload_probe = _write_reload_probe(tmp_dir, project_root / "gameplay" / "components.py")
 
     env = os.environ.copy()
     env["HOME"] = str(tmp_dir / "home")
@@ -441,13 +468,19 @@ def main() -> int:
                 ),
                 helper=helper,
                 session_file=session_file,
-                probe=probe,
+                probe=status_probe,
                 env=env,
                 timeout=args.timeout,
             )
             print("[smoke] initial:", json.dumps(initial, sort_keys=True))
 
             _write_broken_component_source(project_root, mtime=1_800_000_020)
+            failed_reload = _read_probe_status(helper, session_file, reload_probe, env)
+            if failed_reload["marked"] != ["gameplay"] or failed_reload["success"]:
+                raise SmokeError(
+                    "Broken Python source did not trigger the expected failed explicit reload:\n"
+                    + json.dumps(failed_reload, indent=2, sort_keys=True)
+                )
             failed = _wait_for_status(
                 "failed reload to degrade the component",
                 lambda status: (
@@ -458,13 +491,19 @@ def main() -> int:
                 ),
                 helper=helper,
                 session_file=session_file,
-                probe=probe,
+                probe=status_probe,
                 env=env,
                 timeout=args.timeout,
             )
             print("[smoke] failed reload:", json.dumps(failed, sort_keys=True))
 
             _write_component_sources(project_root, step=10, mtime=1_800_000_030)
+            restored_reload = _read_probe_status(helper, session_file, reload_probe, env)
+            if restored_reload["marked"] != ["gameplay"] or not restored_reload["success"]:
+                raise SmokeError(
+                    "Fixed Python source did not complete explicit reload:\n"
+                    + json.dumps(restored_reload, indent=2, sort_keys=True)
+                )
             restored = _wait_for_status(
                 "successful reload to restore the component",
                 lambda status: (
@@ -476,7 +515,7 @@ def main() -> int:
                 ),
                 helper=helper,
                 session_file=session_file,
-                probe=probe,
+                probe=status_probe,
                 env=env,
                 timeout=args.timeout,
             )
@@ -498,7 +537,7 @@ def main() -> int:
             _terminate_process(process)
         if args.keep_temp:
             print("[smoke] kept temp:", tmp_dir)
-        else:
+        elif tmp_handle is not None:
             tmp_handle.cleanup()
 
 

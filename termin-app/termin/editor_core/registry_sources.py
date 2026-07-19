@@ -469,12 +469,19 @@ class ResourceAssetSource:
         self._type_id = type_id
 
     def load_rows(self) -> Iterable[RegistryRow]:
-        names = self._resource_manager.list_runtime_asset_names(self._type_id)
-        for name in sorted(names):
-            asset = self._resource_manager.get_runtime_asset(self._type_id, name)
-            if asset is None:
-                continue
+        assets = sorted(
+            self._resource_manager.iter_runtime_assets(self._type_id),
+            key=lambda asset: (asset.name.casefold(), asset.uuid),
+        )
+        name_counts: dict[str, int] = {}
+        for asset in assets:
+            name_counts[asset.name] = name_counts.get(asset.name, 0) + 1
+        for asset in assets:
+            name = asset.name
             source = asset.source_path or ""
+            label = name
+            if name_counts[name] > 1:
+                label = f"{name} — {source or str(asset.uuid)[:8]}"
             details = "\n".join(
                 (
                     f"{self._type_id}: {name}",
@@ -486,9 +493,9 @@ class ResourceAssetSource:
                 )
             )
             yield RegistryRow(
-                name,
+                str(asset.uuid),
                 (
-                    name,
+                    label,
                     "loaded" if asset.is_loaded else "not loaded",
                     str(asset.version),
                     str(asset.uuid)[:16],
@@ -497,7 +504,7 @@ class ResourceAssetSource:
             )
 
     def activate(self, row: RegistryRow) -> None:
-        asset = self._resource_manager.get_runtime_asset(self._type_id, row.stable_id)
+        asset = self._resource_manager.get_runtime_asset_by_uuid(self._type_id, row.stable_id)
         if asset is None:
             raise LookupError(f"{self._type_id} asset '{row.stable_id}' no longer exists")
         if not asset.is_loaded:

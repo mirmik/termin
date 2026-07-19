@@ -22,7 +22,10 @@ class SmokeError(RuntimeError):
 
 
 COMPONENT_TYPE = "HotReloadNativeProbeComponent"
-CORE_MODULE = "native_core"
+# The test artifact exports its canonical descriptor as ``native_probe``.
+# Keep the project descriptor aligned with that embedded identity: the native
+# loader rejects aliases before loading any executable code.
+CORE_MODULE = "native_probe"
 LEAF_MODULE = "native_leaf"
 
 
@@ -64,14 +67,24 @@ def _compile_leaf_artifact(project_root: Path) -> Path:
     source.write_text(
         "\n".join(
             [
-                "#if defined(_WIN32)",
-                "#define TERMIN_SMOKE_API __declspec(dllexport)",
-                "#else",
-                "#define TERMIN_SMOKE_API __attribute__((visibility(\"default\")))",
-                "#endif",
+                "#include <termin_modules/native_module_abi.h>",
                 "",
-                "extern \"C\" TERMIN_SMOKE_API void module_init() {}",
-                "extern \"C\" TERMIN_SMOKE_API void module_shutdown() {}",
+                "static int32_t leaf_init(const termin_native_module_host_v1*, termin_native_module_error*) {",
+                "    return 0;",
+                "}",
+                "",
+                "static int32_t leaf_shutdown(const termin_native_module_host_v1*, termin_native_module_error*) {",
+                "    return 0;",
+                "}",
+                "",
+                "TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(",
+                f"    \"{LEAF_MODULE}\",",
+                "    \"1.0.0\",",
+                "    \"cpp-cascade-smoke-leaf\",",
+                "    TERMIN_NATIVE_MODULE_CAP_NONE,",
+                "    leaf_init,",
+                "    leaf_shutdown",
+                ");",
                 "",
             ]
         ),
@@ -84,6 +97,8 @@ def _compile_leaf_artifact(project_root: Path) -> Path:
         "-std=c++17",
         "-shared",
         "-fPIC",
+        "-I",
+        str(_repo_root() / "sdk" / "include"),
         str(source),
         "-o",
         str(artifact),
@@ -250,7 +265,6 @@ def _status_script() -> str:
 
         status = {{
             "project_path": project_path,
-            "scene_name": scene_name,
             "has_scene": scene is not None,
             "records": records,
             "core_state": records.get({CORE_MODULE!r}, {{}}).get("state"),
@@ -529,8 +543,12 @@ def main() -> int:
 
     core_artifact_source = _locate_core_artifact(root)
 
-    tmp_handle = tempfile.TemporaryDirectory(prefix="termin-cpp-cascade-smoke-")
-    tmp_dir = Path(tmp_handle.name)
+    tmp_handle = None if args.keep_temp else tempfile.TemporaryDirectory(prefix="termin-cpp-cascade-smoke-")
+    tmp_dir = (
+        Path(tempfile.mkdtemp(prefix="termin-cpp-cascade-smoke-"))
+        if tmp_handle is None
+        else Path(tmp_handle.name)
+    )
     project_root = tmp_dir / "project"
     session_file = tmp_dir / "editor-mcp.json"
     editor_log = tmp_dir / "editor.log"
@@ -623,7 +641,7 @@ def main() -> int:
             _terminate_process(process)
         if args.keep_temp:
             print("[smoke] kept temp:", tmp_dir, flush=True)
-        else:
+        elif tmp_handle is not None:
             tmp_handle.cleanup()
 
 

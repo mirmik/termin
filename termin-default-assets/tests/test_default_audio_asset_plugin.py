@@ -90,7 +90,7 @@ def test_audio_clip_runtime_plugin_registers_lazy_asset() -> None:
     )
 
     create_runtime_plugin().register(
-        AssetContext(resource_manager=resource_manager, name="impact"),
+        AssetContext(resource_manager=resource_manager, name="impact", uuid="audio-uuid"),
         result,
     )
 

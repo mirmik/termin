@@ -5,6 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+@dataclass(frozen=True, slots=True)
+class AssetRegistration:
+    """Canonical identity owned by one registered source file."""
+
+    type_id: str
+    uuid: str
+    name: str
+
+
 @dataclass
 class PreLoadResult:
     """Result of pre-loading a file before asset registration."""
