@@ -39,21 +39,17 @@ class ShaderRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if result.uuid is None and rm.get_shader_asset(name) is not None:
-            return
-
         asset = None
-        if result.uuid:
-            candidate = rm.get_asset_by_uuid(result.uuid)
-            if isinstance(candidate, ShaderAsset):
-                asset = candidate
+        candidate = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
+        if isinstance(candidate, ShaderAsset):
+            asset = candidate
 
         if asset is None:
             asset = ShaderAsset(
                 program=None,
                 name=name,
                 source_path=result.path,
-                uuid=result.uuid,
+                uuid=context.uuid,
             )
 
         asset.parse_spec(result.spec_data)
@@ -62,7 +58,7 @@ class ShaderRuntimePlugin:
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
         name = context.name
-        asset = rm.get_asset_by_uuid(result.uuid) if result.uuid else rm.get_shader_asset(name)
+        asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
 
@@ -97,7 +93,7 @@ class ShaderRuntimePlugin:
             reload_pipelines_for_material_dependencies(rm, material_names)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
+        context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
 
 class ShaderAssetPlugin(ShaderImportPlugin, ShaderRuntimePlugin):

@@ -42,9 +42,26 @@ class AssetCatalog:
         if by_uuid is not None:
             by_uuid.pop(record.uuid, None)
 
+    def remove(self, type_id: str, uuid: str) -> AssetRecord | None:
+        """Remove one external asset by its canonical identity."""
+        by_uuid = self._records_by_type.get(type_id)
+        if by_uuid is None:
+            return None
+        record = by_uuid.pop(uuid, None)
+        if record is None:
+            return None
+        self._records_by_path.pop(record.path, None)
+        if not by_uuid:
+            self._records_by_type.pop(type_id, None)
+        return record
+
     def list_names(self, type_id: str) -> list[str]:
         records = self._records_by_type.get(type_id, {})
         return sorted(record.name for record in records.values())
+
+    def iter_records(self, type_id: str) -> tuple[AssetRecord, ...]:
+        """Enumerate external assets in stable UUID insertion order."""
+        return tuple(self._records_by_type.get(type_id, {}).values())
 
     def get_by_name(self, type_id: str, name: str) -> AssetRecord | None:
         records = self._records_by_type.get(type_id, {})

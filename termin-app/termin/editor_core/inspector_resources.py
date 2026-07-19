@@ -35,15 +35,13 @@ class InspectorResourceChoices:
         if not isinstance(value, dict):
             return -1
         uuid = value.get("uuid")
-        name = value.get("name")
         if uuid:
             for index, item in enumerate(self.items):
                 if item.uuid == uuid:
                     return index
-        if name:
-            for index, item in enumerate(self.items):
-                if item.name == name:
-                    return index
+            _logger.warning("Stale inspector resource UUID '%s' for kind '%s'", uuid, self.kind)
+            return -1
+        _logger.warning("Inspector resource selection for kind '%s' has no UUID", self.kind)
         return -1
 
 
@@ -67,7 +65,15 @@ class InspectorResourceCatalog:
         except Exception:
             _logger.exception("Failed to list inspector resources for kind '%s'", kind)
             raise
-        items.extend(InspectorResourceChoice(name, name, uuid) for name, uuid in resources)
+        name_counts: dict[str, int] = {}
+        for name, _uuid in resources:
+            name_counts[name] = name_counts.get(name, 0) + 1
+        for name, uuid in resources:
+            if not uuid:
+                _logger.error("Skipping inspector resource '%s' for kind '%s': missing UUID", name, kind)
+                continue
+            label = name if name_counts[name] == 1 else f"{name} — {uuid[:8]}"
+            items.append(InspectorResourceChoice(label, name, uuid))
         return InspectorResourceChoices(
             kind=kind,
             items=tuple(items),
@@ -89,6 +95,9 @@ class InspectorResourceCatalog:
         if created is None:
             return None
         name, uuid = created
+        if not uuid:
+            _logger.error("Created inspector resource '%s' for kind '%s' has no UUID", name, kind)
+            return None
         return InspectorResourceChoice(name, name, uuid)
 
 

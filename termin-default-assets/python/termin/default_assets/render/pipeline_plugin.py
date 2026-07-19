@@ -68,12 +68,11 @@ class PipelineRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        uuid = result.uuid
-        if uuid:
-            asset = rm.get_runtime_asset_by_uuid(self.type_id, uuid)
-            if isinstance(asset, PipelineAsset):
-                rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=uuid)
-                return
+        uuid = context.uuid
+        asset = rm.get_runtime_asset_by_uuid(self.type_id, uuid)
+        if isinstance(asset, PipelineAsset):
+            rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=uuid)
+            return
 
         asset = rm.get_or_create_runtime_asset(
             self.type_id,
@@ -84,11 +83,7 @@ class PipelineRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> bool:
         rm = context.resource_manager
-        asset = (
-            rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
-            if result.uuid
-            else rm.get_runtime_asset(self.type_id, context.name)
-        )
+        asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             log.error(f"[PipelineRuntimePlugin] Pipeline asset is not registered: {context.name}")
             return False
@@ -102,7 +97,7 @@ class PipelineRuntimePlugin:
         return asset.reload()
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
+        context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
 
 class PipelineAssetPlugin(PipelineImportPlugin, PipelineRuntimePlugin):
