@@ -62,14 +62,14 @@ termin::TcShader make_test_material_shader(const char* uuid)
             kFragmentSource,
             nullptr,
             "LineRendererContractMaterial",
-            nullptr,
+            "/virtual/line_renderer_contract.shader",
             "vs_main",
             "fs_main",
             nullptr
         },
         uuid,
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_OPTIONAL
+        TC_SHADER_ARTIFACT_REQUIRED
     };
     tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     return termin::TcShader(handle);
@@ -143,6 +143,50 @@ std::vector<termin::TcShader> plan_line_shader_usages(
     return usages;
 }
 
+const termin::RenderTask& plan_line_shader_task(
+    termin::TcShader candidate,
+    termin::LineRenderMode mode,
+    const termin::MaterialPipelinePassContract& shader_contract,
+    tc_render_item& item,
+    termin::RenderTaskList& tasks)
+{
+    termin::LineRenderer::register_type();
+    item = {};
+    item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
+    item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
+
+    termin::RenderItemTaskPlanningContract contract{};
+    contract.phase = TC_PHASE_OPAQUE;
+    contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
+    contract.provided_input_mask = termin::render_item_task_input_bit(
+        termin::RenderItemTaskInput::DrawContext);
+    contract.required_input_mask = termin::render_item_task_input_bit(
+        termin::RenderItemTaskInput::DrawContext);
+    contract.shader_contract = &shader_contract;
+    contract.debug_pass_name = "LineRendererLifetimeContractTest";
+
+    termin::RenderItemTaskPlanningRequest request{};
+    request.item = &item;
+    request.candidate_shader = candidate.handle;
+    request.contract = &contract;
+    const termin::RenderItemTaskPlanningResult result =
+        termin::plan_render_item_task(request, tasks);
+    REQUIRE(result.accepted());
+    return tasks.at(result.task_index);
+}
+
+const termin::TcShader* find_owned_variant(
+    const termin::RenderTask& task,
+    tc_shader_variant_op variant_op)
+{
+    for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+        if (task.owned_shader_usages[i].variant_op() == variant_op) {
+            return &task.owned_shader_usages[i];
+        }
+    }
+    return nullptr;
+}
+
 termin::TcMesh make_two_submesh_mesh()
 {
     const float vertices[] = {
@@ -212,6 +256,70 @@ TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
 
     CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
     CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+
+    tc_render_item owned_item{};
+    termin::RenderTaskList owned_tasks;
+    const termin::RenderTask& owned_task = plan_line_shader_task(
+        material_shader,
+        termin::LineRenderMode::WorldTube,
+        line_material_fragment_contract(),
+        owned_item,
+        owned_tasks);
+    const termin::TcShader* body_variant = find_owned_variant(
+        owned_task,
+        TC_SHADER_VARIANT_LINE_TUBE_BODY);
+    const termin::TcShader* cap_variant = find_owned_variant(
+        owned_task,
+        TC_SHADER_VARIANT_LINE_TUBE_CAP);
+    REQUIRE(body_variant != nullptr);
+    REQUIRE(cap_variant != nullptr);
+    CHECK(body_variant->is_valid());
+    CHECK(cap_variant->is_valid());
+    CHECK(tc_shader_handle_eq(owned_task.final_shader, body_variant->handle));
+
+    emitted.clear();
+    auxiliary_emitted.clear();
+    material_emitted.clear();
+    material_shader = termin::TcShader();
+    CHECK(body_variant->is_valid());
+    CHECK(cap_variant->is_valid());
+
+    tc_shader_shutdown();
+}
+
+TEST_CASE("LineRenderer task owns Slang variants and preserves fragment contract") {
+    tc_shader_init();
+
+    termin::TcShader material_shader = make_test_material_shader(
+        "line-contract-owned-slang-material");
+    REQUIRE(material_shader.is_valid());
+
+    const termin::MaterialPipelinePassContract shader_contract =
+        line_material_fragment_contract();
+    tc_render_item billboard_item{};
+    termin::RenderTaskList billboard_tasks;
+    const termin::RenderTask& billboard_task = plan_line_shader_task(
+        material_shader,
+        termin::LineRenderMode::WorldBillboard,
+        shader_contract,
+        billboard_item,
+        billboard_tasks);
+
+    const termin::TcShader* fragment_variant = find_owned_variant(
+        billboard_task,
+        TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
+    REQUIRE(fragment_variant != nullptr);
+    REQUIRE(fragment_variant->is_valid());
+    CHECK(tc_shader_handle_eq(billboard_task.final_shader, fragment_variant->handle));
+    CHECK(fragment_variant->language() == TC_SHADER_LANGUAGE_SLANG);
+    CHECK(fragment_variant->artifact_policy() == TC_SHADER_ARTIFACT_REQUIRED);
+    CHECK(std::strcmp(fragment_variant->source_path(),
+                      "/virtual/line_renderer_contract.shader") == 0);
+    REQUIRE(fragment_variant->get() != nullptr);
+    CHECK(std::strcmp(fragment_variant->get()->fragment_entry, "fs_main") == 0);
+
+    material_shader = termin::TcShader();
+    CHECK(fragment_variant->is_valid());
 
     tc_shader_shutdown();
 }
