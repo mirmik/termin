@@ -122,6 +122,50 @@ def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Pat
         termin.bootstrap.shutdown_player()
 
 
+def test_pymodule_rejected_descriptor_commit_leaves_no_partial_facets(tmp_path: Path) -> None:
+    import termin.bootstrap
+    from termin.inspect import InspectRegistry
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
+
+    termin.bootstrap.bootstrap_player()
+
+    class ModuleCommitCollisionComponent(PythonComponent):
+        pass
+
+    publish_python_component(ModuleCommitCollisionComponent, owner="existing-test-owner")
+
+    source_root = tmp_path / "Scripts"
+    package = source_root / "rejected_components"
+    package.mkdir(parents=True)
+    (tmp_path / "rejected.pymodule").write_text(
+        "name: rejected\nroot: Scripts\npackages: [rejected_components]\n",
+        encoding="utf-8",
+    )
+    (package / "__init__.py").write_text(
+        "from termin.scene import PythonComponent\n"
+        "class PartialCommitProbeComponent(PythonComponent):\n"
+        "    pass\n"
+        "class ModuleCommitCollisionComponent(PythonComponent):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    components = ComponentRegistry.instance()
+    inspect = InspectRegistry.instance()
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    try:
+        assert not runtime.load_project(tmp_path)
+        assert components.get_class("ModuleCommitCollisionComponent") is ModuleCommitCollisionComponent
+        assert not components.has("PartialCommitProbeComponent")
+        assert not inspect.has_type("PartialCommitProbeComponent")
+        assert "rejected_components" not in sys.modules
+    finally:
+        runtime.close()
+        components.unregister_python("ModuleCommitCollisionComponent")
+        termin.bootstrap.shutdown_player()
+
+
 def test_failed_python_load_does_not_orphan_imports_or_paths(tmp_path: Path) -> None:
     source_root = _write_python_module(
         tmp_path,

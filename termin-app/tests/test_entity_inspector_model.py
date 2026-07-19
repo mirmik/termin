@@ -7,7 +7,7 @@ from termin.editor_core.entity_inspector_model import (
 )
 from termin.editor_core.undo_stack import UndoStack
 from termin.inspect import InspectField
-from termin.scene import ComponentRegistry, PythonComponent, TcScene
+from termin.scene import ComponentRegistry, PythonComponent, TcScene, publish_python_component
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -113,6 +113,8 @@ def test_entity_inspector_clears_fields_for_non_component_or_missing_target(scen
 def test_entity_inspector_component_catalog_add_remove_and_undo(scene):
     class InspectorModelAddProbeComponent(PythonComponent):
         component_category = "Editor/Internal"
+
+    publish_python_component(InspectorModelAddProbeComponent, owner="termin-app-tests")
 
     type_name = "InspectorModelAddProbeComponent"
     entity = scene.create_entity("source")

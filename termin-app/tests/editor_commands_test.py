@@ -21,7 +21,7 @@ from termin.editor_core.inspector_fields_model import collect_inspect_fields
 from termin.editor_core.entity_inspector_model import EntityInspectorController
 from termin.geombase import GeneralPose3, Vec3
 from termin.inspect import InspectField
-from termin.scene import PythonComponent, TcScene
+from termin.scene import PythonComponent, TcScene, publish_python_component
 from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.render import scene_render_state
 from termin.prefab import (
@@ -54,6 +54,7 @@ class TestEditorUndoCommands(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         bootstrap_player()
+        publish_python_component(_editor_prefab_probe_class(), owner="termin-app-tests")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -254,6 +255,8 @@ class TestEditorUndoCommands(unittest.TestCase):
             def __init__(self) -> None:
                 super().__init__()
                 self.target = None
+
+        publish_python_component(DuplicateEntityRefComponent, owner="termin-app-tests")
 
         root = self.scene.create_entity("root")
         child = self.scene.create_entity("child")

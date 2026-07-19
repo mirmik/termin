@@ -2,7 +2,7 @@ import pytest
 
 
 def _owned_component_type(type_name, owner, category, display_name):
-    from termin.scene import PythonComponent
+    from termin.scene import PythonComponent, publish_python_component
     from termin_modules.module_context import (
         register_module_packages,
         unregister_module_packages,
@@ -11,7 +11,7 @@ def _owned_component_type(type_name, owner, category, display_name):
     package = f"tests.component_owner.{owner}"
     register_module_packages(owner, [package])
     try:
-        return type(
+        cls = type(
             type_name,
             (PythonComponent,),
             {
@@ -20,6 +20,8 @@ def _owned_component_type(type_name, owner, category, display_name):
                 "component_display_name": display_name,
             },
         )
+        publish_python_component(cls, owner=owner)
+        return cls
     finally:
         unregister_module_packages(owner)
 
@@ -34,11 +36,13 @@ def _component_runtime():
 
 
 def test_python_component_metadata_is_registered() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
 
     class MetadataProbeComponent(PythonComponent):
         component_category = "Gameplay"
         component_display_name = "Metadata Probe"
+
+    publish_python_component(MetadataProbeComponent)
 
     registry = ComponentRegistry.instance()
     try:
@@ -53,13 +57,15 @@ def test_python_component_metadata_is_registered() -> None:
 
 
 def test_python_component_category_inherits_from_base() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
 
     class MetadataProbeBaseComponent(PythonComponent):
         component_category = "Gameplay"
 
     class MetadataProbeDerivedComponent(MetadataProbeBaseComponent):
         pass
+
+    publish_python_component(MetadataProbeDerivedComponent)
 
     registry = ComponentRegistry.instance()
     try:
@@ -73,13 +79,18 @@ def test_python_component_category_inherits_from_base() -> None:
 
 
 def test_python_component_requirements_are_registered() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_components
 
     class RequiredMetadataProbeComponent(PythonComponent):
         pass
 
     class DependentMetadataProbeComponent(PythonComponent):
         required_components = ("RequiredMetadataProbeComponent",)
+
+    publish_python_components(
+        [RequiredMetadataProbeComponent, DependentMetadataProbeComponent],
+        owner="termin-scene-python",
+    )
 
     registry = ComponentRegistry.instance()
     try:
@@ -145,15 +156,15 @@ def test_cross_owner_python_component_collision_preserves_existing_registration(
         "First Display Name",
     )
     try:
-        second = _owned_component_type(
-            type_name,
-            "component-registration-second-owner",
-            "Second Category",
-            "Second Display Name",
-        )
+        with pytest.raises(RuntimeError, match="another component owns"):
+            _owned_component_type(
+                type_name,
+                "component-registration-second-owner",
+                "Second Category",
+                "Second Display Name",
+            )
 
         assert registry.get_class(type_name) is first
-        assert registry.get_class(type_name) is not second
         info = registry.get_info(type_name)
         assert info["category"] == "First Category"
         assert info["display_name"] == "First Display Name"

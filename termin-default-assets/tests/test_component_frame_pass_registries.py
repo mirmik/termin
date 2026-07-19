@@ -76,9 +76,9 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     import termin.bootstrap
     from termin.inspect import InspectField, InspectRegistry
     from termin.scene import ComponentRegistry, PythonComponent
-    from termin.scene.python_component import restore_python_components
     from termin_modules.module_context import (
         module_registration_context,
+        publish_module_owner,
         unregister_module_owner,
     )
 
@@ -106,6 +106,8 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
                     super().__init__()
                     self.value = 7
 
+            publish_module_owner(module_id)
+
         assert component_registry.has(component_name)
         assert component_name in component_registry.list_owned(module_id)
         assert inspect_registry.has_type(component_name)
@@ -115,7 +117,6 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
         assert not component_registry.has(component_name)
         assert not inspect_registry.has_type(component_name)
 
-        restore_python_components()
         assert not component_registry.has(component_name)
     finally:
         unregister_module_owner(module_id)

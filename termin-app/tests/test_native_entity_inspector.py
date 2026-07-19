@@ -21,7 +21,7 @@ from termin.gui_native import (
     Rect,
 )
 from termin.inspect import InspectField
-from termin.scene import ComponentRegistry, PythonComponent, TcScene
+from termin.scene import ComponentRegistry, PythonComponent, TcScene, publish_python_component
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -34,6 +34,8 @@ def player_runtime():
 def test_native_entity_inspector_selection_edit_undo_and_paint():
     class NativeInspectorAddProbeComponent(PythonComponent):
         component_category = "Editor/Internal"
+
+    publish_python_component(NativeInspectorAddProbeComponent, owner="termin-app-tests")
 
     probe_type = "NativeInspectorAddProbeComponent"
     scene = TcScene.create("native-entity-inspector-test")

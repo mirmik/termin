@@ -43,6 +43,20 @@ class HeadlessQuitComponent(PythonComponent):
             request_quit(7)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _publish_test_components():
+    import termin.bootstrap
+    from termin.scene import publish_python_components
+
+    termin.bootstrap.bootstrap_player()
+    publish_python_components(
+        [HeadlessCounterComponent, HeadlessQuitComponent],
+        owner="termin-player-tests",
+    )
+    yield
+    termin.bootstrap.shutdown_player()
+
+
 def _write_scene_with_component(project_path: Path, scene_name: str = "Main.scene") -> None:
     source_scene = create_scene("source", extensions=[])
     entity = source_scene.create_entity("Counter")

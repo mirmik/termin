@@ -1,11 +1,19 @@
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
+
+
+_OVERLAY = Path(__file__).resolve().parents[2] / "build/python-envs/test/overlay.json"
+
+
+def _python_command() -> list[str]:
+    return [sys.executable, "--termin-overlay", str(_OVERLAY)]
 
 
 def _run_python(code: str) -> None:
     subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(code)],
+        [*_python_command(), "-c", textwrap.dedent(code)],
         check=True,
     )
 
@@ -14,7 +22,7 @@ def _run_python_without_nanobind_leaks(
     code: str,
 ) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(code)],
+        [*_python_command(), "-c", textwrap.dedent(code)],
         check=False,
         capture_output=True,
         text=True,
@@ -51,6 +59,28 @@ def test_importing_bootstrap_has_no_component_registration_side_effects():
         assert after == before
         assert "MeshComponent" not in after
         assert "CameraComponent" not in after
+        """
+    )
+
+
+def test_declaring_python_component_has_no_registry_side_effects():
+    _run_python(
+        """
+        from termin.inspect import InspectRegistry
+        from termin.scene import ComponentRegistry, PythonComponent
+
+        components = ComponentRegistry.instance()
+        inspect = InspectRegistry.instance()
+        component_types_before = {info["name"] for info in components.list_info()}
+        inspect_types_before = set(inspect.types())
+
+        class ImportOnlyProbeComponent(PythonComponent):
+            pass
+
+        assert {info["name"] for info in components.list_info()} == component_types_before
+        assert set(inspect.types()) == inspect_types_before
+        assert not components.has("ImportOnlyProbeComponent")
+        assert not inspect.has_type("ImportOnlyProbeComponent")
         """
     )
 
@@ -311,7 +341,7 @@ def test_player_shutdown_cleans_python_and_render_globals():
             tc_pipeline_create,
             tc_pipeline_registry_count,
         )
-        from termin.scene import ComponentRegistry, PythonComponent
+        from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
 
         class BootstrapShutdownPass(PythonFramePass):
             def execute(self, ctx):
@@ -319,6 +349,9 @@ def test_player_shutdown_cleans_python_and_render_globals():
 
         class BootstrapShutdownComponent(PythonComponent):
             pass
+
+        assert not ComponentRegistry.instance().has("BootstrapShutdownComponent")
+        publish_python_component(BootstrapShutdownComponent)
 
         tc_pipeline_create("bootstrap-shutdown-test")
 
@@ -415,14 +448,19 @@ def test_builtin_bootstrap_registers_each_component_once():
     assert "Ignoring unowned field registration for existing field" not in output
 
 
-def test_player_rebootstrap_restores_loaded_python_component_types():
+def test_explicit_component_publication_is_repeatable_after_rebootstrap():
     _run_python_without_nanobind_leaks(
         """
         import gc
 
         from termin.bootstrap import bootstrap_player, shutdown_player
         from termin.inspect import InspectField, InspectRegistry
-        from termin.scene import ComponentRegistry, Entity, PythonComponent
+        from termin.scene import (
+            ComponentRegistry,
+            Entity,
+            PythonComponent,
+            publish_python_component,
+        )
 
         bootstrap_player()
 
@@ -437,10 +475,15 @@ def test_player_rebootstrap_restores_loaded_python_component_types():
                 super().__init__()
                 self.value = 17
 
+        assert not ComponentRegistry.instance().has("RebootstrapProbeComponent")
+        publish_python_component(RebootstrapProbeComponent)
+
         shutdown_player()
 
         for iteration in range(3):
             bootstrap_player()
+            assert not ComponentRegistry.instance().has("RebootstrapProbeComponent")
+            publish_python_component(RebootstrapProbeComponent)
             registry = ComponentRegistry.instance()
             assert registry.has("RebootstrapProbeComponent")
             info = registry.get_info("RebootstrapProbeComponent")
@@ -464,7 +507,7 @@ def test_player_rebootstrap_restores_loaded_python_component_types():
     )
 
 
-def test_player_bootstrap_does_not_restore_a_component_registered_during_bootstrap():
+def test_player_bootstrap_publishes_builtin_component_catalog_once():
     result = _run_python_without_nanobind_leaks(
         """
         from termin.bootstrap import bootstrap_player, shutdown_player
@@ -486,7 +529,7 @@ def test_player_bootstrap_does_not_restore_a_component_registered_during_bootstr
 
     output = result.stdout + result.stderr
     assert "registration for existing type 'DrawableComponent'" not in output
-    assert "rebootstrap registration rejected for DrawableComponent" not in output
+    assert "explicit descriptor publication failed" not in output
 
 
 def test_player_shutdown_releases_standalone_entity_components():
