@@ -86,6 +86,7 @@ void bind_component_registry(nb::module_& m) {
             ComponentRegistry&,
             const std::string& name,
             nb::object cls,
+            const std::string& owner,
             nb::object parent,
             nb::dict fields,
             nb::dict metadata,
@@ -100,10 +101,10 @@ void bind_component_registry(nb::module_& m) {
                 parent_name = parent_storage.c_str();
             }
             return ComponentRegistryPython::register_python(
-                name, std::move(cls), parent_name, std::move(fields), std::move(metadata),
+                name, std::move(cls), owner, parent_name, std::move(fields), std::move(metadata),
                 category, display_name, std::move(requirements), std::move(capabilities));
         },
-        nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none(),
+        nb::arg("name"), nb::arg("cls"), nb::arg("owner"), nb::arg("parent") = nb::none(),
         nb::arg("fields") = nb::dict(), nb::arg("metadata") = nb::dict(),
         nb::arg("category") = "", nb::arg("display_name") = "",
         nb::arg("requirements") = nb::list(), nb::arg("capabilities") = nb::list())
@@ -115,8 +116,6 @@ void bind_component_registry(nb::module_& m) {
         }, nb::arg("name"))
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
-        .def("set_registration_owner", &ComponentRegistry::set_registration_owner, nb::arg("owner"))
-        .def("registration_owner", &ComponentRegistry::registration_owner)
         .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
         .def("set_display_name", &ComponentRegistry::set_display_name,
             nb::arg("name"), nb::arg("display_name"))

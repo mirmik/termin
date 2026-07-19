@@ -15,8 +15,6 @@
 static tc_component_prepare_unload_fn g_prepare_unload_callback = NULL;
 static void* g_prepare_unload_user_data = NULL;
 
-static const char* g_component_registration_owner = NULL;
-
 #define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 
 typedef struct tc_component_facet_payload {
@@ -87,42 +85,15 @@ static bool can_register_component_type(
         return true;
     }
 
-    const char* current_owner = g_component_registration_owner;
-    if (!current_owner) {
-        tc_log(
-            TC_LOG_DEBUG,
-            "[ComponentRegistry] Ignoring unowned %s registration for existing type '%s'",
-            registration_kind,
-            type_name
-        );
-        return false;
-    }
-
     const char* existing_owner = tc_runtime_type_registry_get_owner(type_name);
-    if (!existing_owner || !existing_owner[0]) {
-        tc_log(
-            TC_LOG_WARN,
-            "[ComponentRegistry] Ignoring %s registration for existing unowned type '%s' from owner '%s'",
-            registration_kind,
-            type_name,
-            current_owner
-        );
-        return false;
-    }
-
-    if (strcmp(existing_owner, current_owner) != 0) {
-        tc_log(
-            TC_LOG_WARN,
-            "[ComponentRegistry] Ignoring %s registration for existing type '%s' owned by '%s' from owner '%s'",
-            registration_kind,
-            type_name,
-            existing_owner,
-            current_owner
-        );
-        return false;
-    }
-
-    return true;
+    tc_log(
+        TC_LOG_DEBUG,
+        "[ComponentRegistry] Ignoring legacy %s registration for existing type '%s' owned by '%s'",
+        registration_kind,
+        type_name,
+        existing_owner ? existing_owner : "<none>"
+    );
+    return false;
 }
 
 static void destroy_component_facet(void* payload) {
@@ -338,13 +309,6 @@ bool tc_component_registry_register_with_parent(
     }
 
     if (tc_runtime_type_registry_ensure_type(type_name)) {
-        if (g_component_registration_owner) {
-            tc_runtime_type_registry_set_owner(
-                type_name,
-                g_component_registration_owner,
-                true
-            );
-        }
         if (parent_type_name) {
             tc_runtime_type_registry_set_parent(type_name, parent_type_name);
         }
@@ -380,13 +344,6 @@ void tc_component_registry_register_abstract(
     }
 
     if (tc_runtime_type_registry_ensure_type(type_name)) {
-        if (g_component_registration_owner) {
-            tc_runtime_type_registry_set_owner(
-                type_name,
-                g_component_registration_owner,
-                true
-            );
-        }
         if (parent_type_name) {
             tc_runtime_type_registry_set_parent(type_name, parent_type_name);
         }
@@ -410,15 +367,6 @@ void tc_component_registry_unregister(const char* type_name) {
 bool tc_component_registry_has(const char* type_name) {
     tc_component_facet_payload* facet = component_facet(type_name);
     return facet != NULL;
-}
-
-void tc_component_registry_set_registration_owner(const char* owner) {
-    g_component_registration_owner = owner && owner[0] ? tc_intern_string(owner) : NULL;
-    tc_runtime_type_registry_set_registration_owner(g_component_registration_owner);
-}
-
-const char* tc_component_registry_get_registration_owner(void) {
-    return g_component_registration_owner;
 }
 
 const char* tc_component_registry_get_owner(const char* type_name) {

@@ -64,6 +64,7 @@ static tc_component* python_component_factory(void* userdata) {
 bool ComponentRegistryPython::register_python(
     const std::string& name,
     nb::object cls,
+    const std::string& owner,
     const char* parent,
     nb::dict fields,
     nb::dict metadata,
@@ -78,8 +79,15 @@ bool ComponentRegistryPython::register_python(
             name.c_str());
         return false;
     }
-    const char* ambient_owner = tc_component_registry_get_registration_owner();
-    const bool allow_same_owner_replacement = ambient_owner && ambient_owner[0];
+    if (owner.empty()) {
+        tc::Log::error(
+            "[ComponentRegistry] refusing ownerless Python component %s",
+            name.c_str());
+        return false;
+    }
+    const char* existing_owner = tc_runtime_type_registry_get_owner(name.c_str());
+    const bool allow_same_owner_replacement =
+        existing_owner && owner == existing_owner;
     if (tc_component_registry_has(name.c_str()) && !allow_same_owner_replacement) {
         auto existing = python_classes().find(name);
         if (existing != python_classes().end() && existing->second->ptr() == cls.ptr()) {
@@ -99,11 +107,8 @@ bool ComponentRegistryPython::register_python(
         return false;
     }
 
-    const char* owner = ambient_owner && ambient_owner[0]
-        ? ambient_owner
-        : "termin-scene-python";
     ComponentTypeDescriptorBuilder descriptor(
-        name.c_str(), owner, parent, python_component_factory,
+        name.c_str(), owner.c_str(), parent, python_component_factory,
         const_cast<char*>(interned_name), TC_PYTHON_COMPONENT, false,
         allow_same_owner_replacement);
     descriptor.category(category).display_name(display_name);

@@ -76,9 +76,9 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     import termin.bootstrap
     from termin.inspect import InspectField, InspectRegistry
     from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene.python_component import restore_python_components
     from termin_modules.module_context import (
-        module_import_context,
-        registrations_for_owner,
+        module_registration_context,
         unregister_module_owner,
     )
 
@@ -96,7 +96,7 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     unregister_module_owner(module_id)
 
     try:
-        with module_import_context(module_id):
+        with module_registration_context(module_id, [__name__]):
             class OwnerContextProbeComponent(PythonComponent):
                 inspect_fields = {
                     "value": InspectField(path="value", label="Value", kind="int")
@@ -106,9 +106,6 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
                     super().__init__()
                     self.value = 7
 
-        registrations = registrations_for_owner(module_id)
-        assert component_name in registrations.components
-        assert component_name in registrations.inspect_types
         assert component_registry.has(component_name)
         assert component_name in component_registry.list_owned(module_id)
         assert inspect_registry.has_type(component_name)
@@ -117,6 +114,9 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
 
         assert not component_registry.has(component_name)
         assert not inspect_registry.has_type(component_name)
+
+        restore_python_components()
+        assert not component_registry.has(component_name)
     finally:
         unregister_module_owner(module_id)
         termin.bootstrap.shutdown_player()
@@ -125,11 +125,15 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
 def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
     from termin.inspect import InspectRegistry, _inspect_native
     from termin.render_framework import (
+        PythonFramePass,
         tc_pass_registry_has,
-        tc_pass_registry_register_python,
         tc_pass_registry_unregister_python,
     )
-    from termin_modules.module_context import module_import_context, unregister_module_owner
+    from termin.render_framework.python_pass import register_loaded_python_passes
+    from termin_modules.module_context import (
+        module_registration_context,
+        unregister_module_owner,
+    )
 
     module_id = "owner_context_pass_probe"
     pass_name = "OwnerContextProbeFramePass"
@@ -140,13 +144,12 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
     except Exception:
         pass
     inspect_registry.unregister_type(pass_name)
-
-    class OwnerContextProbeFramePass:
-        pass
+    register_loaded_python_passes()
 
     try:
-        with module_import_context(module_id):
-            tc_pass_registry_register_python(pass_name, OwnerContextProbeFramePass)
+        with module_registration_context(module_id, [__name__]):
+            class OwnerContextProbeFramePass(PythonFramePass):
+                pass
 
         records = {
             record["name"]: record
@@ -162,6 +165,9 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
             for record in _inspect_native.runtime_type_registry_snapshot()
         }
         assert pass_name not in records
+        assert not tc_pass_registry_has(pass_name)
+
+        register_loaded_python_passes()
         assert not tc_pass_registry_has(pass_name)
     finally:
         tc_pass_registry_unregister_python(pass_name)

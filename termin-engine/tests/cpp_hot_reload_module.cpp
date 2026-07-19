@@ -19,7 +19,7 @@ class HotReloadNativeProbePass : public termin::CxxFramePass {
 public:
     int exposure = 0;
 
-    static void register_type();
+    static void register_type(const char* owner);
 
     HotReloadNativeProbePass() {
         link_to_type_registry("HotReloadNativeProbePass");
@@ -32,8 +32,7 @@ public:
     }
 };
 
-void HotReloadNativeProbePass::register_type() {
-    const char* owner = tc_runtime_type_registry_get_registration_owner();
+void HotReloadNativeProbePass::register_type(const char* owner) {
     auto descriptor = termin::FramePassTypeDescriptorBuilder::native<HotReloadNativeProbePass>(
         "HotReloadNativeProbePass", owner, "CxxFramePass");
     (void)descriptor.inspect().add<HotReloadNativeProbePass, int>(
@@ -46,11 +45,12 @@ void HotReloadNativeProbePass::register_type() {
 } // namespace
 
 int32_t native_probe_init(
-    const termin_native_module_host_v1*,
+    const termin_native_module_host_v1* host,
     termin_native_module_error*
 ) {
-    HotReloadNativeProbePass::register_type();
-    const char* owner = tc_runtime_type_registry_get_registration_owner();
+    if (!host || !host->module_id || !host->module_id[0]) return -1;
+    const char* owner = host->module_id;
+    HotReloadNativeProbePass::register_type(owner);
     auto component = termin::ComponentTypeDescriptorBuilder::native<HotReloadNativeProbeComponent>(
         "HotReloadNativeProbeComponent", owner, "CxxComponent");
     (void)component.inspect().add<HotReloadNativeProbeComponent, int>(
