@@ -665,8 +665,8 @@ Phase 10 factory notes:
   facet and exchanges strict `tc_value` dictionaries. Common stable id/name/
   debug identity moved into `tc_widget`-owned copied storage, removing the
   previous C++/Python string-lifetime split.
-- Versioned `termin.gui.document` schema v1 stores registered type names,
-  common geometry/constraints/behavior/style state, per-type state and
+- Versioned `termin.gui.document` schema v2 stores registered type names,
+  common geometry/constraints/behavior/style/cursor state, per-type state and
   record-index child/root/overlay topology. Runtime handles, dirty flags and
   interaction state are not persisted.
 - Restore requires an empty document, creates instances through registered

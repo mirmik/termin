@@ -15,14 +15,17 @@ from typing import Callable
 from termin.display import (
     BackendWindowManager,
     SDLBackendWindow,
+    SystemCursorShape,
     get_clipboard_text,
     poll_sdl_events,
     set_clipboard_text,
+    set_system_cursor,
     start_text_input,
     stop_text_input,
 )
 from termin.gui_native import (
     Document,
+    CursorIntent,
     DrawList,
     DrawListRenderer,
     KeyCode,
@@ -124,7 +127,7 @@ class NativeUiEventRouter:
         if event_type == "window_refresh":
             return RouteResult(routed=True)
 
-        if event_type in ("mouse_move", "mouse_down", "mouse_up", "mouse_wheel"):
+        if event_type in ("mouse_move", "mouse_down", "mouse_up", "mouse_wheel", "mouse_leave"):
             pointer = PointerEvent()
             pointer.x = float(event.get("x", 0.0))
             pointer.y = float(event.get("y", 0.0))
@@ -138,6 +141,7 @@ class NativeUiEventRouter:
                 "mouse_down": PointerEventType.Down,
                 "mouse_up": PointerEventType.Up,
                 "mouse_wheel": PointerEventType.Wheel,
+                "mouse_leave": PointerEventType.Leave,
             }[event_type]
             self.document.dispatch_pointer_event(pointer)
             return RouteResult(routed=True)
@@ -198,7 +202,13 @@ class NativeUiHost:
         file_drop_handler: FileDropHandler | None = None,
         manage_text_input: bool = True,
     ) -> None:
-        if poll_sdl_events is None or get_clipboard_text is None or set_clipboard_text is None:
+        if (
+            poll_sdl_events is None
+            or get_clipboard_text is None
+            or set_clipboard_text is None
+            or set_system_cursor is None
+            or SystemCursorShape is None
+        ):
             raise RuntimeError("termin-display SDL platform bindings are unavailable")
         self.window = window
         self.device = window.device()
@@ -227,8 +237,29 @@ class NativeUiHost:
         self._image_previews: list[_ImagePreview] = []
         self._deferred: SimpleQueue[Callable[[], None]] = SimpleQueue()
         self._manage_text_input = bool(manage_text_input)
+        self.document.set_cursor_changed_handler(self._apply_cursor_intent)
+        self._apply_cursor_intent(self.document.cursor_intent)
         if self._manage_text_input:
             start_text_input()
+
+    @staticmethod
+    def _apply_cursor_intent(cursor: CursorIntent) -> None:
+        shapes = {
+            CursorIntent.Default: SystemCursorShape.Default,
+            CursorIntent.Text: SystemCursorShape.Text,
+            CursorIntent.Hand: SystemCursorShape.Hand,
+            CursorIntent.Crosshair: SystemCursorShape.Crosshair,
+            CursorIntent.Move: SystemCursorShape.Move,
+            CursorIntent.ResizeHorizontal: SystemCursorShape.ResizeHorizontal,
+            CursorIntent.ResizeVertical: SystemCursorShape.ResizeVertical,
+            CursorIntent.ResizeNwse: SystemCursorShape.ResizeNwse,
+            CursorIntent.ResizeNesw: SystemCursorShape.ResizeNesw,
+        }
+        shape = shapes.get(cursor)
+        if shape is None:
+            _logger.error("native UI host received unresolved cursor intent %s", cursor)
+            shape = SystemCursorShape.Default
+        set_system_cursor(shape)
 
     @property
     def color_target(self):
@@ -451,6 +482,7 @@ class NativeUiHost:
         if self._closed:
             return
         self._closed = True
+        self.document.set_cursor_changed_handler(None)
         self._pre_render_callbacks.clear()
         self._color_pickers.clear()
         for preview in tuple(self._image_previews):

@@ -11,10 +11,12 @@ try:
         BackendWindow,
         PresentationMode,
         SDLBackendWindow,
+        SystemCursorShape,
         get_clipboard_text,
         poll_sdl_events,
         quit_sdl,
         set_clipboard_text,
+        set_system_cursor,
         start_text_input,
         stop_text_input,
         wait_sdl_events_timeout,
@@ -24,10 +26,12 @@ except ImportError as e:
     BackendWindow = None
     PresentationMode = None
     SDLBackendWindow = None
+    SystemCursorShape = None
     get_clipboard_text = None
     poll_sdl_events = None
     quit_sdl = None
     set_clipboard_text = None
+    set_system_cursor = None
     start_text_input = None
     stop_text_input = None
     wait_sdl_events_timeout = None
@@ -73,10 +77,12 @@ __all__ = [
     "BackendWindow",
     "PresentationMode",
     "SDLBackendWindow",
+    "SystemCursorShape",
     "get_clipboard_text",
     "poll_sdl_events",
     "quit_sdl",
     "set_clipboard_text",
+    "set_system_cursor",
     "start_text_input",
     "stop_text_input",
     "wait_sdl_events_timeout",

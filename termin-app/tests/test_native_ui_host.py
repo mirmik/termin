@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from tcbase import Key
+from termin.display import SystemCursorShape
 from termin.editor_native import (
     NativeUiEventRouter,
     NativeUiWindowManager,
@@ -17,6 +18,7 @@ from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandKind,
+    CursorIntent,
     Document,
     DrawCommandType,
     DrawList,
@@ -272,6 +274,10 @@ def test_native_ui_event_router_preserves_click_keys_text_and_file_drop():
     ]
     assert probe.pointer_events[-1] == (PointerEventType.Down, 0, 2, 3)
 
+    assert router.route({"type": "mouse_leave", "window_id": 17}).routed
+    assert probe.pointer_events[-1][0] == PointerEventType.Leave
+    assert not document.hovered_widget
+
     result = router.route(
         {
             "type": "key_down",
@@ -305,6 +311,27 @@ def test_native_ui_event_router_preserves_click_keys_text_and_file_drop():
     assert router.route({"type": "window_close", "window_id": 18}).keep_running
     assert not router.route({"type": "window_close", "window_id": 17}).keep_running
     assert not router.route({"type": "quit"}).keep_running
+
+
+def test_native_ui_host_maps_every_semantic_cursor_to_sdl(monkeypatch):
+    from termin.editor_native import ui_host
+
+    applied = []
+    monkeypatch.setattr(ui_host, "set_system_cursor", applied.append)
+    expected = {
+        CursorIntent.Default: SystemCursorShape.Default,
+        CursorIntent.Text: SystemCursorShape.Text,
+        CursorIntent.Hand: SystemCursorShape.Hand,
+        CursorIntent.Crosshair: SystemCursorShape.Crosshair,
+        CursorIntent.Move: SystemCursorShape.Move,
+        CursorIntent.ResizeHorizontal: SystemCursorShape.ResizeHorizontal,
+        CursorIntent.ResizeVertical: SystemCursorShape.ResizeVertical,
+        CursorIntent.ResizeNwse: SystemCursorShape.ResizeNwse,
+        CursorIntent.ResizeNesw: SystemCursorShape.ResizeNesw,
+    }
+    for cursor, shape in expected.items():
+        ui_host.NativeUiHost._apply_cursor_intent(cursor)
+        assert applied[-1] == shape
 
 
 def test_native_ui_event_router_dispatches_global_shortcuts_before_focused_widget():
