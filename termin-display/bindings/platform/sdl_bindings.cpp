@@ -8,7 +8,11 @@
 #include <nanobind/stl/pair.h>
 
 #include <cstdint>
+#include <array>
+#include <stdexcept>
 #include <string>
+
+#include <tcbase/tc_log.h>
 
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
@@ -23,6 +27,89 @@ namespace nb = nanobind;
 namespace termin {
 
 namespace {
+
+enum class SystemCursorShape : int {
+    Default = 0,
+    Text = 1,
+    Hand = 2,
+    Crosshair = 3,
+    Move = 4,
+    ResizeHorizontal = 5,
+    ResizeVertical = 6,
+    ResizeNwse = 7,
+    ResizeNesw = 8,
+    Count = 9,
+};
+
+std::array<SDL_Cursor*, static_cast<size_t>(SystemCursorShape::Count)> system_cursors{};
+std::array<bool, static_cast<size_t>(SystemCursorShape::Count)> unavailable_system_cursors{};
+
+SDL_SystemCursor to_sdl_cursor(SystemCursorShape shape) {
+    switch (shape) {
+        case SystemCursorShape::Default: return SDL_SYSTEM_CURSOR_ARROW;
+        case SystemCursorShape::Text: return SDL_SYSTEM_CURSOR_IBEAM;
+        case SystemCursorShape::Hand: return SDL_SYSTEM_CURSOR_HAND;
+        case SystemCursorShape::Crosshair: return SDL_SYSTEM_CURSOR_CROSSHAIR;
+        case SystemCursorShape::Move: return SDL_SYSTEM_CURSOR_SIZEALL;
+        case SystemCursorShape::ResizeHorizontal: return SDL_SYSTEM_CURSOR_SIZEWE;
+        case SystemCursorShape::ResizeVertical: return SDL_SYSTEM_CURSOR_SIZENS;
+        case SystemCursorShape::ResizeNwse: return SDL_SYSTEM_CURSOR_SIZENWSE;
+        case SystemCursorShape::ResizeNesw: return SDL_SYSTEM_CURSOR_SIZENESW;
+        case SystemCursorShape::Count: break;
+    }
+    throw std::invalid_argument("invalid system cursor shape");
+}
+
+void set_system_cursor(SystemCursorShape shape) {
+    SDL_Cursor* cursor = nullptr;
+    if (shape == SystemCursorShape::Default) {
+        cursor = SDL_GetDefaultCursor();
+    }
+    const size_t index = static_cast<size_t>(shape);
+    if (!cursor) {
+        if (unavailable_system_cursors[index]) {
+            return;
+        }
+        cursor = system_cursors[index];
+        if (!cursor) {
+            cursor = SDL_CreateSystemCursor(to_sdl_cursor(shape));
+            if (cursor) {
+                system_cursors[index] = cursor;
+            } else {
+                const char* error = SDL_GetError();
+                tc_log_warn(
+                    "[termin-display] system cursor %d is unavailable: %s",
+                    static_cast<int>(shape),
+                    error && error[0] ? error : "SDL returned no error detail"
+                );
+                unavailable_system_cursors[index] = true;
+                SDL_ClearError();
+                return;
+            }
+        }
+    }
+    SDL_SetCursor(cursor);
+}
+
+void release_system_cursors() {
+    SDL_Cursor* default_cursor = SDL_GetDefaultCursor();
+    bool default_is_owned = false;
+    for (SDL_Cursor* cursor : system_cursors) {
+        default_is_owned = default_is_owned || cursor == default_cursor;
+    }
+    if (default_cursor && !default_is_owned) {
+        SDL_SetCursor(default_cursor);
+    } else {
+        SDL_SetCursor(nullptr);
+    }
+    for (size_t index = 0; index < system_cursors.size(); ++index) {
+        if (system_cursors[index]) {
+            SDL_FreeCursor(system_cursors[index]);
+            system_cursors[index] = nullptr;
+        }
+        unavailable_system_cursors[index] = false;
+    }
+}
 
 constexpr int TC_KEY_UNKNOWN = -1;
 constexpr int TC_KEY_TAB = 9;
@@ -139,6 +226,8 @@ nb::object translate_sdl_event(const SDL_Event& event) {
                 case SDL_WINDOWEVENT_MAXIMIZED:
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
                     return make_base_event("window_refresh", event);
+                case SDL_WINDOWEVENT_LEAVE:
+                    return make_base_event("mouse_leave", event);
                 default:
                     break;
             }
@@ -254,6 +343,17 @@ nb::list wait_sdl_events_timeout(int timeout_ms) {
 } // namespace
 
 void bind_sdl(nb::module_& m) {
+    nb::enum_<SystemCursorShape>(m, "SystemCursorShape")
+        .value("Default", SystemCursorShape::Default)
+        .value("Text", SystemCursorShape::Text)
+        .value("Hand", SystemCursorShape::Hand)
+        .value("Crosshair", SystemCursorShape::Crosshair)
+        .value("Move", SystemCursorShape::Move)
+        .value("ResizeHorizontal", SystemCursorShape::ResizeHorizontal)
+        .value("ResizeVertical", SystemCursorShape::ResizeVertical)
+        .value("ResizeNwse", SystemCursorShape::ResizeNwse)
+        .value("ResizeNesw", SystemCursorShape::ResizeNesw);
+    m.def("set_system_cursor", &set_system_cursor, nb::arg("shape"));
     m.def("get_clipboard_text", []() -> std::string {
         char* raw = SDL_GetClipboardText();
         if (!raw) {
@@ -273,6 +373,7 @@ void bind_sdl(nb::module_& m) {
         SDL_StopTextInput();
     });
     m.def("quit_sdl", []() {
+        release_system_cursors();
         SDL_Quit();
     });
     m.def("poll_sdl_events", &poll_sdl_events,
