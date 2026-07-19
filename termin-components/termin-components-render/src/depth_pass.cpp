@@ -1,7 +1,6 @@
 #include <termin/render/depth_pass.hpp>
 
-#include <termin/camera/camera_component.hpp>
-#include <termin/camera/render_camera_utils.hpp>
+#include <termin/render/camera_capability.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
@@ -23,7 +22,6 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include <optional>
 #include <span>
 #include <string>
 
@@ -131,6 +129,9 @@ MaterialPipelinePassContract depth_material_pass_contract(const char* debug_name
             "skinned_depth",
             MeshVertexTransformProfile::Position,
             "depth_draw.u_model");
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_provider(
+            "foliage_depth", MeshVertexTransformProfile::Position);
     return contract;
 }
 
@@ -169,7 +170,8 @@ RenderItemTaskPlanningContract depth_only_task_planning_contract(
         render_item_task_input_bit(RenderItemTaskInput::DrawContext);
     contract.accepted_vertex_transform_kind_mask =
         render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
-        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh);
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage);
     contract.shader_contract = &shader_contract;
     contract.debug_pass_name = debug_pass_name;
     return contract;
@@ -277,7 +279,7 @@ void DepthPass::execute_with_data_tgfx2(
     collect_draw_calls(
         data.scene,
         data.layer_mask,
-        ctx.render_category_mask,
+        data.render_category_mask,
         depth_shader_handle_,
         *snapshot);
     sort_draw_calls_by_shader();
@@ -387,7 +389,7 @@ void DepthPass::execute_with_data_tgfx2(
         fill_depth_draw_model(draw, item);
         std::array<RenderItemNamedUniformBinding, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "depth_draw"},
         }};
         MaterialPipelineResourceView draw_material_resources{};
         RenderItemResourceBinding resource_binding{};
@@ -395,10 +397,22 @@ void DepthPass::execute_with_data_tgfx2(
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
+        RenderContext draw_context;
+        draw_context.view = data.view;
+        draw_context.projection = data.projection;
+        std::memcpy(draw_context.model.data, draw.u_model, sizeof(draw.u_model));
+        draw_context.phase = tc_phase_find(pass_phase_mark.c_str());
+        draw_context.pass_contract = shader_pass_contract();
+        draw_context.current_tc_shader = dc.final_shader;
+        draw_context.layer_mask = data.layer_mask;
+        draw_context.render_category_mask = data.render_category_mask;
+        draw_context.viewport_width = data.rect.width;
+        draw_context.viewport_height = data.rect.height;
         encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;
+        encode_request.draw_context = &draw_context;
         encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "DepthPass";
         encode_request.debug_entity_name = name;
@@ -419,15 +433,18 @@ void DepthPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
     Rect2i rect = ctx.render_rect;
-    std::optional<RenderCamera> named_camera_snapshot;
+    RenderCameraSnapshot named_camera_snapshot;
+    uint64_t camera_layer_mask = ctx.layer_mask;
+    uint64_t camera_render_category_mask = ctx.render_category_mask;
 
     if (!camera_name.empty()) {
-        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-        if (!named_camera) {
+        if (!resolve_named_render_camera_for_pass(
+                scene, camera_name.c_str(), 0.0, "DepthPass", named_camera_snapshot)) {
             return;
         }
-        named_camera_snapshot = make_render_camera(*named_camera);
-        camera = &*named_camera_snapshot;
+        camera = &named_camera_snapshot.camera;
+        camera_layer_mask = named_camera_snapshot.layer_mask;
+        camera_render_category_mask = named_camera_snapshot.render_category_mask;
     }
 
     if (!camera) {
@@ -443,12 +460,17 @@ void DepthPass::execute(ExecuteContext& ctx) {
             if (w > 0 && h > 0) {
                 rect = Rect2i(0, 0, w, h);
                 if (!camera_name.empty()) {
-                    CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-                    if (named_camera) {
-                        named_camera_snapshot = make_render_camera(
-                            *named_camera, static_cast<double>(w) / std::max(1, h));
-                        camera = &*named_camera_snapshot;
+                    if (!resolve_named_render_camera_for_pass(
+                            scene,
+                            camera_name.c_str(),
+                            static_cast<double>(w) / std::max(1, h),
+                            "DepthPass",
+                            named_camera_snapshot)) {
+                        return;
                     }
+                    camera = &named_camera_snapshot.camera;
+                    camera_layer_mask = named_camera_snapshot.layer_mask;
+                    camera_render_category_mask = named_camera_snapshot.render_category_mask;
                 }
             }
         }
@@ -474,7 +496,8 @@ void DepthPass::execute(ExecuteContext& ctx) {
     data.projection = projection;
     data.near_plane = near_plane;
     data.far_plane = far_plane;
-    data.layer_mask = ctx.layer_mask;
+    data.layer_mask = camera_layer_mask;
+    data.render_category_mask = camera_render_category_mask;
     execute_with_data_tgfx2(ctx, data);
 }
 
@@ -489,23 +512,6 @@ void DepthOnlyPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 void DepthOnlyPass::release_tgfx2_resources() {
     if (!device2_) return;
     device2_ = nullptr;
-}
-
-CameraComponent* DepthOnlyPass::find_camera_by_name(
-    tc_scene_handle scene,
-    const std::string& name
-) const {
-    if (name.empty() || !tc_scene_handle_valid(scene)) {
-        return nullptr;
-    }
-
-    tc_entity_id eid = tc_scene_find_entity_by_name(scene, name.c_str());
-    if (!tc_entity_id_valid(eid)) {
-        return nullptr;
-    }
-
-    Entity ent(tc_scene_entity_pool(scene), eid);
-    return ent.get_component<CameraComponent>();
 }
 
 void DepthOnlyPass::collect_draw_calls(
@@ -718,15 +724,18 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
     Rect2i rect = ctx.render_rect;
-    std::optional<RenderCamera> named_camera_snapshot;
+    RenderCameraSnapshot named_camera_snapshot;
+    uint64_t camera_layer_mask = ctx.layer_mask;
+    uint64_t camera_render_category_mask = ctx.render_category_mask;
 
     if (!camera_name.empty()) {
-        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-        if (!named_camera) {
+        if (!resolve_named_render_camera_for_pass(
+                scene, camera_name.c_str(), 0.0, "DepthOnlyPass", named_camera_snapshot)) {
             return;
         }
-        named_camera_snapshot = make_render_camera(*named_camera);
-        camera = &*named_camera_snapshot;
+        camera = &named_camera_snapshot.camera;
+        camera_layer_mask = named_camera_snapshot.layer_mask;
+        camera_render_category_mask = named_camera_snapshot.render_category_mask;
     }
 
     if (!camera) {
@@ -754,12 +763,17 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     if (w > 0 && h > 0) {
         rect = Rect2i(0, 0, w, h);
         if (!camera_name.empty()) {
-            CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-            if (named_camera) {
-                named_camera_snapshot = make_render_camera(
-                    *named_camera, static_cast<double>(w) / std::max(1, h));
-                camera = &*named_camera_snapshot;
+            if (!resolve_named_render_camera_for_pass(
+                    scene,
+                    camera_name.c_str(),
+                    static_cast<double>(w) / std::max(1, h),
+                    "DepthOnlyPass",
+                    named_camera_snapshot)) {
+                return;
             }
+            camera = &named_camera_snapshot.camera;
+            camera_layer_mask = named_camera_snapshot.layer_mask;
+            camera_render_category_mask = named_camera_snapshot.render_category_mask;
         }
     }
 
@@ -782,8 +796,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     }
     collect_draw_calls(
         scene,
-        ctx.layer_mask,
-        ctx.render_category_mask,
+        camera_layer_mask,
+        camera_render_category_mask,
         *snapshot);
     sort_draw_calls_by_shader();
 
@@ -877,7 +891,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         fill_depth_draw_model(draw, item);
         std::array<RenderItemNamedUniformBinding, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "depth_draw"},
         }};
         MaterialPipelineResourceView draw_material_resources{};
         RenderItemResourceBinding resource_binding{};
@@ -885,10 +899,22 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
+        RenderContext draw_context;
+        draw_context.view = view;
+        draw_context.projection = projection;
+        std::memcpy(draw_context.model.data, draw.u_model, sizeof(draw.u_model));
+        draw_context.phase = tc_phase_find(pass_phase_mark.c_str());
+        draw_context.pass_contract = depth_material_pass_contract("depth_only");
+        draw_context.current_tc_shader = dc.final_shader;
+        draw_context.layer_mask = camera_layer_mask;
+        draw_context.render_category_mask = camera_render_category_mask;
+        draw_context.viewport_width = rect.width;
+        draw_context.viewport_height = rect.height;
         encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;
+        encode_request.draw_context = &draw_context;
         encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "DepthOnlyPass";
         encode_request.debug_entity_name = name;

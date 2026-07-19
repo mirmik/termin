@@ -20,12 +20,12 @@ namespace {
 termin::TcMesh make_test_mesh()
 {
     const float vertices[] = {
-        0.0f, 0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f,
     };
     const uint32_t indices[] = {0, 1, 2};
-    tc_vertex_layout layout = tc_vertex_layout_pos();
+    tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv();
 
     termin::TcMeshCreateInfo create_info;
     create_info.data = termin::TcMeshInterleavedDataView{
@@ -46,6 +46,7 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     tc_material_init();
     tc_mesh_init();
     termin::TcFoliageData::clear_registry_for_tests();
+    termin::FoliageLayerComponent::register_type();
 
     termin::TcFoliageData foliage = termin::TcFoliageData::declare(
         "foliage-render-item-test-asset",
@@ -92,10 +93,17 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     layer->material = termin::TcMaterial(material_handle);
     entity.add_component(layer);
 
-    CHECK(layer->get_phase_mask() == TC_PHASE_OPAQUE);
-    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_DEPTH));
-    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_ID));
-    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_NORMAL));
+    CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_OPAQUE));
+    CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_DEPTH));
+    CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_ID));
+    CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_NORMAL));
+
+    termin::RenderItemEncoderCapabilities capabilities{};
+    REQUIRE(termin::get_render_item_encoder_capabilities(
+        TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, capabilities));
+    CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_ID));
+    CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_DEPTH));
+    CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_NORMAL));
 
     tc_render_item_collect_context collect_context{};
     collect_context.phase = TC_PHASE_OPAQUE;
@@ -121,6 +129,18 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     CHECK(std::strcmp(
         item.payload.foliage_batch.foliage_uuid,
         "foliage-render-item-test-asset") == 0);
+
+    tc_render_item_collect_context id_context{};
+    id_context.phase = TC_PHASE_ID;
+    id_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+    id_context.debug_pass_name = "IdPass";
+    termin::RenderItemCollection id_collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        layer->tc_component_ptr(), id_context, id_collection));
+    REQUIRE(id_collection.items.size() == 1u);
+    CHECK(id_collection.items[0].material_phase == nullptr);
+    CHECK((id_collection.items[0].flags &
+           TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
 
     const char* collected_uuid = item.payload.foliage_batch.foliage_uuid;
     layer->foliage_uuid = "changed";

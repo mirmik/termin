@@ -24,8 +24,6 @@ class RenderContext2;
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/lighting/lighting_ubo.hpp"
-#include "termin/camera/camera.hpp"
-#include "termin/camera/camera_component.hpp"
 #include <termin/geom/mat44.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component.hpp>
@@ -58,6 +56,7 @@ struct ColorPassExecuteData {
     std::span<const ShadowMapArrayEntry> shadow_maps;
     ShadowSettings shadow_settings;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
 };
 
 /**
@@ -212,12 +211,6 @@ public:
     }
 
 private:
-    /**
-     * Find camera component by entity name in scene.
-     * Returns nullptr if not found.
-     */
-    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name);
-
     // Collect draw calls from scene entities into cached_draw_calls_.
     void collect_draw_calls(
         tc_scene_handle scene,
