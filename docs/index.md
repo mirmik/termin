@@ -33,6 +33,7 @@
 | [termin-graphics](https://github.com/mirmik/termin-monorepo/blob/master/termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
 | [termin-render](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md) | Render framework, pipelines, frame graph |
 | [termin-display](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md) | Windows/display/platform integration |
+| [termin-window](https://github.com/mirmik/termin-monorepo/blob/master/termin-window/docs/index.md) | Lightweight native windows, portable events and texture presentation |
 | [termin-inspect](https://github.com/mirmik/termin-monorepo/blob/master/termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
 | [termin-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
 | [termin-collision](https://github.com/mirmik/termin-monorepo/blob/master/termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |

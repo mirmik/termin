@@ -4,7 +4,7 @@
 
 Cross-module ownership между application host, `EditorSession` и `EngineCore`
 зафиксирован в
-[протоколе архитектурного совета](../../docs/architecture-council/2026-07-19-engine-loop-client-and-editor-session.md).
+[протоколе архитектурного совета](https://github.com/mirmik/termin-monorepo/blob/master/docs/architecture-council/2026-07-19-engine-loop-client-and-editor-session.md).
 
 ## Слои
 

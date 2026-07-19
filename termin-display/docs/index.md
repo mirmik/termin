@@ -1,11 +1,15 @@
 # termin-display
 
-`termin-display` содержит platform/display integration: native windows, SDL backend window, viewport/display bindings и glue-код для презентации rendered textures.
+`termin-display` содержит logical displays, viewport layout, display-level input
+routing и backend-neutral offscreen output surfaces. Native windows и
+физическая презентация принадлежат соседнему `termin-window`.
 
 Связанные документы:
 
 - [Module Map](../../docs/modules.md#termin-display)
 - [termin-graphics](../../termin-graphics/docs/index.md)
+- [Display render surface contract](../../docs/architecture/2026-07-19-display-render-surface-contract.md)
+- [termin-window](../../termin-window/docs/index.md)
 
 ## Основные области
 
@@ -16,9 +20,9 @@
 - Examples в `examples/`.
 - Tests в `tests/`.
 
-## Публичный API
+## Публичный API и незавершённая миграция
 
-Основной Python entrypoint:
+Python bindings пока повторно экспортируют window types:
 
 ```python
 from termin.display import SDLBackendWindow
@@ -26,11 +30,13 @@ from termin.display import SDLBackendWindow
 
 `BackendWindow` является abstract/native base; прикладной код должен использовать concrete implementation, например `SDLBackendWindow`.
 
-`FBOSurface` is also the typed Python boundary for embedding an offscreen
-display in `termin.gui_native.Viewport3D`. Alongside `is_valid()`,
-`framebuffer_size()`, `resize()` and `get_tgfx_color_tex_id()`, it exposes
-`dispatch_pointer_move()`, `dispatch_pointer_button()`, `dispatch_scroll()`,
-`dispatch_key()` and `dispatch_text()`. These methods route through the input
-manager already attached to the render surface and return `False` for a stale
-surface or missing manager. New UI code must use this contract instead of
-transporting `tc_render_surface*` or `tc_input_manager*` as Python integers.
+Это packaging compatibility, а не ownership: C++ `BackendWindow` и
+`SDLBackendWindow` уже реализованы в `termin-window`. Новая display/render
+архитектура не должна возвращать их в `termin-display`.
+
+Текущий `FBOSurface` является typed Python boundary для embedding offscreen
+display в `termin.gui_native.Viewport3D`, но его имя и input ownership устарели.
+Принятый целевой контракт переименовывает его в `OffscreenRenderSurface` и
+оставляет на surface только texture, pixel extent, resize и lifecycle. Typed
+pointer/wheel/key/text dispatch переходит к `tc_display`; временное хранение
+`tc_input_manager` внутри surface не следует использовать в новом коде.
