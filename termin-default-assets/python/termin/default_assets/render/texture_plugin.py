@@ -42,25 +42,21 @@ class TextureRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if result.uuid is None and rm.get_runtime_asset(self.type_id, name) is not None:
-            return
-
         asset = None
-        if result.uuid:
-            candidate = rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
-            if isinstance(candidate, TextureAsset):
-                asset = candidate
+        candidate = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
+        if isinstance(candidate, TextureAsset):
+            asset = candidate
 
         if asset is None:
             asset = TextureAsset(
                 texture_data=None,
                 name=name,
                 source_path=result.path,
-                uuid=result.uuid,
+                uuid=context.uuid,
             )
 
         asset.parse_spec(result.spec_data)
-        rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=result.uuid)
+        rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=context.uuid)
 
         texture = tc_texture_declare(asset.uuid, name)
 
@@ -74,11 +70,7 @@ class TextureRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        asset = (
-            rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
-            if result.uuid
-            else rm.get_runtime_asset(self.type_id, context.name)
-        )
+        asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
 
@@ -92,7 +84,7 @@ class TextureRuntimePlugin:
         asset.reload()
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
+        context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
 
 class TextureAssetPlugin(TextureImportPlugin, TextureRuntimePlugin):

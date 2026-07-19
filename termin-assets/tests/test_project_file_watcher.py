@@ -72,7 +72,7 @@ class DummyRuntimePlugin:
         pass
 
     def unregister(self, context, result: PreLoadResult) -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+        context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
 
 def test_plugin_preloader_unregisters_runtime_asset_on_delete(tmp_path: Path) -> None:

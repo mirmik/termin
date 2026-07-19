@@ -8,6 +8,7 @@ from termin.editor_core.registry_sources import (
     WatchedFileSource,
     build_resource_manager_pages,
 )
+from termin.editor_core.registry_viewer_model import RegistryCollectionController
 
 
 def test_migrated_tcgui_registry_viewer_modules_stay_removed():
@@ -22,10 +23,10 @@ def test_migrated_tcgui_registry_viewer_modules_stay_removed():
 
 
 class FakeAsset:
-    def __init__(self, name: str):
+    def __init__(self, name: str, uuid: str | None = None, source_path: str | None = None):
         self.name = name
-        self.uuid = f"uuid-{name}"
-        self.source_path = f"Assets/{name}.asset"
+        self.uuid = uuid or f"uuid-{name}"
+        self.source_path = source_path or f"Assets/{name}.asset"
         self.is_loaded = False
         self.version = 3
         self.load_count = 0
@@ -41,13 +42,13 @@ class FakeComponent:
 
 class FakeResourceManager:
     def __init__(self):
-        self.assets = {"mesh": {"cube": FakeAsset("cube")}}
+        self.assets = {"mesh": {"uuid-cube": FakeAsset("cube")}}
 
-    def list_runtime_asset_names(self, type_id):
-        return list(self.assets.get(type_id, {}))
+    def iter_runtime_assets(self, type_id):
+        return tuple(self.assets.get(type_id, {}).values())
 
-    def get_runtime_asset(self, type_id, name):
-        return self.assets.get(type_id, {}).get(name)
+    def get_runtime_asset_by_uuid(self, type_id, uuid):
+        return self.assets.get(type_id, {}).get(uuid)
 
     def list_component_names(self):
         return ["FakeComponent"]
@@ -61,11 +62,35 @@ def test_resource_asset_source_uses_public_runtime_api_and_loads_on_activation()
     source = ResourceAssetSource(manager, "mesh")
     row = tuple(source.load_rows())[0]
 
-    assert row.stable_id == "cube"
+    assert row.stable_id == "uuid-cube"
     assert row.cells == ("cube", "not loaded", "3", "uuid-cube")
     source.activate(row)
-    assert manager.assets["mesh"]["cube"].load_count == 1
+    assert manager.assets["mesh"]["uuid-cube"].load_count == 1
     assert tuple(source.load_rows())[0].cells[1] == "loaded"
+
+
+def test_resource_asset_source_lists_filters_and_activates_duplicate_names_by_uuid():
+    manager = FakeResourceManager()
+    first = FakeAsset("shared", "uuid-first", "Assets/One/shared.asset")
+    second = FakeAsset("shared", "uuid-second", "Assets/Two/shared.asset")
+    manager.assets["mesh"] = {first.uuid: first, second.uuid: second}
+    source = ResourceAssetSource(manager, "mesh")
+
+    rows = tuple(source.load_rows())
+
+    assert [row.stable_id for row in rows] == ["uuid-first", "uuid-second"]
+    assert [row.cells[0] for row in rows] == [
+        "shared — Assets/One/shared.asset",
+        "shared — Assets/Two/shared.asset",
+    ]
+    assert all("shared" in row.details for row in rows)
+    controller = RegistryCollectionController(source)
+    controller.refresh()
+    filtered = controller.set_filter("shared")
+    assert [row.stable_id for row in filtered.rows] == ["uuid-first", "uuid-second"]
+    source.activate(rows[1])
+    assert first.load_count == 0
+    assert second.load_count == 1
 
 
 def test_resource_manager_pages_and_component_source_are_toolkit_neutral():

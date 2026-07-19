@@ -108,7 +108,7 @@ def test_mesh_runtime_plugin_registers_lazy_asset() -> None:
     )
 
     create_runtime_plugin().register(
-        AssetContext(resource_manager=resource_manager, name="triangle"),
+        AssetContext(resource_manager=resource_manager, name="triangle", uuid="mesh-uuid"),
         result,
     )
 
@@ -133,7 +133,7 @@ def test_mesh_runtime_reload_stays_in_asset_layer() -> None:
     )
 
     create_runtime_plugin().reload(
-        AssetContext(resource_manager=resource_manager, name="triangle"),
+        AssetContext(resource_manager=resource_manager, name="triangle", uuid="mesh-uuid"),
         result,
     )
 

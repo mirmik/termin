@@ -38,6 +38,25 @@ def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
     assert isinstance(manager.get_handle_accessors("texture_handle"), HandleAccessors)
 
 
+def test_handle_accessors_enumerate_duplicate_names_by_uuid() -> None:
+    from termin.default_assets.render.texture_asset import TextureAsset
+
+    manager = DefaultResourceManager()
+    manager.register_texture_asset(
+        "shared",
+        TextureAsset(name="shared", source_path="Assets/One/shared.png", uuid="texture-one"),
+    )
+    manager.register_texture_asset(
+        "shared",
+        TextureAsset(name="shared", source_path="Assets/Two/shared.png", uuid="texture-two"),
+    )
+
+    assert manager.get_handle_accessors("tc_texture").list_items() == [
+        ("shared", "texture-one"),
+        ("shared", "texture-two"),
+    ]
+
+
 def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     manager = DefaultResourceManager()
 

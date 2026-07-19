@@ -38,6 +38,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_tc_material,
                 find_name=self._find_tc_material_name,
                 find_uuid=self._find_material_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("material"),
             )
         if kind == "mesh_handle":
             return HandleAccessors(
@@ -45,6 +46,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self.get_mesh,
                 find_name=self.find_mesh_name,
                 find_uuid=self._find_mesh_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("mesh"),
             )
         if kind == "audio_clip_handle":
             return HandleAccessors(
@@ -52,6 +54,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self.get_audio_clip,
                 find_name=self.find_audio_clip_name,
                 find_uuid=self._find_audio_clip_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("audio_clip"),
             )
         if kind == "voxel_grid_handle":
             return HandleAccessors(
@@ -59,6 +62,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_voxel_grid_handle,
                 find_name=self._find_voxel_grid_handle_name,
                 find_uuid=self._find_voxel_grid_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("voxel_grid"),
             )
         if kind == "navmesh_handle":
             return HandleAccessors(
@@ -66,6 +70,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_navmesh_handle,
                 find_name=self._find_navmesh_handle_name,
                 find_uuid=self._find_navmesh_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("navmesh"),
             )
         if kind == "tc_skeleton":
             return HandleAccessors(
@@ -73,6 +78,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_tc_skeleton,
                 find_name=self._find_tc_skeleton_name,
                 find_uuid=self._find_skeleton_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("skeleton"),
             )
         if kind in ("tc_texture", "texture_handle"):
             return HandleAccessors(
@@ -80,6 +86,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self.get_texture_handle,
                 find_name=self._find_tc_texture_name,
                 find_uuid=self._find_texture_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("texture"),
             )
         if kind == "ui_handle":
             return HandleAccessors(
@@ -87,6 +94,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_ui_handle,
                 find_name=self._find_ui_handle_name,
                 find_uuid=self._find_ui_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("ui"),
             )
         if kind == "tc_mesh":
             return HandleAccessors(
@@ -94,6 +102,7 @@ class DefaultResourceAccessorsMixin:
                 get_by_name=self._get_tc_mesh_by_name,
                 find_name=self._find_tc_mesh_name,
                 find_uuid=self._find_tc_mesh_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("mesh"),
             )
         if kind.endswith("_handle"):
             type_id = kind[:-7]
@@ -104,9 +113,16 @@ class DefaultResourceAccessorsMixin:
                     get_by_name=lambda name: self.external_assets.get_by_name(type_id, name),
                     find_name=lambda record: record.name if record is not None else None,
                     find_uuid=lambda name: self.external_assets.find_uuid_by_name(type_id, name),
+                    iter_items=lambda: (
+                        (record.name, record.uuid)
+                        for record in self.external_assets.iter_records(type_id)
+                    ),
                     create_item=lambda: self._create_external_asset(type_id),
                 )
         return None
+
+    def _runtime_handle_items(self, type_id: str):
+        return ((asset.name, asset.uuid) for asset in self.iter_runtime_assets(type_id))
 
     def _create_external_asset(self, type_id: str) -> tuple[str, Optional[str]] | None:
         plugin = self.asset_type_plugins.get_import(type_id)
