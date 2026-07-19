@@ -13,29 +13,31 @@ SkeletonController::SkeletonController()
 }
 
 void SkeletonController::register_type() {
-    register_component_type<SkeletonController>("SkeletonController", "Component");
-    ComponentRegistry::instance().set_category("SkeletonController", "Animation");
-    tc::register_inspect_field(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<SkeletonController>(
+        "SkeletonController", "termin-components-skeleton", "Component");
+    descriptor.category("Animation");
+    tc::stage_inspect_field(descriptor.inspect(),
         &SkeletonController::skeleton,
         "SkeletonController",
         "skeleton",
         "Skeleton",
         "tc_skeleton"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &SkeletonController::bone_entities,
         "SkeletonController",
         "bone_entities",
         "Bone Entities",
         "list[entity]"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &SkeletonController::skeleton_root,
         "SkeletonController",
         "skeleton_root",
         "Skeleton Root",
         "entity"
     );
+    (void)descriptor.commit();
 }
 
 void SkeletonController::start() {

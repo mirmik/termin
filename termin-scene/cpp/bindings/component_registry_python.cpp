@@ -7,6 +7,7 @@
 
 #include <tcbase/tc_log.hpp>
 #include <tcbase/tc_string.h>
+#include <inspect/tc_inspect_python.hpp>
 
 namespace termin {
 
@@ -60,11 +61,32 @@ static tc_component* python_component_factory(void* userdata) {
     return nullptr;
 }
 
-bool ComponentRegistryPython::register_python(const std::string& name, nb::object cls, const char* parent) {
+bool ComponentRegistryPython::register_python(
+    const std::string& name,
+    nb::object cls,
+    const char* parent,
+    nb::dict fields,
+    nb::dict metadata,
+    const std::string& category,
+    const std::string& display_name,
+    nb::list requirements,
+    nb::list capabilities) {
     if (tc_component_registry_has(name.c_str()) &&
         tc_component_registry_get_kind(name.c_str()) == TC_CXX_COMPONENT) {
         tc::Log::error(
             "[ComponentRegistry] refusing Python registration for native component %s",
+            name.c_str());
+        return false;
+    }
+    const char* ambient_owner = tc_component_registry_get_registration_owner();
+    const bool allow_same_owner_replacement = ambient_owner && ambient_owner[0];
+    if (tc_component_registry_has(name.c_str()) && !allow_same_owner_replacement) {
+        auto existing = python_classes().find(name);
+        if (existing != python_classes().end() && existing->second->ptr() == cls.ptr()) {
+            return true;
+        }
+        tc::Log::error(
+            "[ComponentRegistry] refusing duplicate Python component registration for %s",
             name.c_str());
         return false;
     }
@@ -77,15 +99,27 @@ bool ComponentRegistryPython::register_python(const std::string& name, nb::objec
         return false;
     }
 
-    if (!tc_component_registry_register_with_parent(
-        name.c_str(),
-        python_component_factory,
-        const_cast<char*>(interned_name),
-        TC_PYTHON_COMPONENT,
-        parent
-    )) {
-        return false;
+    const char* owner = ambient_owner && ambient_owner[0]
+        ? ambient_owner
+        : "termin-scene-python";
+    ComponentTypeDescriptorBuilder descriptor(
+        name.c_str(), owner, parent, python_component_factory,
+        const_cast<char*>(interned_name), TC_PYTHON_COMPONENT, false,
+        allow_same_owner_replacement);
+    descriptor.category(category).display_name(display_name);
+    for (nb::handle item : requirements) {
+        descriptor.require(nb::cast<std::string>(item));
     }
+    for (nb::handle item : capabilities) {
+        descriptor.capability(nb::cast<tc_component_cap_id>(item));
+    }
+    auto inspect = tc::build_python_inspect_facet(name, std::move(fields));
+    tc_value metadata_value = tc::nb_to_tc_value(std::move(metadata));
+    const bool metadata_ok = inspect.set_metadata(&metadata_value);
+    tc_value_free(&metadata_value);
+    if (!metadata_ok) return false;
+    descriptor.set_inspect(std::move(inspect));
+    if (!descriptor.commit()) return false;
 
     python_classes()[name] = std::make_shared<nb::object>(std::move(cls));
     return true;

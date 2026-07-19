@@ -13,7 +13,7 @@ namespace termin {
 namespace {
 
 // Register collider_type field with enum choices
-void register_collider_type_field() {
+void register_collider_type_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "ColliderComponent";
         info.path = "collider_type";
@@ -39,11 +39,11 @@ void register_collider_type_field() {
         info.choices.push_back({"Capsule", "Capsule"});
         info.choices.push_back({"ConvexHull", "ConvexHull"});
 
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
 // Register ConvexHull mesh source field with enum choices
-void register_convex_hull_mesh_source_field() {
+void register_convex_hull_mesh_source_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "ColliderComponent";
         info.path = "convex_hull_mesh_source";
@@ -67,14 +67,14 @@ void register_convex_hull_mesh_source_field() {
         info.choices.push_back({"Field", "Field"});
         info.choices.push_back({"MeshComponent", "MeshComponent"});
 
-        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_collider_component_inspect_fields() {
-    register_collider_type_field();
-    register_convex_hull_mesh_source_field();
+void register_collider_component_inspect_fields(tc::InspectFacetBuilder& builder) {
+    register_collider_type_field(builder);
+    register_convex_hull_mesh_source_field(builder);
 
-    tc::InspectRegistry::instance().add_with_callbacks<ColliderComponent, tc_vec3>(
+    builder.add_with_callbacks<ColliderComponent, tc_vec3>(
         "ColliderComponent",
         "box_size",
         "Size",
@@ -85,7 +85,7 @@ void register_collider_component_inspect_fields() {
         1000.0,
         0.1
     );
-    tc::InspectRegistry::instance().add_with_callbacks<ColliderComponent, TcMesh>(
+    builder.add_with_callbacks<ColliderComponent, TcMesh>(
         "ColliderComponent",
         "convex_hull_mesh",
         "Convex Hull Mesh",
@@ -93,7 +93,7 @@ void register_collider_component_inspect_fields() {
         [](ColliderComponent* c) -> TcMesh& { return c->convex_hull_mesh; },
         [](ColliderComponent* c, const TcMesh& value) { c->set_convex_hull_mesh(value); }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<ColliderComponent, bool>(
+    builder.add_with_callbacks<ColliderComponent, bool>(
         "ColliderComponent",
         "collider_offset_enabled",
         "Collider Offset",
@@ -106,7 +106,7 @@ void register_collider_component_inspect_fields() {
             }
         }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<ColliderComponent, tc_vec3>(
+    builder.add_with_callbacks<ColliderComponent, tc_vec3>(
         "ColliderComponent",
         "collider_offset_position",
         "Offset Position",
@@ -117,7 +117,7 @@ void register_collider_component_inspect_fields() {
             c->rebuild_collider();
         }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<ColliderComponent, tc_vec3>(
+    builder.add_with_callbacks<ColliderComponent, tc_vec3>(
         "ColliderComponent",
         "collider_offset_euler",
         "Offset Rotation",
@@ -137,9 +137,11 @@ ColliderComponent::ColliderComponent()
 {}
 
 void ColliderComponent::register_type() {
-    register_component_type<ColliderComponent>("ColliderComponent", "Component");
-    ComponentRegistry::instance().set_category("ColliderComponent", "Collision");
-    register_collider_component_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<ColliderComponent>(
+        "ColliderComponent", "termin-components-collision", "Component");
+    descriptor.category("Collision");
+    register_collider_component_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 ColliderComponent::~ColliderComponent() {

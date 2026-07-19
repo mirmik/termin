@@ -79,46 +79,52 @@ public:
     int value = 0;
 };
 
-static ::termin::ComponentRegistrar<ReloadableComponent>
-    reloadable_component_registrar("ReloadableComponent", "CxxComponent");
-static ::termin::ComponentRegistrar<SecondaryComponent>
-    secondary_component_registrar("SecondaryComponent", "CxxComponent");
-static ::termin::ComponentRegistrar<RequiredBaseComponent>
-    required_base_component_registrar("RequiredBaseComponent", "CxxComponent");
-static ::termin::ComponentRegistrar<RequiredDerivedComponent>
-    required_derived_component_registrar("RequiredDerivedComponent", "RequiredBaseComponent");
-static ::termin::ComponentRegistrar<NeedsBaseComponent>
-    needs_base_component_registrar("NeedsBaseComponent", "CxxComponent");
-static ::termin::ComponentRegistrar<CycleAComponent>
-    cycle_a_component_registrar("CycleAComponent", "CxxComponent");
-static ::termin::ComponentRegistrar<CycleBComponent>
-    cycle_b_component_registrar("CycleBComponent", "CxxComponent");
-static ::termin::ComponentRequirementRegistrar
-    needs_base_requirement_registrar("NeedsBaseComponent", "RequiredBaseComponent");
-static ::termin::ComponentRequirementRegistrar
-    cycle_a_requirement_registrar("CycleAComponent", "CycleBComponent");
-static ::termin::ComponentRequirementRegistrar
-    cycle_b_requirement_registrar("CycleBComponent", "CycleAComponent");
+constexpr const char* kTestComponentOwner = "termin-scene-test";
 
-struct InspectFieldRegistration {
-    InspectFieldRegistration() {
-        tc::InspectRegistry::instance().add<ReloadableComponent, int>(
-            "ReloadableComponent",
-            &ReloadableComponent::value,
-            "value",
-            "Value",
-            "int"
-        );
+bool register_reloadable_component() {
+    auto descriptor = termin::ComponentTypeDescriptorBuilder::native<ReloadableComponent>(
+        "ReloadableComponent", kTestComponentOwner, "CxxComponent");
+    (void)descriptor.inspect().add<ReloadableComponent, int>(
+        &ReloadableComponent::value,
+        tc::InspectFieldSpec{
+            "ReloadableComponent", "value", "Value", "int"});
+    return descriptor.commit();
+}
 
-        tc::InspectRegistry::instance().add<SecondaryComponent, int>(
-            "SecondaryComponent",
-            &SecondaryComponent::amount,
-            "amount",
-            "Amount",
-            "int"
-        );
-    }
-} inspect_field_registration;
+bool register_test_component_types() {
+    if (!register_reloadable_component()) return false;
+
+    auto secondary = termin::ComponentTypeDescriptorBuilder::native<SecondaryComponent>(
+        "SecondaryComponent", kTestComponentOwner, "CxxComponent");
+    (void)secondary.inspect().add<SecondaryComponent, int>(
+        &SecondaryComponent::amount,
+        tc::InspectFieldSpec{
+            "SecondaryComponent", "amount", "Amount", "int"});
+    if (!secondary.commit()) return false;
+
+    auto required_base = termin::ComponentTypeDescriptorBuilder::native<RequiredBaseComponent>(
+        "RequiredBaseComponent", kTestComponentOwner, "CxxComponent");
+    if (!required_base.commit()) return false;
+
+    auto required_derived = termin::ComponentTypeDescriptorBuilder::native<RequiredDerivedComponent>(
+        "RequiredDerivedComponent", kTestComponentOwner, "RequiredBaseComponent");
+    if (!required_derived.commit()) return false;
+
+    auto needs_base = termin::ComponentTypeDescriptorBuilder::native<NeedsBaseComponent>(
+        "NeedsBaseComponent", kTestComponentOwner, "CxxComponent");
+    needs_base.require("RequiredBaseComponent");
+    if (!needs_base.commit()) return false;
+
+    auto cycle_a = termin::ComponentTypeDescriptorBuilder::native<CycleAComponent>(
+        "CycleAComponent", kTestComponentOwner, "CxxComponent");
+    cycle_a.require("CycleBComponent");
+    if (!cycle_a.commit()) return false;
+
+    auto cycle_b = termin::ComponentTypeDescriptorBuilder::native<CycleBComponent>(
+        "CycleBComponent", kTestComponentOwner, "CxxComponent");
+    cycle_b.require("CycleAComponent");
+    return cycle_b.commit();
+}
 
 template<typename T>
 T* create_registered_component(const char* type_name) {
@@ -131,12 +137,17 @@ T* create_registered_component(const char* type_name) {
 }
 
 void reregister_reloadable_component() {
-    termin::ComponentRegistry::instance().register_native(
-        "ReloadableComponent",
-        &termin::CxxComponentFactoryData<ReloadableComponent>::create,
-        nullptr,
-        "CxxComponent"
-    );
+    (void)register_reloadable_component();
+}
+
+bool register_owner_scoped_component(const char* owner) {
+    auto descriptor = termin::ComponentTypeDescriptorBuilder::native<OwnerScopedComponent>(
+        "OwnerScopedComponent", owner, "CxxComponent");
+    (void)descriptor.inspect().add<OwnerScopedComponent, int>(
+        &OwnerScopedComponent::value,
+        tc::InspectFieldSpec{
+            "OwnerScopedComponent", "value", "Value", "int"});
+    return descriptor.commit();
 }
 
 struct PrepareUnloadTestContext {
@@ -176,19 +187,8 @@ int test_module_owner_registration_cleanup() {
     components.set_registration_owner(module_id);
     inspect.set_registration_owner(module_id);
 
-    components.register_native(
-        "OwnerScopedComponent",
-        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
-        nullptr,
-        "CxxComponent"
-    );
-    inspect.add<OwnerScopedComponent, int>(
-        "OwnerScopedComponent",
-        &OwnerScopedComponent::value,
-        "value",
-        "Value",
-        "int"
-    );
+    TEST_ASSERT(register_owner_scoped_component(module_id),
+                "owned component descriptor committed");
 
     TEST_ASSERT(components.owner_of("OwnerScopedComponent") == module_id,
                 "component owner captured");
@@ -239,19 +239,8 @@ int test_module_owner_cleanup_prepares_live_components() {
     components.set_registration_owner(module_id);
     inspect.set_registration_owner(module_id);
 
-    components.register_native(
-        "OwnerScopedComponent",
-        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
-        nullptr,
-        "CxxComponent"
-    );
-    inspect.add<OwnerScopedComponent, int>(
-        "OwnerScopedComponent",
-        &OwnerScopedComponent::value,
-        "value",
-        "Value",
-        "int"
-    );
+    TEST_ASSERT(register_owner_scoped_component(module_id),
+                "owned component descriptor committed");
 
     components.set_registration_owner("");
     inspect.set_registration_owner("");
@@ -308,7 +297,8 @@ int test_cpp_inspect_registry_roundtrip() {
     std::cout << "Testing InspectRegistry roundtrip for test components...\n";
 
     auto& reg = tc::InspectRegistry::instance();
-    TEST_ASSERT(reg.all_fields_count("ReloadableComponent") == 1, "ReloadableComponent fields registered");
+    TEST_ASSERT(reg.all_fields_count("ReloadableComponent") == 3,
+                "ReloadableComponent own and inherited fields registered");
     TEST_ASSERT(reg.find_field("ReloadableComponent", "value") != nullptr, "ReloadableComponent.value field registered");
 
     ReloadableComponent component;
@@ -975,12 +965,31 @@ int test_component_is_a_after_rejected_parent_cycle() {
     return 0;
 }
 
+int test_component_descriptor_failure_is_atomic() {
+    const char* type_name = "RejectedComponentDescriptor";
+    tc_runtime_type_registry_unregister_type(type_name);
+    auto descriptor = termin::ComponentTypeDescriptorBuilder::native<ReloadableComponent>(
+        type_name, "termin-scene-test", "MissingComponentDescriptorParent");
+    (void)descriptor.inspect().add<ReloadableComponent, int>(
+        &ReloadableComponent::value,
+        tc::InspectFieldSpec{type_name, "value", "Value", "int"});
+    TEST_ASSERT(!descriptor.commit(), "descriptor with missing parent rejected");
+    TEST_ASSERT(!tc_runtime_type_registry_has_type(type_name), "runtime type not published");
+    TEST_ASSERT(!tc_component_registry_has(type_name), "component facet not published");
+    TEST_ASSERT(!tc::InspectRegistry::instance().has_type(type_name), "inspect facet not published");
+    return 0;
+}
+
 } // namespace
 
 int main() {
     tc::init_cpp_inspect_vtable();
     tc::register_builtin_cpp_kinds();
     termin::register_builtin_scene_component_types();
+    if (!register_test_component_types()) {
+        std::cerr << "FAIL: test component descriptors were not committed\n";
+        return 1;
+    }
 
     int result = 0;
     result |= test_cpp_inspect_registry_roundtrip();
@@ -1001,6 +1010,7 @@ int main() {
     result |= test_component_degradation_prepare_is_all_or_zero();
     result |= test_component_degradation_rejects_stale_plan();
     result |= test_component_is_a_after_rejected_parent_cycle();
+    result |= test_component_descriptor_failure_is_atomic();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";

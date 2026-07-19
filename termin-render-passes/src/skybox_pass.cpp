@@ -308,13 +308,14 @@ void SkyBoxPass::destroy() {
     skybox_layout_ = MaterialUboLayout{};
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(SkyBoxPass);
-
 void SkyBoxPass::register_type() {
-    register_frame_pass_SkyBoxPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<SkyBoxPass>(
+        "SkyBoxPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

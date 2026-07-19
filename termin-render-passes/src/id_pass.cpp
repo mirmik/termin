@@ -414,10 +414,10 @@ void IdPass::execute(ExecuteContext& ctx) {
     );
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(IdPass, GeometryPassBase);
-
 void IdPass::register_type() {
-    register_frame_pass_IdPass();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<IdPass>(
+        "IdPass", "termin-render-passes", "GeometryPassBase");
+    (void)descriptor.commit();
 }
 
 } // namespace termin

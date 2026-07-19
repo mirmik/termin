@@ -6,18 +6,9 @@
 namespace termin {
 
 void MeshComponent::register_type() {
-    auto& component_registry = ComponentRegistry::instance();
-    if (!component_registry.has("MeshComponent")) {
-        component_registry.register_native(
-            "MeshComponent",
-            &CxxComponentFactoryData<MeshComponent>::create,
-            nullptr,
-            "Component"
-        );
-    }
-
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.set_type_parent("MeshComponent", "Component");
+    auto descriptor = ComponentTypeDescriptorBuilder::native<MeshComponent>(
+        "MeshComponent", "termin-components-mesh", "Component");
+    auto& inspect = descriptor.inspect();
     if (!inspect.find_field("MeshComponent", "mesh_generated")) {
         tc::InspectFieldSpec spec = tc::inspect_field_spec(
             "MeshComponent",
@@ -96,6 +87,7 @@ void MeshComponent::register_type() {
             }
         );
     }
+    (void)descriptor.commit();
 }
 
 MeshComponent::MeshComponent()

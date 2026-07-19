@@ -18,7 +18,7 @@ namespace termin {
 
 namespace {
 
-void register_camera_component_inspect_fields();
+void register_camera_component_inspect_fields(tc::InspectFacetBuilder& builder);
 
 } // namespace
 
@@ -224,7 +224,7 @@ std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, i
 
 namespace {
 
-void register_fov_mode_field() {
+void register_fov_mode_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "CameraComponent";
         info.path = "fov_mode";
@@ -245,10 +245,10 @@ void register_fov_mode_field() {
             }
             return false;
         };
-        tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_camera_layer_mask_field() {
+void register_camera_layer_mask_field(tc::InspectFacetBuilder& builder) {
     tc::InspectFieldInfo info;
     info.type_name = "CameraComponent";
     info.path = "layer_mask";
@@ -271,10 +271,10 @@ void register_camera_layer_mask_field() {
         }
         return false;
     };
-    tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+    (void)builder.add_field(std::move(info));
 }
 
-void register_camera_render_category_mask_field() {
+void register_camera_render_category_mask_field(tc::InspectFacetBuilder& builder) {
     tc::InspectFieldInfo info;
     info.type_name = "CameraComponent";
     info.path = "render_category_mask";
@@ -297,11 +297,11 @@ void register_camera_render_category_mask_field() {
         }
         return false;
     };
-    tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+    (void)builder.add_field(std::move(info));
 }
 
-void register_camera_component_inspect_fields() {
-    tc::register_inspect_field(
+void register_camera_component_inspect_fields(tc::InspectFacetBuilder& builder) {
+    tc::stage_inspect_field(builder,
         &CameraComponent::near_clip,
         "CameraComponent",
         "near_clip",
@@ -311,7 +311,7 @@ void register_camera_component_inspect_fields() {
         10000.0,
         0.01
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(builder,
         &CameraComponent::far_clip,
         "CameraComponent",
         "far_clip",
@@ -321,7 +321,7 @@ void register_camera_component_inspect_fields() {
         100000.0,
         1.0
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(builder,
         &CameraComponent::ortho_size,
         "CameraComponent",
         "ortho_size",
@@ -331,7 +331,7 @@ void register_camera_component_inspect_fields() {
         1000.0,
         0.5
     );
-    tc::InspectRegistry::instance().add_with_callbacks<CameraComponent, double>(
+    builder.add_with_callbacks<CameraComponent, double>(
         "CameraComponent",
         "fov_x_degrees",
         "Horizontal FOV",
@@ -346,7 +346,7 @@ void register_camera_component_inspect_fields() {
         360.0,
         1.0
     );
-    tc::InspectRegistry::instance().add_with_callbacks<CameraComponent, double>(
+    builder.add_with_callbacks<CameraComponent, double>(
         "CameraComponent",
         "fov_y_degrees",
         "Vertical FOV",
@@ -361,17 +361,19 @@ void register_camera_component_inspect_fields() {
         360.0,
         1.0
     );
-    register_fov_mode_field();
-    register_camera_layer_mask_field();
-    register_camera_render_category_mask_field();
+    register_fov_mode_field(builder);
+    register_camera_layer_mask_field(builder);
+    register_camera_render_category_mask_field(builder);
 }
 
 } // namespace
 
 void CameraComponent::register_type() {
-    register_component_type<CameraComponent>("CameraComponent", "CxxComponent");
-    ComponentRegistry::instance().set_category("CameraComponent", "Rendering");
-    register_camera_component_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<CameraComponent>(
+        "CameraComponent", "termin-components-render", "CxxComponent");
+    descriptor.category("Rendering");
+    register_camera_component_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 } // namespace termin
