@@ -7,6 +7,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+from tcbase import log
 from termin.display import PresentationMode, SDLBackendWindow, quit_sdl
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
@@ -77,6 +78,7 @@ from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
 from termin.editor_core.editor_log_model import EditorLogModel
 from termin.editor_core.editor_session_presentation import EditorSessionPresentationModel
+from termin.editor_core.terminal_interrupt import TerminalInterruptController
 from termin.editor_core.render_scene_session import RenderSceneSession
 from termin.editor_core.rendering_factories import (
     PipelineAssetResolver,
@@ -1697,9 +1699,14 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
 
     frame_limit = _smoke_frame_limit()
     frame_count = 0
+    terminal_interrupt = TerminalInterruptController()
 
     def poll_events() -> None:
         nonlocal frame_count
+        if terminal_interrupt.consume():
+            log.info("[Editor] SIGINT received; requesting native editor shutdown")
+            window.set_should_close(True)
+            return
         # The root shell and initial scene are owned by this engine-loop closure.
         _ = (
             shell,
@@ -1883,10 +1890,12 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             _logger.exception("Native rendering manager shutdown failed")
         window_manager.close()
         quit_sdl()
+        terminal_interrupt.close()
 
     engine.set_poll_events_callback(poll_events)
     engine.set_should_continue_callback(should_continue)
     engine.set_on_shutdown_callback(on_shutdown)
+    terminal_interrupt.install()
 
 
 __all__ = ["init_editor_native"]
