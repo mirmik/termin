@@ -19,6 +19,11 @@ layer.
 - document clipboard services and a typed file-drop callback boundary;
 - owner-thread PNG readback of the composed color target for screenshots/MCP.
 
+`NativeUiHost` is owned by the editor session; it is not the application
+composition root and is never owned by `EngineCore`. The canonical attachment,
+session and shutdown contract is defined by
+[the architecture council protocol](../architecture-council/2026-07-19-engine-loop-client-and-editor-session.md).
+
 `NativeUiWindowManager` owns the process-level multi-window boundary. SDL has a
 single event queue, so the manager drains it once and routes events to a host by
 SDL window id. Secondary windows receive independent `Document`, renderer,
