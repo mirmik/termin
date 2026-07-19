@@ -25,6 +25,7 @@ setup(
         "termin-components-render",
         "termin-inspect",
         "termin-materials",
+        "termin-navmesh",
         "termin-render",
         "termin-scene",
         "termin-voxels",

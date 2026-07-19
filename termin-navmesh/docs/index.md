@@ -33,6 +33,11 @@ Native Recast/Detour ownership больше не находится в `termin-a
 код может подключать editor-specific визуализацию, но runtime/builder
 components и `_navmesh_native` собираются здесь.
 
+Нейтральный helper `termin.navmesh.ribbon_geometry.build_line_ribbon`
+является публичной границей для построения debug-контуров. Navigation package
+не зависит от `termin-components-voxels`; voxelizer integration направлена в
+обратную сторону и объявляется самим `termin-components-voxels`.
+
 ## Asset integration
 
 Navmesh asset ownership живет в `termin-default-assets`:
