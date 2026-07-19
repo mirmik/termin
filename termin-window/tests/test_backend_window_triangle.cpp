@@ -5,7 +5,7 @@
 //   TERMIN_BACKEND=vulkan ./backend_window_triangle
 //
 // The app code below has zero mention of GL vs Vulkan. All backend
-// specifics are inside BackendWindow + IRenderDevice.
+// specifics are inside the lightweight BackendWindow + IRenderDevice.
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
 #endif

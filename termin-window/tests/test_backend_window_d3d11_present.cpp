@@ -1,4 +1,4 @@
-// test_backend_window_d3d11_present.cpp - SDLBackendWindow D3D11 present smoke.
+// test_backend_window_d3d11_present.cpp - termin-window D3D11 present smoke.
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
 #endif

@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.20)
 project(termin_gui_native_tally VERSION 0.1.0 LANGUAGES CXX)
 
 find_package(termin_gui_native CONFIG REQUIRED)
-find_package(termin_display CONFIG REQUIRED)
+find_package(termin_window CONFIG REQUIRED)
 
-if(NOT termin_display_HAS_SDL)
+if(NOT termin_window_HAS_SDL)
     message(FATAL_ERROR "termin-gui-native tally requires an SDK built with SDL support")
 endif()
 
@@ -22,7 +22,7 @@ target_compile_features(termin_tally PRIVATE cxx_std_20)
 target_link_libraries(termin_tally
     PRIVATE
         termin_gui_native::termin_gui_native
-        termin_display::termin_display
+        termin_window::termin_window
 )
 target_compile_definitions(termin_tally
     PRIVATE

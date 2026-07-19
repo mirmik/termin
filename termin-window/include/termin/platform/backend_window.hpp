@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "render/termin_display_api.h"
+#include "termin/window/api.h"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/handles.hpp"
 
@@ -19,7 +19,7 @@ namespace termin {
 // BackendWindow is intentionally backend-neutral. It does not expose SDL,
 // Qt, GLFW, or native OS handles, which lets termin-display/graphics build
 // without SDL and lets tests provide lightweight mock windows.
-class TERMIN_DISPLAY_API BackendWindow {
+class TERMIN_WINDOW_API BackendWindow {
 public:
     virtual ~BackendWindow() = default;
 

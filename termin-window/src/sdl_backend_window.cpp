@@ -1,4 +1,4 @@
-// backend_window.cpp - SDL window + IRenderDevice wrapper.
+// sdl_backend_window.cpp - SDL window + IRenderDevice wrapper.
 #include "termin/platform/sdl_backend_window.hpp"
 
 #include <cstdint>
@@ -16,8 +16,6 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/render_runtime.hpp"
 #include "tgfx/tgfx2_interop.h"
-#include "termin/platform/sdl_window.hpp"
-
 #ifdef TGFX2_HAS_D3D11
 #include <SDL2/SDL_syswm.h>
 #include "tgfx2/d3d11/d3d11_render_device.hpp"
@@ -26,7 +24,6 @@
 
 extern "C" {
 #include <tcbase/tc_log.h>
-#include "render/tc_input_manager.h"
 }
 
 #ifdef TGFX2_HAS_VULKAN
@@ -580,73 +577,8 @@ void SDLBackendWindow::poll_events() {
             continue;
         }
 
-        if (!input_manager_) {
-            continue;
-        }
-
-        switch (ev.type) {
-            case SDL_MOUSEMOTION:
-                tc_input_manager_on_mouse_move(input_manager_, ev.motion.x, ev.motion.y);
-                break;
-
-            case SDL_MOUSEBUTTONDOWN:
-                tc_input_manager_on_mouse_move(input_manager_, ev.button.x, ev.button.y);
-                tc_input_manager_on_mouse_button(
-                    input_manager_,
-                    SDLWindow::translate_mouse_button(ev.button.button),
-                    TC_INPUT_PRESS,
-                    SDLWindow::translate_sdl_mods(SDL_GetModState()),
-                    ev.button.clicks
-                );
-                break;
-
-            case SDL_MOUSEBUTTONUP:
-                tc_input_manager_on_mouse_move(input_manager_, ev.button.x, ev.button.y);
-                tc_input_manager_on_mouse_button(
-                    input_manager_,
-                    SDLWindow::translate_mouse_button(ev.button.button),
-                    TC_INPUT_RELEASE,
-                    SDLWindow::translate_sdl_mods(SDL_GetModState()),
-                    ev.button.clicks
-                );
-                break;
-
-            case SDL_MOUSEWHEEL: {
-                int x = 0;
-                int y = 0;
-                SDL_GetMouseState(&x, &y);
-                tc_input_manager_on_mouse_move(input_manager_, x, y);
-                tc_input_manager_on_scroll(
-                    input_manager_,
-                    ev.wheel.x,
-                    ev.wheel.y,
-                    SDLWindow::translate_sdl_mods(SDL_GetModState())
-                );
-                break;
-            }
-
-            case SDL_KEYDOWN:
-                tc_input_manager_on_key(
-                    input_manager_,
-                    ev.key.keysym.sym,
-                    ev.key.keysym.scancode,
-                    ev.key.repeat ? TC_INPUT_REPEAT : TC_INPUT_PRESS,
-                    SDLWindow::translate_sdl_mods(ev.key.keysym.mod)
-                );
-                break;
-
-            case SDL_KEYUP:
-                tc_input_manager_on_key(
-                    input_manager_,
-                    ev.key.keysym.sym,
-                    ev.key.keysym.scancode,
-                    TC_INPUT_RELEASE,
-                    SDLWindow::translate_sdl_mods(ev.key.keysym.mod)
-                );
-                break;
-
-            default:
-                break;
+        if (event_handler_) {
+            event_handler_(ev);
         }
     }
 }
