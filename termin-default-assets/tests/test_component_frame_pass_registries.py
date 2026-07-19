@@ -73,6 +73,7 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
 
 
 def test_module_owner_context_unregisters_python_component_registrations() -> None:
+    import termin.bootstrap
     from termin.inspect import InspectField, InspectRegistry
     from termin.scene import ComponentRegistry, PythonComponent
     from termin_modules.module_context import (
@@ -81,6 +82,7 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
         unregister_module_owner,
     )
 
+    termin.bootstrap.bootstrap_player()
     module_id = "owner_context_probe"
     component_name = "OwnerContextProbeComponent"
     component_registry = ComponentRegistry.instance()
@@ -93,27 +95,31 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     inspect_registry.unregister_type(component_name)
     unregister_module_owner(module_id)
 
-    with module_import_context(module_id):
-        class OwnerContextProbeComponent(PythonComponent):
-            inspect_fields = {
-                "value": InspectField(path="value", label="Value", kind="int")
-            }
+    try:
+        with module_import_context(module_id):
+            class OwnerContextProbeComponent(PythonComponent):
+                inspect_fields = {
+                    "value": InspectField(path="value", label="Value", kind="int")
+                }
 
-            def __init__(self):
-                super().__init__()
-                self.value = 7
+                def __init__(self):
+                    super().__init__()
+                    self.value = 7
 
-    registrations = registrations_for_owner(module_id)
-    assert component_name in registrations.components
-    assert component_name in registrations.inspect_types
-    assert component_registry.has(component_name)
-    assert component_name in component_registry.list_owned(module_id)
-    assert inspect_registry.has_type(component_name)
+        registrations = registrations_for_owner(module_id)
+        assert component_name in registrations.components
+        assert component_name in registrations.inspect_types
+        assert component_registry.has(component_name)
+        assert component_name in component_registry.list_owned(module_id)
+        assert inspect_registry.has_type(component_name)
 
-    unregister_module_owner(module_id)
+        unregister_module_owner(module_id)
 
-    assert not component_registry.has(component_name)
-    assert not inspect_registry.has_type(component_name)
+        assert not component_registry.has(component_name)
+        assert not inspect_registry.has_type(component_name)
+    finally:
+        unregister_module_owner(module_id)
+        termin.bootstrap.shutdown_player()
 
 
 def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:

@@ -6,9 +6,10 @@
 namespace termin {
 
 void SkinnedMeshRenderer::register_type() {
-    register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
-    ComponentRegistry::instance().set_category("SkinnedMeshRenderer", "Rendering");
-    register_component_requirement("SkinnedMeshRenderer", "MeshComponent");
+    auto descriptor = ComponentTypeDescriptorBuilder::native<SkinnedMeshRenderer>(
+        "SkinnedMeshRenderer", "termin-components-render", "MeshRenderer");
+    descriptor.category("Rendering").require("MeshComponent");
+    (void)descriptor.commit();
 }
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()

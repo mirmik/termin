@@ -80,27 +80,24 @@ RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent()
 }
 
 void RecastNavMeshBuilderComponent::register_type() {
-    register_component_type<RecastNavMeshBuilderComponent>(
-        "RecastNavMeshBuilderComponent",
-        "Component"
-    );
-    ComponentRegistry::instance().set_category("RecastNavMeshBuilderComponent", "Navigation");
-    register_component_requirement("RecastNavMeshBuilderComponent", "NavMeshKeeperComponent");
-    tc::register_inspect_field(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<RecastNavMeshBuilderComponent>(
+        "RecastNavMeshBuilderComponent", "termin-navmesh", "Component");
+    descriptor.category("Navigation").require("NavMeshKeeperComponent");
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::agent_type_name,
         "RecastNavMeshBuilderComponent",
         "agent_type_name",
         "Agent Type",
         "agent_type"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::area_id,
         "RecastNavMeshBuilderComponent",
         "area_id",
         "Area",
         "navmesh_area"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::cell_size,
         "RecastNavMeshBuilderComponent",
         "cell_size",
@@ -110,7 +107,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         2.0,
         0.05
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::cell_height,
         "RecastNavMeshBuilderComponent",
         "cell_height",
@@ -120,7 +117,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         2.0,
         0.05
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::min_region_area,
         "RecastNavMeshBuilderComponent",
         "min_region_area",
@@ -130,7 +127,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         100,
         1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::merge_region_area,
         "RecastNavMeshBuilderComponent",
         "merge_region_area",
@@ -140,7 +137,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         100,
         1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::max_edge_length,
         "RecastNavMeshBuilderComponent",
         "max_edge_length",
@@ -150,7 +147,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         50.0,
         0.5
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::max_simplification_error,
         "RecastNavMeshBuilderComponent",
         "max_simplification_error",
@@ -160,7 +157,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         5.0,
         0.1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::max_verts_per_poly,
         "RecastNavMeshBuilderComponent",
         "max_verts_per_poly",
@@ -170,14 +167,14 @@ void RecastNavMeshBuilderComponent::register_type() {
         6,
         1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::build_detail_mesh,
         "RecastNavMeshBuilderComponent",
         "build_detail_mesh",
         "Build Detail Mesh",
         "bool"
     );
-    tc::register_inspect_field_choices(
+    tc::stage_inspect_field_choices(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::mesh_source,
         "RecastNavMeshBuilderComponent",
         "mesh_source",
@@ -188,96 +185,97 @@ void RecastNavMeshBuilderComponent::register_type() {
             {"1", "All Descendants"},
         }
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::capture_heightfield,
         "RecastNavMeshBuilderComponent",
         "capture_heightfield",
         "Capture Heightfield (1)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::capture_compact,
         "RecastNavMeshBuilderComponent",
         "capture_compact",
         "Capture Compact (2)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::capture_contours,
         "RecastNavMeshBuilderComponent",
         "capture_contours",
         "Capture Contours (3)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::capture_poly_mesh,
         "RecastNavMeshBuilderComponent",
         "capture_poly_mesh",
         "Capture Poly Mesh (4)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::capture_detail_mesh,
         "RecastNavMeshBuilderComponent",
         "capture_detail_mesh",
         "Capture Detail Mesh (5)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_input_mesh,
         "RecastNavMeshBuilderComponent",
         "show_input_mesh",
         "Show Input Mesh (0)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_heightfield,
         "RecastNavMeshBuilderComponent",
         "show_heightfield",
         "Show Heightfield (1)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_regions,
         "RecastNavMeshBuilderComponent",
         "show_regions",
         "Show Regions (2)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_distance_field,
         "RecastNavMeshBuilderComponent",
         "show_distance_field",
         "Show Distance Field (3)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_contours,
         "RecastNavMeshBuilderComponent",
         "show_contours",
         "Show Contours (4)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_poly_mesh,
         "RecastNavMeshBuilderComponent",
         "show_poly_mesh",
         "Show Poly Mesh (5)",
         "bool"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &RecastNavMeshBuilderComponent::show_detail_mesh,
         "RecastNavMeshBuilderComponent",
         "show_detail_mesh",
         "Show Detail Mesh (6)",
         "bool"
     );
-    tc::register_inspect_button_method(
-        "RecastNavMeshBuilderComponent",
+    tc::stage_inspect_button_method<RecastNavMeshBuilderComponent>(
+        descriptor.inspect(),
         "build_btn",
         "Build NavMesh",
         &RecastNavMeshBuilderComponent::build_from_entity
     );
+    (void)descriptor.commit();
 }
 
 RecastNavMeshBuilderComponent::~RecastNavMeshBuilderComponent() {

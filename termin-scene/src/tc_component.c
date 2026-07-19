@@ -44,6 +44,12 @@ bool tc_component_registry_has_capability(
     tc_component_cap_id cap_id
 );
 
+static bool prepare_component_facet_unload(
+    const char* type_name,
+    void* payload,
+    void* context
+);
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================
@@ -126,6 +132,94 @@ static void destroy_component_facet(void* payload) {
     }
     free(facet->requirements);
     free(facet);
+}
+
+bool tc_component_type_descriptor_add_facet(
+    tc_runtime_type_descriptor* descriptor,
+    tc_component_factory factory,
+    void* factory_userdata,
+    tc_component_kind kind,
+    bool is_abstract,
+    const char* display_name,
+    const char* category,
+    const char* const* requirements,
+    size_t requirement_count,
+    const tc_component_cap_id* capabilities,
+    size_t capability_count
+) {
+    if (!descriptor) {
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] cannot attach component facet to null descriptor");
+        return false;
+    }
+    if (!is_abstract && !factory) {
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] concrete component descriptor requires a factory");
+        return false;
+    }
+    if ((requirement_count > 0 && !requirements) ||
+        (capability_count > 0 && !capabilities)) {
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] staged component arrays must not be null");
+        return false;
+    }
+    tc_component_facet_payload* facet =
+        (tc_component_facet_payload*)calloc(1, sizeof(*facet));
+    if (!facet) {
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to allocate staged component facet");
+        return false;
+    }
+    facet->factory = factory;
+    facet->factory_userdata = factory_userdata;
+    facet->kind = kind;
+    facet->is_abstract = is_abstract;
+    facet->display_name = display_name && display_name[0] ? tc_intern_string(display_name) : NULL;
+    facet->category = category && category[0] ? tc_intern_string(category) : NULL;
+    if ((display_name && display_name[0] && !facet->display_name) ||
+        (category && category[0] && !facet->category)) {
+        destroy_component_facet(facet);
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to intern staged component metadata");
+        return false;
+    }
+    if (requirement_count > 0) {
+        facet->requirements = (const char**)calloc(requirement_count, sizeof(const char*));
+        if (!facet->requirements) {
+            destroy_component_facet(facet);
+            tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to allocate staged requirements");
+            return false;
+        }
+        facet->requirement_capacity = requirement_count;
+        for (size_t i = 0; i < requirement_count; ++i) {
+            if (!requirements[i] || !requirements[i][0]) {
+                destroy_component_facet(facet);
+                tc_log(TC_LOG_ERROR, "[ComponentRegistry] staged requirement must be non-empty");
+                return false;
+            }
+            const char* requirement = tc_intern_string(requirements[i]);
+            if (!requirement) {
+                destroy_component_facet(facet);
+                tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to intern staged requirement");
+                return false;
+            }
+            facet->requirements[facet->requirement_count++] = requirement;
+        }
+    }
+    for (size_t i = 0; i < capability_count; ++i) {
+        uint32_t slot = 0;
+        if (!tc_component_capability_slot(capabilities[i], &slot)) {
+            destroy_component_facet(facet);
+            tc_log(TC_LOG_ERROR, "[ComponentRegistry] invalid staged capability id");
+            return false;
+        }
+        facet->capability_mask |= UINT64_C(1) << slot;
+    }
+    if (!tc_runtime_type_descriptor_add_facet(
+            descriptor,
+            TC_RUNTIME_TYPE_FACET_COMPONENT,
+            facet,
+            destroy_component_facet,
+            prepare_component_facet_unload,
+            1)) {
+        return false;
+    }
+    return true;
 }
 
 static bool prepare_component_facet_unload(
@@ -308,7 +402,9 @@ void tc_component_registry_register_abstract(
 
 void tc_component_registry_unregister(const char* type_name) {
     if (!type_name) return;
-    tc_runtime_type_registry_remove_facet(type_name, TC_RUNTIME_TYPE_FACET_COMPONENT);
+    if (!tc_runtime_type_registry_unregister_type_with_context(type_name, NULL)) {
+        tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to unregister component type '%s'", type_name);
+    }
 }
 
 bool tc_component_registry_has(const char* type_name) {
@@ -731,7 +827,9 @@ void tc_component_registry_cleanup(void) {
         &ctx
     );
     for (size_t i = 0; i < ctx.count; ++i) {
-        tc_runtime_type_registry_remove_facet(ctx.names[i], TC_RUNTIME_TYPE_FACET_COMPONENT);
+        if (!tc_runtime_type_registry_unregister_type_with_context(ctx.names[i], NULL)) {
+            tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to clean up component type '%s'", ctx.names[i]);
+        }
     }
     free(ctx.names);
 

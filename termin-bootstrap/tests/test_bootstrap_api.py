@@ -129,7 +129,7 @@ def test_explicit_bootstrap_configures_resource_manager_factory():
     )
 
 
-def test_explicit_inspect_bootstrap_registers_component_base_fields():
+def test_explicit_runtime_bootstrap_registers_component_base_fields():
     _run_python(
         """
         import termin.bootstrap
@@ -140,7 +140,7 @@ def test_explicit_inspect_bootstrap_registers_component_base_fields():
         assert "display_name" not in before
         assert "enabled" not in before
 
-        termin.bootstrap.init_inspect_adapters()
+        termin.bootstrap.bootstrap_runtime()
 
         after = {field.path for field in registry.fields("Component")}
         assert "display_name" in after

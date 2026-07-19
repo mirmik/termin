@@ -7,16 +7,17 @@
 namespace termin {
 
 void OffMeshLinkComponent::register_type() {
-    register_component_type<OffMeshLinkComponent>("OffMeshLinkComponent", "Component");
-    ComponentRegistry::instance().set_category("OffMeshLinkComponent", "Navigation");
-    tc::register_inspect_field(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<OffMeshLinkComponent>(
+        "OffMeshLinkComponent", "termin-navmesh", "Component");
+    descriptor.category("Navigation");
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::enabled,
         "OffMeshLinkComponent",
         "enabled",
         "Enabled",
         "bool"
     );
-    tc::register_inspect_field_choices(
+    tc::stage_inspect_field_choices(descriptor.inspect(),
         &OffMeshLinkComponent::link_type,
         "OffMeshLinkComponent",
         "link_type",
@@ -29,21 +30,21 @@ void OffMeshLinkComponent::register_type() {
             {"3", "Climb"},
         }
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::agent_type,
         "OffMeshLinkComponent",
         "agent_type",
         "Agent Type",
         "string"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::area_id,
         "OffMeshLinkComponent",
         "area_id",
         "Area",
         "navmesh_area"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::stable_user_id,
         "OffMeshLinkComponent",
         "stable_user_id",
@@ -53,21 +54,21 @@ void OffMeshLinkComponent::register_type() {
         static_cast<double>(std::numeric_limits<unsigned int>::max()),
         1.0
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::start_local,
         "OffMeshLinkComponent",
         "start_local",
         "Start Local",
         "vec3"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::end_local,
         "OffMeshLinkComponent",
         "end_local",
         "End Local",
         "vec3"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::radius,
         "OffMeshLinkComponent",
         "radius",
@@ -77,19 +78,20 @@ void OffMeshLinkComponent::register_type() {
         10.0,
         0.01
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OffMeshLinkComponent::bidirectional,
         "OffMeshLinkComponent",
         "bidirectional",
         "Bidirectional",
         "bool"
     );
-    tc::register_inspect_button_method(
-        "OffMeshLinkComponent",
+    tc::stage_inspect_button_method<OffMeshLinkComponent>(
+        descriptor.inspect(),
         "center_btn",
         "Center Entity",
         &OffMeshLinkComponent::center_entity
     );
+    (void)descriptor.commit();
 }
 
 } // namespace termin

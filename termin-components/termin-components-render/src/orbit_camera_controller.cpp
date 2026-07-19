@@ -36,9 +36,10 @@ OrbitCameraController::OrbitCameraController(
 }
 
 void OrbitCameraController::register_type() {
-    register_component_type<OrbitCameraController>("OrbitCameraController", "CxxComponent");
-    ComponentRegistry::instance().set_category("OrbitCameraController", "Input");
-    tc::register_inspect_field(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<OrbitCameraController>(
+        "OrbitCameraController", "termin-components-render", "CxxComponent");
+    descriptor.category("Input");
+    tc::stage_inspect_field(descriptor.inspect(),
         &OrbitCameraController::radius,
         "OrbitCameraController",
         "radius",
@@ -48,7 +49,7 @@ void OrbitCameraController::register_type() {
         100.0,
         0.1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OrbitCameraController::min_radius,
         "OrbitCameraController",
         "min_radius",
@@ -58,7 +59,7 @@ void OrbitCameraController::register_type() {
         100.0,
         0.1
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &OrbitCameraController::max_radius,
         "OrbitCameraController",
         "max_radius",
@@ -68,6 +69,7 @@ void OrbitCameraController::register_type() {
         1000.0,
         1.0
     );
+    (void)descriptor.commit();
 }
 
 void OrbitCameraController::_ensure_camera() {

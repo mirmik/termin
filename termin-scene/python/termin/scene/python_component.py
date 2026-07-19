@@ -20,7 +20,6 @@ from tcbase import log
 
 
 _registered_python_component_types: list[str] = []
-_registered_python_inspect_types: list[str] = []
 
 
 @dataclass(frozen=True)
@@ -76,9 +75,8 @@ def _component_display_name_for_class(cls: type) -> str:
 
 
 def shutdown_python_components() -> None:
-    """Unregister Python-backed component and inspect types."""
+    """Unregister complete Python-backed component descriptors."""
     component_names = list(reversed(_registered_python_component_types))
-    inspect_names = list(reversed(_registered_python_inspect_types))
 
     try:
         component_registry = ComponentRegistry.instance()
@@ -90,32 +88,33 @@ def shutdown_python_components() -> None:
     except Exception:
         pass
 
-    try:
-        from termin.inspect import InspectRegistry
-        inspect_registry = InspectRegistry.instance()
-        for type_name in inspect_names:
-            try:
-                inspect_registry.unregister_type(type_name)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
     _registered_python_component_types.clear()
-    _registered_python_inspect_types.clear()
 
 
 atexit.register(shutdown_python_components)
 
 
-def _ensure_python_component_inspect_type(registry, record_inspect_type) -> None:
-    if registry.has_type("PythonComponent"):
+def _ensure_python_component_type(component_registry) -> None:
+    if component_registry.has("PythonComponent"):
         return
-
-    registry.register_python_fields("PythonComponent", PythonComponent.inspect_fields)
-    _remember_registered_type(_registered_python_inspect_types, "PythonComponent")
-    if record_inspect_type is not None:
-        record_inspect_type("PythonComponent")
+    previous_owner = component_registry.registration_owner()
+    try:
+        component_registry.set_registration_owner("termin-scene-python")
+        if not component_registry.register_python(
+            "PythonComponent",
+            PythonComponent,
+            "Component",
+            PythonComponent.inspect_fields,
+            {},
+            PythonComponent.component_category,
+            "Python Component",
+            [],
+            [],
+        ):
+            raise RuntimeError("failed to register PythonComponent root descriptor")
+    finally:
+        component_registry.set_registration_owner(previous_owner)
+    _remember_registered_type(_registered_python_component_types, "PythonComponent")
 
 
 def _find_python_component_parent(cls: type["PythonComponent"]) -> str | None:
@@ -131,40 +130,39 @@ def _register_python_component_metadata(
     cls: type["PythonComponent"],
     *,
     component_registry,
-    inspect_registry,
     parent_name: str | None,
     record_component,
     record_inspect_type,
 ) -> None:
-    _ensure_python_component_inspect_type(inspect_registry, record_inspect_type)
-
+    _ensure_python_component_type(component_registry)
     own_fields = cls.__dict__.get("inspect_fields", {})
-    inspect_registry.register_python_fields(cls.__name__, own_fields)
-    _remember_registered_type(_registered_python_inspect_types, cls.__name__)
+    requirements = list(cls.__dict__.get("required_components", ()))
+    for required_name in requirements:
+        if not isinstance(required_name, str) or not required_name:
+            raise TypeError(
+                f"{cls.__name__}.required_components must contain non-empty component type names"
+            )
+    capabilities = list(cls.__dict__.get("component_capabilities", ()))
+    if not component_registry.register_python(
+        cls.__name__,
+        cls,
+        parent_name,
+        own_fields,
+        {},
+        _component_category_for_class(cls),
+        _component_display_name_for_class(cls),
+        requirements,
+        capabilities,
+    ):
+        raise RuntimeError(f"component descriptor rejected for {cls.__name__}")
     if record_inspect_type is not None:
         record_inspect_type(cls.__name__)
 
-    if parent_name:
-        inspect_registry.set_type_parent(cls.__name__, parent_name)
-        if record_inspect_type is not None:
-            record_inspect_type(cls.__name__)
-
-    component_registry.set_category(cls.__name__, _component_category_for_class(cls))
-    component_registry.set_display_name(cls.__name__, _component_display_name_for_class(cls))
     _remember_registered_type(_registered_python_component_types, cls.__name__)
     if record_component is not None:
         record_component(cls.__name__)
     if record_inspect_type is not None:
         record_inspect_type(cls.__name__)
-
-
-def _register_python_component_requirements(cls, component_registry) -> None:
-    for required_name in cls.__dict__.get("required_components", ()):
-        if not isinstance(required_name, str) or not required_name:
-            raise TypeError(
-                f"{cls.__name__}.required_components must contain non-empty component type names"
-            )
-        component_registry.register_requirement(cls.__name__, required_name)
 
 
 def restore_python_components() -> None:
@@ -197,20 +195,13 @@ def restore_python_components() -> None:
             ):
                 continue
 
-            if not component_registry.register_python(cls.__name__, cls, parent_name):
-                log.error(
-                    f"[PythonComponent] rebootstrap registration rejected for {cls.__name__}"
-                )
-                continue
             _register_python_component_metadata(
                 cls,
                 component_registry=component_registry,
-                inspect_registry=inspect_registry,
                 parent_name=parent_name,
                 record_component=None,
                 record_inspect_type=None,
             )
-            _register_python_component_requirements(cls, component_registry)
     except Exception:
         log.error("[PythonComponent] failed to restore loaded component registrations", exc_info=True)
         raise
@@ -231,6 +222,7 @@ class PythonComponent:
     component_category = "Project"
     component_display_name = ""
     required_components: tuple[str, ...] = ()
+    component_capabilities: tuple[int, ...] = ()
 
     inspect_fields: Dict[str, Any] = {
         "display_name": InspectField(
@@ -259,8 +251,6 @@ class PythonComponent:
         if cls.__name__ == "PythonComponent":
             return
 
-        from termin.inspect import InspectRegistry
-        registry = InspectRegistry.instance()
         try:
             from termin_modules.module_context import (
                 record_component,
@@ -278,28 +268,38 @@ class PythonComponent:
 
         parent_name = _find_python_component_parent(cls)
 
-        # Register the native factory first. A conflicting registration must
-        # not replace an existing class, inspect metadata, or ownership record.
         component_registry = ComponentRegistry.instance()
-        if not component_registry.register_python(cls.__name__, cls, parent_name):
+        owner = component_registry.registration_owner()
+        if parent_name and not component_registry.has(parent_name):
+            existing = _python_component_registrations.get(cls.__name__)
+            if existing is None or (owner and existing.owner == owner):
+                _python_component_registrations[cls.__name__] = _PythonComponentRegistration(
+                    cls=cls,
+                    owner=owner,
+                )
+            if record_component is not None:
+                record_component(cls.__name__)
+            if record_inspect_type is not None:
+                record_inspect_type(cls.__name__)
+            return
+        try:
+            _register_python_component_metadata(
+                cls,
+                component_registry=component_registry,
+                parent_name=parent_name,
+                record_component=record_component,
+                record_inspect_type=record_inspect_type,
+            )
+        except Exception:
             log.error(
-                "[PythonComponent] registration rejected for %s; preserving existing component metadata",
-                cls.__name__,
+                f"[PythonComponent] registration rejected for {cls.__name__}; "
+                "preserving existing component metadata",
+                exc_info=True,
             )
             return
-
-        _register_python_component_metadata(
-            cls,
-            component_registry=component_registry,
-            inspect_registry=registry,
-            parent_name=parent_name,
-            record_component=record_component,
-            record_inspect_type=record_inspect_type,
-        )
-        _register_python_component_requirements(cls, component_registry)
         _python_component_registrations[cls.__name__] = _PythonComponentRegistration(
             cls=cls,
-            owner=component_registry.registration_owner(),
+            owner=owner,
         )
 
         # capability registration moved to respective subclasses:

@@ -11,7 +11,7 @@ namespace termin {
 
 namespace {
 
-void register_light_component_inspect_fields();
+void register_light_component_inspect_fields(tc::InspectFacetBuilder& builder);
 
 } // namespace
 
@@ -86,14 +86,16 @@ Light LightComponent::to_light() const {
 }
 
 void LightComponent::register_type() {
-    register_component_type<LightComponent>("LightComponent", "CxxComponent");
-    ComponentRegistry::instance().set_category("LightComponent", "Rendering");
-    register_light_component_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<LightComponent>(
+        "LightComponent", "termin-components-render", "CxxComponent");
+    descriptor.category("Rendering");
+    register_light_component_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 namespace {
 
-void register_light_type_field() {
+void register_light_type_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "LightComponent";
         info.path = "light_type";
@@ -122,10 +124,10 @@ void register_light_type_field() {
             return false;
         };
 
-        tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_light_color_field() {
+void register_light_color_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "LightComponent";
         info.path = "color";
@@ -160,10 +162,10 @@ void register_light_color_field() {
             return false;
         };
 
-        tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_light_shadow_fields() {
+void register_light_shadow_fields(tc::InspectFacetBuilder& builder) {
         {
             tc::InspectFieldInfo info;
             info.type_name = "LightComponent";
@@ -186,7 +188,7 @@ void register_light_shadow_fields() {
                 }
                 return false;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -209,7 +211,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_INT) c->shadows.bias = static_cast<double>(value.data.i);
                 return value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_INT;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -232,7 +234,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_INT) c->shadows.normal_bias = static_cast<double>(value.data.i);
                 return value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_INT;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -255,7 +257,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.map_resolution = static_cast<int>(value.data.d);
                 return value.type == TC_VALUE_INT || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -278,7 +280,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.cascade_count = static_cast<int>(value.data.d);
                 return value.type == TC_VALUE_INT || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -301,7 +303,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_INT) c->shadows.max_distance = static_cast<float>(value.data.i);
                 return value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_INT;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -324,7 +326,7 @@ void register_light_shadow_fields() {
                 if (value.type == TC_VALUE_INT) c->shadows.split_lambda = static_cast<float>(value.data.i);
                 return value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_INT;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -349,14 +351,14 @@ void register_light_shadow_fields() {
                 }
                 return false;
             };
-            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 }
 
-void register_light_component_inspect_fields() {
-    register_light_type_field();
-    register_light_color_field();
-    tc::register_inspect_field(
+void register_light_component_inspect_fields(tc::InspectFacetBuilder& builder) {
+    register_light_type_field(builder);
+    register_light_color_field(builder);
+    tc::stage_inspect_field(builder,
         &LightComponent::intensity,
         "LightComponent",
         "intensity",
@@ -366,7 +368,7 @@ void register_light_component_inspect_fields() {
         100.0,
         0.1
     );
-    register_light_shadow_fields();
+    register_light_shadow_fields(builder);
 }
 
 } // namespace

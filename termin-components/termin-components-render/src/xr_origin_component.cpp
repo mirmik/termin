@@ -10,9 +10,9 @@ namespace termin {
 
 namespace {
 
-void register_xr_origin_reference_space_field();
-void register_xr_origin_reference_alignment_field();
-void register_xr_origin_layer_mask_field();
+void register_xr_origin_reference_space_field(tc::InspectFacetBuilder& builder);
+void register_xr_origin_reference_alignment_field(tc::InspectFacetBuilder& builder);
+void register_xr_origin_layer_mask_field(tc::InspectFacetBuilder& builder);
 
 } // namespace
 
@@ -21,10 +21,10 @@ XrOriginComponent::XrOriginComponent()
 {}
 
 void XrOriginComponent::register_type() {
-    register_component_type<XrOriginComponent>("XrOriginComponent", "CxxComponent");
-    ComponentRegistry::instance().set_category("XrOriginComponent", "Rendering");
-
-    auto& inspect = tc::InspectRegistry::instance();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<XrOriginComponent>(
+        "XrOriginComponent", "termin-components-render", "CxxComponent");
+    descriptor.category("Rendering");
+    auto& inspect = descriptor.inspect();
     if (!inspect.find_field("XrOriginComponent", "near_clip")) {
         inspect.add<XrOriginComponent, double>(
             "XrOriginComponent",
@@ -43,9 +43,10 @@ void XrOriginComponent::register_type() {
             "double"
         );
     }
-    register_xr_origin_reference_space_field();
-    register_xr_origin_reference_alignment_field();
-    register_xr_origin_layer_mask_field();
+    register_xr_origin_reference_space_field(inspect);
+    register_xr_origin_reference_alignment_field(inspect);
+    register_xr_origin_layer_mask_field(inspect);
+    (void)descriptor.commit();
 }
 
 std::string XrOriginComponent::get_reference_space_str() const {
@@ -82,7 +83,7 @@ void XrOriginComponent::set_reference_alignment_str(const std::string& value) {
 
 namespace {
 
-void register_xr_origin_reference_space_field() {
+void register_xr_origin_reference_space_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "reference_space";
@@ -102,10 +103,10 @@ void register_xr_origin_reference_space_field() {
             }
             return false;
         };
-        tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_xr_origin_reference_alignment_field() {
+void register_xr_origin_reference_alignment_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "reference_alignment";
@@ -125,10 +126,10 @@ void register_xr_origin_reference_alignment_field() {
             }
             return false;
         };
-        tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
-void register_xr_origin_layer_mask_field() {
+void register_xr_origin_layer_mask_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "layer_mask";
@@ -152,7 +153,7 @@ void register_xr_origin_layer_mask_field() {
             }
             return false;
         };
-        tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
 } // namespace

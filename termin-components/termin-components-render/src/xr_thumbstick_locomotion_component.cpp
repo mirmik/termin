@@ -16,7 +16,7 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-void register_xr_thumbstick_locomotion_choice_fields();
+void register_xr_thumbstick_locomotion_choice_fields(tc::InspectFacetBuilder& builder);
 
 Vec3 projected_normalized(Vec3 v, const Vec3& fallback) {
     v.z = 0.0;
@@ -36,14 +36,10 @@ XrThumbstickLocomotionComponent::XrThumbstickLocomotionComponent()
 }
 
 void XrThumbstickLocomotionComponent::register_type() {
-    register_component_type<XrThumbstickLocomotionComponent>(
-        "XrThumbstickLocomotionComponent",
-        "CxxComponent"
-    );
-    ComponentRegistry::instance().set_category("XrThumbstickLocomotionComponent", "Input");
-    register_component_requirement("XrThumbstickLocomotionComponent", "XrOriginComponent");
-
-    auto& inspect = tc::InspectRegistry::instance();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<XrThumbstickLocomotionComponent>(
+        "XrThumbstickLocomotionComponent", "termin-components-render", "CxxComponent");
+    descriptor.category("Input").require("XrOriginComponent");
+    auto& inspect = descriptor.inspect();
     if (!inspect.find_field("XrThumbstickLocomotionComponent", "input_device_id")) {
         inspect.add<XrThumbstickLocomotionComponent, std::string>(
             "XrThumbstickLocomotionComponent",
@@ -143,7 +139,8 @@ void XrThumbstickLocomotionComponent::register_type() {
             "double"
         );
     }
-    register_xr_thumbstick_locomotion_choice_fields();
+    register_xr_thumbstick_locomotion_choice_fields(inspect);
+    (void)descriptor.commit();
 }
 
 void XrThumbstickLocomotionComponent::update(float dt) {
@@ -312,7 +309,7 @@ XrLocomotionFrame xr_locomotion_frame_from_string(const std::string& value) {
 
 namespace {
 
-void register_xr_thumbstick_locomotion_choice_fields() {
+void register_xr_thumbstick_locomotion_choice_fields(tc::InspectFacetBuilder& builder) {
         {
             tc::InspectFieldInfo info;
             info.type_name = "XrThumbstickLocomotionComponent";
@@ -333,10 +330,7 @@ void register_xr_thumbstick_locomotion_choice_fields() {
                 }
                 return false;
             };
-            tc::InspectRegistry::instance().add_field_with_choices(
-                "XrThumbstickLocomotionComponent",
-                std::move(info)
-            );
+            (void)builder.add_field(std::move(info));
         }
         {
             tc::InspectFieldInfo info;
@@ -358,10 +352,7 @@ void register_xr_thumbstick_locomotion_choice_fields() {
                 }
                 return false;
             };
-            tc::InspectRegistry::instance().add_field_with_choices(
-                "XrThumbstickLocomotionComponent",
-                std::move(info)
-            );
+            (void)builder.add_field(std::move(info));
         }
         {
             tc::InspectFieldInfo info;
@@ -383,11 +374,8 @@ void register_xr_thumbstick_locomotion_choice_fields() {
                 }
                 return false;
             };
-            tc::InspectRegistry::instance().add_field_with_choices(
-                "XrThumbstickLocomotionComponent",
-                std::move(info)
-            );
-        }
+            (void)builder.add_field(std::move(info));
+    }
 }
 
 } // namespace

@@ -9,7 +9,7 @@ namespace termin {
 
 namespace {
 
-void register_rotator_axis_scale_field();
+void register_rotator_axis_scale_field(tc::InspectFacetBuilder& builder);
 
 } // namespace
 
@@ -20,9 +20,11 @@ RotatorComponent::RotatorComponent()
 }
 
 void RotatorComponent::register_type() {
-    register_component_type<RotatorComponent>("RotatorComponent", "KinematicUnitComponent");
-    ComponentRegistry::instance().set_category("RotatorComponent", "Kinematic");
-    register_rotator_axis_scale_field();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<RotatorComponent>(
+        "RotatorComponent", "termin-components-kinematic", "KinematicUnitComponent");
+    descriptor.category("Kinematic");
+    register_rotator_axis_scale_field(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 void RotatorComponent::apply() {
@@ -80,7 +82,7 @@ void RotatorComponent::capture_base() {
 
 namespace {
 
-void register_rotator_axis_scale_field() {
+void register_rotator_axis_scale_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "RotatorComponent";
         info.path = "axis_scale";
@@ -119,7 +121,7 @@ void register_rotator_axis_scale_field() {
             return true;
         };
 
-        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
 } // namespace
