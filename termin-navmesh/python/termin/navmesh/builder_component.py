@@ -941,7 +941,7 @@ class NavMeshBuilderComponent(DrawableComponent):
     ) -> None:
         """Build contour lines after Douglas-Peucker."""
         from termin.navmesh.polygon_builder import PolygonBuilder
-        from termin.navmesh.display_component import _build_line_ribbon
+        from termin.navmesh.ribbon_geometry import build_line_ribbon
 
         if not self._debug_regions:
             return
@@ -975,7 +975,7 @@ class NavMeshBuilderComponent(DrawableComponent):
                 points = [tuple(v) for v in outer_3d]
                 points.append(points[0])
 
-                ribbon_verts, ribbon_tris = _build_line_ribbon(points, line_width, up_hint)
+                ribbon_verts, ribbon_tris = build_line_ribbon(points, line_width, up_hint)
 
                 if len(ribbon_tris) > 0:
                     ribbon_verts = ribbon_verts + offset_vec
@@ -992,7 +992,7 @@ class NavMeshBuilderComponent(DrawableComponent):
                 hole_points = [tuple(v) for v in hole_3d]
                 hole_points.append(hole_points[0])
 
-                hole_ribbon_verts, hole_ribbon_tris = _build_line_ribbon(hole_points, line_width, up_hint)
+                hole_ribbon_verts, hole_ribbon_tris = build_line_ribbon(hole_points, line_width, up_hint)
 
                 if len(hole_ribbon_tris) > 0:
                     hole_ribbon_verts = hole_ribbon_verts + offset_vec

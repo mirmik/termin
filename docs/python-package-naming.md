@@ -69,11 +69,11 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-collision` | `termin-collision` | `termin.colliders`, `termin.collision`, `termin_collision_component_specs` | Collision runtime and components. |
 | `termin-render` | `termin-render` | `termin.render`, `termin.render_framework`, `termin_render_framework_specs` | Render framework. |
 | `termin-components/termin-components-render` | `termin-components-render` | `termin.render_components`, `termin_render_component_specs` | Render components. |
+| `termin-navmesh` | `termin-navmesh` | `termin.navmesh`, `termin_navmesh_component_specs` | Navmesh runtime and components. |
 | `termin-components/termin-components-voxels` | `termin-components-voxels` | `termin_voxel_components`, `termin_voxel_component_specs` | Voxel components. |
 | `termin-components/termin-components-foliage` | `termin-components-foliage` | `termin.foliage` | Foliage components. |
 | `termin-components/termin-components-ui` | `termin-components-ui` | `termin.ui_components`, `termin_ui_component_specs` | UI components. |
 | `termin-render-passes` | `termin-render-passes` | `termin.render_passes`, `termin_render_pass_specs` | Concrete render passes. |
-| `termin-navmesh` | `termin-navmesh` | `termin.navmesh`, `termin_navmesh_component_specs` | Navmesh runtime and components. |
 | `termin-qopt` | `termin-qopt` | `termin.fem`, `termin.linalg`, `termin.robot` | Optimization/FEM Python APIs. |
 | `termin-physics-fem` | `termin-physics-fem` | `termin.physics_fem` | Experimental FEM scene API. |
 | `termin-pga` | `termin-pga` | `termin.ga201`, `termin.geomalgo` | Geometric algebra APIs. |

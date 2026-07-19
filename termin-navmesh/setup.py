@@ -41,7 +41,6 @@ setup(
         "termin-render",
         "termin-scene",
         "termin-voxels",
-        "termin-components-voxels",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
