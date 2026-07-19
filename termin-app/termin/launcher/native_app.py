@@ -1,0 +1,359 @@
+"""Native projection and host for the toolkit-neutral launcher controller."""
+
+from __future__ import annotations
+
+import logging
+import os
+from pathlib import Path
+from typing import Callable
+
+from termin.gui_native import CollectionItem, CollectionModel, Color, Document, EdgeInsets
+from termin.launcher.controller import LauncherController, LauncherScreen
+
+
+_logger = logging.getLogger(__name__)
+
+
+class NativeLauncherProjection:
+    """Project launcher screens expressed entirely with native widgets."""
+
+    def __init__(
+        self,
+        document: Document,
+        controller: LauncherController,
+        *,
+        request_render: Callable[[], None] = lambda: None,
+    ) -> None:
+        self.document = document
+        self.controller = controller
+        self.request_render = request_render
+        self.root = None
+        self.widgets: dict[str, object] = {}
+        self.models: dict[str, object] = {}
+        self._recent_paths: tuple[str, ...] = ()
+        self._build_current_screen()
+
+    def _replace_root(self, root) -> None:
+        if self.root is not None and self.document.is_alive(self.root.handle):
+            self.document.destroy_widget_recursive(self.root.handle)
+        self.root = root
+        if not self.document.add_root(root.handle):
+            raise RuntimeError("failed to add native launcher root")
+        self.request_render()
+
+    def _screen_frame(self, stable_id: str, panel_height: float):
+        root = self.document.create_vstack(f"native-{stable_id}")
+        root.stable_id = stable_id
+        root.set_layout_background(Color(0.035, 0.04, 0.065, 0.80))
+
+        top = self.document.create_vstack(f"{stable_id}-top-space")
+        bottom = self.document.create_vstack(f"{stable_id}-bottom-space")
+        row = self.document.create_hstack(f"{stable_id}-center-row")
+        left = self.document.create_hstack(f"{stable_id}-left-space")
+        right = self.document.create_hstack(f"{stable_id}-right-space")
+        panel = self.document.create_vstack(f"{stable_id}-panel")
+        panel.stable_id = f"{stable_id}.panel"
+        panel.set_layout_background(Color(0.10, 0.11, 0.15, 0.97))
+        panel.set_layout_border(Color(0.28, 0.31, 0.40, 1.0), 1.0)
+        panel.set_layout_padding(EdgeInsets(28.0, 24.0, 28.0, 24.0))
+        panel.set_layout_spacing(10.0)
+
+        row.add_stretch_child(left)
+        row.add_fixed_child(panel, 720.0)
+        row.add_stretch_child(right)
+        root.add_stretch_child(top)
+        root.add_fixed_child(row, panel_height)
+        root.add_stretch_child(bottom)
+        return root, panel
+
+    def _button(self, text: str, stable_id: str, callback: Callable[[], None]):
+        button = self.document.create_button(text, stable_id)
+        button.widget.stable_id = stable_id
+        button.connect_clicked(callback)
+        return button
+
+    def _add_heading(self, panel, title: str, subtitle: str) -> None:
+        heading = self.document.create_label(title, "launcher-heading")
+        heading.stable_id = "launcher.heading"
+        subheading = self.document.create_label(subtitle, "launcher-subheading")
+        subheading.stable_id = "launcher.subheading"
+        panel.add_fixed_child(heading, 38.0)
+        panel.add_fixed_child(subheading, 24.0)
+
+    def _add_error(self, panel) -> None:
+        error = self.document.create_label("", "launcher-error")
+        error.stable_id = "launcher.error"
+        panel.add_fixed_child(error, 30.0)
+        self.widgets["error"] = error
+        self._sync_error()
+
+    def _build_current_screen(self) -> None:
+        self.widgets = {}
+        self.models = {}
+        if self.controller.state.screen == LauncherScreen.NEW_PROJECT:
+            self._build_new_project()
+        else:
+            self._build_main()
+
+    def close(self) -> None:
+        """Release widget callbacks before the owning document shuts down."""
+        if self.root is not None and self.document.is_alive(self.root.handle):
+            self.document.destroy_widget_recursive(self.root.handle)
+        self.root = None
+        self.widgets.clear()
+        self.models.clear()
+
+    def _build_main(self) -> None:
+        root, panel = self._screen_frame("launcher.main", 500.0)
+        self._add_heading(panel, "Termin Engine", "Project Launcher")
+
+        columns = self.document.create_hstack("launcher-main-columns")
+        columns.set_layout_spacing(18.0)
+        recent_column = self.document.create_vstack("launcher-recent-column")
+        recent_column.set_layout_spacing(6.0)
+        recent_column.add_fixed_child(self.document.create_label("Recent Projects"), 26.0)
+
+        model = CollectionModel()
+        projects = self.controller.state.recent_projects
+        model.set_items(
+            [
+                CollectionItem(f"recent:{project.path}", project.name, os.path.dirname(project.path))
+                for project in projects
+            ]
+        )
+        self._recent_paths = tuple(project.path for project in projects)
+        project_list = self.document.create_list_widget(model)
+        project_list.widget.stable_id = "launcher.recent-projects"
+        recent_column.add_stretch_child(project_list.widget)
+
+        actions = self.document.create_vstack("launcher-actions")
+        actions.set_layout_spacing(8.0)
+        actions.add_fixed_child(self.document.create_label("Actions"), 26.0)
+        new_button = self._button("New Project", "launcher.action.new", self._show_new_project)
+        open_button = self._button("Open Project", "launcher.action.open", self._open_selected)
+        browse_button = self._button(
+            "Open Existing...", "launcher.action.open-existing", self._open_existing
+        )
+        remove_button = self._button(
+            "Remove from List", "launcher.action.remove", self._remove_selected
+        )
+        for button in (new_button, open_button, browse_button, remove_button):
+            actions.add_fixed_child(button.widget, 38.0)
+
+        columns.add_stretch_child(recent_column)
+        columns.add_fixed_child(actions, 190.0)
+        panel.add_stretch_child(columns)
+        self.widgets.update(
+            {
+                "recent_list": project_list,
+                "new": new_button,
+                "open": open_button,
+                "open_existing": browse_button,
+                "remove": remove_button,
+            }
+        )
+        self.models["recent"] = model
+        project_list.connect_selection_changed(self._selection_changed)
+        project_list.connect_activated(self._project_activated)
+        self._sync_selection_actions()
+        self._add_error(panel)
+        self._replace_root(root)
+
+    def _build_new_project(self) -> None:
+        root, panel = self._screen_frame("launcher.new-project", 470.0)
+        self._add_heading(panel, "New Project", "Create a Termin project")
+
+        name_label = self.document.create_label("Project Name")
+        name_input = self.document.create_text_input(self.controller.state.new_project_name)
+        name_input.widget.stable_id = "launcher.new-project.name"
+        location_label = self.document.create_label("Location")
+        location_row = self.document.create_hstack("launcher-location-row")
+        location_row.set_layout_spacing(8.0)
+        location_input = self.document.create_text_input(
+            self.controller.state.new_project_location
+        )
+        location_input.widget.stable_id = "launcher.new-project.location"
+        browse = self._button(
+            "Browse...", "launcher.new-project.browse", self._choose_location
+        )
+        location_row.add_stretch_child(location_input.widget)
+        location_row.add_fixed_child(browse.widget, 120.0)
+
+        actions = self.document.create_hstack("launcher-new-project-actions")
+        actions.set_layout_spacing(10.0)
+        actions.add_stretch_child(self.document.create_label(""))
+        create = self._button("Create", "launcher.new-project.create", self._create_project)
+        back = self._button("Back", "launcher.new-project.back", self._show_main)
+        actions.add_fixed_child(create.widget, 120.0)
+        actions.add_fixed_child(back.widget, 120.0)
+
+        panel.add_fixed_child(name_label, 24.0)
+        panel.add_fixed_child(name_input.widget, 38.0)
+        panel.add_fixed_child(location_label, 24.0)
+        panel.add_fixed_child(location_row, 38.0)
+        panel.add_stretch_child(self.document.create_vstack("launcher-form-space"))
+        panel.add_fixed_child(actions, 40.0)
+        self.widgets.update(
+            {
+                "name": name_input,
+                "location": location_input,
+                "browse": browse,
+                "create": create,
+                "back": back,
+            }
+        )
+        name_input.connect_changed(self.controller.set_new_project_name)
+        location_input.connect_changed(self.controller.set_new_project_location)
+        name_input.connect_submitted(lambda _text: self._create_project())
+        location_input.connect_submitted(lambda _text: self._create_project())
+        self._add_error(panel)
+        self._replace_root(root)
+
+    def _sync_error(self) -> None:
+        error = self.widgets.get("error")
+        if error is None:
+            return
+        message = self.controller.state.last_error or ""
+        error.text = message
+        error.visible = bool(message)
+
+    def _sync_selection_actions(self) -> None:
+        enabled = self.controller.state.can_open_selected
+        self.widgets["open"].widget.enabled = enabled
+        self.widgets["remove"].widget.enabled = enabled
+
+    def _selection_changed(self, selected: list[int]) -> None:
+        path = self._recent_paths[selected[0]] if selected else None
+        self.controller.select_project(path)
+        self._sync_selection_actions()
+        self.request_render()
+
+    def _project_activated(self, index: int, _item: CollectionItem) -> None:
+        opened = self.controller.open_project(self._recent_paths[index])
+        if opened and not self.controller.state.should_quit:
+            self._build_current_screen()
+            return
+        self._sync_error()
+        self.request_render()
+
+    def _show_new_project(self) -> None:
+        self.controller.show_new_project_screen()
+        self._build_current_screen()
+
+    def _show_main(self) -> None:
+        self.controller.show_main_screen()
+        self._build_current_screen()
+
+    def _open_selected(self) -> None:
+        opened = self.controller.open_selected_project()
+        if opened and not self.controller.state.should_quit:
+            self._build_current_screen()
+            return
+        self._sync_error()
+        self.request_render()
+
+    def _open_existing(self) -> None:
+        opened = self.controller.open_existing_project()
+        if opened and not self.controller.state.should_quit:
+            self._build_current_screen()
+            return
+        self._sync_error()
+        self.request_render()
+
+    def _remove_selected(self) -> None:
+        if self.controller.remove_selected_project():
+            self._build_current_screen()
+        else:
+            self._sync_error()
+            self.request_render()
+
+    def _choose_location(self) -> None:
+        chosen = self.controller.choose_new_project_location()
+        if chosen is not None:
+            location = self.widgets["location"]
+            location.text = chosen
+            location.caret = len(chosen)
+        self._sync_error()
+        self.request_render()
+
+    def _create_project(self) -> None:
+        self.controller.create_new_project()
+        self._sync_error()
+        self.request_render()
+
+
+def _install_background(host) -> Callable[[], None] | None:
+    image_path = Path(__file__).with_name("back.png")
+    if not image_path.is_file():
+        _logger.warning("Native launcher background is missing: %s", image_path)
+        return None
+    try:
+        from termin.image import decode_rgba8_file
+
+        pixels = decode_rgba8_file(image_path).to_numpy()
+        image = host.document.create_image_widget()
+        image.widget.stable_id = "launcher.background"
+        image.widget.mouse_transparent = True
+        image.set_preserve_aspect(False)
+        if not host.document.add_root(image.handle):
+            raise RuntimeError("failed to add native launcher background root")
+        return host.register_image_preview(image, pixels)
+    except Exception:
+        _logger.exception("Failed to load native launcher background")
+        return None
+
+
+def _smoke_frame_limit() -> int:
+    raw = os.environ.get("TERMIN_LAUNCHER_NATIVE_SMOKE_FRAMES", "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        _logger.error("Invalid TERMIN_LAUNCHER_NATIVE_SMOKE_FRAMES=%r", raw)
+        return 0
+    return max(0, value)
+
+
+def run_native_launcher(controller: LauncherController) -> None:
+    """Own the native launcher window until an editor starts or it closes."""
+    from termin.display import SDLBackendWindow, quit_sdl, wait_sdl_events_timeout
+    from termin.editor_core.application_icon import apply_editor_window_icon
+    from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
+    from termin.editor_native.ui_host import NativeUiHost
+
+    configure_sdk_shader_runtime("launcher-native")
+    window = SDLBackendWindow("Termin Launcher", 1024, 640)
+    apply_editor_window_icon(window)
+    host = NativeUiHost(window)
+    release_background = _install_background(host)
+    projection = NativeLauncherProjection(
+        host.document,
+        controller,
+        request_render=host.request_render_update,
+    )
+    frame_limit = _smoke_frame_limit()
+    frame_count = 0
+    try:
+        host.render()
+        while not window.should_close() and not controller.state.should_quit:
+            for event in wait_sdl_events_timeout(100):
+                result = host.router.route(event)
+                if not result.keep_running:
+                    window.set_should_close(True)
+                    break
+                if result.routed:
+                    host.request_render_update()
+            if host.render_requested:
+                host.render()
+            frame_count += 1
+            if frame_limit > 0 and frame_count >= frame_limit:
+                window.set_should_close(True)
+        _ = projection
+    finally:
+        projection.close()
+        if release_background is not None:
+            release_background()
+        host.close()
+        quit_sdl()
+
+
+__all__ = ["NativeLauncherProjection", "run_native_launcher"]
