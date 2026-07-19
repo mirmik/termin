@@ -12,7 +12,6 @@ class _Surface:
     def __init__(self, device, width: int, height: int) -> None:
         self.device = device
         self.size = (width, height)
-        self.input_manager = None
         self.closed = False
 
     def is_valid(self) -> bool:
@@ -55,9 +54,6 @@ class _Surface:
     def dispatch_text(self, _codepoint: int) -> bool:
         return True
 
-    def set_input_manager(self, value: int) -> None:
-        self.input_manager = value
-
     def close(self) -> None:
         self.closed = True
 
@@ -69,6 +65,24 @@ class _Display:
         self.editor_only = editor_only
         self.tc_display_ptr = 41
         self.destroyed = False
+
+    def is_valid(self) -> bool:
+        return not self.destroyed
+
+    def dispatch_pointer_move(self, _x, _y) -> bool:
+        return True
+
+    def dispatch_pointer_button(self, *_args) -> bool:
+        return True
+
+    def dispatch_wheel(self, *_args) -> bool:
+        return True
+
+    def dispatch_key(self, *_args) -> bool:
+        return True
+
+    def dispatch_text(self, _codepoint) -> bool:
+        return True
 
     def destroy(self) -> None:
         self.destroyed = True
@@ -237,14 +251,8 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         def detach(self) -> None:
             self.detached = True
 
-    class InputRouter:
-        def __init__(self, display_ptr: int) -> None:
-            self.display_ptr = display_ptr
-            self.tc_input_manager_ptr = 73
-
     monkeypatch.setattr(termin.display, "FBOSurface", _Surface)
     monkeypatch.setattr(termin.display, "Display", _Display)
-    monkeypatch.setattr(termin.display, "DisplayInputRouter", InputRouter)
     monkeypatch.setattr(editor_native, "EditorInteractionSystem", _Interaction)
     monkeypatch.setattr(editor_native, "EditorViewportInputManager", InputManager)
     monkeypatch.setattr(attachment_module, "EditorSceneAttachment", _Attachment)
@@ -269,7 +277,6 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     assert runtime.attachment.scene == "scene"
     assert runtime.attachment.restore_state is False
     assert runtime.input_manager.args == (3, 9, 41)
-    assert runtime.surface.input_manager == 73
     assert runtime.widget.has_surface
     assert _Interaction.instance() is runtime.interaction
 
@@ -322,7 +329,6 @@ root:
 
     runtime.close()
     runtime.close()
-    assert runtime.surface.input_manager == 0
     assert runtime.input_manager.detached
     assert runtime.attachment.closed
     assert manager.removed == [runtime.display]

@@ -1,18 +1,14 @@
 """
 Display-level input routing helpers.
 
-DisplayInputRouter routes display surface events to viewport input managers.
-BasicDisplayInputManager owns a router plus per-viewport managers for simple
-runtime/player input dispatch.
+The display owns its stable router. BasicDisplayInputManager only owns the
+per-viewport managers used for simple runtime/player scene dispatch.
 """
 
 from __future__ import annotations
 
 from termin.display._display_native import (
-    DisplayInputRouter,
-    _display_input_router_base,
-    _display_input_router_free,
-    _display_input_router_new,
+    _display_get_input_manager,
     _viewport_get_input_manager,
     _viewport_input_manager_free,
     _viewport_input_manager_new,
@@ -21,19 +17,17 @@ from termin.display._display_native import (
 
 class BasicDisplayInputManager:
     """
-    Basic input manager: DisplayInputRouter + ViewportInputManager per viewport.
+    Basic input manager: display endpoint + ViewportInputManager per viewport.
 
     Routes input events from display to viewports, then each viewport dispatches
     to scene InputComponents through the native input-manager vtable.
     """
 
     def __init__(self, display_ptr: int):
-        self._router_ptr = 0
+        self._display_ptr = display_ptr
         self._viewport_managers: dict[tuple[int, int], int] = {}
-
-        self._router_ptr = _display_input_router_new(display_ptr)
-        if self._router_ptr == 0:
-            raise RuntimeError("Failed to create DisplayInputRouter")
+        if _display_get_input_manager(display_ptr) == 0:
+            raise RuntimeError("Display input endpoint is unavailable")
 
     def __del__(self):
         self.close()
@@ -42,9 +36,7 @@ class BasicDisplayInputManager:
         """Release all native input objects owned by this manager."""
 
         self._free_viewport_managers()
-        if self._router_ptr:
-            _display_input_router_free(self._router_ptr)
-            self._router_ptr = 0
+        self._display_ptr = 0
 
     def _free_viewport_managers(self) -> None:
         for ptr in self._viewport_managers.values():
@@ -78,9 +70,12 @@ class BasicDisplayInputManager:
     @property
     def tc_input_manager_ptr(self) -> int:
         """Return the tc_input_manager pointer for attaching to a surface."""
-        if not self._router_ptr:
+        if not self._display_ptr:
             raise RuntimeError("BasicDisplayInputManager is closed")
-        return _display_input_router_base(self._router_ptr)
+        endpoint = _display_get_input_manager(self._display_ptr)
+        if endpoint == 0:
+            raise RuntimeError("Display input endpoint is unavailable")
+        return endpoint
 
 
-__all__ = ["DisplayInputRouter", "BasicDisplayInputManager"]
+__all__ = ["BasicDisplayInputManager"]

@@ -1,7 +1,7 @@
 // tc_display_input_router.c - Display-level input event router
-#include "render/tc_display_input_router.h"
+#include "tc_display_input_router_internal.h"
+#include "render/tc_display.h"
 #include "render/tc_viewport.h"
-#include "render/tc_render_surface.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
 
@@ -30,11 +30,24 @@ static const tc_input_manager_vtable g_router_vtable = {
 // Lifecycle
 // ============================================================================
 
-tc_display_input_router* tc_display_input_router_new(tc_display* display) {
+typedef struct tc_display_input_router {
+    tc_input_manager base;
+    tc_display* display;
+    tc_viewport_handle active_viewport;
+    tc_viewport_handle focused_viewport;
+    double last_cursor_x;
+    double last_cursor_y;
+    bool has_cursor;
+} tc_display_input_router;
+
+tc_input_manager* tc_display_input_router_create(tc_display* display) {
     if (!display) return NULL;
 
     tc_display_input_router* r = (tc_display_input_router*)calloc(1, sizeof(tc_display_input_router));
-    if (!r) return NULL;
+    if (!r) {
+        tc_log(TC_LOG_ERROR, "[tc_display_input_router_create] allocation failed");
+        return NULL;
+    }
 
     tc_input_manager_init(&r->base, &g_router_vtable);
     r->base.userdata = r;
@@ -45,29 +58,18 @@ tc_display_input_router* tc_display_input_router_new(tc_display* display) {
     r->last_cursor_y = 0.0;
     r->has_cursor = false;
 
-    // Auto-attach to display's surface
-    if (display->surface) {
-        tc_render_surface_set_input_manager(display->surface, &r->base);
-    }
-
-    return r;
+    return &r->base;
 }
 
-void tc_display_input_router_free(tc_display_input_router* r) {
-    if (!r) return;
-
-    // Detach from surface
-    if (r->display && r->display->surface) {
-        if (r->display->surface->input_manager == &r->base) {
-            tc_render_surface_set_input_manager(r->display->surface, NULL);
-        }
+void tc_display_input_router_destroy(tc_input_manager* endpoint) {
+    if (!endpoint) return;
+    tc_display_input_router* r = (tc_display_input_router*)endpoint->userdata;
+    if (!r || &r->base != endpoint) {
+        tc_log(TC_LOG_ERROR, "[tc_display_input_router_destroy] invalid endpoint");
+        return;
     }
-
+    r->display = NULL;
     free(r);
-}
-
-tc_input_manager* tc_display_input_router_base(tc_display_input_router* r) {
-    return r ? &r->base : NULL;
 }
 
 // ============================================================================

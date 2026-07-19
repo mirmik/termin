@@ -44,7 +44,7 @@ struct tc_input_manager_vtable {
     void (*on_mouse_button)(tc_input_manager* self, int button, int action, int mods,
                             uint32_t click_count);
 
-    // Mouse move event (x, y in window pixels)
+    // Mouse move event (x, y in display pixels, origin top-left)
     void (*on_mouse_move)(tc_input_manager* self, double x, double y);
 
     // Scroll event (x, y offsets, mods)

@@ -5,7 +5,6 @@
 
 #include "tc_types.h"
 #include "render/termin_display_api.h"
-#include "render/tc_input_manager.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -98,9 +97,6 @@ struct tc_render_surface {
     tc_render_surface_resize_fn on_resize;
     void* on_resize_userdata;
 
-    // Input manager (optional, for window surfaces)
-    tc_input_manager* input_manager;
-
 };
 
 // ============================================================================
@@ -115,22 +111,6 @@ static inline void tc_render_surface_init(
     s->body = NULL;
     s->on_resize = NULL;
     s->on_resize_userdata = NULL;
-    s->input_manager = NULL;
-}
-
-// Set input manager for surface
-static inline void tc_render_surface_set_input_manager(
-    tc_render_surface* s,
-    tc_input_manager* input_manager
-) {
-    if (s) {
-        s->input_manager = input_manager;
-    }
-}
-
-// Get input manager from surface
-static inline tc_input_manager* tc_render_surface_get_input_manager(tc_render_surface* s) {
-    return s ? s->input_manager : NULL;
 }
 
 // ============================================================================

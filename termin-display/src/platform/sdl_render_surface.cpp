@@ -81,71 +81,12 @@ void SDLWindowBackend::poll_events() {
 }
 
 void SDLWindowBackend::dispatch_event_to_surface(SDLWindowRenderSurface* surface, const SDL_Event& event) {
-    tc_input_manager* input = surface->input_manager();
-    if (!input) return;
-
-    switch (event.type) {
-        case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-                surface->set_should_close(true);
-            } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
-                auto [w, h] = surface->get_size();
-                tc_render_surface_notify_resize(surface->tc_surface(), w, h);
-            }
-            break;
-
-        case SDL_MOUSEMOTION:
-            tc_input_manager_on_mouse_move(input, event.motion.x, event.motion.y);
-            break;
-
-        case SDL_MOUSEBUTTONDOWN:
-            tc_input_manager_on_mouse_button(
-                input,
-                SDLWindow::translate_mouse_button(event.button.button),
-                TC_INPUT_PRESS,
-                SDLWindow::translate_sdl_mods(SDL_GetModState()),
-                event.button.clicks
-            );
-            break;
-
-        case SDL_MOUSEBUTTONUP:
-            tc_input_manager_on_mouse_button(
-                input,
-                SDLWindow::translate_mouse_button(event.button.button),
-                TC_INPUT_RELEASE,
-                SDLWindow::translate_sdl_mods(SDL_GetModState()),
-                event.button.clicks
-            );
-            break;
-
-        case SDL_MOUSEWHEEL:
-            tc_input_manager_on_scroll(
-                input,
-                event.wheel.x,
-                event.wheel.y,
-                SDLWindow::translate_sdl_mods(SDL_GetModState())
-            );
-            break;
-
-        case SDL_KEYDOWN:
-            tc_input_manager_on_key(
-                input,
-                event.key.keysym.sym,
-                event.key.keysym.scancode,
-                event.key.repeat ? TC_INPUT_REPEAT : TC_INPUT_PRESS,
-                SDLWindow::translate_sdl_mods(event.key.keysym.mod)
-            );
-            break;
-
-        case SDL_KEYUP:
-            tc_input_manager_on_key(
-                input,
-                event.key.keysym.sym,
-                event.key.keysym.scancode,
-                TC_INPUT_RELEASE,
-                SDLWindow::translate_sdl_mods(event.key.keysym.mod)
-            );
-            break;
+    if (event.type != SDL_WINDOWEVENT) return;
+    if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+        surface->set_should_close(true);
+    } else if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+        auto [w, h] = surface->get_size();
+        tc_render_surface_notify_resize(surface->tc_surface(), w, h);
     }
 }
 
@@ -207,10 +148,6 @@ SDLWindowRenderSurface::~SDLWindowRenderSurface() {
         delete window_;
         window_ = nullptr;
     }
-}
-
-void SDLWindowRenderSurface::set_input_manager(tc_input_manager* manager) {
-    tc_render_surface_set_input_manager(&surface_, manager);
 }
 
 bool SDLWindowRenderSurface::check_resize() {

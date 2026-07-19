@@ -4,7 +4,6 @@
 #include <utility>
 
 #include "render/termin_display_api.h"
-#include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "tgfx2/handles.hpp"
 
@@ -46,7 +45,6 @@ public:
     uint32_t ref_count() const { return ref_count_; }
     void retain() { ref_count_++; }
     void release() { if (ref_count_ > 0) ref_count_--; }
-    void set_input_manager(tc_input_manager* manager);
 
 private:
     void allocate_textures();

@@ -190,9 +190,8 @@ public:
     // Returns true if display was removed.
     bool try_auto_remove_display(tc_display* display);
 
-    // Ensure display has a DisplayInputRouter (creates one if missing).
-    // Returns the router's tc_input_manager pointer.
-    tc_input_manager* ensure_display_router(tc_display* display);
+    // Return the stable display-owned input endpoint.
+    tc_input_manager* display_input_endpoint(tc_display* display);
 
     // ========================================================================
     // Viewport State Management

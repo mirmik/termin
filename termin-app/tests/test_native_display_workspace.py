@@ -14,7 +14,6 @@ class _Surface:
     def __init__(self, device, width: int, height: int) -> None:
         self.device = device
         self.size = (width, height)
-        self.input_manager = None
         self.closed = False
         self.__class__.instances.append(self)
 
@@ -52,9 +51,6 @@ class _Surface:
     def dispatch_text(self, _codepoint: int) -> bool:
         return True
 
-    def set_input_manager(self, pointer: int) -> None:
-        self.input_manager = pointer
-
     def close(self) -> None:
         self.closed = True
 
@@ -70,6 +66,24 @@ class _Display:
         self.destroyed = False
         self.enabled = True
         self.viewports = []
+
+    def is_valid(self) -> bool:
+        return not self.destroyed
+
+    def dispatch_pointer_move(self, _x, _y) -> bool:
+        return True
+
+    def dispatch_pointer_button(self, *_args) -> bool:
+        return True
+
+    def dispatch_wheel(self, *_args) -> bool:
+        return True
+
+    def dispatch_key(self, *_args) -> bool:
+        return True
+
+    def dispatch_text(self, _codepoint) -> bool:
+        return True
 
     def add_viewport(self, viewport) -> None:
         self.viewports.append(viewport)
@@ -178,7 +192,6 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     assert workspace.tabs.selected_index == 0
     assert display.enabled is False
     assert manager.added == [(display, "Display 0")]
-    assert _Surface.instances[0].input_manager == display.tc_display_ptr + 100
 
     selections = []
     workspace.on_display_selected = selections.append
@@ -217,7 +230,6 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     assert display.destroyed
     assert second_display.destroyed
     assert all(manager.closed for manager in _InputManager.instances)
-    assert all(surface.input_manager == 0 for surface in _Surface.instances)
     assert all(surface.closed for surface in _Surface.instances)
 
     workspace.close()

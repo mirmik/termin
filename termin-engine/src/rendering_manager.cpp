@@ -268,8 +268,8 @@ bool RenderingManager::try_auto_remove_display(tc_display* display) {
     );
 }
 
-tc_input_manager* RenderingManager::ensure_display_router(tc_display* display) {
-    return display_registry_->ensure_display_router(display);
+tc_input_manager* RenderingManager::display_input_endpoint(tc_display* display) {
+    return display_registry_->display_input_endpoint(display);
 }
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {

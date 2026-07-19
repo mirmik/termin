@@ -36,12 +36,6 @@ public:
     uintptr_t tc_surface_ptr() const;
     uint32_t get_tgfx_color_tex_id() const;
     uint32_t get_framebuffer_id() const;
-    void set_input_manager(uintptr_t input_manager_ptr);
-    bool dispatch_pointer_move(double x, double y);
-    bool dispatch_pointer_button(int button, int action, int modifiers, uint32_t click_count);
-    bool dispatch_scroll(double x, double y, int modifiers);
-    bool dispatch_key(int key, int scancode, int action, int modifiers);
-    bool dispatch_text(uint32_t codepoint);
     void make_current();
     void swap_buffers();
     bool should_close() const;

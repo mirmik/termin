@@ -1,8 +1,9 @@
 #include "render/tc_display.h"
-#include "render/tc_display_input_router.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#include "termin/input/window_input_bridge.hpp"
+#include "termin/window/event.hpp"
 
 #include <cassert>
 #include <cstdio>
@@ -20,6 +21,9 @@ struct CountingInput {
     int presses = 0;
     int releases = 0;
     uint32_t last_click_count = 0;
+    double last_x = 0.0;
+    double last_y = 0.0;
+    uint32_t last_codepoint = 0;
 };
 
 void surface_get_size(tc_render_surface* self, int* width, int* height)
@@ -31,6 +35,19 @@ void surface_get_size(tc_render_surface* self, int* width, int* height)
     if (height) {
         *height = fixed->height;
     }
+}
+
+void count_mouse_move(tc_input_manager* self, double x, double y)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->last_x = x;
+    input->last_y = y;
+}
+
+void count_text(tc_input_manager* self, uint32_t codepoint)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->last_codepoint = codepoint;
 }
 
 void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t click_count)
@@ -50,6 +67,8 @@ const tc_render_surface_vtable fixed_surface_vtable = {
 
 const tc_input_manager_vtable counting_input_vtable = {
     .on_mouse_button = count_mouse_button,
+    .on_mouse_move = count_mouse_move,
+    .on_char = count_text,
 };
 
 void init_counting_input(CountingInput* input)
@@ -57,6 +76,9 @@ void init_counting_input(CountingInput* input)
     input->presses = 0;
     input->releases = 0;
     input->last_click_count = 0;
+    input->last_x = 0.0;
+    input->last_y = 0.0;
+    input->last_codepoint = 0;
     tc_input_manager_init(&input->manager, &counting_input_vtable);
     input->manager.userdata = input;
 }
@@ -87,16 +109,31 @@ int main()
     init_counting_input(&right_input);
     tc_viewport_set_input_manager(left, &left_input.manager);
     tc_viewport_set_input_manager(right, &right_input.manager);
+    assert(tc_viewport_get_input_manager(left) == &left_input.manager);
+    assert(tc_viewport_get_input_manager(right) == &right_input.manager);
 
-    tc_display_input_router* router = tc_display_input_router_new(display);
-    assert(router != nullptr);
-    tc_input_manager* input = tc_display_input_router_base(router);
+    tc_input_manager* input = tc_display_get_input_manager(display);
     assert(input != nullptr);
+    assert(input->vtable != nullptr);
+    assert(input->vtable->on_mouse_move != nullptr);
+    assert(input->vtable->on_mouse_button != nullptr);
+    assert(tc_viewport_handle_valid(tc_display_viewport_at_screen(display, 25.0f, 50.0f)));
 
-    tc_input_manager_on_mouse_move(input, 25.0, 50.0);
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 2);
-    tc_input_manager_on_mouse_move(input, 75.0, 50.0);
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_RELEASE, 0, 2);
+    tc_display_dispatch_pointer_move(display, 25.0, 50.0);
+    tc_display_dispatch_pointer_button(
+        display, 25.0, 50.0, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 2);
+
+    FixedSurface replacement_surface;
+    tc_render_surface_init(&replacement_surface.surface, &fixed_surface_vtable);
+    tc_display_set_surface(display, &replacement_surface.surface);
+    if (tc_display_get_input_manager(display) != input) {
+        std::fprintf(stderr, "surface replacement changed the display input endpoint\n");
+        return 1;
+    }
+
+    tc_display_dispatch_pointer_move(display, 75.0, 50.0);
+    tc_display_dispatch_pointer_button(
+        display, 75.0, 50.0, TC_MOUSE_BUTTON_LEFT, TC_INPUT_RELEASE, 0, 2);
 
     if (left_input.presses != 1 || left_input.releases != 1 ||
         right_input.presses != 0 || right_input.releases != 0 ||
@@ -110,7 +147,26 @@ int main()
         return 1;
     }
 
-    tc_display_input_router_free(router);
+    termin::WindowEvent pointer_event;
+    pointer_event.type = termin::WindowEventType::PointerMoved;
+    pointer_event.pointer.logical_position = {12.5f, 25.0f};
+    pointer_event.pointer.framebuffer_position = {75.0f, 50.0f};
+    termin::dispatch_window_input_event(display, pointer_event);
+    if (right_input.last_x != 75.0 || right_input.last_y != 50.0) {
+        std::fprintf(stderr, "window bridge used logical instead of framebuffer coordinates\n");
+        return 1;
+    }
+
+    termin::WindowEvent text_event;
+    text_event.type = termin::WindowEventType::TextInput;
+    text_event.text.utf8[0] = static_cast<char>(0xd0);
+    text_event.text.utf8[1] = static_cast<char>(0x96);
+    termin::dispatch_window_input_event(display, text_event);
+    if (left_input.last_codepoint != 0x416) {
+        std::fprintf(stderr, "window bridge did not decode UTF-8 text input\n");
+        return 1;
+    }
+
     tc_display_free(display);
     return 0;
 }

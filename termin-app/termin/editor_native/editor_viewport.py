@@ -49,7 +49,6 @@ class NativeEditorViewport:
         attachment,
         interaction,
         input_manager,
-        input_router,
         rendering_manager,
         request_render: Callable[[], None],
     ) -> None:
@@ -62,7 +61,6 @@ class NativeEditorViewport:
         self.attachment = attachment
         self.interaction = interaction
         self.input_manager = input_manager
-        self.input_router = input_router
         self.rendering_manager = rendering_manager
         self._request_render = request_render
         self._resize_connection = None
@@ -95,7 +93,7 @@ class NativeEditorViewport:
     ) -> "NativeEditorViewport":
         """Create and connect the complete editor viewport runtime chain."""
 
-        from termin.display import Display, DisplayInputRouter, FBOSurface
+        from termin.display import Display, DisplayViewportHost, FBOSurface
         from termin.editor._editor_native import (
             EditorInteractionSystem,
             EditorViewportInputManager,
@@ -151,9 +149,7 @@ class NativeEditorViewport:
                 viewport_generation,
                 display.tc_display_ptr,
             )
-            input_router = DisplayInputRouter(display.tc_display_ptr)
-            surface.set_input_manager(input_router.tc_input_manager_ptr)
-            widget.set_surface_host(surface)
+            widget.set_surface_host(DisplayViewportHost(surface, display))
         except Exception:
             _logger.exception("Native editor viewport creation failed")
             if attachment is not None:
@@ -183,7 +179,6 @@ class NativeEditorViewport:
             attachment=attachment,
             interaction=interaction,
             input_manager=input_manager,
-            input_router=input_router,
             rendering_manager=rendering_manager,
             request_render=request_render,
         )
@@ -310,7 +305,6 @@ class NativeEditorViewport:
             self._resize_connection = None
         self.interaction.clear_callbacks()
         self.widget.detach_surface()
-        self.surface.set_input_manager(0)
         self.input_manager.detach()
         self.attachment.close()
         self.rendering_manager.remove_editor_display(self.display)

@@ -37,10 +37,8 @@ class RenderingModel:
         self._selected_display: "Display | None" = None
         self._selected_viewport: "Viewport | None" = None
 
-        # Python-side GC anchor for per-display DisplayInputRouter instances —
-        # the surface only holds a raw ptr, so if the router is GC'd the
-        # ptr becomes dangling. View deferentially relies on this dict
-        # staying alive through the display's lifetime.
+        # Per-display input mode bookkeeping. The native endpoint itself is
+        # owned by tc_display and needs no Python GC anchor.
         self._display_input_managers: dict[int, object] = {}
 
         self.changed = Signal()
@@ -102,7 +100,7 @@ class RenderingModel:
 
     @property
     def display_input_managers(self) -> dict[int, object]:
-        """Live GC-anchor dict: ``display_id → DisplayInputRouter``."""
+        """Live input-mode bindings: ``display_id → Display``."""
         return self._display_input_managers
 
     def drop_display_input_manager(self, display_id: int) -> None:
@@ -115,12 +113,11 @@ class RenderingModel:
         surface,
         on_editor_mode=None,
     ) -> None:
-        """Install the appropriate input router on ``surface`` for ``input_mode``.
+        """Apply display input policy for ``input_mode``.
 
-        - ``"none"``: surface is cleared, no router.
-        - ``"simple"`` / ``"basic"``: creates ``DisplayInputRouter``, stashes
-          it in the GC-anchor dict, and points the surface at its
-          ``tc_input_manager_ptr``.
+        The native router is always owned by ``tc_display``. This method only
+        records whether frontend adapters should use it and invokes the
+        editor-specific setup callback when required.
         - ``"editor"``: view handles it. The optional ``on_editor_mode``
           callback (``(display) -> None``) is invoked so the editor frontend
           can wire up editor-specific input.
@@ -130,23 +127,15 @@ class RenderingModel:
         ``RenderingManager`` returns (raw ``TcDisplay`` wrappers don't
         carry the subclass ``.surface``).
         """
-        from termin.display import DisplayInputRouter
-
         display_id = display.tc_display_ptr
 
         self._display_input_managers.pop(display_id, None)
-
-        if surface is not None:
-            surface.set_input_manager(0)
 
         if input_mode == "none":
             return
 
         if input_mode in ("simple", "basic"):
-            router = DisplayInputRouter(display_id)
-            self._display_input_managers[display_id] = router
-            if surface is not None:
-                surface.set_input_manager(router.tc_input_manager_ptr)
+            self._display_input_managers[display_id] = display
             return
 
         if input_mode == "editor":
@@ -354,8 +343,8 @@ class RenderingModel:
 
         ``setup_display_input(display, input_mode)``: called once per
         non-editor display that received viewports, with the input mode
-        from the first matching ViewportConfig. View creates the
-        appropriate DisplayInputRouter (or whatever backend wants).
+        from the first matching ViewportConfig. View connects its adapter to
+        the stable display-owned endpoint.
         """
         if self.is_scene_attached(scene):
             return []

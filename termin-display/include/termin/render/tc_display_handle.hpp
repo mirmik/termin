@@ -121,6 +121,32 @@ public:
         if (ptr_) tc_display_set_surface(ptr_, surface);
     }
 
+    tc_input_manager* input_manager() const {
+        return ptr_ ? tc_display_get_input_manager(ptr_) : nullptr;
+    }
+
+    bool dispatch_pointer_move(double x, double y) {
+        return ptr_ && tc_display_dispatch_pointer_move(ptr_, x, y);
+    }
+
+    bool dispatch_pointer_button(double x, double y, int button, int action,
+                                 int mods, uint32_t click_count) {
+        return ptr_ && tc_display_dispatch_pointer_button(
+            ptr_, x, y, button, action, mods, click_count);
+    }
+
+    bool dispatch_wheel(double x, double y, double wheel_x, double wheel_y, int mods) {
+        return ptr_ && tc_display_dispatch_wheel(ptr_, x, y, wheel_x, wheel_y, mods);
+    }
+
+    bool dispatch_key(int key, int scancode, int action, int mods) {
+        return ptr_ && tc_display_dispatch_key(ptr_, key, scancode, action, mods);
+    }
+
+    bool dispatch_text(uint32_t codepoint) {
+        return ptr_ && tc_display_dispatch_text(ptr_, codepoint);
+    }
+
     // Size
     std::pair<int, int> get_size() const {
         int w = 0, h = 0;
