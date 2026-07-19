@@ -95,7 +95,6 @@ def refresh_loaded_materials_for_shader(
         try:
             update_material_shader(material, program, shader_name, shader_uuid)
             material_asset._bump_version()
-            resource_manager.materials[material_name] = material
             updated.add(material_name)
         except Exception:
             log.error(

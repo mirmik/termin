@@ -15,7 +15,6 @@ from termin.default_assets.resource_registries import DefaultAssetRegistryFactor
 from termin.default_assets.resource_serialization import DefaultSerializationMixin
 
 if TYPE_CHECKING:
-    from termin.animation import TcAnimationClip
     from termin.animation.asset import AnimationClipAsset
     from termin.default_assets.audio.asset import AudioClipAsset
     from termin.default_assets.mesh.asset import MeshAsset
@@ -26,16 +25,12 @@ if TYPE_CHECKING:
     from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
-    from termin.materials import TcMaterial as Material
-    from termin.navmesh._navmesh_native import TcNavMesh
     from termin.prefab.asset import PrefabAsset
-    from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
-    from termin.voxels._voxels_native import TcVoxelGrid
 
 
 class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeManager):
-    """Base class with default runtime registries and caches."""
+    """Base class with default runtime registries and the parsed shader cache."""
 
     _instance: "DefaultResourceManagerBase | None" = None
 
@@ -50,14 +45,9 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self.components = self.component_registry.classes
         self.frame_passes = self.frame_pass_registry.classes
 
-        # Runtime caches for direct data objects. AssetRegistry remains the
-        # authoritative asset storage; these preserve legacy fast paths.
-        self.materials: dict[str, "Material"] = {}
+        # Parsed shader programs do not yet have a canonical Tc* registry.
+        # Their ownership is tracked separately in #647.
         self.shaders: dict[str, "ShaderMultyPhaseProgramm"] = {}
-        self.voxel_grids: dict[str, "TcVoxelGrid"] = {}
-        self.navmeshes: dict[str, "TcNavMesh"] = {}
-        self.animation_clips: dict[str, "TcAnimationClip"] = {}
-        self.skeletons: dict[str, "TcSkeleton"] = {}
 
         self._prefab_registry = self._create_prefab_registry()
         self._glb_registry = self._create_glb_registry()
@@ -104,25 +94,15 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         *,
         uuid: str | None = None,
     ):
-        """Remove a runtime asset and any legacy direct-data cache entry."""
+        """Remove a runtime asset and its parsed shader cache entry."""
         removed = super().unregister_runtime_asset(type_id, name, uuid=uuid)
         removed_name = removed.name if removed is not None else name
-        if type_id == "material":
-            self.materials.pop(removed_name, None)
-        elif type_id == "shader":
+        if type_id == "shader":
             self.shaders.pop(removed_name, None)
-        elif type_id == "voxel_grid":
-            self.voxel_grids.pop(removed_name, None)
-        elif type_id == "navmesh":
-            self.navmeshes.pop(removed_name, None)
-        elif type_id == "animation_clip":
-            self.animation_clips.pop(removed_name, None)
-        elif type_id == "skeleton":
-            self.skeletons.pop(removed_name, None)
         return removed
 
     def unregister_runtime_asset_by_uuid(self, type_id: str, uuid: str):
-        """Remove canonical UUID membership and synchronize legacy data caches."""
+        """Remove canonical UUID membership and synchronize the shader cache."""
         asset = self.get_runtime_asset_by_uuid(type_id, uuid)
         if asset is None:
             return None
@@ -134,21 +114,12 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         renamed = super().rename_runtime_asset(type_id, uuid, name)
         if not renamed:
             return False
+        if type_id != "shader":
+            return True
         for candidate in (old_name, name):
             if candidate is None:
                 continue
-            if type_id == "material":
-                self.materials.pop(candidate, None)
-            elif type_id == "shader":
-                self.shaders.pop(candidate, None)
-            elif type_id == "voxel_grid":
-                self.voxel_grids.pop(candidate, None)
-            elif type_id == "navmesh":
-                self.navmeshes.pop(candidate, None)
-            elif type_id == "animation_clip":
-                self.animation_clips.pop(candidate, None)
-            elif type_id == "skeleton":
-                self.skeletons.pop(candidate, None)
+            self.shaders.pop(candidate, None)
         return True
 
     @property
@@ -213,7 +184,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         return cls._instance
 
     def clear_runtime_state(self) -> None:
-        """Drop runtime asset registries and direct native wrapper caches."""
+        """Drop runtime asset registries and the parsed shader cache."""
         self._destroy_cached_pipelines()
 
         for registry in list(self._runtime_asset_registries.values()):
@@ -221,12 +192,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self._asset_store.clear()
         self.external_assets.clear()
 
-        self.materials.clear()
         self.shaders.clear()
-        self.voxel_grids.clear()
-        self.navmeshes.clear()
-        self.animation_clips.clear()
-        self.skeletons.clear()
 
         self.component_registry.classes.clear()
         self.frame_pass_registry.classes.clear()
