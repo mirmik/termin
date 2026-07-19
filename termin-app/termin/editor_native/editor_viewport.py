@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 
-from termin.gui_native import Document, Size, WidgetRef
+from termin.gui_native import Document, OverlayAnchor, Size, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
@@ -40,7 +40,9 @@ class NativeEditorViewport:
     def __init__(
         self,
         *,
+        document: Document,
         widget,
+        composition,
         root: WidgetRef,
         surface,
         display,
@@ -51,7 +53,9 @@ class NativeEditorViewport:
         rendering_manager,
         request_render: Callable[[], None],
     ) -> None:
+        self.document = document
         self.widget = widget
+        self.composition = composition
         self.root = root
         self.surface = surface
         self.display = display
@@ -62,13 +66,14 @@ class NativeEditorViewport:
         self.rendering_manager = rendering_manager
         self._request_render = request_render
         self._resize_connection = None
+        self._ui_overlays: dict[str, object] = {}
         self._overlay_drawer: Callable[[], bool] | None = None
         self._closed = False
         from termin.editor_core.viewport_geometry_controller import (
             ViewportGeometryController,
         )
 
-        geometry_widget = _ViewportGeometryWidget(root)
+        geometry_widget = _ViewportGeometryWidget(widget.widget)
         self.geometry = ViewportGeometryController(
             get_camera=lambda: self.camera,
             get_viewport_widget=lambda: geometry_widget,
@@ -98,10 +103,15 @@ class NativeEditorViewport:
         from termin.editor_core.editor_pipeline import make_editor_pipeline
         from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
 
-        widget = document.create_viewport3d()
-        root = widget.widget
+        composition = document.create_overlay_layout("native-editor-viewport-composition")
+        root = composition.widget
         root.stable_id = "editor.viewport"
         root.preferred_size = Size(800.0, 600.0)
+        widget = document.create_viewport3d()
+        widget.widget.stable_id = "editor.viewport.surface"
+        if not composition.add_child(widget.widget, OverlayAnchor.Fill):
+            document.destroy_widget_recursive(root.handle)
+            raise RuntimeError("native editor viewport composition rejected Viewport3D")
         parent.add_stretch_child(root)
 
         surface = None
@@ -159,10 +169,14 @@ class NativeEditorViewport:
                 surface.close()
             if interaction is not None:
                 EditorInteractionSystem.set_instance(None)
+            if root.alive:
+                document.destroy_widget_recursive(root.handle)
             raise
 
         runtime = cls(
+            document=document,
             widget=widget,
+            composition=composition,
             root=root,
             surface=surface,
             display=display,
@@ -179,6 +193,37 @@ class NativeEditorViewport:
     @property
     def camera(self):
         return self.attachment.camera
+
+    @property
+    def overlay_names(self) -> tuple[str, ...]:
+        return tuple(self._ui_overlays)
+
+    def install_overlay(self, name: str, loaded_document) -> None:
+        """Attach one named loaded gui-native document above the viewport."""
+
+        if self._closed:
+            raise RuntimeError("native editor viewport is closed")
+        if not name or name in self._ui_overlays:
+            raise ValueError(f"viewport overlay name is empty or already installed: {name!r}")
+        if loaded_document.document is not self.document:
+            raise ValueError("viewport overlay belongs to another native Document")
+        overlay_root = loaded_document.root.widget
+        if not self.document.remove_root(overlay_root.handle):
+            raise ValueError("viewport overlay must be a loaded document root")
+        if not self.composition.add_child(overlay_root, OverlayAnchor.Fill):
+            if not self.document.add_root(overlay_root.handle):
+                _logger.error("Failed to restore rejected viewport overlay root '%s'", name)
+            raise RuntimeError(f"native viewport composition rejected overlay {name!r}")
+        self._ui_overlays[name] = loaded_document
+        self._request_render()
+
+    def remove_overlay(self, name: str) -> bool:
+        loaded_document = self._ui_overlays.pop(name, None)
+        if loaded_document is None:
+            return False
+        loaded_document.close()
+        self._request_render()
+        return True
 
     def configure_interaction(
         self,
@@ -257,6 +302,12 @@ class NativeEditorViewport:
         from termin.editor._editor_native import EditorInteractionSystem
 
         self._overlay_drawer = None
+        while self._ui_overlays:
+            self.remove_overlay(next(iter(self._ui_overlays)))
+        if self._resize_connection is not None:
+            if not self.widget.disconnect_before_resize(self._resize_connection):
+                _logger.error("Native editor viewport resize handler was already detached")
+            self._resize_connection = None
         self.interaction.clear_callbacks()
         self.widget.detach_surface()
         self.surface.set_input_manager(0)
@@ -267,6 +318,8 @@ class NativeEditorViewport:
         self.surface.close()
         if EditorInteractionSystem.instance() is self.interaction:
             EditorInteractionSystem.set_instance(None)
+        if self.root.alive:
+            self.document.destroy_widget_recursive(self.root.handle)
 
 
 __all__ = ["NativeEditorViewport"]
