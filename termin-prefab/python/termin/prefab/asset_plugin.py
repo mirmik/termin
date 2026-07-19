@@ -54,21 +54,17 @@ class PrefabRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if result.uuid is None and rm.get_prefab_asset(name) is not None:
-            return
-
         asset = None
-        if result.uuid:
-            candidate = rm.get_prefab_by_uuid(result.uuid)
-            if isinstance(candidate, PrefabAsset):
-                asset = candidate
+        candidate = rm.get_prefab_by_uuid(context.uuid)
+        if isinstance(candidate, PrefabAsset):
+            asset = candidate
 
         if asset is None:
             asset = PrefabAsset(
                 data=None,
                 name=name,
                 source_path=result.path,
-                uuid=result.uuid,
+                uuid=context.uuid,
             )
 
         rm.register_prefab(name, asset, source_path=result.path)
@@ -78,7 +74,7 @@ class PrefabRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        asset = rm.get_prefab_by_uuid(result.uuid) if result.uuid else rm.get_prefab_asset(name)
+        asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
 
@@ -92,7 +88,7 @@ class PrefabRuntimePlugin:
         asset.update_from(new_asset)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
+        context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
 
 class PrefabAssetPlugin(PrefabImportPlugin, PrefabRuntimePlugin):

@@ -383,12 +383,12 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
             )
 
         def reload(self, context, result: PreLoadResult) -> None:
-            asset = context.resource_manager.get_runtime_asset(self.type_id, context.name)
+            asset = context.resource_manager.get_runtime_asset_by_uuid(self.type_id, context.uuid)
             if asset is not None:
                 asset.source_path = result.path
 
         def unregister(self, context, result: PreLoadResult) -> None:
-            context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+            context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
 
     manager.asset_type_plugins.register_runtime(RuntimePlugin())
 
@@ -410,6 +410,109 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
     assert manager.get_runtime_asset("dummy", "probe") is None
     assert manager.get_runtime_asset_by_uuid("dummy", "dummy-uuid") is None
     assert manager.get_asset_by_uuid("dummy-uuid") is None
+
+
+def test_file_lifecycle_is_uuid_canonical_for_duplicate_names() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=Asset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset,
+    )
+    manager.register_runtime_asset_registry("dummy", registry)
+
+    class RuntimePlugin:
+        type_id = "dummy"
+
+        def register(self, context, result: PreLoadResult) -> None:
+            asset = context.resource_manager.get_runtime_asset_by_uuid(self.type_id, context.uuid)
+            if asset is None:
+                asset = Asset(name=context.name, source_path=result.path, uuid=context.uuid)
+            context.resource_manager.register_runtime_asset(
+                self.type_id,
+                context.name,
+                asset,
+                source_path=result.path,
+                uuid=context.uuid,
+            )
+
+        def reload(self, context, result: PreLoadResult) -> None:
+            asset = context.resource_manager.get_runtime_asset_by_uuid(self.type_id, context.uuid)
+            assert asset is not None
+            asset.source_path = result.path
+
+        def unregister(self, context, result: PreLoadResult) -> None:
+            context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
+
+    manager.asset_type_plugins.register_runtime(RuntimePlugin())
+    first = PreLoadResult(resource_type="dummy", path="/one/shared.dummy", uuid="uuid-one")
+    second = PreLoadResult(resource_type="dummy", path="/two/shared.dummy", uuid="uuid-two")
+
+    first_registration = manager.register_file(first)
+    second_registration = manager.register_file(second)
+    assert first_registration is not None
+    assert second_registration is not None
+    first_asset = manager.get_runtime_asset_by_uuid("dummy", "uuid-one")
+    second_asset = manager.get_runtime_asset_by_uuid("dummy", "uuid-two")
+    assert first_asset is not None
+    assert second_asset is not None
+    assert first_asset is not second_asset
+
+    first_reload = PreLoadResult(
+        resource_type="dummy",
+        path="/one/shared-reloaded.dummy",
+        uuid="uuid-one",
+    )
+    assert manager.reload_file(first_reload, first_registration)
+    assert manager.get_runtime_asset_by_uuid("dummy", "uuid-one") is first_asset
+    assert first_asset.source_path == Path("/one/shared-reloaded.dummy")
+    assert second_asset.source_path == Path("/two/shared.dummy")
+
+    assert manager.unregister_file(first_reload, first_registration)
+    assert manager.get_runtime_asset_by_uuid("dummy", "uuid-one") is None
+    assert manager.get_runtime_asset_by_uuid("dummy", "uuid-two") is second_asset
+
+
+def test_file_registration_rejects_missing_and_colliding_uuid() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=Asset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset,
+    )
+    manager.register_runtime_asset_registry("dummy", registry)
+    calls: list[str] = []
+
+    class RuntimePlugin:
+        type_id = "dummy"
+
+        def register(self, context, result: PreLoadResult) -> None:
+            calls.append(result.path)
+            context.resource_manager.register_runtime_asset(
+                self.type_id,
+                context.name,
+                Asset(name=context.name, source_path=result.path, uuid=context.uuid),
+                source_path=result.path,
+                uuid=context.uuid,
+            )
+
+        def reload(self, context, result: PreLoadResult) -> None:
+            pass
+
+    manager.asset_type_plugins.register_runtime(RuntimePlugin())
+
+    missing = PreLoadResult(resource_type="dummy", path="/one/missing.dummy")
+    assert manager.register_file(missing) is None
+    assert calls == []
+
+    first = PreLoadResult(resource_type="dummy", path="/one/probe.dummy", uuid="shared-uuid")
+    collision = PreLoadResult(resource_type="dummy", path="/two/probe.dummy", uuid="shared-uuid")
+    assert manager.register_file(first) is not None
+    assert manager.register_file(collision) is None
+    assert calls == ["/one/probe.dummy"]
+    asset = manager.get_runtime_asset_by_uuid("dummy", "shared-uuid")
+    assert asset is not None
+    assert asset.source_path == Path("/one/probe.dummy")
 
 
 def test_asset_reload_events_are_manager_local_versioned_and_unsubscribable() -> None:

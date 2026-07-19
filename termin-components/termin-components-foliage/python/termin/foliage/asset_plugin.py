@@ -76,19 +76,16 @@ class FoliageDataRuntimePlugin:
     type_id = FOLIAGE_DATA_TYPE_ID
 
     def register(self, context, result: PreLoadResult) -> None:
-        if not result.uuid:
-            log.error(f"[FoliageDataRuntimePlugin] cannot register foliage asset without uuid: {result.path}")
-            return
-        handle = _declare_native_foliage_data(result.uuid, context.name, result.path)
+        handle = _declare_native_foliage_data(context.uuid, context.name, result.path)
         if not handle.is_valid:
-            log.error(f"[FoliageDataRuntimePlugin] failed to declare native foliage asset: {result.uuid}")
+            log.error(f"[FoliageDataRuntimePlugin] failed to declare native foliage asset: {context.uuid}")
             return
         context.resource_manager.external_assets.upsert(
             AssetRecord(
                 type_id=self.type_id,
                 name=context.name,
                 path=result.path,
-                uuid=result.uuid,
+                uuid=context.uuid,
                 spec_data=result.spec_data,
             )
         )
@@ -97,7 +94,7 @@ class FoliageDataRuntimePlugin:
         self.register(context, result)
 
     def unregister(self, context, result: PreLoadResult) -> None:
-        context.resource_manager.external_assets.remove_path(result.path)
+        context.resource_manager.external_assets.remove(self.type_id, context.uuid)
 
 
 def _declare_native_foliage_data(uuid: str, name: str, path: str):

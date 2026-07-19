@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from tcbase import log
+from termin.editor_core.inspector_resources import InspectorResourceCatalog, InspectorResourceChoice
 from termin.inspect import parse_uint32
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -989,8 +990,7 @@ class HandleSelectorWidget(FieldWidget):
         self._resource_kind = resource_kind
         self._resources = resources
         self._allow_none = allow_none
-        self._name_to_uuid: dict[str, Optional[str]] = {}
-        self._uuid_to_name: dict[str, str] = {}
+        self._choices: tuple[InspectorResourceChoice, ...] = ()
 
         self._combo = ComboBox()
         self._combo.on_changed = self._on_changed
@@ -1016,19 +1016,22 @@ class HandleSelectorWidget(FieldWidget):
             return
         old = self._combo.on_changed
         self._combo.on_changed = None
-        current = self._combo.selected_text
+        current_uuid = None
+        if 0 <= self._combo.selected_index < len(self._choices):
+            current_uuid = self._choices[self._combo.selected_index].uuid
         self._combo.clear()
-        self._name_to_uuid.clear()
-        self._uuid_to_name.clear()
-        if self._allow_none:
-            self._combo.add_item("(None)")
-        for name, uuid in accessors.list_items():
-            self._combo.add_item(name)
-            self._name_to_uuid[name] = uuid
-            if uuid:
-                self._uuid_to_name[uuid] = name
-        for i in range(self._combo.item_count):
-            if self._combo.item_text(i) == current:
+        choices = InspectorResourceCatalog(self._resources).choices(self._resource_kind)
+        if choices is None:
+            self._choices = ()
+            self._combo.on_changed = old
+            return
+        self._choices = tuple(
+            choice for choice in choices.items if self._allow_none or choice.name is not None
+        )
+        for choice in self._choices:
+            self._combo.add_item(choice.label)
+        for i, choice in enumerate(self._choices):
+            if choice.uuid == current_uuid and (current_uuid is not None or choice.name is None):
                 self._combo.selected_index = i
                 break
         self._combo.on_changed = old
@@ -1038,47 +1041,46 @@ class HandleSelectorWidget(FieldWidget):
         self._emit()
 
     def _on_create_clicked(self) -> None:
-        accessors = self._get_accessors()
-        if accessors is None or accessors.create_item is None:
+        if self._resources is None:
             return
-        created = accessors.create_item()
+        created = InspectorResourceCatalog(self._resources).create(self._resource_kind)
         if created is None:
             return
-        created_name, _created_uuid = created
         self._refresh_items()
-        for i in range(self._combo.item_count):
-            if self._combo.item_text(i) == created_name:
+        for i, choice in enumerate(self._choices):
+            if choice.uuid == created.uuid:
                 self._combo.selected_index = i
                 break
         self._emit()
 
     def get_value(self) -> Optional[dict]:
-        name = self._combo.selected_text
-        if not name or name == "(None)":
+        index = self._combo.selected_index
+        if not 0 <= index < len(self._choices):
             return None
-        uuid = self._name_to_uuid.get(name)
-        return {"uuid": uuid, "name": name}
+        return self._choices[index].value
 
     def set_value(self, value: Any) -> None:
         old = self._combo.on_changed
         self._combo.on_changed = None
         self._refresh_items()
         if value is None:
-            self._combo.selected_index = 0 if self._allow_none else -1
+            self._combo.selected_index = next(
+                (index for index, choice in enumerate(self._choices) if choice.name is None),
+                -1,
+            )
             self._combo.on_changed = old
             return
         uuid = value.get("uuid") if isinstance(value, dict) else None
-        name = value.get("name") if isinstance(value, dict) else None
-        if uuid and uuid in self._uuid_to_name:
-            name = self._uuid_to_name[uuid]
-        if name:
-            for i in range(self._combo.item_count):
-                if self._combo.item_text(i) == name:
+        if uuid:
+            for i, choice in enumerate(self._choices):
+                if choice.uuid == uuid:
                     self._combo.selected_index = i
                     self._combo.on_changed = old
                     return
-            log.warn(f"[HandleSelectorWidget] {self._resource_kind}: '{name}' not found")
-        self._combo.selected_index = 0 if self._allow_none else -1
+            log.warn(f"[HandleSelectorWidget] {self._resource_kind}: UUID '{uuid}' not found")
+        else:
+            log.warn(f"[HandleSelectorWidget] {self._resource_kind}: selection has no UUID")
+        self._combo.selected_index = -1
         self._combo.on_changed = old
 
     def layout(self, x: float, y: float, width: float, height: float,

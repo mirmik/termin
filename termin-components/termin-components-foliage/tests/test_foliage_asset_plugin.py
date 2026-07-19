@@ -15,7 +15,7 @@ def test_runtime_plugin_declares_native_foliage_data() -> None:
     uuid = "00000000-0005-0000-0003-000000000001"
     path = "/tmp/foliage_data.tfoliage"
     rm = _ResourceManager()
-    context = AssetContext(resource_manager=rm, name="foliage_data")
+    context = AssetContext(resource_manager=rm, name="foliage_data", uuid=uuid)
     result = PreLoadResult(
         resource_type="foliage_data",
         path=path,

@@ -50,7 +50,7 @@ def test_texture_runtime_reload_stays_in_asset_layer() -> None:
     )
 
     create_runtime_plugin().reload(
-        AssetContext(resource_manager=resource_manager, name="albedo"),
+        AssetContext(resource_manager=resource_manager, name="albedo", uuid="texture-uuid"),
         result,
     )
 

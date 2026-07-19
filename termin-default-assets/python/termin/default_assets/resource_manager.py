@@ -121,6 +121,13 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             self.skeletons.pop(removed_name, None)
         return removed
 
+    def unregister_runtime_asset_by_uuid(self, type_id: str, uuid: str):
+        """Remove canonical UUID membership and synchronize legacy data caches."""
+        asset = self.get_runtime_asset_by_uuid(type_id, uuid)
+        if asset is None:
+            return None
+        return self.unregister_runtime_asset(type_id, asset.name, uuid=uuid)
+
     def rename_runtime_asset(self, type_id: str, uuid: str, name: str) -> bool:
         asset = self.get_asset_by_uuid(uuid)
         old_name = asset.name if asset is not None else None

@@ -15,6 +15,7 @@ class AssetContext:
 
     resource_manager: object
     name: str
+    uuid: str
 
 
 class AssetRuntimePlugin(Protocol):

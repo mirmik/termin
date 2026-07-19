@@ -30,7 +30,7 @@ from termin_assets.default_plugins import (
     register_default_import_asset_plugins,
     register_default_runtime_asset_plugins,
 )
-from termin_assets.preload import PreLoadResult
+from termin_assets.preload import AssetRegistration, PreLoadResult
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin_assets.resource_handle import (
@@ -69,6 +69,7 @@ __all__ = [
     "EmbeddedAssetSpec",
     "Identifiable",
     "PreLoadResult",
+    "AssetRegistration",
     "FilePreLoader",
     "PluginPreLoader",
     "ProjectFileWatcher",
