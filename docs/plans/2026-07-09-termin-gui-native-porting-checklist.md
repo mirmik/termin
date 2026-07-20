@@ -597,9 +597,9 @@ Phase 9 rich-text notes:
   placeholder for detached/stale surfaces, and releases the host on detach or
   document destruction. Resize ordering is deterministic (`before_resize`,
   then host resize), including late surface attachment after layout.
-  `termin.display.FBOSurface` supplies typed dispatch methods backed by its
-  attached `tc_input_manager`; the new path never transports a native pointer
-  as a Python integer. External drag enter/move/leave/drop uses a separate
+  `termin.display.Display` supplies both the owned texture surface and typed
+  input dispatch; the path never transports a native pointer as a Python
+  integer. External drag enter/move/leave/drop uses a separate
   MIME/payload/local-coordinate host contract. Headless C++ and Python tests
   cover compositing, ordering, complete input routing, drag/drop, stale
   surfaces, detach and destruction lifetime.
@@ -743,7 +743,7 @@ stable.
 - [x] Port ProceduralMesh extrude, wall and operation-transform parameters.
 - [x] Port wall-corner, sketch-plane, contour and path point parameters.
 - [x] Replace the native workspace placeholder with the production editor
-  viewport chain: `Viewport3D` + `FBOSurface` + editor `Display`, scene
+  viewport chain: `Viewport3D` + display-owned offscreen surface, scene
   attachment, input router, picking/selection callbacks and explicit shutdown.
 - [x] Port ProceduralMesh viewport interaction through the shared core model,
   native viewport geometry and extension callback boundary.
@@ -974,10 +974,10 @@ Phase 12 host notes:
   managed targets, synchronizes entity selection with the scene tree, and
   wires display, viewport and render-target add/remove/rename actions.
   `NativeDisplayWorkspace` owns one native `TabView`, the editor page and every
-  secondary `Display` page. Each secondary page has an explicit `FBOSurface`,
+  secondary `Display` page. Each secondary page has one surface-owning `Display`,
   `Viewport3D`, `BasicDisplayInputManager` and rendering-manager registration;
-  removal detaches the tab and surface, releases per-viewport input managers,
-  unregisters and destroys the display, closes the FBO and recursively destroys
+  removal detaches the tab, releases per-viewport input managers,
+  unregisters and destroys the display and recursively destroys
   the page. `TabView` now exposes dynamic page removal/title/handle APIs and a
   typed selection signal through C++ and Python, so list selection and workspace
   tabs stay synchronized without tcgui ownership. The central gate covers the

@@ -47,8 +47,6 @@ except ImportError as e:
     BackendWindowManager = None
 
 from termin.display._display_native import Display
-from termin.display._display_native import FBOSurface
-from termin.display._display_native import _display_get_surface_ptr as _display_get_surface_ptr
 from termin.display._display_native import _display_get_input_manager as _display_get_input_manager
 from termin.display._display_native import _input_manager_create_vtable as _input_manager_create_vtable
 from termin.display._display_native import _input_manager_free as _input_manager_free
@@ -58,15 +56,10 @@ from termin.display._display_native import _input_manager_on_key as _input_manag
 from termin.display._display_native import _input_manager_on_mouse_button as _input_manager_on_mouse_button
 from termin.display._display_native import _input_manager_on_mouse_move as _input_manager_on_mouse_move
 from termin.display._display_native import _input_manager_on_scroll as _input_manager_on_scroll
-from termin.display._display_native import _render_surface_free_external as _render_surface_free_external
-from termin.display._display_native import _render_surface_get_ptr as _render_surface_get_ptr
-from termin.display._display_native import _render_surface_new_from_python as _render_surface_new_from_python
-from termin.display._display_native import _render_surface_notify_resize as _render_surface_notify_resize
 from termin.display._display_native import _viewport_get_input_manager as _viewport_get_input_manager
 from termin.display._display_native import _viewport_input_manager_free as _viewport_input_manager_free
 from termin.display._display_native import _viewport_input_manager_new as _viewport_input_manager_new
 from termin.display.input_manager import BasicDisplayInputManager
-from termin.display.viewport_host import DisplayViewportHost
 
 __all__ = [
     "BackendWindow",
@@ -85,6 +78,4 @@ __all__ = [
     "BackendWindowManager",
     "Display",
     "BasicDisplayInputManager",
-    "DisplayViewportHost",
-    "FBOSurface",
 ]

@@ -40,6 +40,16 @@ void surface_get_size(tc_render_surface* self, int* width, int* height)
 uint32_t surface_get_color_texture_id(tc_render_surface*) { return 1; }
 uintptr_t surface_get_graphics_domain_key(tc_render_surface*) { return 1; }
 void surface_destroy(tc_render_surface*) {}
+bool surface_resize(tc_render_surface* surface, int width, int height) {
+    auto* fixed = static_cast<FixedSurface*>(surface->body);
+    fixed->width = width;
+    fixed->height = height;
+    tc_render_surface_notify_resize(surface, width, height);
+    return true;
+}
+void surface_delete(tc_render_surface* surface) {
+    delete static_cast<FixedSurface*>(surface->body);
+}
 
 void count_mouse_move(tc_input_manager* self, double x, double y)
 {
@@ -67,6 +77,7 @@ void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t c
 
 const tc_render_surface_vtable fixed_surface_vtable = {
     .get_size = surface_get_size,
+    .resize = surface_resize,
     .get_color_texture_id = surface_get_color_texture_id,
     .get_graphics_domain_key = surface_get_graphics_domain_key,
     .destroy = surface_destroy,
@@ -95,10 +106,12 @@ void init_counting_input(CountingInput* input)
 int main()
 {
     tc_display_pool_init();
-    FixedSurface fixed_surface;
-    tc_render_surface_init(&fixed_surface.surface, &fixed_surface_vtable);
+    auto* fixed_surface = new FixedSurface;
+    tc_render_surface_init(
+        &fixed_surface->surface, &fixed_surface_vtable, surface_delete);
+    fixed_surface->surface.body = fixed_surface;
 
-    tc_display_handle display = tc_display_new("router-test-display", &fixed_surface.surface);
+    tc_display_handle display = tc_display_new("router-test-display", &fixed_surface->surface);
     assert(tc_display_handle_valid(display));
 
     tc_viewport_handle left = tc_viewport_new("left", TC_SCENE_HANDLE_INVALID);
@@ -131,9 +144,11 @@ int main()
     tc_display_dispatch_pointer_button(
         display, 25.0, 50.0, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 2);
 
-    FixedSurface replacement_surface;
-    tc_render_surface_init(&replacement_surface.surface, &fixed_surface_vtable);
-    assert(tc_display_set_surface(display, &replacement_surface.surface));
+    auto* replacement_surface = new FixedSurface;
+    tc_render_surface_init(
+        &replacement_surface->surface, &fixed_surface_vtable, surface_delete);
+    replacement_surface->surface.body = replacement_surface;
+    assert(tc_display_set_surface(display, &replacement_surface->surface));
     if (tc_display_get_input_manager(display) != input) {
         std::fprintf(stderr, "surface replacement changed the display input endpoint\n");
         return 1;

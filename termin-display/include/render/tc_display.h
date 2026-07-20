@@ -48,6 +48,14 @@ TERMIN_DISPLAY_API bool tc_display_get_auto_remove_when_empty(tc_display_handle 
 
 TERMIN_DISPLAY_API bool tc_display_set_surface(tc_display_handle display, tc_render_surface* surface);
 TERMIN_DISPLAY_API tc_render_surface* tc_display_get_surface(tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_display_resize(tc_display_handle display, int width, int height);
+TERMIN_DISPLAY_API uint32_t tc_display_get_color_texture_id(tc_display_handle display);
+TERMIN_DISPLAY_API uintptr_t tc_display_get_graphics_domain_key(tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_display_validate_output(
+    tc_display_handle display,
+    uintptr_t expected_graphics_domain_key,
+    uint32_t* color_texture_id
+);
 
 // ============================================================================
 // Display Input Endpoint (pixel coordinates, origin top-left)

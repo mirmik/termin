@@ -132,7 +132,6 @@ class PlayerRuntime:
         self.scene: Scene | None = None
         self.window = None
         self.graphics = None
-        self.surface = None
         self.camera = None
         self._engine = engine
         self._owns_engine = engine is None
@@ -220,7 +219,6 @@ class PlayerRuntime:
         # host tgfx2 device so RenderEngine reuses it instead of creating a
         # second device with incompatible texture handles.
         from termin.display._platform_native import SDLBackendWindow
-        from termin.display import FBOSurface
 
         try:
             self.window = SDLBackendWindow(self.title, self.width, self.height)
@@ -235,8 +233,9 @@ class PlayerRuntime:
 
         self._surface_size = self.window.framebuffer_size()
         surface_width, surface_height = self._surface_size
-        self.surface = FBOSurface(self.window.device(), surface_width, surface_height)
-        self._display = Display(surface=self.surface, name="Main")
+        self._display = Display.offscreen(
+            self.window.device(), surface_width, surface_height, name="Main"
+        )
         manager.set_display_factory(self._runtime_display_factory)
 
         # Load scene
@@ -702,14 +701,14 @@ class PlayerRuntime:
         """Render using RenderingManager."""
         manager = self._engine.rendering_manager
         manager.render_all(present=True)
-        if self.window is not None and self.surface is not None:
-            self.window.present(self.surface.color_tex)
+        if self.window is not None and self._display is not None:
+            self.window.present(self._display.color_tex)
 
     def _sync_surface_size(self) -> None:
         """Resize the offscreen display surface to match the window."""
         from tcbase import log
 
-        if self.window is None or self.surface is None or self._display is None:
+        if self.window is None or self._display is None:
             return
 
         width, height = self.window.framebuffer_size()
@@ -719,7 +718,7 @@ class PlayerRuntime:
             return
 
         try:
-            self.surface.resize(width, height)
+            self._display.resize(width, height)
             self._display.update_all_pixel_rects()
             self._surface_size = (width, height)
         except Exception as e:
@@ -779,10 +778,6 @@ class PlayerRuntime:
             log.error(f"[PlayerRuntime] Failed to shutdown bootstrap runtime: {e}")
 
         self.scene = None
-
-        if self.surface is not None:
-            self.surface.close()
-            self.surface = None
 
         if self.window is not None:
             self.window.close()
