@@ -300,7 +300,7 @@ class EditorWindowTcgui:
             get_init_script_editor=lambda: self,
             resolve_termin_shaderc=resolve_termin_shaderc,
             resolve_slangc=resolve_slangc,
-            get_render_engine=lambda: self.engine.rendering_manager.render_engine,
+            get_render_engine=lambda: self._engine.rendering_manager.render_engine,
         )
         from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
 
@@ -1185,7 +1185,7 @@ class EditorWindowTcgui:
             project_root,
             resolve_termin_shaderc=resolve_termin_shaderc,
             resolve_slangc=resolve_slangc,
-            render_engine=self.engine.rendering_manager.render_engine,
+            render_engine=self._engine.rendering_manager.render_engine,
         )
 
     @property
@@ -1429,6 +1429,22 @@ class EditorWindowTcgui:
 
     def shutdown(self) -> None:
         """Release session-owned engine integrations before backend teardown."""
+        if self._game_mode_model is not None and self._game_mode_model.is_game_mode:
+            self._game_mode_model.toggle_game_mode()
+
+        if self._rendering_controller is not None:
+            scene_name = self._editor_scene_name
+            if scene_name is not None and self.scene_manager.has_scene(scene_name):
+                self.detach_scene_from_render(scene_name, save_state=False)
+
+        if self._editor_attachment is not None:
+            self._editor_attachment.close(save_state=False)
+            self._editor_attachment = None
+            self._sync_attachment_refs()
+
+        self.scene_manager.set_on_after_render(None)
+        self.scene_manager.set_on_before_scene_close(None)
+
         if self._rendering_controller is not None:
             self._rendering_controller.close()
             self._rendering_controller = None

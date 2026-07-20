@@ -10,6 +10,7 @@ RenderEngine — lives on it.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from tcbase import Key, MouseButton, log
@@ -25,6 +26,7 @@ from termin.display._platform_native import (
     start_text_input,
 )
 from termin.editor_tcgui.backend_window_manager import BackendWindowManager
+from termin.editor_tcgui.editor_session import TcguiEditorSession
 from termin.editor_core.application_icon import apply_editor_window_icon
 from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 
@@ -163,13 +165,26 @@ def _dispatch_native_events(bw: SDLBackendWindow, ui: UI, wm=None) -> tuple[bool
 # Entry point
 # ---------------------------------------------------------------------------
 
-def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
-    """Initialize the tcgui editor and setup engine callbacks.
+def _smoke_frame_limit() -> int:
+    value = os.environ.get("TERMIN_EDITOR_TCGUI_SMOKE_FRAMES", "0")
+    try:
+        return max(int(value), 0)
+    except ValueError:
+        return 0
+
+
+def init_editor_tcgui(
+    engine,
+    debug_resource: str | None = None,
+    no_scene: bool = False,
+) -> TcguiEditorSession:
+    """Initialize the tcgui editor and return its explicit session.
 
     Called from C++ before EngineCore.run(). Does NOT call engine.run().
     """
     from termin.bootstrap import bootstrap_editor
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
+    from termin.engine import EngineLoopClient
     bootstrap_editor()
     configure_editor_resource_manager_factory()
     from termin.project_modules.runtime import get_project_modules_runtime
@@ -249,8 +264,11 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
 
     from tcbase.profiler import Profiler
     profiler = Profiler.instance()
+    frame_limit = _smoke_frame_limit()
+    frame_count = 0
 
     def poll_events() -> None:
+        nonlocal frame_count
         with profiler.section("Events"):
             keep_running, routed = _dispatch_native_events(main_window, ui, wm)
             if not keep_running:
@@ -264,23 +282,37 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
 
         with profiler.section("Render Compose"):
             wm.render_all()
+        frame_count += 1
+        if frame_limit > 0 and frame_count >= frame_limit:
+            main_window.set_should_close(True)
 
     def should_continue() -> bool:
         return not (win.should_close() or main_window.should_close())
 
-    def on_shutdown() -> None:
+    def close_editor() -> None:
         if mcp_server is not None:
             mcp_server.stop()
         win.shutdown()
         wm.destroy_all()
         quit_sdl()
 
-    engine.set_poll_events_callback(poll_events)
-    engine.set_should_continue_callback(should_continue)
-    engine.set_on_shutdown_callback(on_shutdown)
+    loop_client = EngineLoopClient(
+        poll_events=poll_events,
+        should_continue=should_continue,
+        on_shutdown=lambda: None,
+    )
+    loop_connection = engine.attach_loop_client(loop_client)
+    return TcguiEditorSession(loop_connection, close_editor)
 
 
 def run_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Run the tcgui editor (legacy entry point for C++ callers)."""
-    init_editor_tcgui(engine, debug_resource=debug_resource, no_scene=no_scene)
-    engine.run()
+    session = init_editor_tcgui(
+        engine,
+        debug_resource=debug_resource,
+        no_scene=no_scene,
+    )
+    try:
+        engine.run()
+    finally:
+        session.close()
