@@ -37,6 +37,10 @@ void surface_get_size(tc_render_surface* self, int* width, int* height)
     }
 }
 
+uint32_t surface_get_color_texture_id(tc_render_surface*) { return 1; }
+uintptr_t surface_get_graphics_domain_key(tc_render_surface*) { return 1; }
+void surface_destroy(tc_render_surface*) {}
+
 void count_mouse_move(tc_input_manager* self, double x, double y)
 {
     auto* input = reinterpret_cast<CountingInput*>(self->userdata);
@@ -63,6 +67,9 @@ void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t c
 
 const tc_render_surface_vtable fixed_surface_vtable = {
     .get_size = surface_get_size,
+    .get_color_texture_id = surface_get_color_texture_id,
+    .get_graphics_domain_key = surface_get_graphics_domain_key,
+    .destroy = surface_destroy,
 };
 
 const tc_input_manager_vtable counting_input_vtable = {
@@ -125,7 +132,7 @@ int main()
 
     FixedSurface replacement_surface;
     tc_render_surface_init(&replacement_surface.surface, &fixed_surface_vtable);
-    tc_display_set_surface(display, &replacement_surface.surface);
+    assert(tc_display_set_surface(display, &replacement_surface.surface));
     if (tc_display_get_input_manager(display) != input) {
         std::fprintf(stderr, "surface replacement changed the display input endpoint\n");
         return 1;

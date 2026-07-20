@@ -59,10 +59,6 @@ RenderEngine* RenderingManager::render_engine() {
     return render_engine_;
 }
 
-void RenderingManager::set_make_current_callback(MakeCurrentCallback callback) {
-    make_current_callback_ = std::move(callback);
-}
-
 void RenderingManager::set_display_factory(DisplayFactory factory) {
     display_factory_ = std::move(factory);
 }
@@ -411,7 +407,7 @@ void RenderingManager::unmount_scene(
         }
 
         if (tc_render_target_handle_valid(rt) && !registered_managed && !still_referenced) {
-            render_states_->remove_render_target_state(rt, make_current_callback_);
+            render_states_->remove_render_target_state(rt);
             tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
             if (tc_pipeline_handle_valid(pipeline)) {
                 tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
@@ -666,7 +662,7 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene, bool include_hos
     }
     for (tc_render_target_handle rt : to_free) {
         unregister_managed_render_target(rt);
-        render_states_->remove_render_target_state(rt, make_current_callback_);
+        render_states_->remove_render_target_state(rt);
         tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
@@ -752,7 +748,7 @@ ViewportRenderState* RenderingManager::get_or_create_viewport_state(tc_viewport_
 }
 
 void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
-    render_states_->remove_viewport_state(viewport, make_current_callback_);
+    render_states_->remove_viewport_state(viewport);
 }
 
 // ============================================================================
@@ -796,11 +792,6 @@ void RenderingManager::render_all(bool present) {
 }
 
 void RenderingManager::render_all_offscreen() {
-    // Activate GL context via callback
-    if (make_current_callback_) {
-        make_current_callback_();
-    }
-
     RenderEngine* engine = render_engine();
     if (!engine) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: no render engine");
@@ -863,8 +854,6 @@ void RenderingManager::render_display(tc_display* display) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_display: surface is null");
         return;
     }
-
-    tc_render_surface_make_current(surface);
 
     int width = 0;
     int height = 0;
@@ -1233,7 +1222,7 @@ void RenderingManager::clear_all_scene_pipelines() {
 
 void RenderingManager::shutdown() {
     if (render_states_) {
-        render_states_->clear_all(make_current_callback_);
+        render_states_->clear_all();
     }
 
     // Clear engine-owned topology after hosts have detached live targets.
@@ -1244,7 +1233,6 @@ void RenderingManager::shutdown() {
     }
 
     // Clear callbacks
-    make_current_callback_ = nullptr;
     display_factory_ = nullptr;
     pipeline_factory_ = nullptr;
     display_removed_callback_ = nullptr;

@@ -289,7 +289,6 @@ namespace Termin.WpfTest.Controls
             _scene?.BeforeRender();
 
             // Cache WPF's FBO before rendering
-            _renderSurface.UpdateFramebuffer();
 
             // Render this display
             var display = SwigHelpers.WrapTcDisplayPtr(_displayManager.DisplayPtr);

@@ -1152,23 +1152,19 @@ bool EditorInteractionSystem::_window_to_fbo_coords(Vec2f screen,
   if (!display)
     return false;
 
-    int win_w, win_h, fb_w, fb_h;
-    tc_display_get_window_size(display, &win_w, &win_h);
+    int fb_w, fb_h;
     tc_display_get_size(display, &fb_w, &fb_h);
 
-  if (win_w <= 0 || win_h <= 0 || fb_w <= 0 || fb_h <= 0)
+  if (fb_w <= 0 || fb_h <= 0)
     return false;
 
     int vp_x, vp_y, vp_w, vp_h;
     tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
 
-    float sx = (float)fb_w / (float)win_w;
-    float sy = (float)fb_h / (float)win_h;
-    float x_phys = screen.x * sx;
-    float y_phys = screen.y * sy;
-
-    float vx = x_phys - vp_x;
-    float vy = y_phys - vp_y;
+    // Display input is already normalized by the host to physical display
+    // pixels (top-left origin); render surfaces do not expose window metrics.
+    float vx = screen.x - vp_x;
+    float vy = screen.y - vp_y;
 
   if (vx < 0 || vy < 0 || vx >= vp_w || vy >= vp_h)
     return false;

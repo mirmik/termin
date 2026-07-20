@@ -293,7 +293,6 @@ public partial class SceneViewerControl : UserControl, IDisposable
         _scene?.BeforeRender();
 
         // Cache WPF's FBO before rendering
-        _renderSurface.UpdateFramebuffer();
 
         // Clear the screen
         GL.ClearColor(0.2f, 0.2f, 0.25f, 1.0f);

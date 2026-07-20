@@ -30,25 +30,9 @@ void present_display(RenderingManager& manager, tc_display* display) {
         return;
     }
 
-    // Make display context current; tgfx2 resources are owned by IRenderDevice.
-    tc_render_surface_make_current(surface);
-
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);
     if (width <= 0 || height <= 0) {
-        if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    // Backend-neutral composite target. Surfaces must expose a tgfx2
-    // TextureHandle; raw FBO presentation is intentionally not supported
-    // through tgfx2 anymore.
-    tgfx::TextureHandle display_color_tex{
-        tc_render_surface_get_tgfx_color_tex_id(surface)
-    };
-    if (!display_color_tex) {
-        tc_log(TC_LOG_ERROR,
-               "[RenderingManager] present_display: render surface has no tgfx2 color texture target");
         if (profile) tc_profiler_end_section();
         return;
     }
@@ -63,6 +47,18 @@ void present_display(RenderingManager& manager, tc_display* display) {
         if (profile) tc_profiler_end_section();
         return;
     }
+
+    uint32_t display_color_texture_id = 0;
+    if (!tc_render_surface_validate_output(
+            surface,
+            reinterpret_cast<uintptr_t>(dev),
+            &display_color_texture_id)) {
+        tc_log(TC_LOG_ERROR,
+               "[RenderingManager] present_display: invalid render surface output");
+        if (profile) tc_profiler_end_section();
+        return;
+    }
+    tgfx::TextureHandle display_color_tex{display_color_texture_id};
 
     if (profile) tc_profiler_begin_section("Present Clear");
     dev->clear_texture(
@@ -125,9 +121,6 @@ void present_display(RenderingManager& manager, tc_display* display) {
     }
     if (profile) tc_profiler_end_section();
 
-    if (profile) tc_profiler_begin_section("Present Swap Buffers");
-    tc_render_surface_swap_buffers(surface);
-    if (profile) tc_profiler_end_section();
     if (profile) tc_profiler_end_section();
 }
 

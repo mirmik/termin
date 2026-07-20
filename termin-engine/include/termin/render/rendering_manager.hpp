@@ -48,7 +48,6 @@ class RenderStateStore;
 // Factory callback types
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
-using MakeCurrentCallback = std::function<void()>;
 using DisplayRemovedCallback = std::function<void(tc_display*)>;
 using RenderTargetContextProvider = std::function<bool(
     RenderingManager& manager,
@@ -87,9 +86,6 @@ private:
     // Engine-owned live scene/pipeline/target topology.
     RenderTopology& topology_;
 
-    // Callback to activate GL context before rendering
-    MakeCurrentCallback make_current_callback_;
-
     // Factory for creating displays on demand
     DisplayFactory display_factory_;
 
@@ -123,9 +119,6 @@ public:
     const RenderEngine* render_engine_if_created() const { return render_engine_; }
     RenderTopology& topology() { return topology_; }
     const RenderTopology& topology() const { return topology_; }
-
-    // Set callback to activate GL context before rendering
-    void set_make_current_callback(MakeCurrentCallback callback);
 
     // Set factory for creating displays on demand
     void set_display_factory(DisplayFactory factory);
@@ -238,8 +231,7 @@ public:
     // All viewports (from all displays) rendered in single pass.
     void render_all_offscreen();
 
-    // Phase 2: Blit viewport output_fbos to displays
-    // For each display: make_current, clear, blit viewports, swap.
+    // Phase 2: composite viewport textures into each display texture output.
     void present_all();
 
     // ========================================================================

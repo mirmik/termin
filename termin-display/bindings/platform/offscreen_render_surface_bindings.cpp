@@ -40,10 +40,6 @@ std::pair<int, int> FBOSurfaceRef::framebuffer_size() const {
         return {0, 0};
     }
 
-std::pair<int, int> FBOSurfaceRef::window_size() const {
-        return framebuffer_size();
-    }
-
 tgfx::TextureHandle FBOSurfaceRef::color_tex() const {
         if (auto* s = surface()) {
             return s->color_tex();
@@ -72,19 +68,9 @@ uint32_t FBOSurfaceRef::get_tgfx_color_tex_id() const {
         return 0;
     }
 
-uint32_t FBOSurfaceRef::get_framebuffer_id() const {
-        return 0;
-    }
-
-void FBOSurfaceRef::make_current() {}
-void FBOSurfaceRef::swap_buffers() {}
-bool FBOSurfaceRef::should_close() const { return false; }
-void FBOSurfaceRef::set_should_close(bool value) { (void)value; }
-std::pair<double, double> FBOSurfaceRef::get_cursor_pos() const { return {0.0, 0.0}; }
-
-uintptr_t FBOSurfaceRef::share_group_key() const {
+uintptr_t FBOSurfaceRef::graphics_domain_key() const {
         if (auto* s = surface()) {
-            return tc_render_surface_share_group_key(s->tc_surface());
+            return tc_render_surface_get_graphics_domain_key(s->tc_surface());
         }
         return 0;
     }
@@ -100,18 +86,11 @@ void bind_offscreen_render_surface(nb::module_& m) {
         .def("is_valid", &FBOSurfaceRef::is_valid)
         .def("resize", &FBOSurfaceRef::resize, nb::arg("width"), nb::arg("height"))
         .def("framebuffer_size", &FBOSurfaceRef::framebuffer_size)
-        .def("window_size", &FBOSurfaceRef::window_size)
         .def_prop_ro("color_tex", &FBOSurfaceRef::color_tex)
         .def_prop_ro("depth_tex", &FBOSurfaceRef::depth_tex)
         .def_prop_ro("tc_surface_ptr", &FBOSurfaceRef::tc_surface_ptr)
         .def("get_tgfx_color_tex_id", &FBOSurfaceRef::get_tgfx_color_tex_id)
-        .def("get_framebuffer_id", &FBOSurfaceRef::get_framebuffer_id)
-        .def("make_current", &FBOSurfaceRef::make_current)
-        .def("swap_buffers", &FBOSurfaceRef::swap_buffers)
-        .def("should_close", &FBOSurfaceRef::should_close)
-        .def("set_should_close", &FBOSurfaceRef::set_should_close, nb::arg("value"))
-        .def("get_cursor_pos", &FBOSurfaceRef::get_cursor_pos)
-        .def("share_group_key", &FBOSurfaceRef::share_group_key)
+        .def("graphics_domain_key", &FBOSurfaceRef::graphics_domain_key)
         .def("close", &FBOSurfaceRef::close);
 }
 

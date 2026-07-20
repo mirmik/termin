@@ -1,24 +1,22 @@
-// tc_render_surface.h - Abstract render surface (window, offscreen FBO, etc.)
-// Language-agnostic interface for render targets
+// tc_render_surface.h - Backend-neutral texture output for one tc_display.
 #ifndef TC_RENDER_SURFACE_H
 #define TC_RENDER_SURFACE_H
 
 #include "tc_types.h"
 #include "render/termin_display_api.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Forward declarations
+typedef struct tc_display tc_display;
 typedef struct tc_render_surface tc_render_surface;
 typedef struct tc_render_surface_vtable tc_render_surface_vtable;
 
-// ============================================================================
-// Resize Callback
-// ============================================================================
+#define TC_RENDER_SURFACE_ABI_VERSION 1u
 
 typedef void (*tc_render_surface_resize_fn)(
     tc_render_surface* surface,
@@ -27,230 +25,106 @@ typedef void (*tc_render_surface_resize_fn)(
     void* userdata
 );
 
-// ============================================================================
-// Render Surface VTable
-// ============================================================================
-
+// Every callback is mandatory. A surface is a pixel-sized texture output; it
+// deliberately has no window, input, presentation, raw-FBO or context API.
 struct tc_render_surface_vtable {
-    // Get framebuffer handle (0 for default/window, custom for offscreen)
-    uint32_t (*get_framebuffer)(tc_render_surface* self);
-
-    // Get surface size in pixels (framebuffer size)
     void (*get_size)(tc_render_surface* self, int* width, int* height);
-
-    // Make OpenGL context current
-    void (*make_current)(tc_render_surface* self);
-
-    // Swap buffers (present result). No-op for offscreen surfaces.
-    void (*swap_buffers)(tc_render_surface* self);
-
-    // Unique key for caching VAO/shaders per context
-    uintptr_t (*context_key)(tc_render_surface* self);
-
-    // Poll events (for window surfaces). No-op for offscreen.
-    void (*poll_events)(tc_render_surface* self);
-
-    // Window-specific methods (NULL for offscreen surfaces)
-    // Get logical window size (may differ from framebuffer on HiDPI)
-    void (*get_window_size)(tc_render_surface* self, int* width, int* height);
-
-    // Check if window should close
-    bool (*should_close)(tc_render_surface* self);
-
-    // Set should close flag
-    void (*set_should_close)(tc_render_surface* self, bool value);
-
-    // Get cursor position in window pixels
-    void (*get_cursor_pos)(tc_render_surface* self, double* x, double* y);
-
-    // Cleanup
+    uint32_t (*get_color_texture_id)(tc_render_surface* self);
+    // Opaque identity of the IRenderDevice domain that minted the texture
+    // handle. It is compared only for equality and is never dereferenced.
+    uintptr_t (*get_graphics_domain_key)(tc_render_surface* self);
     void (*destroy)(tc_render_surface* self);
-
-    // Share group key — surfaces with the same key share GL resources
-    // (textures, shaders, VBO/EBO). NULL = fallback to context_key (no sharing).
-    uintptr_t (*share_group_key)(tc_render_surface* self);
-
-    // --- tgfx2 composite target (backend-neutral) -------------------------
-    // Return the tgfx2 TextureHandle id (uint32_t) that the engine should
-    // composite viewports into. When non-zero, RenderingManager presentation
-    // prefers this path over the legacy `get_framebuffer`+blit-to-FBO
-    // path and routes through IRenderDevice::blit_to_texture /
-    // clear_texture — the only path that works on Vulkan.
-    //
-    // A surface that has not yet been migrated (legacy FBO-only) leaves
-    // this NULL or returns 0 and falls back to the FBO path.
-    uint32_t (*get_tgfx_color_tex_id)(tc_render_surface* self);
 };
-
-// ============================================================================
-// Render Surface Structure
-// ============================================================================
 
 struct tc_render_surface {
-    // Virtual method table
     const tc_render_surface_vtable* vtable;
-
-    // External object (PyObject*, etc.) for external surfaces
     void* body;
-
-    // Resize callback
     tc_render_surface_resize_fn on_resize;
     void* on_resize_userdata;
-
+    // Enforces the one-surface-to-one-display contract and protects the sole
+    // resize subscription from accidental overwrite.
+    tc_display* attached_display;
 };
 
-// ============================================================================
-// Initialization
-// ============================================================================
-
 static inline void tc_render_surface_init(
-    tc_render_surface* s,
+    tc_render_surface* surface,
     const tc_render_surface_vtable* vtable
 ) {
-    s->vtable = vtable;
-    s->body = NULL;
-    s->on_resize = NULL;
-    s->on_resize_userdata = NULL;
+    surface->vtable = vtable;
+    surface->body = NULL;
+    surface->on_resize = NULL;
+    surface->on_resize_userdata = NULL;
+    surface->attached_display = NULL;
 }
 
-// ============================================================================
-// VTable Dispatch (null-safe)
-// ============================================================================
-
-static inline uint32_t tc_render_surface_get_framebuffer(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->get_framebuffer) {
-        return s->vtable->get_framebuffer(s);
-    }
-    return 0;
-}
-
-static inline void tc_render_surface_get_size(tc_render_surface* s, int* width, int* height) {
-    if (s && s->vtable && s->vtable->get_size) {
-        s->vtable->get_size(s, width, height);
-    } else {
-        if (width) *width = 0;
-        if (height) *height = 0;
-    }
-}
-
-static inline void tc_render_surface_make_current(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->make_current) {
-        s->vtable->make_current(s);
-    }
-}
-
-static inline void tc_render_surface_swap_buffers(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->swap_buffers) {
-        s->vtable->swap_buffers(s);
-    }
-}
-
-static inline uintptr_t tc_render_surface_context_key(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->context_key) {
-        return s->vtable->context_key(s);
-    }
-    return (uintptr_t)s;
-}
-
-static inline void tc_render_surface_destroy(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->destroy) {
-        s->vtable->destroy(s);
-    }
-}
-
-static inline uintptr_t tc_render_surface_share_group_key(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->share_group_key) {
-        return s->vtable->share_group_key(s);
-    }
-    // Fallback: same as context_key (no sharing, each surface = own group)
-    return tc_render_surface_context_key(s);
-}
-
-static inline uint32_t tc_render_surface_get_tgfx_color_tex_id(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->get_tgfx_color_tex_id) {
-        return s->vtable->get_tgfx_color_tex_id(s);
-    }
-    return 0;
-}
-
-static inline void tc_render_surface_poll_events(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->poll_events) {
-        s->vtable->poll_events(s);
-    }
-}
-
-static inline void tc_render_surface_get_window_size(tc_render_surface* s, int* width, int* height) {
-    if (s && s->vtable && s->vtable->get_window_size) {
-        s->vtable->get_window_size(s, width, height);
-    } else {
-        // Fallback to framebuffer size
-        tc_render_surface_get_size(s, width, height);
-    }
-}
-
-static inline bool tc_render_surface_should_close(tc_render_surface* s) {
-    if (s && s->vtable && s->vtable->should_close) {
-        return s->vtable->should_close(s);
-    }
-    return false;
-}
-
-static inline void tc_render_surface_set_should_close(tc_render_surface* s, bool value) {
-    if (s && s->vtable && s->vtable->set_should_close) {
-        s->vtable->set_should_close(s, value);
-    }
-}
-
-static inline void tc_render_surface_get_cursor_pos(tc_render_surface* s, double* x, double* y) {
-    if (s && s->vtable && s->vtable->get_cursor_pos) {
-        s->vtable->get_cursor_pos(s, x, y);
-    } else {
-        if (x) *x = 0.0;
-        if (y) *y = 0.0;
-    }
-}
-
-// ============================================================================
-// Resize Callback Management
-// ============================================================================
-
-static inline void tc_render_surface_set_on_resize(
-    tc_render_surface* s,
-    tc_render_surface_resize_fn callback,
-    void* userdata
+static inline void tc_render_surface_get_size(
+    tc_render_surface* surface,
+    int* width,
+    int* height
 ) {
-    if (s) {
-        s->on_resize = callback;
-        s->on_resize_userdata = userdata;
+    if (surface && surface->vtable && surface->vtable->get_size) {
+        surface->vtable->get_size(surface, width, height);
+        return;
     }
+    if (width) *width = 0;
+    if (height) *height = 0;
 }
 
-// Call this from surface implementations when size changes
+static inline uint32_t tc_render_surface_get_color_texture_id(
+    tc_render_surface* surface
+) {
+    return surface && surface->vtable && surface->vtable->get_color_texture_id
+        ? surface->vtable->get_color_texture_id(surface)
+        : 0;
+}
+
+static inline uintptr_t tc_render_surface_get_graphics_domain_key(
+    tc_render_surface* surface
+) {
+    return surface && surface->vtable && surface->vtable->get_graphics_domain_key
+        ? surface->vtable->get_graphics_domain_key(surface)
+        : 0;
+}
+
+// Resolve and validate the mandatory output before any GPU operation. The
+// caller supplies its opaque graphics-domain key (normally the IRenderDevice
+// address). On success, color_texture_id receives a non-zero handle id.
+TERMIN_DISPLAY_API bool tc_render_surface_validate_output(
+    tc_render_surface* surface,
+    uintptr_t expected_graphics_domain_key,
+    uint32_t* color_texture_id
+);
+
 static inline void tc_render_surface_notify_resize(
-    tc_render_surface* s,
+    tc_render_surface* surface,
     int width,
     int height
 ) {
-    if (s && s->on_resize) {
-        s->on_resize(s, width, height, s->on_resize_userdata);
+    if (surface && surface->on_resize) {
+        surface->on_resize(surface, width, height, surface->on_resize_userdata);
     }
 }
 
-// ============================================================================
-// External Surface Support (for Python/Rust/C#)
-// ============================================================================
-
-// Create external surface with custom vtable
-// - body: pointer to external object (e.g., PyObject*)
-// - vtable: vtable for this surface type (one per type, shared by all instances)
-// Python side owns the tc_render_surface and frees it when done.
-TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(
-    void* body,
-    const tc_render_surface_vtable* vtable
+// Attachment functions diagnose invalid ownership transitions. Detach succeeds
+// only for the display that currently owns the attachment.
+TERMIN_DISPLAY_API bool tc_render_surface_attach(
+    tc_render_surface* surface,
+    tc_display* display
+);
+TERMIN_DISPLAY_API bool tc_render_surface_detach(
+    tc_render_surface* surface,
+    tc_display* display
 );
 
-// Free external surface
-TERMIN_DISPLAY_API void tc_render_surface_free_external(tc_render_surface* s);
+// External adapters pass size and version explicitly, so stale managed/native
+// layouts fail before the vtable is copied or invoked.
+TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(
+    void* body,
+    const tc_render_surface_vtable* vtable,
+    size_t vtable_size,
+    uint32_t abi_version
+);
+TERMIN_DISPLAY_API bool tc_render_surface_free_external(tc_render_surface* surface);
 
 #ifdef __cplusplus
 }

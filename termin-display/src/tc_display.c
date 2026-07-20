@@ -40,7 +40,7 @@ tc_display* tc_display_new(const char* name, tc_render_surface* surface) {
     display->editor_only = false;
     display->enabled = true;
     display->auto_remove_when_empty = false;
-    display->surface = surface;
+    display->surface = NULL;
     display->input_endpoint = tc_display_input_router_create(display);
     if (!display->input_endpoint) {
         tc_log(TC_LOG_ERROR, "[tc_display_new] input endpoint allocation failed");
@@ -52,9 +52,12 @@ tc_display* tc_display_new(const char* name, tc_render_surface* surface) {
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->viewport_count = 0;
 
-    // Subscribe to surface resize
-    if (surface) {
-        tc_render_surface_set_on_resize(surface, tc_display_on_surface_resize, display);
+    if (surface && !tc_display_set_surface(display, surface)) {
+        tc_log(TC_LOG_ERROR, "[tc_display_new] surface attachment failed");
+        tc_display_input_router_destroy(display->input_endpoint);
+        free(display->name);
+        free(display);
+        return NULL;
     }
 
     return display;
@@ -65,7 +68,9 @@ void tc_display_free(tc_display* display) {
 
     // Unsubscribe from surface resize
     if (display->surface) {
-        tc_render_surface_set_on_resize(display->surface, NULL, NULL);
+        display->surface->on_resize = NULL;
+        display->surface->on_resize_userdata = NULL;
+        tc_render_surface_detach(display->surface, display);
     }
 
     tc_display_input_router_destroy(display->input_endpoint);
@@ -130,22 +135,33 @@ bool tc_display_get_auto_remove_when_empty(const tc_display* display) {
     return display ? display->auto_remove_when_empty : false;
 }
 
-void tc_display_set_surface(tc_display* display, tc_render_surface* surface) {
-    if (!display) return;
+bool tc_display_set_surface(tc_display* display, tc_render_surface* surface) {
+    if (!display) {
+        tc_log(TC_LOG_ERROR, "[tc_display_set_surface] display is NULL");
+        return false;
+    }
+    if (surface == display->surface) return true;
 
-    // Unsubscribe from old surface
+    // Claim the replacement before touching the current attachment. A failed
+    // duplicate attach therefore leaves both displays unchanged.
+    if (surface && !tc_render_surface_attach(surface, display)) return false;
+
     if (display->surface) {
-        tc_render_surface_set_on_resize(display->surface, NULL, NULL);
+        display->surface->on_resize = NULL;
+        display->surface->on_resize_userdata = NULL;
+        tc_render_surface_detach(display->surface, display);
     }
 
     display->surface = surface;
 
     // Subscribe to new surface
     if (surface) {
-        tc_render_surface_set_on_resize(surface, tc_display_on_surface_resize, display);
+        surface->on_resize = tc_display_on_surface_resize;
+        surface->on_resize_userdata = display;
         // Update pixel rects with new surface size
         tc_display_update_all_pixel_rects(display);
     }
+    return true;
 }
 
 tc_render_surface* tc_display_get_surface(const tc_display* display) {
@@ -232,49 +248,6 @@ void tc_display_get_size(const tc_display* display, int* width, int* height) {
     } else {
         if (width) *width = 0;
         if (height) *height = 0;
-    }
-}
-
-void tc_display_get_window_size(const tc_display* display, int* width, int* height) {
-    if (display && display->surface) {
-        tc_render_surface_get_window_size(display->surface, width, height);
-    } else {
-        if (width) *width = 0;
-        if (height) *height = 0;
-    }
-}
-
-void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y) {
-    if (display && display->surface) {
-        tc_render_surface_get_cursor_pos(display->surface, x, y);
-    } else {
-        if (x) *x = 0.0;
-        if (y) *y = 0.0;
-    }
-}
-
-void tc_display_make_current(tc_display* display) {
-    if (display && display->surface) {
-        tc_render_surface_make_current(display->surface);
-    }
-}
-
-void tc_display_swap_buffers(tc_display* display) {
-    if (display && display->surface) {
-        tc_render_surface_swap_buffers(display->surface);
-    }
-}
-
-bool tc_display_should_close(const tc_display* display) {
-    if (display && display->surface) {
-        return tc_render_surface_should_close(display->surface);
-    }
-    return false;
-}
-
-void tc_display_set_should_close(tc_display* display, bool value) {
-    if (display && display->surface) {
-        tc_render_surface_set_should_close(display->surface, value);
     }
 }
 

@@ -835,7 +835,6 @@ void main() {
             if (_renderSurface != null && _nativeDisplayManager != null && _renderingManager != null)
             {
                 // Cache WPF's FBO before rendering
-                _renderSurface.UpdateFramebuffer();
 
                 // Render this display's viewports and blit to surface
                 var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager.DisplayPtr);
@@ -869,7 +868,6 @@ void main() {
             if (_renderSurface2 != null && _nativeDisplayManager2 != null && _renderingManager != null)
             {
                 // Cache WPF's FBO before rendering
-                _renderSurface2.UpdateFramebuffer();
 
                 // Render this display's viewports and blit to surface
                 var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager2.DisplayPtr);

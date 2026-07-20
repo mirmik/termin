@@ -21,6 +21,9 @@ class DisplayViewportHost:
     def framebuffer_size(self) -> tuple[int, int]:
         return self._surface.framebuffer_size()
 
+    def graphics_domain_key(self) -> int:
+        return self._surface.graphics_domain_key()
+
     def resize(self, width: int, height: int) -> bool:
         return self._surface.resize(width, height)
 

@@ -72,7 +72,6 @@ def test_resolve_pass_serialized_schema_has_no_strategy():
 
 
 def test_rendering_manager_nullable_callbacks_accept_none(rendering_manager):
-    rendering_manager.set_make_current_callback(None)
     rendering_manager.set_display_factory(None)
     rendering_manager.set_pipeline_factory(None)
     rendering_manager.set_display_removed_callback(None)

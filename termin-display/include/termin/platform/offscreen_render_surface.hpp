@@ -51,19 +51,10 @@ private:
     void release_textures();
 
     static OffscreenRenderSurface* from_tc_surface(tc_render_surface* s);
-    static uint32_t vtable_get_framebuffer(tc_render_surface* self);
     static void vtable_get_size(tc_render_surface* self, int* width, int* height);
-    static void vtable_make_current(tc_render_surface* self);
-    static void vtable_swap_buffers(tc_render_surface* self);
-    static uintptr_t vtable_context_key(tc_render_surface* self);
-    static void vtable_poll_events(tc_render_surface* self);
-    static void vtable_get_window_size(tc_render_surface* self, int* width, int* height);
-    static bool vtable_should_close(tc_render_surface* self);
-    static void vtable_set_should_close(tc_render_surface* self, bool value);
-    static void vtable_get_cursor_pos(tc_render_surface* self, double* x, double* y);
+    static uint32_t vtable_get_color_texture_id(tc_render_surface* self);
+    static uintptr_t vtable_get_graphics_domain_key(tc_render_surface* self);
     static void vtable_destroy(tc_render_surface* self);
-    static uintptr_t vtable_share_group_key(tc_render_surface* self);
-    static uint32_t vtable_get_tgfx_color_tex_id(tc_render_surface* self);
 };
 
 TERMIN_DISPLAY_API bool offscreen_render_surface_handle_valid(OffscreenRenderSurfaceHandle handle);

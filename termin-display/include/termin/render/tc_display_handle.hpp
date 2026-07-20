@@ -117,8 +117,8 @@ public:
         return ptr_ ? tc_display_get_surface(ptr_) : nullptr;
     }
 
-    void set_surface(tc_render_surface* surface) {
-        if (ptr_) tc_display_set_surface(ptr_, surface);
+    bool set_surface(tc_render_surface* surface) {
+        return ptr_ && tc_display_set_surface(ptr_, surface);
     }
 
     tc_input_manager* input_manager() const {
@@ -154,29 +154,6 @@ public:
         return {w, h};
     }
 
-    // Window size (logical pixels, may differ from framebuffer on HiDPI)
-    std::pair<int, int> get_window_size() const {
-        int w = 0, h = 0;
-        if (ptr_) tc_display_get_window_size(ptr_, &w, &h);
-        return {w, h};
-    }
-
-    // Cursor position in window pixels
-    std::pair<double, double> get_cursor_pos() const {
-        double x = 0.0, y = 0.0;
-        if (ptr_) tc_display_get_cursor_pos(ptr_, &x, &y);
-        return {x, y};
-    }
-
-    // Should close
-    bool should_close() const {
-        return ptr_ ? tc_display_should_close(ptr_) : false;
-    }
-
-    void set_should_close(bool value) {
-        if (ptr_) tc_display_set_should_close(ptr_, value);
-    }
-
     // Viewport management
     size_t viewport_count() const {
         return ptr_ ? tc_display_get_viewport_count(ptr_) : 0;
@@ -210,15 +187,6 @@ public:
     // Update pixel rects
     void update_all_pixel_rects() {
         if (ptr_) tc_display_update_all_pixel_rects(ptr_);
-    }
-
-    // Context operations
-    void make_current() {
-        if (ptr_) tc_display_make_current(ptr_);
-    }
-
-    void swap_buffers() {
-        if (ptr_) tc_display_swap_buffers(ptr_);
     }
 
     // Static factory
