@@ -197,7 +197,7 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     assert manager.get_mesh_asset("Cube") is not None
 
 
-def test_builtin_pipeline_registration_is_idempotent_without_copying_pipeline() -> None:
+def test_builtin_pipeline_registration_is_idempotent_without_cached_instance() -> None:
     from termin.render_framework import tc_pipeline_registry_count
 
     manager = DefaultResourceManager()
@@ -209,7 +209,7 @@ def test_builtin_pipeline_registration_is_idempotent_without_copying_pipeline() 
         manager.register_builtin_pipelines()
 
         assert manager.get_pipeline_asset("Triangle") is not None
-        assert after_first == baseline + 1
+        assert after_first == baseline
         assert tc_pipeline_registry_count() == after_first
     finally:
         manager.clear_runtime_state()

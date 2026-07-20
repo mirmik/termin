@@ -195,18 +195,8 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
 
     def _destroy_cached_pipelines(self) -> None:
         for asset in list(self._pipeline_registry.iter_assets()):
-            pipeline = asset.cached_data
-            if pipeline is None:
-                continue
-            try:
-                pipeline.destroy()
-            except Exception:
-                from tcbase import log
-
-                log.error(
-                    f"[DefaultResourceManager] Failed to destroy pipeline '{asset.name}'",
-                    exc_info=True,
-                )
+            # Pipeline assets own strong canonical handles, not mutable
+            # execution instances. Dropping the handle releases the resource.
             asset.unload()
 
     def _clear_default_texture_caches(self) -> None:

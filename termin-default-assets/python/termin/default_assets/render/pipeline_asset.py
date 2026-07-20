@@ -1,8 +1,8 @@
-"""Pipeline asset loading and transactional hot reload.
+"""Pipeline import boundary and canonical resource ownership.
 
-Pipeline documents use their UUID as stable external identity.  The import
-plugin establishes that identity before this asset is registered; loading must
-therefore never rewrite it from the document contents.
+Both supported authored formats are normalized through the pass-list path.
+The asset retains only the stable :class:`TcRenderPipeline` resource and small
+dependency metadata; mutable execution instances are created by consumers.
 """
 
 from __future__ import annotations
@@ -16,30 +16,37 @@ from tcbase import log
 from termin_assets import DataAsset
 
 if TYPE_CHECKING:
-    from termin.render_framework import RenderPipeline
+    from termin.render_framework import RenderPipeline, TcRenderPipeline
 
 
 @dataclass(frozen=True)
 class _PipelineCandidate:
-    """Fully parsed pipeline state, ready to atomically replace the live one."""
+    """Complete candidate compiled without mutating the live resource."""
 
     pipeline: "RenderPipeline"
-    graph_data: dict | None
+    pass_parameters: tuple[str, ...]
+    targets: tuple[dict, ...]
+    material_names: frozenset[str]
+    external_params: tuple[str, ...]
+    resource_views: dict
+    fbo_compositions: dict
+    source_format: str
 
 
-class PipelineAsset(DataAsset["RenderPipeline"]):
-    """
-    Asset for render pipelines (.pipeline files).
+def _pass_parameters(pipeline: "RenderPipeline") -> tuple[str, ...]:
+    """Serialize parameters in execution-plan order for the resource payload."""
+    serialized = pipeline.serialize()
+    result: list[str] = []
+    for pass_data in serialized.get("passes", []):
+        data = pass_data.get("data", {}) if isinstance(pass_data, dict) else {}
+        result.append(json.dumps(data, separators=(",", ":"), sort_keys=True))
+    return tuple(result)
 
-    IMPORTANT: Create through ResourceManager, not directly.
 
-    Example:
-        rm = ResourceManager.instance()
-        pipeline = rm.get_pipeline("my_pipeline")
-        asset = rm.get_pipeline_asset("my_pipeline")
-    """
+class PipelineAsset(DataAsset["TcRenderPipeline"]):
+    """Strong owner of one stable, versioned canonical render-pipeline resource."""
 
-    _uses_binary = False  # JSON text files
+    _uses_binary = False
 
     def __init__(
         self,
@@ -48,80 +55,92 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        """
-        Initialize PipelineAsset.
+        from termin.render_framework import TcRenderPipeline
 
-        Args:
-            data: RenderPipeline instance (can be None for lazy loading)
-            name: Pipeline name
-            source_path: Path to .pipeline file
-            uuid: Existing UUID or None to generate new one
-        """
-        super().__init__(data=data, name=name, source_path=source_path, uuid=uuid)
+        super().__init__(data=None, name=name, source_path=source_path, uuid=uuid)
+        resource = TcRenderPipeline.declare(self.uuid, self._name)
+        if not resource.is_valid:
+            raise RuntimeError(f"failed to declare canonical pipeline resource '{self._name}'")
+        self._data = resource
+        self._loaded = False
+        self._source_format: str | None = None
+        self._material_names: frozenset[str] = frozenset()
+        self._external_params: tuple[str, ...] = ()
+        self._resource_views: dict = {}
+        self._fbo_compositions: dict = {}
+        self._resource_manager = None
 
-        self._graph_data: dict | None = None
+        if data is not None:
+            candidate = self._candidate_from_pipeline(data, source_format="runtime")
+            if not self._publish_candidate(candidate):
+                raise RuntimeError(f"failed to publish runtime pipeline '{self._name}'")
+            self._loaded = True
 
     @property
     def pipeline(self) -> "RenderPipeline | None":
-        """Get the render pipeline (lazy-loaded)."""
-        return self.data
+        """Create a fresh mutable execution instance from the canonical resource."""
+        from termin.render_framework import RenderPipeline, apply_pipeline_resource_recipe
+
+        resource = self.canonical_resource
+        if resource is None:
+            return None
+        pipeline = RenderPipeline(resource)
+        apply_pipeline_resource_recipe(
+            pipeline,
+            self._resource_views,
+            self._fbo_compositions,
+        )
+        return pipeline
 
     @property
-    def graph_data(self) -> dict | None:
-        """Raw graph data (nodes, connections) for graph-format pipelines."""
+    def canonical_resource(self) -> "TcRenderPipeline | None":
+        if not self._loaded and not self._load():
+            return None
+        return self._data
+
+    @property
+    def source_format(self) -> str | None:
         if not self._loaded:
             self._load()
-        return self._graph_data
+        return self._source_format
 
     @property
     def is_graph_format(self) -> bool:
-        """True if this pipeline uses the graph format (nodes, connections)."""
-        if not self._loaded:
-            self._load()
-        return self._graph_data is not None
+        return self.source_format == "graph"
 
     @property
     def external_params(self) -> list[str]:
-        """List of external RT slot names defined in the pipeline graph."""
         if not self._loaded:
             self._load()
-        if self._graph_data is None:
-            return []
-        result: list[str] = []
-        for node in self._graph_data.get("nodes", []):
-            if node.get("node_type") == "external_rt":
-                slot = node.get("params", {}).get("slot", "")
-                name = node.get("name", "")
-                result.append(slot or name or "unnamed")
-        return result
+        return list(self._external_params)
 
     def uses_material_names(self, material_names: set[str]) -> bool:
-        """True if this pipeline graph references any of material_names."""
         if not self._loaded:
             return False
-        from termin.default_assets.render.pipeline_dependencies import uses_material_names
+        return bool(self._material_names & material_names)
 
-        return uses_material_names(self._graph_data, material_names)
+    def bind_resource_manager(self, resource_manager) -> None:
+        """Bind the manager needed to deserialize Python-authored pass data."""
+        self._resource_manager = resource_manager
 
-    def _parse_content(self, content: bytes | str) -> "RenderPipeline | None":
-        """Parse without modifying live state (required by :class:`DataAsset`)."""
+    def _parse_content(self, content: bytes | str) -> "TcRenderPipeline | None":
         if not isinstance(content, str):
             log.error(f"[PipelineAsset] Pipeline '{self._name}' has non-text content")
             return None
         candidate = self._prepare_candidate(content)
-        return candidate.pipeline if candidate is not None else None
+        if candidate is None:
+            return None
+        try:
+            return self._data if self._publish_candidate(candidate) else None
+        finally:
+            candidate.pipeline.destroy()
 
     def _prepare_candidate(self, content: str) -> _PipelineCandidate | None:
-        """Compile a candidate pipeline while preserving the registered identity."""
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
-            log.error(
-                f"[PipelineAsset] Invalid JSON in pipeline '{self._name}'",
-                exc_info=True,
-            )
+            log.error(f"[PipelineAsset] Invalid JSON in pipeline '{self._name}'", exc_info=True)
             return None
-
         if not isinstance(data, dict):
             log.error(f"[PipelineAsset] Pipeline '{self._name}' must contain a JSON object")
             return None
@@ -138,43 +157,103 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
                 )
                 return None
 
-        if "nodes" in data and "passes" not in data:
+        has_pass_list = "passes" in data
+        has_graph = any(key in data for key in ("nodes", "connections", "viewport_frames"))
+        if has_pass_list and has_graph:
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' mixes graph and pass-list fields")
+            return None
+        if has_pass_list:
+            return self._prepare_pass_list_candidate(data, source_format="pass-list")
+        if "nodes" in data:
             return self._prepare_graph_candidate(data)
-        return self._prepare_pass_list_candidate(data)
+        log.error(f"[PipelineAsset] Pipeline '{self._name}' has no supported authored format")
+        return None
 
     def _prepare_graph_candidate(self, data: dict) -> _PipelineCandidate | None:
-        """Compile graph JSON without registering or mutating a global template."""
+        """Lower graph authoring to a pass list, then use the canonical path."""
         from termin.render_framework import compile_graph_from_json
 
+        graph_pipeline = None
         try:
-            pipeline = compile_graph_from_json(
-                json.dumps(data),
-                resource_uuid=self.uuid,
-                resource_name=self._name,
+            graph_pipeline = compile_graph_from_json(json.dumps(data))
+            pass_list = graph_pipeline.serialize()
+            pass_list["name"] = str(data.get("name", self._name))
+            pass_list["uuid"] = self.uuid
+            pass_list["targets"] = [
+                {
+                    "viewport_name": str(frame.get("viewport_name", "main")),
+                    "export_name": str(frame.get("export_name", "")),
+                    "width": int(frame.get("target_width", 0)),
+                    "height": int(frame.get("target_height", 0)),
+                }
+                for frame in data.get("viewport_frames", [])
+                if isinstance(frame, dict)
+            ]
+            candidate = self._prepare_pass_list_candidate(pass_list, source_format="graph")
+            if candidate is None:
+                return None
+            external_params = tuple(
+                str(node.get("params", {}).get("slot") or node.get("name") or "unnamed")
+                for node in data.get("nodes", [])
+                if isinstance(node, dict)
+                and node.get("node_type") == "external_rt"
+                and isinstance(node.get("params", {}), dict)
+            )
+            return _PipelineCandidate(
+                pipeline=candidate.pipeline,
+                pass_parameters=candidate.pass_parameters,
+                targets=candidate.targets,
+                material_names=candidate.material_names,
+                external_params=external_params,
+                resource_views=candidate.resource_views,
+                fbo_compositions=candidate.fbo_compositions,
+                source_format=candidate.source_format,
             )
         except Exception:
-            log.error(
-                f"[PipelineAsset] Failed to compile graph pipeline '{self._name}'",
-                exc_info=True,
-            )
+            log.error(f"[PipelineAsset] Failed to lower graph pipeline '{self._name}'", exc_info=True)
             return None
+        finally:
+            if graph_pipeline is not None:
+                graph_pipeline.destroy()
 
-        if pipeline is None:
-            log.error(f"[PipelineAsset] Graph compiler returned no pipeline for '{self._name}'")
-            return None
-        pipeline.name = self._name
-        return _PipelineCandidate(pipeline=pipeline, graph_data=data)
-
-    def _prepare_pass_list_candidate(self, data: dict) -> _PipelineCandidate | None:
-        """Compile a supported pass-list document without modifying live state."""
+    def _prepare_pass_list_candidate(
+        self,
+        data: dict,
+        *,
+        source_format: str,
+    ) -> _PipelineCandidate | None:
         from termin_assets import get_resource_manager
+        from termin.default_assets.render.pipeline_dependencies import material_pass_materials
         from termin.render_framework import RenderPipeline
 
-        rm = get_resource_manager()
+        passes = data.get("passes")
+        if not isinstance(passes, list):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' has a non-list 'passes' field")
+            return None
+        targets = data.get("targets", [])
+        if not isinstance(targets, list) or not all(isinstance(item, dict) for item in targets):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' has invalid target metadata")
+            return None
+        resource_views = data.get("resource_views", {})
+        fbo_compositions = data.get("fbo_compositions", {})
+        if (
+            not isinstance(resource_views, dict)
+            or not all(
+                isinstance(name, str) and isinstance(item, dict)
+                for name, item in resource_views.items()
+            )
+            or not isinstance(fbo_compositions, dict)
+            or not all(
+                isinstance(name, str) and isinstance(item, dict)
+                for name, item in fbo_compositions.items()
+            )
+        ):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' has invalid resource recipe")
+            return None
+        rm = self._resource_manager or get_resource_manager()
         if rm is None:
             log.error(f"[PipelineAsset] Resource manager is not configured for '{self._name}'")
             return None
-
         try:
             pipeline = RenderPipeline.deserialize(data, rm)
         except Exception:
@@ -183,44 +262,96 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
                 exc_info=True,
             )
             return None
-
         if pipeline is None:
             log.error(f"[PipelineAsset] Deserializer returned no pipeline for '{self._name}'")
             return None
         pipeline.name = self._name
-        return _PipelineCandidate(pipeline=pipeline, graph_data=None)
+        external_params = tuple(
+            str(item.get("resource"))
+            for item in data.get("pipeline_specs", [])
+            if isinstance(item, dict)
+            and str(item.get("resource_type", "")).startswith("external")
+            and item.get("resource")
+        )
+        return _PipelineCandidate(
+            pipeline=pipeline,
+            pass_parameters=_pass_parameters(pipeline),
+            targets=tuple(dict(item) for item in targets),
+            material_names=frozenset(material_pass_materials(data)),
+            external_params=external_params,
+            resource_views=dict(resource_views),
+            fbo_compositions=dict(fbo_compositions),
+            source_format=source_format,
+        )
+
+    def _candidate_from_pipeline(
+        self,
+        pipeline: "RenderPipeline",
+        *,
+        source_format: str,
+    ) -> _PipelineCandidate:
+        serialized = pipeline.serialize()
+        from termin.default_assets.render.pipeline_dependencies import material_pass_materials
+
+        return _PipelineCandidate(
+            pipeline=pipeline,
+            pass_parameters=_pass_parameters(pipeline),
+            targets=(),
+            material_names=frozenset(material_pass_materials(serialized)),
+            external_params=(),
+            resource_views=dict(serialized.get("resource_views", {})),
+            fbo_compositions=dict(serialized.get("fbo_compositions", {})),
+            source_format=source_format,
+        )
+
+    def _publish_candidate(self, candidate: _PipelineCandidate) -> bool:
+        from termin.render_framework import publish_pipeline_definition
+
+        try:
+            publish_pipeline_definition(
+                candidate.pipeline,
+                self._data,
+                list(candidate.pass_parameters),
+                list(candidate.targets),
+            )
+        except Exception:
+            log.error(f"[PipelineAsset] Failed to publish pipeline '{self._name}'", exc_info=True)
+            return False
+        self._source_format = candidate.source_format
+        self._material_names = candidate.material_names
+        self._external_params = candidate.external_params
+        self._resource_views = candidate.resource_views
+        self._fbo_compositions = candidate.fbo_compositions
+        return True
 
     def _load_content(self, content: bytes | str) -> bool:
-        """Atomically replace cached pipeline state after a successful parse."""
         if not isinstance(content, str):
             log.error(f"[PipelineAsset] Pipeline '{self._name}' has non-text content")
             return False
-
         candidate = self._prepare_candidate(content)
         if candidate is None:
             return False
-
-        previous_data = self._data
-        previous_graph_data = self._graph_data
-        previous_loaded = self._loaded
-        self._data = candidate.pipeline
-        self._graph_data = candidate.graph_data
-        self._loaded = True
         try:
-            self._on_loaded()
+            previous_loaded = self._loaded
+            self._loaded = True
+            try:
+                self._on_loaded()
+            except Exception:
+                self._loaded = previous_loaded
+                raise
+            if not self._publish_candidate(candidate):
+                self._loaded = previous_loaded
+                return False
         except Exception:
-            self._data = previous_data
-            self._graph_data = previous_graph_data
-            self._loaded = previous_loaded
             log.error(f"[PipelineAsset] Post-load hook failed for '{self._name}'", exc_info=True)
             return False
-
+        finally:
+            candidate.pipeline.destroy()
         if not self._has_uuid_in_spec and self._source_path:
             self.save_spec_file()
         return True
 
     def reload(self) -> bool:
-        """Reload the asset; its owning resource manager publishes the change."""
         if self._source_path is None:
             return False
         result = self._load_from_file()
@@ -228,39 +359,14 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
             self._bump_version()
         return result
 
-    def save_graph_to_file(self, path: Path | str | None = None) -> bool:
-        """Save graph data to .pipeline file.
-
-        Args:
-            path: Target path. If None, uses source_path.
-
-        Returns:
-            True on success, False on failure.
-        """
-        target = Path(path) if path else self._source_path
-        if target is None:
-            log.error("[PipelineAsset] No path specified for save")
-            return False
-
-        if self._graph_data is None:
-            log.error("[PipelineAsset] No graph data to save")
-            return False
-
-        try:
-            save_data = dict(self._graph_data)
-            save_data["uuid"] = self.uuid
-
-            with open(target, "w", encoding="utf-8") as f:
-                json.dump(save_data, f, indent=2, ensure_ascii=False)
-
-            self._source_path = target
-            self.mark_just_saved()
-
-            return True
-
-        except Exception as e:
-            log.error(f"[PipelineAsset] Failed to save: {e}")
-            return False
+    def unload(self) -> None:
+        """Keep the declared strong resource handle while discarding load state."""
+        self._loaded = False
+        self._source_format = None
+        self._material_names = frozenset()
+        self._external_params = ()
+        self._resource_views = {}
+        self._fbo_compositions = {}
 
     @classmethod
     def from_pipeline(
@@ -269,19 +375,4 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         name: str | None = None,
         uuid: str | None = None,
     ) -> "PipelineAsset":
-        """
-        Create PipelineAsset from existing RenderPipeline.
-
-        Args:
-            pipeline: RenderPipeline instance
-            name: Asset name (defaults to pipeline.name)
-            uuid: Optional fixed UUID
-
-        Returns:
-            PipelineAsset wrapping the pipeline
-        """
-        return cls(
-            data=pipeline,
-            name=name or pipeline.name,
-            uuid=uuid,
-        )
+        return cls(data=pipeline, name=name or pipeline.name, uuid=uuid)

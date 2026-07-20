@@ -339,13 +339,13 @@ class DefaultAssetRegistryFactoryMixin:
         from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
-            if asset.pipeline is None:
-                asset.ensure_loaded()
-            return asset.pipeline
+            return asset.canonical_resource
 
         def data_to_asset(data):
+            data_uuid = data.uuid if data is not None else None
             for asset in self._pipeline_registry.iter_assets():
-                if asset.pipeline is data:
+                resource = asset.cached_data
+                if resource is data or (data_uuid and resource is not None and resource.uuid == data_uuid):
                     return asset
             return None
 

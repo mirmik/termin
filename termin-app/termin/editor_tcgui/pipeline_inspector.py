@@ -311,13 +311,23 @@ class PipelineInspectorTcgui(VStack):
 
         if pipeline is None:
             from termin.default_assets.render.pipeline_asset import PipelineAsset
+            from termin.default_assets.render.pipeline_plugin import PipelineImportPlugin
 
-            asset = PipelineAsset(name=name, source_path=path)
-            pipeline = asset.pipeline
-            graph = asset.graph_data
-            if graph is not None:
-                graph_node_count = len(graph.get("nodes", []))
-                graph_connection_count = len(graph.get("connections", []))
+            preload = PipelineImportPlugin().preload(str(path))
+            if preload is not None:
+                asset = PipelineAsset(name=name, source_path=path, uuid=preload.uuid)
+                asset.bind_resource_manager(self._rm)
+                pipeline = asset.pipeline
+                try:
+                    authored = json.loads(path.read_text(encoding="utf-8"))
+                    if isinstance(authored, dict) and "nodes" in authored:
+                        graph_node_count = len(authored.get("nodes", []))
+                        graph_connection_count = len(authored.get("connections", []))
+                except (OSError, json.JSONDecodeError):
+                    log.error(
+                        f"[PipelineInspectorTcgui] failed to inspect pipeline source: {file_path}",
+                        exc_info=True,
+                    )
 
         if pipeline is None:
             log.error(f"[PipelineInspectorTcgui] failed to compile pipeline file: {file_path}")
