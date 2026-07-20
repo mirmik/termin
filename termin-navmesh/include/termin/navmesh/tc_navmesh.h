@@ -2,6 +2,7 @@
 #pragma once
 
 #include <tcbase/tc_binding_types.h>
+#include <tcbase/tc_uuid.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -18,10 +19,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#ifndef TC_UUID_SIZE
-#define TC_UUID_SIZE 40
 #endif
 
 TC_DEFINE_HANDLE(tc_navmesh_handle)

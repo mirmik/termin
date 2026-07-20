@@ -126,7 +126,7 @@ class MaterialInspectorController:
         if program is None or not program.phases:
             message = "Shader metadata unavailable."
         else:
-            properties = tuple(self._property_snapshot(prop) for prop in program.material_properties)
+            properties = tuple(self._property_snapshot(prop) for prop in program.properties)
         self._snapshot = MaterialInspectorSnapshot(
             True,
             name=str(material.name or ""),
@@ -168,7 +168,7 @@ class MaterialInspectorController:
 
     def set_property(self, name: str, value: Any) -> MaterialInspectorSnapshot:
         prop = self._property(name)
-        kind = prop.property_type
+        kind = prop["property_type"]
         if kind == "Bool":
             converted = bool(value)
         elif kind == "Int":
@@ -219,14 +219,15 @@ class MaterialInspectorController:
 
     def _property_snapshot(self, prop) -> MaterialPropertySnapshot:
         material = self._require_material()
-        name = str(prop.name)
-        kind = str(prop.property_type)
-        label = str(prop.label or name)
+        name = str(prop["name"])
+        kind = str(prop["property_type"])
+        label = str(prop["label"] or name)
         if kind in ("Texture", "Texture2D"):
-            default_kind = prop.default if prop.default in ("white", "normal") else "white"
+            default = prop.get("default")
+            default_kind = default if default in ("white", "normal") else "white"
             texture = self._texture_value(name, default_kind)
             return MaterialPropertySnapshot(name, label, kind, None, texture=texture)
-        value = material.uniforms.get(name, prop.default)
+        value = material.uniforms.get(name, prop.get("default"))
         if kind in ("Vec2", "Vec3", "Vec4", "Color"):
             size = {"Vec2": 2, "Vec3": 3, "Vec4": 4, "Color": 4}[kind]
             value = material_vector(value, size, color=kind == "Color")
@@ -235,8 +236,8 @@ class MaterialInspectorController:
             label,
             kind,
             value,
-            minimum=None if prop.range_min is None else float(prop.range_min),
-            maximum=None if prop.range_max is None else float(prop.range_max),
+            minimum=None if prop["range_min"] is None else float(prop["range_min"]),
+            maximum=None if prop["range_max"] is None else float(prop["range_max"]),
         )
 
     def _texture_value(self, name: str, default_kind: str) -> MaterialTextureValue:
@@ -273,8 +274,8 @@ class MaterialInspectorController:
         material = self._require_material()
         program = self._resource_manager.get_shader(material.shader_name)
         if program is not None:
-            for prop in program.material_properties:
-                if prop.name == name:
+            for prop in program.properties:
+                if prop["name"] == name:
                     return prop
         _logger.error("Cannot edit unknown material property '%s'", name)
         raise KeyError(name)

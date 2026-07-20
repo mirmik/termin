@@ -15,12 +15,7 @@ def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:
     shader_path = stdlib_root() / "shaders" / f"{name}.shader"
     shader_asset = ShaderAsset.from_file(shader_path, name=name)
     assert shader_asset.program is not None
-    rm.register_shader(
-        name,
-        shader_asset.program,
-        source_path=str(shader_path),
-        uuid=shader_asset.uuid,
-    )
+    rm.register_shader_asset(name, shader_asset, source_path=str(shader_path))
 
 
 def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(tmp_path) -> None:
@@ -114,9 +109,9 @@ def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
         path.stem
         for path in (stdlib_root() / "shaders").glob("*.shader")
     }
-    assert stdlib_shaders.isdisjoint(rm.shaders)
-    assert "DefaultShader" not in rm.shaders
-    assert "SkinnedShader" not in rm.shaders
+    assert stdlib_shaders.isdisjoint(rm.list_shader_names())
+    assert "DefaultShader" not in rm.list_shader_names()
+    assert "SkinnedShader" not in rm.list_shader_names()
 
 
 def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:

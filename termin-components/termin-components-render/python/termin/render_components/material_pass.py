@@ -60,9 +60,9 @@ def get_texture_inputs_for_material(material_identifier: str) -> List[Tuple[str,
         return []
 
     inputs = []
-    for prop in program.material_properties:
-        if prop.property_type == "Texture":
-            inputs.append((prop.name, "fbo"))
+    for prop in program.properties:
+        if prop["property_type"] in ("Texture", "Texture2D"):
+            inputs.append((prop["name"], "fbo"))
 
     return inputs
 

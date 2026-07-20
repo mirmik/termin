@@ -33,7 +33,7 @@ def test_default_resource_manager_has_no_parallel_tc_handle_caches() -> None:
     assert "navmeshes" not in instance_fields
     assert "animation_clips" not in instance_fields
     assert "skeletons" not in instance_fields
-    assert "shaders" in instance_fields
+    assert "shaders" not in instance_fields
 
 
 def test_material_lookup_uses_unique_asset_name_and_canonical_uuid() -> None:
@@ -62,6 +62,29 @@ def test_material_lookup_uses_unique_asset_name_and_canonical_uuid() -> None:
     assert "Missing material: shared" in ambiguous.name
     assert manager.get_material_by_uuid(first.uuid).uuid == first.uuid
     assert manager.get_material_by_uuid(second.uuid).uuid == second.uuid
+
+
+def test_shader_lookup_rejects_duplicate_names_but_keeps_uuid_identity() -> None:
+    from termin.materials import parse_shader_text
+
+    manager = DefaultResourceManager()
+    source = """@program Shared
+@language slang
+@phase opaque
+@stage vertex
+void main() {}
+@endstage
+@stage fragment
+void main() {}
+@endstage
+@endphase
+"""
+    manager.register_shader("shared", parse_shader_text(source), uuid="shader-duplicate-one")
+    manager.register_shader("shared", parse_shader_text(source), uuid="shader-duplicate-two")
+
+    assert manager.get_shader("shared") is None
+    assert manager.get_shader_by_uuid("shader-duplicate-one").uuid == "shader-duplicate-one"
+    assert manager.get_shader_by_uuid("shader-duplicate-two").uuid == "shader-duplicate-two"
 
 
 def test_tc_resource_lookups_resolve_asset_uuid_through_native_registries() -> None:

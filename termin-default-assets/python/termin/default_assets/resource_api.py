@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from termin.render.texture import Texture
     from termin.scene import Entity, GeneralTransform3, TcScene
     from termin.render_framework import RenderPipeline
+    from tgfx import TcShaderProgram
     from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
     from termin.skeleton import TcSkeleton
@@ -263,10 +264,6 @@ class DefaultAssetResourceMixin:
     ) -> None:
         """Register ShaderAsset."""
         self._shader_registry.register(name, asset, source_path=source_path, uuid=uuid)
-        if len(self._shader_registry.find_assets_by_name(name)) != 1:
-            self.shaders.pop(name, None)
-        elif asset.program is not None:
-            self.shaders[name] = asset.program
 
     def register_shader(
         self,
@@ -283,23 +280,18 @@ class DefaultAssetResourceMixin:
         if source_path:
             shader.source_path = source_path
 
-    def get_shader(self, name: str) -> Optional["ShaderMultyPhaseProgramm"]:
-        """Get shader by name (lazy loading)."""
+    def get_shader(self, name: str) -> Optional["TcShaderProgram"]:
+        """Get the canonical shader program by unique catalog name."""
         asset = self._shader_registry.get_asset(name)
         if asset is None:
             return None
-        shader = self.shaders.get(name)
-        if shader is not None:
-            return shader
         if asset.program is None:
             if not asset.ensure_loaded():
                 return None
-        if asset.program is not None:
-            self.shaders[name] = asset.program
         return asset.program
 
-    def get_shader_by_uuid(self, uuid: str) -> Optional["ShaderMultyPhaseProgramm"]:
-        """Get shader by UUID (lazy loading)."""
+    def get_shader_by_uuid(self, uuid: str) -> Optional["TcShaderProgram"]:
+        """Get the canonical shader program by UUID (lazy loading)."""
         asset = self._shader_registry.get_asset_by_uuid(uuid)
         if asset is None:
             return None
@@ -309,8 +301,7 @@ class DefaultAssetResourceMixin:
         return asset.program
 
     def list_shader_names(self) -> list[str]:
-        names = set(self._shader_registry.list_names()) | set(self.shaders.keys())
-        return sorted(names)
+        return self._shader_registry.list_names()
 
     # --------- Meshes ---------
     def get_mesh_asset(self, name: str) -> Optional["MeshAsset"]:

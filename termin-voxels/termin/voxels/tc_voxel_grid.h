@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tcbase/tc_binding_types.h>
+#include <tcbase/tc_uuid.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -19,9 +20,6 @@
 extern "C" {
 #endif
 
-#ifndef TC_UUID_SIZE
-#define TC_UUID_SIZE 40
-#endif
 
 TC_DEFINE_HANDLE(tc_voxel_grid_handle)
 

@@ -488,7 +488,7 @@ TcShader get_line_material_fragment_shader(TcShader original_shader) {
     }
 
     std::string variant_name = std::string(original_shader.name()) + "_LineFragment";
-    char variant_uuid[40];
+    char variant_uuid[TC_UUID_SIZE];
     tc_shader_make_variant_uuid(
         variant_uuid,
         sizeof(variant_uuid),
@@ -585,7 +585,7 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
 
     std::string variant_name = std::string(original_shader.name())
         + (cap_variant ? "_LineTubeCap" : "_LineTubeBody");
-    char variant_uuid[40];
+    char variant_uuid[TC_UUID_SIZE];
     tc_shader_make_variant_uuid(
         variant_uuid,
         sizeof(variant_uuid),
