@@ -61,8 +61,8 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
     return project, debug_resource, ui_backend
 
 
-def init_editor(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
-    """Initialize the selected editor frontend and setup callbacks."""
+def init_editor(engine, debug_resource: str | None = None, no_scene: bool = False):
+    """Initialize the selected editor frontend and return its session."""
     cli_project, cli_debug, ui_backend = _parse_editor_args()
     if cli_project in ("__help__", "__error__"):
         sys.exit(0 if cli_project == "__help__" else 1)
@@ -76,25 +76,35 @@ def init_editor(engine, debug_resource: str | None = None, no_scene: bool = Fals
     if ui_backend == "tcgui":
         from termin.editor_tcgui.run_editor import init_editor_tcgui
 
-        init_editor_tcgui(engine, debug_resource=debug_resource, no_scene=no_scene)
-        return
+        return init_editor_tcgui(
+            engine,
+            debug_resource=debug_resource,
+            no_scene=no_scene,
+        )
 
     from termin.editor_native.run_editor import init_editor_native
 
-    init_editor_native(engine, debug_resource=debug_resource, no_scene=no_scene)
+    return init_editor_native(
+        engine,
+        debug_resource=debug_resource,
+        no_scene=no_scene,
+    )
 
 
-def init_editor_from_host(engine_capsule) -> None:
+def init_editor_from_host(engine_capsule):
     """Initialize from the C++ host's explicit borrowed-engine capsule."""
     from termin.engine import _borrow_engine_core
 
-    init_editor(_borrow_engine_core(engine_capsule))
+    return init_editor(_borrow_engine_core(engine_capsule))
 
 
 def run_editor(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Initialize and run an explicitly supplied engine."""
-    init_editor(engine, debug_resource=debug_resource, no_scene=no_scene)
-    engine.run()
+    session = init_editor(engine, debug_resource=debug_resource, no_scene=no_scene)
+    try:
+        engine.run()
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":

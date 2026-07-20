@@ -9,6 +9,7 @@
 #include "termin/bootstrap/bootstrap.hpp"
 #include "termin/engine/engine_core.hpp"
 
+#include <exception>
 #include <iostream>
 #include <cstring>
 #include <filesystem>
@@ -135,12 +136,12 @@ static bool is_python_layout_smoke_request(int argc, char* argv[]) {
     return argc == 2 && std::strcmp(argv[1], "--termin-python-layout-smoke") == 0;
 }
 
-static bool initialize_python_editor(termin::EngineCore& engine) {
+static PyObject* initialize_python_editor(termin::EngineCore& engine) {
     PyObject* module = PyImport_ImportModule("termin.editor.run_editor");
     if (module == nullptr) {
         PyErr_Print();
         std::cerr << "Failed to import termin.editor.run_editor" << std::endl;
-        return false;
+        return nullptr;
     }
 
     PyObject* init_editor = PyObject_GetAttrString(module, "init_editor_from_host");
@@ -149,7 +150,7 @@ static bool initialize_python_editor(termin::EngineCore& engine) {
         Py_XDECREF(init_editor);
         PyErr_Print();
         std::cerr << "Missing callable init_editor_from_host" << std::endl;
-        return false;
+        return nullptr;
     }
 
     PyObject* capsule = PyCapsule_New(
@@ -160,7 +161,7 @@ static bool initialize_python_editor(termin::EngineCore& engine) {
         Py_DECREF(init_editor);
         PyErr_Print();
         std::cerr << "Failed to create borrowed EngineCore capsule" << std::endl;
-        return false;
+        return nullptr;
     }
 
     PyObject* result = PyObject_CallFunctionObjArgs(init_editor, capsule, nullptr);
@@ -169,6 +170,26 @@ static bool initialize_python_editor(termin::EngineCore& engine) {
     if (result == nullptr) {
         PyErr_Print();
         std::cerr << "Failed to initialize Python editor" << std::endl;
+        return nullptr;
+    }
+
+    PyObject* close = PyObject_GetAttrString(result, "close");
+    if (close == nullptr || !PyCallable_Check(close)) {
+        Py_XDECREF(close);
+        Py_DECREF(result);
+        PyErr_Print();
+        std::cerr << "Editor initializer returned no callable close()" << std::endl;
+        return nullptr;
+    }
+    Py_DECREF(close);
+    return result;
+}
+
+static bool close_python_editor(PyObject* editor_session) {
+    PyObject* result = PyObject_CallMethod(editor_session, "close", nullptr);
+    if (result == nullptr) {
+        PyErr_Print();
+        std::cerr << "Failed to close Python editor session" << std::endl;
         return false;
     }
     Py_DECREF(result);
@@ -302,15 +323,38 @@ print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__fi
         return result == 0 ? 0 : 1;
     }
 
-    // Initialize editor (creates UI/SDL and installs engine callbacks).
-    if (!initialize_python_editor(engine)) {
+    // Initialize editor and retain its explicit frontend session until the
+    // native EngineCore loop has stopped.
+    PyObject* editor_session = initialize_python_editor(engine);
+    if (editor_session == nullptr) {
         return 1;
     }
 
-    // Run main loop in C++
-    engine.run();
+    int exit_code = 0;
+    try {
+        engine.run();
+    } catch (const std::exception& error) {
+        if (PyErr_Occurred()) {
+            PyErr_Print();
+        }
+        std::cerr << "Editor main loop failed: " << error.what() << std::endl;
+        exit_code = 1;
+    } catch (...) {
+        if (PyErr_Occurred()) {
+            PyErr_Print();
+        }
+        std::cerr << "Editor main loop failed with an unknown exception" << std::endl;
+        exit_code = 1;
+    }
+
+    // Frontend resources and Python callbacks must be released while both
+    // Python and the borrowed EngineCore are still alive.
+    if (!close_python_editor(editor_session)) {
+        exit_code = 1;
+    }
+    Py_DECREF(editor_session);
 
     // Let the OS tear down the embedded interpreter. Some app/UI destructors
     // can still touch Python during shutdown, and Py_Finalize makes that crash.
-    return 0;
+    return exit_code;
 }
