@@ -41,6 +41,7 @@ namespace termin {
 class RenderingManager;
 
 namespace rendering_manager_detail {
+class OffscreenRenderPlanner;
 class RenderDisplayRegistry;
 class RenderStateStore;
 }
@@ -82,6 +83,7 @@ private:
 
     // Runtime GPU output state helpers.
     std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
+    std::unique_ptr<rendering_manager_detail::OffscreenRenderPlanner> offscreen_planner_;
 
     // Engine-owned live scene/pipeline/target topology.
     RenderTopology& topology_;
@@ -333,6 +335,11 @@ public:
     void present_display(tc_display_handle display);
 
 private:
+    void render_planned_offscreen(
+        tc_display_handle only_display,
+        bool include_unattached_roots
+    );
+
     // Render single viewport to its output FBO
     void render_viewport_offscreen(tc_viewport_handle viewport);
 
@@ -348,9 +355,7 @@ private:
     // Render scene pipeline to viewport output FBOs
     void render_scene_pipeline_offscreen(
         tc_scene_handle scene,
-        const std::string& pipeline_name,
-        tc_pipeline_handle pipeline,
-        tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
+        tc_pipeline_handle pipeline
     );
 
     bool build_render_target_contexts(

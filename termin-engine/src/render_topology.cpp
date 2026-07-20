@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <iterator>
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -181,6 +183,11 @@ bool RenderTopology::is_attached(tc_scene_handle scene) const {
     return record != nullptr && record->attached;
 }
 
+tc_scene_handle RenderTopology::attached_scene_at(size_t index) const {
+    return index < attached_scenes_.size()
+        ? attached_scenes_[index] : TC_SCENE_HANDLE_INVALID;
+}
+
 tc_pipeline_handle RenderTopology::get_pipeline(
     tc_scene_handle scene,
     const std::string& name
@@ -201,6 +208,53 @@ std::vector<std::string> RenderTopology::get_pipeline_names(tc_scene_handle scen
         names.push_back(name);
     }
     return names;
+}
+
+size_t RenderTopology::pipeline_count(tc_scene_handle scene) const {
+    const SceneRecord* record = find_record(scene);
+    return record ? record->pipelines.size() : 0;
+}
+
+tc_pipeline_handle RenderTopology::pipeline_at(tc_scene_handle scene, size_t index) const {
+    const SceneRecord* record = find_record(scene);
+    if (!record || index >= record->pipelines.size()) {
+        return TC_PIPELINE_HANDLE_INVALID;
+    }
+    auto pipeline = record->pipelines.begin();
+    std::advance(pipeline, index);
+    return pipeline->second;
+}
+
+size_t RenderTopology::pipeline_target_count(
+    tc_scene_handle scene,
+    tc_pipeline_handle pipeline
+) const {
+    const SceneRecord* record = find_record(scene);
+    if (!record) return 0;
+    for (const auto& [name, candidate] : record->pipelines) {
+        if (!tc_pipeline_handle_eq(candidate, pipeline)) continue;
+        auto targets = record->pipeline_targets.find(name);
+        return targets == record->pipeline_targets.end() ? 0 : targets->second.size();
+    }
+    return 0;
+}
+
+tc_viewport_handle RenderTopology::pipeline_target_viewport_at(
+    tc_scene_handle scene,
+    tc_pipeline_handle pipeline,
+    size_t index
+) const {
+    const SceneRecord* record = find_record(scene);
+    if (!record) return TC_VIEWPORT_HANDLE_INVALID;
+    for (const auto& [name, candidate] : record->pipelines) {
+        if (!tc_pipeline_handle_eq(candidate, pipeline)) continue;
+        auto targets = record->pipeline_targets.find(name);
+        if (targets == record->pipeline_targets.end() || index >= targets->second.size()) {
+            return TC_VIEWPORT_HANDLE_INVALID;
+        }
+        return find_viewport(scene, targets->second[index].c_str());
+    }
+    return TC_VIEWPORT_HANDLE_INVALID;
 }
 
 void RenderTopology::set_pipeline_targets(
@@ -305,14 +359,27 @@ tc_render_target_handle RenderTopology::find_render_target(
     tc_scene_handle scene,
     const std::string& name
 ) const {
+    return find_render_target(scene, name.c_str());
+}
+
+tc_render_target_handle RenderTopology::find_render_target(
+    tc_scene_handle scene,
+    const char* name
+) const {
+    if (!name) return TC_RENDER_TARGET_HANDLE_INVALID;
     const SceneRecord* record = find_record(scene);
     if (record == nullptr) return TC_RENDER_TARGET_HANDLE_INVALID;
     for (tc_render_target_handle target : record->render_targets) {
         if (!tc_render_target_handle_valid(target)) continue;
         const char* target_name = tc_render_target_get_name(target);
-        if (target_name != nullptr && name == target_name) return target;
+        if (target_name != nullptr && std::strcmp(name, target_name) == 0) return target;
     }
     return TC_RENDER_TARGET_HANDLE_INVALID;
+}
+
+tc_render_target_handle RenderTopology::managed_render_target_at(size_t index) const {
+    return index < managed_render_targets_.size()
+        ? managed_render_targets_[index] : TC_RENDER_TARGET_HANDLE_INVALID;
 }
 
 const std::vector<tc_render_target_handle>& RenderTopology::render_targets(
@@ -405,12 +472,26 @@ tc_viewport_handle RenderTopology::find_viewport(
     tc_scene_handle scene,
     const std::string& name
 ) const {
+    return find_viewport(scene, name.c_str());
+}
+
+tc_viewport_handle RenderTopology::find_viewport(
+    tc_scene_handle scene,
+    const char* name
+) const {
+    if (!name) return TC_VIEWPORT_HANDLE_INVALID;
     for (tc_viewport_handle viewport : viewports(scene)) {
         if (!tc_viewport_handle_valid(viewport)) continue;
         const char* viewport_name = tc_viewport_get_name(viewport);
-        if (viewport_name && name == viewport_name) return viewport;
+        if (viewport_name && std::strcmp(name, viewport_name) == 0) return viewport;
     }
     return TC_VIEWPORT_HANDLE_INVALID;
+}
+
+const RenderTopology::ViewportAttachment* RenderTopology::viewport_attachment_at(
+    size_t index
+) const {
+    return index < viewport_attachments_.size() ? &viewport_attachments_[index] : nullptr;
 }
 
 tc_display_handle RenderTopology::display_for_viewport(tc_viewport_handle viewport) const {

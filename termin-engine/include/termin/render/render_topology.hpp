@@ -55,9 +55,19 @@ public:
 
     bool is_attached(tc_scene_handle scene) const;
     const std::vector<tc_scene_handle>& attached_scenes() const { return attached_scenes_; }
+    size_t attached_scene_count() const { return attached_scenes_.size(); }
+    tc_scene_handle attached_scene_at(size_t index) const;
 
     tc_pipeline_handle get_pipeline(tc_scene_handle scene, const std::string& name) const;
     std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
+    size_t pipeline_count(tc_scene_handle scene) const;
+    tc_pipeline_handle pipeline_at(tc_scene_handle scene, size_t index) const;
+    size_t pipeline_target_count(tc_scene_handle scene, tc_pipeline_handle pipeline) const;
+    tc_viewport_handle pipeline_target_viewport_at(
+        tc_scene_handle scene,
+        tc_pipeline_handle pipeline,
+        size_t index
+    ) const;
     void set_pipeline_targets(
         tc_scene_handle scene,
         const std::string& pipeline_name,
@@ -74,10 +84,16 @@ public:
         tc_scene_handle scene,
         const std::string& name
     ) const;
+    tc_render_target_handle find_render_target(tc_scene_handle scene, const char* name) const;
     const std::vector<tc_render_target_handle>& render_targets(tc_scene_handle scene) const;
     const std::vector<tc_render_target_handle>& managed_render_targets() const {
         return managed_render_targets_;
     }
+    size_t managed_render_target_count() const { return managed_render_targets_.size(); }
+    const tc_render_target_handle* managed_render_target_data() const {
+        return managed_render_targets_.data();
+    }
+    tc_render_target_handle managed_render_target_at(size_t index) const;
 
     bool register_viewport(
         tc_scene_handle scene,
@@ -90,10 +106,13 @@ public:
     const std::vector<ViewportAttachment>& viewport_attachments() const {
         return viewport_attachments_;
     }
+    size_t viewport_attachment_count() const { return viewport_attachments_.size(); }
+    const ViewportAttachment* viewport_attachment_at(size_t index) const;
     tc_viewport_handle find_viewport(
         tc_scene_handle scene,
         const std::string& name
     ) const;
+    tc_viewport_handle find_viewport(tc_scene_handle scene, const char* name) const;
     tc_display_handle display_for_viewport(tc_viewport_handle viewport) const;
 
     void clear_scene_pipelines(tc_scene_handle scene, bool notify_detach = true);
