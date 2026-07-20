@@ -81,8 +81,8 @@ def test_pipeline_graph_reload_compiles_new_pipeline_with_stable_uuid(tmp_path: 
         assert asset.cached_data.version > initial_resource_version
         replacement_instance = asset.pipeline
         assert replacement_instance is not initial_pipeline
-        assert replacement_instance.canonical_resource.uuid == "pipeline-uuid"
-        assert replacement_instance.canonical_resource.version == asset.cached_data.version
+        assert replacement_instance.pipeline_template.uuid == "pipeline-uuid"
+        assert replacement_instance.pipeline_template.version == asset.cached_data.version
         initial_pipeline.destroy()
         replacement_instance.destroy()
     finally:
@@ -185,8 +185,8 @@ def test_pass_list_resource_instantiates_independent_execution_passes(tmp_path: 
         assert first is not None and second is not None
         assert first is not second
         assert first.pass_count == second.pass_count == 1
-        assert first.canonical_resource.uuid == "debug-pipeline-uuid"
-        assert second.canonical_resource.uuid == "debug-pipeline-uuid"
+        assert first.pipeline_template.uuid == "debug-pipeline-uuid"
+        assert second.pipeline_template.uuid == "debug-pipeline-uuid"
         first.destroy()
         second.destroy()
     finally:

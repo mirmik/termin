@@ -125,11 +125,11 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 - Этап 1: инфраструктура extension-ов (`register/attach/get/detach`).
 - Этап 2: `collision_world` перенесён в extension; старый scene API работает как shim.
 - Этап 3: `lighting/skybox/background` перенесены в `render_state` extension.
-- Этап 4: strong handles канонических `tc_render_pipeline` и `viewport_configs`
+- Этап 4: strong handles канонических `tc_pipeline_template` и `viewport_configs`
   перенесены в `render_mount` extension; authored pipeline graph в scene runtime не хранится.
 - Scene serialization пишет extension state в `extensions.*`.
-- `TcSceneRef::serialize()` больше не пишет top-level `scene_pipelines`/`viewport_configs`; данные идут через `extensions.render_mount`.
-- `TcSceneRef::load_from_data()` поддерживает legacy top-level поля, адаптируя их в `extensions.render_mount`.
+- `TcSceneRef::serialize()` пишет `pipeline_templates` и `viewport_configs` только через `extensions.render_mount`.
+- `TcSceneRef::load_from_data()` больше не принимает legacy top-level `scene_pipelines`; старый viewport adapter пока остаётся.
 - Добавлены runtime hooks `on_scene_update` и `on_scene_before_render`.
 - Основные C/C++ потребители переведены на extension-first доступ к `collision_world`, `render_state`, `render_mount`.
 

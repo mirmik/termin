@@ -20,10 +20,10 @@ exceed the aggregate owner's lifetime.
 The two pipeline roles are distinct parts of one pattern, not two competing
 resource models:
 
-- `tc_render_pipeline` is the canonical immutable/versioned compiled template;
+- `tc_pipeline_template` is the canonical immutable/versioned compiled template;
 - `tc_pipeline` is a mutable execution instance and owns live `tc_pass`
   implementations plus their deleters and device-local caches;
-- a scene holds a strong `tc_render_pipeline_handle` reference;
+- a scene holds a strong `tc_pipeline_template_handle` reference;
 - `RenderTopology` creates a separate `tc_pipeline` instance per attached
   scene/topology and the instance retains its template.
 
@@ -38,8 +38,9 @@ authored graph, was serialized into scene mounts, and was compiled at scene
 attach time. It bypassed the new canonical resource and kept authoring data in
 the runtime layer.
 
-#687 removes that duplicate registry. Scene mounts now retain canonical
-compiled resources, serialize their UUID references, and instantiate runtime
+#687 removes that duplicate registry. #692 gives the surviving canonical type
+its unambiguous `tc_pipeline_template` name. Scene mounts now retain canonical
+compiled templates, serialize their UUID references, and instantiate runtime
 pipelines directly from compiled descriptors. Authored graph/pass-list data
 stays at the asset/import boundary.
 
@@ -52,7 +53,7 @@ stays at the asset/import boundary.
 | `tc_shader` | process-global generation pool + UUID map | Canonical shape; strongest current stale-handle diagnostics |
 | `tc_shader_program` | process-global generation pool + UUID map | Canonical shape; missing uniform Core Registry projection |
 | `tc_material` | process-global generation pool + UUID map | Canonical shape; common lifecycle/diagnostics cleanup remains |
-| `tc_render_pipeline` | process-global generation pool + UUID map | Canonical after #687 scene-mount migration |
+| `tc_pipeline_template` | process-global generation pool + UUID map | Canonical after #687 scene-mount migration |
 | `tc_animation` | process-global generation pool + UUID map | Canonical shape; lifecycle differs from navmesh/voxel grid |
 | `tc_skeleton` | process-global generation pool + UUID map | Canonical shape; lifecycle differs from navmesh/voxel grid |
 | `tc_navmesh` | process-global generation pool + UUID map | Handle/storage canonical; release does not destroy at zero |
@@ -85,7 +86,8 @@ registries self-initialize, only a subset participates in process bootstrap,
 and `navmesh`/`voxel_grid` release semantics differ from
 `animation`/`skeleton`. The common lifecycle migration is tracked by #688.
 
-No compatibility fallback should recreate `tc_scene_pipeline_template`, raw
+No compatibility fallback should recreate the historical
+`tc_scene_pipeline_template`, raw
 display ownership, or raw UI-document ownership. This is an active-development
 migration and old authored/runtime data should fail with a logged diagnostic
 until republished through the canonical resource path.

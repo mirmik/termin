@@ -4,7 +4,7 @@
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/tc_scene_render_ext.hpp"
 #include "termin/render/tc_pass.hpp"
-#include "termin/render/tc_render_pipeline.hpp"
+#include "termin/render/tc_pipeline_template.hpp"
 
 #include <string>
 #include <optional>
@@ -23,7 +23,7 @@ extern "C" {
 #include "inspect/tc_inspect_pass_adapter.h"
 #include "render/tc_render_target.h"
 #include "render/tc_render_target_pool.h"
-#include "render/tc_render_pipeline_registry.h"
+#include "render/tc_pipeline_template_registry.h"
 #include "render/tc_pass.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -35,7 +35,7 @@ using termin::RenderingManager;
 using termin::RenderTopology;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
-using termin::TcRenderPipeline;
+using termin::TcPipelineTemplate;
 
 namespace {
 
@@ -86,13 +86,13 @@ RenderLifecycleCounter make_render_lifecycle_counter()
     return counter;
 }
 
-TcRenderPipeline make_empty_render_pipeline_resource(const std::string& name)
+TcPipelineTemplate make_empty_pipeline_template(const std::string& name)
 {
-    TcRenderPipeline resource = TcRenderPipeline::declare(name + "-uuid", name);
-    tc_render_pipeline_payload_desc payload = {};
-    payload.descriptor_version = TC_RENDER_PIPELINE_DESCRIPTOR_VERSION;
+    TcPipelineTemplate resource = TcPipelineTemplate::declare(name + "-uuid", name);
+    tc_pipeline_template_payload_desc payload = {};
+    payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
     payload.name = name.c_str();
-    REQUIRE(tc_render_pipeline_set_payload(resource.get(), &payload));
+    REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
     return resource;
 }
 
@@ -773,9 +773,9 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     RenderLifecycleCounter counter = make_render_lifecycle_counter();
     tc_entity_pool_add_component(pool, entity, &counter.component);
 
-    TcRenderPipeline pipeline = make_empty_render_pipeline_resource("lifecycle-template");
+    TcPipelineTemplate pipeline = make_empty_pipeline_template("lifecycle-template");
     REQUIRE(pipeline.is_valid());
-    REQUIRE(tc_scene_add_render_pipeline(scene, pipeline.handle));
+    REQUIRE(tc_scene_add_pipeline_template(scene, pipeline.handle));
 
     manager.attach_scene(scene);
     CHECK_EQ(counter.attach_count, 1);
@@ -798,33 +798,33 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     tc_scene_free(scene);
 }
 
-TEST_CASE("Scene render mount strongly owns canonical pipeline resources")
+TEST_CASE("Scene render mount strongly owns canonical pipeline templates")
 {
     tc_scene_render_mount_extension_init();
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
 
-    TcRenderPipeline external = make_empty_render_pipeline_resource("mounted-resource");
-    const tc_render_pipeline_handle original = external.handle;
-    REQUIRE(tc_scene_add_render_pipeline(scene, original));
-    REQUIRE(tc_render_pipeline_get(original)->header.ref_count == 2);
+    TcPipelineTemplate external = make_empty_pipeline_template("mounted-resource");
+    const tc_pipeline_template_handle original = external.handle;
+    REQUIRE(tc_scene_add_pipeline_template(scene, original));
+    REQUIRE(tc_pipeline_template_get(original)->header.ref_count == 2);
 
-    external = TcRenderPipeline();
-    REQUIRE(tc_render_pipeline_is_valid(original));
-    REQUIRE(tc_render_pipeline_get(original)->header.ref_count == 1);
+    external = TcPipelineTemplate();
+    REQUIRE(tc_pipeline_template_is_valid(original));
+    REQUIRE(tc_pipeline_template_get(original)->header.ref_count == 1);
 
-    TcRenderPipeline mounted = termin::scene_render_pipeline_at(termin::TcSceneRef(scene), 0);
+    TcPipelineTemplate mounted = termin::scene_pipeline_template_at(termin::TcSceneRef(scene), 0);
     REQUIRE(mounted.is_valid());
     CHECK(std::string(mounted.name()) == "mounted-resource");
-    REQUIRE(tc_render_pipeline_get(original)->header.ref_count == 2);
+    REQUIRE(tc_pipeline_template_get(original)->header.ref_count == 2);
 
-    tc_scene_clear_render_pipelines(scene);
-    REQUIRE(tc_render_pipeline_is_valid(original));
-    REQUIRE(tc_render_pipeline_get(original)->header.ref_count == 1);
+    tc_scene_clear_pipeline_templates(scene);
+    REQUIRE(tc_pipeline_template_is_valid(original));
+    REQUIRE(tc_pipeline_template_get(original)->header.ref_count == 1);
     tc_scene_free(scene);
 
-    mounted = TcRenderPipeline();
-    CHECK_FALSE(tc_render_pipeline_is_valid(original));
+    mounted = TcPipelineTemplate();
+    CHECK_FALSE(tc_pipeline_template_is_valid(original));
 }
 
 TEST_CASE("RenderingManager preserves host viewport until forced scene teardown")
@@ -872,15 +872,15 @@ TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fai
     target_config.name = "RollbackTarget";
     tc_scene_add_render_target_config(scene, &target_config);
 
-    TcRenderPipeline first = make_empty_render_pipeline_resource("rollback-template");
-    TcRenderPipeline duplicate = TcRenderPipeline::declare(
+    TcPipelineTemplate first = make_empty_pipeline_template("rollback-template");
+    TcPipelineTemplate duplicate = TcPipelineTemplate::declare(
         "rollback-template-duplicate-uuid", "rollback-template");
-    tc_render_pipeline_payload_desc duplicate_payload = {};
-    duplicate_payload.descriptor_version = TC_RENDER_PIPELINE_DESCRIPTOR_VERSION;
+    tc_pipeline_template_payload_desc duplicate_payload = {};
+    duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
     duplicate_payload.name = "rollback-template";
-    REQUIRE(tc_render_pipeline_set_payload(duplicate.get(), &duplicate_payload));
-    REQUIRE(tc_scene_add_render_pipeline(scene, first.handle));
-    REQUIRE(tc_scene_add_render_pipeline(scene, duplicate.handle));
+    REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
+    REQUIRE(tc_scene_add_pipeline_template(scene, first.handle));
+    REQUIRE(tc_scene_add_pipeline_template(scene, duplicate.handle));
 
     CHECK(manager.attach_scene_full(scene).empty());
     CHECK(!topology.is_attached(scene));
@@ -898,19 +898,19 @@ TEST_CASE("RenderTopology preserves live pipelines when replacement instantiatio
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
 
-    TcRenderPipeline live = make_empty_render_pipeline_resource("stable-pipeline");
-    REQUIRE(tc_scene_add_render_pipeline(scene, live.handle));
+    TcPipelineTemplate live = make_empty_pipeline_template("stable-pipeline");
+    REQUIRE(tc_scene_add_pipeline_template(scene, live.handle));
     REQUIRE(topology.attach_scene(scene));
     tc_pipeline_handle original = topology.get_pipeline(scene, "stable-pipeline");
     REQUIRE(tc_pipeline_handle_valid(original));
 
-    TcRenderPipeline duplicate = TcRenderPipeline::declare(
+    TcPipelineTemplate duplicate = TcPipelineTemplate::declare(
         "failed-replacement-uuid", "stable-pipeline");
-    tc_render_pipeline_payload_desc duplicate_payload = {};
-    duplicate_payload.descriptor_version = TC_RENDER_PIPELINE_DESCRIPTOR_VERSION;
+    tc_pipeline_template_payload_desc duplicate_payload = {};
+    duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
     duplicate_payload.name = "stable-pipeline";
-    REQUIRE(tc_render_pipeline_set_payload(duplicate.get(), &duplicate_payload));
-    REQUIRE(tc_scene_add_render_pipeline(scene, duplicate.handle));
+    REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
+    REQUIRE(tc_scene_add_pipeline_template(scene, duplicate.handle));
     CHECK(!topology.attach_scene(scene));
     CHECK(tc_pipeline_handle_eq(topology.get_pipeline(scene, "stable-pipeline"), original));
     CHECK(tc_pipeline_pool_alive(original));

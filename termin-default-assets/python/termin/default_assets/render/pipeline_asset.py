@@ -1,7 +1,7 @@
-"""Pipeline import boundary and canonical resource ownership.
+"""Pipeline import boundary and canonical template ownership.
 
 Both supported authored formats are normalized through the pass-list path.
-The asset retains only the stable :class:`TcRenderPipeline` resource and small
+The asset retains only the stable :class:`TcPipelineTemplate` resource and small
 dependency metadata; mutable execution instances are created by consumers.
 """
 
@@ -16,12 +16,12 @@ from tcbase import log
 from termin_assets import DataAsset
 
 if TYPE_CHECKING:
-    from termin.render_framework import RenderPipeline, TcRenderPipeline
+    from termin.render_framework import RenderPipeline, TcPipelineTemplate
 
 
 @dataclass(frozen=True)
 class _PipelineCandidate:
-    """Complete candidate compiled without mutating the live resource."""
+    """Complete candidate compiled without mutating the live template."""
 
     pipeline: "RenderPipeline"
     pass_parameters: tuple[str, ...]
@@ -34,7 +34,7 @@ class _PipelineCandidate:
 
 
 def _pass_parameters(pipeline: "RenderPipeline") -> tuple[str, ...]:
-    """Serialize parameters in execution-plan order for the resource payload."""
+    """Serialize parameters in execution-plan order for the template payload."""
     serialized = pipeline.serialize()
     result: list[str] = []
     for pass_data in serialized.get("passes", []):
@@ -43,8 +43,8 @@ def _pass_parameters(pipeline: "RenderPipeline") -> tuple[str, ...]:
     return tuple(result)
 
 
-class PipelineAsset(DataAsset["TcRenderPipeline"]):
-    """Strong owner of one stable, versioned canonical render-pipeline resource."""
+class PipelineAsset(DataAsset["TcPipelineTemplate"]):
+    """Strong owner of one stable, versioned canonical pipeline template."""
 
     _uses_binary = False
 
@@ -55,13 +55,13 @@ class PipelineAsset(DataAsset["TcRenderPipeline"]):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
-        from termin.render_framework import TcRenderPipeline
+        from termin.render_framework import TcPipelineTemplate
 
         super().__init__(data=None, name=name, source_path=source_path, uuid=uuid)
-        resource = TcRenderPipeline.declare(self.uuid, self._name)
-        if not resource.is_valid:
-            raise RuntimeError(f"failed to declare canonical pipeline resource '{self._name}'")
-        self._data = resource
+        pipeline_template = TcPipelineTemplate.declare(self.uuid, self._name)
+        if not pipeline_template.is_valid:
+            raise RuntimeError(f"failed to declare canonical pipeline template '{self._name}'")
+        self._data = pipeline_template
         self._loaded = False
         self._source_format: str | None = None
         self._material_names: frozenset[str] = frozenset()
@@ -78,14 +78,14 @@ class PipelineAsset(DataAsset["TcRenderPipeline"]):
 
     @property
     def pipeline(self) -> "RenderPipeline | None":
-        """Create a fresh mutable execution instance from the canonical resource."""
-        from termin.render_framework import RenderPipeline, apply_pipeline_resource_recipe
+        """Create a fresh mutable execution instance from the canonical template."""
+        from termin.render_framework import RenderPipeline, apply_pipeline_template_recipe
 
-        resource = self.canonical_resource
-        if resource is None:
+        pipeline_template = self.canonical_resource
+        if pipeline_template is None:
             return None
-        pipeline = RenderPipeline(resource)
-        apply_pipeline_resource_recipe(
+        pipeline = RenderPipeline(pipeline_template)
+        apply_pipeline_template_recipe(
             pipeline,
             self._resource_views,
             self._fbo_compositions,
@@ -93,7 +93,7 @@ class PipelineAsset(DataAsset["TcRenderPipeline"]):
         return pipeline
 
     @property
-    def canonical_resource(self) -> "TcRenderPipeline | None":
+    def canonical_resource(self) -> "TcPipelineTemplate | None":
         if not self._loaded and not self._load():
             return None
         return self._data
@@ -123,7 +123,7 @@ class PipelineAsset(DataAsset["TcRenderPipeline"]):
         """Bind the manager needed to deserialize Python-authored pass data."""
         self._resource_manager = resource_manager
 
-    def _parse_content(self, content: bytes | str) -> "TcRenderPipeline | None":
+    def _parse_content(self, content: bytes | str) -> "TcPipelineTemplate | None":
         if not isinstance(content, str):
             log.error(f"[PipelineAsset] Pipeline '{self._name}' has non-text content")
             return None
@@ -305,10 +305,10 @@ class PipelineAsset(DataAsset["TcRenderPipeline"]):
         )
 
     def _publish_candidate(self, candidate: _PipelineCandidate) -> bool:
-        from termin.render_framework import publish_pipeline_definition
+        from termin.render_framework import publish_pipeline_template
 
         try:
-            publish_pipeline_definition(
+            publish_pipeline_template(
                 candidate.pipeline,
                 self._data,
                 list(candidate.pass_parameters),
