@@ -4,6 +4,8 @@ preload_sdk_libs("termin_engine")
 
 from termin.engine._engine_native import (
     EngineCore,
+    EngineLoopClient,
+    EngineLoopClientConnection,
     _borrow_engine_core as _borrow_engine_core,
     SCENE_EXT_TYPE_COLLISION_WORLD,
     create_scene,
@@ -28,6 +30,8 @@ ViewportRenderState = render.ViewportRenderState
 
 __all__ = [
     "EngineCore",
+    "EngineLoopClient",
+    "EngineLoopClientConnection",
     "RenderingManager",
     "RenderAttachmentContext",
     "RenderTopology",
