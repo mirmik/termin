@@ -2,7 +2,7 @@
 
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "termin/render/scene_pipeline_template.hpp"
+#include "termin/render/tc_render_pipeline.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -77,42 +77,34 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
     std::unordered_map<std::string, tc_pipeline_handle> candidate_pipelines;
     std::unordered_map<std::string, std::vector<std::string>> candidate_targets;
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
-    const size_t template_count = mount ? mount->pipeline_template_count : 0;
+    const size_t pipeline_count = mount ? mount->pipeline_count : 0;
 
-    for (size_t i = 0; i < template_count; ++i) {
-        const tc_spt_handle handle = mount->pipeline_templates[i];
-        if (!tc_spt_is_valid(handle)) {
-            tc_log(TC_LOG_ERROR, "[RenderTopology] Scene pipeline template %zu is invalid", i);
+    for (size_t i = 0; i < pipeline_count; ++i) {
+        const tc_render_pipeline_handle handle = mount->pipelines[i];
+        const tc_render_pipeline* definition = tc_render_pipeline_get(handle);
+        if (!definition) {
+            tc_log(TC_LOG_ERROR, "[RenderTopology] Scene pipeline resource %zu is stale", i);
             destroy_pipeline_map(candidate_pipelines);
             return false;
         }
 
-        TcScenePipelineTemplate pipeline_template(handle);
-        if (!pipeline_template.is_loaded()) {
+        TcRenderPipeline resource(handle);
+        RenderPipeline instance;
+        try {
+            instance = RenderPipeline(resource);
+        } catch (const std::exception& error) {
             tc_log(
                 TC_LOG_ERROR,
-                "[RenderTopology] Scene pipeline template '%s' is not loaded",
-                pipeline_template.name().c_str()
+                "[RenderTopology] Failed to instantiate scene pipeline resource '%s': %s",
+                definition->header.name,
+                error.what()
             );
             destroy_pipeline_map(candidate_pipelines);
             return false;
         }
 
-        RenderPipeline* compiled = pipeline_template.compile();
-        if (!compiled) {
-            tc_log(
-                TC_LOG_ERROR,
-                "[RenderTopology] Failed to compile scene pipeline template '%s'",
-                pipeline_template.name().c_str()
-            );
-            destroy_pipeline_map(candidate_pipelines);
-            return false;
-        }
-
-        const std::string name = pipeline_template.name();
-        tc_pipeline_handle pipeline = compiled->handle();
-        tc_pipeline_set_name(pipeline, name.c_str());
-        delete compiled;
+        const std::string name = definition->header.name;
+        tc_pipeline_handle pipeline = instance.handle();
 
         auto previous = candidate_pipelines.find(name);
         if (previous != candidate_pipelines.end()) {
@@ -126,7 +118,15 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
             return false;
         }
         candidate_pipelines.emplace(name, pipeline);
-        candidate_targets.emplace(name, pipeline_template.target_viewports());
+        std::vector<std::string> targets;
+        for (uint32_t target_index = 0; target_index < definition->target_count; ++target_index) {
+            const char* viewport_name = definition->targets[target_index].viewport_name;
+            if (!viewport_name || !viewport_name[0]) continue;
+            if (std::find(targets.begin(), targets.end(), viewport_name) == targets.end()) {
+                targets.emplace_back(viewport_name);
+            }
+        }
+        candidate_targets.emplace(name, std::move(targets));
     }
 
     SceneRecord& record = ensure_record(scene);

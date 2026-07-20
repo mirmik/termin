@@ -312,20 +312,20 @@ def show_scene_properties_dialog(
     pipelines_list.preferred_height = px(100)
     pipelines_list.item_height = 24
 
-    # Store template handles for removal
+    # Store canonical resource handles for removal.
     pipeline_handles: list = []
 
     def _refresh_pipelines():
         pipeline_handles.clear()
         items = []
-        for template in rm.scene_pipelines:
-            if template.is_valid:
-                name = template.name
-                uuid_short = template.uuid[:8] if template.uuid else ""
+        for pipeline in rm.scene_pipelines:
+            if pipeline.is_valid:
+                name = pipeline.name
+                uuid_short = pipeline.uuid[:8] if pipeline.uuid else ""
                 items.append({"text": f"{name} ({uuid_short}...)"})
             else:
                 items.append({"text": "(missing pipeline)"})
-            pipeline_handles.append(template)
+            pipeline_handles.append(pipeline)
         pipelines_list.set_items(items)
         remove_btn.enabled = False
 

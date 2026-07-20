@@ -216,7 +216,7 @@ class ScenePropertiesController:
         handles = tuple(mount.scene_pipelines)
         if not 0 <= index < len(handles):
             raise IndexError("scene pipeline index is out of range")
-        mount.remove_pipeline_template(handles[index])
+        mount.remove_render_pipeline(handles[index])
         return self._published()
 
     def _edit(self, name: str, old_value, new_value, *, merge: bool) -> ScenePropertiesSnapshot:
