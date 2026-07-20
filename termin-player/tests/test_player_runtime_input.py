@@ -51,7 +51,6 @@ def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monke
     runtime = PlayerRuntime(".", "scene.json")
     runtime._display = _FakeDisplay()
     runtime.window = _InputSink()
-    runtime.surface = _InputSink()
     runtime._viewports = [
         _Viewport("Main", "simple", 1, 10),
         _Viewport("Overlay", "basic", 2, 20),
@@ -67,7 +66,6 @@ def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monke
     assert input_manager.viewports == [(1, 10), (2, 20)]
     assert runtime._input_manager is input_manager
     assert runtime.window.display_handle == (101, 7)
-    assert runtime.surface.display_handle is None
 
 
 def test_player_runtime_tracks_attached_viewports():

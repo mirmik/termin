@@ -82,7 +82,6 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
     runtime = SimpleNamespace(
         scene="scene-object",
         window="window-object",
-        surface="surface-object",
         display="display-object",
         viewport="viewport-object",
         camera="camera-object",

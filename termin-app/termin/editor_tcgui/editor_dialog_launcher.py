@@ -20,7 +20,7 @@ class EditorDialogLauncher:
         get_project_path: Callable[[], str | None],
         get_python_executor: Callable[[], object | None],
         get_rendering_controller: Callable[[], object | None],
-        get_fbo_surface: Callable[[], object | None],
+        get_editor_display: Callable[[], object | None],
         get_project_file_watcher: Callable[[], object | None],
         get_editor_attachment: Callable[[], object | None],
         attach_scene_to_render: Callable[[str], bool],
@@ -43,7 +43,7 @@ class EditorDialogLauncher:
         self._get_project_path = get_project_path
         self._get_python_executor = get_python_executor
         self._get_rendering_controller = get_rendering_controller
-        self._get_fbo_surface = get_fbo_surface
+        self._get_editor_display = get_editor_display
         self._get_project_file_watcher = get_project_file_watcher
         self._get_editor_attachment = get_editor_attachment
         self._attach_scene_to_render = attach_scene_to_render
@@ -214,7 +214,7 @@ class EditorDialogLauncher:
             ui,
             rendering_controller,
             rendering_controller.rendering_manager,
-            self._get_fbo_surface(),
+            self._get_editor_display(),
             on_request_update=self._request_viewport_update,
         )
 

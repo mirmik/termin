@@ -153,7 +153,6 @@ if(TERMIN_BUILD_PYTHON)
         bindings/render/tc_input_manager_bindings.cpp
         bindings/render/tc_render_surface_bindings.cpp
         bindings/input/input_events_bindings.cpp
-        bindings/platform/offscreen_render_surface_bindings.cpp
     )
     target_link_libraries(_display_native PRIVATE termin_display)
     target_include_directories(_display_native PRIVATE
@@ -273,6 +272,10 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
     add_executable(render_surface_abi_test tests/test_render_surface_abi.cpp)
     target_link_libraries(render_surface_abi_test PRIVATE termin_display)
     add_test(NAME render_surface_abi_test COMMAND render_surface_abi_test)
+
+    add_executable(offscreen_display_lifecycle_test tests/test_offscreen_display_lifecycle.cpp)
+    target_link_libraries(offscreen_display_lifecycle_test PRIVATE termin_display)
+    add_test(NAME offscreen_display_lifecycle_test COMMAND offscreen_display_lifecycle_test)
 
     add_executable(viewport_input_manager_source_test tests/test_viewport_input_manager_source.cpp)
     target_link_libraries(viewport_input_manager_source_test PRIVATE termin_display)

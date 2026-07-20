@@ -1,4 +1,4 @@
-"""Native tabbed workspace owning editor and runtime display surfaces."""
+"""Native tabbed workspace owning editor and runtime displays."""
 
 from __future__ import annotations
 
@@ -22,12 +22,11 @@ class NativeDisplayPage:
     display: object
     widget: object
     root: WidgetRef
-    surface: object
     input_manager: object
 
 
 class NativeDisplayWorkspace:
-    """Own the tab-to-display mapping and every display surface lifetime."""
+    """Own the tab-to-display mapping and explicit display lifetime."""
 
     def __init__(
         self,
@@ -128,26 +127,23 @@ class NativeDisplayWorkspace:
         """Create, register and project one runtime display into a native tab."""
 
         self._require_open()
-        from termin.display import BasicDisplayInputManager, Display, DisplayViewportHost, FBOSurface
+        from termin.display import BasicDisplayInputManager, Display
 
         display_name = name or self._next_display_name()
-        surface = FBOSurface(self.device, 800, 600)
         display = None
         input_manager = None
         widget = None
         registered = False
         tab_added = False
         try:
-            if not surface.is_valid():
-                raise RuntimeError("native display FBO surface is invalid")
-            display = Display(surface=surface, name=display_name)
+            display = Display.offscreen(self.device, 800, 600, name=display_name)
             input_manager = BasicDisplayInputManager(display.handle)
             widget = self.document.create_viewport3d()
             widget.widget.stable_id = (
                 f"editor.display-workspace.display-{display.index}-{display.generation}"
             )
             widget.widget.preferred_size = Size(800.0, 600.0)
-            widget.set_surface_host(DisplayViewportHost(surface, display))
+            widget.set_surface_host(display)
             self.rendering_manager.add_display(display, display_name)
             registered = True
             self.tabs.add_page(display_name, widget.widget)
@@ -156,7 +152,6 @@ class NativeDisplayWorkspace:
                 display=display,
                 widget=widget,
                 root=widget.widget,
-                surface=surface,
                 input_manager=input_manager,
             )
             self._pages.append(page)
@@ -180,7 +175,6 @@ class NativeDisplayWorkspace:
                 input_manager.close()
             if display is not None:
                 display.destroy()
-            surface.close()
             raise
 
     def remove_display(self, display: object) -> bool:
@@ -346,7 +340,6 @@ class NativeDisplayWorkspace:
         cleanup("input manager close", page.input_manager.close)
         cleanup("rendering manager removal", lambda: self.rendering_manager.remove_display(page.display))
         cleanup("display destroy", page.display.destroy)
-        cleanup("surface close", page.surface.close)
         cleanup("widget destroy", lambda: self.document.destroy_widget_recursive(page.root.handle))
         if first_error is not None:
             raise RuntimeError("native display page cleanup failed") from first_error

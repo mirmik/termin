@@ -56,12 +56,23 @@ void surface_get_size(tc_render_surface* surface, int* width, int* height) {
 uint32_t surface_get_texture(tc_render_surface*) { return 1; }
 uintptr_t surface_get_domain(tc_render_surface*) { return 1; }
 void surface_destroy(tc_render_surface*) {}
+bool surface_resize(tc_render_surface* surface, int width, int height) {
+    FixedSurface* fixed = static_cast<FixedSurface*>(surface->body);
+    fixed->width = width;
+    fixed->height = height;
+    tc_render_surface_notify_resize(surface, width, height);
+    return true;
+}
+void surface_delete(tc_render_surface* surface) {
+    delete static_cast<FixedSurface*>(surface->body);
+}
 
 const tc_render_surface_vtable FIXED_SURFACE_VTABLE = {
-    surface_get_size,
-    surface_get_texture,
-    surface_get_domain,
-    surface_destroy,
+    .get_size = surface_get_size,
+    .resize = surface_resize,
+    .get_color_texture_id = surface_get_texture,
+    .get_graphics_domain_key = surface_get_domain,
+    .destroy = surface_destroy,
 };
 
 TestPipeline make_pipeline(
@@ -224,18 +235,20 @@ int main() {
     };
     set_params(consumer, consumer_params, 3);
 
-    FixedSurface active_surface;
-    active_surface.width = 800;
-    active_surface.height = 600;
-    tc_render_surface_init(&active_surface.surface, &FIXED_SURFACE_VTABLE);
-    active_surface.surface.body = &active_surface;
-    FixedSurface hidden_surface;
-    hidden_surface.width = 320;
-    hidden_surface.height = 200;
-    tc_render_surface_init(&hidden_surface.surface, &FIXED_SURFACE_VTABLE);
-    hidden_surface.surface.body = &hidden_surface;
-    tc_display_handle active_display = tc_display_new("Display 0", &active_surface.surface);
-    tc_display_handle hidden_display = tc_display_new("Display 1", &hidden_surface.surface);
+    auto* active_surface = new FixedSurface;
+    active_surface->width = 800;
+    active_surface->height = 600;
+    tc_render_surface_init(
+        &active_surface->surface, &FIXED_SURFACE_VTABLE, surface_delete);
+    active_surface->surface.body = active_surface;
+    auto* hidden_surface = new FixedSurface;
+    hidden_surface->width = 320;
+    hidden_surface->height = 200;
+    tc_render_surface_init(
+        &hidden_surface->surface, &FIXED_SURFACE_VTABLE, surface_delete);
+    hidden_surface->surface.body = hidden_surface;
+    tc_display_handle active_display = tc_display_new("Display 0", &active_surface->surface);
+    tc_display_handle hidden_display = tc_display_new("Display 1", &hidden_surface->surface);
     tc_viewport_handle consumer_viewport = tc_viewport_new("chronosquad", scene);
     tc_viewport_handle producer_viewport = tc_viewport_new("test_vp", scene);
     tc_viewport_handle unused_viewport = tc_viewport_new("unused_vp", scene);

@@ -58,8 +58,9 @@ class _Surface:
 class _Display:
     next_index = 10
 
-    def __init__(self, *, surface, name: str) -> None:
-        self.surface = surface
+    def __init__(self, device, width: int, height: int, *, name: str) -> None:
+        self.device = device
+        self.size = (width, height)
         self.name = name
         self.index = self.__class__.next_index
         self.generation = 1
@@ -69,8 +70,22 @@ class _Display:
         self.enabled = True
         self.viewports = []
 
+    @classmethod
+    def offscreen(cls, device, width: int, height: int, *, name: str, **_kwargs):
+        return cls(device, width, height, name=name)
+
     def is_valid(self) -> bool:
         return not self.destroyed
+
+    def get_tgfx_color_tex_id(self) -> int:
+        return 17
+
+    def framebuffer_size(self) -> tuple[int, int]:
+        return self.size
+
+    def resize(self, width: int, height: int) -> bool:
+        self.size = (width, height)
+        return True
 
     def dispatch_pointer_move(self, _x, _y) -> bool:
         return True
@@ -167,10 +182,8 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
         return editor_runtime
 
     monkeypatch.setattr(workspace_module.NativeEditorViewport, "create", create_editor)
-    monkeypatch.setattr(termin.display, "FBOSurface", _Surface)
     monkeypatch.setattr(termin.display, "Display", _Display)
     monkeypatch.setattr(termin.display, "BasicDisplayInputManager", _InputManager)
-    _Surface.instances.clear()
     _InputManager.instances.clear()
     _Display.next_index = 10
     manager = _RenderingManager()
@@ -232,7 +245,6 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     assert display.destroyed
     assert second_display.destroyed
     assert all(manager.closed for manager in _InputManager.instances)
-    assert all(surface.closed for surface in _Surface.instances)
 
     workspace.close()
     workspace.close()

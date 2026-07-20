@@ -245,11 +245,6 @@ void bind_tc_input_manager(nb::module_& m) {
         return reinterpret_cast<uintptr_t>(tc_viewport_get_input_manager(vh));
     });
 
-    // Get surface pointer from display
-    m.def("_display_get_surface_ptr", [](uint32_t index, uint32_t generation) -> uintptr_t {
-        return reinterpret_cast<uintptr_t>(
-            tc_display_get_surface(tc_display_handle{index, generation}));
-    }, nb::arg("index"), nb::arg("generation"));
 }
 
 } // namespace termin

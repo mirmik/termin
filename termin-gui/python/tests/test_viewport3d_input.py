@@ -7,17 +7,15 @@ from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.viewport3d import Viewport3D
 
 
-class _Surface:
+class _Display:
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
     def framebuffer_size(self) -> tuple[int, int]:
         return (600, 400)
 
     def resize(self, _width: int, _height: int) -> bool:
         return True
-
-
-class _Display:
-    def __init__(self) -> None:
-        self.calls: list[tuple] = []
 
     def dispatch_pointer_move(self, x: float, y: float) -> None:
         self.calls.append(("move", x, y))
@@ -37,7 +35,6 @@ def _viewport_with_input(x: float, y: float) -> tuple[Viewport3D, _Display]:
     viewport = Viewport3D()
     display = _Display()
     viewport._display = display
-    viewport._surface = _Surface()
     viewport.layout(x, y, 300.0, 200.0, 800.0, 600.0)
     return viewport, display
 

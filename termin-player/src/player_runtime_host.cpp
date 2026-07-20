@@ -676,8 +676,6 @@ struct PlayerRuntimeHost::Impl {
 
     std::unique_ptr<EngineCore> engine;
     std::unique_ptr<SDLBackendWindow> window;
-    OffscreenRenderSurfaceHandle surface_handle{};
-    OffscreenRenderSurface* surface = nullptr;
     std::optional<TcDisplay> display;
     termin::runtime::RuntimePackageLoadResult package;
     TcSceneRef scene;
@@ -1026,12 +1024,12 @@ struct PlayerRuntimeHost::Impl {
             width = window_width;
             height = window_height;
         }
-        surface_handle = offscreen_render_surface_create(window->device(), width, height);
-        surface = offscreen_render_surface_get(surface_handle);
-        if (surface == nullptr) {
-            throw std::runtime_error("failed to create offscreen render surface");
+        tc_display_handle handle = create_offscreen_display(
+            window->device(), width, height, "Main");
+        if (!tc_display_handle_valid(handle)) {
+            throw std::runtime_error("failed to create offscreen display");
         }
-        display.emplace(surface->tc_surface(), "Main");
+        display.emplace(handle);
 
         RenderingManager& manager = engine->rendering_manager;
         manager.set_display_factory([this](const std::string& name) {
@@ -1154,19 +1152,20 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void sync_surface_size() {
-        if (!window || surface == nullptr || !display) {
+        if (!window || !display) {
             return;
         }
         auto [width, height] = window->framebuffer_size();
         if (width <= 0 || height <= 0) {
             return;
         }
-        auto [current_width, current_height] = surface->size();
+        auto [current_width, current_height] = display->get_size();
         if (width == current_width && height == current_height) {
             return;
         }
-        surface->resize(width, height);
-        display->update_all_pixel_rects();
+        if (!display->resize(width, height)) {
+            tc_log_error("termin_player: display surface resize failed");
+        }
     }
 
     void run_loop() {
@@ -1208,10 +1207,10 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void render_present() {
-        if (!window || surface == nullptr) {
+        if (!window || !display || !display->is_valid()) {
             return;
         }
-        window->present(surface->color_tex());
+        window->present(tgfx::TextureHandle{display->color_texture_id()});
     }
 
     void shutdown() {
@@ -1250,12 +1249,6 @@ struct PlayerRuntimeHost::Impl {
         if (engine) {
             engine->scene_manager.set_on_after_render(nullptr);
             engine.reset();
-        }
-
-        if (surface_handle.index != UINT32_MAX) {
-            offscreen_render_surface_destroy(surface_handle);
-            surface_handle = {};
-            surface = nullptr;
         }
 
         if (window) {

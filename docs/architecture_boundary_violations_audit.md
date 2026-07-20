@@ -418,14 +418,14 @@ surface/input-manager pointer transport удалён.
 
 **Где смотреть:** `termin-gui/python/tcgui/widgets/viewport3d.py`
 
-`Viewport3D` уже использует владельца символов `termin.display`. Но он всё ещё вызывает `_display_get_surface_ptr`, `_render_surface_get_input_manager`, `_input_manager_on_mouse_move`, `_input_manager_on_scroll`, `_input_manager_on_mouse_button`, `_input_manager_on_key` как приватные underscored functions.
+До #677 `Viewport3D` вызывал приватные underscored surface/input helpers. В
+#677 события были переведены на публичные typed dispatch methods `Display`, а
+raw pointer transport удалён.
 
-Status 2026-06-20: display/player routing helpers moved to `termin.display.input_manager`; the old app path `termin.visualization.platform.input_manager` was removed. The remaining `Viewport3D` work is a smaller public event-forwarding adapter in `termin.display`, so `Viewport3D` no longer calls native underscored functions directly.
-
-Status 2026-07-20: #677 completed the boundary. `FBOSurface` exposes rendering
-only; `DisplayViewportHost` combines it with the display-owned typed input
-endpoint for native embedding, and legacy tcgui calls public `Display`
-dispatch methods with display-pixel coordinates.
+Status 2026-07-21: #686 completed the ownership boundary. `Display` exclusively
+owns its render surface and directly exposes texture, size/resize and typed
+input dispatch. Native and tcgui embedding no longer retain a second Python
+surface or host facade.
 
 ### 5.2 Component binding targets больше не завязаны на `termin-app/cpp/termin/bindings`
 

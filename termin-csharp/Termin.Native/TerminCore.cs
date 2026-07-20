@@ -775,6 +775,10 @@ public static class TerminCore
     public delegate void RenderSurfaceGetSizeDelegate(IntPtr surface, out int width, out int height);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public delegate bool RenderSurfaceResizeDelegate(IntPtr surface, int width, int height);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate uint RenderSurfaceGetColorTextureIdDelegate(IntPtr surface);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -788,6 +792,7 @@ public static class TerminCore
     public struct RenderSurfaceVTable
     {
         public IntPtr get_size;
+        public IntPtr resize;
         public IntPtr get_color_texture_id;
         public IntPtr get_graphics_domain_key;
         public IntPtr destroy;
@@ -800,13 +805,19 @@ public static class TerminCore
         nuint vtableSize,
         uint abiVersion);
 
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_free_external")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_delete_unowned")]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool RenderSurfaceFreeExternal(IntPtr surface);
+    public static extern bool RenderSurfaceDeleteUnowned(IntPtr surface);
 
     // ========================================================================
     // Display (tc_display)
     // ========================================================================
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_pool_init")]
+    public static extern void DisplayPoolInit();
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_pool_shutdown")]
+    public static extern void DisplayPoolShutdown();
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
     public static extern TcDisplayHandle DisplayNew(string name, IntPtr surface);
@@ -827,6 +838,16 @@ public static class TerminCore
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_size")]
     public static extern void DisplayGetSize(TcDisplayHandle display, out int width, out int height);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_resize")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayResize(TcDisplayHandle display, int width, int height);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_color_texture_id")]
+    public static extern uint DisplayGetColorTextureId(TcDisplayHandle display);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_graphics_domain_key")]
+    public static extern nuint DisplayGetGraphicsDomainKey(TcDisplayHandle display);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_add_viewport")]
     public static extern void DisplayAddViewport(TcDisplayHandle display, TcViewportHandle viewport);

@@ -63,6 +63,17 @@ public:
         return tc_display_set_surface(handle_, surface);
     }
 
+    bool resize(int width, int height) { return tc_display_resize(handle_, width, height); }
+    uint32_t color_texture_id() const {
+        return tc_display_get_color_texture_id(handle_);
+    }
+    uintptr_t graphics_domain_key() const {
+        return tc_display_get_graphics_domain_key(handle_);
+    }
+    bool validate_output(uintptr_t expected_domain, uint32_t* texture_id) const {
+        return tc_display_validate_output(handle_, expected_domain, texture_id);
+    }
+
     tc_input_manager* input_manager() const {
         return tc_display_get_input_manager(handle_);
     }

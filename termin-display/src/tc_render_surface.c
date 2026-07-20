@@ -3,6 +3,15 @@
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
 
+typedef struct tc_external_render_surface {
+    tc_render_surface surface;
+    tc_render_surface_vtable vtable;
+} tc_external_render_surface;
+
+static void tc_external_render_surface_delete(tc_render_surface* surface) {
+    free((tc_external_render_surface*)surface);
+}
+
 bool tc_render_surface_validate_output(
     tc_render_surface* surface,
     uintptr_t expected_graphics_domain_key,
@@ -61,49 +70,47 @@ tc_render_surface* tc_render_surface_new_external(
                vtable_size, sizeof(tc_render_surface_vtable));
         return NULL;
     }
-    if (!vtable->get_size || !vtable->get_color_texture_id ||
+    if (!vtable->get_size || !vtable->resize || !vtable->get_color_texture_id ||
         !vtable->get_graphics_domain_key || !vtable->destroy) {
         tc_log(TC_LOG_ERROR,
                "[tc_render_surface_new_external] vtable has missing mandatory callbacks");
         return NULL;
     }
 
-    tc_render_surface* s = (tc_render_surface*)calloc(1, sizeof(tc_render_surface));
-    if (!s) {
+    tc_external_render_surface* adapter =
+        (tc_external_render_surface*)calloc(1, sizeof(tc_external_render_surface));
+    if (!adapter) {
         tc_log(TC_LOG_ERROR, "[tc_render_surface_new_external] allocation failed");
         return NULL;
     }
-
-    // Copy vtable to owned memory (caller's vtable may be in managed memory that can move)
-    tc_render_surface_vtable* vtable_copy = (tc_render_surface_vtable*)malloc(sizeof(tc_render_surface_vtable));
-    if (!vtable_copy) {
-        tc_log(TC_LOG_ERROR, "[tc_render_surface_new_external] vtable allocation failed");
-        free(s);
-        return NULL;
-    }
-    *vtable_copy = *vtable;
-
-    tc_render_surface_init(s, vtable_copy);
-    s->body = body;
-
-    return s;
+    adapter->vtable = *vtable;
+    tc_render_surface_init(
+        &adapter->surface, &adapter->vtable, tc_external_render_surface_delete);
+    adapter->surface.body = body;
+    return &adapter->surface;
 }
 
-bool tc_render_surface_free_external(tc_render_surface* s) {
-    if (!s) return true;
-    if (tc_display_handle_valid(s->attached_display)) {
+bool tc_render_surface_delete_unowned(tc_render_surface* surface) {
+    if (!surface) return true;
+    if (tc_display_handle_valid(surface->attached_display)) {
         tc_log(TC_LOG_ERROR,
-               "[tc_render_surface_free_external] surface is still attached to a display");
+               "[tc_render_surface_delete_unowned] surface is owned by a display");
         return false;
     }
-    if (s->vtable && s->vtable->destroy) {
-        s->vtable->destroy(s);
+    tc_render_surface_deleter deleter = surface->deleter;
+    if (!deleter) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_render_surface_delete_unowned] surface has no storage deleter");
+        return false;
     }
-    // Free the copied vtable
-    if (s->vtable) {
-        free((void*)s->vtable);
+    surface->deleter = NULL;
+    if (surface->vtable && surface->vtable->destroy) {
+        surface->vtable->destroy(surface);
+    } else {
+        tc_log(TC_LOG_ERROR,
+               "[tc_render_surface_delete_unowned] surface has no semantic destroy callback");
     }
-    free(s);
+    deleter(surface);
     return true;
 }
 
