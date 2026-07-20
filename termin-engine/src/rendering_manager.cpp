@@ -35,6 +35,8 @@ RenderingManager::RenderingManager(RenderTopology& topology)
     : topology_(topology) {
     display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
     render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
+    offscreen_planner_ =
+        std::make_unique<rendering_manager_detail::OffscreenRenderPlanner>();
 }
 
 RenderingManager::~RenderingManager() {
@@ -807,51 +809,12 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    rendering_manager_detail::update_viewport_rects(topology_.viewport_attachments());
+    rendering_manager_detail::update_viewport_rects(topology_);
 
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
-    rendering_manager_detail::OffscreenRenderPlan render_plan =
-        rendering_manager_detail::build_offscreen_render_plan(topology_.viewport_attachments());
-
-    // 1. Render standalone managed render targets first. RTs attached to
-    // viewports are intentionally delayed because we do not yet have a
-    // dependency graph between render targets.
-    for (tc_render_target_handle rt : topology_.managed_render_targets()) {
-        if (tc_render_target_handle_valid(rt)
-                && !rendering_manager_detail::contains_render_target(
-                    render_plan.attached_viewport_render_targets, rt)) {
-            render_render_target_offscreen(rt);
-        }
-    }
-
-    // 2. Execute scene pipelines (can span multiple displays). These render
-    // their viewport-bound render targets as a batch.
-    for (tc_scene_handle scene : topology_.attached_scenes()) {
-        if (!tc_scene_alive(scene)) continue;
-
-        std::vector<std::string> pipeline_names = get_pipeline_names(scene);
-        for (const std::string& pipeline_name : pipeline_names) {
-            tc_pipeline_handle pipeline = get_scene_pipeline(scene, pipeline_name);
-            if (tc_pipeline_handle_valid(pipeline)) {
-                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline);
-            }
-        }
-    }
-
-    // 3. Render viewport-bound render targets not owned by a scene pipeline.
-    // Dedupe by RenderTarget: multiple viewports may display the same target,
-    // but rendering it twice in one frame would race the same output textures.
-    std::vector<tc_render_target_handle> rendered_viewport_targets =
-        render_plan.scene_pipeline_render_targets;
-    for (tc_viewport_handle vp : render_plan.viewport_render_target_viewports) {
-        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-        if (!tc_render_target_handle_valid(rt)) continue;
-        if (rendering_manager_detail::contains_render_target(rendered_viewport_targets, rt)) continue;
-        render_viewport_offscreen(vp);
-        rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
-    }
+    render_planned_offscreen(TC_DISPLAY_HANDLE_INVALID, true);
 }
 
 void RenderingManager::render_display(tc_display_handle display) {
@@ -877,56 +840,51 @@ void RenderingManager::render_display(tc_display_handle display) {
         return;
     }
 
-    rendering_manager_detail::update_viewport_rects(topology_.viewport_attachments(), display);
+    rendering_manager_detail::update_viewport_rects(topology_, display);
     rendering_manager_detail::sync_viewport_render_target_resolutions(
-        topology_.viewport_attachments(),
+        topology_,
         display
     );
 
-    rendering_manager_detail::OffscreenRenderPlan render_plan =
-        rendering_manager_detail::build_offscreen_render_plan(
-            topology_.viewport_attachments(),
-            display
-        );
-
-    for (tc_scene_handle scene : topology_.attached_scenes()) {
-        if (!tc_scene_alive(scene)) continue;
-
-        std::vector<std::string> pipeline_names = get_pipeline_names(scene);
-        for (const std::string& pipeline_name : pipeline_names) {
-            tc_pipeline_handle pipeline = get_scene_pipeline(scene, pipeline_name);
-            if (tc_pipeline_handle_valid(pipeline)) {
-                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline, display);
-            }
-        }
-    }
-
-    std::vector<tc_render_target_handle> rendered_viewport_targets =
-        render_plan.scene_pipeline_render_targets;
-    for (tc_viewport_handle vp : render_plan.viewport_render_target_viewports) {
-        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-        if (!tc_render_target_handle_valid(rt)) continue;
-        if (rendering_manager_detail::contains_render_target(rendered_viewport_targets, rt)) continue;
-        render_viewport_offscreen(vp);
-        rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
-    }
+    render_planned_offscreen(display, false);
 
     present_display(display);
 }
 
+void RenderingManager::render_planned_offscreen(
+    tc_display_handle only_display,
+    bool include_unattached_roots
+) {
+    offscreen_planner_->execute(
+        topology_,
+        only_display,
+        include_unattached_roots,
+        [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* planned_job) {
+            RenderingManager* manager = static_cast<RenderingManager*>(user_data);
+            const rendering_manager_detail::OffscreenRenderJob& job = *planned_job;
+            if (job.kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
+                manager->render_scene_pipeline_offscreen(job.scene, job.pipeline);
+                return;
+            }
+            if (tc_viewport_handle_valid(job.viewport)) {
+                manager->render_viewport_offscreen(job.viewport);
+            } else {
+                manager->render_render_target_offscreen(job.render_target);
+            }
+        },
+        this);
+}
+
 void RenderingManager::render_scene_pipeline_offscreen(
     tc_scene_handle scene,
-    const std::string& pipeline_name,
-    tc_pipeline_handle pipeline,
-    tc_display_handle only_display
+    tc_pipeline_handle pipeline
 ) {
     if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline)) {
         return;
     }
 
-    const std::vector<std::string>& target_names =
-        topology_.get_pipeline_targets(scene, pipeline_name);
-    if (target_names.empty()) {
+    const size_t target_count = topology_.pipeline_target_count(scene, pipeline);
+    if (target_count == 0) {
         return;
     }
 
@@ -934,59 +892,57 @@ void RenderingManager::render_scene_pipeline_offscreen(
     std::unordered_map<std::string, RenderTargetContext> contexts;
     std::string first_viewport_name;
 
-    for (const std::string& vp_name : target_names) {
-        tc_viewport_handle viewport = topology_.find_viewport(scene, vp_name);
+    for (size_t target_index = 0; target_index < target_count; ++target_index) {
+        tc_viewport_handle viewport = topology_.pipeline_target_viewport_at(
+            scene, pipeline, target_index);
+        const char* vp_name = tc_viewport_handle_valid(viewport)
+            ? tc_viewport_get_name(viewport) : nullptr;
         if (!tc_viewport_handle_valid(viewport)) {
-            tc_log(TC_LOG_ERROR, "[RenderingManager] Scene pipeline '%s' target viewport '%s' NOT FOUND",
-                   pipeline_name.c_str(), vp_name.c_str());
+            tc_log(
+                TC_LOG_ERROR,
+                "[RenderingManager] Scene pipeline [%u:%u] target viewport %zu NOT FOUND",
+                pipeline.index,
+                pipeline.generation,
+                target_index);
             continue;
         }
-        tc_display_handle viewport_display = topology_.display_for_viewport(viewport);
-        if (tc_display_handle_valid(only_display) && viewport_display != only_display) {
-            continue;
-        }
-        if (tc_display_alive(viewport_display) && !tc_display_get_enabled(viewport_display)) {
-            continue;
-        }
-
-        if (!tc_viewport_get_enabled(viewport)) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' is disabled, skipping", vp_name.c_str());
-            continue;
-        }
-
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
         if (!tc_render_target_handle_valid(rt)) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no render target", vp_name.c_str());
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no render target",
+                   vp_name ? vp_name : "<unnamed>");
             continue;
         }
         if (!tc_render_target_get_enabled(rt)) {
             continue;
         }
 
-        // Get pixel rect
-        int px, py, pw, ph;
-        tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-        if (pw <= 0 || ph <= 0) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has invalid pixel_rect: %dx%d",
-                   vp_name.c_str(), pw, ph);
+        const int rw = tc_render_target_get_width(rt);
+        const int rh = tc_render_target_get_height(rt);
+        if (tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D
+                && (rw <= 0 || rh <= 0)) {
+            tc_log(
+                TC_LOG_WARN,
+                "[RenderingManager] Scene pipeline [%u:%u] target '%s' has invalid RT size %dx%d",
+                pipeline.index,
+                pipeline.generation,
+                vp_name ? vp_name : "<unnamed>",
+                rw,
+                rh);
             continue;
         }
-
-        int rw = pw;
-        int rh = ph;
-        rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
 
         std::string default_context;
         if (build_render_target_contexts(
                 rt,
-                vp_name,
+                vp_name ? vp_name : "",
                 tc_viewport_get_internal_entities(viewport),
                 rw,
                 rh,
                 contexts,
                 default_context)) {
             if (first_viewport_name.empty()) {
-                first_viewport_name = default_context.empty() ? vp_name : default_context;
+                first_viewport_name = default_context.empty()
+                    ? (vp_name ? vp_name : "") : default_context;
             }
         }
     }
@@ -1066,14 +1022,18 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     // Wrap pipeline handle
     RenderPipeline render_pipeline(pipeline);
 
-    // Get pixel rect
-    int px, py, pw, ph;
-    tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-    if (pw <= 0 || ph <= 0) return;
-
-    int rw = pw;
-    int rh = ph;
-    rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+    const int rw = tc_render_target_get_width(rt);
+    const int rh = tc_render_target_get_height(rt);
+    if (tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D
+            && (rw <= 0 || rh <= 0)) {
+        tc_log(
+            TC_LOG_WARN,
+            "[RenderingManager] viewport '%s' target has invalid RT size %dx%d",
+            vp_name ? vp_name : "<unnamed>",
+            rw,
+            rh);
+        return;
+    }
 
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
@@ -1101,7 +1061,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
 void RenderingManager::sync_viewport_resolutions() {
     rendering_manager_detail::sync_viewport_render_target_resolutions(
-        topology_.viewport_attachments()
+        topology_
     );
 }
 

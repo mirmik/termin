@@ -1,5 +1,6 @@
 #include "render_target_context_builder.hpp"
 
+#include "pipeline_texture_ref.hpp"
 #include "rendering_manager_utils.hpp"
 #include "termin/render/camera_capability.hpp"
 #include "termin/render/render_camera.hpp"
@@ -37,64 +38,6 @@ static void fill_render_target_clear_settings(RenderTargetContext& ctx, tc_rende
     ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
 }
 
-void resolve_render_target_size_for_viewport(
-    tc_render_target_handle rt,
-    int viewport_width,
-    int viewport_height,
-    int& render_width,
-    int& render_height
-) {
-    render_width = viewport_width;
-    render_height = viewport_height;
-
-    if (!tc_render_target_handle_valid(rt)) {
-        return;
-    }
-
-    if (tc_render_target_get_dynamic_resolution(rt)) {
-        tc_render_target_set_width(rt, viewport_width);
-        tc_render_target_set_height(rt, viewport_height);
-        return;
-    }
-
-    int fixed_width = tc_render_target_get_width(rt);
-    int fixed_height = tc_render_target_get_height(rt);
-    if (fixed_width > 0 && fixed_height > 0) {
-        render_width = fixed_width;
-        render_height = fixed_height;
-    }
-}
-
-static tc_render_target_handle find_render_target_by_name(
-    const char* name,
-    tc_scene_handle preferred_scene,
-    const std::vector<tc_render_target_handle>& render_targets
-) {
-    if (!name || name[0] == '\0') {
-        return TC_RENDER_TARGET_HANDLE_INVALID;
-    }
-
-    for (tc_render_target_handle rt : render_targets) {
-        if (!tc_render_target_handle_valid(rt)) {
-            continue;
-        }
-        const char* candidate = tc_render_target_get_name(rt);
-        if (!candidate || std::strcmp(candidate, name) != 0) {
-            continue;
-        }
-
-        if (tc_scene_handle_valid(preferred_scene)) {
-            tc_scene_handle scene = tc_render_target_get_scene(rt);
-            if (!tc_scene_handle_eq(scene, preferred_scene)) {
-                continue;
-            }
-        }
-        return rt;
-    }
-
-    return TC_RENDER_TARGET_HANDLE_INVALID;
-}
-
 static tgfx::TextureHandle resolve_pipeline_texture_ref(
     tgfx::IRenderDevice& device,
     tc_scene_handle preferred_scene,
@@ -105,10 +48,10 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         return {};
     }
 
-    constexpr const char* file_prefix = "file:";
-    const char* texture_name = ref;
-    if (std::strncmp(ref, file_prefix, std::strlen(file_prefix)) == 0) {
-        texture_name = ref + std::strlen(file_prefix);
+    PipelineTextureRef classified = classify_pipeline_texture_ref(
+        ref, preferred_scene, render_targets.data(), render_targets.size());
+    if (classified.kind == PipelineTextureRefKind::FileTexture) {
+        const char* texture_name = classified.texture_name;
         tc_texture_handle tex = tc_texture_find(texture_name);
         if (tc_texture_handle_is_invalid(tex)) {
             tex = tc_texture_find_by_name(texture_name);
@@ -120,12 +63,13 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         return wrap_tc_texture_as_tgfx2(device, tex);
     }
 
-    tc_render_target_handle rt = find_render_target_by_name(ref, preferred_scene, render_targets);
-    if (tc_render_target_handle_valid(rt)) {
-        tc_render_target_ensure_textures(rt);
-        return wrap_tc_texture_as_tgfx2(device, tc_render_target_get_color_texture(rt));
+    if (classified.kind == PipelineTextureRefKind::RenderTarget) {
+        tc_render_target_ensure_textures(classified.render_target);
+        return wrap_tc_texture_as_tgfx2(
+            device, tc_render_target_get_color_texture(classified.render_target));
     }
 
+    const char* texture_name = classified.texture_name;
     tc_texture_handle tex = tc_texture_find_by_name(texture_name);
     if (tc_texture_handle_is_invalid(tex)) {
         tex = tc_texture_find(texture_name);

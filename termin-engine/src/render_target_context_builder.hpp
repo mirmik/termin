@@ -4,14 +4,6 @@
 
 namespace termin::rendering_manager_detail {
 
-void resolve_render_target_size_for_viewport(
-    tc_render_target_handle rt,
-    int viewport_width,
-    int viewport_height,
-    int& render_width,
-    int& render_height
-);
-
 struct RenderTargetContextBuildRequest {
     RenderingManager& manager;
     RenderEngine* engine = nullptr;
