@@ -499,8 +499,22 @@ def pass_list_to_pipeline_graph(data: dict) -> Graph:
             }
         )
         _configure_node(controller, node, "pass", graph_type)
+        pass_values = pass_data.get("data", {})
+        if isinstance(pass_values, dict):
+            node.params.update(pass_values)
         sync_material_pass_inputs(graph, node)
     return graph
+
+
+def lower_pipeline_graph_to_pass_list(graph: Graph) -> dict:
+    """Use the runtime graph compiler as the single graph-to-pass-list lowering."""
+    from termin.render_framework import compile_graph_from_json
+
+    pipeline = compile_graph_from_json(json.dumps(save_pipeline_graph(graph)))
+    try:
+        return pipeline.serialize()
+    finally:
+        pipeline.destroy()
 
 
 def save_pipeline_graph(graph: Graph) -> dict:
@@ -583,6 +597,7 @@ class PipelineEditorController:
         self.graph_controller = GraphController(self.graph)
         self.file_path: Path | None = None
         self.file_uuid: str | None = None
+        self.source_format = "graph"
         self.status = "Ready"
         self.graph_changed = Signal()
         self.status_changed = Signal()
@@ -596,15 +611,23 @@ class PipelineEditorController:
         file_path = Path(path)
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
-            graph = (
-                pass_list_to_pipeline_graph(data)
-                if "passes" in data and "nodes" not in data
-                else load_pipeline_graph(data)
-            )
+            has_pass_list = "passes" in data
+            has_graph = any(key in data for key in ("nodes", "connections", "viewport_frames"))
+            if has_pass_list and has_graph:
+                raise ValueError("pipeline document mixes graph and pass-list fields")
+            if has_pass_list:
+                graph = pass_list_to_pipeline_graph(data)
+                source_format = "pass-list"
+            elif "nodes" in data:
+                graph = load_pipeline_graph(data)
+                source_format = "graph"
+            else:
+                raise ValueError("pipeline document has no supported authored format")
             file_uuid = data.get("uuid")
             if file_uuid is not None and not isinstance(file_uuid, str):
                 raise ValueError("pipeline uuid must be a string")
             self.file_uuid = file_uuid
+            self.source_format = source_format
             self.file_path = file_path
             self.set_graph(graph)
             self._set_status(f"Loaded: {file_path}")
@@ -618,7 +641,11 @@ class PipelineEditorController:
         file_path = Path(path) if path is not None else self.file_path
         if file_path is None:
             raise ValueError("pipeline editor has no save path")
-        data = save_pipeline_graph(self.graph)
+        data = (
+            lower_pipeline_graph_to_pass_list(self.graph)
+            if self.source_format == "pass-list"
+            else save_pipeline_graph(self.graph)
+        )
         if self.file_uuid:
             data["uuid"] = self.file_uuid
         try:
@@ -715,6 +742,7 @@ class PipelineEditorController:
 __all__ = [
     "PipelineEditorController",
     "load_pipeline_graph",
+    "lower_pipeline_graph_to_pass_list",
     "pass_list_to_pipeline_graph",
     "reload_pipeline_asset",
     "save_pipeline_graph",

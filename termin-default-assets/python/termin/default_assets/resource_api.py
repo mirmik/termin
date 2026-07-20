@@ -735,31 +735,29 @@ class DefaultAssetResourceMixin:
 
         asset = self._pipeline_registry.get_asset(name)
         if asset is not None:
-            asset._data = pipeline
+            candidate = asset._candidate_from_pipeline(pipeline, source_format="runtime")
+            if not asset._publish_candidate(candidate):
+                raise RuntimeError(f"failed to update registered pipeline '{name}'")
+            pipeline.destroy()
             return
 
         asset = PipelineAsset.from_pipeline(pipeline, name=name, uuid=uuid)
         self._pipeline_registry.register(name, asset, uuid=uuid)
+        pipeline.destroy()
 
     def get_pipeline(self, name: str) -> Optional["RenderPipeline"]:
-        """Get a copy of RenderPipeline by name (pipelines are mutable)."""
-        pipeline = self._pipeline_registry.get(name)
-        if pipeline is not None:
-            return pipeline.copy(self)
-        return None
+        """Instantiate a mutable RenderPipeline from its canonical resource."""
+        asset = self._pipeline_registry.get_asset(name)
+        return asset.pipeline if asset is not None else None
 
     def get_pipeline_asset(self, name: str) -> Optional["PipelineAsset"]:
         """Get PipelineAsset by name."""
         return self._pipeline_registry.get_asset(name)
 
     def get_pipeline_by_uuid(self, uuid: str) -> Optional["RenderPipeline"]:
-        """Get a copy of RenderPipeline by UUID."""
+        """Instantiate a mutable RenderPipeline by canonical UUID."""
         asset = self._pipeline_registry.get_asset_by_uuid(uuid)
-        if asset is not None:
-            pipeline = asset.data
-            if pipeline is not None:
-                return pipeline.copy(self)
-        return None
+        return asset.pipeline if asset is not None else None
 
     def list_pipeline_names(self) -> list[str]:
         """List all registered pipeline names."""

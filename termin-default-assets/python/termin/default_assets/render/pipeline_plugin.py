@@ -71,6 +71,7 @@ class PipelineRuntimePlugin:
         uuid = context.uuid
         asset = rm.get_runtime_asset_by_uuid(self.type_id, uuid)
         if isinstance(asset, PipelineAsset):
+            asset.bind_resource_manager(rm)
             rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=uuid)
             return
 
@@ -80,6 +81,7 @@ class PipelineRuntimePlugin:
             source_path=result.path,
             uuid=uuid,
         )
+        asset.bind_resource_manager(rm)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> bool:
         rm = context.resource_manager

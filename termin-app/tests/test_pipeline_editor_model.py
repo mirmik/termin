@@ -73,6 +73,39 @@ def test_pipeline_editor_controller_failed_load_preserves_current_document(tmp_p
     assert controller.status == f"Load failed: {broken}"
 
 
+def test_pipeline_editor_preserves_pass_list_authored_format(tmp_path: Path):
+    source = tmp_path / "debug.pipeline"
+    source.write_text(
+        json.dumps(
+            {
+                "uuid": "debug-pipeline-uuid",
+                "name": "Debug",
+                "passes": [
+                    {
+                        "type": "UIWidgetPass",
+                        "pass_name": "UI",
+                        "data": {"include_internal_entities": True},
+                    }
+                ],
+                "pipeline_specs": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    controller = PipelineEditorController()
+
+    graph = controller.load(source)
+    assert controller.source_format == "pass-list"
+    assert graph.nodes["node_0"].params["include_internal_entities"] is True
+
+    saved = tmp_path / "saved-debug.pipeline"
+    controller.save(saved)
+    payload = json.loads(saved.read_text(encoding="utf-8"))
+    assert "passes" in payload
+    assert "nodes" not in payload
+    assert payload["uuid"] == "debug-pipeline-uuid"
+
+
 def test_pipeline_editor_controller_mutations_emit_only_for_changes():
     controller = PipelineEditorController()
     events = []
