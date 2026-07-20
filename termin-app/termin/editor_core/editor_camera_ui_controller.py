@@ -1,68 +1,35 @@
-"""
-EditorCameraUIController — shared controller for the editor camera overlay.
-
-Подписывается на кнопки в editor_camera_ui.uiscript и управляет:
-- Отображением коллайдеров (render category mask)
-- Отображением navmesh overlay (render category mask)
-- Режимом wireframe
-- Ортографической камерой
-- Ориентацией transform gizmo: local / global
-
-Использование:
-    Контроллер должен быть на entity-потомке камеры (или на самой камере).
-    Он найдёт CameraComponent и через него получит render target pipeline.
-"""
+"""Serializable, toolkit-neutral editor-camera mode state and actions."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from termin.scene import PythonComponent
-from termin.render_components.camera import CameraComponent
-from termin.render import RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
-from termin.ui_components import UIComponent
-from tcgui.widgets.basic import IconButton
-from termin.inspect import InspectField
 from tcbase import log
+from termin.inspect import InspectField
+from termin.render import RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
+from termin.scene import PythonComponent
 
 if TYPE_CHECKING:
-    from termin.viewport import Viewport
+    from termin.render_components.camera import CameraComponent
 
 
 class EditorCameraUIController(PythonComponent):
-    """
-    Контроллер UI редакторской камеры.
-
-    Ищет CameraComponent на своей entity или родителях,
-    через него получает viewport и доступ к pipeline.passes.
-    """
+    """Own camera-mode state while frontends own widgets and bindings."""
 
     component_category = "Editor/Internal"
-
     inspect_fields = {
         "colliders_enabled": InspectField(
-            path="colliders_enabled",
-            kind="bool",
-            is_serializable=True,
-            is_inspectable=True,
+            path="colliders_enabled", kind="bool", is_serializable=True, is_inspectable=True
         ),
         "wireframe_enabled": InspectField(
-            path="wireframe_enabled",
-            kind="bool",
-            is_serializable=True,
-            is_inspectable=True,
+            path="wireframe_enabled", kind="bool", is_serializable=True, is_inspectable=True
         ),
         "navmesh_enabled": InspectField(
-            path="navmesh_enabled",
-            kind="bool",
-            is_serializable=True,
-            is_inspectable=True,
+            path="navmesh_enabled", kind="bool", is_serializable=True, is_inspectable=True
         ),
         "ortho_enabled": InspectField(
-            path="ortho_enabled",
-            kind="bool",
-            is_serializable=True,
-            is_inspectable=True,
+            path="ortho_enabled", kind="bool", is_serializable=True, is_inspectable=True
         ),
         "gizmo_world_orientation_enabled": InspectField(
             path="gizmo_world_orientation_enabled",
@@ -72,246 +39,134 @@ class EditorCameraUIController(PythonComponent):
         ),
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(enabled=True)
-        self.active_in_editor = True  # Работает в режиме редактора
-        self._ui_component: UIComponent | None = None
-        self._camera_component: CameraComponent | None = None
-
-        # Serializable state
-        self.colliders_enabled: bool = False
-        self.navmesh_enabled: bool = True
-        self.wireframe_enabled: bool = False
-        self.ortho_enabled: bool = False
-        self.gizmo_world_orientation_enabled: bool = False
-
-        # Кнопки (найдутся в start)
-        self._colliders_btn: IconButton | None = None
-        self._navmesh_btn: IconButton | None = None
-        self._wireframe_btn: IconButton | None = None
-        self._ortho_btn: IconButton | None = None
-        self._gizmo_orientation_btn: IconButton | None = None
+        self.active_in_editor = True
+        self.colliders_enabled = False
+        self.navmesh_enabled = True
+        self.wireframe_enabled = False
+        self.ortho_enabled = False
+        self.gizmo_world_orientation_enabled = False
+        self._camera: CameraComponent | None = None
+        self._gizmo = None
+        self._request_render: Callable[[], None] | None = None
 
     @property
-    def viewport(self) -> "Viewport | None":
-        """Получает viewport через CameraComponent."""
-        if self._camera_component is not None:
-            return self._camera_component.viewport
-        return None
+    def camera(self) -> CameraComponent | None:
+        return self._camera
 
-    def start(self) -> None:
-        """Инициализация при старте."""
-        self._setup()
+    @property
+    def gizmo_orientation_mode(self) -> str:
+        return "world" if self.gizmo_world_orientation_enabled else "local"
 
-    def on_scene_active(self) -> None:
-        """Перепривязка при активации сцены (после возврата из INACTIVE)."""
-        self._setup()
+    def bind_runtime(
+        self,
+        *,
+        camera: CameraComponent | None,
+        gizmo,
+        request_render: Callable[[], None] | None,
+    ) -> bool:
+        """Inject frontend/runtime capabilities and apply serialized state."""
 
-    def _setup(self) -> None:
-        """Инициализация: поиск компонентов и привязка обработчиков."""
-        self._find_camera_component()
-        self._find_ui_component()
-        self._bind_buttons()
+        if camera is None:
+            log.error("[EditorCameraUIController] camera capability is unavailable")
+        if gizmo is None:
+            log.error("[EditorCameraUIController] transform gizmo capability is unavailable")
+        if request_render is None:
+            log.error("[EditorCameraUIController] render-update callback is unavailable")
+        self._camera = camera
+        self._gizmo = gizmo
+        self._request_render = request_render
+        self.resync()
+        return camera is not None and gizmo is not None and request_render is not None
 
-        self._sync_button_states()
+    def unbind_runtime(self) -> None:
+        self._camera = None
+        self._gizmo = None
+        self._request_render = None
 
-    def _find_camera_component(self) -> None:
-        """Ищет CameraComponent на своей entity или родителях."""
-        entity = self.entity
-        while entity is not None:
-            comp = entity.get_component(CameraComponent)
-            if comp is not None:
-                self._camera_component = comp
-                return
-            entity = entity.parent
+    def resync(self) -> None:
+        """Apply all five persisted modes to currently injected capabilities."""
 
-    def _find_ui_component(self) -> None:
-        """Ищет UIComponent на своей Entity."""
-        if self.entity is None:
-            return
-        comp = self.entity.get_component(UIComponent)
-        if comp is not None:
-            self._ui_component = comp
-
-    def _bind_buttons(self) -> None:
-        """Привязка обработчиков к кнопкам."""
-        if self._ui_component is None:
-            return
-
-        self._colliders_btn = self._ui_component.find("colliders_btn")
-        if self._colliders_btn is not None:
-            self._colliders_btn.on_click = self._on_colliders_click
-
-        self._navmesh_btn = self._ui_component.find("navmesh_btn")
-        if self._navmesh_btn is not None:
-            self._navmesh_btn.on_click = self._on_navmesh_click
-
-        self._wireframe_btn = self._ui_component.find("wireframe_btn")
-        if self._wireframe_btn is not None:
-            self._wireframe_btn.on_click = self._on_wireframe_click
-
-        self._ortho_btn = self._ui_component.find("ortho_btn")
-        if self._ortho_btn is not None:
-            self._ortho_btn.on_click = self._on_ortho_click
-
-        self._gizmo_orientation_btn = self._ui_component.find("gizmo_orientation_btn")
-        if self._gizmo_orientation_btn is not None:
-            self._gizmo_orientation_btn.on_click = self._on_gizmo_orientation_click
-
-    def _sync_button_states(self) -> None:
-        """Применяет сохранённые состояния к кнопкам и пассам."""
-        # Colliders
-        self._set_render_category_enabled(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
-        if self._colliders_btn is not None:
-            self._colliders_btn.active = self.colliders_enabled
-
-        # NavMesh / editor debug overlay
-        self._set_render_category_enabled(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
-        if self._navmesh_btn is not None:
-            self._navmesh_btn.active = self.navmesh_enabled
-
-        # Wireframe
-        color_pass = self._find_pass_by_name("Color")
-        transparent_pass = self._find_pass_by_name("Transparent")
-        if color_pass is not None:
-            py_pass = color_pass.to_python()
-            if py_pass is not None:
-                py_pass.wireframe = self.wireframe_enabled
-        if transparent_pass is not None:
-            py_pass = transparent_pass.to_python()
-            if py_pass is not None:
-                py_pass.wireframe = self.wireframe_enabled
-        if self._wireframe_btn is not None:
-            self._wireframe_btn.active = self.wireframe_enabled
-
-        # Ortho
-        if self._camera_component is not None:
-            self._camera_component.projection_type = "orthographic" if self.ortho_enabled else "perspective"
-        if self._ortho_btn is not None:
-            self._ortho_btn.active = self.ortho_enabled
-
-        # Transform gizmo orientation
-        self._apply_gizmo_orientation()
-
-    def _find_pass_by_name(self, pass_name: str):
-        """Ищет пасс по имени в pipeline."""
-        vp = self.viewport
-        if vp is None or vp.render_target is None or vp.render_target.pipeline is None:
-            return None
-        for p in vp.render_target.pipeline.passes:
-            if p.pass_name == pass_name:
-                return p
-        return None
-
-    def _set_render_category_enabled(self, category: int, enabled: bool) -> None:
-        """Переключает категорию отрисовки на редакторской камере."""
-        if self._camera_component is None:
-            return
-        mask = int(self._camera_component.render_category_mask)
-        if enabled:
-            mask |= int(category)
+        self._set_render_category(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
+        self._set_render_category(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
+        self._apply_wireframe()
+        if self._camera is None:
+            log.error("[EditorCameraUIController] cannot apply projection without camera")
         else:
-            mask &= ~int(category)
-        self._camera_component.render_category_mask = mask
+            self._camera.projection_type = (
+                "orthographic" if self.ortho_enabled else "perspective"
+            )
+        if self._gizmo is None:
+            log.error("[EditorCameraUIController] cannot apply orientation without transform gizmo")
+        else:
+            self._gizmo.set_orientation_mode(self.gizmo_orientation_mode)
+
+    def toggle_colliders(self) -> None:
+        self.colliders_enabled = not self.colliders_enabled
+        self._set_render_category(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
+        self._request_update()
+
+    def toggle_navmesh(self) -> None:
+        self.navmesh_enabled = not self.navmesh_enabled
+        self._set_render_category(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
+        self._request_update()
+
+    def toggle_wireframe(self) -> None:
+        self.wireframe_enabled = not self.wireframe_enabled
+        self._apply_wireframe()
+        self._request_update()
+
+    def toggle_projection(self) -> None:
+        self.ortho_enabled = not self.ortho_enabled
+        if self._camera is None:
+            log.error("[EditorCameraUIController] cannot toggle projection without camera")
+        else:
+            self._camera.projection_type = (
+                "orthographic" if self.ortho_enabled else "perspective"
+            )
+        self._request_update()
+
+    def toggle_gizmo_orientation(self) -> None:
+        self.gizmo_world_orientation_enabled = not self.gizmo_world_orientation_enabled
+        if self._gizmo is None:
+            log.error("[EditorCameraUIController] cannot toggle orientation without transform gizmo")
+        else:
+            self._gizmo.set_orientation_mode(self.gizmo_orientation_mode)
+        self._request_update()
+
+    def _set_render_category(self, category: int, enabled: bool) -> None:
+        if self._camera is None:
+            log.error("[EditorCameraUIController] cannot change render category without camera")
+            return
+        mask = int(self._camera.render_category_mask)
+        self._camera.render_category_mask = mask | int(category) if enabled else mask & ~int(category)
+
+    def _apply_wireframe(self) -> None:
+        color_pass = self._find_pass("Color")
+        transparent_pass = self._find_pass("Transparent")
+        if color_pass is None:
+            log.error("[EditorCameraUIController] Color render pass is unavailable")
+        else:
+            color_pass.wireframe = self.wireframe_enabled
+        if transparent_pass is None:
+            log.error("[EditorCameraUIController] Transparent render pass is unavailable")
+        else:
+            transparent_pass.wireframe = self.wireframe_enabled
+
+    def _find_pass(self, pass_name: str):
+        if self._camera is None or self._camera.viewport is None:
+            return None
+        render_target = self._camera.viewport.render_target
+        if render_target is None or render_target.pipeline is None:
+            return None
+        for pass_ref in render_target.pipeline.passes:
+            if pass_ref.pass_name == pass_name:
+                return pass_ref.to_python()
+        return None
 
     def _request_update(self) -> None:
-        """Request a scene render after changing an editor-camera mode."""
-        try:
-            from termin.editor._editor_native import EditorInteractionSystem
-        except Exception as error:
-            log.error(f"[EditorCameraUIController] cannot import EditorInteractionSystem: {error}")
+        if self._request_render is None:
+            log.error("[EditorCameraUIController] render-update callback is unavailable")
             return
-
-        interaction_system = EditorInteractionSystem.instance()
-        if interaction_system is None:
-            log.error("[EditorCameraUIController] cannot request update: interaction system is unavailable")
-            return
-        if interaction_system.on_request_update is None:
-            log.error("[EditorCameraUIController] cannot request update: callback is unavailable")
-            return
-        interaction_system.on_request_update()
-
-    def _apply_gizmo_orientation(self, *, request_update: bool = False) -> None:
-        """Переключает ориентацию transform gizmo между local и global."""
-        mode = "world" if self.gizmo_world_orientation_enabled else "local"
-
-        if self._gizmo_orientation_btn is not None:
-            self._gizmo_orientation_btn.active = self.gizmo_world_orientation_enabled
-            self._gizmo_orientation_btn.icon = "G" if self.gizmo_world_orientation_enabled else "L"
-            self._gizmo_orientation_btn.tooltip = (
-                "Transform Gizmo: Global"
-                if self.gizmo_world_orientation_enabled
-                else "Transform Gizmo: Local"
-            )
-
-        try:
-            from termin.editor._editor_native import EditorInteractionSystem
-        except Exception as e:
-            log.error(f"[EditorCameraUIController] cannot import EditorInteractionSystem: {e}")
-            return
-
-        interaction_system = EditorInteractionSystem.instance()
-        if interaction_system is None:
-            log.error("[EditorCameraUIController] cannot set gizmo orientation: interaction system is unavailable")
-            return
-
-        transform_gizmo = interaction_system.transform_gizmo
-        if transform_gizmo is None:
-            log.error("[EditorCameraUIController] cannot set gizmo orientation: transform gizmo is unavailable")
-            return
-
-        transform_gizmo.set_orientation_mode(mode)
-        if request_update and interaction_system.on_request_update is not None:
-            interaction_system.on_request_update()
-
-    def _on_colliders_click(self) -> None:
-        """Переключает отображение коллайдеров."""
-        self.colliders_enabled = not self.colliders_enabled
-
-        self._set_render_category_enabled(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
-        if self._colliders_btn is not None:
-            self._colliders_btn.active = self.colliders_enabled
-        self._request_update()
-
-    def _on_navmesh_click(self) -> None:
-        """Переключает отображение navmesh/editor debug overlay."""
-        self.navmesh_enabled = not self.navmesh_enabled
-
-        self._set_render_category_enabled(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
-        if self._navmesh_btn is not None:
-            self._navmesh_btn.active = self.navmesh_enabled
-        self._request_update()
-
-    def _on_wireframe_click(self) -> None:
-        """Переключает wireframe режим."""
-        self.wireframe_enabled = not self.wireframe_enabled
-
-        color_pass_ref = self._find_pass_by_name("Color")
-        transparent_pass_ref = self._find_pass_by_name("Transparent")
-        color_pass = color_pass_ref.to_python() if color_pass_ref is not None else None
-        transparent_pass = (
-            transparent_pass_ref.to_python() if transparent_pass_ref is not None else None
-        )
-
-        if color_pass is not None:
-            color_pass.wireframe = self.wireframe_enabled
-        if transparent_pass is not None:
-            transparent_pass.wireframe = self.wireframe_enabled
-        if self._wireframe_btn is not None:
-            self._wireframe_btn.active = self.wireframe_enabled
-        self._request_update()
-
-    def _on_ortho_click(self) -> None:
-        """Переключает ортографическую камеру."""
-        self.ortho_enabled = not self.ortho_enabled
-
-        if self._camera_component is not None:
-            self._camera_component.projection_type = "orthographic" if self.ortho_enabled else "perspective"
-        if self._ortho_btn is not None:
-            self._ortho_btn.active = self.ortho_enabled
-        self._request_update()
-
-    def _on_gizmo_orientation_click(self) -> None:
-        """Переключает ориентацию transform gizmo."""
-        self.gizmo_world_orientation_enabled = not self.gizmo_world_orientation_enabled
-        self._apply_gizmo_orientation(request_update=True)
+        self._request_render()

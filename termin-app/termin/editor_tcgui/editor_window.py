@@ -502,11 +502,17 @@ class EditorWindowTcgui:
             self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
 
             # Create editor scene attachment (now with rendering controller)
+            from termin.editor_tcgui.camera_overlay import make_tcgui_camera_overlay_factory
+
             self._editor_attachment = EditorSceneAttachment(
                 display=self._editor_display,
                 rendering_controller=self._rendering_controller,
                 rendering_manager=self._rendering_controller._manager,
                 make_editor_pipeline=make_editor_pipeline,
+                camera_overlay_factory=make_tcgui_camera_overlay_factory(
+                    self._interaction_system.transform_gizmo,
+                    self._request_viewport_update,
+                ),
             )
             self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
             self.attach_scene_to_render(self._editor_scene_name)

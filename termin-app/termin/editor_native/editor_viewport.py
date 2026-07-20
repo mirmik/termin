@@ -65,6 +65,7 @@ class NativeEditorViewport:
         self._request_render = request_render
         self._resize_connection = None
         self._ui_overlays: dict[str, object] = {}
+        self._camera_overlay = None
         self._overlay_drawer: Callable[[], bool] | None = None
         self._closed = False
         from termin.editor_core.viewport_geometry_controller import (
@@ -183,6 +184,16 @@ class NativeEditorViewport:
             request_render=request_render,
         )
         runtime._resize_connection = widget.connect_before_resize(runtime._on_before_resize)
+        try:
+            from termin.editor_native.camera_overlay import (
+                NativeEditorCameraOverlayProjection,
+            )
+
+            runtime._camera_overlay = NativeEditorCameraOverlayProjection.create(runtime)
+        except Exception:
+            _logger.exception("Native editor camera controls failed to initialize")
+            runtime.close()
+            raise
         return runtime
 
     @property
@@ -285,6 +296,8 @@ class NativeEditorViewport:
         index, generation = viewport._viewport_handle()
         if not self.input_manager.rebind(index, generation, self.display.tc_display_ptr):
             raise RuntimeError("failed to rebind editor viewport input manager")
+        if self._camera_overlay is not None:
+            self._camera_overlay.rebind_camera()
 
     def _on_before_resize(self, _previous, _next) -> None:
         self._request_render()
@@ -297,6 +310,9 @@ class NativeEditorViewport:
         from termin.editor._editor_native import EditorInteractionSystem
 
         self._overlay_drawer = None
+        if self._camera_overlay is not None:
+            self._camera_overlay.close()
+            self._camera_overlay = None
         while self._ui_overlays:
             self.remove_overlay(next(iter(self._ui_overlays)))
         if self._resize_connection is not None:

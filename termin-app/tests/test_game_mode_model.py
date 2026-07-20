@@ -293,7 +293,8 @@ class _Camera:
 
 
 class _CameraManager:
-    def __init__(self):
+    def __init__(self, *, camera_overlay_factory=None):
+        self.camera_overlay_factory = camera_overlay_factory
         self.camera = _Camera()
         self.editor_entities = _Entity()
 

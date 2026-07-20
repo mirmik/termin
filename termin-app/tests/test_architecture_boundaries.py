@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 
@@ -6,6 +7,35 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_editor_camera_mode_controller_has_no_frontend_dependency() -> None:
+    sources = (
+        REPO_ROOT / "termin-app/termin/editor_core/editor_camera.py",
+        REPO_ROOT / "termin-app/termin/editor_core/editor_camera_ui_controller.py",
+    )
+    forbidden_modules = ("tcgui", "termin.gui_native")
+    forbidden_names = ("UIComponent", "EditorInteractionSystem")
+    offenders: list[str] = []
+
+    for source in sources:
+        text = _read_text(source)
+        tree = ast.parse(text)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported = tuple(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                imported = (node.module or "",)
+            else:
+                continue
+            for module in imported:
+                if module.startswith(forbidden_modules):
+                    offenders.append(f"{source.name}: {module}")
+        for name in forbidden_names:
+            if name in text:
+                offenders.append(f"{source.name}: {name}")
+
+    assert offenders == []
 
 
 def test_runtime_types_have_no_incremental_publication_api() -> None:
