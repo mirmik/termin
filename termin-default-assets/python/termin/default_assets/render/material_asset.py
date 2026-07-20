@@ -279,28 +279,57 @@ def _apply_texture_defaults(phase, shader_phase, rm):
 
 def _apply_canonical_property_defaults(phase, properties: list[dict], uniforms: dict) -> None:
     """Populate material values from the canonical program schema."""
-    from termin.geombase import Vec3, Vec4
+    from termin.geombase import Mat44, Mat44f, Vec2, Vec3, Vec4
 
+    def apply_value(name: str, prop_type: str, value) -> None:
+        if prop_type == "Float":
+            phase.set_uniform_float(name, float(value))
+        elif prop_type in ("Int", "Bool"):
+            phase.set_uniform_int(name, int(value))
+        elif prop_type == "Vec2":
+            vector = value if isinstance(value, Vec2) else Vec2(*value[:2])
+            phase.set_uniform_vec2(name, vector)
+        elif prop_type == "Vec3":
+            vector = value if isinstance(value, Vec3) else Vec3(*value[:3])
+            phase.set_uniform_vec3(name, vector)
+        elif prop_type in ("Vec4", "Color"):
+            vector = value if isinstance(value, Vec4) else Vec4(*value[:4])
+            phase.set_uniform_vec4(name, vector)
+        elif prop_type == "Mat4":
+            if isinstance(value, (Mat44, Mat44f)):
+                matrix = value
+            else:
+                if len(value) != 16:
+                    log.error(
+                        f"[MaterialAsset] Mat4 property '{name}' requires 16 default components; "
+                        f"got {len(value)}"
+                    )
+                    raise ValueError(f"Mat4 property '{name}' requires 16 components")
+                matrix = Mat44f.zero()
+                for column in range(4):
+                    for row in range(4):
+                        matrix[column, row] = float(value[column * 4 + row])
+            phase.set_param(name, matrix)
+
+    property_types = {prop["name"]: prop["property_type"] for prop in properties}
     for prop in properties:
         default = prop.get("default")
         if default is None:
             continue
-        name = prop["name"]
-        prop_type = prop["property_type"]
-        if prop_type == "Float":
-            phase.set_uniform_float(name, float(default))
-        elif prop_type in ("Int", "Bool"):
-            phase.set_uniform_int(name, int(default))
-        elif prop_type == "Vec3" and len(default) >= 3:
-            phase.set_uniform_vec3(name, Vec3(*default[:3]))
-        elif prop_type in ("Vec4", "Color") and len(default) >= 4:
-            phase.set_uniform_vec4(name, Vec4(*default[:4]))
+        apply_value(prop["name"], prop["property_type"], default)
 
     for name, value in uniforms.items():
-        if isinstance(value, Vec3):
+        prop_type = property_types.get(name)
+        if prop_type is not None:
+            apply_value(name, prop_type, value)
+        elif isinstance(value, Vec2):
+            phase.set_uniform_vec2(name, value)
+        elif isinstance(value, Vec3):
             phase.set_uniform_vec3(name, value)
         elif isinstance(value, Vec4):
             phase.set_uniform_vec4(name, value)
+        elif isinstance(value, (Mat44, Mat44f)):
+            phase.set_param(name, value)
         elif isinstance(value, float):
             phase.set_uniform_float(name, value)
         elif isinstance(value, bool):
