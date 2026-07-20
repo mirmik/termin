@@ -166,7 +166,7 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         return _PipelineCandidate(pipeline=pipeline, graph_data=data)
 
     def _prepare_pass_list_candidate(self, data: dict) -> _PipelineCandidate | None:
-        """Deserialize a legacy pass-list document without modifying live state."""
+        """Compile a supported pass-list document without modifying live state."""
         from termin_assets import get_resource_manager
         from termin.render_framework import RenderPipeline
 
