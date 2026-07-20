@@ -59,8 +59,9 @@ class _Surface:
 
 
 class _Display:
-    def __init__(self, *, surface, name: str, editor_only: bool) -> None:
-        self.surface = surface
+    def __init__(self, device, width: int, height: int, *, name: str, editor_only: bool) -> None:
+        self.device = device
+        self.size = (width, height)
         self.name = name
         self.editor_only = editor_only
         self.index = 41
@@ -68,8 +69,24 @@ class _Display:
         self.handle = (self.index, self.generation)
         self.destroyed = False
 
+    @classmethod
+    def offscreen(
+        cls, device, width: int, height: int, *, name: str, editor_only: bool
+    ):
+        return cls(device, width, height, name=name, editor_only=editor_only)
+
     def is_valid(self) -> bool:
         return not self.destroyed
+
+    def get_tgfx_color_tex_id(self) -> int:
+        return 17
+
+    def framebuffer_size(self) -> tuple[int, int]:
+        return self.size
+
+    def resize(self, width: int, height: int) -> bool:
+        self.size = (width, height)
+        return True
 
     def dispatch_pointer_move(self, _x, _y) -> bool:
         return True
@@ -275,7 +292,6 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         def detach(self) -> None:
             self.detached = True
 
-    monkeypatch.setattr(termin.display, "FBOSurface", _Surface)
     monkeypatch.setattr(termin.display, "Display", _Display)
     monkeypatch.setattr(editor_native, "EditorInteractionSystem", _Interaction)
     monkeypatch.setattr(editor_native, "EditorViewportInputManager", InputManager)
@@ -364,7 +380,6 @@ root:
     assert runtime.attachment.closed
     assert manager.removed == [runtime.display]
     assert runtime.display.destroyed
-    assert runtime.surface.closed
     assert _Interaction.instance() is None
     assert not overlay_root.alive
     assert not runtime.root.alive

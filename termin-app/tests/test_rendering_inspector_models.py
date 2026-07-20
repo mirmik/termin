@@ -137,7 +137,7 @@ def test_display_inspector_snapshot_and_edits():
     snapshot = controller.set_target(display)
 
     assert snapshot.name == "Game"
-    assert snapshot.surface_type == "_Surface"
+    assert snapshot.surface_type == "display-owned"
     assert snapshot.size == (1280, 720)
     assert snapshot.debug_identity == "(123, 1)"
 

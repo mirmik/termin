@@ -1,220 +1,178 @@
 #include "termin/platform/offscreen_render_surface.hpp"
 
 #include <algorithm>
-#include <memory>
-#include <vector>
+#include <new>
 
 #include <tcbase/tc_log.hpp>
+#include "render/tc_display.h"
+#include "render/tc_render_surface.h"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
 
 namespace termin {
-
 namespace {
 
-struct OffscreenSurfacePoolEntry {
-    std::unique_ptr<OffscreenRenderSurface> surface;
-    uint32_t generation = 1;
+class OffscreenRenderSurface {
+public:
+    OffscreenRenderSurface(tgfx::IRenderDevice* device, int width, int height)
+        : device_(device)
+        , width_(std::max(1, width))
+        , height_(std::max(1, height)) {
+        tc_render_surface_init(&surface_, &s_vtable, &delete_storage);
+        surface_.body = this;
+        allocate_textures();
+    }
+
+    ~OffscreenRenderSurface() = default;
+
+    tc_render_surface* tc_surface() { return &surface_; }
+    bool is_valid() const { return device_ && color_tex_ && depth_tex_; }
+
+private:
+    tgfx::IRenderDevice* device_ = nullptr;
+    tc_render_surface surface_{};
+    tgfx::TextureHandle color_tex_{};
+    tgfx::TextureHandle depth_tex_{};
+    int width_ = 0;
+    int height_ = 0;
+
+    static const tc_render_surface_vtable s_vtable;
+
+    void allocate_textures() {
+        if (!device_) {
+            tc::Log::error("OffscreenRenderSurface::allocate_textures: device is null");
+            return;
+        }
+
+        tgfx::TextureDesc color_desc;
+        color_desc.width = static_cast<uint32_t>(width_);
+        color_desc.height = static_cast<uint32_t>(height_);
+        color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        color_desc.usage = tgfx::TextureUsage::Sampled |
+                           tgfx::TextureUsage::ColorAttachment |
+                           tgfx::TextureUsage::CopySrc |
+                           tgfx::TextureUsage::CopyDst;
+        color_tex_ = device_->create_texture(color_desc);
+
+        tgfx::TextureDesc depth_desc;
+        depth_desc.width = static_cast<uint32_t>(width_);
+        depth_desc.height = static_cast<uint32_t>(height_);
+        depth_desc.format = tgfx::PixelFormat::D24_UNorm;
+        depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
+                           tgfx::TextureUsage::Sampled |
+                           tgfx::TextureUsage::CopySrc |
+                           tgfx::TextureUsage::CopyDst;
+        depth_tex_ = device_->create_texture(depth_desc);
+        if (!color_tex_ || !depth_tex_) {
+            tc::Log::error("OffscreenRenderSurface: texture allocation failed");
+        }
+    }
+
+    void release_textures() {
+        if (!device_) {
+            color_tex_ = {};
+            depth_tex_ = {};
+            return;
+        }
+        if (color_tex_) {
+            device_->destroy(color_tex_);
+            color_tex_ = {};
+        }
+        if (depth_tex_) {
+            device_->destroy(depth_tex_);
+            depth_tex_ = {};
+        }
+        device_->invalidate_render_target_cache();
+    }
+
+    bool resize(int width, int height) {
+        if (!device_ || width <= 0 || height <= 0) return false;
+        if (width == width_ && height == height_) return true;
+        release_textures();
+        width_ = width;
+        height_ = height;
+        allocate_textures();
+        if (!is_valid()) return false;
+        tc_render_surface_notify_resize(&surface_, width_, height_);
+        return true;
+    }
+
+    static OffscreenRenderSurface* from_surface(tc_render_surface* surface) {
+        return surface
+            ? static_cast<OffscreenRenderSurface*>(surface->body)
+            : nullptr;
+    }
+
+    static void get_size(tc_render_surface* surface, int* width, int* height) {
+        OffscreenRenderSurface* self = from_surface(surface);
+        if (width) *width = self ? self->width_ : 0;
+        if (height) *height = self ? self->height_ : 0;
+    }
+
+    static bool resize_surface(tc_render_surface* surface, int width, int height) {
+        OffscreenRenderSurface* self = from_surface(surface);
+        return self && self->resize(width, height);
+    }
+
+    static uint32_t get_color_texture_id(tc_render_surface* surface) {
+        OffscreenRenderSurface* self = from_surface(surface);
+        return self ? self->color_tex_.id : 0u;
+    }
+
+    static uintptr_t get_graphics_domain_key(tc_render_surface* surface) {
+        OffscreenRenderSurface* self = from_surface(surface);
+        return reinterpret_cast<uintptr_t>(self ? self->device_ : nullptr);
+    }
+
+    static void destroy(tc_render_surface* surface) {
+        OffscreenRenderSurface* self = from_surface(surface);
+        if (!self) return;
+        self->release_textures();
+        self->device_ = nullptr;
+    }
+
+    static void delete_storage(tc_render_surface* surface) {
+        delete from_surface(surface);
+    }
 };
 
-std::vector<OffscreenSurfacePoolEntry>& offscreen_surface_pool() {
-    static auto* pool = new std::vector<OffscreenSurfacePoolEntry>();
-    return *pool;
-}
+const tc_render_surface_vtable OffscreenRenderSurface::s_vtable = {
+    .get_size = &OffscreenRenderSurface::get_size,
+    .resize = &OffscreenRenderSurface::resize_surface,
+    .get_color_texture_id = &OffscreenRenderSurface::get_color_texture_id,
+    .get_graphics_domain_key = &OffscreenRenderSurface::get_graphics_domain_key,
+    .destroy = &OffscreenRenderSurface::destroy,
+};
 
 } // namespace
 
-const tc_render_surface_vtable OffscreenRenderSurface::s_vtable = {
-    .get_size = &OffscreenRenderSurface::vtable_get_size,
-    .get_color_texture_id = &OffscreenRenderSurface::vtable_get_color_texture_id,
-    .get_graphics_domain_key = &OffscreenRenderSurface::vtable_get_graphics_domain_key,
-    .destroy = &OffscreenRenderSurface::vtable_destroy,
-};
-
-OffscreenRenderSurface::OffscreenRenderSurface(tgfx::IRenderDevice* device, int width, int height)
-    : device_(device)
-    , width_(std::max(1, width))
-    , height_(std::max(1, height))
-{
-    tc_render_surface_init(&surface_, &s_vtable);
-    surface_.body = this;
-    allocate_textures();
-}
-
-OffscreenRenderSurface::~OffscreenRenderSurface() {
-    release_textures();
-}
-
-void OffscreenRenderSurface::resize(int width, int height) {
-    int next_width = std::max(1, width);
-    int next_height = std::max(1, height);
-    if (next_width == width_ && next_height == height_) {
-        return;
-    }
-
-    release_textures();
-    width_ = next_width;
-    height_ = next_height;
-    allocate_textures();
-    tc_render_surface_notify_resize(&surface_, width_, height_);
-}
-
-std::pair<int, int> OffscreenRenderSurface::size() const {
-    return {width_, height_};
-}
-
-void OffscreenRenderSurface::allocate_textures() {
-    if (!device_) {
-        tc::Log::error("OffscreenRenderSurface::allocate_textures: device is null");
-        return;
-    }
-
-    tgfx::TextureDesc color_desc;
-    color_desc.width = static_cast<uint32_t>(width_);
-    color_desc.height = static_cast<uint32_t>(height_);
-    color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-    color_desc.usage = tgfx::TextureUsage::Sampled |
-                       tgfx::TextureUsage::ColorAttachment |
-                       tgfx::TextureUsage::CopySrc |
-                       tgfx::TextureUsage::CopyDst;
-    color_tex_ = device_->create_texture(color_desc);
-
-    tgfx::TextureDesc depth_desc;
-    depth_desc.width = static_cast<uint32_t>(width_);
-    depth_desc.height = static_cast<uint32_t>(height_);
-    depth_desc.format = tgfx::PixelFormat::D24_UNorm;
-    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
-                       tgfx::TextureUsage::Sampled |
-                       tgfx::TextureUsage::CopySrc |
-                       tgfx::TextureUsage::CopyDst;
-    depth_tex_ = device_->create_texture(depth_desc);
-}
-
-void OffscreenRenderSurface::release_textures() {
-    if (!device_) {
-        color_tex_ = {};
-        depth_tex_ = {};
-        return;
-    }
-    if (color_tex_) {
-        device_->destroy(color_tex_);
-        color_tex_ = {};
-    }
-    if (depth_tex_) {
-        device_->destroy(depth_tex_);
-        depth_tex_ = {};
-    }
-    device_->invalidate_render_target_cache();
-}
-
-OffscreenRenderSurface* OffscreenRenderSurface::from_tc_surface(tc_render_surface* s) {
-    if (!s) return nullptr;
-    return reinterpret_cast<OffscreenRenderSurface*>(s->body);
-}
-
-void OffscreenRenderSurface::vtable_get_size(tc_render_surface* self, int* width, int* height) {
-    auto* surface = from_tc_surface(self);
-    if (!surface) {
-        if (width) *width = 0;
-        if (height) *height = 0;
-        return;
-    }
-    if (width) *width = surface->width_;
-    if (height) *height = surface->height_;
-}
-
-void OffscreenRenderSurface::vtable_destroy(tc_render_surface* self) {
-    (void)self;
-}
-
-uintptr_t OffscreenRenderSurface::vtable_get_graphics_domain_key(tc_render_surface* self) {
-    auto* surface = from_tc_surface(self);
-    return reinterpret_cast<uintptr_t>(surface ? surface->device_ : nullptr);
-}
-
-uint32_t OffscreenRenderSurface::vtable_get_color_texture_id(tc_render_surface* self) {
-    auto* surface = from_tc_surface(self);
-    return surface ? surface->color_tex_.id : 0;
-}
-
-bool offscreen_render_surface_handle_valid(OffscreenRenderSurfaceHandle handle) {
-    auto& pool = offscreen_surface_pool();
-    return handle.index < pool.size() &&
-           pool[handle.index].generation == handle.generation &&
-           pool[handle.index].surface != nullptr;
-}
-
-OffscreenRenderSurfaceHandle offscreen_render_surface_create(
+tc_display_handle create_offscreen_display(
     tgfx::IRenderDevice* device,
     int width,
-    int height
+    int height,
+    const char* name
 ) {
-    auto& pool = offscreen_surface_pool();
-    for (uint32_t i = 0; i < pool.size(); ++i) {
-        auto& entry = pool[i];
-        if (!entry.surface) {
-            entry.surface = std::make_unique<OffscreenRenderSurface>(device, width, height);
-            return {i, entry.generation};
-        }
+    if (!device || width <= 0 || height <= 0) {
+        tc::Log::error("create_offscreen_display: device and positive dimensions are required");
+        return TC_DISPLAY_HANDLE_INVALID;
     }
-
-    OffscreenSurfacePoolEntry entry;
-    entry.surface = std::make_unique<OffscreenRenderSurface>(device, width, height);
-    pool.push_back(std::move(entry));
-    return {static_cast<uint32_t>(pool.size() - 1), pool.back().generation};
-}
-
-OffscreenRenderSurface* offscreen_render_surface_get(OffscreenRenderSurfaceHandle handle) {
-    if (!offscreen_render_surface_handle_valid(handle)) {
-        return nullptr;
-    }
-    return offscreen_surface_pool()[handle.index].surface.get();
-}
-
-OffscreenRenderSurfaceHandle offscreen_render_surface_find(tc_render_surface* surface) {
+    auto* surface = new (std::nothrow) OffscreenRenderSurface(device, width, height);
     if (!surface) {
-        return {};
+        tc::Log::error("create_offscreen_display: surface allocation failed");
+        return TC_DISPLAY_HANDLE_INVALID;
     }
-    auto& pool = offscreen_surface_pool();
-    for (uint32_t i = 0; i < pool.size(); ++i) {
-        auto& entry = pool[i];
-        if (entry.surface && entry.surface->tc_surface() == surface) {
-            return {i, entry.generation};
-        }
+    if (!surface->is_valid()) {
+        tc::Log::error("create_offscreen_display: texture allocation failed");
+        tc_render_surface_delete_unowned(surface->tc_surface());
+        return TC_DISPLAY_HANDLE_INVALID;
     }
-    return {};
-}
-
-void offscreen_render_surface_retain(OffscreenRenderSurfaceHandle handle) {
-    if (auto* surface = offscreen_render_surface_get(handle)) {
-        surface->retain();
+    tc_display_handle display = tc_display_new(name ? name : "Display", surface->tc_surface());
+    if (!tc_display_handle_valid(display)) {
+        tc_render_surface_delete_unowned(surface->tc_surface());
     }
-}
-
-void offscreen_render_surface_release(OffscreenRenderSurfaceHandle handle) {
-    if (auto* surface = offscreen_render_surface_get(handle)) {
-        surface->release();
-    }
-}
-
-bool offscreen_render_surface_destroy(OffscreenRenderSurfaceHandle handle) {
-    if (!offscreen_render_surface_handle_valid(handle)) {
-        return false;
-    }
-
-    auto& entry = offscreen_surface_pool()[handle.index];
-    if (entry.surface->ref_count() > 0) {
-        tc::Log::error("offscreen_render_surface_destroy: surface is still referenced");
-        return false;
-    }
-
-    entry.surface.reset();
-    entry.generation++;
-    if (entry.generation == 0) {
-        entry.generation = 1;
-    }
-    return true;
+    return display;
 }
 
 } // namespace termin

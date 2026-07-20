@@ -28,7 +28,7 @@ def capture_player_screenshot(
         raise RuntimeError("No tgfx2 device is available")
 
     return capture_surface_screenshot(
-        runtime.surface,
+        runtime.display,
         device,
         output_path=output_path,
         include_image=include_image,

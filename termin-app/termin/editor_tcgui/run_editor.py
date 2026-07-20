@@ -4,7 +4,7 @@ Runs on ``termin.display.BackendWindow`` — backend selection lives in
 the env-var ``TERMIN_BACKEND`` (``opengl`` / ``vulkan``). No raw SDL+GL
 window creation, no per-window tc_gpu_context, no SDL_GL_SHARE_WITH_
 CURRENT_CONTEXT: the process owns a single tgfx2 IRenderDevice (borrowed
-from the BackendWindow) and every renderer — UIRenderer, FBOSurface,
+from the BackendWindow) and every renderer — UIRenderer, display surfaces,
 RenderEngine — lives on it.
 """
 
@@ -217,7 +217,7 @@ def init_editor_tcgui(
     main_window.maximize()
 
     # Process-global tgfx2 context owned by the window. Every renderer
-    # (UIRenderer, FBOSurface, RenderEngine) wraps the same device+ctx
+    # (UIRenderer, display-owned offscreen surface, RenderEngine) uses one device+ctx
     # through it.
     tgfx2_ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())

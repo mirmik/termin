@@ -121,8 +121,7 @@ class DisplayInspectorTcgui(VStack):
             self._display_name = name or (display.name or "")
             self._name_input.text = self._display_name
 
-            surface_type = type(display.surface).__name__ if display.surface is not None else "-"
-            self._surface_value.text = surface_type
+            self._surface_value.text = "display-owned"
 
             try:
                 w, h = display.get_size()

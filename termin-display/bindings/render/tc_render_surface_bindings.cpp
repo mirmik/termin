@@ -3,6 +3,7 @@
 #include <nanobind/stl/tuple.h>
 
 #include "render/tc_render_surface.h"
+#include "tc_render_surface_bindings.hpp"
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
@@ -26,6 +27,19 @@ void python_surface_get_size(tc_render_surface* surface, int* width, int* height
         if (height) *height = h;
     } catch (const std::exception& error) {
         tc::Log::error("python render surface framebuffer_size failed: %s", error.what());
+    }
+}
+
+bool python_surface_resize(tc_render_surface* surface, int width, int height) {
+    if (!surface || !surface->body) return false;
+    nb::gil_scoped_acquire gil;
+    try {
+        bool resized = nb::cast<bool>(surface_object(surface).attr("resize")(width, height));
+        if (resized) tc_render_surface_notify_resize(surface, width, height);
+        return resized;
+    } catch (const std::exception& error) {
+        tc::Log::error("python render surface resize failed: %s", error.what());
+        return false;
     }
 }
 
@@ -62,6 +76,7 @@ void python_surface_destroy(tc_render_surface* surface) {
 
 const tc_render_surface_vtable python_surface_vtable = {
     .get_size = python_surface_get_size,
+    .resize = python_surface_resize,
     .get_color_texture_id = python_surface_get_color_texture_id,
     .get_graphics_domain_key = python_surface_get_graphics_domain_key,
     .destroy = python_surface_destroy,
@@ -69,28 +84,20 @@ const tc_render_surface_vtable python_surface_vtable = {
 
 } // namespace
 
-void bind_tc_render_surface(nb::module_& module) {
-    module.def("_render_surface_new_from_python", [](nb::object python_surface) -> uintptr_t {
-        PyObject* body = python_surface.ptr();
-        Py_INCREF(body);
-        tc_render_surface* surface = tc_render_surface_new_external(
-            body,
-            &python_surface_vtable,
-            sizeof(python_surface_vtable),
-            TC_RENDER_SURFACE_ABI_VERSION);
-        if (!surface) Py_DECREF(body);
-        return reinterpret_cast<uintptr_t>(surface);
-    });
+tc_render_surface* create_python_render_surface(nb::object python_surface) {
+    PyObject* body = python_surface.ptr();
+    Py_INCREF(body);
+    tc_render_surface* surface = tc_render_surface_new_external(
+        body,
+        &python_surface_vtable,
+        sizeof(python_surface_vtable),
+        TC_RENDER_SURFACE_ABI_VERSION);
+    if (!surface) Py_DECREF(body);
+    return surface;
+}
 
-    module.def("_render_surface_free_external", [](uintptr_t pointer) {
-        return tc_render_surface_free_external(
-            reinterpret_cast<tc_render_surface*>(pointer));
-    });
-    module.def("_render_surface_get_ptr", [](uintptr_t pointer) { return pointer; });
-    module.def("_render_surface_notify_resize", [](uintptr_t pointer, int width, int height) {
-        tc_render_surface_notify_resize(
-            reinterpret_cast<tc_render_surface*>(pointer), width, height);
-    });
+void bind_tc_render_surface(nb::module_& module) {
+    (void)module;
 }
 
 } // namespace termin

@@ -72,7 +72,7 @@ stays at the asset/import boundary.
 | `tc_component` | `tc_entity` | Owner/deleter pattern implemented |
 | `tc_pass` | runtime `tc_pipeline` | Owner/deleter pattern implemented and tested |
 | `tc_widget` | `tc_ui_document` | Document-local handles exist; document storage itself is non-canonical (#691) |
-| `tc_render_surface` | `tc_display` | Display attachment now stores a generation handle; ownership transfer and deleter contract remain #686 |
+| `tc_render_surface` | `tc_display` | Owner/deleter pattern implemented by #686; wrappers are non-owning and offscreen storage has no separate pool |
 
 ## Cross-cutting gaps
 

@@ -59,6 +59,39 @@ static void tc_display_init_empty(tc_display* display, uint32_t generation) {
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
 }
 
+static bool tc_display_surface_can_be_adopted(
+    tc_render_surface* surface,
+    const char* operation
+) {
+    if (!surface) return true;
+    if (!surface->vtable || !surface->vtable->get_size || !surface->vtable->resize ||
+        !surface->vtable->get_color_texture_id ||
+        !surface->vtable->get_graphics_domain_key || !surface->vtable->destroy) {
+        tc_log(TC_LOG_ERROR, "[%s] surface has an incomplete vtable", operation);
+        return false;
+    }
+    if (!surface->deleter) {
+        tc_log(TC_LOG_ERROR, "[%s] surface has no storage deleter", operation);
+        return false;
+    }
+    return true;
+}
+
+static bool tc_display_destroy_owned_surface(
+    tc_display_handle handle,
+    tc_render_surface* surface,
+    const char* operation
+) {
+    if (!surface) return true;
+    surface->on_resize = NULL;
+    surface->on_resize_userdata = NULL;
+    if (!tc_render_surface_detach(surface, handle)) {
+        tc_log(TC_LOG_ERROR, "[%s] owned surface attachment is inconsistent", operation);
+        return false;
+    }
+    return tc_render_surface_delete_unowned(surface);
+}
+
 static tc_display* tc_display_get_alive(tc_display_handle handle, const char* operation) {
     if (!g_display_pool) {
         tc_log(TC_LOG_ERROR, "[%s] display pool is not initialized", operation);
@@ -149,10 +182,11 @@ void tc_display_pool_init(void) {
 
 static void tc_display_cleanup(tc_display_handle handle, tc_display* display) {
     if (display->surface) {
-        display->surface->on_resize = NULL;
-        display->surface->on_resize_userdata = NULL;
-        tc_render_surface_detach(display->surface, handle);
+        tc_render_surface* surface = display->surface;
         display->surface = NULL;
+        if (!tc_display_destroy_owned_surface(handle, surface, "tc_display_cleanup")) {
+            tc_log(TC_LOG_ERROR, "[tc_display_cleanup] failed to destroy owned surface");
+        }
     }
 
     tc_display_input_router_destroy(display->input_endpoint);
@@ -203,6 +237,9 @@ size_t tc_display_pool_count(void) {
 tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
     if (!g_display_pool) {
         tc_log(TC_LOG_ERROR, "[tc_display_new] display pool is not initialized");
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
+    if (!tc_display_surface_can_be_adopted(surface, "tc_display_new")) {
         return TC_DISPLAY_HANDLE_INVALID;
     }
     if (g_display_pool->free_count == 0u && !tc_display_pool_grow()) {
@@ -323,16 +360,21 @@ bool tc_display_set_surface(tc_display_handle handle, tc_render_surface* surface
     }
     if (surface == display->surface) return true;
 
+    if (!tc_display_surface_can_be_adopted(surface, "tc_display_set_surface")) {
+        return false;
+    }
+    if (display->surface &&
+        !tc_display_handle_eq(display->surface->attached_display, handle)) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_set_surface] current owned surface attachment is inconsistent");
+        return false;
+    }
+
     // Claim the replacement before touching the current attachment. A failed
     // duplicate attach therefore leaves both displays unchanged.
     if (surface && !tc_render_surface_attach(surface, handle)) return false;
 
-    if (display->surface) {
-        display->surface->on_resize = NULL;
-        display->surface->on_resize_userdata = NULL;
-        tc_render_surface_detach(display->surface, handle);
-    }
-
+    tc_render_surface* previous = display->surface;
     display->surface = surface;
 
     // Subscribe to new surface
@@ -342,12 +384,64 @@ bool tc_display_set_surface(tc_display_handle handle, tc_render_surface* surface
         // Update pixel rects with new surface size
         tc_display_update_all_pixel_rects(handle);
     }
+    if (previous &&
+        !tc_display_destroy_owned_surface(handle, previous, "tc_display_set_surface")) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_set_surface] failed to destroy replaced owned surface");
+    }
     return true;
 }
 
 tc_render_surface* tc_display_get_surface(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_get_surface");
     return display ? display->surface : NULL;
+}
+
+bool tc_display_resize(tc_display_handle handle, int width, int height) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_resize");
+    if (!display || !display->surface) {
+        tc_log(TC_LOG_ERROR, "[tc_display_resize] display has no render surface");
+        return false;
+    }
+    if (width <= 0 || height <= 0) {
+        tc_log(TC_LOG_ERROR, "[tc_display_resize] positive pixel dimensions are required");
+        return false;
+    }
+    if (!tc_render_surface_resize(display->surface, width, height)) {
+        tc_log(TC_LOG_ERROR, "[tc_display_resize] surface rejected resize to %dx%d",
+               width, height);
+        return false;
+    }
+    return true;
+}
+
+uint32_t tc_display_get_color_texture_id(tc_display_handle handle) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_get_color_texture_id");
+    return display && display->surface
+        ? tc_render_surface_get_color_texture_id(display->surface)
+        : 0u;
+}
+
+uintptr_t tc_display_get_graphics_domain_key(tc_display_handle handle) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_get_graphics_domain_key");
+    return display && display->surface
+        ? tc_render_surface_get_graphics_domain_key(display->surface)
+        : 0u;
+}
+
+bool tc_display_validate_output(
+    tc_display_handle handle,
+    uintptr_t expected_graphics_domain_key,
+    uint32_t* color_texture_id
+) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_validate_output");
+    if (!display || !display->surface) {
+        if (color_texture_id) *color_texture_id = 0u;
+        tc_log(TC_LOG_ERROR, "[tc_display_validate_output] display has no render surface");
+        return false;
+    }
+    return tc_render_surface_validate_output(
+        display->surface, expected_graphics_domain_key, color_texture_id);
 }
 
 static bool tc_display_validate_pointer_event(tc_display* display, double x, double y,

@@ -59,7 +59,7 @@ class DisplayInspectorController:
         except Exception:
             _logger.exception("Display inspector failed to query display size")
             size = None
-        surface_type = "—" if display.surface is None else type(display.surface).__name__
+        surface_type = "display-owned"
         return self._publish(
             DisplayInspectorSnapshot(
                 display=display,
