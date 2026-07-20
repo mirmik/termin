@@ -66,6 +66,9 @@ def test_pipeline_graph_reload_compiles_new_pipeline_with_stable_uuid(tmp_path: 
         assert asset is not None
         initial_pipeline = asset.pipeline
         assert initial_pipeline is not None
+        initial_resource = initial_pipeline.canonical_resource
+        assert initial_resource.uuid == "pipeline-uuid"
+        initial_resource_version = initial_resource.version
 
         _write_graph_pipeline(pipeline_path, "pipeline-uuid")
         reload_result = plugin.preload(str(pipeline_path))
@@ -75,6 +78,8 @@ def test_pipeline_graph_reload_compiles_new_pipeline_with_stable_uuid(tmp_path: 
         assert asset.uuid == "pipeline-uuid"
         assert asset.version == 1
         assert asset.cached_data is not initial_pipeline
+        assert asset.cached_data.canonical_resource.uuid == "pipeline-uuid"
+        assert asset.cached_data.canonical_resource.version > initial_resource_version
     finally:
         manager.clear_runtime_state()
 

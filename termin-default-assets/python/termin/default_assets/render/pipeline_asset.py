@@ -147,7 +147,11 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         from termin.render_framework import compile_graph_from_json
 
         try:
-            pipeline = compile_graph_from_json(json.dumps(data))
+            pipeline = compile_graph_from_json(
+                json.dumps(data),
+                resource_uuid=self.uuid,
+                resource_name=self._name,
+            )
         except Exception:
             log.error(
                 f"[PipelineAsset] Failed to compile graph pipeline '{self._name}'",
