@@ -622,7 +622,7 @@ class PlayerRuntime:
             log.error("[PlayerRuntime] Cannot set up input without display")
             return
 
-        input_manager = BasicDisplayInputManager(self._display.tc_display_ptr)
+        input_manager = BasicDisplayInputManager(self._display.handle)
         active_viewports = 0
         for viewport in self._viewports:
             mode = viewport.input_mode or "simple"
@@ -641,7 +641,7 @@ class PlayerRuntime:
                 log.error(f"[PlayerRuntime] Failed to create input manager for viewport '{viewport.name}'")
 
         if self.window is not None:
-            self.window.set_input_display(self._display.tc_display_ptr)
+            self.window.set_input_display(*self._display.handle)
 
         self._input_manager = input_manager
         log.info(f"[PlayerRuntime] Input configured for {active_viewports} viewport(s)")
@@ -762,7 +762,7 @@ class PlayerRuntime:
                 manager.remove_display(self._display)
 
         if self.window is not None:
-            self.window.set_input_display(0)
+            self.window.set_input_display(0xFFFFFFFF, 0)
         if self._input_manager is not None:
             self._input_manager.close()
             self._input_manager = None

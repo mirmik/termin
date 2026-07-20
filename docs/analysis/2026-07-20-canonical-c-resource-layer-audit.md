@@ -61,7 +61,7 @@ stays at the asset/import boundary.
 | `tc_scene` | process-global generation pool | Canonical long-lived runtime object |
 | `tc_viewport` | process-global generation pool | Canonical shape; bootstrap ownership must be made uniform |
 | `tc_render_target` | process-global generation pool | Canonical shape; bootstrap ownership must be made uniform |
-| `tc_display` | individually allocated raw pointer | Non-canonical; tracked by #690 |
+| `tc_display` | process-global generation pool | Canonical storage/interop shape implemented by #685 |
 | `tc_ui_document` | individually allocated raw pointer | Non-canonical; tracked by #691 |
 | `tc_entity` | scene-owned SoA generation pool | Correct second-level form |
 
@@ -72,7 +72,7 @@ stays at the asset/import boundary.
 | `tc_component` | `tc_entity` | Owner/deleter pattern implemented |
 | `tc_pass` | runtime `tc_pipeline` | Owner/deleter pattern implemented and tested |
 | `tc_widget` | `tc_ui_document` | Document-local handles exist; document storage itself is non-canonical (#691) |
-| `tc_render_surface` | `tc_display` | Raw pointer boundary and ownership contract require the #690 migration |
+| `tc_render_surface` | `tc_display` | Display attachment now stores a generation handle; ownership transfer and deleter contract remain #686 |
 
 ## Cross-cutting gaps
 

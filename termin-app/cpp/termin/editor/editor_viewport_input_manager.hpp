@@ -16,7 +16,7 @@ class EditorViewportInputManager {
 public:
     tc_input_manager _tc_im;
     tc_viewport_handle _viewport = TC_VIEWPORT_HANDLE_INVALID;
-    tc_display* _display = nullptr;
+    tc_display_handle _display = TC_DISPLAY_HANDLE_INVALID;
 
 private:
     double _last_cursor_x = 0.0;
@@ -27,15 +27,15 @@ private:
     static tc_input_manager_vtable _vtable;
 
 public:
-    EditorViewportInputManager(tc_viewport_handle viewport, tc_display* display);
+    EditorViewportInputManager(tc_viewport_handle viewport, tc_display_handle display);
     ~EditorViewportInputManager();
 
-    bool rebind(tc_viewport_handle viewport, tc_display* display);
+    bool rebind(tc_viewport_handle viewport, tc_display_handle display);
     void detach();
 
     tc_input_manager* tc_input_manager_ptr() { return &_tc_im; }
     tc_viewport_handle viewport() const { return _viewport; }
-    tc_display* display() const { return _display; }
+    tc_display_handle display() const { return _display; }
 
     // vtable event handlers
     void on_mouse_button(int button, int action, int mods, uint32_t click_count);

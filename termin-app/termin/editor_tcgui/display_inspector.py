@@ -133,7 +133,7 @@ class DisplayInspectorTcgui(VStack):
 
             self._viewports_value.text = str(len(display.viewports))
             self._editor_only.checked = bool(display.editor_only)
-            self._debug.text = f"display=0x{display.tc_display_ptr:X}"
+            self._debug.text = f"display={display.handle}"
         finally:
             self._updating = False
             if self._ui is not None:

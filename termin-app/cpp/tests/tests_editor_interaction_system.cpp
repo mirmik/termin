@@ -19,7 +19,7 @@ TEST_CASE("EditorInteractionSystem ignores release without scene press")
         12.0f,
         34.0f,
         TC_VIEWPORT_HANDLE_INVALID,
-        nullptr);
+        TC_DISPLAY_HANDLE_INVALID);
     interaction.after_render();
 
     CHECK_EQ(click_callbacks, 0);

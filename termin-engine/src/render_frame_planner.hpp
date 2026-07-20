@@ -34,17 +34,17 @@ bool contains_render_target(
 
 void update_viewport_rects(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display = nullptr
+    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
 );
 
 void sync_viewport_render_target_resolutions(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display = nullptr
+    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
 );
 
 OffscreenRenderPlan build_offscreen_render_plan(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display = nullptr
+    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
 );
 
 } // namespace termin::rendering_manager_detail

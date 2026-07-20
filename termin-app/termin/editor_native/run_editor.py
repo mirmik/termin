@@ -617,11 +617,11 @@ def init_editor_native(
 
     def sync_viewport_list() -> None:
         displays = [] if display_workspace is None else list(display_workspace.displays)
-        display_pointers = {display.tc_display_ptr for display in displays}
+        display_handles = {display.handle for display in displays}
         for display in engine.rendering_manager.displays:
-            if display.tc_display_ptr not in display_pointers:
+            if display.handle not in display_handles:
                 displays.append(display)
-                display_pointers.add(display.tc_display_ptr)
+                display_handles.add(display.handle)
         viewport_list_controller.set_displays(displays)
         viewport_list_controller.set_render_targets(engine.rendering_manager.managed_render_targets)
 

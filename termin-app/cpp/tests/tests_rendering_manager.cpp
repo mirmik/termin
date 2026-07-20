@@ -834,8 +834,8 @@ TEST_CASE("RenderingManager preserves host viewport until forced scene teardown"
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
 
-    tc_display* editor_display = tc_display_new("HostDisplay", nullptr);
-    REQUIRE(editor_display != nullptr);
+    tc_display_handle editor_display = tc_display_new("HostDisplay", nullptr);
+    REQUIRE(tc_display_handle_valid(editor_display));
     tc_viewport_handle editor_viewport = tc_viewport_new("HostViewport", scene);
     REQUIRE(tc_viewport_handle_valid(editor_viewport));
     tc_display_add_viewport(editor_display, editor_viewport);
@@ -953,8 +953,8 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     auto viewports = manager.attach_scene_full(scene);
     REQUIRE_EQ(viewports.size(), 1u);
 
-    tc_display* display = manager.get_display_by_name("Display0");
-    REQUIRE(display != nullptr);
+    tc_display_handle display = manager.get_display_by_name("Display0");
+    REQUIRE(tc_display_handle_valid(display));
     REQUIRE_EQ(tc_display_get_viewport_count(display), 1u);
 
     tc_viewport_handle viewport = tc_display_get_first_viewport(display);
@@ -998,8 +998,8 @@ TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty withou
     auto viewports = manager.attach_scene_full(scene);
     REQUIRE_EQ(viewports.size(), 1u);
 
-    tc_display* display = manager.get_display_by_name("Display0");
-    REQUIRE(display != nullptr);
+    tc_display_handle display = manager.get_display_by_name("Display0");
+    REQUIRE(tc_display_handle_valid(display));
     REQUIRE_EQ(tc_display_get_viewport_count(display), 1u);
 
     tc_viewport_handle viewport = tc_display_get_first_viewport(display);
@@ -1080,8 +1080,8 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     REQUIRE(tc_scene_handle_valid(editor_scene));
     tc_scene_set_name(editor_scene, "editor-counts-scene");
 
-    tc_display* editor_display = tc_display_new("Editor", nullptr);
-    REQUIRE(editor_display != nullptr);
+    tc_display_handle editor_display = tc_display_new("Editor", nullptr);
+    REQUIRE(tc_display_handle_valid(editor_display));
     tc_render_target_handle editor_rt = tc_render_target_new("(Editor)");
     REQUIRE(tc_render_target_handle_valid(editor_rt));
     tc_render_target_set_scene(editor_rt, editor_scene);
@@ -1100,7 +1100,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     const size_t baseline_pipelines = tc_pipeline_pool_count();
 
     manager.set_display_factory([](const std::string& name) {
-        tc_display* display = tc_display_new(name.c_str(), nullptr);
+        tc_display_handle display = tc_display_new(name.c_str(), nullptr);
         tc_display_set_auto_remove_when_empty(display, true);
         return display;
     });

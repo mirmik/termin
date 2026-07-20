@@ -46,9 +46,9 @@ class RenderStateStore;
 }
 
 // Factory callback types
-using DisplayFactory = std::function<tc_display*(const std::string& name)>;
+using DisplayFactory = std::function<tc_display_handle(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
-using DisplayRemovedCallback = std::function<void(tc_display*)>;
+using DisplayRemovedCallback = std::function<void(tc_display_handle)>;
 using RenderTargetContextProvider = std::function<bool(
     RenderingManager& manager,
     tc_render_target_handle render_target,
@@ -60,7 +60,7 @@ using RenderTargetContextProvider = std::function<bool(
 
 struct SceneMountRequest {
     tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-    tc_display* display = nullptr;
+    tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
     tc_component* camera = nullptr;
     Rect2f region;
     tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
@@ -156,35 +156,35 @@ public:
     // ========================================================================
 
     // Add display to management (scene display, cleaned up by detach_scene_full)
-    void add_display(tc_display* display);
+    void add_display(tc_display_handle display);
 
     // Remove display from management
-    void remove_display(tc_display* display);
+    void remove_display(tc_display_handle display);
 
     // Get all managed scene displays
-    const std::vector<tc_display*>& displays() const;
+    const std::vector<tc_display_handle>& displays() const;
 
     // Add editor display (skipped by detach_scene_full/unmount_scene)
-    void add_editor_display(tc_display* display);
+    void add_editor_display(tc_display_handle display);
 
     // Remove editor display
-    void remove_editor_display(tc_display* display);
+    void remove_editor_display(tc_display_handle display);
 
     // Get all editor displays
-    const std::vector<tc_display*>& editor_displays() const;
+    const std::vector<tc_display_handle>& editor_displays() const;
 
     // Find display by name (searches both scene and editor displays)
-    tc_display* get_display_by_name(const std::string& name) const;
+    tc_display_handle get_display_by_name(const std::string& name) const;
 
     // Get existing display or create via factory
-    tc_display* get_or_create_display(const std::string& name);
+    tc_display_handle get_or_create_display(const std::string& name);
 
     // Check if display should be auto-removed (empty + auto_remove_when_empty flag)
     // Returns true if display was removed.
-    bool try_auto_remove_display(tc_display* display);
+    bool try_auto_remove_display(tc_display_handle display);
 
     // Return the stable display-owned input endpoint.
-    tc_input_manager* display_input_endpoint(tc_display* display);
+    tc_input_manager* display_input_endpoint(tc_display_handle display);
 
     // ========================================================================
     // Viewport State Management
@@ -216,7 +216,7 @@ public:
     // Render and present a single display for pull-based hosts (WPF/Qt style).
     // Renders RT-backed viewports on this display through the shared offscreen
     // render-target path, then composites them into the display surface.
-    void render_display(tc_display* display);
+    void render_display(tc_display_handle display);
 
     // ========================================================================
     // Rendering - Offscreen-First Model (Full Path)
@@ -244,7 +244,7 @@ public:
 
     // Register a host-created viewport in the engine-owned live topology.
     bool register_viewport_attachment(
-        tc_display* display,
+        tc_display_handle display,
         tc_viewport_handle viewport,
         bool destroy_on_scene_detach = true
     );
@@ -253,7 +253,7 @@ public:
     // Unmount scene from display (removes all viewports showing this scene)
     void unmount_scene(
         tc_scene_handle scene,
-        tc_display* display,
+        tc_display_handle display,
         bool include_host_viewports = false
     );
 
@@ -330,7 +330,7 @@ public:
     // ========================================================================
 
     // Blit viewports to single display
-    void present_display(tc_display* display);
+    void present_display(tc_display_handle display);
 
 private:
     // Render single viewport to its output FBO
@@ -350,7 +350,7 @@ private:
         tc_scene_handle scene,
         const std::string& pipeline_name,
         tc_pipeline_handle pipeline,
-        tc_display* only_display = nullptr
+        tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
     );
 
     bool build_render_target_contexts(

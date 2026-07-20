@@ -364,6 +364,11 @@ struct tc_viewport_handle {
     unsigned int generation;
 };
 
+struct tc_display_handle {
+    unsigned int index;
+    unsigned int generation;
+};
+
 struct tc_pipeline_handle {
     unsigned int index;
     unsigned int generation;
@@ -672,15 +677,15 @@ public:
     RenderEngine* render_engine();
 
     // Display management
-    void add_display(tc_display* display);
-    void remove_display(tc_display* display);
-    tc_display* get_display_by_name(const std::string& name) const;
+    void add_display(tc_display_handle display);
+    void remove_display(tc_display_handle display);
+    tc_display_handle get_display_by_name(const std::string& name) const;
 
     // Rendering - Offscreen-First Model
     void render_all(bool present = true);
     void render_all_offscreen();
     void present_all();
-    void render_display(tc_display* display);
+    void render_display(tc_display_handle display);
 
     // Shutdown
     void shutdown();

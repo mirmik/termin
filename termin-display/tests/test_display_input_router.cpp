@@ -94,11 +94,12 @@ void init_counting_input(CountingInput* input)
 
 int main()
 {
+    tc_display_pool_init();
     FixedSurface fixed_surface;
     tc_render_surface_init(&fixed_surface.surface, &fixed_surface_vtable);
 
-    tc_display* display = tc_display_new("router-test-display", &fixed_surface.surface);
-    assert(display != nullptr);
+    tc_display_handle display = tc_display_new("router-test-display", &fixed_surface.surface);
+    assert(tc_display_handle_valid(display));
 
     tc_viewport_handle left = tc_viewport_new("left", TC_SCENE_HANDLE_INVALID);
     tc_viewport_handle right = tc_viewport_new("right", TC_SCENE_HANDLE_INVALID);
@@ -175,5 +176,6 @@ int main()
     }
 
     tc_display_free(display);
+    tc_display_pool_shutdown();
     return 0;
 }

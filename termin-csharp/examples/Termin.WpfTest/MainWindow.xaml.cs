@@ -492,7 +492,7 @@ public partial class MainWindow : Window
         _nativeDisplayManager = new NativeDisplayManager(_renderSurface, _backend, "WpfDisplay");
 
         // Add display to RenderingManager
-        var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager.DisplayPtr);
+        var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_nativeDisplayManager.DisplayHandle);
         _renderingManager!.add_display(displayWrapper);
         Console.WriteLine("[Init] Display added to RenderingManager");
 
@@ -537,7 +537,7 @@ public partial class MainWindow : Window
         _nativeDisplayManager2 = new NativeDisplayManager(_renderSurface2, _backend2, "WpfDisplay2");
 
         // Add display to RenderingManager
-        var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager2.DisplayPtr);
+        var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_nativeDisplayManager2.DisplayHandle);
         _renderingManager!.add_display(displayWrapper);
         Console.WriteLine("[Init] Display2 added to RenderingManager");
 
@@ -837,7 +837,7 @@ void main() {
                 // Cache WPF's FBO before rendering
 
                 // Render this display's viewports and blit to surface
-                var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager.DisplayPtr);
+                var display = SwigHelpers.ToSwigDisplayHandle(_nativeDisplayManager.DisplayHandle);
                 _renderingManager.render_display(display);
 
                 _renderCount++;
@@ -870,7 +870,7 @@ void main() {
                 // Cache WPF's FBO before rendering
 
                 // Render this display's viewports and blit to surface
-                var display = SwigHelpers.WrapTcDisplayPtr(_nativeDisplayManager2.DisplayPtr);
+                var display = SwigHelpers.ToSwigDisplayHandle(_nativeDisplayManager2.DisplayHandle);
                 _renderingManager.render_display(display);
             }
         }

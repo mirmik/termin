@@ -304,15 +304,15 @@ class ViewportListController:
     @staticmethod
     def _display_valid(display: Any) -> bool:
         try:
-            _display_pointer = display.tc_display_ptr
+            _display_handle = display.handle
             return True
         except (AttributeError, RuntimeError, ReferenceError):
             _logger.exception("Skipping invalid display in viewport list")
             return False
 
     @staticmethod
-    def display_stable_key(display: Any) -> int:
-        return int(display.tc_display_ptr)
+    def display_stable_key(display: Any) -> tuple[int, int]:
+        return display.handle
 
     @staticmethod
     def display_stable_id(display: Any) -> str:

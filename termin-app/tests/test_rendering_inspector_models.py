@@ -41,7 +41,7 @@ class _Surface:
 class _Display:
     def __init__(self, name, pointer):
         self.name = name
-        self.tc_display_ptr = pointer
+        self.handle = (pointer, 1)
         self.surface = _Surface()
         self.viewports = []
         self.editor_only = False
@@ -139,7 +139,7 @@ def test_display_inspector_snapshot_and_edits():
     assert snapshot.name == "Game"
     assert snapshot.surface_type == "_Surface"
     assert snapshot.size == (1280, 720)
-    assert snapshot.debug_identity == "0x7B"
+    assert snapshot.debug_identity == "(123, 1)"
 
     controller.set_name("Preview")
     controller.set_editor_only(True)

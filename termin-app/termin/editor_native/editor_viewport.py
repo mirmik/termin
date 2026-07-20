@@ -148,7 +148,8 @@ class NativeEditorViewport:
             input_manager = EditorViewportInputManager(
                 viewport_index,
                 viewport_generation,
-                display.tc_display_ptr,
+                display.index,
+                display.generation,
             )
             widget.set_surface_host(DisplayViewportHost(surface, display))
         except Exception:
@@ -294,7 +295,9 @@ class NativeEditorViewport:
         if viewport is None:
             raise RuntimeError("editor scene attachment has no viewport for input binding")
         index, generation = viewport._viewport_handle()
-        if not self.input_manager.rebind(index, generation, self.display.tc_display_ptr):
+        if not self.input_manager.rebind(
+            index, generation, self.display.index, self.display.generation
+        ):
             raise RuntimeError("failed to rebind editor viewport input manager")
         if self._camera_overlay is not None:
             self._camera_overlay.rebind_camera()

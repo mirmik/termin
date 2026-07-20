@@ -75,7 +75,7 @@ private:
     struct PendingEvent {
         Vec2f screen{0.0f, 0.0f};
         tc_viewport_handle vp = TC_VIEWPORT_HANDLE_INVALID;
-        tc_display* display = nullptr;
+        tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
         bool valid = false;
     };
     PendingEvent _pending_press;
@@ -138,21 +138,21 @@ public:
 
     // Picking (reads from ID buffer)
   Entity pick_entity_at(Vec2f screen, tc_viewport_handle viewport,
-                        tc_display *display);
+                        tc_display_handle display);
   SurfacePickResult pick_surface_at(Vec2f screen, tc_viewport_handle viewport,
-                                    tc_display *display);
+                                    tc_display_handle display);
 
     // Post-render processing - call once per frame after rendering
     void after_render();
   bool handle_key_event(const KeyEvent &event, Vec2f cursor,
-                        tc_viewport_handle viewport, tc_display *display);
+                        tc_viewport_handle viewport, tc_display_handle display);
 
     // Called by EditorViewportInputManager instances
   void on_mouse_button(int button, int action, int mods, uint32_t click_count,
                        float x, float y, tc_viewport_handle vp,
-                       tc_display *display);
+                       tc_display_handle display);
     void on_mouse_move(float x, float y, float dx, float dy,
-                       tc_viewport_handle vp, tc_display* display);
+                       tc_viewport_handle vp, tc_display_handle display);
 
 private:
     void _process_pending_press();
@@ -161,20 +161,20 @@ private:
     bool _dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick);
     bool _dispatch_viewport_pointer(const ViewportPointerEvent& event);
   bool _start_async_entity_pick(Vec2f screen, tc_viewport_handle vp,
-                                tc_display *display);
+                                tc_display_handle display);
   bool _start_async_surface_pick(Vec2f screen, tc_viewport_handle vp,
-                                 tc_display *display);
+                                 tc_display_handle display);
     void _poll_async_hover_pick();
     void _poll_async_release_pick();
   void _handle_double_click(Vec2f screen, tc_viewport_handle vp,
-                            tc_display *display);
+                            tc_display_handle display);
     void _rebuild_component_visual_gizmos(Entity entity);
     void _clear_component_visual_gizmos();
   bool _snap_transform_gizmo_target(Vec2f cursor, tc_viewport_handle viewport,
-                                      tc_display* display);
+                                      tc_display_handle display);
 
     bool _window_to_fbo_coords(Vec2f screen, tc_viewport_handle vp,
-                               tc_display* display, Vec2i& fbo);
+                               tc_display_handle display, Vec2i& fbo);
   Entity _entity_from_pick_color(const float color[4],
                                  tc_viewport_handle viewport);
   SurfacePickResult _surface_from_pick_color_depth(const float color[4],
@@ -182,7 +182,7 @@ private:
                                                      tc_viewport_handle viewport);
 
     // Get ray from screen coordinates
-    bool _screen_to_ray(Vec2f screen, tc_viewport_handle vp, tc_display* display,
+    bool _screen_to_ray(Vec2f screen, tc_viewport_handle vp, tc_display_handle display,
                         Vec3f& origin, Vec3f& direction);
 
     void _request_update();

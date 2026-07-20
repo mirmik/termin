@@ -122,7 +122,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
         _displayManager = new NativeDisplayManager(_renderSurface, _backend!, "SceneViewer");
 
         // Add display to rendering manager
-        var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_displayManager.DisplayPtr);
+        var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
         _renderingManager.add_display(displayWrapper);
 
         // Create internal entities (camera)
@@ -299,7 +299,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
         // Render this display
-        var display = SwigHelpers.WrapTcDisplayPtr(_displayManager.DisplayPtr);
+        var display = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
         _renderingManager.render_display(display);
 
         // Debug output once per second

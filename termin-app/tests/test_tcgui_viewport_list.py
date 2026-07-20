@@ -18,7 +18,7 @@ class _Viewport:
 @dataclass
 class _Display:
     name: str
-    tc_display_ptr: int
+    handle: tuple[int, int]
     viewports: list[_Viewport] = field(default_factory=list)
 
 
@@ -32,7 +32,7 @@ class _RenderTarget:
 
 def test_tcgui_viewport_list_is_projection_of_shared_controller():
     viewport = _Viewport("Game")
-    display = _Display("Window", 10, [viewport])
+    display = _Display("Window", (10, 1), [viewport])
     target = _RenderTarget("Target")
     widget = ViewportListWidgetTcgui()
     selected = []

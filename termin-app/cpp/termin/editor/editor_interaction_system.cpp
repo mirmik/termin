@@ -224,7 +224,7 @@ void EditorInteractionSystem::_clear_component_visual_gizmos() {
 void EditorInteractionSystem::on_mouse_button(int button, int action, int mods,
                                               uint32_t click_count, float x,
                                               float y, tc_viewport_handle vp,
-                                              tc_display *display) {
+                                              tc_display_handle display) {
     const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
     if (_dispatch_viewport_pointer(ViewportPointerEvent{
           phase, Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, action, mods})) {
@@ -253,7 +253,7 @@ void EditorInteractionSystem::on_mouse_button(int button, int action, int mods,
 
 void EditorInteractionSystem::on_mouse_move(float x, float y, float dx,
                                             float dy, tc_viewport_handle vp,
-                                            tc_display *display) {
+                                            tc_display_handle display) {
     if (_dispatch_viewport_pointer(ViewportPointerEvent{
           "move", Vec2f{x, y}, Vec2f{dx, dy}, -1, -1, 0})) {
         _request_update();
@@ -276,7 +276,7 @@ void EditorInteractionSystem::on_mouse_move(float x, float y, float dx,
 bool EditorInteractionSystem::handle_key_event(const KeyEvent &event,
     Vec2f cursor,
     tc_viewport_handle viewport,
-                                               tc_display *display) {
+                                               tc_display_handle display) {
     if (event.action != TC_ACTION_PRESS) {
         return false;
     }
@@ -291,7 +291,7 @@ bool EditorInteractionSystem::handle_key_event(const KeyEvent &event,
 }
 
 bool EditorInteractionSystem::_snap_transform_gizmo_target(
-    Vec2f cursor, tc_viewport_handle viewport, tc_display *display) {
+    Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display) {
     if (!_transform_gizmo.can_snap()) {
         tc_log(TC_LOG_WARN,
            "[EditorSnap] active transform target cannot snap has_target=%d "
@@ -374,7 +374,7 @@ void EditorInteractionSystem::after_render() {
 void EditorInteractionSystem::_process_pending_press() {
     Vec2f screen = _pending_press.screen;
     tc_viewport_handle vp = _pending_press.vp;
-    tc_display* display = _pending_press.display;
+    tc_display_handle display = _pending_press.display;
 
     _press_x = screen.x;
     _press_y = screen.y;
@@ -396,7 +396,7 @@ void EditorInteractionSystem::_process_pending_press() {
 void EditorInteractionSystem::_process_pending_release() {
     Vec2f screen = _pending_release.screen;
     tc_viewport_handle vp = _pending_release.vp;
-    tc_display* display = _pending_release.display;
+    tc_display_handle display = _pending_release.display;
 
     // If gizmo handled the press, skip selection
     if (_gizmo_handled_press) {
@@ -443,7 +443,7 @@ void EditorInteractionSystem::_process_pending_release() {
 void EditorInteractionSystem::_process_pending_hover() {
     Vec2f screen = _pending_hover.screen;
     tc_viewport_handle vp = _pending_hover.vp;
-    tc_display* display = _pending_hover.display;
+    tc_display_handle display = _pending_hover.display;
 
   if (!tc_viewport_handle_valid(vp))
     return;
@@ -489,7 +489,7 @@ bool EditorInteractionSystem::_dispatch_viewport_pointer(
 
 bool EditorInteractionSystem::_start_async_entity_pick(Vec2f screen,
                                                        tc_viewport_handle vp,
-                                                       tc_display *display) {
+                                                       tc_display_handle display) {
   if (_async_hover_pick.valid || !tc_viewport_handle_valid(vp))
     return false;
 
@@ -523,7 +523,7 @@ bool EditorInteractionSystem::_start_async_entity_pick(Vec2f screen,
 
 bool EditorInteractionSystem::_start_async_surface_pick(Vec2f screen,
                                                         tc_viewport_handle vp,
-                                                        tc_display *display) {
+                                                        tc_display_handle display) {
     const bool debug_pick = picking_debug_enabled();
   if (_async_release_pick.valid || !tc_viewport_handle_valid(vp))
     return false;
@@ -726,7 +726,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
 
 void EditorInteractionSystem::_handle_double_click(Vec2f screen,
                                                    tc_viewport_handle vp,
-                                                   tc_display *display) {
+                                                   tc_display_handle display) {
     Entity ent = pick_entity_at(screen, vp, display);
     if (!ent.valid()) {
         return;
@@ -778,7 +778,7 @@ void EditorInteractionSystem::_handle_double_click(Vec2f screen,
 
 Entity EditorInteractionSystem::pick_entity_at(Vec2f screen,
                                                tc_viewport_handle viewport,
-                                               tc_display *display) {
+                                               tc_display_handle display) {
     if (!tc_viewport_handle_valid(viewport)) {
     tc_log(TC_LOG_INFO, "[DBG pick] viewport invalid");
     return Entity();
@@ -838,7 +838,7 @@ EditorInteractionSystem::_entity_from_pick_color(const float color[4],
 }
 
 SurfacePickResult EditorInteractionSystem::pick_surface_at(
-    Vec2f screen, tc_viewport_handle viewport, tc_display *display) {
+    Vec2f screen, tc_viewport_handle viewport, tc_display_handle display) {
     SurfacePickResult result;
     const bool debug_pick = picking_debug_enabled();
 
@@ -1147,9 +1147,9 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
 
 bool EditorInteractionSystem::_window_to_fbo_coords(Vec2f screen,
                                                     tc_viewport_handle vp,
-                                                    tc_display *display,
+                                                    tc_display_handle display,
                                                     Vec2i &fbo) {
-  if (!display)
+  if (!tc_display_alive(display))
     return false;
 
     int fb_w, fb_h;
@@ -1182,7 +1182,7 @@ bool EditorInteractionSystem::_window_to_fbo_coords(Vec2f screen,
 
 bool EditorInteractionSystem::_screen_to_ray(Vec2f screen,
                                              tc_viewport_handle vp,
-                                             tc_display *display, Vec3f &origin,
+                                             tc_display_handle display, Vec3f &origin,
                                              Vec3f &direction) {
     (void)display;
 

@@ -46,6 +46,7 @@ const tc_render_surface_vtable valid_vtable = {
 } // namespace
 
 int main() {
+    tc_display_pool_init();
     AdapterState adapter;
     tc_render_surface* external = tc_render_surface_new_external(
         &adapter, &valid_vtable, sizeof(valid_vtable), TC_RENDER_SURFACE_ABI_VERSION);
@@ -66,25 +67,26 @@ int main() {
     assert(tc_render_surface_new_external(
         &adapter, &malformed, sizeof(malformed), TC_RENDER_SURFACE_ABI_VERSION) == nullptr);
 
-    tc_display* first = tc_display_new("first", external);
-    assert(first != nullptr);
+    tc_display_handle first = tc_display_new("first", external);
+    assert(tc_display_handle_valid(first));
     tc_render_surface_resize_fn first_resize = external->on_resize;
     void* first_resize_userdata = external->on_resize_userdata;
-    tc_display* duplicate = tc_display_new("duplicate", external);
-    assert(duplicate == nullptr);
+    tc_display_handle duplicate = tc_display_new("duplicate", external);
+    assert(!tc_display_handle_valid(duplicate));
     assert(external->on_resize == first_resize);
     assert(external->on_resize_userdata == first_resize_userdata);
-    assert(external->attached_display == first);
+    assert(tc_display_handle_eq(external->attached_display, first));
     assert(!tc_render_surface_free_external(external));
     assert(!adapter.destroyed);
 
     tc_display_free(first);
-    assert(external->attached_display == nullptr);
-    tc_display* second = tc_display_new("second", external);
-    assert(second != nullptr);
+    assert(!tc_display_handle_valid(external->attached_display));
+    tc_display_handle second = tc_display_new("second", external);
+    assert(tc_display_handle_valid(second));
     tc_display_free(second);
 
     assert(tc_render_surface_free_external(external));
     assert(adapter.destroyed);
+    tc_display_pool_shutdown();
     return 0;
 }

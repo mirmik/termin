@@ -54,13 +54,12 @@ static tc_scene_handle get_scene_handle(nb::object scene_py) {
     return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
 }
 
-// Helper to extract tc_display* from Python Display object
-static tc_display* get_display_ptr(nb::object display_py) {
-    if (display_py.is_none()) return nullptr;
-    // Display.tc_display_ptr is a property returning int (pointer as int)
-    return reinterpret_cast<tc_display*>(
-        nb::cast<uintptr_t>(display_py.attr("tc_display_ptr"))
-    );
+static tc_display_handle get_display_handle(nb::object display_py) {
+    if (display_py.is_none()) return TC_DISPLAY_HANDLE_INVALID;
+    return tc_display_handle{
+        nb::cast<uint32_t>(display_py.attr("index")),
+        nb::cast<uint32_t>(display_py.attr("generation"))
+    };
 }
 
 // Helper to convert viewport handle tuple
@@ -190,10 +189,10 @@ void bind_rendering_manager(nb::module_& m) {
                 self.set_display_factory(nullptr);
             } else {
                 nb::object stored = factory;
-                self.set_display_factory([stored](const std::string& name) -> tc_display* {
+                self.set_display_factory([stored](const std::string& name) -> tc_display_handle {
                     nb::gil_scoped_acquire gil;
                     nb::object result = stored(name);
-                    return get_display_ptr(result);
+                    return get_display_handle(result);
                 });
             }
         }, nb::arg("factory").none(),
@@ -218,17 +217,17 @@ void bind_rendering_manager(nb::module_& m) {
                 self.set_display_removed_callback(nullptr);
             } else {
                 nb::object stored = callback;
-                self.set_display_removed_callback([stored](tc_display* display) {
+                self.set_display_removed_callback([stored](tc_display_handle display) {
                     nb::gil_scoped_acquire gil;
                     // Wrap in non-owning TcDisplay for Python
-                    stored(TcDisplay::from_ptr(display, false));
+                    stored(TcDisplay::from_handle(display));
                 });
             }
         }, nb::arg("callback").none(),
            "Set callback called when a display is removed (for editor cleanup)")
 
         .def("try_auto_remove_display", [](RenderingManager& self, TcDisplay& display) -> bool {
-            return self.try_auto_remove_display(display.ptr());
+            return self.try_auto_remove_display(display.handle());
         }, nb::arg("display"),
            "Check if display should be auto-removed (empty + flag set). Returns true if removed.")
 
@@ -237,8 +236,8 @@ void bind_rendering_manager(nb::module_& m) {
         // ================================================================
 
         .def("add_display", [](RenderingManager& self, TcDisplay& display, nb::object name_py) {
-            if (display.ptr()) {
-                self.add_display(display.ptr());
+            if (display.is_valid()) {
+                self.add_display(display.handle());
                 if (!name_py.is_none()) {
                     std::string name = nb::cast<std::string>(name_py);
                     display.set_name(name);
@@ -248,22 +247,22 @@ void bind_rendering_manager(nb::module_& m) {
            "Add display to management")
 
         .def("remove_display", [](RenderingManager& self, TcDisplay& display) {
-            if (display.ptr()) {
-                self.remove_display(display.ptr());
+            if (display.is_valid()) {
+                self.remove_display(display.handle());
             }
         }, nb::arg("display"),
            "Remove display from management")
 
         .def("add_editor_display", [](RenderingManager& self, TcDisplay& display) {
-            if (display.ptr()) {
-                self.add_editor_display(display.ptr());
+            if (display.is_valid()) {
+                self.add_editor_display(display.handle());
             }
         }, nb::arg("display"),
            "Add editor display (skipped by detach_scene_full)")
 
         .def("remove_editor_display", [](RenderingManager& self, TcDisplay& display) {
-            if (display.ptr()) {
-                self.remove_editor_display(display.ptr());
+            if (display.is_valid()) {
+                self.remove_editor_display(display.handle());
             }
         }, nb::arg("display"),
            "Remove editor display from management")
@@ -273,7 +272,7 @@ void bind_rendering_manager(nb::module_& m) {
                                                   nb::object viewport_py,
                                                   bool destroy_on_scene_detach) {
             return self.register_viewport_attachment(
-                display.ptr(),
+                display.handle(),
                 get_viewport_handle(viewport_py),
                 destroy_on_scene_detach
             );
@@ -287,21 +286,23 @@ void bind_rendering_manager(nb::module_& m) {
 
         .def_prop_ro("editor_displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
             std::vector<TcDisplay> result;
-            for (tc_display* d : self.editor_displays()) {
-                result.push_back(TcDisplay::from_ptr(d, false));
+            for (tc_display_handle d : self.editor_displays()) {
+                result.push_back(TcDisplay::from_handle(d));
             }
             return result;
         }, "List of editor displays")
 
-        .def("get_display_by_name", [](RenderingManager& self, const std::string& name) -> uintptr_t {
-            tc_display* display = self.get_display_by_name(name);
-            return reinterpret_cast<uintptr_t>(display);
+        .def("get_display_by_name", [](RenderingManager& self, const std::string& name) -> nb::object {
+            tc_display_handle display = self.get_display_by_name(name);
+            return tc_display_alive(display)
+                ? nb::cast(TcDisplay::from_handle(display)) : nb::none();
         }, nb::arg("name"),
-           "Find display by name, returns pointer as int (0 if not found)")
+           "Find display by name, returning a non-owning handle facade")
 
-        .def("get_or_create_display", [](RenderingManager& self, const std::string& name) -> uintptr_t {
-            tc_display* display = self.get_or_create_display(name);
-            return reinterpret_cast<uintptr_t>(display);
+        .def("get_or_create_display", [](RenderingManager& self, const std::string& name) -> nb::object {
+            tc_display_handle display = self.get_or_create_display(name);
+            return tc_display_alive(display)
+                ? nb::cast(TcDisplay::from_handle(display)) : nb::none();
         }, nb::arg("name"),
            "Get existing display or create via factory")
 
@@ -311,30 +312,19 @@ void bind_rendering_manager(nb::module_& m) {
 
         .def_prop_ro("displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
             std::vector<TcDisplay> result;
-            for (tc_display* d : self.displays()) {
-                result.push_back(TcDisplay::from_ptr(d, false));
+            for (tc_display_handle d : self.displays()) {
+                result.push_back(TcDisplay::from_handle(d));
             }
-            for (tc_display* d : self.editor_displays()) {
-                result.push_back(TcDisplay::from_ptr(d, false));
+            for (tc_display_handle d : self.editor_displays()) {
+                result.push_back(TcDisplay::from_handle(d));
             }
             return result;
         }, "List of all managed displays (scene + editor)")
 
-        .def_prop_ro("display_ptrs", [](RenderingManager& self) -> std::vector<uintptr_t> {
-            std::vector<uintptr_t> result;
-            for (tc_display* d : self.displays()) {
-                result.push_back(reinterpret_cast<uintptr_t>(d));
-            }
-            for (tc_display* d : self.editor_displays()) {
-                result.push_back(reinterpret_cast<uintptr_t>(d));
-            }
-            return result;
-        }, "List of display pointers (as int) - all displays")
-
         .def_prop_ro("scene_displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
             std::vector<TcDisplay> result;
-            for (tc_display* d : self.displays()) {
-                result.push_back(TcDisplay::from_ptr(d, false));
+            for (tc_display_handle d : self.displays()) {
+                result.push_back(TcDisplay::from_handle(d));
             }
             return result;
         }, "List of scene displays only (cleaned up by detach_scene_full)")
@@ -344,12 +334,12 @@ void bind_rendering_manager(nb::module_& m) {
             if (!tc_viewport_handle_valid(vh)) return nb::none();
 
             // Search through displays for this viewport
-            for (tc_display* display : self.displays()) {
+            for (tc_display_handle display : self.displays()) {
                 size_t count = tc_display_get_viewport_count(display);
                 for (size_t i = 0; i < count; ++i) {
                     tc_viewport_handle vph = tc_display_get_viewport_at_index(display, i);
                     if (tc_viewport_handle_eq(vph, vh)) {
-                        return nb::cast(TcDisplay::from_ptr(display, false));
+                        return nb::cast(TcDisplay::from_handle(display));
                     }
                 }
             }
@@ -392,8 +382,8 @@ void bind_rendering_manager(nb::module_& m) {
 
         .def("unmount_scene", [](RenderingManager& self, nb::object scene_py, TcDisplay& display) {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            if (display.ptr()) {
-                self.unmount_scene(scene, display.ptr());
+            if (display.is_valid()) {
+                self.unmount_scene(scene, display.handle());
             }
         }, nb::arg("scene"), nb::arg("display"),
            "Unmount scene from display (removes all viewports showing this scene)")
@@ -488,8 +478,8 @@ void bind_rendering_manager(nb::module_& m) {
              "Phase 2: Blit viewport FBOs to displays")
 
         .def("present_display", [](RenderingManager& self, TcDisplay& display) {
-            if (display.ptr()) {
-                self.present_display(display.ptr());
+            if (display.is_valid()) {
+                self.present_display(display.handle());
             }
         }, nb::arg("display"),
            "Blit viewport output_fbos to a single display")
@@ -558,9 +548,9 @@ void bind_rendering_manager(nb::module_& m) {
             stats["pipeline_names"] = pipeline_names;
 
             // Count unmanaged viewports across all displays
-            auto count_unmanaged = [](const std::vector<tc_display*>& disp_list) -> int {
+            auto count_unmanaged = [](const std::vector<tc_display_handle>& disp_list) -> int {
                 int unmanaged = 0;
-                for (tc_display* display : disp_list) {
+                for (tc_display_handle display : disp_list) {
                     size_t count = tc_display_get_viewport_count(display);
                     for (size_t i = 0; i < count; ++i) {
                         tc_viewport_handle vp = tc_display_get_viewport_at_index(display, i);

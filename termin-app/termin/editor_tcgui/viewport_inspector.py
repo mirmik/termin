@@ -231,7 +231,7 @@ class ViewportInspectorTcgui(VStack):
         self._display_combo.on_changed = None
         self._display_combo.clear()
         for disp in self._displays:
-            name = display_names.get(disp.tc_display_ptr, None)
+            name = display_names.get(disp.handle, None)
             self._display_combo.add_item(name or disp.name or "Display")
         self._display_combo.on_changed = old
 

@@ -4,8 +4,8 @@
 
 namespace termin::rendering_manager_detail {
 
-void RenderDisplayRegistry::add_display(tc_display* display) {
-    if (!display) return;
+void RenderDisplayRegistry::add_display(tc_display_handle display) {
+    if (!tc_display_alive(display)) return;
 
     auto it = std::find(displays_.begin(), displays_.end(), display);
     if (it != displays_.end()) return;
@@ -14,11 +14,11 @@ void RenderDisplayRegistry::add_display(tc_display* display) {
 }
 
 void RenderDisplayRegistry::remove_display(
-    tc_display* display,
+    tc_display_handle display,
     const ViewportCleanupCallback& cleanup_viewport,
     const DisplayRemovedCallback& removed_callback
 ) {
-    if (!display) return;
+    if (!tc_display_alive(display)) return;
 
     auto it = std::find(displays_.begin(), displays_.end(), display);
     bool is_editor = false;
@@ -41,8 +41,8 @@ void RenderDisplayRegistry::remove_display(
     }
 }
 
-void RenderDisplayRegistry::add_editor_display(tc_display* display) {
-    if (!display) return;
+void RenderDisplayRegistry::add_editor_display(tc_display_handle display) {
+    if (!tc_display_alive(display)) return;
 
     auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
     if (it != editor_displays_.end()) return;
@@ -51,10 +51,10 @@ void RenderDisplayRegistry::add_editor_display(tc_display* display) {
 }
 
 void RenderDisplayRegistry::remove_editor_display(
-    tc_display* display,
+    tc_display_handle display,
     const ViewportCleanupCallback& cleanup_viewport
 ) {
-    if (!display) return;
+    if (!tc_display_alive(display)) return;
 
     auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
     if (it == editor_displays_.end()) return;
@@ -64,11 +64,11 @@ void RenderDisplayRegistry::remove_editor_display(
 }
 
 bool RenderDisplayRegistry::try_auto_remove_display(
-    tc_display* display,
+    tc_display_handle display,
     const ViewportCleanupCallback& cleanup_viewport,
     const DisplayRemovedCallback& removed_callback
 ) {
-    if (!display) return false;
+    if (!tc_display_alive(display)) return false;
     if (!tc_display_get_auto_remove_when_empty(display)) return false;
     if (tc_display_get_viewport_count(display) > 0) return false;
 
@@ -76,44 +76,44 @@ bool RenderDisplayRegistry::try_auto_remove_display(
     return true;
 }
 
-tc_input_manager* RenderDisplayRegistry::display_input_endpoint(tc_display* display) {
+tc_input_manager* RenderDisplayRegistry::display_input_endpoint(tc_display_handle display) {
     return tc_display_get_input_manager(display);
 }
 
-tc_display* RenderDisplayRegistry::get_display_by_name(const std::string& name) const {
-    for (tc_display* d : displays_) {
+tc_display_handle RenderDisplayRegistry::get_display_by_name(const std::string& name) const {
+    for (tc_display_handle d : displays_) {
         const char* dname = tc_display_get_name(d);
         if (dname && name == dname) {
             return d;
         }
     }
-    for (tc_display* d : editor_displays_) {
+    for (tc_display_handle d : editor_displays_) {
         const char* dname = tc_display_get_name(d);
         if (dname && name == dname) {
             return d;
         }
     }
-    return nullptr;
+    return TC_DISPLAY_HANDLE_INVALID;
 }
 
-tc_display* RenderDisplayRegistry::get_or_create_display(
+tc_display_handle RenderDisplayRegistry::get_or_create_display(
     const std::string& name,
     const DisplayFactory& factory
 ) {
-    tc_display* display = get_display_by_name(name);
-    if (display) {
+    tc_display_handle display = get_display_by_name(name);
+    if (tc_display_alive(display)) {
         return display;
     }
 
     if (factory) {
         display = factory(name);
-        if (display) {
+        if (tc_display_alive(display)) {
             add_display(display);
             return display;
         }
     }
 
-    return nullptr;
+    return TC_DISPLAY_HANDLE_INVALID;
 }
 
 void RenderDisplayRegistry::clear() {
@@ -122,7 +122,7 @@ void RenderDisplayRegistry::clear() {
 }
 
 void RenderDisplayRegistry::cleanup_viewport_states(
-    tc_display* display,
+    tc_display_handle display,
     const ViewportCleanupCallback& cleanup_viewport
 ) {
     if (!cleanup_viewport) return;

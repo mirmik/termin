@@ -21,7 +21,7 @@ public:
     struct ViewportAttachment {
         tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
         tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
-        tc_display* display = nullptr;
+        tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
         bool destroy_on_scene_detach = true;
     };
 
@@ -82,7 +82,7 @@ public:
     bool register_viewport(
         tc_scene_handle scene,
         tc_viewport_handle viewport,
-        tc_display* display,
+        tc_display_handle display,
         bool destroy_on_scene_detach = true
     );
     bool unregister_viewport(tc_viewport_handle viewport);
@@ -94,7 +94,7 @@ public:
         tc_scene_handle scene,
         const std::string& name
     ) const;
-    tc_display* display_for_viewport(tc_viewport_handle viewport) const;
+    tc_display_handle display_for_viewport(tc_viewport_handle viewport) const;
 
     void clear_scene_pipelines(tc_scene_handle scene, bool notify_detach = true);
     void clear_all();

@@ -60,7 +60,8 @@ tc_input_manager_vtable EditorViewportInputManager::_vtable = {
 // Constructor
 // ============================================================================
 
-EditorViewportInputManager::EditorViewportInputManager(tc_viewport_handle viewport, tc_display* display)
+EditorViewportInputManager::EditorViewportInputManager(
+    tc_viewport_handle viewport, tc_display_handle display)
 {
     tc_input_manager_init(&_tc_im, &_vtable);
     _tc_im.userdata = this;
@@ -69,9 +70,9 @@ EditorViewportInputManager::EditorViewportInputManager(tc_viewport_handle viewpo
 
 EditorViewportInputManager::~EditorViewportInputManager() { detach(); }
 
-bool EditorViewportInputManager::rebind(tc_viewport_handle viewport, tc_display* display) {
+bool EditorViewportInputManager::rebind(tc_viewport_handle viewport, tc_display_handle display) {
     detach();
-    if (!tc_viewport_alive(viewport) || !display) {
+    if (!tc_viewport_alive(viewport) || !tc_display_alive(display)) {
         tc_log_error("[EditorViewportInputManager] cannot bind to an invalid viewport/display");
         return false;
     }
@@ -85,7 +86,7 @@ bool EditorViewportInputManager::rebind(tc_viewport_handle viewport, tc_display*
     if (tc_viewport_get_input_manager(_viewport) != &_tc_im) {
         tc_log_error("[EditorViewportInputManager] failed to attach to viewport");
         _viewport = TC_VIEWPORT_HANDLE_INVALID;
-        _display = nullptr;
+        _display = TC_DISPLAY_HANDLE_INVALID;
         return false;
     }
     return true;
@@ -95,7 +96,7 @@ void EditorViewportInputManager::detach() {
     if (tc_viewport_alive(_viewport) && tc_viewport_get_input_manager(_viewport) == &_tc_im)
         tc_viewport_set_input_manager(_viewport, nullptr);
     _viewport = TC_VIEWPORT_HANDLE_INVALID;
-    _display = nullptr;
+    _display = TC_DISPLAY_HANDLE_INVALID;
     _has_cursor = false;
 }
 

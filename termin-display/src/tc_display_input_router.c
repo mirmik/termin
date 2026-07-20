@@ -32,7 +32,7 @@ static const tc_input_manager_vtable g_router_vtable = {
 
 typedef struct tc_display_input_router {
     tc_input_manager base;
-    tc_display* display;
+    tc_display_handle display;
     tc_viewport_handle active_viewport;
     tc_viewport_handle focused_viewport;
     double last_cursor_x;
@@ -40,8 +40,8 @@ typedef struct tc_display_input_router {
     bool has_cursor;
 } tc_display_input_router;
 
-tc_input_manager* tc_display_input_router_create(tc_display* display) {
-    if (!display) return NULL;
+tc_input_manager* tc_display_input_router_create(tc_display_handle display) {
+    if (!tc_display_handle_valid(display)) return NULL;
 
     tc_display_input_router* r = (tc_display_input_router*)calloc(1, sizeof(tc_display_input_router));
     if (!r) {
@@ -68,7 +68,7 @@ void tc_display_input_router_destroy(tc_input_manager* endpoint) {
         tc_log(TC_LOG_ERROR, "[tc_display_input_router_destroy] invalid endpoint");
         return;
     }
-    r->display = NULL;
+    r->display = TC_DISPLAY_HANDLE_INVALID;
     free(r);
 }
 
@@ -81,7 +81,7 @@ static inline tc_display_input_router* router_from(tc_input_manager* self) {
 }
 
 static tc_viewport_handle router_viewport_at_cursor(tc_display_input_router* r) {
-    if (!r->display) return TC_VIEWPORT_HANDLE_INVALID;
+    if (!tc_display_alive(r->display)) return TC_VIEWPORT_HANDLE_INVALID;
     return tc_display_viewport_at_screen(r->display, (float)r->last_cursor_x, (float)r->last_cursor_y);
 }
 
@@ -167,7 +167,7 @@ static void router_on_key(tc_input_manager* self, int key, int scancode, int act
     if (!tc_viewport_handle_valid(viewport)) {
         viewport = r->focused_viewport;
     }
-    if (!tc_viewport_handle_valid(viewport) && r->display) {
+    if (!tc_viewport_handle_valid(viewport) && tc_display_alive(r->display)) {
         viewport = tc_display_get_first_viewport(r->display);
     }
 
@@ -189,7 +189,7 @@ static void router_on_char(tc_input_manager* self, uint32_t codepoint) {
     if (!tc_viewport_handle_valid(viewport)) {
         viewport = r->focused_viewport;
     }
-    if (!tc_viewport_handle_valid(viewport) && r->display) {
+    if (!tc_viewport_handle_valid(viewport) && tc_display_alive(r->display)) {
         viewport = tc_display_get_first_viewport(r->display);
     }
 
