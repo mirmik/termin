@@ -175,6 +175,85 @@ def write_shaders(
         write_shader(package_dir, resources, diagnostics, shader, compiler, requested_targets)
 
 
+def shader_program_to_spec(program: Any) -> dict[str, Any]:
+    if program is None or not program.is_valid:
+        raise ValueError("Cannot export an invalid TcShaderProgram")
+
+    properties: list[dict[str, Any]] = []
+    for prop in program.properties:
+        item: dict[str, Any] = {
+            "name": str(prop["name"]),
+            "property_type": str(prop["property_type"]),
+            "label": str(prop.get("label", "")),
+        }
+        default = prop.get("default")
+        if default is not None:
+            item["default"] = list(default) if isinstance(default, tuple) else default
+        if prop.get("range_min") is not None:
+            item["range_min"] = float(prop["range_min"])
+        if prop.get("range_max") is not None:
+            item["range_max"] = float(prop["range_max"])
+        properties.append(item)
+
+    phases: list[dict[str, Any]] = []
+    for phase in program.phases:
+        shader = phase["shader"]
+        if shader is None or not shader.is_valid:
+            raise ValueError(
+                f"Shader program '{program.uuid}' has stale phase '{phase['phase_mark']}'"
+            )
+        state = phase["state"]
+        phases.append(
+            {
+                "phase_mark": str(phase["phase_mark"]),
+                "priority": int(phase["priority"]),
+                "shader": shader.uuid,
+                "state": {
+                    "polygon_mode": int(state["polygon_mode"]),
+                    "cull": bool(state["cull"]),
+                    "depth_test": bool(state["depth_test"]),
+                    "depth_write": bool(state["depth_write"]),
+                    "blend": bool(state["blend"]),
+                    "blend_src": int(state["blend_src"]),
+                    "blend_dst": int(state["blend_dst"]),
+                    "depth_func": int(state["depth_func"]),
+                },
+            }
+        )
+
+    if not phases:
+        raise ValueError(f"Shader program '{program.uuid}' has no phases")
+    return {
+        "schema_version": 1,
+        "uuid": program.uuid,
+        "name": program.name or program.uuid,
+        "source_path": program.source_path or "runtime-registry",
+        "language": program.language,
+        "features": int(program.features),
+        "properties": properties,
+        "phases": phases,
+    }
+
+
+def write_shader_programs(
+    package_dir: Path,
+    shader_programs: dict[str, dict[str, Any]],
+    resources: list[dict[str, str]],
+) -> None:
+    shader_dir = package_dir / "shaders"
+    shader_dir.mkdir(parents=True, exist_ok=True)
+    for program_uuid, spec in sorted(shader_programs.items()):
+        path = shader_dir / f"{program_uuid}.shader-program.json"
+        write_json(path, spec)
+        resources.append(
+            {
+                "type": "shader_program",
+                "uuid": program_uuid,
+                "path": f"shaders/{program_uuid}.shader-program.json",
+            }
+        )
+
+
 def write_shader(
     package_dir: Path,
     resources: list[dict[str, str]],

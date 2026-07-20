@@ -17,6 +17,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
+#include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
 extern "C" {
@@ -29,7 +30,8 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kShaderUuid = "runtime-loader-test-shader";
+constexpr const char* kProgramUuid = "runtime-loader-test-program";
+constexpr const char* kShaderUuid = "shader-phase-12beb2a809af29f7";
 constexpr const char* kMaterialUuid = "runtime-loader-test-material";
 constexpr const char* kMeshUuid = "runtime-loader-test-mesh";
 constexpr const char* kMeshName = "RuntimeLoaderTestMesh";
@@ -74,6 +76,30 @@ std::string shader_spec() {
     return out.str();
 }
 
+std::string shader_program_spec() {
+    std::ostringstream out;
+    out
+        << "{\n"
+        << "  \"schema_version\": 1,\n"
+        << "  \"uuid\": \"" << kProgramUuid << "\",\n"
+        << "  \"name\": \"RuntimeLoaderTestProgram\",\n"
+        << "  \"source_path\": \"packaged-test\",\n"
+        << "  \"language\": \"glsl\",\n"
+        << "  \"features\": 1,\n"
+        << "  \"properties\": [\n"
+        << "    {\"name\": \"u_color\", \"property_type\": \"Color\", "
+           "\"default\": [1.0, 0.5, 0.25, 1.0]}\n"
+        << "  ],\n"
+        << "  \"phases\": [\n"
+        << "    {\"phase_mark\": \"opaque\", \"priority\": 0, \"shader\": \""
+        << kShaderUuid << "\", \"state\": {\"polygon_mode\": 0, \"cull\": true, "
+           "\"depth_test\": true, \"depth_write\": true, \"blend\": false, "
+           "\"blend_src\": 2, \"blend_dst\": 3, \"depth_func\": 0}}\n"
+        << "  ]\n"
+        << "}\n";
+    return out.str();
+}
+
 std::string mesh_spec() {
     return R"({
   "uuid": "runtime-loader-test-mesh",
@@ -98,6 +124,7 @@ std::string material_spec() {
         << "{\n"
         << "  \"uuid\": \"" << kMaterialUuid << "\",\n"
         << "  \"name\": \"RuntimeLoaderTestMaterial\",\n"
+        << "  \"shader_program\": \"" << kProgramUuid << "\",\n"
         << "  \"phases\": [\n"
         << "    {\"shader\": \"" << kShaderUuid << "\", \"mark\": \"opaque\", \"priority\": 0}\n"
         << "  ],\n"
@@ -119,7 +146,8 @@ std::string manifest() {
     return R"({
   "version": 1,
   "resources": [
-    {"type": "shader", "uuid": "runtime-loader-test-shader", "path": "shaders/test.shader.json"},
+    {"type": "shader", "uuid": "shader-phase-12beb2a809af29f7", "path": "shaders/test.shader.json"},
+    {"type": "shader_program", "uuid": "runtime-loader-test-program", "path": "shaders/test.shader-program.json"},
     {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
     {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"}
   ],
@@ -162,7 +190,8 @@ std::string manifest_with_packaged_texture() {
     {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
     {"type": "texture", "uuid": "runtime-loader-test-texture", "path": "textures/test.texture.json"},
     {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"},
-    {"type": "shader", "uuid": "runtime-loader-test-shader", "path": "shaders/test.shader.json"}
+    {"type": "shader", "uuid": "shader-phase-12beb2a809af29f7", "path": "shaders/test.shader.json"},
+    {"type": "shader_program", "uuid": "runtime-loader-test-program", "path": "shaders/test.shader-program.json"}
   ],
   "scene": "scene.json"
 }
@@ -270,6 +299,7 @@ void write_test_package(const std::filesystem::path& root) {
     write_text(root / "manifest.json", manifest());
     write_text(root / "scene.json", scene_json());
     write_text(root / "shaders" / "test.shader.json", shader_spec());
+    write_text(root / "shaders" / "test.shader-program.json", shader_program_spec());
     write_text(root / "shaders" / "test.frag", R"(
 #version 330 core
 uniform sampler2D u_albedo_texture;
@@ -355,6 +385,16 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
 
     termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
     REQUIRE(material.is_valid());
+    termin::TcShaderProgram program = termin::TcShaderProgram::find(kProgramUuid);
+    REQUIRE(program.is_valid());
+    CHECK_EQ(std::string(material.shader_program_uuid()), std::string(kProgramUuid));
+    CHECK_EQ(material.shader_program_version(), program.version());
+    REQUIRE(program.get() != nullptr);
+    CHECK_EQ(program.get()->property_count, 1u);
+    CHECK_EQ(program.get()->phase_count, 1u);
+    tc_shader* program_phase_shader = tc_shader_get(program.get()->phases[0].shader);
+    REQUIRE(program_phase_shader != nullptr);
+    CHECK_EQ(std::string(program_phase_shader->uuid), std::string(kShaderUuid));
     tc_material_phase* phase = material.default_phase();
     REQUIRE(phase != nullptr);
 
@@ -430,6 +470,19 @@ TEST_CASE("RuntimePackageLoader requires an explicit supported shader language")
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(unsupported.ok);
     CHECK(unsupported.message.find("unsupported language 'spirv'") != std::string::npos);
+}
+
+TEST_CASE("RuntimePackageLoader rejects incompatible shader program schema") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+    write_text(
+        root / "shaders" / "test.shader-program.json",
+        replace_once(shader_program_spec(), "\"schema_version\": 1", "\"schema_version\": 99"));
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(result.ok);
+    CHECK(result.message.find("requires schema_version 1") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or invalid") {

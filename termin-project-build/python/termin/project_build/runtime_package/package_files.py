@@ -23,9 +23,10 @@ def write_clean_package_dir(output_dir: Path) -> None:
 def resource_sort_key(resource: dict[str, str]) -> tuple[int, str]:
     type_order = {
         "shader": 0,
-        "pipeline": 1,
-        "mesh": 2,
-        "material": 3,
+        "shader_program": 1,
+        "pipeline": 2,
+        "mesh": 3,
+        "material": 4,
     }
     resource_type = resource["type"]
     return (type_order.get(resource_type, 100), resource["path"])

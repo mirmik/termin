@@ -10,6 +10,7 @@ from termin.project_build.runtime_package.models import (
     ShaderSpec,
 )
 from termin.project_build.runtime_package.package_files import write_json
+from termin.project_build.runtime_package.shaders import shader_program_to_spec
 from termin.project_build.runtime_package.textures import collect_material_texture_refs
 
 
@@ -19,6 +20,7 @@ def write_materials(
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, ShaderSpec],
+    shader_programs: dict[str, dict[str, Any]],
     default_shader_language: str,
     resource_policy: str,
     default_shader_uuid: str,
@@ -35,6 +37,7 @@ def write_materials(
             name,
             diagnostics,
             shaders,
+            shader_programs,
             default_shader_language,
             resource_policy,
             default_shader_uuid,
@@ -63,6 +66,7 @@ def export_material_spec(
     name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, ShaderSpec],
+    shader_programs: dict[str, dict[str, Any]],
     default_shader_language: str,
     resource_policy: str,
     default_shader_uuid: str,
@@ -73,7 +77,7 @@ def export_material_spec(
 
         material = TcMaterial.from_uuid(uuid_value)
         if material.is_valid:
-            return material_to_spec(material, shaders)
+            return material_to_spec(material, shaders, shader_programs)
     except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -108,7 +112,11 @@ def export_material_spec(
     return None
 
 
-def material_to_spec(material: Any, shaders: dict[str, ShaderSpec]) -> dict[str, Any]:
+def material_to_spec(
+    material: Any,
+    shaders: dict[str, ShaderSpec],
+    shader_programs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
     import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     phases: list[dict[str, Any]] = []
@@ -133,6 +141,25 @@ def material_to_spec(material: Any, shaders: dict[str, ShaderSpec]) -> dict[str,
         "name": material.name or material.uuid,
         "phases": phases,
     }
+    program_uuid = material.shader_program_uuid
+    if program_uuid:
+        from tgfx import TcShaderProgram
+
+        program = TcShaderProgram.find(program_uuid)
+        if not program.is_valid:
+            raise ValueError(
+                f"Material '{material.uuid}' references missing shader program '{program_uuid}'"
+            )
+        for program_phase in program.phases:
+            phase_shader = program_phase["shader"]
+            if not phase_shader.is_valid:
+                raise ValueError(
+                    f"Shader program '{program_uuid}' has stale phase "
+                    f"'{program_phase['phase_mark']}'"
+                )
+            shaders[phase_shader.uuid] = shader_to_spec(phase_shader)
+        shader_programs[program_uuid] = shader_program_to_spec(program)
+        spec["shader_program"] = program_uuid
     uniforms = material_uniforms_to_json(material)
     if uniforms:
         spec["uniforms"] = uniforms

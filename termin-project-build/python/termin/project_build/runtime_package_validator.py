@@ -179,6 +179,8 @@ def _validate_resources(
         spec: dict[str, Any] | None = None
         if resource_type == "shader" and resolved_path is not None and isinstance(path, str):
             spec = _validate_shader_resource(package_root, path, resolved_path, diagnostics)
+        elif resource_type == "shader_program" and resolved_path is not None and isinstance(path, str):
+            spec = _validate_shader_program_resource(path, resolved_path, diagnostics)
         elif resource_type == "material" and resolved_path is not None and isinstance(path, str):
             spec = _validate_material_resource(package_root, path, resolved_path, diagnostics)
         elif resource_type == "texture" and resolved_path is not None and isinstance(path, str):
@@ -224,7 +226,56 @@ def _validate_resources(
                         f"Runtime texture spec UUID '{spec.get('uuid')}' does not match manifest UUID '{uuid}'",
                     )
                 )
+            if resource_type == "shader_program" and isinstance(spec, dict) and spec.get("uuid") != uuid:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        path,
+                        f"Runtime shader program spec UUID '{spec.get('uuid')}' does not match manifest UUID '{uuid}'",
+                    )
+                )
     return resource_index
+
+
+def _validate_shader_program_resource(
+    resource_path: str,
+    spec_path: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> dict[str, Any] | None:
+    spec = _read_json_file(spec_path, resource_path, diagnostics)
+    if spec is None:
+        return None
+    if spec.get("schema_version") != 1:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime shader program spec requires schema_version 1",
+            )
+        )
+    for field_name in ("uuid", "name", "language"):
+        if not isinstance(spec.get(field_name), str) or spec[field_name] == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    f"Runtime shader program field '{field_name}' must be a non-empty string",
+                )
+            )
+    if not isinstance(spec.get("properties"), list):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error", resource_path, "Runtime shader program properties must be a list"
+            )
+        )
+    phases = spec.get("phases")
+    if not isinstance(phases, list) or not phases:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error", resource_path, "Runtime shader program phases must be a non-empty list"
+            )
+        )
+    return spec
 
 
 def _validate_shader_resource(
@@ -758,6 +809,8 @@ def _validate_resource_graph(
             continue
         if resource_type == "material":
             _validate_material_graph(uuid_value, resource_path, spec, resource_index, diagnostics)
+        elif resource_type == "shader_program":
+            _validate_shader_program_graph(uuid_value, resource_path, spec, resource_index, diagnostics)
         elif resource_type == "pipeline":
             _validate_pipeline_graph(uuid_value, resource_path, spec, resource_index, diagnostics)
 
@@ -769,6 +822,15 @@ def _validate_material_graph(
     resource_index: dict[str, dict[str, Any]],
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
+    program_uuid = material_spec.get("shader_program")
+    if isinstance(program_uuid, str) and program_uuid != "":
+        _validate_resource_ref(
+            program_uuid,
+            "shader_program",
+            resource_index,
+            diagnostics,
+            f"{resource_path}:shader_program",
+        )
     phases = material_spec.get("phases")
     if not isinstance(phases, list):
         return
@@ -808,6 +870,46 @@ def _validate_material_graph(
                 resource_index,
                 diagnostics,
                 f"{resource_path}:textures.{slot_name}",
+            )
+
+
+def _validate_shader_program_graph(
+    program_uuid: str,
+    resource_path: str,
+    program_spec: dict[str, Any],
+    resource_index: dict[str, dict[str, Any]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    phases = program_spec.get("phases")
+    if not isinstance(phases, list):
+        return
+    seen_marks: set[str] = set()
+    for index, phase in enumerate(phases):
+        context = f"{resource_path}:phases[{index}]"
+        if not isinstance(phase, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic("error", context, "Shader program phase must be an object")
+            )
+            continue
+        mark = phase.get("phase_mark")
+        if not isinstance(mark, str) or mark == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic("error", context, "Shader program phase_mark must be non-empty")
+            )
+        elif mark in seen_marks:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, f"Shader program '{program_uuid}' has duplicate phase '{mark}'"
+                )
+            )
+        else:
+            seen_marks.add(mark)
+        shader_uuid = phase.get("shader")
+        if isinstance(shader_uuid, str) and shader_uuid != "":
+            _validate_resource_ref(shader_uuid, "shader", resource_index, diagnostics, f"{context}.shader")
+        else:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic("error", context, "Shader program phase shader must be non-empty")
             )
 
 

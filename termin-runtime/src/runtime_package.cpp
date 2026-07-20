@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <any>
@@ -20,6 +21,7 @@
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
+#include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
@@ -29,6 +31,7 @@ namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive {
     std::vector<TcShader> shaders;
+    std::vector<TcShaderProgram> shader_programs;
     std::vector<TcTexture> textures;
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
@@ -710,6 +713,211 @@ bool load_shader_resource(
     return true;
 }
 
+bool optional_bool_field(const nos::trent& object, const char* name, bool default_value) {
+    const nos::trent* value = dict_get(object, name);
+    return value && value->is_bool() ? value->as_bool() : default_value;
+}
+
+bool shader_program_property_default(
+    const nos::trent& property,
+    const std::string& property_type,
+    tc_uniform_value& value,
+    std::string& text,
+    std::string& error)
+{
+    const nos::trent* input = dict_get(property, "default");
+    if (!input) {
+        return true;
+    }
+    if (input->is_string()) {
+        text = input->as_string();
+        return true;
+    }
+    if (input->is_bool()) {
+        value.type = TC_UNIFORM_BOOL;
+        value.data.i = input->as_bool() ? 1 : 0;
+        return true;
+    }
+    if (input->is_numer()) {
+        if (property_type == "Int") {
+            value.type = TC_UNIFORM_INT;
+            value.data.i = static_cast<int32_t>(input->as_numer());
+        } else {
+            value.type = TC_UNIFORM_FLOAT;
+            value.data.f = static_cast<float>(input->as_numer());
+        }
+        return true;
+    }
+    if (input->is_list()) {
+        const auto& elements = input->as_list();
+        if (elements.size() < 2 || elements.size() > 4) {
+            error = "shader program property vector default requires 2-4 components";
+            return false;
+        }
+        float components[4] = {};
+        for (size_t index = 0; index < elements.size(); ++index) {
+            if (!elements[index].is_numer()) {
+                error = "shader program property vector default contains a non-number";
+                return false;
+            }
+            components[index] = static_cast<float>(elements[index].as_numer());
+        }
+        value.type = elements.size() == 2
+            ? TC_UNIFORM_VEC2
+            : (elements.size() == 3 ? TC_UNIFORM_VEC3 : TC_UNIFORM_VEC4);
+        std::memcpy(value.data.v4, components, elements.size() * sizeof(float));
+        return true;
+    }
+    error = "shader program property default has unsupported JSON type";
+    return false;
+}
+
+bool load_shader_program_resource(
+    const nos::trent& entry,
+    const nos::trent& spec,
+    RuntimePackageResourceKeepalive& keepalive,
+    std::string& error)
+{
+    if (uint32_field(spec, "schema_version", 0) != 1) {
+        error = "shader program resource requires schema_version 1";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    const std::string uuid = string_field(spec, "uuid");
+    if (uuid.empty() || uuid != string_field(entry, "uuid")) {
+        error = "shader program resource manifest UUID does not match its payload";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    const std::string name = string_field(spec, "name");
+    const std::string language = string_field(spec, "language");
+    const nos::trent* property_list = dict_get(spec, "properties");
+    const nos::trent* phase_list = dict_get(spec, "phases");
+    if (name.empty() || language.empty() || !property_list || !property_list->is_list()
+        || !phase_list || !phase_list->is_list() || phase_list->as_list().empty()) {
+        error = "shader program resource requires name, language, properties and phases";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    const size_t property_count = property_list->as_list().size();
+    std::vector<std::string> property_names;
+    std::vector<std::string> property_types;
+    std::vector<std::string> property_labels;
+    std::vector<std::string> property_default_texts(property_count);
+    std::vector<tc_uniform_value> property_defaults(property_count);
+    std::vector<tc_shader_program_property_desc> properties;
+    property_names.reserve(property_count);
+    property_types.reserve(property_count);
+    property_labels.reserve(property_count);
+    properties.reserve(property_count);
+    for (size_t index = 0; index < property_count; ++index) {
+        const nos::trent& item = property_list->as_list()[index];
+        if (!item.is_dict()) {
+            error = "shader program property must be an object";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        property_names.push_back(string_field(item, "name"));
+        property_types.push_back(string_field(item, "property_type"));
+        property_labels.push_back(string_field(item, "label"));
+        if (property_names.back().empty() || property_types.back().empty()) {
+            error = "shader program property requires name and property_type";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        tc_uniform_value& default_value = property_defaults[index];
+        std::memset(&default_value, 0, sizeof(default_value));
+        if (!shader_program_property_default(
+                item, property_types.back(), default_value,
+                property_default_texts[index], error)) {
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        tc_shader_program_property_desc desc{};
+        desc.name = property_names.back().c_str();
+        desc.property_type = property_types.back().c_str();
+        desc.label = property_labels.back().empty() ? nullptr : property_labels.back().c_str();
+        desc.default_value = default_value.type == TC_UNIFORM_NONE ? nullptr : &default_value;
+        desc.default_text = property_default_texts[index].empty()
+            ? nullptr : property_default_texts[index].c_str();
+        const nos::trent* range_min = dict_get(item, "range_min");
+        const nos::trent* range_max = dict_get(item, "range_max");
+        if (range_min && range_min->is_numer()) {
+            desc.range_min = range_min->as_numer();
+            desc.has_range_min = 1;
+        }
+        if (range_max && range_max->is_numer()) {
+            desc.range_max = range_max->as_numer();
+            desc.has_range_max = 1;
+        }
+        properties.push_back(desc);
+    }
+
+    const size_t phase_count = phase_list->as_list().size();
+    std::vector<std::string> phase_marks;
+    std::vector<tc_shader_program_phase_desc> phases;
+    phase_marks.reserve(phase_count);
+    phases.reserve(phase_count);
+    for (const nos::trent& item : phase_list->as_list()) {
+        if (!item.is_dict()) {
+            error = "shader program phase must be an object";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        phase_marks.push_back(string_field(item, "phase_mark"));
+        const std::string shader_uuid = string_field(item, "shader");
+        char expected_uuid[TC_UUID_SIZE];
+        tc_shader_program_make_phase_uuid(
+            expected_uuid, sizeof(expected_uuid), uuid.c_str(), phase_marks.back().c_str());
+        if (phase_marks.back().empty() || shader_uuid != expected_uuid
+            || !TcShader::from_uuid(shader_uuid).is_valid()) {
+            error = "shader program phase has missing or inconsistent phase shader identity";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        const nos::trent* state = dict_get(item, "state");
+        if (!state || !state->is_dict()) {
+            error = "shader program phase requires render state";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        tc_render_state render_state{};
+        render_state.polygon_mode = static_cast<uint8_t>(uint32_field(*state, "polygon_mode", 0));
+        render_state.cull = optional_bool_field(*state, "cull", true);
+        render_state.depth_test = optional_bool_field(*state, "depth_test", true);
+        render_state.depth_write = optional_bool_field(*state, "depth_write", true);
+        render_state.blend = optional_bool_field(*state, "blend", false);
+        render_state.blend_src = static_cast<uint8_t>(uint32_field(*state, "blend_src", 0));
+        render_state.blend_dst = static_cast<uint8_t>(uint32_field(*state, "blend_dst", 0));
+        render_state.depth_func = static_cast<uint8_t>(uint32_field(*state, "depth_func", 0));
+        tc_shader_program_phase_desc desc{};
+        desc.phase_mark = phase_marks.back().c_str();
+        desc.priority = static_cast<int32_t>(number_field(item, "priority", 0));
+        desc.state = render_state;
+        phases.push_back(desc);
+    }
+
+    TcShaderProgram program = TcShaderProgram::declare(uuid, name);
+    tc_shader_program_payload_desc payload{};
+    const std::string source_path = string_field(spec, "source_path");
+    payload.name = name.c_str();
+    payload.source_path = source_path.c_str();
+    payload.language = language.c_str();
+    payload.features = uint32_field(spec, "features", 0);
+    payload.properties = properties.data();
+    payload.property_count = static_cast<uint32_t>(properties.size());
+    payload.phases = phases.data();
+    payload.phase_count = static_cast<uint32_t>(phases.size());
+    if (!program.is_valid() || !tc_shader_program_set_payload(program.get(), &payload)) {
+        error = "failed to publish shader program '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    keepalive.shader_programs.push_back(std::move(program));
+    return true;
+}
+
 bool load_material_resource(
     const nos::trent& spec,
     RuntimePackageResourceKeepalive& keepalive,
@@ -728,6 +936,17 @@ bool load_material_resource(
         error = "failed to create material '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
+    }
+
+    const std::string program_uuid = string_field(spec, "shader_program");
+    if (!program_uuid.empty()) {
+        TcShaderProgram program = TcShaderProgram::find(program_uuid);
+        if (!program.is_valid()) {
+            error = "material '" + uuid + "' references missing shader program '" + program_uuid + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        material.set_shader_program_dependency(program_uuid.c_str(), program.version());
     }
 
     material.clear_phases();
@@ -1088,6 +1307,9 @@ bool load_resource(
     if (type == "shader") {
         return load_shader_resource(root, spec_path, spec, keepalive, error);
     }
+    if (type == "shader_program") {
+        return load_shader_program_resource(entry, spec, keepalive, error);
+    }
     if (type == "material") {
         return load_material_resource(spec, keepalive, error);
     }
@@ -1173,8 +1395,8 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
         ensure_runtime_builtin_textures();
-        constexpr std::array<const char*, 6> resource_order = {
-            "shader", "mesh", "texture", "material", "pipeline", "foliage_data"
+        constexpr std::array<const char*, 7> resource_order = {
+            "shader", "shader_program", "mesh", "texture", "material", "pipeline", "foliage_data"
         };
         const auto& resource_list = resources->as_list();
         auto load_entry = [&](const nos::trent& resource) -> bool {
