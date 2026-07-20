@@ -71,6 +71,28 @@ def _write_shader_resource(package_dir: Path, shader_uuid: str = "shader-uuid") 
     )
 
 
+def _write_shader_program_resource(package_dir: Path, schema_version: int = 1) -> None:
+    _write_json(
+        package_dir / "shaders" / "program-uuid.shader-program.json",
+        {
+            "schema_version": schema_version,
+            "uuid": "program-uuid",
+            "name": "Program",
+            "language": "slang",
+            "features": 0,
+            "properties": [],
+            "phases": [
+                {
+                    "phase_mark": "opaque",
+                    "priority": 0,
+                    "shader": "shader-uuid",
+                    "state": {},
+                }
+            ],
+        },
+    )
+
+
 def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
 
@@ -185,6 +207,65 @@ def test_validate_runtime_package_accepts_shader_artifacts(tmp_path: Path) -> No
     )
 
     assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_accepts_versioned_shader_program(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    _write_shader_program_resource(package_dir)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            "version": 1,
+            "scene": "scene.json",
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                },
+                {
+                    "type": "shader_program",
+                    "uuid": "program-uuid",
+                    "path": "shaders/program-uuid.shader-program.json",
+                },
+            ],
+        },
+    )
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_rejects_incompatible_shader_program_schema(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    _write_shader_program_resource(package_dir, schema_version=99)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            "version": 1,
+            "scene": "scene.json",
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                },
+                {
+                    "type": "shader_program",
+                    "uuid": "program-uuid",
+                    "path": "shaders/program-uuid.shader-program.json",
+                },
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+    assert any(
+        diagnostic.path == "shaders/program-uuid.shader-program.json"
+        and diagnostic.message == "Runtime shader program spec requires schema_version 1"
+        for diagnostic in diagnostics
+    )
 
 
 def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path) -> None:

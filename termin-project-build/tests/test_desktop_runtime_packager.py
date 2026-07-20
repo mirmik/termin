@@ -1487,7 +1487,48 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     project.mkdir()
     mesh_uuid = "live-mesh-uuid"
     material_uuid = "live-material-uuid"
-    shader_uuid = "live-shader-uuid"
+    program_uuid = "live-shader-program-uuid"
+    shader_uuid = tgfx.TcShaderProgram.make_phase_uuid(program_uuid, "opaque")
+
+    program = tgfx.TcShaderProgram.declare(program_uuid, "LiveShaderProgram")
+    program.set_payload(
+        name="LiveShaderProgram",
+        source_path="Assets/Live.shader",
+        language="glsl",
+        features=1,
+        properties=[
+            {
+                "name": "u_color",
+                "property_type": "Color",
+                "label": "Color",
+                "default": [1.0, 1.0, 1.0, 1.0],
+            },
+            {
+                "name": "u_roughness",
+                "property_type": "Range",
+                "label": "Roughness",
+                "default": 0.5,
+                "range_min": 0.0,
+                "range_max": 1.0,
+            },
+        ],
+        phases=[
+            {
+                "phase_mark": "opaque",
+                "priority": 7,
+                "state": {
+                    "polygon_mode": 0,
+                    "cull": True,
+                    "depth_test": True,
+                    "depth_write": True,
+                    "blend": False,
+                    "blend_src": 2,
+                    "blend_dst": 3,
+                    "depth_func": 0,
+                },
+            }
+        ],
+    )
 
     layout = TcVertexLayout()
     layout.add("position", 3, TcAttribType.FLOAT32, 0)
@@ -1524,6 +1565,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         language=tgfx.ShaderLanguage.GLSL.value,
     )
     assert phase is not None
+    material.set_shader_program_dependency(program_uuid, program.version)
     shader = tgfx.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
     shader.set_feature(1)
@@ -1577,6 +1619,11 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     mesh_data = json.loads((result.package_dir / "meshes" / f"{mesh_uuid}.tmesh.json").read_text(encoding="utf-8"))
     material_data = json.loads((result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(encoding="utf-8"))
     shader_data = json.loads((result.package_dir / "shaders" / f"{shader_uuid}.shader.json").read_text(encoding="utf-8"))
+    program_data = json.loads(
+        (result.package_dir / "shaders" / f"{program_uuid}.shader-program.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert mesh_data["vertices"] == vertices.astype(float).tolist()
     assert mesh_data["indices"] == [0, 1, 2]
@@ -1597,6 +1644,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     assert material_data["phases"] == [
         {"mark": "opaque", "shader": shader_uuid, "priority": 7},
     ]
+    assert material_data["shader_program"] == program_uuid
     assert material_data["uniforms"] == {
         "u_color": [0.25, 0.5, 0.75, 1.0],
         "u_roughness": 0.625,
@@ -1604,6 +1652,11 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     assert shader_data["uuid"] == shader_uuid
     assert shader_data["language"] == "glsl"
     assert shader_data["features"] == 1
+    assert program_data["schema_version"] == 1
+    assert program_data["uuid"] == program_uuid
+    assert program_data["phases"][0]["shader"] == shader_uuid
+    assert program_data["properties"][1]["range_max"] == 1.0
+    assert not list(result.package_dir.rglob("*.shader"))
     assert shader_data["artifacts"] == {
         "vulkan": {
             "vertex": f"shaders/vulkan/{shader_uuid}.vert.spv",

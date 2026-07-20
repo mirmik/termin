@@ -10,6 +10,7 @@ The exporter writes the package contract consumed by termin-runtime:
     textures/*.texture.json
     textures/*.{png,jpg,jpeg,tga,bmp}
     shaders/*.shader.json
+    shaders/*.shader-program.json
     shaders/vulkan/*.spv
 
 When a referenced mesh/material exists in project sources or the current runtime
@@ -62,6 +63,7 @@ from termin.project_build.runtime_package.shaders import (
     normalize_shader_targets as _normalize_shader_targets,
     resolve_shader_compiler as _resolve_shader_compiler,
     write_default_pipeline_shader_artifacts as _write_default_pipeline_shader_artifacts,
+    write_shader_programs as _write_shader_programs,
     write_shaders as _write_shaders,
 )
 from termin.project_build.runtime_package.textures import write_textures as _write_textures
@@ -112,6 +114,7 @@ def export_runtime_package(
 
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
+    shader_programs: dict[str, dict[str, Any]] = {}
     _write_meshes(
         project_root_path,
         output_dir_path,
@@ -126,6 +129,7 @@ def export_runtime_package(
         resources,
         diagnostics,
         shaders,
+        shader_programs,
         default_shader_language,
         resource_policy,
         refs.textures,
@@ -143,6 +147,7 @@ def export_runtime_package(
         shader_compiler,
         requested_shader_targets,
     )
+    _write_shader_programs(output_dir_path, shader_programs, resources)
     _write_default_pipeline_shader_artifacts(
         output_dir_path,
         diagnostics,
@@ -261,6 +266,7 @@ def _write_materials(
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
+    shader_programs: dict[str, dict[str, Any]],
     default_shader_language: str,
     resource_policy: str,
     texture_refs: dict[str, str],
@@ -271,6 +277,7 @@ def _write_materials(
         resources,
         diagnostics,
         shaders,
+        shader_programs,
         default_shader_language,
         resource_policy,
         DEFAULT_SHADER_UUID,
@@ -287,11 +294,13 @@ def _export_material_spec(
     default_shader_language: str,
     resource_policy: str,
 ) -> dict[str, Any] | None:
+    shader_programs: dict[str, dict[str, Any]] = {}
     return export_material_spec(
         uuid_value,
         name,
         diagnostics,
         shaders,
+        shader_programs,
         default_shader_language,
         resource_policy,
         DEFAULT_SHADER_UUID,
