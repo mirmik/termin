@@ -242,16 +242,12 @@ public:
     }
 };
 
-// Forward declaration
-class SDLWindowRenderSurface;
-
 /**
  * SDL2 window backend - manages SDL initialization and windows.
  */
 class TERMIN_DISPLAY_API SDLWindowBackend {
 private:
     std::unordered_map<uint32_t, std::weak_ptr<SDLWindow>> windows_;
-    std::unordered_map<uint32_t, SDLWindowRenderSurface*> surfaces_;
 
 public:
     SDLWindowBackend() {
@@ -277,20 +273,12 @@ public:
         return window;
     }
 
-    // Register render surface for input event routing
-    void register_surface(SDLWindowRenderSurface* surface);
-    void unregister_surface(SDLWindowRenderSurface* surface);
-
     void poll_events();
 
     void terminate() {
         windows_.clear();
-        surfaces_.clear();
         // SDL_Quit() is called externally (e.g., in run_editor.py)
     }
-
-private:
-    void dispatch_event_to_surface(SDLWindowRenderSurface* surface, const SDL_Event& event);
 };
 
 } // namespace termin

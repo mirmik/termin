@@ -15,7 +15,6 @@
 #include <tcbase/tc_log.h>
 
 #include "termin/platform/sdl_window.hpp"
-#include "termin/platform/sdl_render_surface.hpp"
 #include "termin/platform/sdl_backend_window.hpp"
 #include "termin/input/window_input_bridge.hpp"
 
@@ -474,35 +473,6 @@ void bind_sdl(nb::module_& m) {
             nb::arg("share") = nullptr)
         .def("poll_events", &SDLWindowBackend::poll_events)
         .def("terminate", &SDLWindowBackend::terminate);
-
-    // SDLWindowRenderSurface - C++ render surface wrapping SDLWindow and tc_render_surface
-    nb::class_<SDLWindowRenderSurface>(m, "SDLWindowRenderSurface")
-        .def(nb::init<int, int, const std::string&, SDLWindowBackend*, SDLWindowRenderSurface*>(),
-            nb::arg("width"), nb::arg("height"), nb::arg("title"),
-            nb::arg("backend"), nb::arg("share") = nullptr,
-            nb::keep_alive<1, 5>())  // keep backend alive
-        .def("tc_surface", [](SDLWindowRenderSurface& self) {
-            return self.tc_surface();
-        }, nb::rv_policy::reference)
-        .def("tc_surface_ptr", [](SDLWindowRenderSurface& self) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(self.tc_surface());
-        })
-        .def("window", [](SDLWindowRenderSurface& self) {
-            return self.window();
-        }, nb::rv_policy::reference)
-        .def("window_id", &SDLWindowRenderSurface::window_id)
-        .def("make_current", &SDLWindowRenderSurface::make_current)
-        .def("swap_buffers", &SDLWindowRenderSurface::swap_buffers)
-        .def("get_size", &SDLWindowRenderSurface::get_size)
-        .def("window_size", &SDLWindowRenderSurface::window_size)
-        .def("should_close", &SDLWindowRenderSurface::should_close)
-        .def("set_should_close", &SDLWindowRenderSurface::set_should_close, nb::arg("value"))
-        .def("get_cursor_pos", &SDLWindowRenderSurface::get_cursor_pos)
-        .def("get_native_handle", &SDLWindowRenderSurface::get_native_handle)
-        .def("request_update", &SDLWindowRenderSurface::request_update)
-        .def("needs_render", &SDLWindowRenderSurface::needs_render)
-        .def("clear_render_flag", &SDLWindowRenderSurface::clear_render_flag)
-        .def("check_resize", &SDLWindowRenderSurface::check_resize);
 
     // --- BackendWindow: the backend-neutral SDL wrapper. ---
     //

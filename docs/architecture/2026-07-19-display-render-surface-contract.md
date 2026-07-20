@@ -1,7 +1,8 @@
 # Display Render Surface Contract
 
 Статус реализации: принято 2026-07-19; input ownership реализован в #677,
-остальные этапы миграции ещё не завершены.
+узкий texture-output ABI и attachment/domain validation реализованы в #678.
+RAII ownership/rename и WPF D3D11 hosting остаются в #638 и #679.
 
 Обоснование и рассмотренные альтернативы зафиксированы в
 [протоколе архитектурного совета](../architecture-council/2026-07-19-display-render-surface-boundary.md).
@@ -36,6 +37,14 @@ BackendWindow / Viewport3D / WPF input
 - результирующая tgfx color texture;
 - уведомление display об изменении размера;
 - C adapter state и однозначный lifecycle.
+
+ABI v1 представлен четырьмя обязательными callbacks: `get_size`,
+`get_color_texture_id`, `get_graphics_domain_key` и `destroy`. Внешний adapter
+передаёт в `tc_render_surface_new_external` также точный размер vtable и
+`TC_RENDER_SURFACE_ABI_VERSION`; несовпадение версии, размера или отсутствующий
+callback отвергаются при создании.
+`tc_render_surface_free_external` возвращает `false` и сохраняет adapter живым,
+если host пытается освободить всё ещё прикреплённую surface.
 
 Surface не предоставляет window, input, presentation или graphics-context
 operations. В частности, в целевом API отсутствуют raw framebuffer, OpenGL
@@ -73,6 +82,13 @@ RAII ownership и shutdown ordering реализуются в рамках #638;
 этой миграции текущий leaked pool/manual `close()` не считается целевым
 поведением.
 
+`tc_display_set_surface` сначала пытается атомарно занять новую surface и
+возвращает `false`, если она принадлежит другому display. Старое attachment и
+его resize subscription при этом остаются неизменными. Opaque domain key
+сравнивается с key активного `IRenderDevice` через
+`tc_render_surface_validate_output` до clear/blit; нулевая texture, нулевой key
+и несовпадение domain являются ошибками контракта.
+
 Миграционный порядок закреплён карточками #677 (input), #678 (surface ABI),
 #638 (lifetime/rename) и #679 (C#/WPF hosting).
 
@@ -101,6 +117,6 @@ display input.
 - native editor, player и Viewport3D используют display input endpoint;
 - C#/WPF surface adapter предоставляет рабочую tgfx texture либо удалён как
   неподдерживаемый;
-- `FBOSurface` заменён на `OffscreenRenderSurface` во внешнем API;
+- `FBOSurface` заменён на `OffscreenRenderSurface` во внешнем API (#638);
 - tests покрывают resize/attach, input coordinates, missing/wrong-domain
   texture и deterministic shutdown.

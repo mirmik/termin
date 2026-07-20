@@ -78,7 +78,7 @@ set(TERMIN_DISPLAY_SOURCES
 
 if(TERMIN_DISPLAY_HAS_SDL)
     list(APPEND TERMIN_DISPLAY_SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_render_surface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_window_backend.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/platform/window_input_bridge.cpp
     )
 endif()
@@ -252,7 +252,6 @@ install(FILES
 if(TERMIN_DISPLAY_HAS_SDL)
     install(FILES
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_window.hpp
-        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_render_surface.hpp
         DESTINATION include/termin/platform
     )
     if(WIN32 AND SDL2_DLL)
@@ -265,6 +264,10 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
     add_executable(display_input_router_test tests/test_display_input_router.cpp)
     target_link_libraries(display_input_router_test PRIVATE termin_display)
     add_test(NAME display_input_router_test COMMAND display_input_router_test)
+
+    add_executable(render_surface_abi_test tests/test_render_surface_abi.cpp)
+    target_link_libraries(render_surface_abi_test PRIVATE termin_display)
+    add_test(NAME render_surface_abi_test COMMAND render_surface_abi_test)
 
     add_executable(viewport_input_manager_source_test tests/test_viewport_input_manager_source.cpp)
     target_link_libraries(viewport_input_manager_source_test PRIVATE termin_display)

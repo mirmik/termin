@@ -763,9 +763,6 @@ struct PlayerRuntimeHost::Impl {
         if (window) {
             window->set_should_close(true);
         }
-        if (display && display->is_valid()) {
-            display->set_should_close(true);
-        }
         if (engine) {
             engine->stop();
         }

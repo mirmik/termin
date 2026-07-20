@@ -797,17 +797,10 @@ class PlayerRuntime:
 
     def request_quit(self, exit_code: int = 0) -> None:
         """Request graceful shutdown at the next game loop boundary."""
-        from tcbase import log
-
         self.exit_code = int(exit_code)
         self.running = False
         if self.window is not None:
             self.window.set_should_close(True)
-        if self._display is not None:
-            try:
-                self._display.should_close = True
-            except Exception as e:
-                log.error(f"[PlayerRuntime] Failed to mark display closed: {e}")
 
 
 def run_project(

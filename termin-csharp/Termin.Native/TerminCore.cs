@@ -772,69 +772,37 @@ public static class TerminCore
 
     // VTable function pointer delegates
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate uint RenderSurfaceGetFramebufferDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void RenderSurfaceGetSizeDelegate(IntPtr surface, out int width, out int height);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfaceMakeCurrentDelegate(IntPtr surface);
+    public delegate uint RenderSurfaceGetColorTextureIdDelegate(IntPtr surface);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfaceSwapBuffersDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate nuint RenderSurfaceContextKeyDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfacePollEventsDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfaceGetWindowSizeDelegate(IntPtr surface, out int width, out int height);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    [return: MarshalAs(UnmanagedType.U1)]
-    public delegate bool RenderSurfaceShouldCloseDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfaceSetShouldCloseDelegate(IntPtr surface, [MarshalAs(UnmanagedType.U1)] bool value);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate void RenderSurfaceGetCursorPosDelegate(IntPtr surface, out double x, out double y);
+    public delegate nuint RenderSurfaceGetGraphicsDomainKeyDelegate(IntPtr surface);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void RenderSurfaceDestroyDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate nuint RenderSurfaceShareGroupKeyDelegate(IntPtr surface);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate uint RenderSurfaceGetTgfxColorTexIdDelegate(IntPtr surface);
 
     // VTable structure (must match tc_render_surface_vtable in C)
     [StructLayout(LayoutKind.Sequential)]
     public struct RenderSurfaceVTable
     {
-        public IntPtr get_framebuffer;
         public IntPtr get_size;
-        public IntPtr make_current;
-        public IntPtr swap_buffers;
-        public IntPtr context_key;
-        public IntPtr poll_events;
-        public IntPtr get_window_size;
-        public IntPtr should_close;
-        public IntPtr set_should_close;
-        public IntPtr get_cursor_pos;
+        public IntPtr get_color_texture_id;
+        public IntPtr get_graphics_domain_key;
         public IntPtr destroy;
-        public IntPtr share_group_key;
-        public IntPtr get_tgfx_color_tex_id;
     }
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_new_external")]
-    public static extern IntPtr RenderSurfaceNewExternal(IntPtr body, ref RenderSurfaceVTable vtable);
+    public static extern IntPtr RenderSurfaceNewExternal(
+        IntPtr body,
+        ref RenderSurfaceVTable vtable,
+        nuint vtableSize,
+        uint abiVersion);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_free_external")]
-    public static extern void RenderSurfaceFreeExternal(IntPtr surface);
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool RenderSurfaceFreeExternal(IntPtr surface);
 
     // ========================================================================
     // Display (tc_display)

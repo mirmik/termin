@@ -27,17 +27,11 @@ ViewportRenderState* RenderStateStore::get_or_create_viewport_state(tc_viewport_
     return state.get();
 }
 
-void RenderStateStore::remove_viewport_state(
-    tc_viewport_handle viewport,
-    const MakeCurrent& make_current
-) {
+void RenderStateStore::remove_viewport_state(tc_viewport_handle viewport) {
     if (!tc_viewport_handle_valid(viewport)) return;
     uint64_t key = viewport_key(viewport);
     auto it = viewport_states_.find(key);
     if (it == viewport_states_.end()) return;
-    if (make_current) {
-        make_current();
-    }
     it->second->clear_all();
     viewport_states_.erase(it);
 }
@@ -59,25 +53,16 @@ ViewportRenderState* RenderStateStore::get_or_create_render_target_state(tc_rend
     return state.get();
 }
 
-void RenderStateStore::remove_render_target_state(
-    tc_render_target_handle rt,
-    const MakeCurrent& make_current
-) {
+void RenderStateStore::remove_render_target_state(tc_render_target_handle rt) {
     if (!tc_render_target_handle_valid(rt)) return;
     uint64_t key = render_target_key(rt);
     auto it = render_target_states_.find(key);
     if (it == render_target_states_.end()) return;
-    if (make_current) {
-        make_current();
-    }
     it->second->clear_all();
     render_target_states_.erase(it);
 }
 
-void RenderStateStore::clear_all(const MakeCurrent& make_current) {
-    if (make_current) {
-        make_current();
-    }
+void RenderStateStore::clear_all() {
     for (auto& pair : viewport_states_) {
         pair.second->clear_all();
     }

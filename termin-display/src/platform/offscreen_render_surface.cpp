@@ -26,19 +26,10 @@ std::vector<OffscreenSurfacePoolEntry>& offscreen_surface_pool() {
 } // namespace
 
 const tc_render_surface_vtable OffscreenRenderSurface::s_vtable = {
-    .get_framebuffer = &OffscreenRenderSurface::vtable_get_framebuffer,
     .get_size = &OffscreenRenderSurface::vtable_get_size,
-    .make_current = &OffscreenRenderSurface::vtable_make_current,
-    .swap_buffers = &OffscreenRenderSurface::vtable_swap_buffers,
-    .context_key = &OffscreenRenderSurface::vtable_context_key,
-    .poll_events = &OffscreenRenderSurface::vtable_poll_events,
-    .get_window_size = &OffscreenRenderSurface::vtable_get_window_size,
-    .should_close = &OffscreenRenderSurface::vtable_should_close,
-    .set_should_close = &OffscreenRenderSurface::vtable_set_should_close,
-    .get_cursor_pos = &OffscreenRenderSurface::vtable_get_cursor_pos,
+    .get_color_texture_id = &OffscreenRenderSurface::vtable_get_color_texture_id,
+    .get_graphics_domain_key = &OffscreenRenderSurface::vtable_get_graphics_domain_key,
     .destroy = &OffscreenRenderSurface::vtable_destroy,
-    .share_group_key = &OffscreenRenderSurface::vtable_share_group_key,
-    .get_tgfx_color_tex_id = &OffscreenRenderSurface::vtable_get_tgfx_color_tex_id,
 };
 
 OffscreenRenderSurface::OffscreenRenderSurface(tgfx::IRenderDevice* device, int width, int height)
@@ -122,11 +113,6 @@ OffscreenRenderSurface* OffscreenRenderSurface::from_tc_surface(tc_render_surfac
     return reinterpret_cast<OffscreenRenderSurface*>(s->body);
 }
 
-uint32_t OffscreenRenderSurface::vtable_get_framebuffer(tc_render_surface* self) {
-    (void)self;
-    return 0;
-}
-
 void OffscreenRenderSurface::vtable_get_size(tc_render_surface* self, int* width, int* height) {
     auto* surface = from_tc_surface(self);
     if (!surface) {
@@ -138,53 +124,16 @@ void OffscreenRenderSurface::vtable_get_size(tc_render_surface* self, int* width
     if (height) *height = surface->height_;
 }
 
-void OffscreenRenderSurface::vtable_make_current(tc_render_surface* self) {
-    (void)self;
-}
-
-void OffscreenRenderSurface::vtable_swap_buffers(tc_render_surface* self) {
-    (void)self;
-}
-
-uintptr_t OffscreenRenderSurface::vtable_context_key(tc_render_surface* self) {
-    auto* surface = from_tc_surface(self);
-    return reinterpret_cast<uintptr_t>(surface ? surface->device_ : nullptr);
-}
-
-void OffscreenRenderSurface::vtable_poll_events(tc_render_surface* self) {
-    (void)self;
-}
-
-void OffscreenRenderSurface::vtable_get_window_size(tc_render_surface* self, int* width, int* height) {
-    vtable_get_size(self, width, height);
-}
-
-bool OffscreenRenderSurface::vtable_should_close(tc_render_surface* self) {
-    (void)self;
-    return false;
-}
-
-void OffscreenRenderSurface::vtable_set_should_close(tc_render_surface* self, bool value) {
-    (void)self;
-    (void)value;
-}
-
-void OffscreenRenderSurface::vtable_get_cursor_pos(tc_render_surface* self, double* x, double* y) {
-    (void)self;
-    if (x) *x = 0.0;
-    if (y) *y = 0.0;
-}
-
 void OffscreenRenderSurface::vtable_destroy(tc_render_surface* self) {
     (void)self;
 }
 
-uintptr_t OffscreenRenderSurface::vtable_share_group_key(tc_render_surface* self) {
+uintptr_t OffscreenRenderSurface::vtable_get_graphics_domain_key(tc_render_surface* self) {
     auto* surface = from_tc_surface(self);
     return reinterpret_cast<uintptr_t>(surface ? surface->device_ : nullptr);
 }
 
-uint32_t OffscreenRenderSurface::vtable_get_tgfx_color_tex_id(tc_render_surface* self) {
+uint32_t OffscreenRenderSurface::vtable_get_color_texture_id(tc_render_surface* self) {
     auto* surface = from_tc_surface(self);
     return surface ? surface->color_tex_.id : 0;
 }

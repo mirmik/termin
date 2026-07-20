@@ -30,18 +30,11 @@ public:
     OffscreenRenderSurface* surface() const;
     bool resize(int width, int height);
     std::pair<int, int> framebuffer_size() const;
-    std::pair<int, int> window_size() const;
     tgfx::TextureHandle color_tex() const;
     tgfx::TextureHandle depth_tex() const;
     uintptr_t tc_surface_ptr() const;
     uint32_t get_tgfx_color_tex_id() const;
-    uint32_t get_framebuffer_id() const;
-    void make_current();
-    void swap_buffers();
-    bool should_close() const;
-    void set_should_close(bool value);
-    std::pair<double, double> get_cursor_pos() const;
-    uintptr_t share_group_key() const;
+    uintptr_t graphics_domain_key() const;
     bool close();
 };
 

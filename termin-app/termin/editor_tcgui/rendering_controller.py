@@ -68,7 +68,6 @@ class RenderingControllerTcgui:
         self._center_tabs = None
 
         # BackendWindow/render surfaces own make-current during presentation.
-        self._manager.set_make_current_callback(lambda: None)
 
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
@@ -83,7 +82,6 @@ class RenderingControllerTcgui:
         self._manager.set_display_removed_callback(None)
         self._manager.set_pipeline_factory(None)
         self._manager.set_display_factory(None)
-        self._manager.set_make_current_callback(None)
 
     def _connect_viewport_list_signals(self) -> None:
         vl = self._viewport_list

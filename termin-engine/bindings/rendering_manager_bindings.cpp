@@ -185,20 +185,6 @@ void bind_rendering_manager(nb::module_& m) {
                      nb::rv_policy::reference,
                      "Access the engine's RenderEngine (tgfx2_ctx lives on it)")
 
-        .def("set_make_current_callback", [](RenderingManager& self, nb::object callback) {
-            if (callback.is_none()) {
-                self.set_make_current_callback(nullptr);
-            } else {
-                // Store callback preventing GC
-                nb::object stored = callback;
-                self.set_make_current_callback([stored]() {
-                    nb::gil_scoped_acquire gil;
-                    stored();
-                });
-            }
-        }, nb::arg("callback").none(),
-           "Set callback to activate GL context before rendering")
-
         .def("set_display_factory", [](RenderingManager& self, nb::object factory) {
             if (factory.is_none()) {
                 self.set_display_factory(nullptr);

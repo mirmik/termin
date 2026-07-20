@@ -67,7 +67,7 @@ TERMIN_DISPLAY_API bool tc_display_get_enabled(const tc_display* display);
 TERMIN_DISPLAY_API void tc_display_set_auto_remove_when_empty(tc_display* display, bool value);
 TERMIN_DISPLAY_API bool tc_display_get_auto_remove_when_empty(const tc_display* display);
 
-TERMIN_DISPLAY_API void tc_display_set_surface(tc_display* display, tc_render_surface* surface);
+TERMIN_DISPLAY_API bool tc_display_set_surface(tc_display* display, tc_render_surface* surface);
 TERMIN_DISPLAY_API tc_render_surface* tc_display_get_surface(const tc_display* display);
 
 // ============================================================================
@@ -85,30 +85,8 @@ TERMIN_DISPLAY_API bool tc_display_dispatch_key(
     tc_display* display, int key, int scancode, int action, int mods);
 TERMIN_DISPLAY_API bool tc_display_dispatch_text(tc_display* display, uint32_t codepoint);
 
-// ============================================================================
-// Surface Delegation
-// ============================================================================
-
 // Get display size in pixels (delegates to surface)
 TERMIN_DISPLAY_API void tc_display_get_size(const tc_display* display, int* width, int* height);
-
-// Get window size in logical pixels (may differ from framebuffer on HiDPI)
-TERMIN_DISPLAY_API void tc_display_get_window_size(const tc_display* display, int* width, int* height);
-
-// Get cursor position in window pixels
-TERMIN_DISPLAY_API void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y);
-
-// Make context current (delegates to surface)
-TERMIN_DISPLAY_API void tc_display_make_current(tc_display* display);
-
-// Swap buffers (delegates to surface)
-TERMIN_DISPLAY_API void tc_display_swap_buffers(tc_display* display);
-
-// Check if window should close
-TERMIN_DISPLAY_API bool tc_display_should_close(const tc_display* display);
-
-// Set should close flag
-TERMIN_DISPLAY_API void tc_display_set_should_close(tc_display* display, bool value);
 
 // ============================================================================
 // Viewport Management
