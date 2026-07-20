@@ -12,6 +12,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/engine/engine_core.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
@@ -662,6 +663,8 @@ public:
 // RenderingManager - owned by EngineCore
 // ============================================================================
 
+%nodefaultctor RenderingManager;
+
 class RenderingManager {
 public:
     // Configuration
@@ -682,6 +685,18 @@ public:
     // Shutdown
     void shutdown();
 };
+
+class EngineCore {
+public:
+    EngineCore();
+    ~EngineCore();
+};
+
+%extend EngineCore {
+    RenderingManager* rendering_manager() {
+        return &$self->rendering_manager;
+    }
+}
 
 // ============================================================================
 // CameraComponent - camera for rendering
