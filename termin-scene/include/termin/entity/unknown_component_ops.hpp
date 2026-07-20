@@ -58,6 +58,16 @@ struct ENTITY_API UnknownComponentPreparationHooks {
     std::function<tc_component*()> create_replacement;
 };
 
+class UnknownComponentDegradationPlan;
+
+ENTITY_API bool prepare_components_to_unknown(
+    const std::vector<TcSceneRef>& scenes,
+    const std::vector<std::string>& type_names,
+    UnknownComponentDegradationPlan& plan,
+    std::string* error,
+    const UnknownComponentPreparationHooks& hooks
+);
+
 class ENTITY_API UnknownComponentDegradationPlan {
 public:
     UnknownComponentDegradationPlan();
@@ -78,7 +88,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> _impl;
 
-    friend bool prepare_components_to_unknown(
+    friend ENTITY_API bool prepare_components_to_unknown(
         const std::vector<TcSceneRef>&,
         const std::vector<std::string>&,
         UnknownComponentDegradationPlan&,
