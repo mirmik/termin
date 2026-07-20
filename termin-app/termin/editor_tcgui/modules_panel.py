@@ -11,7 +11,7 @@ from tcgui.widgets.tree import TreeWidget, TreeNode
 from tcgui.widgets.units import px
 
 from termin.project_modules.runtime import get_project_modules_runtime
-from termin.editor_core.modules_panel_model import format_cleanup_phase
+from termin.editor_core.modules_panel_model import module_recovery_hint
 from termin.editor_tcgui.dialogs.module_operation_dialog import show_module_operation_dialog
 from termin_modules import ModuleEvent, ModuleState
 
@@ -385,10 +385,13 @@ class ModulesPanel(VStack):
 
             details = record.kind.name.lower()
             flags = []
-            if record.state == ModuleState.CleanupFailed:
-                flags.append(
-                    f"retry cleanup: {format_cleanup_phase(record.cleanup_phase.name)}"
-                )
+            recovery = (
+                module_recovery_hint(record.state, record.cleanup_phase)
+                if record.state == ModuleState.CleanupFailed
+                else module_recovery_hint(record.state)
+            )
+            if recovery is not None:
+                flags.append(recovery)
             if record.id in dirty:
                 flags.append("dirty")
             if record.id in stale:
