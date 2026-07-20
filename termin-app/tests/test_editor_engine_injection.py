@@ -21,6 +21,17 @@ def test_init_editor_passes_engine_to_native_frontend(monkeypatch):
     assert result is session
 
 
+def test_init_editor_returns_tcgui_frontend_session(monkeypatch):
+    engine = object()
+    session = object()
+    frontend = types.ModuleType("termin.editor_tcgui.run_editor")
+    frontend.init_editor_tcgui = lambda value, **kwargs: session if value is engine else None
+    monkeypatch.setitem(sys.modules, "termin.editor_tcgui.run_editor", frontend)
+    monkeypatch.setattr(run_editor, "_parse_editor_args", lambda: (None, None, "tcgui"))
+
+    assert run_editor.init_editor(engine, no_scene=True) is session
+
+
 def test_run_editor_runs_explicit_engine(monkeypatch):
     calls = []
 
