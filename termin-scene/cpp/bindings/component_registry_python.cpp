@@ -89,10 +89,6 @@ bool ComponentRegistryPython::register_python(
     const bool allow_same_owner_replacement =
         existing_owner && owner == existing_owner;
     if (tc_component_registry_has(name.c_str()) && !allow_same_owner_replacement) {
-        auto existing = python_classes().find(name);
-        if (existing != python_classes().end() && existing->second->ptr() == cls.ptr()) {
-            return true;
-        }
         tc::Log::error(
             "[ComponentRegistry] refusing duplicate Python component registration for %s",
             name.c_str());

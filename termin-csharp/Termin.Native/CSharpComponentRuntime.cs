@@ -18,6 +18,10 @@ public static class CSharpComponentRuntime
     // Type name -> factory
     private static readonly Dictionary<string, Func<CSharpComponent>> _factories = new();
 
+    // Native factory userdata must remain valid for the lifetime of a
+    // committed runtime type descriptor.
+    private static readonly Dictionary<string, IntPtr> _factoryUserdata = new();
+
     // Type name -> inspectable PropertyInfo[]
     private static readonly Dictionary<string, PropertyInfo[]> _inspectProperties = new();
 
@@ -101,15 +105,72 @@ public static class CSharpComponentRuntime
     {
         Initialize();
 
+        if (_factories.ContainsKey(typeName))
+            throw new InvalidOperationException($"C# component type '{typeName}' is already registered");
+
         _factories[typeName] = () => new T();
 
-        // Register inspect metadata
-        RegisterInspectFields(typeName, typeof(T));
+        IntPtr inspectDescriptor;
+        PropertyInfo[] inspectProperties;
+        try
+        {
+            inspectDescriptor = BuildInspectDescriptor(
+                typeName, typeof(T), out inspectProperties);
+        }
+        catch
+        {
+            _factories.Remove(typeName);
+            throw;
+        }
 
-        // Register in native component registry.
-        // userdata = pointer to a nul-terminated type name string (leaked intentionally — types are registered once).
+        // Publish the complete native component type atomically. The C#
+        // inspect backend remains language-owned, while the runtime registry
+        // receives the component facet and hierarchy in this single commit.
         var typeNamePtr = Marshal.StringToHGlobalAnsi(typeName);
-        TerminCore.ComponentRegistryRegister(typeName, _factoryPtr, typeNamePtr, (int)ComponentKind.CSharp);
+        var descriptor = TerminCore.RuntimeTypeDescriptorCreate(
+            typeName, "termin-csharp", "Component");
+        if (descriptor == IntPtr.Zero)
+        {
+            TerminCore.CSharpInspectDescriptorDestroy(inspectDescriptor);
+            Marshal.FreeHGlobal(typeNamePtr);
+            _factories.Remove(typeName);
+            throw new InvalidOperationException($"Could not create runtime descriptor for '{typeName}'");
+        }
+        if (!TerminCore.ComponentTypeDescriptorAddFacet(
+                descriptor,
+                _factoryPtr,
+                typeNamePtr,
+                (int)ComponentKind.CSharp,
+                false,
+                null,
+                null,
+                IntPtr.Zero,
+                0,
+                IntPtr.Zero,
+                0))
+        {
+            TerminCore.CSharpInspectDescriptorDestroy(inspectDescriptor);
+            TerminCore.RuntimeTypeDescriptorDestroy(descriptor);
+            Marshal.FreeHGlobal(typeNamePtr);
+            _factories.Remove(typeName);
+            throw new InvalidOperationException($"Could not stage component facet for '{typeName}'");
+        }
+        if (!TerminCore.CSharpInspectDescriptorAttach(inspectDescriptor, descriptor))
+        {
+            TerminCore.CSharpInspectDescriptorDestroy(inspectDescriptor);
+            TerminCore.RuntimeTypeDescriptorDestroy(descriptor);
+            Marshal.FreeHGlobal(typeNamePtr);
+            _factories.Remove(typeName);
+            throw new InvalidOperationException($"Could not stage inspect facet for '{typeName}'");
+        }
+        if (!TerminCore.RuntimeTypeRegistryCommitDescriptor(descriptor))
+        {
+            Marshal.FreeHGlobal(typeNamePtr);
+            _factories.Remove(typeName);
+            throw new InvalidOperationException($"Could not commit runtime descriptor for '{typeName}'");
+        }
+        _factoryUserdata[typeName] = typeNamePtr;
+        _inspectProperties[typeName] = inspectProperties;
     }
 
     // ====================================================================
@@ -138,9 +199,14 @@ public static class CSharpComponentRuntime
     // Inspect field registration (via reflection)
     // ====================================================================
 
-    private static void RegisterInspectFields(string typeName, Type type)
+    private static IntPtr BuildInspectDescriptor(
+        string typeName,
+        Type type,
+        out PropertyInfo[] inspectProperties)
     {
-        TerminCore.InspectCSharpRegisterType(typeName);
+        var descriptor = TerminCore.CSharpInspectDescriptorCreate(typeName);
+        if (descriptor == IntPtr.Zero)
+            throw new InvalidOperationException($"Could not create C# inspect descriptor for '{typeName}'");
 
         var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var inspectList = new List<PropertyInfo>();
@@ -152,17 +218,23 @@ public static class CSharpComponentRuntime
 
             inspectList.Add(prop);
 
-            TerminCore.InspectCSharpRegisterField(
-                typeName,
-                attr.Path,
-                attr.Label ?? attr.Path,
-                attr.Kind,
-                attr.Min,
-                attr.Max,
-                attr.Step);
+            if (!TerminCore.CSharpInspectDescriptorAddField(
+                    descriptor,
+                    attr.Path,
+                    attr.Label ?? attr.Path,
+                    attr.Kind,
+                    attr.Min,
+                    attr.Max,
+                    attr.Step))
+            {
+                TerminCore.CSharpInspectDescriptorDestroy(descriptor);
+                throw new InvalidOperationException(
+                    $"Could not stage inspect field '{typeName}.{attr.Path}'");
+            }
         }
 
-        _inspectProperties[typeName] = inspectList.ToArray();
+        inspectProperties = inspectList.ToArray();
+        return descriptor;
     }
 
     // ====================================================================

@@ -1137,21 +1137,53 @@ public static class TerminCore
     [DllImport(TERMIN_DLL, EntryPoint = "tc_component_free_csharp")]
     public static extern void ComponentFreeCSharp(IntPtr component);
 
-    // Component registry — register factory for a type
-    [DllImport(SCENE_DLL, EntryPoint = "tc_component_registry_register", CharSet = CharSet.Ansi)]
-    public static extern void ComponentRegistryRegister(string typeName, IntPtr factory, IntPtr factoryUserdata, int kind);
+    // Runtime type descriptors are the only component publication path.
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_runtime_type_descriptor_create", CharSet = CharSet.Ansi)]
+    public static extern IntPtr RuntimeTypeDescriptorCreate(
+        string typeName, string owner, string? parentName);
+
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_runtime_type_descriptor_destroy")]
+    public static extern void RuntimeTypeDescriptorDestroy(IntPtr descriptor);
+
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_runtime_type_registry_commit_descriptor")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool RuntimeTypeRegistryCommitDescriptor(IntPtr descriptor);
+
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_type_descriptor_add_facet")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool ComponentTypeDescriptorAddFacet(
+        IntPtr descriptor,
+        IntPtr factory,
+        IntPtr factoryUserdata,
+        int kind,
+        [MarshalAs(UnmanagedType.I1)] bool isAbstract,
+        string? displayName,
+        string? category,
+        IntPtr requirements,
+        nuint requirementCount,
+        IntPtr capabilities,
+        nuint capabilityCount);
 
     // ========================================================================
     // C# Inspect Registration (in termin.dll)
     // ========================================================================
 
-    [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_csharp_register_type", CharSet = CharSet.Ansi)]
-    public static extern void InspectCSharpRegisterType(string typeName);
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_csharp_inspect_descriptor_create", CharSet = CharSet.Ansi)]
+    public static extern IntPtr CSharpInspectDescriptorCreate(string typeName);
 
-    [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_csharp_register_field", CharSet = CharSet.Ansi)]
-    public static extern void InspectCSharpRegisterField(
-        string typeName, string path, string label, string kind,
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_csharp_inspect_descriptor_add_field", CharSet = CharSet.Ansi)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool CSharpInspectDescriptorAddField(
+        IntPtr descriptor, string path, string label, string kind,
         double min, double max, double step);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_csharp_inspect_descriptor_attach")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool CSharpInspectDescriptorAttach(
+        IntPtr inspectDescriptor, IntPtr runtimeDescriptor);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_csharp_inspect_descriptor_destroy")]
+    public static extern void CSharpInspectDescriptorDestroy(IntPtr descriptor);
 
     [DllImport(TERMIN_DLL, EntryPoint = "tc_inspect_set_csharp_callbacks")]
     public static extern void InspectSetCSharpCallbacks(IntPtr getter, IntPtr setter);

@@ -37,27 +37,9 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
         _valid = false;
         return;
     }
-    if (tc_component_registry_has(_type_name.c_str())) {
-        const char* existing_owner = tc_runtime_type_registry_get_owner(_type_name.c_str());
-        if (existing_owner && _owner == existing_owner) {
-            if (!allow_same_owner_replacement) {
-                _already_registered = true;
-                return;
-            }
-        } else {
-            tc::Log::error(
-                "[ComponentTypeDescriptor] type %s is already registered by owner %s",
-                _type_name.c_str(), existing_owner ? existing_owner : "<none>");
-            _valid = false;
-            return;
-        }
-    }
     _descriptor = tc_runtime_type_descriptor_create(
         _type_name.c_str(), _owner.c_str(), parent && parent[0] ? parent : nullptr);
     if (!_descriptor) {
-        _valid = false;
-    } else if (tc::InspectRegistry::instance().is_empty_unowned_type_shell(_type_name) &&
-               !tc_runtime_type_descriptor_allow_unowned_shell_adoption(_descriptor)) {
         _valid = false;
     } else if (allow_same_owner_replacement &&
                !tc_runtime_type_descriptor_allow_same_owner_replacement(_descriptor)) {
@@ -79,7 +61,6 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
       _factory_userdata(other._factory_userdata),
       _kind(other._kind),
       _abstract(other._abstract),
-      _already_registered(other._already_registered),
       _valid(other._valid),
       _display_name(std::move(other._display_name)),
       _category(std::move(other._category)),
@@ -101,7 +82,6 @@ ComponentTypeDescriptorBuilder& ComponentTypeDescriptorBuilder::operator=(
     _factory_userdata = other._factory_userdata;
     _kind = other._kind;
     _abstract = other._abstract;
-    _already_registered = other._already_registered;
     _valid = other._valid;
     _display_name = std::move(other._display_name);
     _category = std::move(other._category);
@@ -132,7 +112,6 @@ ComponentTypeDescriptorBuilder& ComponentTypeDescriptorBuilder::capability(tc_co
 }
 
 bool ComponentTypeDescriptorBuilder::commit() {
-    if (_already_registered) return true;
     if (!_valid || !_descriptor || !_inspect.valid()) {
         tc::Log::error("[ComponentTypeDescriptor] invalid descriptor for %s", _type_name.c_str());
         return false;
@@ -165,14 +144,6 @@ bool ComponentTypeDescriptorBuilder::commit() {
 ComponentRegistry& ComponentRegistry::instance() {
     static ComponentRegistry inst;
     return inst;
-}
-
-void ComponentRegistry::register_native(const std::string& name, tc_component_factory factory, void* userdata, const char* parent) {
-    tc_component_registry_register_with_parent(name.c_str(), factory, userdata, TC_CXX_COMPONENT, parent);
-}
-
-void ComponentRegistry::register_abstract(const std::string& name, const char* parent) {
-    tc_component_registry_register_abstract(name.c_str(), TC_CXX_COMPONENT, parent);
 }
 
 void ComponentRegistry::unregister(const std::string& name) {
@@ -228,17 +199,9 @@ bool ComponentRegistry::is_a(const std::string& name, const std::string& base_na
     return tc_component_registry_is_a(name.c_str(), base_name.c_str());
 }
 
-void ComponentRegistry::set_display_name(const std::string& name, const std::string& display_name) {
-    tc_component_registry_set_display_name(name.c_str(), display_name.c_str());
-}
-
 std::string ComponentRegistry::display_name_of(const std::string& name) const {
     const char* display_name = tc_component_registry_get_display_name(name.c_str());
     return display_name ? std::string(display_name) : std::string();
-}
-
-void ComponentRegistry::set_category(const std::string& name, const std::string& category) {
-    tc_component_registry_set_category(name.c_str(), category.c_str());
 }
 
 std::string ComponentRegistry::category_of(const std::string& name) const {
@@ -288,14 +251,6 @@ std::vector<std::string> ComponentRegistry::requirements_of(const std::string& n
 }
 
 void ComponentRegistry::clear() {
-}
-
-void ComponentRegistry::register_requirement(const std::string& name, const std::string& required_name) {
-    tc_component_registry_add_requirement(name.c_str(), required_name.c_str());
-}
-
-void ComponentRegistry::set_capability(const std::string& name, tc_component_cap_id cap_id, bool enabled) {
-    tc_component_registry_set_capability(name.c_str(), cap_id, enabled);
 }
 
 bool ComponentRegistry::has_capability(const std::string& name, tc_component_cap_id cap_id) {

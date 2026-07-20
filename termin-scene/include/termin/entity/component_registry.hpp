@@ -23,7 +23,6 @@ class ENTITY_API ComponentTypeDescriptorBuilder {
     void* _factory_userdata = nullptr;
     tc_component_kind _kind = TC_CXX_COMPONENT;
     bool _abstract = false;
-    bool _already_registered = false;
     bool _valid = true;
     std::string _display_name;
     std::string _category;
@@ -76,12 +75,6 @@ public:
     // Singleton access
     static ComponentRegistry& instance();
 
-    // C++ component registration - registers directly in C registry
-    void register_native(const std::string& name, tc_component_factory factory, void* userdata, const char* parent = nullptr);
-
-    // Register abstract component (no factory, can't be instantiated)
-    void register_abstract(const std::string& name, const char* parent = nullptr);
-
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
@@ -93,9 +86,7 @@ public:
     bool has(const std::string& name) const;
     bool is_native(const std::string& name) const;
     bool is_a(const std::string& name, const std::string& base_name) const;
-    void set_display_name(const std::string& name, const std::string& display_name);
     std::string display_name_of(const std::string& name) const;
-    void set_category(const std::string& name, const std::string& category);
     std::string category_of(const std::string& name) const;
 
     // Listing
@@ -105,11 +96,6 @@ public:
 
     // Clear all (for testing)
     void clear();
-
-    void register_requirement(const std::string& name, const std::string& required_name);
-
-    // Enable or disable a capability for a component type
-    static void set_capability(const std::string& name, tc_component_cap_id cap_id, bool enabled);
 
     // Check whether a component type has a capability
     static bool has_capability(const std::string& name, tc_component_cap_id cap_id);
@@ -174,84 +160,5 @@ ComponentTypeDescriptorBuilder ComponentTypeDescriptorBuilder::native(
         TC_CXX_COMPONENT,
         false);
 }
-
-template<typename T>
-void register_component_type(const char* name, const char* parent = nullptr) {
-    if (!name || !name[0]) {
-        return;
-    }
-
-    if (!CxxComponentFactoryData<T>::initialized) {
-        CxxComponentFactoryData<T>::has_update = component_overrides_update<T>();
-        CxxComponentFactoryData<T>::has_fixed_update = component_overrides_fixed_update<T>();
-        CxxComponentFactoryData<T>::initialized = true;
-    }
-
-    ComponentRegistry::instance().register_native(
-        name,
-        &CxxComponentFactoryData<T>::create,
-        nullptr,
-        parent
-    );
-
-    if (parent && parent[0]) {
-        tc::InspectRegistry::instance().set_type_parent(name, parent);
-    }
-
-    mark_drawable_if_base<T>(name);
-}
-
-inline void register_component_requirement(
-    const char* name,
-    const char* required_name
-) {
-    if (!name || !name[0] || !required_name || !required_name[0]) {
-        return;
-    }
-    ComponentRegistry::instance().register_requirement(name, required_name);
-}
-
-// Helper for static registration of C++ components.
-template<typename T>
-struct ComponentRegistrar {
-    ComponentRegistrar(const char* name, const char* parent = nullptr) {
-        register_component_type<T>(name, parent);
-    }
-};
-
-#define REGISTER_COMPONENT(ClassName, Parent) \
-    static ::termin::ComponentRegistrar<ClassName> \
-        _component_registrar_##ClassName(#ClassName, #Parent)
-
-// Registration for abstract component types (no factory, can't be instantiated).
-struct AbstractComponentRegistrar {
-    AbstractComponentRegistrar(const char* name, const char* parent = nullptr) {
-        ComponentRegistry::instance().register_abstract(name, parent);
-        if (parent) {
-            tc::InspectRegistry::instance().set_type_parent(name, parent);
-        }
-    }
-};
-
-struct ComponentRequirementRegistrar {
-    ComponentRequirementRegistrar(const char* name, const char* required_name) {
-        register_component_requirement(name, required_name);
-    }
-};
-
-#define REGISTER_ABSTRACT_COMPONENT(ClassName, Parent) \
-    static ::termin::AbstractComponentRegistrar \
-        _component_registrar_##ClassName(#ClassName, #Parent)
-
-#define REQUIRE_COMPONENT(ClassName, RequiredClassName) \
-    static ::termin::ComponentRequirementRegistrar \
-        _component_requirement_registrar_##ClassName##_##RequiredClassName( \
-            #ClassName, #RequiredClassName)
-
-#define TC_MODULE_REGISTER_COMPONENT(ClassName, Parent) \
-    ::termin::register_component_type<ClassName>(#ClassName, #Parent)
-
-#define TC_MODULE_REQUIRE_COMPONENT(ClassName, RequiredClassName) \
-    ::termin::register_component_requirement(#ClassName, #RequiredClassName)
 
 } // namespace termin
