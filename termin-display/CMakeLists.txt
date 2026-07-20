@@ -221,6 +221,7 @@ install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/render/termin_display_api.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport_pool.h
+    ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_display_pool.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_display.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_input_manager.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport_input_manager.h
@@ -261,6 +262,10 @@ endif()
 
 option(TERMIN_DISPLAY_BUILD_TESTS "Build termin-display tests" OFF)
 if(TERMIN_DISPLAY_BUILD_TESTS)
+    add_executable(display_handles_test tests/test_display_handles.cpp)
+    target_link_libraries(display_handles_test PRIVATE termin_display)
+    add_test(NAME display_handles_test COMMAND display_handles_test)
+
     add_executable(display_input_router_test tests/test_display_input_router.cpp)
     target_link_libraries(display_input_router_test PRIVATE termin_display)
     add_test(NAME display_input_router_test COMMAND display_input_router_test)

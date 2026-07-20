@@ -4,7 +4,7 @@ using WpfInput = Termin.WpfTest.Input;
 namespace Termin.WpfTest;
 
 /// <summary>
-/// Manages tc_display and tc_display_input_router for WPF.
+/// Manages a generation handle to tc_display for WPF.
 ///
 /// Flow:
 /// 1. WpfRenderSurface wraps GLWpfControl as tc_render_surface
@@ -16,15 +16,14 @@ public class NativeDisplayManager : IDisposable
 {
     private readonly WpfRenderSurface _renderSurface;
     private readonly GlWpfBackend _backend;
-    private IntPtr _displayPtr;
-    private IntPtr _routerPtr;
+    private TcDisplayHandle _displayHandle = TcDisplayHandle.Invalid;
     private IntPtr _inputManagerPtr;
     private bool _disposed;
 
     /// <summary>
-    /// Native tc_display pointer.
+    /// Copyable non-owning tc_display handle.
     /// </summary>
-    public IntPtr DisplayPtr => _displayPtr;
+    public TcDisplayHandle DisplayHandle => _displayHandle;
 
     /// <summary>
     /// Native tc_input_manager pointer.
@@ -37,23 +36,19 @@ public class NativeDisplayManager : IDisposable
         _backend = backend;
 
         // Create tc_display with render surface
-        _displayPtr = TerminCore.DisplayNew(name, _renderSurface.SurfacePtr);
-        if (_displayPtr == IntPtr.Zero)
+        _displayHandle = TerminCore.DisplayNew(name, _renderSurface.SurfacePtr);
+        if (!_displayHandle.IsValid)
         {
             throw new Exception("Failed to create tc_display");
         }
 
-        // Create tc_display_input_router (auto-attaches to surface)
-        _routerPtr = TerminCore.DisplayInputRouterNew(_displayPtr);
-        if (_routerPtr == IntPtr.Zero)
+        _inputManagerPtr = TerminCore.DisplayGetInputManager(_displayHandle);
+        if (_inputManagerPtr == IntPtr.Zero)
         {
-            TerminCore.DisplayFree(_displayPtr);
-            _displayPtr = IntPtr.Zero;
-            throw new Exception("Failed to create tc_display_input_router");
+            TerminCore.DisplayFree(_displayHandle);
+            _displayHandle = TcDisplayHandle.Invalid;
+            throw new Exception("Failed to resolve tc_display input endpoint");
         }
-
-        // Get tc_input_manager pointer
-        _inputManagerPtr = TerminCore.DisplayInputRouterBase(_routerPtr);
 
         // Subscribe to backend events
         _backend.OnMouseButton += OnMouseButton;
@@ -61,7 +56,7 @@ public class NativeDisplayManager : IDisposable
         _backend.OnScroll += OnScroll;
         _backend.OnKey += OnKey;
 
-        Console.WriteLine($"[NativeDisplayManager] Created: display=0x{_displayPtr:X}, input_manager=0x{_inputManagerPtr:X}");
+        Console.WriteLine($"[NativeDisplayManager] Created: display={_displayHandle}, input_manager=0x{_inputManagerPtr:X}");
     }
 
     /// <summary>
@@ -69,9 +64,9 @@ public class NativeDisplayManager : IDisposable
     /// </summary>
     public void AddViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
+        if (_displayHandle.IsValid && viewport.IsValid)
         {
-            TerminCore.DisplayAddViewport(_displayPtr, viewport);
+            TerminCore.DisplayAddViewport(_displayHandle, viewport);
         }
     }
 
@@ -80,9 +75,9 @@ public class NativeDisplayManager : IDisposable
     /// </summary>
     public void RemoveViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
+        if (_displayHandle.IsValid && viewport.IsValid)
         {
-            TerminCore.DisplayRemoveViewport(_displayPtr, viewport);
+            TerminCore.DisplayRemoveViewport(_displayHandle, viewport);
         }
     }
 
@@ -136,26 +131,14 @@ public class NativeDisplayManager : IDisposable
         _backend.OnScroll -= OnScroll;
         _backend.OnKey -= OnKey;
 
-        // Free router first (it detaches from surface)
-        if (_routerPtr != IntPtr.Zero)
+        _inputManagerPtr = IntPtr.Zero;
+        if (_displayHandle.IsValid)
         {
-            TerminCore.DisplayInputRouterFree(_routerPtr);
-            _routerPtr = IntPtr.Zero;
-            _inputManagerPtr = IntPtr.Zero;
-        }
-
-        // Free display
-        if (_displayPtr != IntPtr.Zero)
-        {
-            TerminCore.DisplayFree(_displayPtr);
-            _displayPtr = IntPtr.Zero;
+            TerminCore.DisplayFree(_displayHandle);
+            _displayHandle = TcDisplayHandle.Invalid;
         }
 
         GC.SuppressFinalize(this);
     }
 
-    ~NativeDisplayManager()
-    {
-        Dispose();
-    }
 }

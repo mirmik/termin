@@ -1002,13 +1002,13 @@ struct PlayerRuntimeHost::Impl {
         scene_registered = true;
     }
 
-    tc_display* display_factory(const std::string& requested_name) {
+    tc_display_handle display_factory(const std::string& requested_name) {
         if (!display || !display->is_valid()) {
             tc_log_error("termin_player: display requested before display initialization");
-            return nullptr;
+            return TC_DISPLAY_HANDLE_INVALID;
         }
         display->set_name(requested_name.empty() ? "Main" : requested_name);
-        return display->ptr();
+        return display->handle();
     }
 
     void initialize_window_and_rendering() {
@@ -1055,14 +1055,14 @@ struct PlayerRuntimeHost::Impl {
             return;
         }
 
-        tc_input_manager* router = manager.display_input_endpoint(display->ptr());
+        tc_input_manager* router = manager.display_input_endpoint(display->handle());
         if (router == nullptr) {
             tc_log_error("termin_player: failed to create display input router");
             return;
         }
 
         if (window) {
-            attach_window_input_display(*window, display->ptr());
+            attach_window_input_display(*window, display->handle());
         }
 
         int active_viewports = 0;
@@ -1108,7 +1108,7 @@ struct PlayerRuntimeHost::Impl {
 
     void clear_input() {
         if (window) {
-            attach_window_input_display(*window, nullptr);
+            attach_window_input_display(*window, TC_DISPLAY_HANDLE_INVALID);
         }
         for (tc_viewport_input_manager* input : viewport_input_managers) {
             tc_viewport_input_manager_free(input);
@@ -1228,10 +1228,13 @@ struct PlayerRuntimeHost::Impl {
                 scene_attached = false;
             }
             if (display && display->is_valid()) {
-                manager->remove_display(display->ptr());
+                manager->remove_display(display->handle());
             }
         }
 
+        if (display && display->is_valid()) {
+            display->destroy();
+        }
         display.reset();
 
         if (scene_registered && engine) {

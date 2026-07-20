@@ -4,6 +4,7 @@
 
 #include "tc_types.h"
 #include "render/termin_display_api.h"
+#include "render/tc_display_pool.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,7 +13,6 @@
 extern "C" {
 #endif
 
-typedef struct tc_display tc_display;
 typedef struct tc_render_surface tc_render_surface;
 typedef struct tc_render_surface_vtable tc_render_surface_vtable;
 
@@ -43,7 +43,7 @@ struct tc_render_surface {
     void* on_resize_userdata;
     // Enforces the one-surface-to-one-display contract and protects the sole
     // resize subscription from accidental overwrite.
-    tc_display* attached_display;
+    tc_display_handle attached_display;
 };
 
 static inline void tc_render_surface_init(
@@ -54,7 +54,7 @@ static inline void tc_render_surface_init(
     surface->body = NULL;
     surface->on_resize = NULL;
     surface->on_resize_userdata = NULL;
-    surface->attached_display = NULL;
+    surface->attached_display = TC_DISPLAY_HANDLE_INVALID;
 }
 
 static inline void tc_render_surface_get_size(
@@ -109,11 +109,11 @@ static inline void tc_render_surface_notify_resize(
 // only for the display that currently owns the attachment.
 TERMIN_DISPLAY_API bool tc_render_surface_attach(
     tc_render_surface* surface,
-    tc_display* display
+    tc_display_handle display
 );
 TERMIN_DISPLAY_API bool tc_render_surface_detach(
     tc_render_surface* surface,
-    tc_display* display
+    tc_display_handle display
 );
 
 // External adapters pass size and version explicitly, so stale managed/native

@@ -118,11 +118,11 @@ class NativeDisplayWorkspace:
         return self.editor_viewport.display
 
     def contains_display(self, display: object) -> bool:
-        pointer = self._display_pointer(display)
-        return any(self._display_pointer(candidate) == pointer for candidate in self.displays)
+        handle = self._display_handle(display)
+        return any(self._display_handle(candidate) == handle for candidate in self.displays)
 
     def is_editor_display(self, display: object) -> bool:
-        return self._display_pointer(display) == self._display_pointer(self.editor_viewport.display)
+        return self._display_handle(display) == self._display_handle(self.editor_viewport.display)
 
     def create_display(self, name: str | None = None) -> object:
         """Create, register and project one runtime display into a native tab."""
@@ -141,9 +141,11 @@ class NativeDisplayWorkspace:
             if not surface.is_valid():
                 raise RuntimeError("native display FBO surface is invalid")
             display = Display(surface=surface, name=display_name)
-            input_manager = BasicDisplayInputManager(display.tc_display_ptr)
+            input_manager = BasicDisplayInputManager(display.handle)
             widget = self.document.create_viewport3d()
-            widget.widget.stable_id = f"editor.display-workspace.display-{display.tc_display_ptr}"
+            widget.widget.stable_id = (
+                f"editor.display-workspace.display-{display.index}-{display.generation}"
+            )
             widget.widget.preferred_size = Size(800.0, 600.0)
             widget.set_surface_host(DisplayViewportHost(surface, display))
             self.rendering_manager.add_display(display, display_name)
@@ -202,8 +204,8 @@ class NativeDisplayWorkspace:
         return True
 
     def select_display(self, display: object) -> bool:
-        pointer = self._display_pointer(display)
-        if pointer == self._display_pointer(self.editor_viewport.display):
+        handle = self._display_handle(display)
+        if handle == self._display_handle(self.editor_viewport.display):
             self.tabs.selected_index = 0
             return True
         page_index = self._page_index(display)
@@ -379,15 +381,15 @@ class NativeDisplayWorkspace:
         return f"Display {index}"
 
     def _page_index(self, display: object) -> int | None:
-        pointer = self._display_pointer(display)
+        handle = self._display_handle(display)
         for index, page in enumerate(self._pages):
-            if self._display_pointer(page.display) == pointer:
+            if self._display_handle(page.display) == handle:
                 return index
         return None
 
     @staticmethod
-    def _display_pointer(display: object) -> int:
-        return int(display.tc_display_ptr)
+    def _display_handle(display: object) -> tuple[int, int]:
+        return display.handle
 
     def _require_open(self) -> None:
         if self._closed:

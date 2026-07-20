@@ -68,7 +68,7 @@ class DisplayInspectorController:
                 size=size,
                 viewport_count=len(display.viewports),
                 editor_only=bool(display.editor_only),
-                debug_identity=f"0x{int(display.tc_display_ptr):X}",
+                debug_identity=f"{display.handle}",
             )
         )
 
@@ -601,8 +601,8 @@ def _identity_index(values: tuple[Any, ...], target: Any, identity: Callable[[An
     return next((index for index, value in enumerate(values) if identity(value) == target_identity), -1)
 
 
-def _display_identity(display) -> int:
-    return int(display.tc_display_ptr)
+def _display_identity(display) -> tuple[int, int]:
+    return display.handle
 
 
 def _scene_identity(scene) -> tuple[int, int]:

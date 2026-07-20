@@ -45,7 +45,7 @@ class _Viewport:
 @dataclass
 class _Display:
     name: str
-    tc_display_ptr: int
+    handle: tuple[int, int]
     viewports: list[_Viewport] = field(default_factory=list)
 
 
@@ -65,7 +65,7 @@ def test_viewport_list_snapshot_hierarchy_selection_and_names():
     root.transform.children.append(child.transform)
     target = _RenderTarget("MainTarget")
     viewport = _Viewport("Game", target, root)
-    display = _Display("Window", 10, [viewport])
+    display = _Display("Window", (10, 1), [viewport])
     xr_target = _RenderTarget("Headset", "xr_stereo", index=2)
     controller = ViewportListController()
 
@@ -89,7 +89,7 @@ def test_viewport_list_snapshot_hierarchy_selection_and_names():
     assert controller.snapshot.roots[0].label == "Preview"
 
     replacement_viewport = _Viewport("Game Reloaded", target, root)
-    replacement_display = _Display("Replacement Wrapper", 10, [replacement_viewport])
+    replacement_display = _Display("Replacement Wrapper", (10, 1), [replacement_viewport])
     controller.set_displays([replacement_display])
     assert controller.snapshot.selected_id == viewport_node.stable_id
     assert controller.snapshot.find(viewport_node.stable_id).value is replacement_viewport
@@ -98,7 +98,7 @@ def test_viewport_list_snapshot_hierarchy_selection_and_names():
 
 def test_viewport_list_actions_rename_and_stale_selection_reconciliation():
     viewport = _Viewport("Game")
-    display = _Display("Window", 11, [viewport])
+    display = _Display("Window", (11, 1), [viewport])
     target = _RenderTarget("Target")
     controller = ViewportListController()
     controller.set_displays([display])

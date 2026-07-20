@@ -29,11 +29,14 @@ public static class SwigHelpers
     }
 
     /// <summary>
-    /// Wrap an IntPtr as SWIGTYPE_p_tc_display for passing to SWIG methods.
+    /// Convert a P/Invoke display handle to its SWIG representation.
     /// </summary>
-    public static SWIGTYPE_p_tc_display WrapTcDisplayPtr(IntPtr ptr)
+    public static tc_display_handle ToSwigDisplayHandle(TcDisplayHandle handle)
     {
-        return new SWIGTYPE_p_tc_display(ptr, false);
+        var swigHandle = new tc_display_handle();
+        swigHandle.index = handle.Index;
+        swigHandle.generation = handle.Generation;
+        return swigHandle;
     }
 
     /// <summary>

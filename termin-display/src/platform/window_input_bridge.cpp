@@ -39,7 +39,7 @@ bool decode_utf8(std::string_view text, size_t& offset, uint32_t& codepoint) {
 
 } // namespace
 
-void dispatch_window_input_event(tc_display* display, const WindowEvent& event) {
+void dispatch_window_input_event(tc_display_handle display, const WindowEvent& event) {
     switch (event.type) {
         case WindowEventType::PointerMoved:
             tc_display_dispatch_pointer_move(
@@ -106,8 +106,8 @@ void dispatch_window_input_event(tc_display* display, const WindowEvent& event) 
 
 void attach_window_input_display(
     BackendWindow& window,
-    tc_display* display) {
-    if (!display) {
+    tc_display_handle display) {
+    if (!tc_display_handle_valid(display)) {
         window.set_event_handler({});
         return;
     }

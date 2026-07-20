@@ -7,13 +7,17 @@ def test_basic_display_input_manager_releases_only_owned_viewport_managers(monke
 
     freed_viewports = []
     next_pointer = iter((201, 202))
-    monkeypatch.setattr(input_module, "_display_get_input_manager", lambda display: display + 101)
+    monkeypatch.setattr(
+        input_module,
+        "_display_get_input_manager",
+        lambda index, generation: index + generation + 101,
+    )
     monkeypatch.setattr(input_module, "_viewport_get_input_manager", lambda _index, _generation: 0)
     monkeypatch.setattr(input_module, "_viewport_input_manager_new", lambda _index, _generation: next(next_pointer))
     monkeypatch.setattr(input_module, "_viewport_input_manager_free", freed_viewports.append)
 
-    manager = BasicDisplayInputManager(7)
-    assert manager.tc_input_manager_ptr == 108
+    manager = BasicDisplayInputManager((7, 3))
+    assert manager.tc_input_manager_ptr == 111
     assert manager.add_viewport(1, 2)
     assert manager.add_viewport(1, 2)
     assert manager.add_viewport(3, 4)

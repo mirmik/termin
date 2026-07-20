@@ -91,7 +91,7 @@ tc_render_surface* tc_render_surface_new_external(
 
 bool tc_render_surface_free_external(tc_render_surface* s) {
     if (!s) return true;
-    if (s->attached_display) {
+    if (tc_display_handle_valid(s->attached_display)) {
         tc_log(TC_LOG_ERROR,
                "[tc_render_surface_free_external] surface is still attached to a display");
         return false;
@@ -107,12 +107,13 @@ bool tc_render_surface_free_external(tc_render_surface* s) {
     return true;
 }
 
-bool tc_render_surface_attach(tc_render_surface* surface, tc_display* display) {
-    if (!surface || !display) {
+bool tc_render_surface_attach(tc_render_surface* surface, tc_display_handle display) {
+    if (!surface || !tc_display_handle_valid(display)) {
         tc_log(TC_LOG_ERROR, "[tc_render_surface_attach] surface and display are required");
         return false;
     }
-    if (surface->attached_display && surface->attached_display != display) {
+    if (tc_display_handle_valid(surface->attached_display) &&
+        !tc_display_handle_eq(surface->attached_display, display)) {
         tc_log(TC_LOG_ERROR,
                "[tc_render_surface_attach] surface is already attached to another display");
         return false;
@@ -121,16 +122,16 @@ bool tc_render_surface_attach(tc_render_surface* surface, tc_display* display) {
     return true;
 }
 
-bool tc_render_surface_detach(tc_render_surface* surface, tc_display* display) {
-    if (!surface || !display) {
+bool tc_render_surface_detach(tc_render_surface* surface, tc_display_handle display) {
+    if (!surface || !tc_display_handle_valid(display)) {
         tc_log(TC_LOG_ERROR, "[tc_render_surface_detach] surface and display are required");
         return false;
     }
-    if (surface->attached_display != display) {
+    if (!tc_display_handle_eq(surface->attached_display, display)) {
         tc_log(TC_LOG_ERROR,
                "[tc_render_surface_detach] display does not own this surface attachment");
         return false;
     }
-    surface->attached_display = NULL;
+    surface->attached_display = TC_DISPLAY_HANDLE_INVALID;
     return true;
 }

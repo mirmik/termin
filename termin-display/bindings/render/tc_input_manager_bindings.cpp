@@ -208,10 +208,11 @@ void bind_tc_input_manager(nb::module_& m) {
     m.attr("TC_MOD_ALT") = TC_MOD_ALT;
     m.attr("TC_MOD_SUPER") = TC_MOD_SUPER;
 
-    m.def("_display_get_input_manager", [](uintptr_t display_ptr) -> uintptr_t {
-        tc_display* display = reinterpret_cast<tc_display*>(display_ptr);
-        return reinterpret_cast<uintptr_t>(tc_display_get_input_manager(display));
-    }, nb::arg("display_ptr"), "Return the stable display-owned input endpoint.");
+    m.def("_display_get_input_manager", [](uint32_t index, uint32_t generation) -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(
+            tc_display_get_input_manager(tc_display_handle{index, generation}));
+    }, nb::arg("index"), nb::arg("generation"),
+       "Return the stable display-owned input endpoint.");
 
     // ========================================================================
     // tc_viewport_input_manager - per-viewport scene dispatch
@@ -245,10 +246,10 @@ void bind_tc_input_manager(nb::module_& m) {
     });
 
     // Get surface pointer from display
-    m.def("_display_get_surface_ptr", [](uintptr_t display_ptr) -> uintptr_t {
-        tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
-        return reinterpret_cast<uintptr_t>(tc_display_get_surface(d));
-    });
+    m.def("_display_get_surface_ptr", [](uint32_t index, uint32_t generation) -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(
+            tc_display_get_surface(tc_display_handle{index, generation}));
+    }, nb::arg("index"), nb::arg("generation"));
 }
 
 } // namespace termin

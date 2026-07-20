@@ -42,11 +42,13 @@ bool contains_render_target(
 
 void update_viewport_rects(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display
+    tc_display_handle only_display
 ) {
     for (const auto& attachment : attachments) {
-        tc_display* display = attachment.display;
-        if (!display || (only_display && display != only_display)) continue;
+        tc_display_handle display = attachment.display;
+        if (!tc_display_alive(display) ||
+            (tc_display_handle_valid(only_display) &&
+             !tc_display_handle_eq(display, only_display))) continue;
         if (!tc_display_get_enabled(display)) {
             continue;
         }
@@ -71,11 +73,13 @@ void update_viewport_rects(
 
 void sync_viewport_render_target_resolutions(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display
+    tc_display_handle only_display
 ) {
     for (const auto& attachment : attachments) {
-        tc_display* display = attachment.display;
-        if (!display || (only_display && display != only_display)) continue;
+        tc_display_handle display = attachment.display;
+        if (!tc_display_alive(display) ||
+            (tc_display_handle_valid(only_display) &&
+             !tc_display_handle_eq(display, only_display))) continue;
         if (!tc_display_get_enabled(display)) {
             continue;
         }
@@ -102,12 +106,14 @@ void sync_viewport_render_target_resolutions(
 
 OffscreenRenderPlan build_offscreen_render_plan(
     const std::vector<RenderTopology::ViewportAttachment>& attachments,
-    tc_display* only_display
+    tc_display_handle only_display
 ) {
     OffscreenRenderPlan plan;
     for (const auto& attachment : attachments) {
-        tc_display* display = attachment.display;
-        if (!display || (only_display && display != only_display)) continue;
+        tc_display_handle display = attachment.display;
+        if (!tc_display_alive(display) ||
+            (tc_display_handle_valid(only_display) &&
+             !tc_display_handle_eq(display, only_display))) continue;
 
         tc_viewport_handle vp = attachment.viewport;
         if (tc_viewport_handle_valid(vp)) {

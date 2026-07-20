@@ -117,11 +117,11 @@ class RenderingControllerTcgui:
 
     @property
     def editor_display(self) -> "Display | None":
-        ptr = self._model.editor_display_ptr
-        if ptr is None:
+        handle = self._model.editor_display_handle
+        if handle is None:
             return None
         for display in self._manager.displays:
-            if display.tc_display_ptr == ptr:
+            if display.handle == handle:
                 return display
         return None
 
@@ -130,12 +130,12 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
 
     @property
-    def _editor_display_ptr(self) -> int | None:
-        return self._model.editor_display_ptr
+    def _editor_display_handle(self) -> tuple[int, int] | None:
+        return self._model.editor_display_handle
 
-    @_editor_display_ptr.setter
-    def _editor_display_ptr(self, value: int | None) -> None:
-        self._model.set_editor_display_ptr(value)
+    @_editor_display_handle.setter
+    def _editor_display_handle(self, value: tuple[int, int] | None) -> None:
+        self._model.set_editor_display_handle(value)
 
     @property
     def _selected_display(self) -> "Display | None":
@@ -154,14 +154,14 @@ class RenderingControllerTcgui:
         self._model.set_selected_viewport(value)
 
     @property
-    def _display_input_managers(self) -> dict[int, object]:
+    def _display_input_managers(self) -> dict[tuple[int, int], object]:
         return self._model.display_input_managers
 
-    def set_editor_display_ptr(self, ptr: int) -> None:
-        self._model.set_editor_display_ptr(ptr)
+    def set_editor_display_handle(self, handle: tuple[int, int]) -> None:
+        self._model.set_editor_display_handle(handle)
 
     def is_editor_display(self, display: "Display") -> bool:
-        return display.tc_display_ptr == self._editor_display_ptr
+        return display.handle == self._editor_display_handle
 
     def set_center_tabs(self, tabs) -> None:
         self._center_tabs = tabs
@@ -211,7 +211,7 @@ class RenderingControllerTcgui:
         display = Display(surface=fbo, name=name)
         display.auto_remove_when_empty = True
 
-        display_id = display.tc_display_ptr
+        display_id = display.handle
         self._display_surfaces[display_id] = fbo
 
         # Add tab with Viewport3D for this display
@@ -253,9 +253,9 @@ class RenderingControllerTcgui:
         """Detach scene and clean up per-display input managers."""
         emptied = self._model.detach_scene(scene)
 
-        for display_ptr in emptied:
-            self._free_viewport_input_managers(display_ptr)
-            self._display_input_managers.pop(display_ptr, None)
+        for display_handle in emptied:
+            self._free_viewport_input_managers(display_handle)
+            self._display_input_managers.pop(display_handle, None)
 
         self._request_update()
         self._notify_rendering_changed()
@@ -284,7 +284,7 @@ class RenderingControllerTcgui:
         through the dict the factory populates at create time and pass it
         in explicitly.
         """
-        display_id = display.tc_display_ptr
+        display_id = display.handle
         surface = self._display_surfaces.get(display_id)
         # Editor mode here is a no-op — the editor display has its input
         # handling wired up by ``EditorWindowTcgui._attach_editor_input_router``
@@ -309,8 +309,8 @@ class RenderingControllerTcgui:
             log.warn(f"Cannot create input manager for viewport '{viewport.name}': display not found")
             return
 
-        display_id = display.tc_display_ptr
-        if display_id == self._editor_display_ptr:
+        display_id = display.handle
+        if display_id == self._editor_display_handle:
             return
 
         from termin.display._display_native import _viewport_input_manager_new
@@ -337,7 +337,7 @@ class RenderingControllerTcgui:
         _display_id, ptr = entry
         _viewport_input_manager_free(ptr)
 
-    def _free_viewport_input_managers(self, display_id: int) -> None:
+    def _free_viewport_input_managers(self, display_id: tuple[int, int]) -> None:
         keys = [
             key for key, (owner_display_id, _ptr) in self._viewport_input_managers.items()
             if owner_display_id == display_id
@@ -418,7 +418,7 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
 
     def _on_display_removed(self, display: "Display") -> None:
-        display_id = display.tc_display_ptr
+        display_id = display.handle
 
         # Remove tab
         if display_id in self._display_viewports:

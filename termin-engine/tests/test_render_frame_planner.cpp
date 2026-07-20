@@ -23,8 +23,9 @@ int main()
     using termin::RenderTopology;
     using namespace termin::rendering_manager_detail;
 
-    tc_display* display_a = tc_display_new("DisplayA", nullptr);
-    tc_display* display_b = tc_display_new("DisplayB", nullptr);
+    tc_display_pool_init();
+    tc_display_handle display_a = tc_display_new("DisplayA", nullptr);
+    tc_display_handle display_b = tc_display_new("DisplayB", nullptr);
     tc_render_target_handle target_a = tc_render_target_new("TargetA");
     tc_render_target_handle target_b = tc_render_target_new("TargetB");
     tc_viewport_handle viewport_a = tc_viewport_new("ViewportA", TC_SCENE_HANDLE_INVALID);
@@ -71,5 +72,6 @@ int main()
     tc_render_target_free(target_b);
     tc_display_free(display_a);
     tc_display_free(display_b);
+    tc_display_pool_shutdown();
     return 0;
 }

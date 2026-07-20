@@ -325,10 +325,11 @@ const std::vector<tc_render_target_handle>& RenderTopology::render_targets(
 bool RenderTopology::register_viewport(
     tc_scene_handle scene,
     tc_viewport_handle viewport,
-    tc_display* display,
+    tc_display_handle display,
     bool destroy_on_scene_detach
 ) {
-    if (!tc_scene_handle_valid(scene) || !tc_viewport_handle_valid(viewport) || !display) {
+    if (!tc_scene_handle_valid(scene) || !tc_viewport_handle_valid(viewport) ||
+        !tc_display_alive(display)) {
         tc_log(TC_LOG_ERROR, "[RenderTopology] Cannot register incomplete viewport attachment");
         return false;
     }
@@ -344,7 +345,8 @@ bool RenderTopology::register_viewport(
         }
     );
     if (existing != viewport_attachments_.end()) {
-        if (!same_scene(existing->scene, scene) || existing->display != display
+        if (!same_scene(existing->scene, scene) ||
+                !tc_display_handle_eq(existing->display, display)
                 || existing->destroy_on_scene_detach != destroy_on_scene_detach) {
             tc_log(TC_LOG_ERROR, "[RenderTopology] Viewport is already attached elsewhere");
             return false;
@@ -411,7 +413,7 @@ tc_viewport_handle RenderTopology::find_viewport(
     return TC_VIEWPORT_HANDLE_INVALID;
 }
 
-tc_display* RenderTopology::display_for_viewport(tc_viewport_handle viewport) const {
+tc_display_handle RenderTopology::display_for_viewport(tc_viewport_handle viewport) const {
     auto attachment = std::find_if(
         viewport_attachments_.begin(),
         viewport_attachments_.end(),
@@ -419,7 +421,8 @@ tc_display* RenderTopology::display_for_viewport(tc_viewport_handle viewport) co
             return same_viewport(candidate.viewport, viewport);
         }
     );
-    return attachment == viewport_attachments_.end() ? nullptr : attachment->display;
+    return attachment == viewport_attachments_.end()
+        ? TC_DISPLAY_HANDLE_INVALID : attachment->display;
 }
 
 void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_detach) {

@@ -2,15 +2,15 @@ from termin.player.runtime import PlayerRuntime
 
 
 class _FakeDisplay:
-    tc_display_ptr = 101
+    handle = (101, 7)
 
 
 class _InputSink:
     def __init__(self):
-        self.display_ptr = 0
+        self.display_handle = None
 
-    def set_input_display(self, ptr):
-        self.display_ptr = ptr
+    def set_input_display(self, index, generation):
+        self.display_handle = (index, generation)
 
 
 class _Viewport:
@@ -28,8 +28,8 @@ class _Viewport:
 class _BasicDisplayInputManager:
     instances = []
 
-    def __init__(self, display_ptr):
-        self.display_ptr = display_ptr
+    def __init__(self, display_handle):
+        self.display_handle = display_handle
         self.viewports = []
         self.tc_input_manager_ptr = 4242
         _BasicDisplayInputManager.instances.append(self)
@@ -63,11 +63,11 @@ def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monke
 
     assert len(_BasicDisplayInputManager.instances) == 1
     input_manager = _BasicDisplayInputManager.instances[0]
-    assert input_manager.display_ptr == 101
+    assert input_manager.display_handle == (101, 7)
     assert input_manager.viewports == [(1, 10), (2, 20)]
     assert runtime._input_manager is input_manager
-    assert runtime.window.display_ptr == 101
-    assert runtime.surface.display_ptr == 0
+    assert runtime.window.display_handle == (101, 7)
+    assert runtime.surface.display_handle is None
 
 
 def test_player_runtime_tracks_attached_viewports():

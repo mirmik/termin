@@ -63,7 +63,9 @@ class _Display:
         self.surface = surface
         self.name = name
         self.editor_only = editor_only
-        self.tc_display_ptr = 41
+        self.index = 41
+        self.generation = 1
+        self.handle = (self.index, self.generation)
         self.destroyed = False
 
     def is_valid(self) -> bool:
@@ -257,14 +259,16 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
             self.closed = True
 
     class InputManager:
-        def __init__(self, index: int, generation: int, display_ptr: int) -> None:
-            self.args = (index, generation, display_ptr)
+        def __init__(self, index: int, generation: int,
+                     display_index: int, display_generation: int) -> None:
+            self.args = (index, generation, display_index, display_generation)
             self.rebinds = []
             self.detached = False
 
-        def rebind(self, index: int, generation: int, display_ptr: int) -> bool:
-            self.rebinds.append((index, generation, display_ptr))
-            self.args = (index, generation, display_ptr)
+        def rebind(self, index: int, generation: int,
+                   display_index: int, display_generation: int) -> bool:
+            self.rebinds.append((index, generation, display_index, display_generation))
+            self.args = (index, generation, display_index, display_generation)
             self.detached = False
             return True
 
@@ -301,7 +305,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     assert manager.added == [runtime.display]
     assert runtime.attachment.scene == "scene"
     assert runtime.attachment.restore_state is False
-    assert runtime.input_manager.args == (3, 9, 41)
+    assert runtime.input_manager.args == (3, 9, 41, 1)
     assert runtime.widget.has_surface
     assert _Interaction.instance() is runtime.interaction
 
@@ -330,7 +334,7 @@ root:
 
     runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
     runtime.rebind_input_manager()
-    assert runtime.input_manager.rebinds == [(7, 11, 41)]
+    assert runtime.input_manager.rebinds == [(7, 11, 41, 1)]
     assert runtime._camera_overlay.rebind_count == 1
 
     overlay_enabled = False

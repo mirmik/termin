@@ -809,34 +809,42 @@ public static class TerminCore
     // ========================================================================
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
-    public static extern IntPtr DisplayNew(string name, IntPtr surface);
+    public static extern TcDisplayHandle DisplayNew(string name, IntPtr surface);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_free")]
-    public static extern void DisplayFree(IntPtr display);
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayFree(TcDisplayHandle display);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_alive")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayAlive(TcDisplayHandle display);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_set_name", CharSet = CharSet.Ansi)]
-    public static extern void DisplaySetName(IntPtr display, string name);
+    public static extern void DisplaySetName(TcDisplayHandle display, string name);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_name")]
-    public static extern IntPtr DisplayGetName(IntPtr display);
+    public static extern IntPtr DisplayGetName(TcDisplayHandle display);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_size")]
-    public static extern void DisplayGetSize(IntPtr display, out int width, out int height);
+    public static extern void DisplayGetSize(TcDisplayHandle display, out int width, out int height);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_add_viewport")]
-    public static extern void DisplayAddViewport(IntPtr display, TcViewportHandle viewport);
+    public static extern void DisplayAddViewport(TcDisplayHandle display, TcViewportHandle viewport);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_remove_viewport")]
-    public static extern void DisplayRemoveViewport(IntPtr display, TcViewportHandle viewport);
+    public static extern void DisplayRemoveViewport(TcDisplayHandle display, TcViewportHandle viewport);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_viewport_count")]
-    public static extern nuint DisplayGetViewportCount(IntPtr display);
+    public static extern nuint DisplayGetViewportCount(TcDisplayHandle display);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_first_viewport")]
-    public static extern TcViewportHandle DisplayGetFirstViewport(IntPtr display);
+    public static extern TcViewportHandle DisplayGetFirstViewport(TcDisplayHandle display);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_viewport_at_screen")]
-    public static extern TcViewportHandle DisplayViewportAtScreen(IntPtr display, float px, float py);
+    public static extern TcViewportHandle DisplayViewportAtScreen(TcDisplayHandle display, float px, float py);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_input_manager")]
+    public static extern IntPtr DisplayGetInputManager(TcDisplayHandle display);
 
     // ========================================================================
     // Input Manager (tc_input_manager)
@@ -856,19 +864,6 @@ public static class TerminCore
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_char")]
     public static extern void InputManagerDispatchChar(IntPtr manager, uint codepoint);
-
-    // ========================================================================
-    // Display Input Router (tc_display_input_router)
-    // ========================================================================
-
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_new")]
-    public static extern IntPtr DisplayInputRouterNew(IntPtr display);
-
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_free")]
-    public static extern void DisplayInputRouterFree(IntPtr router);
-
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_base")]
-    public static extern IntPtr DisplayInputRouterBase(IntPtr router);
 
     // ========================================================================
     // Viewport Input Manager (tc_viewport_input_manager)

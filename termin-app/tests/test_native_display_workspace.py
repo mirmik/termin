@@ -56,13 +56,15 @@ class _Surface:
 
 
 class _Display:
-    next_pointer = 10
+    next_index = 10
 
     def __init__(self, *, surface, name: str) -> None:
         self.surface = surface
         self.name = name
-        self.tc_display_ptr = self.__class__.next_pointer
-        self.__class__.next_pointer += 1
+        self.index = self.__class__.next_index
+        self.generation = 1
+        self.handle = (self.index, self.generation)
+        self.__class__.next_index += 1
         self.destroyed = False
         self.enabled = True
         self.viewports = []
@@ -98,9 +100,9 @@ class _Display:
 class _InputManager:
     instances = []
 
-    def __init__(self, display_pointer: int) -> None:
-        self.display_pointer = display_pointer
-        self.tc_input_manager_ptr = display_pointer + 100
+    def __init__(self, display_handle: tuple[int, int]) -> None:
+        self.display_handle = display_handle
+        self.tc_input_manager_ptr = display_handle[0] + 100
         self.added = []
         self.removed = []
         self.closed = False
@@ -145,7 +147,7 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
 
     document = Document()
     parent = document.create_vstack("workspace-parent")
-    editor_display = SimpleNamespace(name="Editor", tc_display_ptr=1)
+    editor_display = SimpleNamespace(name="Editor", handle=(1, 1))
     editor_runtime = SimpleNamespace(
         display=editor_display,
         camera=object(),
@@ -170,7 +172,7 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     monkeypatch.setattr(termin.display, "BasicDisplayInputManager", _InputManager)
     _Surface.instances.clear()
     _InputManager.instances.clear()
-    _Display.next_pointer = 10
+    _Display.next_index = 10
     manager = _RenderingManager()
     renders = []
     workspace = NativeDisplayWorkspace.create(

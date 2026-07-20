@@ -263,7 +263,7 @@ def test_attach_scene_does_not_create_render_target_for_viewport(monkeypatch):
     model = RenderingModel(manager)
     viewport = _Viewport()
     display = types.SimpleNamespace(
-        tc_display_ptr=1,
+        handle=(1, 1),
         name="Display",
         viewports=[viewport],
     )

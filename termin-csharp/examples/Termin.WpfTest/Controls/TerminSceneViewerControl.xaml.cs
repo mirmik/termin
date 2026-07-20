@@ -139,7 +139,7 @@ namespace Termin.WpfTest.Controls
             _displayManager = new NativeDisplayManager(_renderSurface, _backend!, "SceneViewer");
 
             // Add display to rendering manager
-            var displayWrapper = SwigHelpers.WrapTcDisplayPtr(_displayManager.DisplayPtr);
+            var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
             _renderingManager.add_display(displayWrapper);
 
             // Create internal entities (camera)
@@ -291,7 +291,7 @@ namespace Termin.WpfTest.Controls
             // Cache WPF's FBO before rendering
 
             // Render this display
-            var display = SwigHelpers.WrapTcDisplayPtr(_displayManager.DisplayPtr);
+            var display = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
             _renderingManager.render_display(display);
 
             RenderFrame?.Invoke(this, EventArgs.Empty);

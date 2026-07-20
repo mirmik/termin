@@ -17,9 +17,9 @@ extern "C" {
 
 namespace termin::rendering_manager_detail {
 
-void present_display(RenderingManager& manager, tc_display* display) {
+void present_display(RenderingManager& manager, tc_display_handle display) {
     (void)manager;
-    if (!display) return;
+    if (!tc_display_alive(display)) return;
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("Present Display");
 

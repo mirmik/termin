@@ -25,7 +25,7 @@ class _RenderingModel:
 
     def detach_scene(self, scene):
         self.detached.append(scene)
-        return {2}
+        return {(2, 1)}
 
     def sync_viewport_configs_to_scene(self, scene):
         self.synced.append(("viewports", scene))
@@ -36,7 +36,7 @@ class _RenderingModel:
 
 class _Workspace:
     def __init__(self, display, *, fail=False):
-        self.editor = SimpleNamespace(tc_display_ptr=1, viewports=[])
+        self.editor = SimpleNamespace(handle=(1, 1), viewports=[])
         self.display = display
         self.displays = (self.editor, display)
         self.fail = fail
@@ -58,7 +58,7 @@ class _Workspace:
 def _session(*, fail=False):
     scene = object()
     viewport = object()
-    display = SimpleNamespace(tc_display_ptr=2, viewports=[])
+    display = SimpleNamespace(handle=(2, 1), viewports=[])
     model = _RenderingModel(display, viewport)
     workspace = _Workspace(display, fail=fail)
     events = []

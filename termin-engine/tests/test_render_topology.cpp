@@ -4,6 +4,7 @@
 
 int main()
 {
+    tc_display_pool_init();
     tc_scene_handle scene_a = tc_scene_new();
     tc_scene_handle scene_b = tc_scene_new();
     if (!tc_scene_handle_valid(scene_a) || !tc_scene_handle_valid(scene_b)) {
@@ -54,8 +55,8 @@ int main()
 
     topology.unregister_render_target(target_b);
 
-    tc_display* display_a = tc_display_new("DisplayA", nullptr);
-    tc_display* display_b = tc_display_new("DisplayB", nullptr);
+    tc_display_handle display_a = tc_display_new("DisplayA", nullptr);
+    tc_display_handle display_b = tc_display_new("DisplayB", nullptr);
     tc_viewport_handle viewport_a = tc_viewport_new("SharedViewport", scene_a);
     tc_viewport_handle viewport_b = tc_viewport_new("SharedViewport", scene_b);
     tc_display_add_viewport(display_a, viewport_a);
@@ -89,5 +90,6 @@ int main()
     tc_render_target_free(target_b);
     tc_scene_free(scene_a);
     tc_scene_free(scene_b);
+    tc_display_pool_shutdown();
     return 0;
 }

@@ -66,6 +66,22 @@ public struct TcViewportHandle
 }
 
 /// <summary>
+/// Display handle matching tc_display_handle in C.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TcDisplayHandle
+{
+    public uint Index;
+    public uint Generation;
+
+    public static readonly TcDisplayHandle Invalid = new() { Index = 0xFFFFFFFF, Generation = 0 };
+
+    public bool IsValid => Index != 0xFFFFFFFF;
+
+    public override string ToString() => $"Display({Index}:{Generation})";
+}
+
+/// <summary>
 /// Scene handle matching tc_scene_handle in C.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]

@@ -499,7 +499,7 @@ class EditorWindowTcgui:
 
             # Register editor display in the editor-only standalone hierarchy.
             self._rendering_controller.add_editor_display(self._editor_display, "Editor")
-            self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
+            self._rendering_controller.set_editor_display_handle(self._editor_display.handle)
 
             # Create editor scene attachment (now with rendering controller)
             from termin.editor_tcgui.camera_overlay import make_tcgui_camera_overlay_factory
@@ -584,7 +584,7 @@ class EditorWindowTcgui:
 
         self._editor_viewport_input_managers.clear()
 
-        display_id = display.tc_display_ptr
+        display_id = display.handle
         for vp in display.viewports:
             vp_idx, vp_gen = vp._viewport_handle()
             editor_im = EditorViewportInputManager(vp_idx, vp_gen, display_id)
@@ -600,7 +600,7 @@ class EditorWindowTcgui:
         surface stays on the default scene-pipeline input_manager and
         Viewport3D never sees editor-aware input.
         """
-        display_id = display.tc_display_ptr
+        display_id = display.handle
         self._display_routers[display_id] = display
 
         if self._viewport_widget is not None:

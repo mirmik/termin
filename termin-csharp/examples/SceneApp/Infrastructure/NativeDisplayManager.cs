@@ -7,12 +7,11 @@ public class NativeDisplayManager : IDisposable
 {
     private readonly WpfRenderSurface _renderSurface;
     private readonly GlWpfBackend _backend;
-    private IntPtr _displayPtr;
-    private IntPtr _routerPtr;
+    private TcDisplayHandle _displayHandle = TcDisplayHandle.Invalid;
     private IntPtr _inputManagerPtr;
     private bool _disposed;
 
-    public IntPtr DisplayPtr => _displayPtr;
+    public TcDisplayHandle DisplayHandle => _displayHandle;
     public IntPtr InputManagerPtr => _inputManagerPtr;
 
     public NativeDisplayManager(WpfRenderSurface renderSurface, GlWpfBackend backend, string name = "WpfDisplay")
@@ -20,19 +19,17 @@ public class NativeDisplayManager : IDisposable
         _renderSurface = renderSurface;
         _backend = backend;
 
-        _displayPtr = TerminCore.DisplayNew(name, _renderSurface.SurfacePtr);
-        if (_displayPtr == IntPtr.Zero)
+        _displayHandle = TerminCore.DisplayNew(name, _renderSurface.SurfacePtr);
+        if (!_displayHandle.IsValid)
             throw new Exception("Failed to create tc_display");
 
-        _routerPtr = TerminCore.DisplayInputRouterNew(_displayPtr);
-        if (_routerPtr == IntPtr.Zero)
+        _inputManagerPtr = TerminCore.DisplayGetInputManager(_displayHandle);
+        if (_inputManagerPtr == IntPtr.Zero)
         {
-            TerminCore.DisplayFree(_displayPtr);
-            _displayPtr = IntPtr.Zero;
-            throw new Exception("Failed to create tc_display_input_router");
+            TerminCore.DisplayFree(_displayHandle);
+            _displayHandle = TcDisplayHandle.Invalid;
+            throw new Exception("Failed to resolve tc_display input endpoint");
         }
-
-        _inputManagerPtr = TerminCore.DisplayInputRouterBase(_routerPtr);
 
         _backend.OnMouseButton += OnMouseButton;
         _backend.OnMouseMove += OnMouseMove;
@@ -42,14 +39,14 @@ public class NativeDisplayManager : IDisposable
 
     public void AddViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
-            TerminCore.DisplayAddViewport(_displayPtr, viewport);
+        if (_displayHandle.IsValid && viewport.IsValid)
+            TerminCore.DisplayAddViewport(_displayHandle, viewport);
     }
 
     public void RemoveViewport(TcViewportHandle viewport)
     {
-        if (_displayPtr != IntPtr.Zero && viewport.IsValid)
-            TerminCore.DisplayRemoveViewport(_displayPtr, viewport);
+        if (_displayHandle.IsValid && viewport.IsValid)
+            TerminCore.DisplayRemoveViewport(_displayHandle, viewport);
     }
 
     private void OnMouseButton(WpfInput.MouseButtonEvent evt)
@@ -86,21 +83,14 @@ public class NativeDisplayManager : IDisposable
         _backend.OnScroll -= OnScroll;
         _backend.OnKey -= OnKey;
 
-        if (_routerPtr != IntPtr.Zero)
+        _inputManagerPtr = IntPtr.Zero;
+        if (_displayHandle.IsValid)
         {
-            TerminCore.DisplayInputRouterFree(_routerPtr);
-            _routerPtr = IntPtr.Zero;
-            _inputManagerPtr = IntPtr.Zero;
-        }
-
-        if (_displayPtr != IntPtr.Zero)
-        {
-            TerminCore.DisplayFree(_displayPtr);
-            _displayPtr = IntPtr.Zero;
+            TerminCore.DisplayFree(_displayHandle);
+            _displayHandle = TcDisplayHandle.Invalid;
         }
 
         GC.SuppressFinalize(this);
     }
 
-    ~NativeDisplayManager() => Dispose();
 }

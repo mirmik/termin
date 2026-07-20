@@ -45,6 +45,7 @@ extern "C" {
 #include <inspect/tc_kind.h>
 #include <inspect/tc_inspect_pass_adapter.h>
 #include <render/tc_pass.h>
+#include <render/tc_display_pool.h>
 #include <render/tc_pipeline_pool.h>
 #include <render/tc_pipeline_template_registry.h>
 #include <resources/tc_skeleton_registry.h>
@@ -117,6 +118,7 @@ void tc_init(void) {
     tc_material_init();
     tc_pipeline_template_init();
     tc_pipeline_pool_init();
+    tc_display_pool_init();
     tc_entity_pool_registry_init();
     tc_scene_pool_init();
     tc_scene_ext_registry_init();
@@ -132,6 +134,7 @@ void tc_shutdown(void) {
     // Scene shutdown unregisters and destroys scene-owned pools first.  The
     // registry then owns only standalone (or otherwise unmounted) pools.
     tc_entity_pool_registry_shutdown();
+    tc_display_pool_shutdown();
     tc_pipeline_pool_shutdown();
     tc_pipeline_template_shutdown();
     tc_material_shutdown();

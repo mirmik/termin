@@ -2,7 +2,7 @@
 
 Owns:
 - an injected reference to the host EngineCore's RenderingManager
-- the "editor display" pointer (a non-serialized display the editor uses
+- the editor display handle (a non-serialized display the editor uses
   for its main viewport)
 
 Provides UI-agnostic operations used by the tcgui rendering controller:
@@ -32,14 +32,14 @@ class RenderingModel:
     def __init__(self, manager: "RenderingManager"):
         self._manager = manager
         self._topology: "RenderTopology" = manager.topology
-        self._editor_display_ptr: int | None = None
+        self._editor_display_handle: tuple[int, int] | None = None
 
         self._selected_display: "Display | None" = None
         self._selected_viewport: "Viewport | None" = None
 
         # Per-display input mode bookkeeping. The native endpoint itself is
         # owned by tc_display and needs no Python GC anchor.
-        self._display_input_managers: dict[int, object] = {}
+        self._display_input_managers: dict[tuple[int, int], object] = {}
 
         self.changed = Signal()
         self.selection_changed = Signal()
@@ -49,11 +49,11 @@ class RenderingModel:
         return self._manager
 
     @property
-    def editor_display_ptr(self) -> int | None:
-        return self._editor_display_ptr
+    def editor_display_handle(self) -> tuple[int, int] | None:
+        return self._editor_display_handle
 
-    def set_editor_display_ptr(self, ptr: int | None) -> None:
-        self._editor_display_ptr = ptr
+    def set_editor_display_handle(self, handle: tuple[int, int] | None) -> None:
+        self._editor_display_handle = handle
 
     # ------------------------------------------------------------------
     # Selection state (display / viewport)
@@ -99,11 +99,11 @@ class RenderingModel:
     # ------------------------------------------------------------------
 
     @property
-    def display_input_managers(self) -> dict[int, object]:
+    def display_input_managers(self) -> dict[tuple[int, int], object]:
         """Live input-mode bindings: ``display_id → Display``."""
         return self._display_input_managers
 
-    def drop_display_input_manager(self, display_id: int) -> None:
+    def drop_display_input_manager(self, display_id: tuple[int, int]) -> None:
         self._display_input_managers.pop(display_id, None)
 
     def apply_display_input(
@@ -127,7 +127,7 @@ class RenderingModel:
         ``RenderingManager`` returns (raw ``TcDisplay`` wrappers don't
         carry the subclass ``.surface``).
         """
-        display_id = display.tc_display_ptr
+        display_id = display.handle
 
         self._display_input_managers.pop(display_id, None)
 
@@ -351,7 +351,7 @@ class RenderingModel:
 
         viewports = self._manager.attach_scene(scene)
 
-        by_display: dict[int, list] = {}
+        by_display: dict[tuple[int, int], list] = {}
         for viewport in viewports:
             display = self._manager.get_display_for_viewport(viewport)
             if display is None:
@@ -363,7 +363,7 @@ class RenderingModel:
                 render_target.scene = scene
             if config is None:
                 continue
-            by_display.setdefault(display.tc_display_ptr, []).append(
+            by_display.setdefault(display.handle, []).append(
                 (viewport, config, display)
             )
 
@@ -371,37 +371,37 @@ class RenderingModel:
             for display_id, entries in by_display.items():
                 if not entries:
                     continue
-                if display_id == self._editor_display_ptr:
+                if display_id == self._editor_display_handle:
                     continue
                 viewport, config, display = entries[0]
                 setup_display_input(display, config.input_mode)
 
         return viewports
 
-    def detach_scene(self, scene: "Scene") -> set[int]:
+    def detach_scene(self, scene: "Scene") -> set[tuple[int, int]]:
         """Detach scene: remove viewports, free unlocked render targets
         for the scene, then call manager.detach_scene.
 
-        Returns the set of non-editor display_ptrs that were emptied by
+        Returns the set of non-editor display handles that were emptied by
         this detach — view can use that to drop per-display input
         managers or tabs.
         """
-        displays_to_check: set[int] = set()
+        displays_to_check: set[tuple[int, int]] = set()
         for display in self._non_editor_displays():
             if display.viewports:
-                displays_to_check.add(display.tc_display_ptr)
+                displays_to_check.add(display.handle)
 
         self._manager.detach_scene_full(scene)
 
-        emptied: set[int] = set()
-        for display_ptr in displays_to_check:
+        emptied: set[tuple[int, int]] = set()
+        for display_handle in displays_to_check:
             display = None
             for d in self._manager.displays:
-                if d.tc_display_ptr == display_ptr:
+                if d.handle == display_handle:
                     display = d
                     break
             if display is not None and not display.viewports:
-                emptied.add(display_ptr)
+                emptied.add(display_handle)
 
         return emptied
 

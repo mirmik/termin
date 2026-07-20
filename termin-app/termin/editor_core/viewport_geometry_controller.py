@@ -93,7 +93,8 @@ class ViewportGeometryController:
                 local_y,
                 vp_idx,
                 vp_gen,
-                editor_display.tc_display_ptr,
+                editor_display.index,
+                editor_display.generation,
             )
         except Exception as e:
             log.error(f"[ViewportGeometryController] GLB viewport drop pick failed: {e}")

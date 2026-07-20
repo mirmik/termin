@@ -61,11 +61,11 @@ class RenderSceneSession:
             raise ValueError(f"scene '{name}' does not exist")
         return scene
 
-    def _remove_empty_displays(self, display_pointers: set[int]) -> None:
+    def _remove_empty_displays(self, display_handles: set[tuple[int, int]]) -> None:
         for display in tuple(self._workspace.displays):
             if self._workspace.is_editor_display(display):
                 continue
-            if display.tc_display_ptr in display_pointers and not display.viewports:
+            if display.handle in display_handles and not display.viewports:
                 self._workspace.remove_display(display)
 
     def _publish(self) -> None:

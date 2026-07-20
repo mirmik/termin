@@ -1,202 +1,122 @@
-// tc_display_handle.hpp - C++ wrapper for tc_display
 #pragma once
 
 #include <string>
-#include <vector>
-#include <functional>
+#include <utility>
 
 extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
-#include "render/tc_viewport_pool.h"
 #include "render/tc_render_surface.h"
 }
 
 namespace termin {
 
-class TcViewport;
-
-// TcDisplay - RAII wrapper for tc_display
-// Owns the tc_display pointer and frees it on destruction.
+// Copyable, non-owning facade over process-owned tc_display storage.
+// Native lifetime is controlled only through explicit tc_display_free/destroy().
 class TcDisplay {
 public:
-    tc_display* ptr_ = nullptr;
-    bool owned_ = true;
+    tc_display_handle handle_ = TC_DISPLAY_HANDLE_INVALID;
 
-public:
     TcDisplay() = default;
+    explicit TcDisplay(tc_display_handle handle) : handle_(handle) {}
 
-    // Create new display with surface
     explicit TcDisplay(tc_render_surface* surface, const std::string& name = "Display")
-        : ptr_(tc_display_new(name.c_str(), surface)), owned_(true) {}
+        : handle_(tc_display_new(name.c_str(), surface)) {}
 
-    // Wrap existing pointer (non-owning by default)
-    explicit TcDisplay(tc_display* ptr, bool owned = false)
-        : ptr_(ptr), owned_(owned) {}
+    bool is_valid() const { return tc_display_alive(handle_); }
+    tc_display_handle handle() const { return handle_; }
 
-    ~TcDisplay() {
-        if (ptr_ && owned_) {
-            tc_display_free(ptr_);
-        }
-        ptr_ = nullptr;
+    bool destroy() {
+        if (!tc_display_handle_valid(handle_)) return false;
+        bool destroyed = tc_display_free(handle_);
+        if (destroyed) handle_ = TC_DISPLAY_HANDLE_INVALID;
+        return destroyed;
     }
 
-    // Move semantics
-    TcDisplay(TcDisplay&& other) noexcept
-        : ptr_(other.ptr_), owned_(other.owned_) {
-        other.ptr_ = nullptr;
-        other.owned_ = false;
-    }
-
-    TcDisplay& operator=(TcDisplay&& other) noexcept {
-        if (this != &other) {
-            if (ptr_ && owned_) {
-                tc_display_free(ptr_);
-            }
-            ptr_ = other.ptr_;
-            owned_ = other.owned_;
-            other.ptr_ = nullptr;
-            other.owned_ = false;
-        }
-        return *this;
-    }
-
-    // No copy
-    TcDisplay(const TcDisplay&) = delete;
-    TcDisplay& operator=(const TcDisplay&) = delete;
-
-    bool is_valid() const { return ptr_ != nullptr; }
-    tc_display* ptr() const { return ptr_; }
-
-    // Properties
     std::string name() const {
-        if (!ptr_) return "";
-        const char* n = tc_display_get_name(ptr_);
-        return n ? n : "";
+        const char* value = tc_display_get_name(handle_);
+        return value ? value : "";
     }
-
-    void set_name(const std::string& name) {
-        if (ptr_) tc_display_set_name(ptr_, name.c_str());
-    }
+    void set_name(const std::string& value) { tc_display_set_name(handle_, value.c_str()); }
 
     std::string uuid() const {
-        if (!ptr_) return "";
-        const char* u = tc_display_get_uuid(ptr_);
-        return u ? u : "";
+        const char* value = tc_display_get_uuid(handle_);
+        return value ? value : "";
     }
+    void set_uuid(const std::string& value) { tc_display_set_uuid(handle_, value.c_str()); }
 
-    void set_uuid(const std::string& uuid) {
-        if (ptr_) tc_display_set_uuid(ptr_, uuid.c_str());
-    }
+    bool editor_only() const { return tc_display_get_editor_only(handle_); }
+    void set_editor_only(bool value) { tc_display_set_editor_only(handle_, value); }
 
-    bool editor_only() const {
-        return ptr_ ? tc_display_get_editor_only(ptr_) : false;
-    }
-
-    void set_editor_only(bool value) {
-        if (ptr_) tc_display_set_editor_only(ptr_, value);
-    }
-
-    bool enabled() const {
-        return ptr_ ? tc_display_get_enabled(ptr_) : true;
-    }
-
-    void set_enabled(bool value) {
-        if (ptr_) tc_display_set_enabled(ptr_, value);
-    }
+    bool enabled() const { return tc_display_get_enabled(handle_); }
+    void set_enabled(bool value) { tc_display_set_enabled(handle_, value); }
 
     bool auto_remove_when_empty() const {
-        return ptr_ ? tc_display_get_auto_remove_when_empty(ptr_) : false;
+        return tc_display_get_auto_remove_when_empty(handle_);
     }
-
     void set_auto_remove_when_empty(bool value) {
-        if (ptr_) tc_display_set_auto_remove_when_empty(ptr_, value);
+        tc_display_set_auto_remove_when_empty(handle_, value);
     }
 
-    tc_render_surface* surface() const {
-        return ptr_ ? tc_display_get_surface(ptr_) : nullptr;
-    }
-
+    tc_render_surface* surface() const { return tc_display_get_surface(handle_); }
     bool set_surface(tc_render_surface* surface) {
-        return ptr_ && tc_display_set_surface(ptr_, surface);
+        return tc_display_set_surface(handle_, surface);
     }
 
     tc_input_manager* input_manager() const {
-        return ptr_ ? tc_display_get_input_manager(ptr_) : nullptr;
+        return tc_display_get_input_manager(handle_);
     }
-
     bool dispatch_pointer_move(double x, double y) {
-        return ptr_ && tc_display_dispatch_pointer_move(ptr_, x, y);
+        return tc_display_dispatch_pointer_move(handle_, x, y);
     }
-
     bool dispatch_pointer_button(double x, double y, int button, int action,
                                  int mods, uint32_t click_count) {
-        return ptr_ && tc_display_dispatch_pointer_button(
-            ptr_, x, y, button, action, mods, click_count);
+        return tc_display_dispatch_pointer_button(
+            handle_, x, y, button, action, mods, click_count);
     }
-
     bool dispatch_wheel(double x, double y, double wheel_x, double wheel_y, int mods) {
-        return ptr_ && tc_display_dispatch_wheel(ptr_, x, y, wheel_x, wheel_y, mods);
+        return tc_display_dispatch_wheel(handle_, x, y, wheel_x, wheel_y, mods);
     }
-
     bool dispatch_key(int key, int scancode, int action, int mods) {
-        return ptr_ && tc_display_dispatch_key(ptr_, key, scancode, action, mods);
+        return tc_display_dispatch_key(handle_, key, scancode, action, mods);
     }
-
     bool dispatch_text(uint32_t codepoint) {
-        return ptr_ && tc_display_dispatch_text(ptr_, codepoint);
+        return tc_display_dispatch_text(handle_, codepoint);
     }
 
-    // Size
     std::pair<int, int> get_size() const {
-        int w = 0, h = 0;
-        if (ptr_) tc_display_get_size(ptr_, &w, &h);
-        return {w, h};
+        int width = 0;
+        int height = 0;
+        tc_display_get_size(handle_, &width, &height);
+        return {width, height};
     }
 
-    // Viewport management
-    size_t viewport_count() const {
-        return ptr_ ? tc_display_get_viewport_count(ptr_) : 0;
-    }
-
+    size_t viewport_count() const { return tc_display_get_viewport_count(handle_); }
     tc_viewport_handle first_viewport() const {
-        return ptr_ ? tc_display_get_first_viewport(ptr_) : TC_VIEWPORT_HANDLE_INVALID;
+        return tc_display_get_first_viewport(handle_);
     }
-
     tc_viewport_handle viewport_at_index(size_t index) const {
-        return ptr_ ? tc_display_get_viewport_at_index(ptr_, index) : TC_VIEWPORT_HANDLE_INVALID;
+        return tc_display_get_viewport_at_index(handle_, index);
     }
-
-    void add_viewport(tc_viewport_handle vh) {
-        if (ptr_) tc_display_add_viewport(ptr_, vh);
+    void add_viewport(tc_viewport_handle viewport) {
+        tc_display_add_viewport(handle_, viewport);
     }
-
-    void remove_viewport(tc_viewport_handle vh) {
-        if (ptr_) tc_display_remove_viewport(ptr_, vh);
+    void remove_viewport(tc_viewport_handle viewport) {
+        tc_display_remove_viewport(handle_, viewport);
     }
-
-    // Viewport lookup
     tc_viewport_handle viewport_at(float x, float y) const {
-        return ptr_ ? tc_display_viewport_at(ptr_, x, y) : TC_VIEWPORT_HANDLE_INVALID;
+        return tc_display_viewport_at(handle_, x, y);
     }
-
-    tc_viewport_handle viewport_at_screen(float px, float py) const {
-        return ptr_ ? tc_display_viewport_at_screen(ptr_, px, py) : TC_VIEWPORT_HANDLE_INVALID;
+    tc_viewport_handle viewport_at_screen(float x, float y) const {
+        return tc_display_viewport_at_screen(handle_, x, y);
     }
+    void update_all_pixel_rects() { tc_display_update_all_pixel_rects(handle_); }
 
-    // Update pixel rects
-    void update_all_pixel_rects() {
-        if (ptr_) tc_display_update_all_pixel_rects(ptr_);
-    }
-
-    // Static factory
-    static TcDisplay create(tc_render_surface* surface, const std::string& name = "Display") {
+    static TcDisplay create(tc_render_surface* surface,
+                            const std::string& name = "Display") {
         return TcDisplay(surface, name);
     }
-
-    static TcDisplay from_ptr(tc_display* ptr, bool owned = false) {
-        return TcDisplay(ptr, owned);
-    }
+    static TcDisplay from_handle(tc_display_handle handle) { return TcDisplay(handle); }
 };
 
 } // namespace termin

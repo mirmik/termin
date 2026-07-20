@@ -51,23 +51,25 @@ void bind_editor_interaction(nb::module_& m) {
     nb::class_<EditorViewportInputManager>(m, "EditorViewportInputManager")
         .def("__init__", [](EditorViewportInputManager* self,
                            uint32_t vp_index, uint32_t vp_generation,
-                           uintptr_t display_ptr) {
+                           uint32_t display_index, uint32_t display_generation) {
             tc_viewport_handle vh;
             vh.index = vp_index;
             vh.generation = vp_generation;
             new (self) EditorViewportInputManager(
-                vh, reinterpret_cast<tc_display*>(display_ptr));
-        }, nb::arg("vp_index"), nb::arg("vp_generation"), nb::arg("display_ptr"))
+                vh, tc_display_handle{display_index, display_generation});
+        }, nb::arg("vp_index"), nb::arg("vp_generation"),
+           nb::arg("display_index"), nb::arg("display_generation"))
         .def("tc_input_manager_ptr", [](EditorViewportInputManager& s) {
             return reinterpret_cast<uintptr_t>(s.tc_input_manager_ptr());
         })
         .def("rebind", [](EditorViewportInputManager& self,
                            uint32_t vp_index, uint32_t vp_generation,
-                           uintptr_t display_ptr) {
+                           uint32_t display_index, uint32_t display_generation) {
             return self.rebind(
                 tc_viewport_handle{vp_index, vp_generation},
-                reinterpret_cast<tc_display*>(display_ptr));
-        }, nb::arg("vp_index"), nb::arg("vp_generation"), nb::arg("display_ptr"))
+                tc_display_handle{display_index, display_generation});
+        }, nb::arg("vp_index"), nb::arg("vp_generation"),
+           nb::arg("display_index"), nb::arg("display_generation"))
         .def("detach", &EditorViewportInputManager::detach);
 
     nb::class_<SurfacePickResult>(m, "SurfacePickResult")
@@ -168,22 +170,22 @@ void bind_editor_interaction(nb::module_& m) {
         .def("pick_entity_at", [](EditorInteractionSystem& s,
                 float x, float y,
                 uint32_t vp_index, uint32_t vp_generation,
-                uintptr_t display_ptr) {
+                uint32_t display_index, uint32_t display_generation) {
             tc_viewport_handle vp;
             vp.index = vp_index;
             vp.generation = vp_generation;
-            return s.pick_entity_at(Vec2f{x, y}, vp,
-                reinterpret_cast<tc_display*>(display_ptr));
+            return s.pick_entity_at(
+                Vec2f{x, y}, vp, tc_display_handle{display_index, display_generation});
         })
         .def("pick_surface_at", [](EditorInteractionSystem& s,
                 float x, float y,
                 uint32_t vp_index, uint32_t vp_generation,
-                uintptr_t display_ptr) {
+                uint32_t display_index, uint32_t display_generation) {
             tc_viewport_handle vp;
             vp.index = vp_index;
             vp.generation = vp_generation;
             return s.pick_surface_at(
-                Vec2f{x, y}, vp, reinterpret_cast<tc_display*>(display_ptr));
+                Vec2f{x, y}, vp, tc_display_handle{display_index, display_generation});
         })
         .def_prop_rw("on_request_update",
             [](EditorInteractionSystem& s) { return s.on_request_update; },

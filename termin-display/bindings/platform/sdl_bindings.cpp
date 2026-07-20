@@ -532,12 +532,11 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &SDLBackendWindow::should_close)
         .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
-        .def("set_input_display", [](SDLBackendWindow& self, uintptr_t display_ptr) {
-                attach_window_input_display(
-                    self,
-                    reinterpret_cast<tc_display*>(display_ptr));
+        .def("set_input_display", [](SDLBackendWindow& self,
+                                      uint32_t index, uint32_t generation) {
+                attach_window_input_display(self, tc_display_handle{index, generation});
             },
-            nb::arg("display_ptr"),
+            nb::arg("index"), nb::arg("generation"),
             "Route SDL input events from this window to a tc_display endpoint.")
         .def("set_title", &SDLBackendWindow::set_title,
             nb::arg("title"),

@@ -5,8 +5,6 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/vector.h>
 
-#include <vector>
-
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/platform/offscreen_render_surface.hpp"
 #include "../platform/offscreen_render_surface_bindings.hpp"
@@ -22,57 +20,6 @@ extern "C" {
 namespace nb = nanobind;
 
 namespace termin {
-
-namespace {
-
-struct NativeDisplayRegistryEntry {
-    tc_display* display = nullptr;
-    OffscreenRenderSurfaceHandle offscreen_surface{};
-};
-
-std::vector<NativeDisplayRegistryEntry>& native_display_registry() {
-    static auto* registry = new std::vector<NativeDisplayRegistryEntry>();
-    return *registry;
-}
-
-tc_display* create_native_registry_display(tc_render_surface* surface, const std::string& name) {
-    tc_display* display = tc_display_new(name.c_str(), surface);
-    if (display) {
-        NativeDisplayRegistryEntry entry;
-        entry.display = display;
-        OffscreenRenderSurfaceHandle offscreen = offscreen_render_surface_find(surface);
-        if (offscreen_render_surface_handle_valid(offscreen)) {
-            offscreen_render_surface_retain(offscreen);
-            entry.offscreen_surface = offscreen;
-        }
-        native_display_registry().push_back(std::move(entry));
-    }
-    return display;
-}
-
-bool destroy_native_display(tc_display* display) {
-    if (!display) {
-        return false;
-    }
-
-    auto& registry = native_display_registry();
-    for (auto& entry : registry) {
-        if (entry.display == display) {
-            if (offscreen_render_surface_handle_valid(entry.offscreen_surface)) {
-                offscreen_render_surface_release(entry.offscreen_surface);
-            }
-            tc_display_free(entry.display);
-            entry.display = nullptr;
-            entry.offscreen_surface = {};
-            return true;
-        }
-    }
-
-    tc_display_free(display);
-    return true;
-}
-
-} // namespace
 
 // Helper to convert viewport handle
 static std::tuple<uint32_t, uint32_t> vh_to_tuple(tc_viewport_handle h) {
@@ -96,7 +43,7 @@ void bind_tc_display(nb::module_& m) {
         .def("__init__", [](TcDisplay* self, uintptr_t surface_ptr, const std::string& name,
                             bool editor_only, const std::string& uuid) {
             tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-            new (self) TcDisplay(create_native_registry_display(surface, name), false);
+            new (self) TcDisplay(surface, name);
             if (!uuid.empty()) {
                 self->set_uuid(uuid);
             }
@@ -107,7 +54,7 @@ void bind_tc_display(nb::module_& m) {
         .def("__init__", [](TcDisplay* self, FBOSurfaceRef& surface, const std::string& name,
                             bool editor_only, const std::string& uuid) {
             tc_render_surface* tc_surface = reinterpret_cast<tc_render_surface*>(surface.tc_surface_ptr());
-            new (self) TcDisplay(create_native_registry_display(tc_surface, name), false);
+            new (self) TcDisplay(tc_surface, name);
             if (!uuid.empty()) {
                 self->set_uuid(uuid);
             }
@@ -117,44 +64,43 @@ void bind_tc_display(nb::module_& m) {
 
         .def("is_valid", &TcDisplay::is_valid)
 
-        .def("destroy", [](TcDisplay& self) {
-            if (destroy_native_display(self.ptr_)) {
-                self.ptr_ = nullptr;
-                self.owned_ = false;
-            }
-        }, "Explicitly destroy the native display. Python GC does not call this.")
+        .def("destroy", &TcDisplay::destroy,
+             "Explicitly destroy the native display. Python GC does not call this.")
 
-        .def_prop_ro("tc_display_ptr", [](TcDisplay& self) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(self.ptr());
-        }, "Raw pointer to tc_display (for C interop)")
+        .def_prop_ro("handle", [](TcDisplay& self) {
+            tc_display_handle handle = self.handle();
+            return std::make_tuple(handle.index, handle.generation);
+        }, "Stable (index, generation) display identity")
+
+        .def_prop_ro("index", [](TcDisplay& self) { return self.handle().index; })
+        .def_prop_ro("generation", [](TcDisplay& self) { return self.handle().generation; })
 
         .def_prop_ro("tc_input_manager_ptr", [](TcDisplay& self) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(tc_display_get_input_manager(self.ptr()));
+            return reinterpret_cast<uintptr_t>(self.input_manager());
         }, "Stable display-owned tc_input_manager endpoint")
 
         .def("dispatch_pointer_move", [](TcDisplay& self, double x, double y) {
-            return tc_display_dispatch_pointer_move(self.ptr(), x, y);
+            return self.dispatch_pointer_move(x, y);
         }, nb::arg("x"), nb::arg("y"))
         .def("dispatch_pointer_button",
              [](TcDisplay& self, double x, double y, int button, int action,
                 int modifiers, uint32_t click_count) {
-                 return tc_display_dispatch_pointer_button(
-                     self.ptr(), x, y, button, action, modifiers, click_count);
+                 return self.dispatch_pointer_button(
+                     x, y, button, action, modifiers, click_count);
              }, nb::arg("x"), nb::arg("y"), nb::arg("button"), nb::arg("action"),
              nb::arg("modifiers"), nb::arg("click_count") = 1)
         .def("dispatch_wheel",
              [](TcDisplay& self, double x, double y, double wheel_x,
                 double wheel_y, int modifiers) {
-                 return tc_display_dispatch_wheel(
-                     self.ptr(), x, y, wheel_x, wheel_y, modifiers);
+                 return self.dispatch_wheel(x, y, wheel_x, wheel_y, modifiers);
              }, nb::arg("x"), nb::arg("y"), nb::arg("wheel_x"),
              nb::arg("wheel_y"), nb::arg("modifiers"))
         .def("dispatch_key", [](TcDisplay& self, int key, int scancode,
                                 int action, int modifiers) {
-            return tc_display_dispatch_key(self.ptr(), key, scancode, action, modifiers);
+            return self.dispatch_key(key, scancode, action, modifiers);
         }, nb::arg("key"), nb::arg("scancode"), nb::arg("action"), nb::arg("modifiers"))
         .def("dispatch_text", [](TcDisplay& self, uint32_t codepoint) {
-            return tc_display_dispatch_text(self.ptr(), codepoint);
+            return self.dispatch_text(codepoint);
         }, nb::arg("codepoint"))
 
         // Properties
@@ -298,126 +244,11 @@ void bind_tc_display(nb::module_& m) {
            "Create and add new viewport")
 
         // Static factory
-        .def_static("_from_ptr", [](uintptr_t ptr, bool owned) {
-            return TcDisplay::from_ptr(reinterpret_cast<tc_display*>(ptr), owned);
-        }, nb::arg("ptr"), nb::arg("owned") = false,
-           "Create TcDisplay from raw pointer")
+        .def_static("from_handle", [](uint32_t index, uint32_t generation) {
+            return TcDisplay::from_handle(tc_display_handle{index, generation});
+        }, nb::arg("index"), nb::arg("generation"),
+           "Create a non-owning display facade from generation handle")
     ;
-
-    // Keep old _display_* functions for backwards compatibility during migration
-    m.def("_display_new", [](uintptr_t surface_ptr, const std::string& name) -> uintptr_t {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-        tc_display* d = tc_display_new(name.c_str(), surface);
-        return reinterpret_cast<uintptr_t>(d);
-    }, nb::arg("surface_ptr"), nb::arg("name"));
-
-    m.def("_display_free", [](uintptr_t ptr) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        destroy_native_display(d);
-    }, nb::arg("ptr"));
-
-    m.def("_display_get_name", [](uintptr_t ptr) -> std::string {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return "";
-        const char* name = tc_display_get_name(d);
-        return name ? name : "";
-    }, nb::arg("ptr"));
-
-    m.def("_display_set_name", [](uintptr_t ptr, const std::string& name) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_set_name(d, name.c_str());
-    }, nb::arg("ptr"), nb::arg("name"));
-
-    m.def("_display_get_uuid", [](uintptr_t ptr) -> std::string {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return "";
-        const char* uuid = tc_display_get_uuid(d);
-        return uuid ? uuid : "";
-    }, nb::arg("ptr"));
-
-    m.def("_display_set_uuid", [](uintptr_t ptr, const std::string& uuid) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_set_uuid(d, uuid.c_str());
-    }, nb::arg("ptr"), nb::arg("uuid"));
-
-    m.def("_display_get_editor_only", [](uintptr_t ptr) -> bool {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        return d ? tc_display_get_editor_only(d) : false;
-    }, nb::arg("ptr"));
-
-    m.def("_display_set_editor_only", [](uintptr_t ptr, bool editor_only) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_set_editor_only(d, editor_only);
-    }, nb::arg("ptr"), nb::arg("editor_only"));
-
-    m.def("_display_get_enabled", [](uintptr_t ptr) -> bool {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        return d ? tc_display_get_enabled(d) : false;
-    }, nb::arg("ptr"));
-
-    m.def("_display_set_enabled", [](uintptr_t ptr, bool enabled) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_set_enabled(d, enabled);
-    }, nb::arg("ptr"), nb::arg("enabled"));
-
-    m.def("_display_get_surface", [](uintptr_t ptr) -> uintptr_t {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return 0;
-        tc_render_surface* s = tc_display_get_surface(d);
-        return reinterpret_cast<uintptr_t>(s);
-    }, nb::arg("ptr"));
-
-    m.def("_display_get_size", [](uintptr_t ptr) -> std::tuple<int, int> {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        int w = 0, h = 0;
-        if (d) tc_display_get_size(d, &w, &h);
-        return std::make_tuple(w, h);
-    }, nb::arg("ptr"));
-
-    m.def("_display_add_viewport", [](uintptr_t display_ptr, std::tuple<uint32_t, uint32_t> vh) {
-        tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
-        if (d) tc_display_add_viewport(d, tuple_to_vh(vh));
-    }, nb::arg("display_ptr"), nb::arg("viewport_handle"));
-
-    m.def("_display_remove_viewport", [](uintptr_t display_ptr, std::tuple<uint32_t, uint32_t> vh) {
-        tc_display* d = reinterpret_cast<tc_display*>(display_ptr);
-        if (d) tc_display_remove_viewport(d, tuple_to_vh(vh));
-    }, nb::arg("display_ptr"), nb::arg("viewport_handle"));
-
-    m.def("_display_get_viewport_count", [](uintptr_t ptr) -> size_t {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        return d ? tc_display_get_viewport_count(d) : 0;
-    }, nb::arg("ptr"));
-
-    m.def("_display_get_first_viewport", [](uintptr_t ptr) -> std::tuple<uint32_t, uint32_t> {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
-        return vh_to_tuple(tc_display_get_first_viewport(d));
-    }, nb::arg("ptr"));
-
-    m.def("_display_get_viewport_at_index", [](uintptr_t ptr, size_t index) -> std::tuple<uint32_t, uint32_t> {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
-        return vh_to_tuple(tc_display_get_viewport_at_index(d, index));
-    }, nb::arg("ptr"), nb::arg("index"));
-
-    m.def("_display_viewport_at", [](uintptr_t ptr, float x, float y) -> std::tuple<uint32_t, uint32_t> {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
-        return vh_to_tuple(tc_display_viewport_at(d, x, y));
-    }, nb::arg("ptr"), nb::arg("x"), nb::arg("y"));
-
-    m.def("_display_viewport_at_screen", [](uintptr_t ptr, float px, float py) -> std::tuple<uint32_t, uint32_t> {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (!d) return std::make_tuple(0xFFFFFFFF, 0u);
-        return vh_to_tuple(tc_display_viewport_at_screen(d, px, py));
-    }, nb::arg("ptr"), nb::arg("px"), nb::arg("py"));
-
-    m.def("_display_update_all_pixel_rects", [](uintptr_t ptr) {
-        tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_update_all_pixel_rects(d);
-    }, nb::arg("ptr"));
-
 }
 
 } // namespace termin
