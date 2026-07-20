@@ -244,243 +244,17 @@ termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
     return dynamic_cast<termin::CameraComponent*>(cxx);
 }
 
-double value_to_double(const tc_value* value, double fallback = 0.0) {
-    if (!value) {
-        return fallback;
-    }
-    if (value->type == TC_VALUE_DOUBLE) {
-        return value->data.d;
-    }
-    if (value->type == TC_VALUE_FLOAT) {
-        return static_cast<double>(value->data.f);
-    }
-    if (value->type == TC_VALUE_INT) {
-        return static_cast<double>(value->data.i);
-    }
-    return fallback;
-}
-
-void register_camera_runtime_fields(tc::InspectRegistry& inspect) {
-    inspect.set_type_parent("CameraComponent", "CxxComponent");
-    if (!inspect.find_field("CameraComponent", "near_clip")) {
-        inspect.add<termin::CameraComponent, double>(
-            "CameraComponent", &termin::CameraComponent::near_clip, "near_clip", "Near Clip", "double");
-    }
-    if (!inspect.find_field("CameraComponent", "far_clip")) {
-        inspect.add<termin::CameraComponent, double>(
-            "CameraComponent", &termin::CameraComponent::far_clip, "far_clip", "Far Clip", "double");
-    }
-    if (!inspect.find_field("CameraComponent", "ortho_size")) {
-        inspect.add<termin::CameraComponent, double>(
-            "CameraComponent", &termin::CameraComponent::ortho_size, "ortho_size", "Ortho Size", "double");
-    }
-    if (!inspect.find_field("CameraComponent", "fov_x_degrees")) {
-        inspect.add_with_accessors<termin::CameraComponent, double>(
-            "CameraComponent",
-            "fov_x_degrees",
-            "Horizontal FOV",
-            "double",
-            [](termin::CameraComponent* camera) { return camera ? camera->get_fov_x_degrees() : 0.0; },
-            [](termin::CameraComponent* camera, double value) {
-                if (camera) {
-                    camera->set_fov_x_degrees(value);
-                }
-            }
-        );
-    }
-    if (!inspect.find_field("CameraComponent", "fov_y_degrees")) {
-        inspect.add_with_accessors<termin::CameraComponent, double>(
-            "CameraComponent",
-            "fov_y_degrees",
-            "Vertical FOV",
-            "double",
-            [](termin::CameraComponent* camera) { return camera ? camera->get_fov_y_degrees() : 0.0; },
-            [](termin::CameraComponent* camera, double value) {
-                if (camera) {
-                    camera->set_fov_y_degrees(value);
-                }
-            }
-        );
-    }
-    if (!inspect.find_field("CameraComponent", "fov_mode")) {
-        tc::InspectFieldInfo info;
-        info.type_name = "CameraComponent";
-        info.path = "fov_mode";
-        info.label = "FOV Mode";
-        info.kind = "string";
-        info.getter = [](void* obj) -> tc_value {
-            return tc_value_string(static_cast<termin::CameraComponent*>(obj)->get_fov_mode_str().c_str());
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            auto* camera = static_cast<termin::CameraComponent*>(obj);
-            if (camera && value.type == TC_VALUE_STRING && value.data.s) {
-                camera->set_fov_mode_str(value.data.s);
-                return true;
-            }
-            return false;
-        };
-        inspect.add_field_with_choices("CameraComponent", std::move(info));
-    }
-    if (!inspect.find_field("CameraComponent", "layer_mask")) {
-        tc::InspectFieldInfo info;
-        info.type_name = "CameraComponent";
-        info.path = "layer_mask";
-        info.label = "Layers";
-        info.kind = "layer_mask";
-        info.getter = [](void* obj) -> tc_value {
-            auto* camera = static_cast<termin::CameraComponent*>(obj);
-            char buf[32];
-            snprintf(buf, sizeof(buf), "0x%llx", static_cast<unsigned long long>(camera->layer_mask));
-            return tc_value_string(buf);
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            auto* camera = static_cast<termin::CameraComponent*>(obj);
-            if (!camera) {
-                return false;
-            }
-            if (value.type == TC_VALUE_STRING && value.data.s) {
-                camera->layer_mask = strtoull(value.data.s, nullptr, 0);
-                return true;
-            } else if (value.type == TC_VALUE_INT) {
-                camera->layer_mask = static_cast<uint64_t>(value.data.i);
-                return true;
-            }
-            return false;
-        };
-        inspect.add_field_with_choices("CameraComponent", std::move(info));
-    }
-}
-
-void register_light_runtime_fields(tc::InspectRegistry& inspect) {
-    inspect.set_type_parent("LightComponent", "CxxComponent");
-    if (!inspect.find_field("LightComponent", "light_type")) {
-        tc::InspectFieldInfo info;
-        info.type_name = "LightComponent";
-        info.path = "light_type";
-        info.label = "Light Type";
-        info.kind = "string";
-        info.getter = [](void* obj) -> tc_value {
-            return tc_value_string(static_cast<termin::LightComponent*>(obj)->get_light_type_str().c_str());
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            auto* light = static_cast<termin::LightComponent*>(obj);
-            if (light && value.type == TC_VALUE_STRING && value.data.s) {
-                light->set_light_type_str(value.data.s);
-                return true;
-            }
-            return false;
-        };
-        inspect.add_field_with_choices("LightComponent", std::move(info));
-    }
-    if (!inspect.find_field("LightComponent", "color")) {
-        tc::InspectFieldInfo info;
-        info.type_name = "LightComponent";
-        info.path = "color";
-        info.label = "Color";
-        info.kind = "color";
-        info.getter = [](void* obj) -> tc_value {
-            auto* light = static_cast<termin::LightComponent*>(obj);
-            tc_value list = tc_value_list_new();
-            tc_value_list_push(&list, tc_value_double(light->color.x));
-            tc_value_list_push(&list, tc_value_double(light->color.y));
-            tc_value_list_push(&list, tc_value_double(light->color.z));
-            return list;
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            auto* light = static_cast<termin::LightComponent*>(obj);
-            if (light && value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
-                light->color = termin::Vec3(
-                    value_to_double(tc_value_list_get(&value, 0), 1.0),
-                    value_to_double(tc_value_list_get(&value, 1), 1.0),
-                    value_to_double(tc_value_list_get(&value, 2), 1.0)
-                );
-                return true;
-            }
-            return false;
-        };
-        inspect.add_field_with_choices("LightComponent", std::move(info));
-    }
-    if (!inspect.find_field("LightComponent", "intensity")) {
-        inspect.add<termin::LightComponent, double>(
-            "LightComponent", &termin::LightComponent::intensity, "intensity", "Intensity", "double");
-    }
-}
-
-void register_android_runtime_inspect_fields() {
+void register_android_runtime_types() {
     static bool registered = false;
-    if (registered) {
-        return;
-    }
+    if (registered) return;
     registered = true;
 
-    tc_inspect_kind_core_init();
-    tc::KindRegistryCpp::instance();
-    termin::MeshComponent::register_type();
+    // Core component and inspect descriptors are committed by bootstrap_runtime().
+    // Android owns only its platform-local pass descriptor.
     UIWidgetPass::register_type();
 
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.set_type_parent("MeshRenderer", "Component");
-    if (!inspect.find_field("MeshRenderer", "material")) {
-        inspect.add<termin::MeshRenderer, termin::TcMaterial>(
-            "MeshRenderer", &termin::MeshRenderer::material, "material", "Material", "tc_material");
-    }
-    if (!inspect.find_field("MeshRenderer", "cast_shadow")) {
-        inspect.add<termin::MeshRenderer, bool>(
-            "MeshRenderer", &termin::MeshRenderer::cast_shadow, "cast_shadow", "Cast Shadow", "bool");
-    }
-    if (!inspect.find_field("MeshRenderer", "mesh_offset_enabled")) {
-        inspect.add<termin::MeshRenderer, bool>(
-            "MeshRenderer", &termin::MeshRenderer::mesh_offset_enabled, "mesh_offset_enabled", "Mesh Offset", "bool");
-    }
-    if (!inspect.find_field("MeshRenderer", "mesh_offset_position")) {
-        inspect.add<termin::MeshRenderer, tc_vec3>(
-            "MeshRenderer", &termin::MeshRenderer::mesh_offset_position, "mesh_offset_position", "Offset Position", "vec3");
-    }
-    if (!inspect.find_field("MeshRenderer", "mesh_offset_euler")) {
-        inspect.add<termin::MeshRenderer, tc_vec3>(
-            "MeshRenderer", &termin::MeshRenderer::mesh_offset_euler, "mesh_offset_euler", "Offset Rotation", "vec3");
-    }
-    if (!inspect.find_field("MeshRenderer", "mesh_offset_scale")) {
-        inspect.add<termin::MeshRenderer, tc_vec3>(
-            "MeshRenderer", &termin::MeshRenderer::mesh_offset_scale, "mesh_offset_scale", "Offset Scale", "vec3");
-    }
-    if (!inspect.find_field("MeshRenderer", "_override_material")) {
-        inspect.add_with_accessors<termin::MeshRenderer, bool>(
-            "MeshRenderer",
-            "_override_material",
-            "Override Material",
-            "bool",
-            [](termin::MeshRenderer* renderer) { return renderer ? renderer->override_material() : false; },
-            [](termin::MeshRenderer* renderer, bool value) {
-                if (renderer) {
-                    renderer->set_override_material(value);
-                }
-            }
-        );
-    }
-    if (!inspect.find_field("MeshRenderer", "_overridden_material_data")) {
-        tc::InspectFieldInfo info;
-        info.type_name = "MeshRenderer";
-        info.path = "_overridden_material_data";
-        info.label = "";
-        info.kind = "";
-        info.is_inspectable = false;
-        info.is_serializable = true;
-        info.getter = [](void* obj) -> tc_value {
-            return static_cast<termin::MeshRenderer*>(obj)->get_override_data();
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            static_cast<termin::MeshRenderer*>(obj)->set_override_data(&value);
-            return true;
-        };
-        inspect.add_serializable_field("MeshRenderer", std::move(info));
-    }
-
-    register_camera_runtime_fields(inspect);
-    register_light_runtime_fields(inspect);
-
     tc_log_info(
-        "termin_android_player: runtime inspect fields registered mesh=%zu renderer=%zu camera=%zu light=%zu",
+        "termin_android_player: runtime descriptors ready mesh=%zu renderer=%zu camera=%zu light=%zu",
         tc_inspect_field_count("MeshComponent"),
         tc_inspect_field_count("MeshRenderer"),
         tc_inspect_field_count("CameraComponent"),
@@ -884,7 +658,7 @@ bool ensure_player_scene_locked() {
         g_state.player_engine = std::make_unique<termin::EngineCore>();
     }
 
-    register_android_runtime_inspect_fields();
+    register_android_runtime_types();
 
     const char* required_components[] = {
         "MeshComponent",

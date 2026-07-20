@@ -2,7 +2,6 @@
 #include <termin_csharp/tc_inspect_csharp.h>
 #include <string>
 #include <vector>
-#include <unordered_map>
 #include <cstring>
 
 // ============================================================================
@@ -18,9 +17,20 @@ struct CsFieldInfo {
     double step;
 };
 
-static std::unordered_map<std::string, std::vector<CsFieldInfo>>& get_cs_fields() {
-    static std::unordered_map<std::string, std::vector<CsFieldInfo>> fields;
-    return fields;
+struct tc_csharp_inspect_descriptor {
+    std::string type_name;
+    std::vector<CsFieldInfo> fields;
+};
+
+static constexpr const char* k_csharp_inspect_facet = "termin.inspect.csharp_fields";
+
+static tc_csharp_inspect_descriptor* cs_facet(const char* type_name) {
+    return static_cast<tc_csharp_inspect_descriptor*>(
+        tc_runtime_type_registry_get_facet(type_name, k_csharp_inspect_facet));
+}
+
+static void destroy_cs_facet(void* payload) {
+    delete static_cast<tc_csharp_inspect_descriptor*>(payload);
 }
 
 // Global C# inspect callbacks
@@ -35,31 +45,28 @@ static bool g_cs_vtable_initialized = false;
 static bool cs_has_type(const char* type_name, void* ctx) {
     (void)ctx;
     if (!type_name) return false;
-    return get_cs_fields().count(type_name) > 0;
+    return cs_facet(type_name) != nullptr;
 }
 
 static const char* cs_get_parent(const char* type_name, void* ctx) {
-    (void)ctx; (void)type_name;
-    return nullptr;  // C# components have no parent in inspect hierarchy
+    (void)ctx;
+    return tc_runtime_type_registry_get_parent(type_name);
 }
 
 static size_t cs_field_count(const char* type_name, void* ctx) {
     (void)ctx;
     if (!type_name) return 0;
-    auto& fields = get_cs_fields();
-    auto it = fields.find(type_name);
-    if (it == fields.end()) return 0;
-    return it->second.size();
+    auto* facet = cs_facet(type_name);
+    return facet ? facet->fields.size() : 0;
 }
 
 static bool cs_get_field(const char* type_name, size_t index, tc_field_info* out, void* ctx) {
     (void)ctx;
     if (!type_name || !out) return false;
-    auto& fields = get_cs_fields();
-    auto it = fields.find(type_name);
-    if (it == fields.end() || index >= it->second.size()) return false;
+    auto* facet = cs_facet(type_name);
+    if (!facet || index >= facet->fields.size()) return false;
 
-    const auto& f = it->second[index];
+    const auto& f = facet->fields[index];
     out->path = f.path.c_str();
     out->label = f.label.c_str();
     out->kind = f.kind.c_str();
@@ -76,11 +83,10 @@ static bool cs_get_field(const char* type_name, size_t index, tc_field_info* out
 static bool cs_find_field(const char* type_name, const char* path, tc_field_info* out, void* ctx) {
     (void)ctx;
     if (!type_name || !path || !out) return false;
-    auto& fields = get_cs_fields();
-    auto it = fields.find(type_name);
-    if (it == fields.end()) return false;
+    auto* facet = cs_facet(type_name);
+    if (!facet) return false;
 
-    for (const auto& f : it->second) {
+    for (const auto& f : facet->fields) {
         if (f.path == path) {
             out->path = f.path.c_str();
             out->label = f.label.c_str();
@@ -141,15 +147,17 @@ void tc_inspect_csharp_init(void) {
     tc_inspect_set_lang_vtable(TC_INSPECT_LANG_CSHARP, &cs_vtable);
 }
 
-void tc_inspect_csharp_register_type(const char* type_name) {
-    if (!type_name) return;
-    tc_inspect_csharp_init();
-    // Ensure the type exists in the map (even if empty)
-    get_cs_fields()[type_name];
+tc_csharp_inspect_descriptor* tc_csharp_inspect_descriptor_create(
+    const char* type_name
+) {
+    if (!type_name || !type_name[0]) return nullptr;
+    auto* descriptor = new tc_csharp_inspect_descriptor;
+    descriptor->type_name = type_name;
+    return descriptor;
 }
 
-void tc_inspect_csharp_register_field(
-    const char* type_name,
+bool tc_csharp_inspect_descriptor_add_field(
+    tc_csharp_inspect_descriptor* descriptor,
     const char* path,
     const char* label,
     const char* kind,
@@ -157,8 +165,12 @@ void tc_inspect_csharp_register_field(
     double max,
     double step
 ) {
-    if (!type_name || !path) return;
+    if (!descriptor || !path || !path[0]) return false;
     tc_inspect_csharp_init();
+
+    for (const auto& field : descriptor->fields) {
+        if (field.path == path) return false;
+    }
 
     CsFieldInfo info;
     info.path = path;
@@ -168,7 +180,32 @@ void tc_inspect_csharp_register_field(
     info.max = max;
     info.step = step;
 
-    get_cs_fields()[type_name].push_back(std::move(info));
+    descriptor->fields.push_back(std::move(info));
+    return true;
+}
+
+bool tc_csharp_inspect_descriptor_attach(
+    tc_csharp_inspect_descriptor* inspect_descriptor,
+    tc_runtime_type_descriptor* runtime_descriptor
+) {
+    if (!inspect_descriptor || !runtime_descriptor) return false;
+    if (!tc_runtime_type_descriptor_add_facet(
+            runtime_descriptor,
+            k_csharp_inspect_facet,
+            inspect_descriptor,
+            destroy_cs_facet,
+            nullptr,
+            1)) {
+        return false;
+    }
+    tc_inspect_csharp_init();
+    return true;
+}
+
+void tc_csharp_inspect_descriptor_destroy(
+    tc_csharp_inspect_descriptor* descriptor
+) {
+    delete descriptor;
 }
 
 void tc_inspect_set_csharp_callbacks(

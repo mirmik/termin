@@ -72,6 +72,52 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
     assert "scan_frame_passes" not in dir(rm)
 
 
+def test_owner_cleanup_revokes_app_resources_and_python_kinds() -> None:
+    from termin.inspect.kind import KindRegistry
+    from termin_assets import set_resource_manager_factory
+    from termin_modules.module_context import (
+        module_registration_context,
+        unregister_module_owner,
+    )
+
+    module_id = "resource_and_kind_owner_probe"
+    rm = DefaultResourceManager()
+    set_resource_manager_factory(lambda: rm)
+    try:
+        with module_registration_context(module_id, [__name__]):
+            class OwnerResourceComponent:
+                pass
+
+            class OwnerResourceFramePass:
+                pass
+
+            rm.register_component("OwnerResourceComponent", OwnerResourceComponent)
+            rm.register_frame_pass("OwnerResourceFramePass", OwnerResourceFramePass)
+            KindRegistry.register_python(
+                "owner-resource-kind",
+                serialize=lambda value: value,
+                deserialize=lambda value: value,
+                owner=module_id,
+            )
+
+        assert rm.component_registry.list_owned(module_id) == [
+            "OwnerResourceComponent"
+        ]
+        assert rm.frame_pass_registry.list_owned(module_id) == [
+            "OwnerResourceFramePass"
+        ]
+        assert KindRegistry.list_owned(module_id) == ["owner-resource-kind"]
+
+        unregister_module_owner(module_id)
+
+        assert rm.component_registry.list_owned(module_id) == []
+        assert rm.frame_pass_registry.list_owned(module_id) == []
+        assert KindRegistry.list_owned(module_id) == []
+    finally:
+        unregister_module_owner(module_id)
+        set_resource_manager_factory(None)
+
+
 def test_module_owner_context_unregisters_python_component_registrations() -> None:
     import termin.bootstrap
     from termin.inspect import InspectField, InspectRegistry
@@ -87,12 +133,10 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     component_name = "OwnerContextProbeComponent"
     component_registry = ComponentRegistry.instance()
     inspect_registry = InspectRegistry.instance()
-
     try:
         component_registry.unregister_python(component_name)
     except AttributeError:
         component_registry.unregister(component_name)
-    inspect_registry.unregister_type(component_name)
     unregister_module_owner(module_id)
 
     try:
@@ -124,7 +168,7 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
 
 
 def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
-    from termin.inspect import InspectRegistry, _inspect_native
+    from termin.inspect import _inspect_native
     from termin.render_framework import (
         PythonFramePass,
         tc_pass_registry_has,
@@ -138,13 +182,11 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
 
     module_id = "owner_context_pass_probe"
     pass_name = "OwnerContextProbeFramePass"
-    inspect_registry = InspectRegistry.instance()
 
     try:
         tc_pass_registry_unregister_python(pass_name)
     except Exception:
         pass
-    inspect_registry.unregister_type(pass_name)
     register_loaded_python_passes()
 
     try:
@@ -172,7 +214,6 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
         assert not tc_pass_registry_has(pass_name)
     finally:
         tc_pass_registry_unregister_python(pass_name)
-        inspect_registry.unregister_type(pass_name)
         unregister_module_owner(module_id)
 
 
@@ -227,11 +268,9 @@ def test_ui_component_and_pass_use_canonical_paths() -> None:
         assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
         assert UIComponent.__module__ == "termin.ui_components.component"
     finally:
-        from termin.inspect import InspectRegistry
         from termin.scene import ComponentRegistry
 
         ComponentRegistry.instance().unregister_python("UIComponent")
-        InspectRegistry.instance().unregister_type("UIComponent")
 
 
 def test_render_config_types_use_canonical_paths() -> None:

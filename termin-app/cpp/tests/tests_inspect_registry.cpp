@@ -1,5 +1,6 @@
 #include "guard_main.h"
 #include "tc_inspect_cpp.hpp"
+#include "inspect/tc_runtime_type_registry.h"
 
 namespace {
 
@@ -18,16 +19,30 @@ TEST_CASE("InspectRegistry add/get/set and inheritance")
 {
     auto& reg = tc::InspectRegistry::instance();
 
-    reg.unregister_type("InspectTestBase");
-    reg.unregister_type("InspectTestDerived");
+    tc_runtime_type_registry_unregister_type("InspectTestBase");
+    tc_runtime_type_registry_unregister_type("InspectTestDerived");
 
     tc::register_builtin_cpp_kinds();
 
-    reg.add<InspectTestBase, int>("InspectTestBase", &InspectTestBase::base_value,
-                                  "base_value", "Base Value", "int", 0.0, 100.0, 1.0);
-    reg.add<InspectTestDerived, float>("InspectTestDerived", &InspectTestDerived::gain,
-                                       "gain", "Gain", "float", 0.0, 10.0, 0.1);
-    reg.set_type_parent("InspectTestDerived", "InspectTestBase");
+    tc::InspectFacetBuilder base("InspectTestBase");
+    REQUIRE((base.add<InspectTestBase, int>(
+        "InspectTestBase", &InspectTestBase::base_value,
+        "base_value", "Base Value", "int", 0.0, 100.0, 1.0)));
+    auto* base_descriptor = tc_runtime_type_descriptor_create(
+        "InspectTestBase", "termin-app-test", nullptr);
+    REQUIRE(base_descriptor != nullptr);
+    REQUIRE(base.attach_to(base_descriptor));
+    REQUIRE(tc_runtime_type_registry_commit_descriptor(base_descriptor));
+
+    tc::InspectFacetBuilder derived("InspectTestDerived");
+    REQUIRE((derived.add<InspectTestDerived, float>(
+        "InspectTestDerived", &InspectTestDerived::gain,
+        "gain", "Gain", "float", 0.0, 10.0, 0.1)));
+    auto* derived_descriptor = tc_runtime_type_descriptor_create(
+        "InspectTestDerived", "termin-app-test", "InspectTestBase");
+    REQUIRE(derived_descriptor != nullptr);
+    REQUIRE(derived.attach_to(derived_descriptor));
+    REQUIRE(tc_runtime_type_registry_commit_descriptor(derived_descriptor));
 
     InspectTestDerived obj;
     obj.base_value = 7;
@@ -55,18 +70,16 @@ TEST_CASE("InspectRegistry add/get/set and inheritance")
     tc_value_free(&set_gain);
     CHECK_EQ(obj.gain, guard::Approx(3.25).epsilon(1e-6));
 
-    reg.unregister_type("InspectTestDerived");
-    reg.unregister_type("InspectTestBase");
+    tc_runtime_type_registry_unregister_owner("termin-app-test");
 }
 
 TEST_CASE("InspectRegistry generic action callback invocation")
 {
     auto& reg = tc::InspectRegistry::instance();
 
-    reg.unregister_type("InspectTestDerived");
-
-    reg.add_button(
-        "InspectTestDerived",
+    tc_runtime_type_registry_unregister_type("InspectTestAction");
+    tc::InspectFacetBuilder inspect("InspectTestAction");
+    REQUIRE(inspect.add_button(
         "do_action",
         "Do Action",
         [](void* obj, const tc::InspectContext&) {
@@ -74,13 +87,18 @@ TEST_CASE("InspectRegistry generic action callback invocation")
             if (!derived) return;
             derived->action_called = true;
         }
-    );
+    ));
+    auto* descriptor = tc_runtime_type_descriptor_create(
+        "InspectTestAction", "termin-app-action-test", nullptr);
+    REQUIRE(descriptor != nullptr);
+    REQUIRE(inspect.attach_to(descriptor));
+    REQUIRE(tc_runtime_type_registry_commit_descriptor(descriptor));
 
     InspectTestDerived obj;
     CHECK_EQ(obj.action_called, false);
 
-    reg.action_field(&obj, "InspectTestDerived", "do_action");
+    reg.action_field(&obj, "InspectTestAction", "do_action");
     CHECK_EQ(obj.action_called, true);
 
-    reg.unregister_type("InspectTestDerived");
+    tc_runtime_type_registry_unregister_owner("termin-app-action-test");
 }

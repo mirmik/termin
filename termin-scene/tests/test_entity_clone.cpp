@@ -8,6 +8,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/entity/unknown_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <inspect/tc_inspect_init.h>
 
@@ -60,64 +61,33 @@ public:
     }
 };
 
-static ::termin::ComponentRegistrar<CloneRefComponent>
-    clone_ref_component_registrar("CloneRefComponent", "CxxComponent");
-
-void register_clone_ref_inspect_fields() {
+int register_clone_ref_inspect_fields() {
     tc::register_cpp_handle_kind<termin::Entity>("entity");
 
-    {
-        tc::InspectFieldInfo info;
-        info.type_name = "CloneRefComponent";
-        info.path = "value";
-        info.label = "Value";
-        info.kind = "int";
-        info.is_serializable = true;
-        info.getter = [](void* obj) -> tc_value {
-            return tc_value_int(static_cast<CloneRefComponent*>(obj)->value);
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            if (value.type == TC_VALUE_INT) {
-                static_cast<CloneRefComponent*>(obj)->value = static_cast<int>(value.data.i);
-                return true;
-            }
-            return false;
-        };
-        tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
-    }
-    tc::InspectRegistry::instance().add_handle(
-        "CloneRefComponent",
-        &CloneRefComponent::target,
-        "target",
-        "Target",
-        "entity"
-    );
-    {
-        tc::InspectFieldInfo info;
-        info.type_name = "CloneRefComponent";
-        info.path = "plain_uuid";
-        info.label = "Plain UUID";
-        info.kind = "string";
-        info.is_serializable = true;
-        info.getter = [](void* obj) -> tc_value {
-            return tc_value_string(static_cast<CloneRefComponent*>(obj)->plain_uuid_string.c_str());
-        };
-        info.setter = [](void* obj, tc_value value, void*) -> bool {
-            if (value.type == TC_VALUE_STRING && value.data.s) {
-                static_cast<CloneRefComponent*>(obj)->plain_uuid_string = value.data.s;
-                return true;
-            }
-            return false;
-        };
-        tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
-    }
+    auto descriptor = termin::ComponentTypeDescriptorBuilder::native<CloneRefComponent>(
+        "CloneRefComponent", "termin-scene-test");
+    auto& inspect = descriptor.inspect();
+    TEST_ASSERT((inspect.add<CloneRefComponent, int>(
+        "CloneRefComponent", &CloneRefComponent::value, "value", "Value", "int")),
+        "value field should stage");
+    TEST_ASSERT((inspect.add<CloneRefComponent, termin::Entity>(
+        "CloneRefComponent", &CloneRefComponent::target, "target", "Target", "entity")),
+        "target field should stage");
+    TEST_ASSERT((inspect.add<CloneRefComponent, std::string>(
+        "CloneRefComponent", &CloneRefComponent::plain_uuid_string,
+        "plain_uuid", "Plain UUID", "string")),
+        "plain UUID field should stage");
+    TEST_ASSERT(descriptor.commit(), "CloneRefComponent descriptor should commit");
+    return 0;
 }
 
 } // namespace
 
 int main() {
     tc_inspect_kind_core_init();
-    register_clone_ref_inspect_fields();
+    termin::register_builtin_scene_component_types();
+    TEST_ASSERT(register_clone_ref_inspect_fields() == 0,
+                "CloneRefComponent descriptor should register");
 
     termin::TcSceneRef migration_scene = termin::TcSceneRef::create("entity-migration-test");
     termin::Entity standalone = termin::Entity::create_with_uuid(
