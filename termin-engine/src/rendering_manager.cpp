@@ -8,7 +8,6 @@
 #include "render_state_store.hpp"
 #include "render_target_context_builder.hpp"
 #include "scene_light_collector.hpp"
-#include "termin/render/scene_pipeline_template.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
@@ -701,16 +700,23 @@ bool RenderingManager::apply_scene_pipelines(
     // Validate every pipeline target before installing live topology or
     // emitting lifecycle callbacks.
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
-    size_t template_count = mount ? mount->pipeline_template_count : 0;
-    for (size_t i = 0; i < template_count; i++) {
-        tc_spt_handle spt_handle = mount->pipeline_templates[i];
-        if (!tc_spt_is_valid(spt_handle)) continue;
+    size_t pipeline_count = mount ? mount->pipeline_count : 0;
+    for (size_t i = 0; i < pipeline_count; i++) {
+        const tc_render_pipeline* resource = tc_render_pipeline_get(mount->pipelines[i]);
+        if (!resource) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] Scene contains a stale pipeline handle");
+            return false;
+        }
 
-        TcScenePipelineTemplate templ(spt_handle);
-        if (!templ.is_loaded()) continue;
-
-        std::string pipeline_name = templ.name();
-        std::vector<std::string> targets = templ.target_viewports();
+        std::string pipeline_name = resource->header.name;
+        std::vector<std::string> targets;
+        for (uint32_t target_index = 0; target_index < resource->target_count; ++target_index) {
+            const char* viewport_name = resource->targets[target_index].viewport_name;
+            if (!viewport_name || !viewport_name[0]) continue;
+            if (std::find(targets.begin(), targets.end(), viewport_name) == targets.end()) {
+                targets.emplace_back(viewport_name);
+            }
+        }
 
         for (const std::string& vp_name : targets) {
             auto it = viewport_by_name.find(vp_name);
