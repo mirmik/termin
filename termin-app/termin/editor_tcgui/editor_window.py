@@ -41,7 +41,6 @@ from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
 from termin.editor_core.resource_manager import ResourceManager
-from termin.display import FBOSurface
 
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import (
@@ -102,7 +101,7 @@ class EditorWindowTcgui:
         main_window=None,
     ) -> None:
         self._engine = engine
-        # Process-global tgfx2 context — the editor's FBOSurface and
+        # Process-global tgfx2 context — the editor's owned display surface and
         # RenderingControllerTcgui allocate their render targets here.
         # Supplied by run_editor_tcgui from SDLBackendWindow.
         self._ctx = ctx
@@ -143,7 +142,6 @@ class EditorWindowTcgui:
         self.scene_tree_controller: SceneTreeControllerTcgui | None = None
         self._inspector_controller: InspectorControllerTcgui | None = None
         self._project_browser: ProjectBrowserTcgui | None = None
-        self._fbo_surface: FBOSurface | None = None
         self._viewport_widget: Viewport3D | None = None
         self._status_bar: StatusBar | None = None
         self._console_area: TextArea | None = None
@@ -215,7 +213,7 @@ class EditorWindowTcgui:
             get_project_path=self._get_project_path,
             get_python_executor=lambda: self._python_executor,
             get_rendering_controller=lambda: self._rendering_controller,
-            get_fbo_surface=lambda: self._fbo_surface,
+            get_editor_display=lambda: self._editor_display,
             get_project_file_watcher=lambda: self._project_file_watcher,
             get_editor_attachment=lambda: self._editor_attachment,
             attach_scene_to_render=self.attach_scene_to_render,
@@ -728,18 +726,17 @@ class EditorWindowTcgui:
         ).detach_scene_from_render(scene_name, save_state=save_state)
 
     def _setup_viewport(self) -> None:
-        """Create FBO surface, editor display, and connect to Viewport3D."""
-        self._fbo_surface = FBOSurface(self._ctx.device, 800, 600)
+        """Create an offscreen editor display and connect it to Viewport3D."""
 
         try:
             from termin.display import Display
 
-            display = Display(surface=self._fbo_surface, name="Editor")
+            display = Display.offscreen(self._ctx.device, 800, 600, name="Editor")
             self._editor_display = display
 
             if self._viewport_widget is not None:
                 self._viewport_widget.on_before_resize = self._on_before_viewport_resize
-                self._viewport_widget.set_surface(self._fbo_surface, display)
+                self._viewport_widget.set_display(display)
 
         except Exception as e:
             log.error(f"EditorWindowTcgui: failed to create editor display: {e}")
@@ -1454,6 +1451,11 @@ class EditorWindowTcgui:
         if self._rendering_controller is not None:
             self._rendering_controller.close()
             self._rendering_controller = None
+
+        if self._editor_display is not None:
+            if self._editor_display.is_valid() and not self._editor_display.destroy():
+                log.error("EditorWindowTcgui: failed to destroy editor display")
+            self._editor_display = None
 
     def _update_window_title(self) -> None:
         scene_label = "No Scene"

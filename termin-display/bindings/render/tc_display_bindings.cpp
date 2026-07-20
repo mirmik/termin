@@ -7,8 +7,10 @@
 
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/platform/offscreen_render_surface.hpp"
-#include "../platform/offscreen_render_surface_bindings.hpp"
+#include "tc_render_surface_bindings.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
+#include "tgfx2/handles.hpp"
+#include "tgfx2/i_render_device.hpp"
 
 extern "C" {
 #include "render/tc_render_surface.h"
@@ -21,16 +23,18 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Helper to convert viewport handle
-static std::tuple<uint32_t, uint32_t> vh_to_tuple(tc_viewport_handle h) {
-    return {h.index, h.generation};
-}
-
-static tc_viewport_handle tuple_to_vh(const std::tuple<uint32_t, uint32_t>& t) {
-    tc_viewport_handle h;
-    h.index = std::get<0>(t);
-    h.generation = std::get<1>(t);
-    return h;
+static TcDisplay configured_display(
+    tc_display_handle handle,
+    bool editor_only,
+    const std::string& uuid
+) {
+    if (!tc_display_handle_valid(handle)) {
+        throw std::runtime_error("failed to create display");
+    }
+    TcDisplay display(handle);
+    if (!uuid.empty()) display.set_uuid(uuid);
+    display.set_editor_only(editor_only);
+    return display;
 }
 
 void bind_tc_display(nb::module_& m) {
@@ -39,28 +43,7 @@ void bind_tc_display(nb::module_& m) {
         "Display - render target with viewports.\n\n"
         "Wraps tc_display. Contains surface and viewport list.")
 
-        // Constructor with surface pointer
-        .def("__init__", [](TcDisplay* self, uintptr_t surface_ptr, const std::string& name,
-                            bool editor_only, const std::string& uuid) {
-            tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-            new (self) TcDisplay(surface, name);
-            if (!uuid.empty()) {
-                self->set_uuid(uuid);
-            }
-            self->set_editor_only(editor_only);
-        }, nb::arg("surface_ptr"), nb::arg("name") = "Display",
-           nb::arg("editor_only") = false, nb::arg("uuid") = "")
-
-        .def("__init__", [](TcDisplay* self, FBOSurfaceRef& surface, const std::string& name,
-                            bool editor_only, const std::string& uuid) {
-            tc_render_surface* tc_surface = reinterpret_cast<tc_render_surface*>(surface.tc_surface_ptr());
-            new (self) TcDisplay(tc_surface, name);
-            if (!uuid.empty()) {
-                self->set_uuid(uuid);
-            }
-            self->set_editor_only(editor_only);
-        }, nb::arg("surface"), nb::arg("name") = "Display",
-           nb::arg("editor_only") = false, nb::arg("uuid") = "")
+        .def(nb::init<>())
 
         .def("is_valid", &TcDisplay::is_valid)
 
@@ -134,23 +117,19 @@ void bind_tc_display(nb::module_& m) {
             &TcDisplay::set_auto_remove_when_empty,
             "If True, display is auto-removed when last viewport is removed")
 
-        .def_prop_ro("surface_ptr", [](TcDisplay& self) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(self.surface());
-        }, "Raw pointer to tc_render_surface")
-
-        .def_prop_ro("surface", [](TcDisplay& self) -> nb::object {
-            tc_render_surface* surface = self.surface();
-            OffscreenRenderSurfaceHandle handle = offscreen_render_surface_find(surface);
-            if (offscreen_render_surface_handle_valid(handle)) {
-                return nb::cast(FBOSurfaceRef(handle));
-            }
-            return nb::none();
-        }, "Native render surface facade when the display uses a known native surface")
-
         // Size
         .def("get_size", [](TcDisplay& self) {
             return self.get_size();
         }, "Return display size in pixels as (width, height)")
+        .def("framebuffer_size", [](TcDisplay& self) {
+            return self.get_size();
+        }, "Return display surface size in pixels")
+        .def("resize", &TcDisplay::resize, nb::arg("width"), nb::arg("height"))
+        .def("get_tgfx_color_tex_id", &TcDisplay::color_texture_id)
+        .def_prop_ro("color_tex", [](TcDisplay& self) {
+            return tgfx::TextureHandle{self.color_texture_id()};
+        })
+        .def("graphics_domain_key", &TcDisplay::graphics_domain_key)
 
         // Viewport management - returns TcViewport objects
         .def_prop_ro("viewports", [](TcDisplay& self) -> std::vector<TcViewport> {
@@ -244,6 +223,33 @@ void bind_tc_display(nb::module_& m) {
            "Create and add new viewport")
 
         // Static factory
+        .def_static("offscreen", [](tgfx::IRenderDevice& device, int width, int height,
+                                     const std::string& name, bool editor_only,
+                                     const std::string& uuid) {
+            return configured_display(
+                create_offscreen_display(&device, width, height, name.c_str()),
+                editor_only,
+                uuid);
+        }, nb::arg("device"), nb::arg("width"), nb::arg("height"),
+           nb::arg("name") = "Display", nb::arg("editor_only") = false,
+           nb::arg("uuid") = "",
+           "Create a display that exclusively owns an offscreen texture surface")
+
+        .def_static("from_surface", [](nb::object surface_object,
+                                        const std::string& name,
+                                        bool editor_only,
+                                        const std::string& uuid) {
+            tc_render_surface* surface = create_python_render_surface(surface_object);
+            if (!surface) throw std::runtime_error("failed to create Python surface adapter");
+            tc_display_handle handle = tc_display_new(name.c_str(), surface);
+            if (!tc_display_handle_valid(handle)) {
+                tc_render_surface_delete_unowned(surface);
+            }
+            return configured_display(handle, editor_only, uuid);
+        }, nb::arg("surface"), nb::arg("name") = "Display",
+           nb::arg("editor_only") = false, nb::arg("uuid") = "",
+           "Create a display and transfer ownership of a Python surface adapter")
+
         .def_static("from_handle", [](uint32_t index, uint32_t generation) {
             return TcDisplay::from_handle(tc_display_handle{index, generation});
         }, nb::arg("index"), nb::arg("generation"),

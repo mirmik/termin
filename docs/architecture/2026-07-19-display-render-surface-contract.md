@@ -38,13 +38,14 @@ BackendWindow / Viewport3D / WPF input
 - уведомление display об изменении размера;
 - C adapter state и однозначный lifecycle.
 
-ABI v1 представлен четырьмя обязательными callbacks: `get_size`,
+ABI v2 представлен пятью обязательными callbacks: `resize`, `get_size`,
 `get_color_texture_id`, `get_graphics_domain_key` и `destroy`. Внешний adapter
 передаёт в `tc_render_surface_new_external` также точный размер vtable и
 `TC_RENDER_SURFACE_ABI_VERSION`; несовпадение версии, размера или отсутствующий
 callback отвергаются при создании.
-`tc_render_surface_free_external` возвращает `false` и сохраняет adapter живым,
-если host пытается освободить всё ещё прикреплённую surface.
+Хранилище каждой surface имеет явный deleter. `tc_render_surface_delete_unowned`
+уничтожает только ещё не переданную display surface и возвращает `false`, если
+host пытается освободить уже прикреплённый объект.
 
 Surface не предоставляет window, input, presentation или graphics-context
 operations. В частности, в целевом API отсутствуют raw framebuffer, OpenGL
@@ -111,12 +112,13 @@ display input.
 
 - в `tc_render_surface_vtable` нет window/OpenGL/input/presentation методов;
 - `tc_display` владеет input router и не делегирует window lifecycle surface;
-- `OffscreenRenderSurface` не содержит no-op window/context methods;
+- внутренний `OffscreenRenderSurface` не содержит no-op window/context methods;
 - `RenderingManager` использует обязательную tgfx texture без FBO fallback,
   `make_current()` и `swap_buffers()`;
 - native editor, player и Viewport3D используют display input endpoint;
 - C#/WPF surface adapter предоставляет рабочую tgfx texture либо удалён как
   неподдерживаемый;
-- `FBOSurface` заменён на `OffscreenRenderSurface` во внешнем API (#638);
+- внешний API создаёт display-owned offscreen surface через один `Display`
+  handle, без отдельной surface identity (#686);
 - tests покрывают resize/attach, input coordinates, missing/wrong-domain
   texture и deterministic shutdown.

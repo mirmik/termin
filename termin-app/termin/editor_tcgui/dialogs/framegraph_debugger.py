@@ -30,7 +30,7 @@ class CapturePreviewWidget(Widget):
         super().__init__()
         self._core = None
         self._capture = None
-        self._fbo_surface = None
+        self._editor_display = None
         self.channel_mode: int = 0
         self.highlight_hdr: bool = False
         self.has_content: bool = False
@@ -323,7 +323,7 @@ class _FramegraphDebuggerHandle:
 
 
 def show_framegraph_debugger(
-    ui, rendering_controller, rendering_manager, fbo_surface,
+    ui, rendering_controller, rendering_manager, editor_display,
     on_request_update=None,
 ) -> _FramegraphDebuggerHandle | None:
     """Create and show the Framegraph Debugger in a dedicated tcgui window."""
@@ -524,7 +524,7 @@ def show_framegraph_debugger(
     preview.stretch = True
     preview._core = core
     preview._capture = core.capture
-    preview._fbo_surface = fbo_surface
+    preview._editor_display = editor_display
     handle._preview = preview
     viewer_area.add_child(preview)
 

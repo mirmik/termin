@@ -48,7 +48,7 @@ class UI:
             render through. Required — UI never creates a Tgfx2Context
             of its own, because that would mint a second IRenderDevice
             and break cross-widget TextureHandle sharing (Viewport3D
-            consuming FBOSurface.color_tex, etc.), plus Vulkan parity.
+            consuming display-owned color textures, etc.), plus Vulkan parity.
             Obtain from the application host:
             ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
             at the top level, or ``Tgfx2Context.from_context(ctx2)``

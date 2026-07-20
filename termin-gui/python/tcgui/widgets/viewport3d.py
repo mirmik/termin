@@ -1,15 +1,10 @@
-"""Viewport3D — виджет для отображения 3D-сцены через FBO.
-
-Принимает FBOSurface от FBOWindowBackend. На каждом кадре отображает
-содержимое FBO через glBlitFramebuffer в область виджета.
-Перенаправляет события мыши и клавиатуры в input manager 3D-движка.
+"""Viewport3D — display-backed 3D viewport widget.
 
 Usage::
 
-    surface = FBOSurface(width=800, height=600)
-    display = Display(surface=surface, name="Editor")
+    display = Display.offscreen(device, 800, 600, name="Editor")
     viewport = Viewport3D()
-    viewport.set_surface(surface, display)
+    viewport.set_display(display)
 """
 
 from __future__ import annotations
@@ -20,24 +15,20 @@ from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import DragEvent, MouseEvent, MouseWheelEvent, KeyEvent
 
 if TYPE_CHECKING:
-    from termin.display import FBOSurface
     from tcgui.widgets.renderer import UIRenderer
 
 
 class Viewport3D(Widget):
     """Виджет, отображающий FBO от 3D-движка.
 
-    FBOSurface's FBO lives in the offscreen GL context (where present_display
-    writes to it). This widget runs in the main window GL context. Since FBOs
-    are per-context objects, we create a local FBO here that wraps the *shared*
-    color texture from the surface. Textures are shared between contexts.
+    The display owns an offscreen backend-neutral texture and the stable input
+    endpoint consumed by this widget.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.focusable = True
 
-        self._surface: FBOSurface | None = None
         self._display = None
         self._pointer_x = 0.0
         self._pointer_y = 0.0
@@ -51,33 +42,29 @@ class Viewport3D(Widget):
     # Подключение
     # ------------------------------------------------------------------
 
-    def set_surface(self, surface: FBOSurface, display=None) -> None:
-        """Подключить FBOSurface и опционально Display для получения input manager."""
-        self._surface = surface
-        if display is not None:
-            self._connect_input(display)
+    def set_display(self, display) -> None:
+        """Attach the single display rendering and input endpoint."""
+        self._connect_input(display)
         self._sync_surface_size()
 
     def _sync_surface_size(self) -> None:
         """Resize a newly attached surface to the widget's current layout size.
 
-        The tcgui editor can lay out and first-present the widget before
-        FBOSurface exists. In that case later layout passes see unchanged
-        widget dimensions and do not call resize(), leaving the surface at
-        its constructor fallback size until the user manually resizes a panel.
+        A display can be attached after the first layout pass, so synchronize
+        its owned surface immediately instead of waiting for another resize.
         """
-        if self._surface is None:
+        if self._display is None:
             return
         new_w = int(self.width)
         new_h = int(self.height)
         if new_w <= 0 or new_h <= 0:
             return
-        old_w, old_h = self._surface.framebuffer_size()
+        old_w, old_h = self._display.framebuffer_size()
         if (new_w, new_h) == (old_w, old_h):
             return
         if self.on_before_resize is not None:
             self.on_before_resize(new_w, new_h)
-        self._surface.resize(new_w, new_h)
+        self._display.resize(new_w, new_h)
 
     def _connect_input(self, display) -> None:
         """Use the stable display-owned input endpoint."""
@@ -96,17 +83,17 @@ class Viewport3D(Widget):
         new_w = int(width)
         new_h = int(height)
 
-        if self._surface is not None and (new_w != old_w or new_h != old_h):
+        if self._display is not None and (new_w != old_w or new_h != old_h):
             if self.on_before_resize is not None:
                 self.on_before_resize(new_w, new_h)
-            self._surface.resize(new_w, new_h)
+            self._display.resize(new_w, new_h)
 
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
     def render(self, renderer: 'UIRenderer') -> None:
-        if self._surface is None or self._surface.color_tex is None:
+        if self._display is None or not self._display.is_valid():
             # Render target not ready — placeholder rectangle
             renderer.draw_rect(self.x, self.y, self.width, self.height,
                                (0.05, 0.05, 0.05, 1.0))
@@ -123,8 +110,8 @@ class Viewport3D(Widget):
         wrapper in `OpenGLRenderDevice` (see coord_system.md §4). No
         backend branch needed here.
         """
-        handle = self._surface.color_tex
-        tex_w, tex_h = self._surface.framebuffer_size()
+        handle = self._display.color_tex
+        tex_w, tex_h = self._display.framebuffer_size()
         if handle is None or tex_w == 0 or tex_h == 0:
             return
 
@@ -155,9 +142,9 @@ class Viewport3D(Widget):
 
     def _sync_mouse_position(self, event: MouseEvent | MouseWheelEvent) -> None:
         from tcbase import log
-        if self._display is not None and self._surface is not None:
+        if self._display is not None:
             try:
-                pixel_width, pixel_height = self._surface.framebuffer_size()
+                pixel_width, pixel_height = self._display.framebuffer_size()
                 self._pointer_x = float(event.x - self.x) * pixel_width / max(self.width, 1.0)
                 self._pointer_y = float(event.y - self.y) * pixel_height / max(self.height, 1.0)
                 self._display.dispatch_pointer_move(self._pointer_x, self._pointer_y)

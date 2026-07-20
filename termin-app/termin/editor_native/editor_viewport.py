@@ -44,7 +44,6 @@ class NativeEditorViewport:
         widget,
         composition,
         root: WidgetRef,
-        surface,
         display,
         attachment,
         interaction,
@@ -56,7 +55,6 @@ class NativeEditorViewport:
         self.widget = widget
         self.composition = composition
         self.root = root
-        self.surface = surface
         self.display = display
         self.attachment = attachment
         self.interaction = interaction
@@ -94,7 +92,7 @@ class NativeEditorViewport:
     ) -> "NativeEditorViewport":
         """Create and connect the complete editor viewport runtime chain."""
 
-        from termin.display import Display, DisplayViewportHost, FBOSurface
+        from termin.display import Display
         from termin.editor._editor_native import (
             EditorInteractionSystem,
             EditorViewportInputManager,
@@ -113,18 +111,15 @@ class NativeEditorViewport:
             raise RuntimeError("native editor viewport composition rejected Viewport3D")
         parent.add_stretch_child(root)
 
-        surface = None
         display = None
         attachment = None
         interaction = None
         registered_display = False
         try:
-            surface = FBOSurface(device, 800, 600)
-            if not surface.is_valid():
-                raise RuntimeError("native editor FBO surface is invalid")
-
-            display = Display(
-                surface=surface,
+            display = Display.offscreen(
+                device,
+                800,
+                600,
                 name="Editor",
                 editor_only=True,
             )
@@ -151,7 +146,7 @@ class NativeEditorViewport:
                 display.index,
                 display.generation,
             )
-            widget.set_surface_host(DisplayViewportHost(surface, display))
+            widget.set_surface_host(display)
         except Exception:
             _logger.exception("Native editor viewport creation failed")
             if attachment is not None:
@@ -163,8 +158,6 @@ class NativeEditorViewport:
                 rendering_manager.remove_editor_display(display)
             if display is not None:
                 display.destroy()
-            if surface is not None:
-                surface.close()
             if interaction is not None:
                 EditorInteractionSystem.set_instance(None)
             if root.alive:
@@ -176,7 +169,6 @@ class NativeEditorViewport:
             widget=widget,
             composition=composition,
             root=root,
-            surface=surface,
             display=display,
             attachment=attachment,
             interaction=interaction,
@@ -328,7 +320,6 @@ class NativeEditorViewport:
         self.attachment.close()
         self.rendering_manager.remove_editor_display(self.display)
         self.display.destroy()
-        self.surface.close()
         if EditorInteractionSystem.instance() is self.interaction:
             EditorInteractionSystem.set_instance(None)
         if self.root.alive:

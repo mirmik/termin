@@ -41,6 +41,7 @@ public class NativeDisplayManager : IDisposable
         {
             throw new Exception("Failed to create tc_display");
         }
+        _renderSurface.MarkTransferred();
 
         _inputManagerPtr = TerminCore.DisplayGetInputManager(_displayHandle);
         if (_inputManagerPtr == IntPtr.Zero)

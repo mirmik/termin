@@ -20,7 +20,7 @@ routing и backend-neutral offscreen output surfaces. Native windows и
 - Examples в `examples/`.
 - Tests в `tests/`.
 
-## Публичный API и незавершённая миграция
+## Публичный API
 
 Python bindings пока повторно экспортируют window types:
 
@@ -34,9 +34,10 @@ from termin.display import SDLBackendWindow
 `SDLBackendWindow` уже реализованы в `termin-window`. Новая display/render
 архитектура не должна возвращать их в `termin-display`.
 
-Текущий `FBOSurface` является typed Python boundary для embedding offscreen
-display в `termin.gui_native.Viewport3D`, но его имя устарело.
-Принятый целевой контракт переименовывает его в `OffscreenRenderSurface` и
-оставляет на surface только texture, pixel extent, resize и lifecycle. Typed
-pointer/wheel/key/text dispatch принадлежит `tc_display`; surface больше не
-хранит и не экспортирует `tc_input_manager`.
+`tc_display` эксклюзивно владеет прикреплённым `tc_render_surface`. Surface
+имеет обязательные semantic `destroy` и storage deleter; успешное создание или
+замена передаёт владение display, а неуспешная операция оставляет его caller.
+Offscreen surface является внутренней backend-реализацией и создаётся через
+`Display.offscreen(device, width, height)`. Сам `Display` предоставляет texture,
+pixel extent, resize и typed pointer/wheel/key/text dispatch, поэтому отдельной
+долгоживущей Python surface identity нет.

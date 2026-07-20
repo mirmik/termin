@@ -13,7 +13,7 @@ Cross-module ownership между application host, `EditorSession` и `EngineCo
 │  View (tcgui)        │
 │  termin/editor_tcgui/│
 │  — tcgui widgets     │
-│  — FBOSurface        │
+│  — owned Display     │
 └──────────┬───────────┘
            │ uses
            ┌────────────▼────────────┐

@@ -15,8 +15,9 @@ extern "C" {
 
 typedef struct tc_render_surface tc_render_surface;
 typedef struct tc_render_surface_vtable tc_render_surface_vtable;
+typedef void (*tc_render_surface_deleter)(tc_render_surface* surface);
 
-#define TC_RENDER_SURFACE_ABI_VERSION 1u
+#define TC_RENDER_SURFACE_ABI_VERSION 2u
 
 typedef void (*tc_render_surface_resize_fn)(
     tc_render_surface* surface,
@@ -29,6 +30,7 @@ typedef void (*tc_render_surface_resize_fn)(
 // deliberately has no window, input, presentation, raw-FBO or context API.
 struct tc_render_surface_vtable {
     void (*get_size)(tc_render_surface* self, int* width, int* height);
+    bool (*resize)(tc_render_surface* self, int width, int height);
     uint32_t (*get_color_texture_id)(tc_render_surface* self);
     // Opaque identity of the IRenderDevice domain that minted the texture
     // handle. It is compared only for equality and is never dereferenced.
@@ -39,6 +41,10 @@ struct tc_render_surface_vtable {
 struct tc_render_surface {
     const tc_render_surface_vtable* vtable;
     void* body;
+    // Frees the storage enclosing this language-neutral base after vtable.destroy
+    // has completed semantic cleanup. A non-NULL surface can be adopted by a
+    // display only when this callback is installed.
+    tc_render_surface_deleter deleter;
     tc_render_surface_resize_fn on_resize;
     void* on_resize_userdata;
     // Enforces the one-surface-to-one-display contract and protects the sole
@@ -48,13 +54,25 @@ struct tc_render_surface {
 
 static inline void tc_render_surface_init(
     tc_render_surface* surface,
-    const tc_render_surface_vtable* vtable
+    const tc_render_surface_vtable* vtable,
+    tc_render_surface_deleter deleter
 ) {
     surface->vtable = vtable;
     surface->body = NULL;
+    surface->deleter = deleter;
     surface->on_resize = NULL;
     surface->on_resize_userdata = NULL;
     surface->attached_display = TC_DISPLAY_HANDLE_INVALID;
+}
+
+static inline bool tc_render_surface_resize(
+    tc_render_surface* surface,
+    int width,
+    int height
+) {
+    return surface && surface->vtable && surface->vtable->resize
+        ? surface->vtable->resize(surface, width, height)
+        : false;
 }
 
 static inline void tc_render_surface_get_size(
@@ -124,7 +142,11 @@ TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(
     size_t vtable_size,
     uint32_t abi_version
 );
-TERMIN_DISPLAY_API bool tc_render_surface_free_external(tc_render_surface* surface);
+
+// Destroy and free a surface that has not been transferred to a display.
+// Display-owned surfaces are rejected. The deleter is consumed before either
+// callback runs, so re-entrant deletion from semantic cleanup is rejected.
+TERMIN_DISPLAY_API bool tc_render_surface_delete_unowned(tc_render_surface* surface);
 
 #ifdef __cplusplus
 }

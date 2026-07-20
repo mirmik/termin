@@ -11,7 +11,7 @@ def test_player_screenshot_uses_runtime_rendering_manager(monkeypatch):
     )
     runtime = SimpleNamespace(
         rendering_manager=SimpleNamespace(render_engine=render_engine),
-        surface=object(),
+        display=object(),
     )
     captured = []
     monkeypatch.setattr(
@@ -26,5 +26,5 @@ def test_player_screenshot_uses_runtime_rendering_manager(monkeypatch):
     result = screenshot.capture_player_screenshot(runtime)
 
     assert result == {"path": "/tmp/player.png"}
-    assert captured[0][0] is runtime.surface
+    assert captured[0][0] is runtime.display
     assert captured[0][1] is device

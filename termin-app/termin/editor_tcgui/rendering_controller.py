@@ -50,8 +50,7 @@ class RenderingControllerTcgui:
             make_editor_pipeline=make_editor_pipeline,
         )
         self._pipeline_reload_binding = PipelineReloadBinding(resource_manager, self._manager)
-        # Process-global tgfx2 context — every FBOSurface this controller
-        # creates allocates its color/depth textures on this device.
+        # Process-global tgfx2 context used by display-owned offscreen surfaces.
         self._ctx = ctx
         self._get_scene = get_scene
         self._on_request_update = on_request_update
@@ -61,8 +60,8 @@ class RenderingControllerTcgui:
         self._on_entity_selected = on_entity_selected
         self._on_render_target_selected = on_render_target_selected
 
-        self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
+        self._owned_display_handles: set[tuple[int, int]] = set()
         self._viewport_input_managers: dict[tuple[int, int], tuple[int, int]] = {}
         self._viewport_list = viewport_list_widget
         self._center_tabs = None
@@ -79,6 +78,9 @@ class RenderingControllerTcgui:
     def close(self) -> None:
         """Detach every callback and asset subscription owned by this controller."""
         self._pipeline_reload_binding.close()
+        for display in list(self._manager.displays):
+            if display.handle in self._owned_display_handles:
+                self._manager.remove_display(display)
         self._manager.set_display_removed_callback(None)
         self._manager.set_pipeline_factory(None)
         self._manager.set_display_factory(None)
@@ -205,21 +207,18 @@ class RenderingControllerTcgui:
 
     def _create_display_for_name(self, name: str) -> "Display | None":
         from termin.display import Display
-        from termin.display import FBOSurface
 
-        fbo = FBOSurface(self._ctx.device, 800, 600)
-        display = Display(surface=fbo, name=name)
+        display = Display.offscreen(self._ctx.device, 800, 600, name=name)
         display.auto_remove_when_empty = True
 
         display_id = display.handle
-        self._display_surfaces[display_id] = fbo
-
+        self._owned_display_handles.add(display_id)
         # Add tab with Viewport3D for this display
         if self._center_tabs is not None:
             from tcgui.widgets.viewport3d import Viewport3D
             vp3d = Viewport3D()
             vp3d.stretch = True
-            vp3d.set_surface(fbo, display)
+            vp3d.set_display(display)
             self._center_tabs.add_tab(name, vp3d)
             self._display_viewports[display_id] = vp3d
 
@@ -279,17 +278,13 @@ class RenderingControllerTcgui:
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
         """Set up input manager for a display (delegates to RenderingModel).
 
-        The raw ``TcDisplay`` returned by ``RenderingManager`` doesn't carry
-        the Python ``.surface`` attribute, so we look the FBOSurface up
-        through the dict the factory populates at create time and pass it
-        in explicitly.
+        Display itself is the rendering and input host.
         """
         display_id = display.handle
-        surface = self._display_surfaces.get(display_id)
         # Editor mode here is a no-op — the editor display has its input
         # handling wired up by ``EditorWindowTcgui._attach_editor_input_router``
         # directly; non-editor displays never carry input_mode="editor".
-        self._model.apply_display_input(display, input_mode, surface)
+        self._model.apply_display_input(display, input_mode)
 
         viewport_widget = self._display_viewports.get(display_id)
         if viewport_widget is not None:
@@ -429,15 +424,19 @@ class RenderingControllerTcgui:
                         self._center_tabs.remove_tab(i)
                         break
 
-        if display_id in self._display_surfaces:
-            del self._display_surfaces[display_id]
-
         self._free_viewport_input_managers(display_id)
 
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
         self._viewport_list.remove_display(display)
+
+        if display_id in self._owned_display_handles:
+            self._owned_display_handles.remove(display_id)
+            if not display.destroy():
+                log.error(
+                    f"[RenderingControllerTcgui] failed to destroy owned display {display_id}"
+                )
 
         if self._selected_display is display:
             self._selected_display = None

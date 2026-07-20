@@ -110,7 +110,6 @@ class RenderingModel:
         self,
         display: "Display",
         input_mode: str,
-        surface,
         on_editor_mode=None,
     ) -> None:
         """Apply display input policy for ``input_mode``.
@@ -122,10 +121,7 @@ class RenderingModel:
           callback (``(display) -> None``) is invoked so the editor frontend
           can wire up editor-specific input.
 
-        ``surface`` comes from the view — the model doesn't look it up
-        itself because the Python `Display` subclass isn't always what
-        ``RenderingManager`` returns (raw ``TcDisplay`` wrappers don't
-        carry the subclass ``.surface``).
+        Rendering and input are both reached through the display handle.
         """
         display_id = display.handle
 
