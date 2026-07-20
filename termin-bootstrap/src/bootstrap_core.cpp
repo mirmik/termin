@@ -46,7 +46,7 @@ extern "C" {
 #include <inspect/tc_inspect_pass_adapter.h>
 #include <render/tc_pass.h>
 #include <render/tc_pipeline_pool.h>
-#include <render/tc_render_pipeline_registry.h>
+#include <render/tc_pipeline_template_registry.h>
 #include <resources/tc_skeleton_registry.h>
 #include <termin_collision/termin_collision.h>
 #include <tgfx/resources/tc_material_registry.h>
@@ -115,7 +115,7 @@ void tc_init(void) {
     tc_animation_init();
 #endif
     tc_material_init();
-    tc_render_pipeline_init();
+    tc_pipeline_template_init();
     tc_pipeline_pool_init();
     tc_entity_pool_registry_init();
     tc_scene_pool_init();
@@ -133,7 +133,7 @@ void tc_shutdown(void) {
     // registry then owns only standalone (or otherwise unmounted) pools.
     tc_entity_pool_registry_shutdown();
     tc_pipeline_pool_shutdown();
-    tc_render_pipeline_shutdown();
+    tc_pipeline_template_shutdown();
     tc_material_shutdown();
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
     tc_animation_shutdown();

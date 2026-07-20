@@ -318,7 +318,7 @@ def show_scene_properties_dialog(
     def _refresh_pipelines():
         pipeline_handles.clear()
         items = []
-        for pipeline in rm.scene_pipelines:
+        for pipeline in rm.pipeline_templates:
             if pipeline.is_valid:
                 name = pipeline.name
                 uuid_short = pipeline.uuid[:8] if pipeline.uuid else ""

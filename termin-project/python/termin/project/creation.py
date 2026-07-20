@@ -280,7 +280,7 @@ def make_default_scene() -> dict:
             "extensions": {
                 "render_mount": {
                     "viewport_configs": [],
-                    "scene_pipelines": [],
+                    "pipeline_templates": [],
                 },
                 "render_state": {
                     "background_color": [0.05, 0.05, 0.08, 1.0],

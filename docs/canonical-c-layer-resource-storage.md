@@ -22,7 +22,7 @@
 В первую очередь к каноническим ресурсам движка относятся ресурсы ассетов:
 tc_mesh
 tc_texture
-tc_render_pipeline (неизменяемый шаблон пайплайна)
+tc_pipeline_template (неизменяемый шаблон пайплайна)
 tc_shader
 tc_ui_document
 и д.р.
@@ -57,11 +57,10 @@ tc_widget (tc_ui_document)
 tc_render_surface (tc_display)
 
 Для pipeline две роли образуют один паттерн, но не один storage type:
-`tc_render_pipeline` — каноничный неизменяемый/versioned шаблон, а
+`tc_pipeline_template` — каноничный неизменяемый/versioned шаблон, а
 `tc_pipeline` — его mutable execution instance, владеющий живыми `tc_pass` и
 их deleter'ами. Scene и asset удерживают strong handle шаблона; render topology
 создаёт отдельный instance для конкретного runtime attachment.
 Созданный напрямую runtime-only `tc_pipeline` может не иметь шаблона вообще;
-такой instance обязан возвращать invalid resource handle, а не создавать
-пустой анонимный canonical resource как побочный эффект.
-
+такой instance обязан возвращать invalid template handle, а не создавать
+пустой анонимный canonical template как побочный эффект.

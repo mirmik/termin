@@ -150,7 +150,7 @@ class ScenePropertiesController:
     def load(self) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
         mount = scene_render_mount(self._scene)
-        handles = tuple(mount.scene_pipelines)
+        handles = tuple(mount.pipeline_templates)
         pipelines = tuple(
             ScenePipelineSnapshot(
                 name=handle.name if handle.is_valid else "(missing pipeline)",
@@ -213,10 +213,10 @@ class ScenePropertiesController:
 
     def remove_pipeline(self, index: int) -> ScenePropertiesSnapshot:
         mount = scene_render_mount(self._scene)
-        handles = tuple(mount.scene_pipelines)
+        handles = tuple(mount.pipeline_templates)
         if not 0 <= index < len(handles):
             raise IndexError("scene pipeline index is out of range")
-        mount.remove_render_pipeline(handles[index])
+        mount.remove_pipeline_template(handles[index])
         return self._published()
 
     def _edit(self, name: str, old_value, new_value, *, merge: bool) -> ScenePropertiesSnapshot:

@@ -2,7 +2,7 @@
 
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "termin/render/tc_render_pipeline.hpp"
+#include "termin/render/tc_pipeline_template.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -77,25 +77,25 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
     std::unordered_map<std::string, tc_pipeline_handle> candidate_pipelines;
     std::unordered_map<std::string, std::vector<std::string>> candidate_targets;
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
-    const size_t pipeline_count = mount ? mount->pipeline_count : 0;
+    const size_t template_count = mount ? mount->pipeline_template_count : 0;
 
-    for (size_t i = 0; i < pipeline_count; ++i) {
-        const tc_render_pipeline_handle handle = mount->pipelines[i];
-        const tc_render_pipeline* definition = tc_render_pipeline_get(handle);
+    for (size_t i = 0; i < template_count; ++i) {
+        const tc_pipeline_template_handle handle = mount->pipeline_templates[i];
+        const tc_pipeline_template* definition = tc_pipeline_template_get(handle);
         if (!definition) {
-            tc_log(TC_LOG_ERROR, "[RenderTopology] Scene pipeline resource %zu is stale", i);
+            tc_log(TC_LOG_ERROR, "[RenderTopology] Scene pipeline template %zu is stale", i);
             destroy_pipeline_map(candidate_pipelines);
             return false;
         }
 
-        TcRenderPipeline resource(handle);
+        TcPipelineTemplate pipeline_template(handle);
         RenderPipeline instance;
         try {
-            instance = RenderPipeline(resource);
+            instance = RenderPipeline(pipeline_template);
         } catch (const std::exception& error) {
             tc_log(
                 TC_LOG_ERROR,
-                "[RenderTopology] Failed to instantiate scene pipeline resource '%s': %s",
+                "[RenderTopology] Failed to instantiate scene pipeline template '%s': %s",
                 definition->header.name,
                 error.what()
             );
