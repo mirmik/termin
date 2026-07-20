@@ -24,7 +24,7 @@ def test_editor_project_load_configures_shader_runtime(monkeypatch, tmp_path: Pa
     monkeypatch.delenv("TERMIN_SLANGC", raising=False)
 
     win = EditorWindowTcgui.__new__(EditorWindowTcgui)
-    win.engine = type(
+    win._engine = type(
         "Engine",
         (),
         {
@@ -70,7 +70,7 @@ def test_editor_shader_runtime_rejects_missing_configured_slangc(monkeypatch, tm
     monkeypatch.setattr(project_session_controller.log, "error", errors.append)
 
     win = EditorWindowTcgui.__new__(EditorWindowTcgui)
-    win.engine = type(
+    win._engine = type(
         "Engine",
         (),
         {

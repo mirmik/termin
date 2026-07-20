@@ -242,15 +242,22 @@ bool cleanup_module_registrations(
         const std::vector<std::string> remaining_types = module_runtime_types(record);
         if (!remaining_types.empty()) {
             if (sync_live_scenes) rollback_module_placeholders(record, scene_provider);
-            error = "Failed to clean module registrations for '" + record.spec.id + "'";
+            error = "Owner contribution audit failed: owner='" + record.spec.id +
+                "' participant='runtime-types' phase='audit' remaining=[";
+            for (size_t i = 0; i < remaining_types.size(); ++i) {
+                if (i > 0) error += ", ";
+                error += remaining_types[i];
+            }
+            error += "]";
             tc::Log::error("TermModulesIntegration: %s", error.c_str());
             return false;
         }
         if (type_count > 0) {
             tc::Log::info(
-                "TermModulesIntegration: cleaned %zu runtime type registrations for module '%s'",
-                type_count,
-                record.spec.id.c_str()
+                "TermModulesIntegration: owner='%s' participant='runtime-types' "
+                "phase='revoke' removed_count=%zu",
+                record.spec.id.c_str(),
+                type_count
             );
         }
         return true;

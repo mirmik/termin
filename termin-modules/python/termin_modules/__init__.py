@@ -15,12 +15,15 @@ from ._termin_modules_native import (
     PythonModuleBackend,
 )
 from .module_context import (
+    OwnerContributionParticipant,
     module_registration_context,
     owner_for_python_module,
     publish_module_owner,
     register_module_packages,
+    register_owner_contribution_participant,
     unregister_module_owner,
     unregister_module_packages,
+    unregister_owner_contribution_participant,
 )
 
 __all__ = [
@@ -34,10 +37,13 @@ __all__ = [
     "ModuleRuntime",
     "ModuleState",
     "PythonModuleBackend",
+    "OwnerContributionParticipant",
     "module_registration_context",
     "owner_for_python_module",
     "publish_module_owner",
     "register_module_packages",
+    "register_owner_contribution_participant",
     "unregister_module_owner",
     "unregister_module_packages",
+    "unregister_owner_contribution_participant",
 ]

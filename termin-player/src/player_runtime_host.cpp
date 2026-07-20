@@ -1174,28 +1174,25 @@ struct PlayerRuntimeHost::Impl {
 
     void run_loop() {
         g_active_host = this;
-        engine->set_poll_events_callback([this]() {
-            consume_shutdown_signal();
-            if (window) {
-                window->poll_events();
-            }
-            sync_surface_size();
-        });
-        engine->set_should_continue_callback([this]() {
-            consume_shutdown_signal();
-            return !quit_requested && window && !window->should_close();
-        });
-        engine->set_on_shutdown_callback([this]() {
-            render_present();
+        auto loop_connection = engine->attach_loop_client(EngineLoopClient{
+            .poll_events = [this]() {
+                consume_shutdown_signal();
+                if (window) {
+                    window->poll_events();
+                }
+                sync_surface_size();
+            },
+            .should_continue = [this]() {
+                consume_shutdown_signal();
+                return !quit_requested && window && !window->should_close();
+            },
+            .on_shutdown = []() {},
         });
         engine->scene_manager.request_render();
 
-        using clock = std::chrono::steady_clock;
-        auto last_present = clock::now();
         int presented_frames = 0;
-        engine->scene_manager.set_on_after_render([this, &last_present, &presented_frames]() {
+        engine->scene_manager.set_on_after_render([this, &presented_frames]() {
             render_present();
-            last_present = clock::now();
             if (cli.exit_after_frames > 0) {
                 // Test harness hook: let packaged runtime prove that rendering
                 // and shutdown work without relying on an external SIGTERM.
@@ -1208,6 +1205,8 @@ struct PlayerRuntimeHost::Impl {
 
         tc_log_info("termin_player: starting native C++ runtime host");
         engine->run();
+        render_present();
+        loop_connection.detach();
         g_active_host = nullptr;
     }
 
@@ -1250,9 +1249,6 @@ struct PlayerRuntimeHost::Impl {
 
         if (engine) {
             engine->scene_manager.set_on_after_render(nullptr);
-            engine->set_poll_events_callback(nullptr);
-            engine->set_should_continue_callback(nullptr);
-            engine->set_on_shutdown_callback(nullptr);
             engine.reset();
         }
 

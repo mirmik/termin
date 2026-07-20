@@ -333,28 +333,6 @@ TC_API bool tc_component_type_descriptor_add_facet(
     size_t capability_count
 );
 
-TC_API void tc_component_registry_register(
-    const char* type_name,
-    tc_component_factory factory,
-    void* factory_userdata,
-    tc_component_kind kind
-);
-
-TC_API bool tc_component_registry_register_with_parent(
-    const char* type_name,
-    tc_component_factory factory,
-    void* factory_userdata,
-    tc_component_kind kind,
-    const char* parent_type_name
-);
-
-// Register abstract component type (no factory, can't be instantiated)
-TC_API void tc_component_registry_register_abstract(
-    const char* type_name,
-    tc_component_kind kind,
-    const char* parent_type_name
-);
-
 TC_API void tc_component_registry_unregister(const char* type_name);
 TC_API bool tc_component_registry_has(const char* type_name);
 TC_API tc_component* tc_component_registry_create(const char* type_name);
@@ -385,11 +363,6 @@ TC_API bool tc_component_registry_is_a(
     const char* base_type_name
 );
 
-TC_API void tc_component_registry_add_requirement(
-    const char* type_name,
-    const char* required_type_name
-);
-
 TC_API size_t tc_component_registry_requirement_count(const char* type_name);
 TC_API const char* tc_component_registry_requirement_at(
     const char* type_name,
@@ -404,23 +377,9 @@ TC_API bool tc_component_registry_has_requirement(
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
 TC_API bool tc_component_registry_is_abstract(const char* type_name);
 
-TC_API void tc_component_registry_set_display_name(
-    const char* type_name,
-    const char* display_name
-);
 TC_API const char* tc_component_registry_get_display_name(const char* type_name);
 
-TC_API void tc_component_registry_set_category(
-    const char* type_name,
-    const char* category
-);
 TC_API const char* tc_component_registry_get_category(const char* type_name);
-
-TC_API void tc_component_registry_set_capability(
-    const char* type_name,
-    tc_component_cap_id cap_id,
-    bool enabled
-);
 
 TC_API bool tc_component_registry_has_capability(
     const char* type_name,

@@ -95,6 +95,7 @@ from termin.editor_native.display_workspace import NativeDisplayWorkspace
 from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.editor_log import build_native_editor_log
+from termin.editor_native.editor_session import EditorSession
 from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
@@ -193,14 +194,18 @@ def _smoke_frame_limit() -> int:
         return 0
 
 
-def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
+def init_editor_native(
+    engine,
+    debug_resource: str | None = None,
+    no_scene: bool = False,
+) -> EditorSession:
     """Initialize one native document and register it with the C++ engine loop."""
 
     from termin.bootstrap import bootstrap_editor
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     from termin.editor_core.mcp_server import start_editor_mcp_server
     from termin.editor_core.python_executor import EditorPythonExecutor
-    from termin.engine import create_scene, scene as engine_scene
+    from termin.engine import EngineLoopClient, create_scene, scene as engine_scene
 
     bootstrap_editor()
     configure_editor_resource_manager_factory()
@@ -1707,38 +1712,6 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             log.info("[Editor] SIGINT received; requesting native editor shutdown")
             window.set_should_close(True)
             return
-        # The root shell and initial scene are owned by this engine-loop closure.
-        _ = (
-            shell,
-            initial_scene,
-            profiler_panel,
-            frame_profiler,
-            modules_panel,
-            registry_viewer,
-            core_registry_viewer,
-            resource_manager_viewer,
-            project_browser,
-            pipeline_editor,
-            framegraph_debugger,
-            python_console,
-            editor_log,
-            settings_dialog,
-            about_dialog,
-            undo_history_dialog,
-            audio_debugger_dialog,
-            scene_properties_dialog,
-            scene_names_dialog,
-            shadow_settings_dialog,
-            project_settings_dialog,
-            agent_types_dialog,
-            navmesh_areas_dialog,
-            spacemouse_settings_dialog,
-            scene_manager_dialog,
-            scene_tree,
-            viewport_list,
-            display_workspace,
-            entity_inspector,
-        )
         with capture_profiler.section("Events"):
             keep_running, _routed = window_manager.poll_events()
         if not keep_running:
@@ -1774,7 +1747,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     def should_continue() -> bool:
         return not window.should_close()
 
-    def on_shutdown() -> None:
+    def close_editor() -> None:
         scene_structure_observer.close()
         editor_log.close()
         modules_panel.close()
@@ -1884,18 +1857,18 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
                 _logger.exception("Native display workspace shutdown cleanup failed")
         if initial_scene is not None:
             engine.scene_manager.unregister_scene(editor_scene_name)
-        try:
-            engine.rendering_manager.shutdown()
-        except Exception:
-            _logger.exception("Native rendering manager shutdown failed")
         window_manager.close()
         quit_sdl()
         terminal_interrupt.close()
 
-    engine.set_poll_events_callback(poll_events)
-    engine.set_should_continue_callback(should_continue)
-    engine.set_on_shutdown_callback(on_shutdown)
+    loop_client = EngineLoopClient(
+        poll_events=poll_events,
+        should_continue=should_continue,
+        on_shutdown=lambda: None,
+    )
+    loop_connection = engine.attach_loop_client(loop_client)
     terminal_interrupt.install()
+    return EditorSession(loop_connection, close_editor)
 
 
-__all__ = ["init_editor_native"]
+__all__ = ["EditorSession", "init_editor_native"]

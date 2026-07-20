@@ -2,6 +2,8 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
 
+#include <utility>
+
 #include "termin/engine/engine_core.hpp"
 
 namespace nb = nanobind;
@@ -18,6 +20,30 @@ void bind_engine_core(nb::module_& m) {
             PyCapsule_GetPointer(capsule.ptr(), capsule_name));
     }, nb::arg("capsule"), nb::rv_policy::reference,
        "Convert an explicit C++ host capsule into a borrowed EngineCore reference.");
+
+    nb::class_<EngineLoopClient>(m, "EngineLoopClient")
+        .def(nb::init<>(),
+             "Create an incomplete loop client for explicit population.")
+        .def(nb::init<
+                 std::function<void()>,
+                 std::function<bool()>,
+                 std::function<void()>>(),
+             nb::arg("poll_events"),
+             nb::arg("should_continue"),
+             nb::arg("on_shutdown"),
+             "Create one complete external main-loop integration.")
+        .def_rw("poll_events", &EngineLoopClient::poll_events)
+        .def_rw("should_continue", &EngineLoopClient::should_continue)
+        .def_rw("on_shutdown", &EngineLoopClient::on_shutdown)
+        ;
+
+    nb::class_<EngineLoopClientConnection>(m, "EngineLoopClientConnection")
+        .def("detach", &EngineLoopClientConnection::detach,
+             "Detach the complete loop client. Repeated calls are harmless.")
+        .def("connected", &EngineLoopClientConnection::connected,
+             "Return whether this handle still owns the engine connection.")
+        .def("__bool__", &EngineLoopClientConnection::connected)
+        ;
 
     nb::class_<EngineCore>(m, "EngineCore")
         .def(nb::init<>(),
@@ -51,6 +77,12 @@ void bind_engine_core(nb::module_& m) {
             &EngineCore::set_profile_ui,
             "When true, run() wraps poll_events in a 'UI' profiler section "
             "and the frame scope covers both UI and tick_and_render.")
+
+        .def("attach_loop_client", [](EngineCore& self, EngineLoopClient& client) {
+            return self.attach_loop_client(std::move(client));
+        }, nb::arg("client"),
+           "Atomically attach and consume one complete loop client. "
+           "The returned connection controls its lifetime.")
 
         // Callbacks
         .def("set_poll_events_callback", [](EngineCore& self, nb::object callback) {
