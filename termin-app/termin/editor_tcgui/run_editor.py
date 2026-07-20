@@ -3,8 +3,8 @@
 Runs on ``termin.display.BackendWindow`` — backend selection lives in
 the env-var ``TERMIN_BACKEND`` (``opengl`` / ``vulkan``). No raw SDL+GL
 window creation, no per-window tc_gpu_context, no SDL_GL_SHARE_WITH_
-CURRENT_CONTEXT: the process owns a single tgfx2 IRenderDevice (borrowed
-from the BackendWindow) and every renderer — UIRenderer, display surfaces,
+CURRENT_CONTEXT: the process owns a single tgfx2 IRenderDevice in an explicit
+host graphics runtime and every renderer — UIRenderer, display surfaces,
 RenderEngine — lives on it.
 """
 
@@ -19,8 +19,9 @@ from tcgui.widgets.ui import UI
 
 from tgfx import Tgfx2Context
 from termin.display._platform_native import (
+    BackendWindow,
     PresentationMode,
-    SDLBackendWindow,
+    WindowedGraphicsSession,
     poll_sdl_events,
     quit_sdl,
     start_text_input,
@@ -73,7 +74,7 @@ def _dispatch_file_drop(event: dict, target_ui: UI) -> bool:
     )
 
 
-def _dispatch_native_events(bw: SDLBackendWindow, ui: UI, wm=None) -> tuple[bool, int]:
+def _dispatch_native_events(bw: BackendWindow, ui: UI, wm=None) -> tuple[bool, int]:
     """Pump native window events, forward to the UI each event is for.
 
     We poll native events directly (bypassing BackendWindow.poll_events) because
@@ -204,23 +205,22 @@ def init_editor_tcgui(
         else PresentationMode.IMMEDIATE
     )
 
-    # BackendWindow inits SDL and creates its own window + tgfx2 device
-    # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
-    main_window = SDLBackendWindow(
+    graphics_session = WindowedGraphicsSession.create_native()
+    main_window = graphics_session.create_window(
         "Termin Editor",
         1280,
         720,
         presentation_mode=presentation_mode,
     )
     apply_editor_window_icon(main_window)
+    render_engine.set_graphics_host(graphics_session.graphics)
     render_engine.ensure_tgfx2()
     main_window.maximize()
 
-    # Process-global tgfx2 context owned by the window. Every renderer
+    # Process-global tgfx2 context owned by the host graphics runtime. Every renderer
     # (UIRenderer, display-owned offscreen surface, RenderEngine) uses one device+ctx
     # through it.
-    tgfx2_ctx = Tgfx2Context.from_window(
-        main_window.device_ptr(), main_window.context_ptr())
+    tgfx2_ctx = Tgfx2Context.from_runtime(graphics_session.graphics)
 
     # Create initial scene
     from termin.engine import create_scene
@@ -232,7 +232,7 @@ def init_editor_tcgui(
 
     ui = UI(graphics=tgfx2_ctx)
 
-    wm = BackendWindowManager()
+    wm = BackendWindowManager(graphics_session)
     wm.register_main(main_window, ui)
 
     # Apply font size settings before widget tree is built.
@@ -289,11 +289,14 @@ def init_editor_tcgui(
     def should_continue() -> bool:
         return not (win.should_close() or main_window.should_close())
 
-    def close_editor() -> None:
+    def prepare_engine_shutdown() -> None:
         if mcp_server is not None:
             mcp_server.stop()
         win.shutdown()
+
+    def close_backend() -> None:
         wm.destroy_all()
+        graphics_session.close()
         quit_sdl()
 
     loop_client = EngineLoopClient(
@@ -302,7 +305,11 @@ def init_editor_tcgui(
         on_shutdown=lambda: None,
     )
     loop_connection = engine.attach_loop_client(loop_client)
-    return TcguiEditorSession(loop_connection, close_editor)
+    return TcguiEditorSession(
+        loop_connection,
+        prepare_engine_shutdown,
+        close_backend,
+    )
 
 
 def run_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
@@ -315,4 +322,11 @@ def run_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool =
     try:
         engine.run()
     finally:
-        session.close()
+        try:
+            session.prepare_engine_shutdown()
+        finally:
+            try:
+                if not engine.shutdown():
+                    raise RuntimeError("EngineCore refused tcgui editor shutdown")
+            finally:
+                session.close()

@@ -2,7 +2,8 @@
 
 ## Status
 
-Implemented for architecture card #472 on 2026-07-16.
+Implemented for architecture card #472 on 2026-07-16; ownership API tightened
+by #703 on 2026-07-21.
 
 ## Decision
 
@@ -21,7 +22,7 @@ multi-backend rendering and cross-device resource transfer are unsupported.
 
 ## Original risk
 
-`RenderRuntime` published an owned device from its constructor.
+`GraphicsHost` published an owned device from its constructor.
 `Tgfx2Context.from_window` published the same pointer again, and direct
 Android/OpenXR paths called an unrestricted global setter. A second owner could
 therefore replace the active device, while destruction could clear a device it
@@ -41,23 +42,24 @@ The C interop boundary exposes an owner-checked registration:
 - `tgfx2_interop_release_device(device, owner)` succeeds only for the owner;
 - `tgfx2_interop_get_device()` remains an observing accessor.
 
-`RenderRuntime` construction has no global side effects. An application host
-calls `claim_interop()` explicitly and the runtime releases only its own claim
-during `close()`. Borrowed runtimes never claim their host device.
+`tgfx::GraphicsHost` is the sole owning application-domain object. Named
+factories distinguish application hosts, which own the interop claim, from
+isolated test/tool hosts, which never publish globally. Borrowed-device and
+borrowed-context host constructors do not exist.
 
 ## Migration
 
 1. Add owner-checked claim/release to the C interop API and remove the
    unrestricted setter.
-2. Make `RenderRuntime` standalone by default and expose explicit
-   `claim_interop()` / `release_interop()` operations.
+2. Make `GraphicsHost` owning-only and expose named application/isolated
+   factories rather than public claim/release toggles.
 3. Claim from application composition roots:
-   `SDLBackendWindow`, standalone `RenderEngine`, `tcplot::GpuHost`, Android
+   `WindowedGraphicsSession`, standalone `RenderEngine`, `tcplot::GpuHost`, Android
    smoke and OpenXR smoke.
-4. Make `Tgfx2Context.from_window` and `from_context` validate that their host
+4. Make `Tgfx2Context.from_runtime` and `from_context` validate that their host
    device is already installed instead of mutating global state.
-5. Keep secondary-window construction on the existing shared-device path and
-   reject a second primary `BackendWindow` before it creates another device.
+5. Remove primary/secondary window construction. Every `BackendWindow` is an
+   equal per-window presentation target created by one session.
 6. Add focused tests for conflicting claim, mismatched release and idempotent
    owner operations.
 
@@ -92,11 +94,14 @@ hardening concern and does not justify simultaneous application domains.
 - The unrestricted global setter was replaced with owner-checked claim and
   release operations. Conflicts are rejected and logged without changing the
   active device.
-- `RenderRuntime` construction is side-effect free. Application roots claim
-  explicitly; borrowed runtimes and Python context wrappers only observe and
-  validate the installed device.
-- A second primary `BackendWindow` is rejected before another device is
-  created. Secondary windows continue to share the primary device.
+- `GraphicsHost` is owning-only. Application and isolated factories encode
+  interop policy; Python renderer contexts borrow the typed host with binding
+  keep-alive instead of passing raw device/context pointers.
+- `BackendWindow` exposes no device/context API. `BackendWindowSystem` owns
+  only platform state, while `WindowedGraphicsSession` provides the standard
+  composition and teardown order for any number of equal windows.
+- `RenderEngine` receives the exact host explicitly and no longer constructs a
+  second cache/context around the globally installed device.
 - Android, OpenXR, `tcplot::GpuHost` and standalone `RenderEngine` paths now
   have explicit ownership and exact-owner teardown.
 - Device locality is documented at the handle definition, and native tests

@@ -22,7 +22,7 @@ from tcgui.widgets.basic import Label, Button, TextInput, SpinBox
 from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.units import px, pct
-from termin.display import SDLBackendWindow
+from termin.display import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -75,28 +75,25 @@ def _translate_mods(sdl_mods):
 
 @dataclass
 class _WinEntry:
-    window: SDLBackendWindow
+    window: object
     ui: UI
     is_main: bool = False
 
 
 class _WindowManager:
-    def __init__(self):
+    def __init__(self, runtime: WindowedGraphicsSession):
+        self._runtime = runtime
         self._windows: list[_WinEntry] = []
 
-    def register_main(self, window: SDLBackendWindow, ui: UI):
+    def register_main(self, window, ui: UI):
         entry = _WinEntry(window, ui, is_main=True)
         self._windows.append(entry)
         ui.create_window = self.create_window
 
     def create_window(self, title: str, width: int, height: int) -> UI | None:
-        share_with = self._windows[0].window if self._windows else None
-        if share_with is None:
-            window = SDLBackendWindow(title, width, height)
-        else:
-            window = SDLBackendWindow(title, width, height, share_with)
+        window = self._runtime.create_window(title, width, height)
 
-        graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+        graphics = Tgfx2Context.from_runtime(self._runtime.graphics)
         window_ui = UI(graphics=graphics)
         entry = _WinEntry(window, window_ui)
         self._windows.append(entry)
@@ -384,10 +381,11 @@ def build_main_ui(wm, graphics):
 
 def main():
     configure_default_shader_runtime("examples")
-    window = SDLBackendWindow("tcgui Multi-Window", 600, 400)
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    runtime = WindowedGraphicsSession.create_native()
+    window = runtime.create_window("tcgui Multi-Window", 600, 400)
+    graphics = Tgfx2Context.from_runtime(runtime.graphics)
 
-    wm = _WindowManager()
+    wm = _WindowManager(runtime)
 
     ui = build_main_ui(wm, graphics)
     wm.register_main(window, ui)
@@ -408,7 +406,8 @@ def main():
         wm.render_all()
 
     wm.destroy_all()
-    sdl2.SDL_Quit()
+    runtime.close()
+    quit_sdl()
 
 
 if __name__ == "__main__":

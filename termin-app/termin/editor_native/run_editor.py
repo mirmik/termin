@@ -8,7 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from tcbase import log
-from termin.display import PresentationMode, SDLBackendWindow, quit_sdl
+from tgfx import Tgfx2Context
+from termin.display import PresentationMode, WindowedGraphicsSession, quit_sdl
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
@@ -227,17 +228,20 @@ def init_editor_native(
         if settings_snapshot.vsync_enabled
         else PresentationMode.IMMEDIATE
     )
-    window = SDLBackendWindow(
+    graphics_session = WindowedGraphicsSession.create_native()
+    window = graphics_session.create_window(
         "Termin Editor — Native UI",
         1280,
         720,
         presentation_mode=presentation_mode,
     )
     apply_editor_window_icon(window)
+    render_engine.set_graphics_host(graphics_session.graphics)
     render_engine.ensure_tgfx2()
     window.maximize()
-    host = NativeUiHost(window)
-    window_manager = NativeUiWindowManager(host)
+    graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
+    host = NativeUiHost(window, graphics)
+    window_manager = NativeUiWindowManager(host, graphics_session=graphics_session)
     shell = build_native_editor_shell(host.document)
     host.router.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
     file_menu = shell.menu_route("file")
@@ -1747,7 +1751,7 @@ def init_editor_native(
     def should_continue() -> bool:
         return not window.should_close()
 
-    def close_editor() -> None:
+    def prepare_engine_shutdown() -> None:
         scene_structure_observer.close()
         editor_log.close()
         modules_panel.close()
@@ -1857,7 +1861,10 @@ def init_editor_native(
                 _logger.exception("Native display workspace shutdown cleanup failed")
         if initial_scene is not None:
             engine.scene_manager.unregister_scene(editor_scene_name)
+
+    def close_backend() -> None:
         window_manager.close()
+        graphics_session.close()
         quit_sdl()
         terminal_interrupt.close()
 
@@ -1868,7 +1875,11 @@ def init_editor_native(
     )
     loop_connection = engine.attach_loop_client(loop_client)
     terminal_interrupt.install()
-    return EditorSession(loop_connection, close_editor)
+    return EditorSession(
+        loop_connection,
+        prepare_engine_shutdown,
+        close_backend,
+    )
 
 
 __all__ = ["EditorSession", "init_editor_native"]

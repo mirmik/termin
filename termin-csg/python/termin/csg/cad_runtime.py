@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tcbase import Key, MouseButton, log
 from tcgui.widgets.ui import UI
-from termin.display import SDLBackendWindow, quit_sdl, start_text_input, wait_sdl_events_timeout
+from termin.display import WindowedGraphicsSession, quit_sdl, start_text_input, wait_sdl_events_timeout
 from tgfx import Tgfx2Context
 
 from termin.csg.cad_app import CadApp
@@ -28,16 +28,18 @@ def _event_button(value: int) -> MouseButton:
 
 
 def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 760)) -> None:
-    window = SDLBackendWindow(title, int(size[0]), int(size[1]))
-    window.maximize()
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
-    ui = UI(graphics=graphics)
-    app = CadApp()
-    ui.root = app.build_ui(ui)
-    scene_renderer = CsgSceneRenderer(graphics)
-
-    start_text_input()
+    graphics_session = WindowedGraphicsSession.create_native()
+    window = None
     try:
+        window = graphics_session.create_window(title, int(size[0]), int(size[1]))
+        window.maximize()
+        graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
+        ui = UI(graphics=graphics)
+        app = CadApp()
+        ui.root = app.build_ui(ui)
+        scene_renderer = CsgSceneRenderer(graphics)
+
+        start_text_input()
         while not window.should_close():
             for event in wait_sdl_events_timeout(16):
                 _dispatch_event(window, ui, event)
@@ -52,9 +54,14 @@ def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 76
             if texture is not None:
                 window.present(texture)
     finally:
-        scene_renderer.close()
-        window.close()
-        quit_sdl()
+        if "scene_renderer" in locals():
+            scene_renderer.close()
+        if window is not None:
+            window.close()
+        try:
+            graphics_session.close()
+        finally:
+            quit_sdl()
 
 
 def _dispatch_event(window, ui: UI, event: dict) -> None:

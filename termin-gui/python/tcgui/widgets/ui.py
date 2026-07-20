@@ -50,7 +50,7 @@ class UI:
             and break cross-widget TextureHandle sharing (Viewport3D
             consuming display-owned color textures, etc.), plus Vulkan parity.
             Obtain from the application host:
-            ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
+            ``Tgfx2Context.from_runtime(windowed_session.graphics)``
             at the top level, or ``Tgfx2Context.from_context(ctx2)``
             inside framegraph passes.
         font : FontTextureAtlas or None

@@ -24,8 +24,13 @@
 одним `BackendWindow`.
 
 `BackendWindow` уже выделен в `termin-window`. Он владеет native window,
-graphics runtime/presentation surface и системными событиями, но не является
-выходной поверхностью конкретного `tc_display`.
+per-window presentation resources и системными событиями, но не является
+владельцем graphics host/device и не является выходной поверхностью
+конкретного `tc_display`. Единственный владелец graphics domain —
+`tgfx::GraphicsHost` из `termin-graphics`; `BackendWindowSystem` отвечает
+только за platform bootstrap и создание presentation targets.
+`WindowedGraphicsSession` фиксирует их совместный lifetime, не дублируя
+device/context API.
 
 ## Решение
 

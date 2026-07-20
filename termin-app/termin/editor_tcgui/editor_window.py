@@ -582,10 +582,15 @@ class EditorWindowTcgui:
 
         self._editor_viewport_input_managers.clear()
 
-        display_id = display.handle
+        display_index, display_generation = display.handle
         for vp in display.viewports:
             vp_idx, vp_gen = vp._viewport_handle()
-            editor_im = EditorViewportInputManager(vp_idx, vp_gen, display_id)
+            editor_im = EditorViewportInputManager(
+                vp_idx,
+                vp_gen,
+                display_index,
+                display_generation,
+            )
             self._editor_viewport_input_managers.append(editor_im)
 
     def _attach_editor_input_router(self, display) -> None:

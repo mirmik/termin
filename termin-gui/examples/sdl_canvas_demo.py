@@ -21,7 +21,7 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.panel import Panel
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.units import px, pct
-from termin.display import SDLBackendWindow
+from termin.display import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -276,8 +276,9 @@ def build_ui(graphics):
 
 def main():
     configure_default_shader_runtime("examples")
-    window = SDLBackendWindow("tcgui — Canvas Demo", 800, 600)
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    runtime = WindowedGraphicsSession.create_native()
+    window = runtime.create_window("tcgui — Canvas Demo", 800, 600)
+    graphics = Tgfx2Context.from_runtime(runtime.graphics)
 
     ui, canvas = build_ui(graphics)
 
@@ -352,7 +353,8 @@ def main():
             first_frame = False
 
     window.close()
-    sdl2.SDL_Quit()
+    runtime.close()
+    quit_sdl()
 
 
 if __name__ == "__main__":

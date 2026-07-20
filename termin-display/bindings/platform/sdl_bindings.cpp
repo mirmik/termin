@@ -5,6 +5,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/pair.h>
 
 #include <cstdint>
@@ -21,6 +22,7 @@
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
+#include "tgfx2/graphics_host.hpp"
 
 namespace nb = nanobind;
 
@@ -474,38 +476,13 @@ void bind_sdl(nb::module_& m) {
         .def("poll_events", &SDLWindowBackend::poll_events)
         .def("terminate", &SDLWindowBackend::terminate);
 
-    // --- BackendWindow: the backend-neutral SDL wrapper. ---
-    //
-    // Apps write the same Python code under TERMIN_BACKEND=opengl and
-    // TERMIN_BACKEND=vulkan. The ctor reads the env-var and spins up
-    // the right SDL window flags + IRenderDevice internally.
-    //
-    //   from tgfx import _tgfx_native   # ensures Tgfx2* types registered
-    //   from termin.display._platform_native import BackendWindow
-    //   win = BackendWindow("Editor", 1280, 720)
-    //   dev = win.device()
-    //   while not win.should_close():
-    //       win.poll_events()
-    //       # render into my_color_tex via dev
-    //       win.present(my_color_tex)
+    // One WindowedGraphicsSession composes the canonical GraphicsHost with an
+    // SDL window system. Every visible window is an equal presentation target.
     nb::enum_<tgfx::PresentationMode>(m, "PresentationMode")
         .value("VSYNC", tgfx::PresentationMode::VSync)
         .value("IMMEDIATE", tgfx::PresentationMode::Immediate);
 
     nb::class_<SDLBackendWindow, BackendWindow>(m, "SDLBackendWindow")
-        .def(nb::init<const std::string&, int, int, tgfx::PresentationMode>(),
-             nb::arg("title"), nb::arg("width"), nb::arg("height"),
-             nb::arg("presentation_mode") = tgfx::PresentationMode::VSync)
-        .def(nb::init<const std::string&, int, int, SDLBackendWindow&>(),
-             nb::arg("title"), nb::arg("width"), nb::arg("height"),
-             nb::arg("share_with"),
-             "Secondary-window ctor: reuses `share_with`'s IRenderDevice "
-             "and RenderContext2. Creates its own SDL window + GL context "
-             "(OpenGL) or Vulkan surface + swapchain.")
-        .def("device", &SDLBackendWindow::device, nb::rv_policy::reference_internal,
-             "tgfx::IRenderDevice bound to this window. Outlives the window.")
-        .def("context", &SDLBackendWindow::context, nb::rv_policy::reference_internal,
-             "tgfx::RenderContext2 bound to this window's device. Lazy-built.")
         .def_prop_ro("backend", [](const SDLBackendWindow& self) {
                 return std::string(tgfx::backend_name(self.backend_type()));
             },
@@ -514,22 +491,6 @@ void bind_sdl(nb::module_& m) {
             "Presentation mode actually applied to this window group.")
         .def_prop_ro("requested_presentation_mode", &SDLBackendWindow::requested_presentation_mode,
             "Presentation mode requested when the primary window was created.")
-        // Opaque pointers for cross-module (nanobind) handshakes. Python
-        // code in tgfx._tgfx_native calls `Tgfx2Context.borrow(dev_ptr,
-        // ctx_ptr)` with these to produce a non-owning holder — we cannot
-        // return the C++ objects directly because IRenderDevice /
-        // RenderContext2 are registered in another .so's nanobind type
-        // table.
-        .def("device_ptr", [](SDLBackendWindow& self) -> uintptr_t {
-                return reinterpret_cast<uintptr_t>(self.device());
-            },
-            "uintptr_t to the bound IRenderDevice. Pass to "
-            "tgfx._tgfx_native.Tgfx2Context.borrow.")
-        .def("context_ptr", [](SDLBackendWindow& self) -> uintptr_t {
-                return reinterpret_cast<uintptr_t>(self.context());
-            },
-            "uintptr_t to the bound RenderContext2 (lazy-built on first "
-            "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &SDLBackendWindow::should_close)
         .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
         .def("set_input_display", [](SDLBackendWindow& self,
@@ -570,6 +531,34 @@ void bind_sdl(nb::module_& m) {
         .def("present", &SDLBackendWindow::present, nb::arg("color_tex"),
              "Publish color_tex to the window surface. GL: blit + SwapWindow. "
              "Vulkan: acquire + compose + present.");
+
+    nb::class_<WindowedGraphicsSession>(m, "WindowedGraphicsSession")
+        .def_static("create_native", &create_native_windowed_graphics,
+            "Create the standard native window-system + canonical GraphicsHost session.")
+        .def("create_window", [](WindowedGraphicsSession& self,
+                                  const std::string& title,
+                                  int width,
+                                  int height,
+                                  tgfx::PresentationMode presentation_mode) {
+                BackendWindowPtr window = self.create_window(WindowConfig{
+                    title, width, height, presentation_mode});
+                return std::unique_ptr<SDLBackendWindow>(
+                    static_cast<SDLBackendWindow*>(window.release()));
+            },
+            nb::arg("title"), nb::arg("width"), nb::arg("height"),
+            nb::arg("presentation_mode") = tgfx::PresentationMode::VSync,
+            nb::keep_alive<0, 1>(),
+            "Create an equal presentation window on this graphics session.")
+        .def_prop_ro("graphics", [](WindowedGraphicsSession& self)
+                -> tgfx::GraphicsHost& { return self.graphics(); },
+            nb::rv_policy::reference_internal,
+            "The one canonical tgfx GraphicsHost for this application domain.")
+        .def_prop_ro("backend", [](const WindowedGraphicsSession& self) {
+                return std::string(tgfx::backend_name(
+                    self.graphics().device().backend_type()));
+            })
+        .def("close", &WindowedGraphicsSession::close,
+            "Close GraphicsHost and platform state after all windows are closed.");
 }
 
 } // namespace termin

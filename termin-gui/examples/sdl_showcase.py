@@ -47,7 +47,7 @@ from tcgui.widgets.units import px, pct
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
-from termin.display import SDLBackendWindow
+from termin.display import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -744,9 +744,10 @@ def _get_event_window_id(event):
 
 def main():
     configure_default_shader_runtime("examples")
-    window = SDLBackendWindow("tcgui — Widget Showcase", 900, 680)
+    runtime = WindowedGraphicsSession.create_native()
+    window = runtime.create_window("tcgui — Widget Showcase", 900, 680)
 
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    graphics = Tgfx2Context.from_runtime(runtime.graphics)
 
     ui = build_ui(graphics)
     main_id = window.window_id()
@@ -809,7 +810,8 @@ def main():
             window.present(tex)
 
     window.close()
-    sdl2.SDL_Quit()
+    runtime.close()
+    quit_sdl()
 
 
 if __name__ == "__main__":

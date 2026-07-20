@@ -37,12 +37,12 @@
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <termin_collision/termin_collision.h>
-#include <tgfx/tgfx2_interop.h>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx2/i_command_list.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/render_state.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
+#include <tgfx2/graphics_host.hpp>
 
 #include "openxr_math.hpp"
 
@@ -1103,7 +1103,8 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     std::vector<const char *> instance_extensions = extension_cstrs(instance_extension_storage);
     std::vector<const char *> device_extensions = extension_cstrs(device_extension_storage);
 
-    std::unique_ptr<tgfx::VulkanRenderDevice> render_device;
+    std::unique_ptr<tgfx::GraphicsHost> graphics_host;
+    tgfx::VulkanRenderDevice* render_device = nullptr;
     try {
         tgfx::VulkanDeviceCreateInfo device_info{};
         device_info.enable_validation = false;
@@ -1119,11 +1120,10 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
             }
             return physical_device;
         };
-        render_device = std::make_unique<tgfx::VulkanRenderDevice>(device_info);
-        if (!tgfx2_interop_claim_device(render_device.get(), render_device.get())) {
-            throw std::runtime_error(
-                "another application graphics device is already installed");
-        }
+        auto owned_device = std::make_unique<tgfx::VulkanRenderDevice>(device_info);
+        render_device = owned_device.get();
+        graphics_host = tgfx::GraphicsHost::adopt_application_device(
+            std::move(owned_device));
     } catch (const std::exception &e) {
         log_error("tgfx2 Vulkan", e.what());
         xr.destroy_instance(instance);
@@ -1132,13 +1132,11 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     }
 
     auto release_render_device = [&]() {
-        if (!render_device) {
+        if (!graphics_host) {
             return;
         }
-        if (!tgfx2_interop_release_device(render_device.get(), render_device.get())) {
-            log_error("tgfx2 Vulkan", "failed to release application graphics device");
-        }
-        render_device.reset();
+        graphics_host.reset();
+        render_device = nullptr;
     };
 
     XrGraphicsBindingVulkanKHR graphics_binding{};
@@ -1674,7 +1672,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
         xr.end_session(session);
     }
     runtime_scene.destroy();
-    scene_primitive.destroy(render_device.get());
+    scene_primitive.destroy(render_device);
     if (depth_texture) {
         render_device->destroy(depth_texture);
     }

@@ -71,7 +71,7 @@ authoring/build domain, сгенерированный GLSL — backend artifact
 но сохранили бы process-global include state и несуществующий authored GLSL
 product contract.
 
-### Preprocessor, принадлежащий RenderRuntime
+### Preprocessor, принадлежащий GraphicsHost
 
 Отвергнуто. Runtime isolation стала бы лучше, но graphics layer всё равно
 владел бы Termin-specific source semantics, не нужными Slang pipeline.

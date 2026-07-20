@@ -45,7 +45,7 @@ class UIRenderer:
         graphics : Tgfx2Context
             The process-wide tgfx2 context (device + RenderContext2) to
             draw through. Obtained from the application host:
-            ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
+            ``Tgfx2Context.from_runtime(windowed_session.graphics)``
             at the top level, or ``Tgfx2Context.from_context(ctx2)``
             inside framegraph passes. Required — UIRenderer never
             creates a Tgfx2Context on its own, because that would mint
@@ -57,7 +57,7 @@ class UIRenderer:
         if graphics is None:
             raise ValueError(
                 "UIRenderer requires a graphics= Tgfx2Context. Get one "
-                "from the host (Tgfx2Context.from_window) or from an "
+                "from the host (Tgfx2Context.from_runtime) or from an "
                 "active RenderContext2 (Tgfx2Context.from_context).")
         self._font = font
 

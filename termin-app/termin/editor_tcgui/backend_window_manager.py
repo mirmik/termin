@@ -1,10 +1,10 @@
 """tcgui-aware adapter around termin.display.BackendWindowManager.
 
-The generic window-bag + device sharing lives in termin-display — this
+The generic window-bag + graphics-session sharing lives in termin-display — this
 module only binds tcgui ``UI`` instances to each window and drives
 render_compose / present per frame. Secondary windows created through
-``UI.create_window`` get their own ``UI`` built on the primary's
-``Tgfx2Context`` so every renderer shares one IRenderDevice.
+``UI.create_window`` get their own ``UI`` built on the session's canonical
+``Tgfx2Context`` so every renderer shares one GraphicsHost.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ class BackendWindowManager(_BaseManager):
     # the final composite is presented.
     WINDOW_BG: tuple[float, float, float, float] = (0.08, 0.08, 0.10, 1.0)
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, graphics_session) -> None:
+        super().__init__(graphics_session)
         # Primary's Tgfx2Context, cached in register_main so every
         # secondary UI spins up with the same `graphics=` — one
         # IRenderDevice per process invariant.

@@ -640,84 +640,73 @@ def _run_tcgui(controller: LauncherController) -> None:
     configure_sdk_shader_runtime("launcher-tcgui")
 
     from tcbase import Key, MouseButton
-    from termin.display._platform_native import (
-        SDLBackendWindow,
-        quit_sdl,
-        start_text_input,
-        wait_sdl_events_timeout,
-    )
+    from termin.display import WindowedGraphicsSession, quit_sdl, start_text_input, wait_sdl_events_timeout
     from tgfx import Tgfx2Context
     from termin.editor_core.application_icon import apply_editor_window_icon
 
-    window = SDLBackendWindow("Termin Launcher — tcgui", 1024, 640)
-    apply_editor_window_icon(window)
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    graphics_session = WindowedGraphicsSession.create_native()
+    window = None
+    graphics = None
+    app = None
+    try:
+        window = graphics_session.create_window("Termin Launcher — tcgui", 1024, 640)
+        apply_editor_window_icon(window)
+        graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
 
-    app = LauncherApp(graphics=graphics, controller=controller)
-    presenting = False
+        app = LauncherApp(graphics=graphics, controller=controller)
+        presenting = False
 
-    def present_ui() -> None:
-        nonlocal presenting
-        if presenting:
-            return
-        presenting = True
-        try:
-            vw, vh = _get_drawable_size_from_backend(window)
-            if vw <= 0 or vh <= 0:
+        def present_ui() -> None:
+            nonlocal presenting
+            if presenting:
                 return
-            tex = app.ui.render_compose(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
-            if tex is not None:
-                window.present(tex)
+            presenting = True
+            try:
+                vw, vh = _get_drawable_size_from_backend(window)
+                if vw <= 0 or vh <= 0:
+                    return
+                tex = app.ui.render_compose(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
+                if tex is not None:
+                    window.present(tex)
+            finally:
+                presenting = False
+
+        app.ui.on_present_requested = present_ui
+        present_ui()
+
+        start_text_input()
+        running = True
+
+        def dispatch_event(ev):
+            nonlocal running
+            etype = ev.get("type")
+            if etype == "quit":
+                running = False
+            elif etype == "window_close":
+                running = False
+            elif etype == "mouse_move":
+                app.ui.mouse_move(float(ev.get("x", 0.0)), float(ev.get("y", 0.0)), int(ev.get("mods", 0)))
+            elif etype == "mouse_down":
+                app.ui.mouse_down(float(ev.get("x", 0.0)), float(ev.get("y", 0.0)), _event_button(int(ev.get("button", MouseButton.LEFT.value))), int(ev.get("mods", 0)))
+            elif etype == "mouse_up":
+                app.ui.mouse_up(float(ev.get("x", 0.0)), float(ev.get("y", 0.0)), _event_button(int(ev.get("button", MouseButton.LEFT.value))), int(ev.get("mods", 0)))
+            elif etype == "key_down":
+                app.ui.key_down(_event_key(int(ev.get("key", Key.UNKNOWN.value))), int(ev.get("mods", 0)))
+            elif etype == "text_input":
+                app.ui.text_input(str(ev.get("text", "")))
+
+        while running and not app.should_quit:
+            for event in wait_sdl_events_timeout(500):
+                dispatch_event(event)
+            if running:
+                present_ui()
+    finally:
+        if window is not None:
+            window.close()
+        try:
+            graphics_session.close()
         finally:
-            presenting = False
-
-    app.ui.on_present_requested = present_ui
-    present_ui()
-
-    start_text_input()
-    running = True
-
-    def dispatch_event(ev):
-        nonlocal running
-        etype = ev.get("type")
-        if etype == "quit":
-            running = False
-        elif etype == "window_close":
-            running = False
-        elif etype == "mouse_move":
-            app.ui.mouse_move(
-                float(ev.get("x", 0.0)),
-                float(ev.get("y", 0.0)),
-                int(ev.get("mods", 0)),
-            )
-        elif etype == "mouse_down":
-            app.ui.mouse_down(
-                float(ev.get("x", 0.0)),
-                float(ev.get("y", 0.0)),
-                _event_button(int(ev.get("button", MouseButton.LEFT.value))),
-                int(ev.get("mods", 0)),
-            )
-        elif etype == "mouse_up":
-            app.ui.mouse_up(
-                float(ev.get("x", 0.0)),
-                float(ev.get("y", 0.0)),
-                _event_button(int(ev.get("button", MouseButton.LEFT.value))),
-                int(ev.get("mods", 0)),
-            )
-        elif etype == "key_down":
-            app.ui.key_down(
-                _event_key(int(ev.get("key", Key.UNKNOWN.value))),
-                int(ev.get("mods", 0)),
-            )
-        elif etype == "text_input":
-            app.ui.text_input(str(ev.get("text", "")))
-
-    while running and not app.should_quit:
-        for event in wait_sdl_events_timeout(500):
-            dispatch_event(event)
-        if running:
-            present_ui()
-    quit_sdl()
+            quit_sdl()
 
 
 def run():

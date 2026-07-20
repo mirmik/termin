@@ -110,8 +110,26 @@ EngineCore::EngineCore()
 
 EngineCore::~EngineCore() {
     stop();
+    if (!shutdown()) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Failed to shut down during destruction");
+    }
+}
+
+bool EngineCore::shutdown() {
+    if (_shutdown) {
+        return true;
+    }
+    if (is_running()) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Refusing shutdown while the main loop is running"
+        );
+        return false;
+    }
+
     // Scene-owned render objects must be detached while scene handles and the
-    // scene runtime are still alive. Member destructors run after this body.
+    // scene runtime are still alive. The frontend has already released its
+    // integrations, but this central pass is the final ownership backstop.
     const std::vector<tc_scene_handle> attached_scenes(
         render_topology.attached_scenes().begin(),
         render_topology.attached_scenes().end()
@@ -121,10 +139,16 @@ EngineCore::~EngineCore() {
     }
     scene_manager.close_all_scenes();
     rendering_manager.shutdown();
-    tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
+    _shutdown = true;
+    tc_log(TC_LOG_INFO, "[EngineCore] Shutdown complete");
+    return true;
 }
 
 EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient client) {
+    if (_shutdown) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Cannot attach a loop client after shutdown");
+        throw std::logic_error("cannot attach a loop client after EngineCore shutdown");
+    }
     if (!client.poll_events || !client.should_continue || !client.on_shutdown) {
         tc_log(
             TC_LOG_ERROR,
@@ -183,6 +207,10 @@ void EngineCore::set_target_fps(double fps) {
 }
 
 bool EngineCore::tick_and_render(double dt) {
+    if (_shutdown) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Cannot tick after shutdown");
+        return false;
+    }
     // Frame scope is owned by run() — tick_and_render only opens sections
     // inside the already-open frame. When called standalone (outside run),
     // sections are no-ops because current_frame is NULL.
@@ -210,6 +238,10 @@ bool EngineCore::tick_and_render(double dt) {
 }
 
 void EngineCore::run() {
+    if (_shutdown) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Cannot run after shutdown");
+        throw std::logic_error("cannot run EngineCore after shutdown");
+    }
     EngineLoopClient loop_client;
     {
         std::lock_guard lock(_loop_state->mutex);

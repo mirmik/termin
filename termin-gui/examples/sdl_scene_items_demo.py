@@ -19,7 +19,7 @@ from tcgui.scene import GraphicsScene, RectItem, SceneView
 from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct
 from tcgui.widgets.vstack import VStack
-from termin.display import SDLBackendWindow
+from termin.display import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -129,8 +129,9 @@ def build_ui(graphics) -> UI:
 
 def main():
     configure_default_shader_runtime("examples")
-    window = SDLBackendWindow("tcgui scene items demo", 1200, 800)
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    runtime = WindowedGraphicsSession.create_native()
+    window = runtime.create_window("tcgui scene items demo", 1200, 800)
+    graphics = Tgfx2Context.from_runtime(runtime.graphics)
     try:
         ui = build_ui(graphics)
         event = sdl2.SDL_Event()
@@ -183,7 +184,8 @@ def main():
                 window.present(tex)
     finally:
         window.close()
-        sdl2.SDL_Quit()
+        runtime.close()
+        quit_sdl()
 
 
 if __name__ == "__main__":

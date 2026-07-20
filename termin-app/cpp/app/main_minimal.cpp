@@ -173,23 +173,29 @@ static PyObject* initialize_python_editor(termin::EngineCore& engine) {
         return nullptr;
     }
 
-    PyObject* close = PyObject_GetAttrString(result, "close");
-    if (close == nullptr || !PyCallable_Check(close)) {
-        Py_XDECREF(close);
-        Py_DECREF(result);
-        PyErr_Print();
-        std::cerr << "Editor initializer returned no callable close()" << std::endl;
-        return nullptr;
+    for (const char* method_name : {"prepare_engine_shutdown", "close"}) {
+        PyObject* method = PyObject_GetAttrString(result, method_name);
+        if (method == nullptr || !PyCallable_Check(method)) {
+            Py_XDECREF(method);
+            Py_DECREF(result);
+            PyErr_Print();
+            std::cerr << "Editor initializer returned no callable "
+                      << method_name << "()" << std::endl;
+            return nullptr;
+        }
+        Py_DECREF(method);
     }
-    Py_DECREF(close);
     return result;
 }
 
-static bool close_python_editor(PyObject* editor_session) {
-    PyObject* result = PyObject_CallMethod(editor_session, "close", nullptr);
+static bool call_python_editor_method(
+    PyObject* editor_session,
+    const char* method_name
+) {
+    PyObject* result = PyObject_CallMethod(editor_session, method_name, nullptr);
     if (result == nullptr) {
         PyErr_Print();
-        std::cerr << "Failed to close Python editor session" << std::endl;
+        std::cerr << "Failed to call editor session " << method_name << "()" << std::endl;
         return false;
     }
     Py_DECREF(result);
@@ -347,9 +353,17 @@ print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__fi
         exit_code = 1;
     }
 
-    // Frontend resources and Python callbacks must be released while both
-    // Python and the borrowed EngineCore are still alive.
-    if (!close_python_editor(editor_session)) {
+    // Release frontend integrations first, then the EngineCore-owned render
+    // consumers, and only then the frontend backend that owns the graphics
+    // device. Neither EditorSession nor EngineCore owns the other object.
+    if (!call_python_editor_method(editor_session, "prepare_engine_shutdown")) {
+        exit_code = 1;
+    }
+    if (!engine.shutdown()) {
+        std::cerr << "EngineCore refused terminal shutdown" << std::endl;
+        exit_code = 1;
+    }
+    if (!call_python_editor_method(editor_session, "close")) {
         exit_code = 1;
     }
     Py_DECREF(editor_session);

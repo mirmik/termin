@@ -1,6 +1,6 @@
 """Multi-window example for termin.display.
 
-Opens one primary SDLBackendWindow and one (or more) secondary windows
+Opens one primary runtime window and one (or more) secondary windows
 that share the primary's IRenderDevice. Each window gets its own
 colour attachment and is filled with an animated clear colour — a
 minimal demonstration that independent presentation works through a
@@ -27,7 +27,8 @@ from tgfx._tgfx_native import Tgfx2Context, Tgfx2PixelFormat
 from termin.display import (
     BackendWindowEntry,
     BackendWindowManager,
-    SDLBackendWindow,
+    WindowedGraphicsSession,
+    quit_sdl,
 )
 
 
@@ -156,14 +157,11 @@ def pump_events(wm: BackendWindowManager, ctx: Tgfx2Context) -> bool:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
+    runtime = WindowedGraphicsSession.create_native()
+    main_window = runtime.create_window("termin.display multi-window (primary)", 800, 600)
+    ctx = Tgfx2Context.from_runtime(runtime.graphics)
 
-    main_window = SDLBackendWindow("termin.display multi-window (primary)", 800, 600)
-    ctx = Tgfx2Context.from_window(
-        main_window.device_ptr(), main_window.context_ptr())
-
-    wm = BackendWindowManager()
+    wm = BackendWindowManager(runtime)
     primary_entry = wm.register_main(
         main_window,
         host_data=WindowState(ctx, 800, 600, hue_offset=0.0),
@@ -192,7 +190,8 @@ def main() -> None:
             running = False
 
     wm.destroy_all()
-    sdl2.SDL_Quit()
+    runtime.close()
+    quit_sdl()
 
 
 if __name__ == "__main__":

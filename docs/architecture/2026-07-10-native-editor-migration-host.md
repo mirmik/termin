@@ -26,12 +26,18 @@ session and shutdown contract is defined by
 
 `NativeUiWindowManager` owns the process-level multi-window boundary. SDL has a
 single event queue, so the manager drains it once and routes events to a host by
-SDL window id. Secondary windows receive independent `Document`, renderer,
-color target and input state while `SDLBackendWindow(..., share_with=main)`
-keeps one render device/context contract for the process. Closing a secondary
-window tears down only its host; closing the primary window terminates the
-editor. Requested hosts are composed and presented sequentially so tgfx2 frame
-recording is never nested.
+SDL window id. Every window receives an independent `Document`, renderer, color
+target and input state. A single `WindowedGraphicsSession` owned by the editor
+session combines platform window services with one canonical
+`tgfx::GraphicsHost`. That host supplies the same `IRenderDevice`,
+`PipelineCache` and `RenderContext2` to the engine and every UI renderer; all
+windows are equal presentation targets with no window-specific graphics
+ownership distinction.
+Closing any window tears down only that window's host and presentation
+resources; the graphics host remains available to the remaining windows and their GPU
+resources. Closing the last application window (or an explicit editor close
+request) terminates the editor according to session policy. Requested hosts are
+composed and presented sequentially so tgfx2 frame recording is never nested.
 
 `EditorPythonExecutor`, `EditorMcpServer` and editor shader-runtime setup now
 live in `termin.editor_core`; their old `termin.editor_tcgui` modules are

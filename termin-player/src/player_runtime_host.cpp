@@ -36,6 +36,7 @@
 #include <termin/scene/scene_manager.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/graphics_host.hpp>
 
 #include <termin_modules/module_cpp_backend.hpp>
 #include <termin_modules/module_python_backend.hpp>
@@ -675,7 +676,8 @@ struct PlayerRuntimeHost::Impl {
     int exit_code = 0;
 
     std::unique_ptr<EngineCore> engine;
-    std::unique_ptr<SDLBackendWindow> window;
+    std::unique_ptr<WindowedGraphicsSession> graphics_session;
+    BackendWindowPtr window;
     std::optional<TcDisplay> display;
     termin::runtime::RuntimePackageLoadResult package;
     TcSceneRef scene;
@@ -1014,7 +1016,11 @@ struct PlayerRuntimeHost::Impl {
         const int window_height = cli.height > 0 ? cli.height : manifest.window.height;
         const bool fullscreen = cli.fullscreen.value_or(manifest.window.fullscreen);
 
-        window = std::make_unique<SDLBackendWindow>(manifest.project_name, window_width, window_height);
+        graphics_session = create_native_windowed_graphics();
+        window = graphics_session->create_window(WindowConfig{
+            manifest.project_name, window_width, window_height});
+        engine->rendering_manager.render_engine()->set_graphics_host(
+            graphics_session->graphics());
         if (fullscreen) {
             window->set_fullscreen(true);
         }
@@ -1025,7 +1031,7 @@ struct PlayerRuntimeHost::Impl {
             height = window_height;
         }
         tc_display_handle handle = create_offscreen_display(
-            window->device(), width, height, "Main");
+            &graphics_session->graphics().device(), width, height, "Main");
         if (!tc_display_handle_valid(handle)) {
             throw std::runtime_error("failed to create offscreen display");
         }
@@ -1254,6 +1260,10 @@ struct PlayerRuntimeHost::Impl {
         if (window) {
             window->close();
             window.reset();
+        }
+        if (graphics_session) {
+            graphics_session->close();
+            graphics_session.reset();
         }
 
         termin::bootstrap::shutdown_runtime();

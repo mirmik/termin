@@ -19,7 +19,7 @@
 #include <inspect/tc_inspect_init.h>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
-#include <tgfx/tgfx2_interop.h>
+#include <tgfx2/graphics_host.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/camera/camera_component.hpp>
@@ -134,7 +134,8 @@ struct AndroidBootstrapState {
     int32_t surface_height = 0;
     bool initialized = false;
 #ifdef __ANDROID__
-    std::unique_ptr<tgfx::VulkanRenderDevice> smoke_device;
+    std::unique_ptr<tgfx::GraphicsHost> graphics_host;
+    tgfx::VulkanRenderDevice* smoke_device = nullptr;
     tgfx::ShaderHandle smoke_vertex_shader;
     tgfx::ShaderHandle smoke_fragment_shader;
     tgfx::PipelineHandle smoke_pipeline;
@@ -656,6 +657,10 @@ bool ensure_player_scene_locked() {
     if (!g_state.player_engine) {
         register_android_scene_extensions_locked();
         g_state.player_engine = std::make_unique<termin::EngineCore>();
+        if (g_state.graphics_host) {
+            g_state.player_engine->rendering_manager.render_engine()->set_graphics_host(
+                *g_state.graphics_host);
+        }
     }
 
     register_android_runtime_types();
@@ -837,13 +842,11 @@ void destroy_smoke_renderer_locked() {
             android_log_error("smoke: destroy failed: %s", e.what());
             tc_log_error("termin_android_smoke: destroy failed: %s", e.what());
         }
-        if (!tgfx2_interop_release_device(g_state.smoke_device.get(), &g_state)) {
-            android_log_error("smoke: failed to release application graphics device");
-        }
     } else {
         destroy_player_scene_locked();
     }
-    g_state.smoke_device.reset();
+    g_state.graphics_host.reset();
+    g_state.smoke_device = nullptr;
     reset_smoke_resources_locked();
     g_state.smoke_width = 0;
     g_state.smoke_height = 0;
@@ -970,8 +973,8 @@ bool create_smoke_renderer_locked() {
             return surface;
         };
 
-        g_state.smoke_device = std::make_unique<tgfx::VulkanRenderDevice>(info);
-        g_state.smoke_device->configure_shader_artifacts(
+        auto render_device = std::make_unique<tgfx::VulkanRenderDevice>(info);
+        render_device->configure_shader_artifacts(
             termin::ShaderArtifactResolver(
                 g_state.shader_artifact_root,
                 g_state.app_data_dir.empty()
@@ -981,10 +984,13 @@ bool create_smoke_renderer_locked() {
                 false
             )
         );
-        if (!tgfx2_interop_claim_device(g_state.smoke_device.get(), &g_state)) {
-            g_state.smoke_device.reset();
-            throw std::runtime_error(
-                "another application graphics device is already installed");
+        tgfx::VulkanRenderDevice* render_device_ptr = render_device.get();
+        g_state.graphics_host = tgfx::GraphicsHost::adopt_application_device(
+            std::move(render_device));
+        g_state.smoke_device = render_device_ptr;
+        if (g_state.player_engine) {
+            g_state.player_engine->rendering_manager.render_engine()->set_graphics_host(
+                *g_state.graphics_host);
         }
 
         g_state.smoke_width = g_state.smoke_device->swapchain()->width();

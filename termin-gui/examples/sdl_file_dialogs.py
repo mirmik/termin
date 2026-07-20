@@ -24,7 +24,7 @@ from tcgui.widgets.file_dialog_overlay import (
     show_save_file_dialog,
     show_open_directory_dialog,
 )
-from termin.display import SDLBackendWindow
+from termin.display import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -182,8 +182,9 @@ def build_ui(graphics):
 
 def main():
     configure_default_shader_runtime("examples")
-    window = SDLBackendWindow("tcgui File Dialogs", 900, 520)
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+    runtime = WindowedGraphicsSession.create_native()
+    window = runtime.create_window("tcgui File Dialogs", 900, 520)
+    graphics = Tgfx2Context.from_runtime(runtime.graphics)
 
     ui = build_ui(graphics)
 
@@ -238,7 +239,8 @@ def main():
             window.present(tex)
 
     window.close()
-    sdl2.SDL_Quit()
+    runtime.close()
+    quit_sdl()
 
 
 if __name__ == "__main__":
