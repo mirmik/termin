@@ -105,6 +105,14 @@ def unregister_python_component_owner(owner: str) -> None:
             _registered_python_component_types.remove(type_name)
 
 
+def list_python_component_owner(owner: str) -> list[str]:
+    return sorted(
+        registration.cls.__name__
+        for registration in _python_component_declarations.values()
+        if registration.owner == owner
+    )
+
+
 atexit.register(shutdown_python_components)
 
 
