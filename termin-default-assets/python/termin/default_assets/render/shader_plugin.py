@@ -69,19 +69,29 @@ class ShaderRuntimePlugin:
         if not asset.should_reload_from_file():
             return
 
-        old_program = asset.program
+        from termin.default_assets.render.shader_interface import (
+            shader_graph_input_signature,
+            shader_material_interface_signature,
+        )
 
+        program = asset.program
+        old_material_signature = shader_material_interface_signature(program)
+        old_graph_signature = shader_graph_input_signature(program)
         asset.parse_spec(result.spec_data)
-        asset.reload()
+        if not asset.reload():
+            from tcbase import log
 
-        if asset.program is None:
+            log.error(f"[ShaderAssetPlugin] Failed to reload shader '{name}'")
             return
 
-        rm.shaders[name] = asset.program
-        from termin.default_assets.render.shader_interface import compare_shader_interface
+        program = asset.program
+        material_changed = old_material_signature != shader_material_interface_signature(program)
+        if not material_changed:
+            from termin.default_assets.render.pipeline_dependencies import (
+                sync_loaded_material_shader_version,
+            )
 
-        interface_change = compare_shader_interface(old_program, asset.program)
-        if not interface_change.material_changed:
+            sync_loaded_material_shader_version(rm, name, program)
             return
 
         from termin.default_assets.render.pipeline_dependencies import (
@@ -89,8 +99,9 @@ class ShaderRuntimePlugin:
             reload_pipelines_for_material_dependencies,
         )
 
-        material_names = refresh_loaded_materials_for_shader(rm, name, asset.uuid, asset.program)
-        if material_names and interface_change.graph_inputs_changed:
+        material_names = refresh_loaded_materials_for_shader(rm, name, asset.uuid, program)
+        graph_changed = old_graph_signature != shader_graph_input_signature(program)
+        if material_names and graph_changed:
             reload_pipelines_for_material_dependencies(rm, material_names)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:

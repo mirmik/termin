@@ -110,6 +110,18 @@ def refresh_loaded_materials_for_shader(
     return updated
 
 
+def sync_loaded_material_shader_version(resource_manager, shader_name: str, program) -> None:
+    """Advance dependency versions when phase sources changed without schema changes."""
+    for material_name in resource_manager.list_material_names():
+        material_asset = resource_manager.get_material_asset(material_name)
+        if material_asset is None or not material_asset.is_loaded:
+            continue
+        material = material_asset.material
+        if material is None or material.shader_name != shader_name:
+            continue
+        material.set_shader_program_dependency(program.uuid, program.version)
+
+
 def reload_pipelines_for_material_dependencies(resource_manager, material_names: set[str]) -> None:
     """Reload loaded pipeline assets whose MaterialPass nodes use material_names."""
     if not material_names:

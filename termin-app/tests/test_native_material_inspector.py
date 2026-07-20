@@ -59,12 +59,12 @@ class _Material:
 
 class _Program:
     phases = [object()]
-    material_properties = [
-        _Property("enabled", "Enabled", "Bool", False),
-        _Property("roughness", "Roughness", "Float", 0.5, 0.0, 1.0),
-        _Property("direction", "Direction", "Vec3", (0.0, 0.0, 1.0)),
-        _Property("tint", "Tint", "Color", (1.0, 1.0, 1.0, 1.0)),
-        _Property("albedo", "Albedo", "Texture", "white"),
+    properties = [
+        {"name": "enabled", "label": "Enabled", "property_type": "Bool", "default": False, "range_min": None, "range_max": None},
+        {"name": "roughness", "label": "Roughness", "property_type": "Float", "default": 0.5, "range_min": 0.0, "range_max": 1.0},
+        {"name": "direction", "label": "Direction", "property_type": "Vec3", "default": (0.0, 0.0, 1.0), "range_min": None, "range_max": None},
+        {"name": "tint", "label": "Tint", "property_type": "Color", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
+        {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "range_min": None, "range_max": None},
     ]
 
 

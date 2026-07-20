@@ -24,13 +24,12 @@ if TYPE_CHECKING:
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.glb.asset import GLBAsset
-    from termin.materials import ShaderMultyPhaseProgramm
     from termin.prefab.asset import PrefabAsset
     from termin.skeleton.asset import SkeletonAsset
 
 
 class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeManager):
-    """Base class with default runtime registries and the parsed shader cache."""
+    """Base class assembling default canonical asset registries."""
 
     _instance: "DefaultResourceManagerBase | None" = None
 
@@ -44,10 +43,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self.frame_pass_registry = FramePassRegistry()
         self.components = self.component_registry.classes
         self.frame_passes = self.frame_pass_registry.classes
-
-        # Parsed shader programs do not yet have a canonical Tc* registry.
-        # Their ownership is tracked separately in #647.
-        self.shaders: dict[str, "ShaderMultyPhaseProgramm"] = {}
 
         self._prefab_registry = self._create_prefab_registry()
         self._glb_registry = self._create_glb_registry()
@@ -92,33 +87,18 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         *,
         uuid: str | None = None,
     ):
-        """Remove a runtime asset and its parsed shader cache entry."""
-        removed = super().unregister_runtime_asset(type_id, name, uuid=uuid)
-        removed_name = removed.name if removed is not None else name
-        if type_id == "shader":
-            self.shaders.pop(removed_name, None)
-        return removed
+        """Remove a runtime asset from its canonical registry."""
+        return super().unregister_runtime_asset(type_id, name, uuid=uuid)
 
     def unregister_runtime_asset_by_uuid(self, type_id: str, uuid: str):
-        """Remove canonical UUID membership and synchronize the shader cache."""
+        """Remove canonical UUID membership."""
         asset = self.get_runtime_asset_by_uuid(type_id, uuid)
         if asset is None:
             return None
         return self.unregister_runtime_asset(type_id, asset.name, uuid=uuid)
 
     def rename_runtime_asset(self, type_id: str, uuid: str, name: str) -> bool:
-        asset = self.get_asset_by_uuid(uuid)
-        old_name = asset.name if asset is not None else None
-        renamed = super().rename_runtime_asset(type_id, uuid, name)
-        if not renamed:
-            return False
-        if type_id != "shader":
-            return True
-        for candidate in (old_name, name):
-            if candidate is None:
-                continue
-            self.shaders.pop(candidate, None)
-        return True
+        return super().rename_runtime_asset(type_id, uuid, name)
 
     @property
     def _prefab_assets(self) -> dict[str, "PrefabAsset"]:
@@ -178,15 +158,13 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         return cls._instance
 
     def clear_runtime_state(self) -> None:
-        """Drop runtime asset registries and the parsed shader cache."""
+        """Drop runtime asset registries."""
         self._destroy_cached_pipelines()
 
         for registry in list(self._runtime_asset_registries.values()):
             registry.clear()
         self._asset_store.clear()
         self.external_assets.clear()
-
-        self.shaders.clear()
 
         self.component_registry.classes.clear()
         self.frame_pass_registry.classes.clear()

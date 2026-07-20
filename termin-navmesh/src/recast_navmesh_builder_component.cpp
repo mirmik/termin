@@ -699,7 +699,7 @@ void RecastNavMeshBuilderComponent::build_input_mesh(const float* verts, int nve
 
     // Compute UUID
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -796,7 +796,7 @@ void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -926,7 +926,7 @@ void RecastNavMeshBuilderComponent::build_regions_mesh() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -1072,7 +1072,7 @@ void RecastNavMeshBuilderComponent::build_distance_field_mesh() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -1189,7 +1189,7 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -1315,7 +1315,7 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh
@@ -1435,7 +1435,7 @@ void RecastNavMeshBuilderComponent::build_detail_mesh_debug() {
 
     // Compute UUID from vertex data
     size_t vertices_size = vertices.size() * sizeof(Vertex);
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices_size, indices.data(), indices.size(), uuid);
 
     // Get or create mesh

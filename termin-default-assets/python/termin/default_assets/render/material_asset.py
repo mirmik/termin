@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 from termin_assets import DataAsset
-from termin.default_assets.render.shader_asset import make_phase_uuid
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -278,6 +277,72 @@ def _apply_texture_defaults(phase, shader_phase, rm):
             log.warn(f"[MaterialAsset] Failed to get default texture for '{name}'")
 
 
+def _apply_canonical_property_defaults(phase, properties: list[dict], uniforms: dict) -> None:
+    """Populate material values from the canonical program schema."""
+    from termin.geombase import Vec3, Vec4
+
+    for prop in properties:
+        default = prop.get("default")
+        if default is None:
+            continue
+        name = prop["name"]
+        prop_type = prop["property_type"]
+        if prop_type == "Float":
+            phase.set_uniform_float(name, float(default))
+        elif prop_type in ("Int", "Bool"):
+            phase.set_uniform_int(name, int(default))
+        elif prop_type == "Vec3" and len(default) >= 3:
+            phase.set_uniform_vec3(name, Vec3(*default[:3]))
+        elif prop_type in ("Vec4", "Color") and len(default) >= 4:
+            phase.set_uniform_vec4(name, Vec4(*default[:4]))
+
+    for name, value in uniforms.items():
+        if isinstance(value, Vec3):
+            phase.set_uniform_vec3(name, value)
+        elif isinstance(value, Vec4):
+            phase.set_uniform_vec4(name, value)
+        elif isinstance(value, float):
+            phase.set_uniform_float(name, value)
+        elif isinstance(value, bool):
+            phase.set_uniform_int(name, 1 if value else 0)
+        elif isinstance(value, int):
+            phase.set_uniform_int(name, value)
+
+
+def _apply_canonical_texture_defaults(phase, properties: list[dict]) -> None:
+    from termin.render.texture_handle import get_normal_texture_handle, get_white_texture_handle
+
+    for prop in properties:
+        if prop["property_type"] not in ("Texture", "Texture2D"):
+            continue
+        texture = (
+            get_normal_texture_handle()
+            if prop.get("default") == "normal"
+            else get_white_texture_handle()
+        )
+        if texture is not None and texture.is_valid:
+            phase.set_texture(prop["name"], texture)
+        else:
+            log.warning(
+                f"[MaterialAsset] Failed to get default texture for '{prop['name']}'"
+            )
+
+
+def _canonical_render_state(state_data: dict):
+    from termin.materials import TcRenderState
+
+    state = TcRenderState()
+    state.polygon_mode = state_data["polygon_mode"]
+    state.cull = int(state_data["cull"])
+    state.depth_test = int(state_data["depth_test"])
+    state.depth_write = int(state_data["depth_write"])
+    state.blend = int(state_data["blend"])
+    state.blend_src = state_data["blend_src"]
+    state.blend_dst = state_data["blend_dst"]
+    state.depth_func = state_data["depth_func"]
+    return state
+
+
 def _parse_material_content(
     content: str,
     name: str | None = None,
@@ -317,21 +382,10 @@ def _parse_material_content(
 
     # Try to load shader by UUID first, fallback to name
     program = None
-    shader_asset_uuid = shader_uuid  # The actual asset uuid for phase uuid generation
-    shader_asset = None
     if shader_uuid:
-        from termin.default_assets.render.shader_asset import ShaderAsset
-
-        candidate = rm.get_asset_by_uuid(shader_uuid)
-        if isinstance(candidate, ShaderAsset):
-            shader_asset = candidate
         program = rm.get_shader_by_uuid(shader_uuid)
     if program is None:
         program = rm.get_shader(shader_name)
-        # Get shader asset uuid from registry
-        shader_asset = rm.get_shader_asset(shader_name)
-        if shader_asset is not None:
-            shader_asset_uuid = shader_asset.uuid
 
     if program is None:
         log.error(f"[MaterialAsset] Shader not found (uuid={shader_uuid}, name={shader_name}), creating empty material")
@@ -384,48 +438,38 @@ def _parse_material_content(
     # Create TcMaterial
     mat = TcMaterial.create(name or "material", file_uuid or "")
     mat.shader_name = shader_name
+    mat.set_shader_program_dependency(program.uuid, program.version)
     if source_path:
         mat.source_path = source_path
 
-    for i, shader_phase in enumerate(program.phases):
-        if "vertex" not in shader_phase.stages or "fragment" not in shader_phase.stages:
-            log.warning(f"[MaterialAsset] Phase {i} missing vertex or fragment shader")
-            continue
-
+    canonical_phases = program.phases
+    available_marks = [item["phase_mark"] for item in canonical_phases]
+    for i, shader_phase in enumerate(canonical_phases):
         # Determine phase mark (apply override if specified)
-        phase_mark = shader_phase.phase_mark
+        phase_mark = shader_phase["phase_mark"]
         if i < len(phase_marks) and phase_marks[i]:
             phase_mark = phase_marks[i]
 
-        # Build render state
-        state = _build_render_state(shader_phase, phase_mark)
-
-        # Generate phase uuid for hot-reload support
-        phase_uuid = ""
-        if shader_asset_uuid:
-            phase_uuid = make_phase_uuid(shader_asset_uuid, shader_phase.phase_mark)
-
-        shader = shader_asset.get_tc_shader_for_phase(shader_phase) if shader_asset is not None else None
-        if shader is None or not shader.is_valid:
-            log.error(f"[MaterialAsset] Shader phase not found: {phase_uuid}")
+        shader = shader_phase["shader"]
+        if not shader.is_valid:
+            log.error(f"[MaterialAsset] Stale shader phase: {shader_phase['phase_mark']}")
             continue
 
-        phase = mat.add_phase(shader, phase_mark, shader_phase.priority)
+        phase = mat.add_phase(shader, phase_mark, shader_phase["priority"])
 
         if phase is None:
             log.error(f"[MaterialAsset] Failed to add phase {i}")
             continue
-        phase.state = state
+        phase.state = _canonical_render_state(shader_phase["state"])
 
         # Set available marks
-        if shader_phase.available_marks:
-            phase.set_available_marks(shader_phase.available_marks)
+        phase.set_available_marks(available_marks)
 
         # Apply uniform defaults
-        _apply_uniform_defaults(phase, shader_phase, uniforms)
+        _apply_canonical_property_defaults(phase, program.properties, uniforms)
 
         # Set default textures from shader properties
-        _apply_texture_defaults(phase, shader_phase, rm)
+        _apply_canonical_texture_defaults(phase, program.properties)
 
         # Apply textures from .material file (override defaults)
         for tex_name, tc_tex in textures.items():
@@ -467,11 +511,11 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
     from termin_assets import get_resource_manager
 
     shader_name = material.shader_name
+    rm = get_resource_manager()
 
     # Get shader UUID from ResourceManager
-    shader_uuid = ""
-    if shader_name:
-        rm = get_resource_manager()
+    shader_uuid = material.shader_program_uuid
+    if shader_name and not shader_uuid:
         if rm is None:
             log.warning(f"[MaterialAsset] Resource manager is not configured; saving '{shader_name}' without shader UUID")
         else:

@@ -472,7 +472,7 @@ TcMesh build_detour_debug_mesh(const std::vector<std::vector<unsigned char>>& bl
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    char uuid[40];
+    char uuid[TC_UUID_SIZE];
     tc_mesh_compute_uuid(vertices.data(), vertices.size() * sizeof(NavMeshDebugVertex),
                          indices.data(), indices.size(), uuid);
 

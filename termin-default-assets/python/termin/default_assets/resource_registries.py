@@ -93,6 +93,7 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_shader_registry(self):
         """Create AssetRegistry for shader programs."""
         from termin_assets import AssetRegistry
+        from tgfx import TcShaderProgram
 
         def data_from_asset(asset):
             if asset.program is None:
@@ -100,8 +101,10 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.program
 
         def data_to_asset(data):
+            if not isinstance(data, TcShaderProgram) or not data.is_valid:
+                return None
             for asset in self._shader_registry.iter_assets():
-                if asset.program is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 
