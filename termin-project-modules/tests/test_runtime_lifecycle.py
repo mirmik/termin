@@ -471,6 +471,123 @@ def test_module_registration_commit_failure_is_propagated_and_retryable() -> Non
     assert module_context.owner_for_python_module(package) is None
 
 
+def test_owner_contribution_cleanup_resumes_at_each_failed_participant() -> None:
+    module_id = "owner_participant_retry_probe"
+    identities = ["synthetic-first", "synthetic-second", "synthetic-third"]
+    calls = {identity: 0 for identity in identities}
+    failing: str | None = None
+
+    def participant(identity: str):
+        def revoke(owner: str) -> list[str]:
+            nonlocal failing
+            assert owner == module_id
+            calls[identity] += 1
+            if failing == identity:
+                failing = None
+                raise RuntimeError(f"injected {identity} failure")
+            return [f"{identity}-contribution"]
+
+        return module_context.OwnerContributionParticipant(
+            identity,
+            revoke,
+            lambda owner: (),
+        )
+
+    for identity in identities:
+        module_context.register_owner_contribution_participant(participant(identity))
+
+    try:
+        for failed_index, identity in enumerate(identities):
+            module_context.register_module_packages(module_id, [f"{module_id}_{identity}"])
+            calls.update({candidate: 0 for candidate in identities})
+            failing = identity
+            with pytest.raises(RuntimeError, match=f"injected {identity} failure"):
+                module_context.unregister_module_owner(module_id)
+
+            completed_before_failure = identities[:failed_index]
+            assert all(calls[candidate] == 1 for candidate in completed_before_failure)
+            module_context.unregister_module_owner(module_id)
+            assert all(calls[candidate] == 1 for candidate in completed_before_failure)
+            assert all(calls[candidate] >= 1 for candidate in identities[failed_index:])
+    finally:
+        for identity in identities:
+            module_context.unregister_owner_contribution_participant(identity)
+        module_context.unregister_module_packages(module_id)
+
+
+def test_each_builtin_owner_participant_failure_is_retryable(monkeypatch) -> None:
+    module_id = "builtin_owner_participant_retry_probe"
+    revoke_functions = [
+        "_unregister_app_resource_classes",
+        "_unregister_python_component_classes",
+        "_unregister_python_frame_pass_classes",
+        "_unregister_python_kinds",
+        "_commit_runtime_type_records",
+        "_revoke_module_packages",
+    ]
+
+    for function_name in revoke_functions:
+        original = module_context.__dict__[function_name]
+        failure_calls = 0
+
+        def fail_once(owner: str, *, name: str = function_name) -> list[str]:
+            nonlocal failure_calls
+            assert owner == module_id
+            failure_calls += 1
+            raise RuntimeError(f"injected {name} failure")
+
+        module_context.register_module_packages(
+            module_id, [f"{module_id}_{function_name}"]
+        )
+        monkeypatch.setattr(module_context, function_name, fail_once)
+        with pytest.raises(RuntimeError, match=f"injected {function_name} failure"):
+            module_context.unregister_module_owner(module_id)
+        assert failure_calls == 1
+
+        monkeypatch.setattr(module_context, function_name, original)
+        module_context.unregister_module_owner(module_id)
+        assert module_context.owner_for_python_module(
+            f"{module_id}_{function_name}"
+        ) is None
+
+
+def test_owner_contribution_audit_rejects_synthetic_leak_and_preserves_foreign_owner() -> None:
+    module_id = "owner_audit_probe"
+    foreign_owner = "owner_audit_foreign"
+    remaining = {module_id: {"leaked"}, foreign_owner: {"foreign"}}
+    revoke_calls = 0
+
+    def revoke(owner: str) -> list[str]:
+        nonlocal revoke_calls
+        revoke_calls += 1
+        return []
+
+    participant = module_context.OwnerContributionParticipant(
+        "synthetic-leak-audit",
+        revoke,
+        lambda owner: sorted(remaining.get(owner, ())),
+    )
+    module_context.register_owner_contribution_participant(participant)
+    module_context.register_module_packages(module_id, [module_id])
+    try:
+        with pytest.raises(RuntimeError, match="synthetic-leak-audit"):
+            module_context.unregister_module_owner(module_id)
+        assert remaining[foreign_owner] == {"foreign"}
+
+        remaining[module_id].clear()
+        module_context.unregister_module_owner(module_id)
+        assert revoke_calls == 2
+        assert remaining[foreign_owner] == {"foreign"}
+
+        module_context.unregister_module_owner(module_id)
+        assert revoke_calls == 2
+    finally:
+        module_context.unregister_owner_contribution_participant(
+            "synthetic-leak-audit"
+        )
+        module_context.unregister_module_packages(module_id)
+
+
 def test_package_owner_claims_are_explicit_and_cannot_be_overwritten() -> None:
     module_context.register_module_packages("outer", ["gameplay"])
     module_context.register_module_packages("inner", ["gameplay.tools"])

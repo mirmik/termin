@@ -62,8 +62,17 @@
   - должен удалить все module-owned `InspectRegistry`/`ComponentRegistry`
     registrations, чтобы не осталось callbacks/factory pointers в выгружаемый код
   - если возвращает ошибку, backend handle не закрывается, а модуль остаётся в
-    `CleanupFailed` на фазе `RevokeContributions`; повтор не вызывает уже
-    завершённый native shutdown
+  `CleanupFailed` на фазе `RevokeContributions`; повтор не вызывает уже
+  завершённый native shutdown
+  - native runtime types выступают стабильным participant `runtime-types`:
+    revoke атомарно снимает owner descriptors, затем audit запрещает закрытие
+    handle при любой оставшейся contribution identity
+
+Python-side registries используют тот же revoke/audit contract через
+`OwnerContributionParticipant`. Новая extension registry подключается
+регистрацией participant со стабильным identity; backend-specific ветвление в
+unload для неё не добавляется. `sys.modules` не является participant: exact
+import entries удаляются позднее, при backend cleanup.
 
 - `after_unload`
   - завершить cleanup после фактической выгрузки shared library

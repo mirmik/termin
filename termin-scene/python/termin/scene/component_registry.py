@@ -42,6 +42,12 @@ class ComponentClassRegistry:
             if registered_owner == owner:
                 self.unregister(name)
 
+    def list_owned(self, owner: str) -> list[str]:
+        return sorted(
+            name for name, registered_owner in self.owners.items()
+            if registered_owner == owner
+        )
+
     def get(self, name: str) -> type["Component"] | None:
         return self.classes.get(name)
 

@@ -72,6 +72,52 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
     assert "scan_frame_passes" not in dir(rm)
 
 
+def test_owner_cleanup_revokes_app_resources_and_python_kinds() -> None:
+    from termin.inspect.kind import KindRegistry
+    from termin_assets import set_resource_manager_factory
+    from termin_modules.module_context import (
+        module_registration_context,
+        unregister_module_owner,
+    )
+
+    module_id = "resource_and_kind_owner_probe"
+    rm = DefaultResourceManager()
+    set_resource_manager_factory(lambda: rm)
+    try:
+        with module_registration_context(module_id, [__name__]):
+            class OwnerResourceComponent:
+                pass
+
+            class OwnerResourceFramePass:
+                pass
+
+            rm.register_component("OwnerResourceComponent", OwnerResourceComponent)
+            rm.register_frame_pass("OwnerResourceFramePass", OwnerResourceFramePass)
+            KindRegistry.register_python(
+                "owner-resource-kind",
+                serialize=lambda value: value,
+                deserialize=lambda value: value,
+                owner=module_id,
+            )
+
+        assert rm.component_registry.list_owned(module_id) == [
+            "OwnerResourceComponent"
+        ]
+        assert rm.frame_pass_registry.list_owned(module_id) == [
+            "OwnerResourceFramePass"
+        ]
+        assert KindRegistry.list_owned(module_id) == ["owner-resource-kind"]
+
+        unregister_module_owner(module_id)
+
+        assert rm.component_registry.list_owned(module_id) == []
+        assert rm.frame_pass_registry.list_owned(module_id) == []
+        assert KindRegistry.list_owned(module_id) == []
+    finally:
+        unregister_module_owner(module_id)
+        set_resource_manager_factory(None)
+
+
 def test_module_owner_context_unregisters_python_component_registrations() -> None:
     import termin.bootstrap
     from termin.inspect import InspectField, InspectRegistry
