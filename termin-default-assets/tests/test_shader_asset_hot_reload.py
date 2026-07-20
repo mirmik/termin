@@ -203,6 +203,62 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert tgfx.TcShader.from_uuid(phase_uuid).source_hash == published_hash
 
 
+def test_shader_asset_round_trips_and_applies_matrix_defaults(tmp_path: Path) -> None:
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.default_assets.render.shader_plugin import ShaderImportPlugin
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.geombase import Mat44f
+
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+
+    shader_path = tmp_path / "HotReload.shader"
+    shader_path.write_text(
+        _shader_source(
+            "float4(1.0, 1.0, 1.0, 1.0)",
+            "@property Mat4 u_transform\n"
+            "@property Vec2 u_texel_size = Vec2(0.25, 0.5)",
+        ),
+        encoding="utf-8",
+    )
+    shader_path.with_suffix(".shader.meta").write_text(
+        '{"uuid": "typed-default-shader"}\n',
+        encoding="utf-8",
+    )
+
+    result = ShaderImportPlugin().preload(str(shader_path))
+    assert result is not None
+    rm.register_file(result)
+
+    program = rm.get_shader("HotReload")
+    assert program is not None
+    properties = {prop["name"]: prop for prop in program.properties}
+    assert properties["u_transform"]["default"] == (
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    )
+    assert properties["u_texel_size"]["default"] == (0.25, 0.5)
+
+    material_path = tmp_path / "HotReload.material"
+    material_path.write_text(
+        '{"uuid": "typed-default-material", "shader": "HotReload", '
+        '"shader_uuid": "typed-default-shader"}\n',
+        encoding="utf-8",
+    )
+    material = MaterialAsset.from_file(material_path, name="TypedDefaultMaterial").material
+    assert material is not None
+    uniforms = material.default_phase().uniforms
+
+    matrix = uniforms["u_transform"]
+    assert isinstance(matrix, Mat44f)
+    for column in range(4):
+        for row in range(4):
+            assert matrix[column, row] == (1.0 if column == row else 0.0)
+    assert uniforms["u_texel_size"] == (0.25, 0.5)
+
+
 def test_shader_asset_releases_program_without_invalidating_live_handles(tmp_path: Path) -> None:
     import tgfx
     from termin.default_assets.render.shader_plugin import ShaderImportPlugin
