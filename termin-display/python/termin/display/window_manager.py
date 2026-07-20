@@ -5,9 +5,9 @@ frameworks — hosts attach their own UI / renderer state to each
 window through ``BackendWindowEntry.host_data`` and drive render via
 ``entries()``.
 
-Secondary windows share the primary's ``IRenderDevice`` — see the
-secondary-window ctor in ``BackendWindow``. There is one device per
-process regardless of how many OS windows the host opens.
+Every window is created by the same host graphics runtime. There is one device
+per runtime regardless of how many OS windows the host opens, and no window is
+privileged as its owner.
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from typing import Any, Callable
 _logger = logging.getLogger(__name__)
 
 try:
-    from termin.display._platform_native import BackendWindow, SDLBackendWindow
+    from termin.display._platform_native import BackendWindow, WindowedGraphicsSession
 except ImportError as e:
     _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
-    SDLBackendWindow = None
+    WindowedGraphicsSession = None
 
 
 @dataclass
@@ -50,7 +50,10 @@ class BackendWindowManager:
     an entry by SDL windowID.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, graphics_session: WindowedGraphicsSession) -> None:
+        if graphics_session is None:
+            raise ValueError("BackendWindowManager requires a windowed graphics session")
+        self._graphics_session = graphics_session
         self._entries: list[BackendWindowEntry] = []
 
     # ------------------------------------------------------------------
@@ -74,18 +77,16 @@ class BackendWindowManager:
                       always_on_top: bool = False,
                       on_destroy: Callable[[BackendWindowEntry], None] | None = None
                       ) -> BackendWindowEntry:
-        """Open a secondary OS window backed by the primary's
-        IRenderDevice. Returns the new entry — host fills in
+        """Open another OS presentation window on the session's canonical
+        GraphicsHost. Returns the new entry — host fills in
         ``host_data`` (typically a UI + renderer bound to the shared
         graphics context)."""
         main = self.main_entry()
         if main is None:
             raise RuntimeError(
                 "BackendWindowManager.create_window called before "
-                "register_main: no primary window to share device with.")
-        if SDLBackendWindow is None:
-            raise RuntimeError("SDLBackendWindow is not available in this build.")
-        secondary = SDLBackendWindow(title, width, height, main.window)
+                "register_main: application main window is not registered.")
+        secondary = self._graphics_session.create_window(title, width, height)
         secondary.set_always_on_top(always_on_top)
         entry = BackendWindowEntry(
             window=secondary, is_main=False,
@@ -120,6 +121,12 @@ class BackendWindowManager:
         for entry in list(self._entries):
             if entry.is_main and entry.on_destroy is not None:
                 entry.on_destroy(entry)
+        for entry in list(self._entries):
+            if not entry.is_main:
+                entry.window.close()
+        for entry in list(self._entries):
+            if entry.is_main:
+                entry.window.close()
         self._entries.clear()
 
     # ------------------------------------------------------------------

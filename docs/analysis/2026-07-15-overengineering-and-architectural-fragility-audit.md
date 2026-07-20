@@ -61,10 +61,10 @@ C interop при этом использует один process-global `g_tgfx2_
 - `termin-graphics/src/tgfx2_interop.cpp:23`;
 - `termin-graphics/src/tgfx2_interop.cpp:360`.
 
-`RenderRuntime` перезаписывает этот указатель и при destruction только обнуляет
+`GraphicsHost` перезаписывает этот указатель и при destruction только обнуляет
 его, не восстанавливая предыдущий runtime:
 
-- `termin-graphics/src/tgfx2/render_runtime.cpp:83`.
+- `termin-graphics/src/tgfx2/graphics_host.cpp:83`.
 
 В коде уже документированы cross-pool grey viewport/crash:
 

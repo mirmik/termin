@@ -17,18 +17,29 @@ class _LoopConnection:
         self.events.append("detach")
 
 
-def test_tcgui_session_detaches_before_frontend_cleanup_exactly_once() -> None:
+def test_tcgui_session_has_explicit_three_phase_shutdown() -> None:
     events: list[str] = []
     session = TcguiEditorSession(
         _LoopConnection(events),
-        lambda: events.append("cleanup"),
+        lambda: events.append("prepare"),
+        lambda: events.append("backend"),
     )
 
+    session.prepare_engine_shutdown()
+    session.prepare_engine_shutdown()
     session.close()
     session.close()
 
+    assert session.prepared
     assert session.closed
-    assert events == ["detach", "cleanup"]
+    assert events == ["detach", "prepare", "backend"]
+
+
+def test_tcgui_session_rejects_backend_close_before_engine_phase() -> None:
+    session = TcguiEditorSession(_LoopConnection([]), lambda: None, lambda: None)
+
+    with pytest.raises(RuntimeError, match="prepare_engine_shutdown"):
+        session.close()
 
 
 def test_tcgui_frontend_uses_atomic_loop_session_and_external_teardown() -> None:
@@ -41,7 +52,12 @@ def test_tcgui_frontend_uses_atomic_loop_session_and_external_teardown() -> None
     assert "set_poll_events_callback(" not in source
     assert "set_should_continue_callback(" not in source
     assert "set_on_shutdown_callback(" not in source
-    assert "finally:\n        session.close()" in source
+    assert "engine.shutdown()" not in source[:source.index("def run_editor_tcgui(")]
+    wrapper = source[source.index("def run_editor_tcgui("):]
+    prepare = wrapper.index("session.prepare_engine_shutdown()")
+    shutdown_engine = wrapper.index("engine.shutdown()", prepare)
+    close = wrapper.index("session.close()", shutdown_engine)
+    assert prepare < shutdown_engine < close
 
 
 def test_tcgui_window_releases_render_attachments_before_controller() -> None:
@@ -67,6 +83,19 @@ def test_tcgui_window_uses_its_private_engine_reference() -> None:
 
     assert "self.engine" not in source
     assert "self._engine.rendering_manager.render_engine" in source
+
+
+def test_tcgui_editor_input_manager_receives_full_display_handle() -> None:
+    source = (
+        REPO_ROOT / "termin-app/termin/editor_tcgui/editor_window.py"
+    ).read_text(encoding="utf-8")
+    setup = source[
+        source.index("    def _setup_editor_viewport_input_managers("):
+        source.index("    def _attach_editor_input_router(")
+    ]
+
+    assert "display_index, display_generation = display.handle" in setup
+    assert "display_index,\n                display_generation," in setup
 
 
 @pytest.mark.parametrize(

@@ -14,7 +14,7 @@ import numpy as np
 from tcbase import Key, MouseButton
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.csg.viewer_camera import OrbitCamera
-from termin.display import SDLBackendWindow, quit_sdl, wait_sdl_events_timeout
+from termin.display import WindowedGraphicsSession, quit_sdl, wait_sdl_events_timeout
 from tgfx import (
     CULL_NONE,
     PIXEL_D32F,
@@ -243,65 +243,79 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
     lo, hi = _mesh_bounds([m.cpu_mesh for m in preview_meshes])
     camera.fit_bounds(lo, hi)
 
-    window = SDLBackendWindow(title, int(size[0]), int(size[1]))
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
-    ctx = graphics.context
-    vs = graphics.device.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
-    fs = graphics.device.create_shader(Tgfx2ShaderStage.Fragment, _FRAG_SRC)
+    graphics_session = WindowedGraphicsSession.create_native()
+    window = None
+    graphics = None
+    vs = None
+    fs = None
 
     color_tex = None
     depth_tex = None
     tex_size = (0, 0)
     state = {"dragging": False, "x": 0, "y": 0}
 
-    while not window.should_close():
-        for event in wait_sdl_events_timeout(16):
-            _dispatch_event(window, camera, state, event)
+    try:
+        window = graphics_session.create_window(title, int(size[0]), int(size[1]))
+        graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
+        ctx = graphics.context
+        vs = graphics.device.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
+        fs = graphics.device.create_shader(Tgfx2ShaderStage.Fragment, _FRAG_SRC)
 
-        w, h = window.framebuffer_size()
-        if w <= 0 or h <= 0:
-            continue
-        if tex_size != (w, h):
+        while not window.should_close():
+            for event in wait_sdl_events_timeout(16):
+                _dispatch_event(window, camera, state, event)
+
+            w, h = window.framebuffer_size()
+            if w <= 0 or h <= 0:
+                continue
+            if tex_size != (w, h):
+                if color_tex is not None:
+                    graphics.destroy_texture(color_tex)
+                if depth_tex is not None:
+                    graphics.destroy_texture(depth_tex)
+                color_tex = graphics.create_color_attachment(w, h, PIXEL_RGBA8)
+                depth_tex = graphics.create_depth_attachment(w, h, PIXEL_D32F)
+                tex_size = (w, h)
+
+            mvp = camera.view_projection(w, h)
+            ctx.begin_frame()
+            ctx.begin_pass(color_tex, depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
+            ctx.set_viewport(0, 0, w, h)
+            ctx.set_depth_test(True)
+            ctx.set_depth_write(True)
+            ctx.set_blend(False)
+            ctx.set_cull(CULL_NONE)
+            ctx.bind_shader(vs, fs)
+            for mesh in preview_meshes:
+                if mesh.draw_solid:
+                    _push_draw_state(ctx, mvp, mesh.color)
+                    draw_tc_mesh(ctx, mesh.solid_mesh)
+            if show_wireframe:
+                ctx.set_depth_test(False)
+                ctx.set_depth_write(False)
+                for mesh in preview_meshes:
+                    _push_draw_state(ctx, mvp, mesh.line_color)
+                    draw_tc_mesh(ctx, mesh.line_mesh)
+                ctx.set_depth_test(True)
+            ctx.end_pass()
+            ctx.end_frame()
+            window.present(color_tex)
+    finally:
+        if graphics is not None:
             if color_tex is not None:
                 graphics.destroy_texture(color_tex)
             if depth_tex is not None:
                 graphics.destroy_texture(depth_tex)
-            color_tex = graphics.create_color_attachment(w, h, PIXEL_RGBA8)
-            depth_tex = graphics.create_depth_attachment(w, h, PIXEL_D32F)
-            tex_size = (w, h)
-
-        mvp = camera.view_projection(w, h)
-        ctx.begin_frame()
-        ctx.begin_pass(color_tex, depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
-        ctx.set_viewport(0, 0, w, h)
-        ctx.set_depth_test(True)
-        ctx.set_depth_write(True)
-        ctx.set_blend(False)
-        ctx.set_cull(CULL_NONE)
-        ctx.bind_shader(vs, fs)
-        for mesh in preview_meshes:
-            if mesh.draw_solid:
-                _push_draw_state(ctx, mvp, mesh.color)
-                draw_tc_mesh(ctx, mesh.solid_mesh)
-        if show_wireframe:
-            ctx.set_depth_test(False)
-            ctx.set_depth_write(False)
-            for mesh in preview_meshes:
-                _push_draw_state(ctx, mvp, mesh.line_color)
-                draw_tc_mesh(ctx, mesh.line_mesh)
-            ctx.set_depth_test(True)
-        ctx.end_pass()
-        ctx.end_frame()
-        window.present(color_tex)
-
-    if color_tex is not None:
-        graphics.destroy_texture(color_tex)
-    if depth_tex is not None:
-        graphics.destroy_texture(depth_tex)
-    graphics.device.destroy_shader(vs)
-    graphics.device.destroy_shader(fs)
-    window.close()
-    quit_sdl()
+            if vs is not None:
+                graphics.device.destroy_shader(vs)
+            if fs is not None:
+                graphics.device.destroy_shader(fs)
+        if window is not None:
+            window.close()
+        try:
+            graphics_session.close()
+        finally:
+            quit_sdl()
 
 
 __all__ = ["draw_solids"]

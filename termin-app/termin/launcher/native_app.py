@@ -401,24 +401,31 @@ def _smoke_frame_limit() -> int:
 
 def run_native_launcher(controller: LauncherController) -> None:
     """Own the native launcher window until an editor starts or it closes."""
-    from termin.display import SDLBackendWindow, quit_sdl, wait_sdl_events_timeout
+    from termin.display import WindowedGraphicsSession, quit_sdl, wait_sdl_events_timeout
     from termin.editor_core.application_icon import apply_editor_window_icon
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
     from termin.editor_native.ui_host import NativeUiHost
+    from tgfx import Tgfx2Context
 
     configure_sdk_shader_runtime("launcher-native")
-    window = SDLBackendWindow("Termin Launcher", 1024, 640)
-    apply_editor_window_icon(window)
-    host = NativeUiHost(window)
-    release_background = _install_background(host)
-    projection = NativeLauncherProjection(
-        host.document,
-        controller,
-        request_render=host.request_render_update,
-    )
-    frame_limit = _smoke_frame_limit()
-    frame_count = 0
+    graphics_session = WindowedGraphicsSession.create_native()
+    window = None
+    host = None
+    release_background = None
+    projection = None
     try:
+        window = graphics_session.create_window("Termin Launcher", 1024, 640)
+        apply_editor_window_icon(window)
+        graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
+        host = NativeUiHost(window, graphics)
+        release_background = _install_background(host)
+        projection = NativeLauncherProjection(
+            host.document,
+            controller,
+            request_render=host.request_render_update,
+        )
+        frame_limit = _smoke_frame_limit()
+        frame_count = 0
         host.render()
         while not window.should_close() and not controller.state.should_quit:
             for event in wait_sdl_events_timeout(100):
@@ -435,11 +442,18 @@ def run_native_launcher(controller: LauncherController) -> None:
                 window.set_should_close(True)
         _ = projection
     finally:
-        projection.close()
+        if projection is not None:
+            projection.close()
         if release_background is not None:
             release_background()
-        host.close()
-        quit_sdl()
+        if host is not None:
+            host.close()
+        if window is not None:
+            window.close()
+        try:
+            graphics_session.close()
+        finally:
+            quit_sdl()
 
 
 __all__ = ["NativeLauncherProjection", "run_native_launcher"]

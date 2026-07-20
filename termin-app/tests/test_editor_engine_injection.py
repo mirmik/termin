@@ -1,6 +1,8 @@
 import sys
 import types
 
+import pytest
+
 from termin.editor import run_editor
 
 
@@ -36,12 +38,19 @@ def test_run_editor_runs_explicit_engine(monkeypatch):
     calls = []
 
     class _Session:
+        def prepare_engine_shutdown(self):
+            calls.append("prepare")
+
         def close(self):
             calls.append("close")
 
     class _Engine:
         def run(self):
             calls.append("run")
+
+        def shutdown(self):
+            calls.append("shutdown")
+            return True
 
     engine = _Engine()
     monkeypatch.setattr(
@@ -52,7 +61,35 @@ def test_run_editor_runs_explicit_engine(monkeypatch):
 
     run_editor.run_editor(engine)
 
-    assert calls == [engine, "run", "close"]
+    assert calls == [engine, "run", "prepare", "shutdown", "close"]
+
+
+def test_run_editor_finishes_all_shutdown_phases_after_prepare_failure(monkeypatch):
+    calls = []
+
+    class _Session:
+        def prepare_engine_shutdown(self):
+            calls.append("prepare")
+            raise RuntimeError("prepare failed")
+
+        def close(self):
+            calls.append("close")
+
+    class _Engine:
+        def run(self):
+            calls.append("run")
+
+        def shutdown(self):
+            calls.append("shutdown")
+            return True
+
+    engine = _Engine()
+    monkeypatch.setattr(run_editor, "init_editor", lambda value, **kwargs: _Session())
+
+    with pytest.raises(RuntimeError, match="prepare failed"):
+        run_editor.run_editor(engine)
+
+    assert calls == ["run", "prepare", "shutdown", "close"]
 
 
 def test_init_editor_from_host_returns_session(monkeypatch):

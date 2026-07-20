@@ -136,6 +136,9 @@ void bind_engine_core(nb::module_& m) {
 
         .def("is_running", &EngineCore::is_running,
              "Check if main loop is running")
+
+        .def("shutdown", &EngineCore::shutdown,
+             "Finalize engine-owned scenes and rendering resources. Repeated calls are harmless.")
         ;
 }
 

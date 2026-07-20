@@ -49,6 +49,36 @@
 
 Это позволяет SDL, tcgui, Qt-like hosts, tests и external embedding использовать одну и ту же форму runtime loop.
 
+## Завершение runtime
+
+`shutdown()` явно и окончательно освобождает принадлежащие engine сцены и
+рендеринг. Вызов идемпотентен, но после него нельзя снова запускать loop,
+подключать loop client или выполнять кадры. `shutdown()` нельзя вызывать, пока
+`run()` ещё исполняется.
+
+Если `RenderEngine` использует графическое устройство, принадлежащее host,
+composition root обязан завершать приложение в таком порядке:
+
+1. `EditorSession.prepare_engine_shutdown()` отключает loop client и снимает
+   frontend-интеграции;
+2. `EngineCore.shutdown()` разрушает engine-owned потребителей графического
+   устройства;
+3. `EditorSession.close()` разрушает окна и их per-window presentation
+   resources.
+4. После того как engine-owned GPU resources и все окна уничтожены,
+   `WindowedGraphicsSession.close()` сначала закрывает канонический
+   `tgfx::GraphicsHost`, затем platform state оконной системы.
+
+`tgfx::GraphicsHost` является единственным владельцем graphics domain и явно
+инжектируется в `RenderEngine`; восстановление второго cache/context из
+process-global device запрещено. `BackendWindowSystem` владеет только platform
+bootstrap, а `BackendWindow` — только native/presentation state. Session
+фиксирует lifetime: окна → GraphicsHost → platform bootstrap.
+
+Деструктор `EngineCore` вызывает `shutdown()` как страховку, но host не должен
+полагаться на него при borrowed graphics device: владелец устройства обязан
+быть ещё жив во время явного shutdown.
+
 ## Профилирование
 
 Когда profiling включен, loop владеет границами profiler frame. UI-work можно

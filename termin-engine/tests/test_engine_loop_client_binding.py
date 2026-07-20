@@ -84,3 +84,17 @@ def test_detach_releases_consumed_python_callback_references() -> None:
     connection.detach()
     gc.collect()
     assert all(callback_ref() is None for callback_ref in callback_refs)
+
+
+def test_shutdown_is_idempotent_and_rejects_later_loop_use() -> None:
+    engine = EngineCore()
+
+    assert engine.shutdown()
+    assert engine.shutdown()
+    assert not engine.tick_and_render(0.0)
+
+    client = EngineLoopClient(lambda: None, lambda: False, lambda: None)
+    with pytest.raises(RuntimeError, match="after EngineCore shutdown"):
+        engine.attach_loop_client(client)
+    with pytest.raises(RuntimeError, match="after shutdown"):
+        engine.run()

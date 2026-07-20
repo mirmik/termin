@@ -14,6 +14,7 @@ namespace termin {
 
 void bind_backend_window(nb::module_& m) {
     nb::class_<BackendWindow>(m, "BackendWindow");
+    nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
 }
 
 } // namespace termin
@@ -25,8 +26,8 @@ NB_MODULE(_platform_native, m) {
 #ifdef TERMIN_DISPLAY_HAS_SDL
     m.attr("HAS_SDL") = nb::bool_(true);
 
-    // BackendWindow::device() returns tgfx::IRenderDevice* and
-    // BackendWindow::present() takes tgfx::TextureHandle — both are
+    // BackendWindow::present() takes tgfx::TextureHandle and the windowed
+    // session binding returns tgfx::GraphicsHost — both are
     // registered in _tgfx_native. Force-import so nanobind can resolve
     // those cross-module types the first time Python calls into the
     // window wrapper. Failure (tgfx not on sys.path) is non-fatal —

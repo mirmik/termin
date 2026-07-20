@@ -67,6 +67,7 @@ private:
     std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
     std::atomic<double> _target_fps{60.0};
     bool _profile_ui = false;
+    bool _shutdown = false;
 
     // Callbacks for external integration (set from Python)
     std::function<void()> _poll_events_callback;
@@ -124,6 +125,12 @@ public:
 
     // Check if running
     bool is_running() const;
+
+    // Finalize engine-owned scenes and rendering resources. Hosts must call
+    // this after their scene/display integrations are detached and before
+    // destroying a graphics device borrowed by RenderEngine. Idempotent;
+    // returns false when called while the main loop is still running.
+    bool shutdown();
 };
 
 } // namespace termin

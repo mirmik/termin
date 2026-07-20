@@ -104,7 +104,14 @@ def run_editor(engine, debug_resource: str | None = None, no_scene: bool = False
     try:
         engine.run()
     finally:
-        session.close()
+        try:
+            session.prepare_engine_shutdown()
+        finally:
+            try:
+                if not engine.shutdown():
+                    raise RuntimeError("EngineCore refused editor shutdown")
+            finally:
+                session.close()
 
 
 if __name__ == "__main__":

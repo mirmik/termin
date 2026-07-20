@@ -9,8 +9,10 @@ _logger = logging.getLogger(__name__)
 try:
     from termin.display._platform_native import (
         BackendWindow,
+        BackendWindowSystem,
         PresentationMode,
         SDLBackendWindow,
+        WindowedGraphicsSession,
         SystemCursorShape,
         get_clipboard_text,
         poll_sdl_events,
@@ -24,8 +26,10 @@ try:
 except ImportError as e:
     _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
+    BackendWindowSystem = None
     PresentationMode = None
     SDLBackendWindow = None
+    WindowedGraphicsSession = None
     SystemCursorShape = None
     get_clipboard_text = None
     poll_sdl_events = None
@@ -63,8 +67,10 @@ from termin.display.input_manager import BasicDisplayInputManager
 
 __all__ = [
     "BackendWindow",
+    "BackendWindowSystem",
     "PresentationMode",
     "SDLBackendWindow",
+    "WindowedGraphicsSession",
     "SystemCursorShape",
     "get_clipboard_text",
     "poll_sdl_events",

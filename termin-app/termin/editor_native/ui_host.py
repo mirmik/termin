@@ -23,6 +23,7 @@ from termin.display import (
     start_text_input,
     stop_text_input,
 )
+from tgfx import Tgfx2Context
 from termin.gui_native import (
     Document,
     CursorIntent,
@@ -196,6 +197,7 @@ class NativeUiHost:
     def __init__(
         self,
         window: SDLBackendWindow,
+        graphics: Tgfx2Context,
         document: Document | None = None,
         *,
         font_path: str | Path | None = None,
@@ -211,9 +213,10 @@ class NativeUiHost:
         ):
             raise RuntimeError("termin-display SDL platform bindings are unavailable")
         self.window = window
-        self.device = window.device()
+        self.graphics = graphics
+        self.device = graphics.device
         self.document = document if document is not None else Document()
-        self.context = window.context()
+        self.context = graphics.context
         self.draw_list = DrawList()
         self.paint_context = PaintContext(self.draw_list)
         self.renderer = DrawListRenderer()
@@ -546,7 +549,7 @@ class NativeUiWindowManager:
     SDL has one process-global event queue, so individual hosts cannot poll it
     independently.  This manager drains the queue once, routes each event by
     window id, and composes every host that requested an update.  Secondary
-    windows share the primary window's render device through
+    windows use the same explicit host graphics runtime through
     :class:`BackendWindowManager`.
     """
 
@@ -554,6 +557,7 @@ class NativeUiWindowManager:
         self,
         main_host: NativeUiHost,
         *,
+        graphics_session: object | None = None,
         backend_manager: object | None = None,
         event_source: Callable[[], list[dict[str, object]]] | None = None,
         host_factory: Callable[..., NativeUiHost] | None = None,
@@ -561,7 +565,13 @@ class NativeUiWindowManager:
         if BackendWindowManager is None and backend_manager is None:
             raise RuntimeError("termin-display BackendWindowManager is unavailable")
         self.main_host = main_host
-        self._backend = backend_manager if backend_manager is not None else BackendWindowManager()
+        if backend_manager is None and graphics_session is None:
+            raise ValueError("NativeUiWindowManager requires a graphics runtime")
+        self._backend = (
+            backend_manager
+            if backend_manager is not None
+            else BackendWindowManager(graphics_session)
+        )
         self._event_source = event_source if event_source is not None else poll_sdl_events
         self._host_factory = host_factory if host_factory is not None else NativeUiHost
         self._windows: list[NativeUiWindow] = []

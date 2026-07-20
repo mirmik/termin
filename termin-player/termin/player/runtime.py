@@ -131,6 +131,7 @@ class PlayerRuntime:
         self.running = False
         self.scene: Scene | None = None
         self.window = None
+        self._graphics_session = None
         self.graphics = None
         self.camera = None
         self._engine = engine
@@ -215,17 +216,31 @@ class PlayerRuntime:
 
         manager.set_pipeline_factory(self._create_pipeline_for_name)
 
-        # Create native backend window first. Its constructor publishes the
-        # host tgfx2 device so RenderEngine reuses it instead of creating a
-        # second device with incompatible texture handles.
-        from termin.display._platform_native import SDLBackendWindow
+        # Create one host-owned graphics runtime before its presentation
+        # window. RenderEngine reuses this device instead of creating a second
+        # device with incompatible texture handles.
+        from termin.display import WindowedGraphicsSession, quit_sdl
 
         try:
-            self.window = SDLBackendWindow(self.title, self.width, self.height)
+            self._graphics_session = WindowedGraphicsSession.create_native()
+            self.window = self._graphics_session.create_window(
+                self.title, self.width, self.height
+            )
+            manager.render_engine.set_graphics_host(self._graphics_session.graphics)
+            from tgfx import Tgfx2Context
+
+            self.graphics = Tgfx2Context.from_runtime(self._graphics_session.graphics)
             if self.fullscreen:
                 self.window.set_fullscreen(True)
         except Exception as e:
             log.error(f"[PlayerRuntime] Failed to create backend window: {e}")
+            if self._graphics_session is not None:
+                try:
+                    self._graphics_session.close()
+                except Exception as close_error:
+                    log.error(f"[PlayerRuntime] Failed to close graphics runtime: {close_error}")
+                self._graphics_session = None
+            quit_sdl()
             return False
 
         # Create display
@@ -234,7 +249,7 @@ class PlayerRuntime:
         self._surface_size = self.window.framebuffer_size()
         surface_width, surface_height = self._surface_size
         self._display = Display.offscreen(
-            self.window.device(), surface_width, surface_height, name="Main"
+            self.graphics.device, surface_width, surface_height, name="Main"
         )
         manager.set_display_factory(self._runtime_display_factory)
 
@@ -769,6 +784,7 @@ class PlayerRuntime:
         if self._display is not None:
             self._display.destroy()
             self._display = None
+        self.graphics = None
 
         try:
             from termin.bootstrap import shutdown_player
@@ -782,6 +798,19 @@ class PlayerRuntime:
         if self.window is not None:
             self.window.close()
             self.window = None
+
+        if self._graphics_session is not None:
+            try:
+                self._graphics_session.close()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to close graphics runtime: {e}")
+            self._graphics_session = None
+            try:
+                from termin.display import quit_sdl
+
+                quit_sdl()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to quit SDL: {e}")
 
         # Release a borrowed wrapper only after all engine-backed resources are
         # detached. For standalone runtimes this also destroys the owned engine.
