@@ -235,6 +235,26 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     import termin.display
     import termin.editor._editor_native as editor_native
     import termin.editor_core.editor_scene_attachment as attachment_module
+    import termin.editor_native.camera_overlay as camera_overlay_module
+
+    class CameraOverlay:
+        instances = []
+
+        def __init__(self, viewport) -> None:
+            self.viewport = viewport
+            self.rebind_count = 0
+            self.closed = False
+            self.__class__.instances.append(self)
+
+        @classmethod
+        def create(cls, viewport):
+            return cls(viewport)
+
+        def rebind_camera(self) -> None:
+            self.rebind_count += 1
+
+        def close(self) -> None:
+            self.closed = True
 
     class InputManager:
         def __init__(self, index: int, generation: int, display_ptr: int) -> None:
@@ -256,6 +276,11 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     monkeypatch.setattr(editor_native, "EditorInteractionSystem", _Interaction)
     monkeypatch.setattr(editor_native, "EditorViewportInputManager", InputManager)
     monkeypatch.setattr(attachment_module, "EditorSceneAttachment", _Attachment)
+    monkeypatch.setattr(
+        camera_overlay_module,
+        "NativeEditorCameraOverlayProjection",
+        CameraOverlay,
+    )
     _Attachment.instances.clear()
     _Interaction._instance = None
 
@@ -306,6 +331,7 @@ root:
     runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
     runtime.rebind_input_manager()
     assert runtime.input_manager.rebinds == [(7, 11, 41)]
+    assert runtime._camera_overlay.rebind_count == 1
 
     overlay_enabled = False
 
@@ -328,6 +354,7 @@ root:
     assert renders == [True]
 
     runtime.close()
+    assert CameraOverlay.instances[0].closed
     runtime.close()
     assert runtime.input_manager.detached
     assert runtime.attachment.closed

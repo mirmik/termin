@@ -11,6 +11,7 @@ Coordinate convention: Y-forward, Z-up
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from termin.scene import Entity
@@ -37,10 +38,16 @@ class EditorCameraManager:
     2. New: EditorCameraManager() + attach_to_scene(scene) - deferred creation
     """
 
-    def __init__(self, scene: "Scene | None" = None):
+    def __init__(
+        self,
+        scene: "Scene | None" = None,
+        *,
+        camera_overlay_factory: Callable[[Entity, object], Entity | None] | None = None,
+    ):
         self._scene: "Scene | None" = None
         self.editor_entities: Entity | None = None
         self.camera: CameraComponent | None = None
+        self._camera_overlay_factory = camera_overlay_factory
 
         # Legacy: if scene provided, attach immediately
         if scene is not None:
@@ -91,6 +98,7 @@ class EditorCameraManager:
                     camera = child.entity.get_component_by_type("CameraComponent")
                     if camera is not None:
                         self.camera = camera
+                        self._ensure_camera_controller(child.entity)
                         self._enable_editor_input_sources(child.entity)
                         print(f"[DEBUG] _ensure_editor_camera: FOUND existing camera={camera}", flush=True)
                         return
@@ -102,26 +110,7 @@ class EditorCameraManager:
         camera = camera_entity.get_component_by_type("CameraComponent")
         print(f"[DEBUG] _ensure_editor_camera: CREATED new camera={camera}, entity={camera_entity}", flush=True)
 
-        # Create child entity for editor UI with layer=1
-        ui_entity = Entity(name="editor_ui")
-        ui_entity.layer = 1  # Editor UI layer
-        ui_entity.add_component_by_name("UIComponent")
-        ui_comp = ui_entity.get_component_by_type("UIComponent")
-        ui_comp.active_in_editor = True
-        ui_comp.input_source_mask = INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR
-        ui_comp.set_ui_layout_by_name("editor_camera_ui")
-
-        # The shared editor bootstrap registers the overlay controller for every
-        # frontend. Keep the lookup registry-based so editor camera construction
-        # remains independent from the concrete controller implementation.
-        from termin.editor_core.resource_manager import ResourceManager
-        rm = ResourceManager.instance()
-        controller_cls = rm.get_component("EditorCameraUIController")
-        if controller_cls is not None:
-            ui_entity.add_component(controller_cls())
-
-        # Link UI entity as child of camera
-        camera_entity.transform.link(ui_entity.transform)
+        self._ensure_camera_controller(camera_entity)
 
         # Link camera to EditorEntities
         if self.editor_entities is not None:
@@ -139,13 +128,23 @@ class EditorCameraManager:
                 INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR,
             )
 
-        for child in camera_entity.transform.children:
-            child_entity = child.entity
-            if child_entity is None:
-                continue
-            ui_comp = child_entity.get_component_by_type("UIComponent")
-            if ui_comp is not None:
-                ui_comp.input_source_mask = INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR
+    def _ensure_camera_controller(self, camera_entity: Entity):
+        """Attach serialized mode state and optional frontend projection."""
+
+        from termin.editor_core.resource_manager import ResourceManager
+
+        controller_cls = ResourceManager.instance().get_component("EditorCameraUIController")
+        if controller_cls is None:
+            return None
+        controller = camera_entity.get_component(controller_cls)
+        if controller is None:
+            controller = controller_cls()
+            camera_entity.add_component(controller)
+        if self._camera_overlay_factory is not None:
+            overlay = self._camera_overlay_factory(camera_entity, controller)
+            if overlay is not None:
+                camera_entity.transform.link(overlay.transform)
+        return controller
 
     @property
     def orbit_controller(self) -> OrbitCameraController | None:
@@ -256,6 +255,20 @@ class EditorCameraManager:
         # Get scene for handle resolution during deserialization
         # TcScene is now a non-owning reference, no need for scene_ref()
         scene_ref = self._scene
+
+        # Before the native viewport projection existed, this controller lived
+        # on the tcgui-only ``editor_ui`` child. Its state is frontend-neutral,
+        # so migrate those persisted fields onto the camera component owner.
+        legacy_overlay_components = data.get("editor_ui", [])
+        camera_components = data.setdefault("camera", [])
+        if not any(
+            item.get("type") == "EditorCameraUIController"
+            for item in camera_components
+        ):
+            for item in legacy_overlay_components:
+                if item.get("type") == "EditorCameraUIController":
+                    camera_components.append(item)
+                    break
 
         for ent in entities:
             components_data = data.get(ent.name)
