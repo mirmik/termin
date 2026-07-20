@@ -87,12 +87,10 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     component_name = "OwnerContextProbeComponent"
     component_registry = ComponentRegistry.instance()
     inspect_registry = InspectRegistry.instance()
-
     try:
         component_registry.unregister_python(component_name)
     except AttributeError:
         component_registry.unregister(component_name)
-    inspect_registry.unregister_type(component_name)
     unregister_module_owner(module_id)
 
     try:
@@ -124,7 +122,7 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
 
 
 def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
-    from termin.inspect import InspectRegistry, _inspect_native
+    from termin.inspect import _inspect_native
     from termin.render_framework import (
         PythonFramePass,
         tc_pass_registry_has,
@@ -138,13 +136,11 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
 
     module_id = "owner_context_pass_probe"
     pass_name = "OwnerContextProbeFramePass"
-    inspect_registry = InspectRegistry.instance()
 
     try:
         tc_pass_registry_unregister_python(pass_name)
     except Exception:
         pass
-    inspect_registry.unregister_type(pass_name)
     register_loaded_python_passes()
 
     try:
@@ -172,7 +168,6 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
         assert not tc_pass_registry_has(pass_name)
     finally:
         tc_pass_registry_unregister_python(pass_name)
-        inspect_registry.unregister_type(pass_name)
         unregister_module_owner(module_id)
 
 
@@ -227,11 +222,9 @@ def test_ui_component_and_pass_use_canonical_paths() -> None:
         assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
         assert UIComponent.__module__ == "termin.ui_components.component"
     finally:
-        from termin.inspect import InspectRegistry
         from termin.scene import ComponentRegistry
 
         ComponentRegistry.instance().unregister_python("UIComponent")
-        InspectRegistry.instance().unregister_type("UIComponent")
 
 
 def test_render_config_types_use_canonical_paths() -> None:

@@ -183,7 +183,7 @@ int test_module_owner_registration_cleanup() {
     auto& inspect = tc::InspectRegistry::instance();
 
     components.unregister("OwnerScopedComponent");
-    inspect.unregister_type("OwnerScopedComponent");
+    tc_runtime_type_registry_unregister_type("OwnerScopedComponent");
     TEST_ASSERT(register_owner_scoped_component(module_id),
                 "owned component descriptor committed");
 
@@ -203,19 +203,18 @@ int test_module_owner_registration_cleanup() {
     TEST_ASSERT(tc_runtime_type_registry_unregister_owner(module_id) == 0,
                 "runtime owner cleanup idempotent");
 
-    components.register_native(
-        "OwnerScopedComponent",
-        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
-        nullptr,
-        "CxxComponent"
-    );
-    TEST_ASSERT(components.owner_of("OwnerScopedComponent").empty(),
-                "unowned component registration remains unowned");
+    constexpr const char* standalone_owner = "standalone_owner_cleanup_test";
+    auto standalone = termin::ComponentTypeDescriptorBuilder::native<OwnerScopedComponent>(
+        "OwnerScopedComponent", standalone_owner);
+    TEST_ASSERT(standalone.commit(), "standalone descriptor committed");
+    TEST_ASSERT(components.owner_of("OwnerScopedComponent") == standalone_owner,
+                "standalone component has explicit owner");
     TEST_ASSERT(components.unregister_owner(module_id) == 0,
-                "owner cleanup does not remove unowned component");
+                "unrelated owner cleanup does not remove component");
     TEST_ASSERT(components.has("OwnerScopedComponent"),
-                "unowned component survives owner cleanup");
-    components.unregister("OwnerScopedComponent");
+                "explicitly owned component survives unrelated cleanup");
+    TEST_ASSERT(components.unregister_owner(standalone_owner) == 1,
+                "standalone owner cleanup removes component");
 
     std::cout << "  Module owner cleanup: PASS\n";
     return 0;
@@ -229,7 +228,7 @@ int test_module_owner_cleanup_prepares_live_components() {
     auto& inspect = tc::InspectRegistry::instance();
 
     components.unregister("OwnerScopedComponent");
-    inspect.unregister_type("OwnerScopedComponent");
+    tc_runtime_type_registry_unregister_type("OwnerScopedComponent");
     TEST_ASSERT(register_owner_scoped_component(module_id),
                 "owned component descriptor committed");
 
@@ -936,12 +935,22 @@ int test_component_is_a_after_rejected_parent_cycle() {
     tc_runtime_type_registry_unregister_type(child_name);
     tc_runtime_type_registry_unregister_type(root_name);
 
-    TEST_ASSERT(tc_runtime_type_registry_set_parent(root_name, nullptr),
-                "cycle guard root registered");
-    TEST_ASSERT(tc_runtime_type_registry_set_parent(child_name, root_name),
-                "cycle guard child registered");
-    TEST_ASSERT(!tc_runtime_type_registry_set_parent(root_name, child_name),
-                "transitive parent cycle rejected");
+    auto root = termin::ComponentTypeDescriptorBuilder::abstract_native(
+        root_name, "termin-scene-cycle-test");
+    TEST_ASSERT(root.commit(), "cycle guard root registered");
+    auto child = termin::ComponentTypeDescriptorBuilder::abstract_native(
+        child_name, "termin-scene-cycle-test", root_name);
+    TEST_ASSERT(child.commit(), "cycle guard child registered");
+    termin::ComponentTypeDescriptorBuilder rejected(
+        root_name,
+        "termin-scene-cycle-test",
+        child_name,
+        nullptr,
+        nullptr,
+        TC_CXX_COMPONENT,
+        true,
+        true);
+    TEST_ASSERT(!rejected.commit(), "duplicate descriptor cannot introduce a cycle");
     TEST_ASSERT(tc_component_registry_is_a(child_name, root_name),
                 "valid inheritance remains queryable after rejection");
     TEST_ASSERT(!tc_component_registry_is_a(root_name, child_name),

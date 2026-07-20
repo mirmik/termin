@@ -154,32 +154,39 @@ void set_pass_int_field(tc_pass* pass, const char* path, int field_value) {
 }
 
 void register_engine_owned_inspect_probe() {
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.unregister_type(kEngineOwnedProbeType);
-    inspect.add<EngineOwnedProbe, int>(
+    tc_runtime_type_registry_unregister_type(kEngineOwnedProbeType);
+    tc::InspectFacetBuilder inspect(kEngineOwnedProbeType);
+    if (!inspect.add<EngineOwnedProbe, int>(
         kEngineOwnedProbeType,
         &EngineOwnedProbe::value,
         "value",
         "Engine Value",
         "int"
-    );
-}
-
-void create_unowned_module_inspect_shell() {
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.unregister_type(kComponentType);
-    inspect.set_type_parent(kComponentType, "Component");
+    )) {
+        throw std::runtime_error(inspect.error());
+    }
+    auto* descriptor = tc_runtime_type_descriptor_create(
+        kEngineOwnedProbeType, "termin-engine-test", nullptr);
+    if (!descriptor) {
+        throw std::runtime_error("failed to create engine-owned inspect descriptor");
+    }
+    if (!inspect.attach_to(descriptor)) {
+        tc_runtime_type_descriptor_destroy(descriptor);
+        throw std::runtime_error("failed to attach engine-owned inspect facet");
+    }
+    if (!tc_runtime_type_registry_commit_descriptor(descriptor)) {
+        throw std::runtime_error("failed to commit engine-owned inspect descriptor");
+    }
 }
 
 void register_engine_owned_component_probe() {
     auto& components = termin::ComponentRegistry::instance();
     components.unregister(kEngineOwnedProbeComponent);
-    components.register_native(
-        kEngineOwnedProbeComponent,
-        &termin::CxxComponentFactoryData<EngineOwnedProbeComponent>::create,
-        nullptr,
-        "CxxComponent"
-    );
+    auto descriptor = termin::ComponentTypeDescriptorBuilder::native<EngineOwnedProbeComponent>(
+        kEngineOwnedProbeComponent, "termin-engine-test");
+    if (!descriptor.commit()) {
+        throw std::runtime_error("failed to commit engine-owned component descriptor");
+    }
 }
 
 int engine_owned_probe_value(int field_value) {
@@ -196,8 +203,9 @@ int engine_owned_probe_value(int field_value) {
 
 bool engine_owned_probe_intact(const char* step, std::string& error) {
     const std::string prefix = std::string("engine-owned inspect type survives ") + step + ": ";
-    if (!tc::InspectRegistry::instance().owner_of(kEngineOwnedProbeType).empty()) {
-        error = prefix + "owner remains empty";
+    if (tc::InspectRegistry::instance().owner_of(kEngineOwnedProbeType) !=
+        "termin-engine-test") {
+        error = prefix + "owner remains unchanged";
         return false;
     }
     if (tc::InspectRegistry::instance().find_field(kEngineOwnedProbeType, "value") == nullptr) {
@@ -219,8 +227,8 @@ bool engine_owned_probe_intact(const char* step, std::string& error) {
 bool engine_owned_component_probe_intact(const char* step, std::string& error) {
     const std::string prefix = std::string("engine-owned component type survives ") + step + ": ";
     auto& components = termin::ComponentRegistry::instance();
-    if (!components.owner_of(kEngineOwnedProbeComponent).empty()) {
-        error = prefix + "owner remains empty";
+    if (components.owner_of(kEngineOwnedProbeComponent) != "termin-engine-test") {
+        error = prefix + "owner remains unchanged";
         return false;
     }
     if (!components.has(kEngineOwnedProbeComponent)) {
@@ -250,7 +258,6 @@ int run_cpp_module_hot_reload_smoke() {
     tc::register_builtin_cpp_kinds();
     termin::register_builtin_render_pass_types();
     register_engine_owned_inspect_probe();
-    create_unowned_module_inspect_shell();
     register_engine_owned_component_probe();
 
     TempDir tmp;
@@ -418,7 +425,7 @@ int run_cpp_module_hot_reload_smoke() {
     tc_pipeline_destroy(pipeline);
     runtime.unload_module(kModuleId);
     termin::ComponentRegistry::instance().unregister(kEngineOwnedProbeComponent);
-    tc::InspectRegistry::instance().unregister_type(kEngineOwnedProbeType);
+    tc_runtime_type_registry_unregister_type(kEngineOwnedProbeType);
     return 0;
 }
 

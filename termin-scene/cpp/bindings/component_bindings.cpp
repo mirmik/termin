@@ -117,14 +117,8 @@ void bind_component_registry(nb::module_& m) {
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
-        .def("set_display_name", &ComponentRegistry::set_display_name,
-            nb::arg("name"), nb::arg("display_name"))
         .def("display_name_of", &ComponentRegistry::display_name_of, nb::arg("name"))
-        .def("set_category", &ComponentRegistry::set_category,
-            nb::arg("name"), nb::arg("category"))
         .def("category_of", &ComponentRegistry::category_of, nb::arg("name"))
-        .def("register_requirement", &ComponentRegistry::register_requirement,
-            nb::arg("name"), nb::arg("required_name"))
         .def("requirements_of", &ComponentRegistry::requirements_of, nb::arg("name"))
         .def("get_info", [](ComponentRegistry& reg, const std::string& name) {
             nb::dict info;
@@ -171,9 +165,6 @@ void bind_component_registry(nb::module_& m) {
             return ComponentRegistryPython::list_python();
         })
         .def("clear", &ComponentRegistry::clear)
-        .def_static("set_capability", &ComponentRegistry::set_capability,
-            nb::arg("name"), nb::arg("cap_id"), nb::arg("enabled"),
-            "Enable or disable a capability for a component type")
         .def_static("has_capability", &ComponentRegistry::has_capability,
             nb::arg("name"), nb::arg("cap_id"),
             "Check whether a component type has a capability")

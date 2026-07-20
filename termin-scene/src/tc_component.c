@@ -18,7 +18,6 @@ static void* g_prepare_unload_user_data = NULL;
 #define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 
 typedef struct tc_component_facet_payload {
-    const char* type_name;
     tc_component_factory factory;
     void* factory_userdata;
     tc_component_kind kind;
@@ -30,12 +29,6 @@ typedef struct tc_component_facet_payload {
     size_t requirement_count;
     size_t requirement_capacity;
 } tc_component_facet_payload;
-
-void tc_component_registry_set_capability(
-    const char* type_name,
-    tc_component_cap_id cap_id,
-    bool enabled
-);
 
 bool tc_component_registry_has_capability(
     const char* type_name,
@@ -73,26 +66,6 @@ static bool component_facet_has_requirement(
         }
     }
 
-    return false;
-}
-
-static bool can_register_component_type(
-    const char* type_name,
-    const char* registration_kind
-) {
-    tc_component_facet_payload* existing = component_facet(type_name);
-    if (!existing) {
-        return true;
-    }
-
-    const char* existing_owner = tc_runtime_type_registry_get_owner(type_name);
-    tc_log(
-        TC_LOG_DEBUG,
-        "[ComponentRegistry] Ignoring legacy %s registration for existing type '%s' owned by '%s'",
-        registration_kind,
-        type_name,
-        existing_owner ? existing_owner : "<none>"
-    );
     return false;
 }
 
@@ -220,44 +193,6 @@ static bool prepare_component_facet_unload(
     );
 }
 
-static tc_component_facet_payload* ensure_component_facet(
-    const char* type_name
-) {
-    tc_component_facet_payload* facet = component_facet(type_name);
-    if (facet) {
-        tc_runtime_type_registry_set_facet_with_lifecycle(
-            type_name,
-            TC_RUNTIME_TYPE_FACET_COMPONENT,
-            facet,
-            destroy_component_facet,
-            prepare_component_facet_unload,
-            1
-        );
-        return facet;
-    }
-
-    facet = (tc_component_facet_payload*)calloc(1, sizeof(tc_component_facet_payload));
-    if (!facet) {
-        tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to allocate component facet for '%s'", type_name);
-        return NULL;
-    }
-    facet->type_name = tc_intern_string(type_name);
-    facet->kind = TC_CXX_COMPONENT;
-
-    if (!tc_runtime_type_registry_set_facet_with_lifecycle(
-            type_name,
-            TC_RUNTIME_TYPE_FACET_COMPONENT,
-            facet,
-            destroy_component_facet,
-            prepare_component_facet_unload,
-            1
-        )) {
-        free(facet);
-        return NULL;
-    }
-    return facet;
-}
-
 static bool tc_component_link_runtime_type(
     tc_component* c,
     const char* type_name
@@ -285,77 +220,6 @@ static bool tc_component_link_runtime_type(
 // ============================================================================
 // Registry Implementation
 // ============================================================================
-
-void tc_component_registry_register(
-    const char* type_name,
-    tc_component_factory factory,
-    void* factory_userdata,
-    tc_component_kind kind
-) {
-    tc_component_registry_register_with_parent(type_name, factory, factory_userdata, kind, NULL);
-}
-
-bool tc_component_registry_register_with_parent(
-    const char* type_name,
-    tc_component_factory factory,
-    void* factory_userdata,
-    tc_component_kind kind,
-    const char* parent_type_name
-) {
-    if (!type_name) return false;
-
-    if (!can_register_component_type(type_name, "component")) {
-        return false;
-    }
-
-    if (tc_runtime_type_registry_ensure_type(type_name)) {
-        if (parent_type_name) {
-            tc_runtime_type_registry_set_parent(type_name, parent_type_name);
-        }
-        tc_component_facet_payload* facet = ensure_component_facet(type_name);
-        if (facet) {
-            facet->factory = factory;
-            facet->factory_userdata = factory_userdata;
-            facet->kind = kind;
-            facet->is_abstract = false;
-            return true;
-        }
-        tc_log(TC_LOG_ERROR,
-               "[ComponentRegistry] failed to create component facet for '%s'",
-               type_name);
-        return false;
-    }
-
-    tc_log(TC_LOG_ERROR,
-           "[ComponentRegistry] failed to register component type '%s'",
-           type_name);
-    return false;
-}
-
-void tc_component_registry_register_abstract(
-    const char* type_name,
-    tc_component_kind kind,
-    const char* parent_type_name
-) {
-    if (!type_name) return;
-
-    if (!can_register_component_type(type_name, "abstract component")) {
-        return;
-    }
-
-    if (tc_runtime_type_registry_ensure_type(type_name)) {
-        if (parent_type_name) {
-            tc_runtime_type_registry_set_parent(type_name, parent_type_name);
-        }
-        tc_component_facet_payload* facet = ensure_component_facet(type_name);
-        if (facet) {
-            facet->factory = NULL;
-            facet->factory_userdata = NULL;
-            facet->kind = kind;
-            facet->is_abstract = true;
-        }
-    }
-}
 
 void tc_component_registry_unregister(const char* type_name) {
     if (!type_name) return;
@@ -546,33 +410,6 @@ bool tc_component_registry_is_a(
     return false;
 }
 
-void tc_component_registry_add_requirement(
-    const char* type_name,
-    const char* required_type_name
-) {
-    if (!type_name || !required_type_name) return;
-
-    tc_component_facet_payload* facet = component_facet(type_name);
-    if (!facet) return;
-
-    if (component_facet_has_requirement(facet, required_type_name)) {
-        return;
-    }
-
-    if (facet->requirement_count >= facet->requirement_capacity) {
-        size_t new_cap = facet->requirement_capacity == 0 ? 4 : facet->requirement_capacity * 2;
-        const char** new_arr = (const char**)realloc(
-            facet->requirements,
-            new_cap * sizeof(const char*)
-        );
-        if (!new_arr) return;
-        facet->requirements = new_arr;
-        facet->requirement_capacity = new_cap;
-    }
-
-    facet->requirements[facet->requirement_count++] = tc_intern_string(required_type_name);
-}
-
 size_t tc_component_registry_requirement_count(const char* type_name) {
     tc_component_facet_payload* facet = component_facet(type_name);
     return facet ? facet->requirement_count : 0;
@@ -604,40 +441,12 @@ bool tc_component_registry_is_abstract(const char* type_name) {
     return facet ? facet->is_abstract : false;
 }
 
-void tc_component_registry_set_display_name(
-    const char* type_name,
-    const char* display_name
-) {
-    if (!type_name) return;
-
-    tc_component_facet_payload* facet = component_facet(type_name);
-    if (!facet) return;
-
-    facet->display_name = (display_name && display_name[0])
-        ? tc_intern_string(display_name)
-        : NULL;
-}
-
 const char* tc_component_registry_get_display_name(const char* type_name) {
     tc_component_facet_payload* facet = component_facet(type_name);
     if (facet && facet->display_name && facet->display_name[0]) {
         return facet->display_name;
     }
     return type_name ? type_name : "";
-}
-
-void tc_component_registry_set_category(
-    const char* type_name,
-    const char* category
-) {
-    if (!type_name) return;
-
-    tc_component_facet_payload* facet = component_facet(type_name);
-    if (!facet) return;
-
-    facet->category = (category && category[0])
-        ? tc_intern_string(category)
-        : NULL;
 }
 
 const char* tc_component_registry_get_category(const char* type_name) {
@@ -668,29 +477,9 @@ static bool collect_component_type_with_capability(const char* type_name, void* 
     tc_component_facet_payload* facet = component_facet(type_name);
     if (facet &&
         (facet->capability_mask & ctx->capability_mask) != 0) {
-        ctx->out_names[ctx->count++] = facet->type_name;
+        ctx->out_names[ctx->count++] = type_name;
     }
     return true;
-}
-
-void tc_component_registry_set_capability(
-    const char* type_name,
-    tc_component_cap_id cap_id,
-    bool enabled
-) {
-    if (!type_name) return;
-
-    tc_component_facet_payload* facet = component_facet(type_name);
-    if (!facet) return;
-
-    uint32_t slot = 0;
-    if (!tc_component_capability_slot(cap_id, &slot)) return;
-
-    if (enabled) {
-        facet->capability_mask |= (UINT64_C(1) << slot);
-    } else {
-        facet->capability_mask &= ~(UINT64_C(1) << slot);
-    }
 }
 
 bool tc_component_registry_has_capability(

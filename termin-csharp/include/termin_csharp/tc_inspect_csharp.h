@@ -5,15 +5,20 @@
 #define TC_INSPECT_CSHARP_H
 
 #include "inspect/tc_inspect.h"
+#include "inspect/tc_runtime_type_registry.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Register an inspectable field for a C# component type.
-// Strings are copied internally — caller does not need to keep them alive.
-TC_API void tc_inspect_csharp_register_field(
-    const char* type_name,
+typedef struct tc_csharp_inspect_descriptor tc_csharp_inspect_descriptor;
+
+// Stage a complete C# inspect facet before publishing the runtime type.
+TC_API tc_csharp_inspect_descriptor* tc_csharp_inspect_descriptor_create(
+    const char* type_name
+);
+TC_API bool tc_csharp_inspect_descriptor_add_field(
+    tc_csharp_inspect_descriptor* descriptor,
     const char* path,
     const char* label,
     const char* kind,       // "double", "bool", "string", "vec3", etc.
@@ -21,9 +26,13 @@ TC_API void tc_inspect_csharp_register_field(
     double max,
     double step
 );
-
-// Mark a C# type as registered (even if it has no fields).
-TC_API void tc_inspect_csharp_register_type(const char* type_name);
+TC_API bool tc_csharp_inspect_descriptor_attach(
+    tc_csharp_inspect_descriptor* inspect_descriptor,
+    tc_runtime_type_descriptor* runtime_descriptor
+);
+TC_API void tc_csharp_inspect_descriptor_destroy(
+    tc_csharp_inspect_descriptor* descriptor
+);
 
 // C# inspect getter/setter callbacks (set once at initialization).
 // These are called from the inspect dispatcher when accessing C# component fields.

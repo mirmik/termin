@@ -85,33 +85,34 @@ public:
     }
 };
 
-static termin::ComponentRegistrar<PrefabRefProbe>
-    prefab_ref_probe_registrar("PrefabRefProbe", "CxxComponent");
-static termin::ComponentRegistrar<PrefabRefProbeV2>
-    prefab_ref_probe_v2_registrar("PrefabRefProbeV2", "CxxComponent");
-
-void register_inspect() {
+int register_inspect() {
     tc::register_cpp_handle_kind<termin::Entity>("entity");
     tc::register_cpp_handle_kind<TestResourceHandle>("test_resource");
-    tc::InspectRegistry::instance().add_handle(
-        "PrefabRefProbe",
-        &PrefabRefProbe::target,
-        "target",
-        "Target",
-        "entity"
-    );
-    tc::InspectRegistry::instance().add<PrefabRefProbe, double>(
-        "PrefabRefProbe", &PrefabRefProbe::weight, "weight", "Weight", "double"
-    );
-    tc::InspectRegistry::instance().add<PrefabRefProbe, std::vector<std::string>>(
-        "PrefabRefProbe", &PrefabRefProbe::labels, "labels", "Labels", "list[string]"
-    );
-    tc::InspectRegistry::instance().add<PrefabRefProbe, TestResourceHandle>(
-        "PrefabRefProbe", &PrefabRefProbe::resource, "resource", "Resource", "test_resource"
-    );
-    tc::InspectRegistry::instance().add<PrefabRefProbeV2, double>(
-        "PrefabRefProbeV2", &PrefabRefProbeV2::gain, "gain", "Gain", "double"
-    );
+
+    auto probe = termin::ComponentTypeDescriptorBuilder::native<PrefabRefProbe>(
+        "PrefabRefProbe", "termin-prefab-test");
+    auto& probe_inspect = probe.inspect();
+    TEST_ASSERT((probe_inspect.add<PrefabRefProbe, termin::Entity>(
+        "PrefabRefProbe", &PrefabRefProbe::target, "target", "Target", "entity")),
+        "target field should stage");
+    TEST_ASSERT((probe_inspect.add<PrefabRefProbe, double>(
+        "PrefabRefProbe", &PrefabRefProbe::weight, "weight", "Weight", "double")),
+        "weight field should stage");
+    TEST_ASSERT((probe_inspect.add<PrefabRefProbe, std::vector<std::string>>(
+        "PrefabRefProbe", &PrefabRefProbe::labels, "labels", "Labels", "list[string]")),
+        "labels field should stage");
+    TEST_ASSERT((probe_inspect.add<PrefabRefProbe, TestResourceHandle>(
+        "PrefabRefProbe", &PrefabRefProbe::resource, "resource", "Resource", "test_resource")),
+        "resource field should stage");
+    TEST_ASSERT(probe.commit(), "PrefabRefProbe descriptor should commit");
+
+    auto probe_v2 = termin::ComponentTypeDescriptorBuilder::native<PrefabRefProbeV2>(
+        "PrefabRefProbeV2", "termin-prefab-test");
+    TEST_ASSERT((probe_v2.inspect().add<PrefabRefProbeV2, double>(
+        "PrefabRefProbeV2", &PrefabRefProbeV2::gain, "gain", "Gain", "double")),
+        "gain field should stage");
+    TEST_ASSERT(probe_v2.commit(), "PrefabRefProbeV2 descriptor should commit");
+    return 0;
 }
 
 nos::trent source_hierarchy() {
@@ -192,7 +193,7 @@ nos::trent source_hierarchy() {
 int main() {
     tc_inspect_kind_core_init();
     termin::register_builtin_scene_component_types();
-    register_inspect();
+    TEST_ASSERT(register_inspect() == 0, "test descriptors should register");
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("prefab-instantiator-test");
     termin::Entity parent = scene.create_entity("Parent");

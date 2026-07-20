@@ -8,6 +8,43 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def test_runtime_types_have_no_incremental_publication_api() -> None:
+    forbidden = (
+        "tc_runtime_type_registry_ensure_type",
+        "tc_runtime_type_registry_set_owner",
+        "tc_runtime_type_registry_set_parent",
+        "tc_runtime_type_registry_set_facet",
+        "tc_runtime_type_registry_remove_facet",
+        "tc_component_registry_register(",
+        "tc_component_registry_register_with_parent",
+        "tc_component_registry_register_abstract",
+        "tc_pass_registry_register(",
+        "TC_MODULE_INSPECT_",
+        "ComponentRegistrar<",
+        "register_python_fields\"",
+    )
+    source_roots = [
+        path
+        for path in REPO_ROOT.iterdir()
+        if path.is_dir() and path.name.startswith("termin-")
+    ]
+    suffixes = {".h", ".hpp", ".c", ".cc", ".cpp", ".cxx", ".py", ".cs"}
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*"):
+            relative_parts = path.relative_to(root).parts
+            if path.suffix not in suffixes or any(
+                part in {"tests", "docs", "build", "sdk"} for part in relative_parts
+            ):
+                continue
+            text = _read_text(path)
+            for symbol in forbidden:
+                if symbol in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {symbol}")
+
+    assert offenders == []
+
+
 def test_scene_owns_component_ref_and_entity_binding_helpers() -> None:
     scene_component_ref_binding = (
         REPO_ROOT / "termin-scene/include/termin/bindings/tc_component_ref_bindings.hpp"
