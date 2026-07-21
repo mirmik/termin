@@ -135,6 +135,24 @@ def test_refresh_uses_debug_targets_not_viewport_list():
     assert model.get_current_pipeline() is pipeline
 
 
+def test_connect_holds_selected_target_rendering_until_disconnect():
+    pipeline = _Pipeline("inactive-display")
+    render_states = []
+    target = FramegraphDebugTarget(
+        source=object(),
+        label="Display / inactive",
+        get_pipeline=lambda: pipeline,
+        set_render_active=render_states.append,
+    )
+    model = FramegraphDebuggerModel(_Controller([target]), _Core(), object())
+    model.refresh_viewports()
+
+    model.connect()
+    model.disconnect()
+
+    assert render_states == [True, False]
+
+
 def test_format_fbo_info_uses_color_capture_info_only():
     core = _Core()
     core.capture._has_capture = True

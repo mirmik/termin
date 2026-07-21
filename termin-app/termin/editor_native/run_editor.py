@@ -1034,7 +1034,14 @@ def _compose_native_editor(
 
     from termin.editor_core.rendering_model import RenderingModel
 
-    rendering_model = RenderingModel(engine.rendering_manager)
+    rendering_model = RenderingModel(
+        engine.rendering_manager,
+        set_debug_display_active=(
+            None
+            if display_workspace is None
+            else display_workspace.set_debug_display_active
+        ),
+    )
     rendering_factory_registration = None
     pipeline_reload_binding = None
     if display_workspace is not None:

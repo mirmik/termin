@@ -542,14 +542,47 @@ def test_framegraph_targets_do_not_duplicate_viewport_owned_managed_target(monke
     viewport = _Viewport()
     viewport.managed_by_scene_pipeline = ""
     viewport.render_target = target
-    manager.displays = [types.SimpleNamespace(viewports=[viewport])]
+    display = types.SimpleNamespace(viewports=[viewport])
+    manager.displays = [display]
     manager.managed_render_targets = [target]
+    debug_render_states = []
 
-    targets = RenderingModel(manager).get_framegraph_debug_targets_info()
+    targets = RenderingModel(
+        manager,
+        set_debug_display_active=lambda selected, active: debug_render_states.append(
+            (selected, active)
+        ),
+    ).get_framegraph_debug_targets_info()
 
     assert len(targets) == 1
     assert targets[0].source is target
     assert targets[0].label == "Display / Viewport / MainRT"
+    targets[0].set_render_active(True)
+    targets[0].set_render_active(False)
+    assert debug_render_states == [(display, True), (display, False)]
+
+
+def test_standalone_framegraph_target_requests_all_displays_for_debug_render(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    manager = _Manager()
+    manager.displays = []
+    target = _RenderTarget("StandaloneRT", pool)
+    target.pipeline = _Pipeline("Standalone")
+    manager.managed_render_targets = [target]
+    debug_render_states = []
+    targets = RenderingModel(
+        manager,
+        set_debug_display_active=lambda selected, active: debug_render_states.append(
+            (selected, active)
+        ),
+    ).get_framegraph_debug_targets_info()
+
+    targets[0].set_render_active(True)
+    targets[0].set_render_active(False)
+
+    assert debug_render_states == [(None, True), (None, False)]
 
 
 def test_framegraph_scene_pipeline_lookup_uses_explicit_topology(monkeypatch):
