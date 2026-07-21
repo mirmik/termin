@@ -215,10 +215,14 @@ TEST_CASE("Graph compiler treats render target input as external resources")
     CHECK(tc_frame_graph_get_error(fg) == TC_FG_OK);
 
     bool found_fbo = false;
+    bool found_external = false;
     for (size_t i = 0; i < pipeline->spec_count(); i++) {
         const ResourceSpec* spec = pipeline->get_spec_at(i);
         REQUIRE(spec != nullptr);
-        CHECK(spec->resource != "RT_COLOR");
+        if (spec->resource == "RT_COLOR") {
+            found_external = true;
+            CHECK(spec->resource_type == "external_color");
+        }
         if (spec->resource == "fbo_1") {
             found_fbo = true;
             REQUIRE(spec->format.has_value());
@@ -226,6 +230,7 @@ TEST_CASE("Graph compiler treats render target input as external resources")
         }
     }
     CHECK(found_fbo);
+    CHECK(found_external);
 
     pipeline->destroy();
     delete pipeline;
@@ -299,7 +304,18 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
     REQUIRE(pipeline->pass_count() == 3u);
-    CHECK(pipeline->spec_count() == 1u);
+    REQUIRE(pipeline->spec_count() == 2u);
+    bool found_external = false;
+    bool found_output = false;
+    for (const ResourceSpec& spec : pipeline->specs()) {
+        if (spec.resource == "RT_COLOR") {
+            found_external = true;
+            CHECK(spec.resource_type == "external_color");
+        }
+        if (spec.resource == "DepthPass_1_output_res") found_output = true;
+    }
+    CHECK(found_external);
+    CHECK(found_output);
 
     termin::TcPassRef pass(pipeline->get_pass_at(1));
     CHECK(pass.type_name() == "DepthPass");
@@ -383,7 +399,9 @@ TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO")
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
     CHECK(pipeline->pass_count() == 4u);
-    CHECK(pipeline->spec_count() == 0u);
+    REQUIRE(pipeline->spec_count() == 1u);
+    CHECK(pipeline->specs()[0].resource == "RT_COLOR");
+    CHECK(pipeline->specs()[0].resource_type == "external_color");
     termin::TcPassRef join_pass(pipeline->get_pass_at(2));
     REQUIRE(join_pass.type_name() == "GraphAliasPass");
     const char* aliases[4];

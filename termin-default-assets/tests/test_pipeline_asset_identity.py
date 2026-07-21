@@ -111,6 +111,49 @@ def test_pipeline_reload_keeps_live_resource_on_failure_and_commits_atomically(t
         assert asset.version == 0
 
         pipeline_path.write_text(
+            json.dumps(
+                {
+                    "uuid": "pipeline-uuid",
+                    "passes": [],
+                    "pipeline_specs": [
+                        {"resource": "scene-fbo", "resource_type": "external"}
+                    ],
+                    "resource_views": {
+                        "scene-color": {
+                            "parent": "scene-fbo",
+                            "attachment": "colour",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert not asset.reload()
+        assert asset.cached_data is resource
+        assert resource.version == live_version
+        assert asset.version == 0
+
+        pipeline_path.write_text(
+            json.dumps(
+                {
+                    "uuid": "pipeline-uuid",
+                    "passes": [],
+                    "resource_views": {
+                        "orphan.color": {
+                            "parent": "missing-parent",
+                            "attachment": "color",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert not asset.reload()
+        assert asset.cached_data is resource
+        assert resource.version == live_version
+        assert asset.version == 0
+
+        pipeline_path.write_text(
             json.dumps({"uuid": "pipeline-uuid", "passes": []}),
             encoding="utf-8",
         )
@@ -206,13 +249,22 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
             {"type": "RenderTargetInput", "node_type": "render_target_input", "x": 10, "y": 10},
             {"type": "FBO Split", "node_type": "fbo_split", "x": 160, "y": 10},
             {"type": "FBO Join", "node_type": "fbo_join", "name": "Joined", "x": 310, "y": 10},
+            {
+                "type": "FBO Join",
+                "node_type": "fbo_join",
+                "name": "JoinedParallel",
+                "x": 310,
+                "y": 160,
+            },
             {"type": "PipelineOutput", "node_type": "pipeline_output", "x": 460, "y": 10},
         ],
         "connections": [
             {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo"},
             {"from_node": 1, "from_socket": "color", "to_node": 2, "to_socket": "color"},
             {"from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "depth"},
-            {"from_node": 2, "from_socket": "fbo", "to_node": 3, "to_socket": "color"},
+            {"from_node": 1, "from_socket": "color", "to_node": 3, "to_socket": "color"},
+            {"from_node": 1, "from_socket": "depth", "to_node": 3, "to_socket": "depth"},
+            {"from_node": 2, "from_socket": "fbo", "to_node": 4, "to_socket": "color"},
         ],
         "viewport_frames": [
             {
@@ -259,6 +311,16 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
             map(dependency_key, pass_list_resource.dependencies)
         )
         assert graph_resource.targets == pass_list_resource.targets
+        assert graph_resource.resource_views == pass_list_resource.resource_views
+        assert graph_resource.fbo_compositions == pass_list_resource.fbo_compositions
+        assert graph_resource.fbo_compositions["Joined"] == {
+            "color": "RT_COLOR.color",
+            "depth": "RT_COLOR.depth",
+        }
+        assert graph_resource.fbo_compositions["JoinedParallel"] == {
+            "color": "RT_COLOR.color",
+            "depth": "RT_COLOR.depth",
+        }
         graph_instance = manager.get_pipeline("graph")
         pass_list_instance = manager.get_pipeline("pass-list")
         try:
