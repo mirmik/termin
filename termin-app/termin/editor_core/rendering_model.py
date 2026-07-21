@@ -16,7 +16,7 @@ routing into the same model.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from termin.editor_core.signal import Signal
 
@@ -29,9 +29,15 @@ if TYPE_CHECKING:
 
 
 class RenderingModel:
-    def __init__(self, manager: "RenderingManager"):
+    def __init__(
+        self,
+        manager: "RenderingManager",
+        *,
+        set_debug_display_active: Callable[["Display | None", bool], None] | None = None,
+    ):
         self._manager = manager
         self._topology: "RenderTopology" = manager.topology
+        self._set_debug_display_active = set_debug_display_active
         self._editor_display_handle: tuple[int, int] | None = None
 
         self._selected_display: "Display | None" = None
@@ -179,6 +185,12 @@ class RenderingModel:
                         source=viewport,
                         label=label,
                         get_pipeline=lambda viewport=viewport: self._pipeline_for_viewport(viewport),
+                        set_render_active=(
+                            None
+                            if self._set_debug_display_active is None
+                            else lambda active, display=display:
+                                self._set_debug_display_active(display, active)
+                        ),
                     ))
                     continue
 
@@ -193,6 +205,12 @@ class RenderingModel:
                     label=label,
                     get_pipeline=lambda viewport=viewport, render_target=render_target:
                         self._pipeline_for_viewport_render_target(viewport, render_target),
+                    set_render_active=(
+                        None
+                        if self._set_debug_display_active is None
+                        else lambda active, display=display:
+                            self._set_debug_display_active(display, active)
+                    ),
                 ))
 
         for render_target in self._manager.managed_render_targets:
@@ -203,6 +221,11 @@ class RenderingModel:
                 source=render_target,
                 label=f"RenderTarget / {rt_name}",
                 get_pipeline=lambda render_target=render_target: render_target.pipeline,
+                set_render_active=(
+                    None
+                    if self._set_debug_display_active is None
+                    else lambda active: self._set_debug_display_active(None, active)
+                ),
             ))
 
         return result

@@ -52,6 +52,8 @@ class NativeDisplayWorkspace:
         self._render_only_active_display = bool(render_only_active_display)
         self.on_display_selected: Callable[[object], None] | None = None
         self._pages: list[NativeDisplayPage] = []
+        self._debug_render_display_handle: tuple[int, int] | None = None
+        self._debug_render_all_displays = False
         self._closed = False
         weak_owner = weakref.ref(self)
 
@@ -222,6 +224,26 @@ class NativeDisplayWorkspace:
         self._sync_display_rendering()
         self.request_render()
 
+    def set_debug_display_active(self, display: object | None, active: bool) -> None:
+        """Keep the debugger's display rendering without changing the active tab."""
+
+        if display is None:
+            if self._debug_render_all_displays == active:
+                return
+            self._debug_render_all_displays = active
+            self._sync_display_rendering()
+            self.request_render()
+            return
+        handle = self._display_handle(display)
+        next_handle = handle if active else None
+        if not active and self._debug_render_display_handle != handle:
+            return
+        if self._debug_render_display_handle == next_handle:
+            return
+        self._debug_render_display_handle = next_handle
+        self._sync_display_rendering()
+        self.request_render()
+
     def configure_viewport_input(self, display: object, viewport: object) -> None:
         """Attach simple scene input routing for a runtime viewport."""
 
@@ -303,6 +325,8 @@ class NativeDisplayWorkspace:
         if self._closed:
             return
         self._closed = True
+        self._debug_render_display_handle = None
+        self._debug_render_all_displays = False
         first_error: BaseException | None = None
         while self._pages:
             page = self._pages.pop()
@@ -364,7 +388,12 @@ class NativeDisplayWorkspace:
 
         selected = self.tabs.selected_index
         for index, display in enumerate(self.displays):
-            display.enabled = not self._render_only_active_display or index == selected
+            display.enabled = (
+                not self._render_only_active_display
+                or self._debug_render_all_displays
+                or index == selected
+                or self._display_handle(display) == self._debug_render_display_handle
+            )
 
     def _next_display_name(self) -> str:
         existing = {display.name for display in self.displays}

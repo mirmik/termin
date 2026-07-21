@@ -64,16 +64,19 @@ class FramegraphDebugTarget:
     source: object
     label: str
     get_pipeline: Callable[[], object | None]
+    set_render_active: Callable[[bool], None]
 
     def __init__(
         self,
         source: object,
         label: str,
         get_pipeline: Callable[[], object | None],
+        set_render_active: Callable[[bool], None] | None = None,
     ) -> None:
         self.source = source
         self.label = label
         self.get_pipeline = get_pipeline
+        self.set_render_active = set_render_active or (lambda _active: None)
 
 
 @dataclass(frozen=True)
@@ -115,6 +118,7 @@ class FramegraphDebuggerModel:
 
         self._frame_debugger_pass = None
         self._connected_pipeline = None
+        self._connected_target: FramegraphDebugTarget | None = None
 
         self.lists_changed = Signal()
         self.selection_changed = Signal()
@@ -651,6 +655,9 @@ class FramegraphDebuggerModel:
             for p in pipeline.passes:
                 p.set_debug_internal_point("")
                 p.clear_debug_capture()
+        if self._connected_target is not None:
+            self._connected_target.set_render_active(False)
+            self._connected_target = None
         self._connected_pipeline = None
         self._core.capture.reset_capture()
         self._core.depth_capture.reset_capture()
@@ -676,6 +683,11 @@ class FramegraphDebuggerModel:
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return
+        target = self._current_target
+        if target is None:
+            return
+        target.set_render_active(True)
+        self._connected_target = target
         self._connected_pipeline = pipeline
 
         if self._mode == "between":
