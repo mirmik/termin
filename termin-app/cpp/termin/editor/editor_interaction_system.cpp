@@ -14,6 +14,7 @@
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include <components/mesh_component.hpp>
+#include <tcbase/input_enums.hpp>
 #include <tcbase/tc_log.h>
 #include <termin/entity/component.hpp>
 #include <termin/tc_scene.hpp>
@@ -232,7 +233,7 @@ void EditorInteractionSystem::on_mouse_button(int button, int action, int mods,
         return;
     }
 
-    if (button == 0) { // LEFT
+    if (button == tcbase::mouse_button_value(tcbase::MouseButton::LEFT)) {
         if (action == TC_INPUT_PRESS) {
             _pending_press = {Vec2f{x, y}, vp, display, true};
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from tcbase import MouseButton
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
@@ -9,7 +10,6 @@ from termin.gui_native import (
     KeyCode,
     KeyEvent,
     KeyEventType,
-    PointerButton,
     PointerEvent,
     PointerEventType,
     Rect,
@@ -116,7 +116,7 @@ def test_native_dialog_service_delivers_color_from_default_button_click() -> Non
     default_button = dialog.widget.children[-2]
     bounds = default_button.bounds
     event = PointerEvent()
-    event.button = PointerButton.Left.value
+    event.button = MouseButton.LEFT.value
     event.x = bounds.x + bounds.width * 0.5
     event.y = bounds.y + bounds.height * 0.5
     event.type = PointerEventType.Down

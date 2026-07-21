@@ -54,7 +54,7 @@ void dispatch_window_input_event(tc_display_handle display, const WindowEvent& e
                 display,
                 event.pointer.framebuffer_position.x,
                 event.pointer.framebuffer_position.y,
-                static_cast<int>(event.pointer.button),
+                tcbase::mouse_button_value(event.pointer.button),
                 event.type == WindowEventType::PointerButtonPressed
                     ? TC_INPUT_PRESS : TC_INPUT_RELEASE,
                 static_cast<int>(event.pointer.modifiers),

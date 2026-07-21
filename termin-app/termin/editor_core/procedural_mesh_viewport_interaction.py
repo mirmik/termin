@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from tcbase import MouseButton, log
 from tcbase._geom_native import Vec3
 from tgfx._tgfx_native import Color4
 
@@ -129,7 +129,7 @@ class ProceduralMeshViewportInteraction:
                 return self._drag_sketch_point_to_viewport(x, y)
             return False
         if phase == "down":
-            if button != 0:
+            if button != MouseButton.LEFT.value:
                 return False
             wall_drag = self._pick_selected_wall_height_point(x, y)
             if wall_drag is not None:
