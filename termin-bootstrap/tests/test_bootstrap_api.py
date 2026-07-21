@@ -390,6 +390,47 @@ def test_runtime_shutdown_allows_later_rebootstrap():
     )
 
 
+def test_default_textures_follow_native_registry_lifecycle_across_rebootstrap():
+    _run_python(
+        """
+        from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.render.texture import get_normal_texture, get_white_texture
+        from termin.render.texture_handle import (
+            get_normal_texture_handle,
+            get_white_texture_handle,
+        )
+        from tgfx import TcTexture
+
+        bootstrap_player()
+        old_white = get_white_texture_handle()
+        old_normal = get_normal_texture_handle()
+        assert old_white.is_valid
+        assert old_normal.is_valid
+
+        first_wrapper = get_white_texture()
+        second_wrapper = get_white_texture()
+        assert first_wrapper is not second_wrapper
+        assert first_wrapper.texture_data is not second_wrapper.texture_data
+
+        shutdown_player()
+        assert not old_white.is_valid
+        assert not old_normal.is_valid
+
+        bootstrap_player()
+        new_white = get_white_texture_handle()
+        new_normal = get_normal_texture_handle()
+        assert new_white.is_valid
+        assert new_normal.is_valid
+        assert not old_white.is_valid
+        assert not old_normal.is_valid
+        assert TcTexture.from_uuid("__white_1x1__").is_valid
+        assert TcTexture.from_uuid("__normal_1x1__").is_valid
+
+        shutdown_player()
+        """
+    )
+
+
 def test_component_registry_names_survive_repeated_player_rebootstrap():
     _run_python_without_nanobind_leaks(
         """

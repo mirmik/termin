@@ -21,11 +21,14 @@ def register_builtin_shaders(rm: DefaultAssetsResourceApiMixin) -> None:
 def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register built-in placeholder textures."""
     from termin.default_assets.render.texture_asset import TextureAsset
-    from termin.render.texture import get_normal_texture, get_white_texture
+    from termin.render.texture_handle import (
+        get_normal_texture_handle,
+        get_white_texture_handle,
+    )
 
     if rm._texture_registry.get_asset("__white_1x1__") is None:
-        white_texture = get_white_texture().texture_data
-        if white_texture is not None and white_texture.is_valid:
+        white_texture = get_white_texture_handle()
+        if white_texture.is_valid:
             white_asset = TextureAsset(
                 texture_data=white_texture,
                 name="__white_1x1__",
@@ -35,8 +38,8 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
             rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
 
     if rm._texture_registry.get_asset("__normal_1x1__") is None:
-        normal_texture = get_normal_texture().texture_data
-        if normal_texture is not None and normal_texture.is_valid:
+        normal_texture = get_normal_texture_handle()
+        if normal_texture.is_valid:
             normal_asset = TextureAsset(
                 texture_data=normal_texture,
                 name="__normal_1x1__",
