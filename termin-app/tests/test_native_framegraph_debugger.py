@@ -1,4 +1,4 @@
-from termin.editor_core.signal import Signal
+from termin.engine import FrameGraphDebuggerMode
 from termin.editor_native.framegraph_debugger import (
     NativeFramegraphPreviewSurface,
     build_native_framegraph_debugger,
@@ -38,105 +38,85 @@ class _Presenter:
         return b"pixels", 64, 32
 
 
-class _Core:
-    def __init__(self):
-        self.capture = _Capture()
-        self.depth_capture = _Capture(is_depth=True)
-        self.presenter = _Presenter()
-
-
 class _PassItem:
     index = 3
+    name = "Color"
     display_name = "Color *"
 
 
 class _Target:
     def __init__(self):
-        self.source = object()
         self.label = "Editor / Main"
+        self.renderable = True
 
 
 class _Model:
     def __init__(self):
-        self.core = _Core()
+        self.capture = _Capture()
+        self.depth_capture = _Capture(is_depth=True)
+        self.presenter = _Presenter()
         self.targets = [_Target()]
-        self.current_viewport = self.targets[0].source
-        self.mode = "inside"
-        self.selected_pass_index = None
+        self.selected_target_index = None
+        self.selected_target_calls = []
+        self.mode = FrameGraphDebuggerMode.InsidePass
+        self._selected_pass_index = None
         self.selected_symbol = None
-        self.debug_source_res = ""
+        self.selected_resource = ""
         self.channel_mode = 0
-        self.debug_paused = False
+        self.paused = False
         self.highlight_hdr = False
         self.disconnect_count = 0
         self.connect_count = 0
-        self.lists_changed = Signal()
-        self.selection_changed = Signal()
-        self.info_changed = Signal()
-        self.capture_updated = Signal()
-        self.preview_params_changed = Signal()
-        self.hdr_stats_changed = Signal()
 
-    def refresh_viewports(self):
-        self.lists_changed.emit(self)
+    @property
+    def selected_pass_index(self):
+        return self._selected_pass_index
 
-    def get_passes(self):
-        return [_PassItem()]
+    @selected_pass_index.setter
+    def selected_pass_index(self, index):
+        self._selected_pass_index = index
+        self.selected_symbol = "opaque" if index is not None else ""
 
-    def get_symbols(self):
-        return ["opaque"] if self.selected_pass_index is not None else []
+    @property
+    def selected_pass(self):
+        return "Color" if self.selected_pass_index is not None else ""
 
-    def get_resources(self):
-        return ["RT_COLOR"]
-
-    def set_viewport_by_index(self, _index):
+    def refresh(self):
         pass
 
-    def set_mode(self, mode):
-        self.mode = mode
-        self.selection_changed.emit(self)
+    def passes(self):
+        return [_PassItem()]
 
-    def set_selected_pass_by_index(self, index):
-        self.selected_pass_index = index
-        self.selected_symbol = "opaque"
-        self.lists_changed.emit(self)
-        self.selection_changed.emit(self)
+    def symbols(self):
+        return ["opaque"] if self.selected_pass_index is not None else []
 
-    def set_selected_symbol(self, symbol):
-        self.selected_symbol = symbol
+    def resources(self):
+        return ["RT_COLOR"]
 
-    def set_source_resource(self, resource):
-        self.debug_source_res = resource
-        self.selection_changed.emit(self)
-
-    def set_channel_mode(self, mode):
-        self.channel_mode = mode
-        self.preview_params_changed.emit(self)
+    def select_target_at(self, index):
+        self.selected_target_calls.append(index)
+        self.selected_target_index = index
+        return True
 
     def set_paused(self, paused):
-        self.debug_paused = paused
-
-    def set_highlight_hdr(self, enabled):
-        self.highlight_hdr = enabled
-        self.preview_params_changed.emit(self)
+        self.paused = paused
 
     def analyze_hdr(self):
-        self.hdr_stats_changed.emit("HDR: none")
+        return "HDR: none"
 
-    def refresh_render_stats(self):
-        self.info_changed.emit(self)
+    def finish_frame(self):
+        pass
 
-    def notify_frame_rendered(self):
-        self.capture_updated.emit(self)
-        self.info_changed.emit(self)
-
-    def disconnect(self):
+    def cancel_request(self):
         self.disconnect_count += 1
 
     def connect(self):
         self.connect_count += 1
 
-    def format_fbo_info(self):
+    def disconnect(self):
+        self.disconnect_count += 1
+
+    def format_capture_info(self):
         return "<b>RT_COLOR</b>"
 
     def format_pipeline_info(self):
@@ -382,12 +362,14 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     )
 
     assert debugger.show()
-    assert model.connect_count == 1
+    assert model.selected_target_calls == [0]
+    assert model.selected_target_index == 0
+    assert debugger.target_combo.selected_index == 0
     assert debugger.window is window_manager.windows[-1]
     assert debugger.render_previews in debugger.window.host.callbacks
     assert model.selected_pass_index == 3
     assert model.selected_symbol == "opaque"
-    assert model.debug_source_res == "RT_COLOR"
+    assert model.selected_resource == "RT_COLOR"
     assert debugger.pass_indices == [3]
     assert debugger.pass_json.text == '{"pass": "Color"}'
     assert debugger.stats_bar.text == "Scenes: 1"
@@ -395,8 +377,19 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     assert not debugger.between_panel.visible
     assert debugger.update()
 
+    # A missing exact target must not be painted as item zero.  Reconnecting
+    # the native session will choose a live target explicitly; ordinary UI
+    # refresh remains an honest projection of the native selection.
+    model.selected_target_index = None
+    assert debugger.update()
+    assert debugger.target_combo.selected_index == -1
+    assert model.select_target_at(0)
+    assert debugger.update()
+    assert debugger.target_combo.selected_index == 0
+
     debugger.mode_combo.selected_index = 1
-    assert model.mode == "between"
+    debugger.update()
+    assert model.mode == FrameGraphDebuggerMode.BetweenPasses
     assert debugger.between_panel.visible
     first_window = debugger.window
     debugger.dismiss()
@@ -406,7 +399,6 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     assert not debugger.update()
 
     assert debugger.show()
-    assert model.connect_count == 2
     assert debugger.window is window_manager.windows[-1]
     debugger_root = debugger.root.handle
     debugger.close()

@@ -67,7 +67,7 @@ def _screenshot_tool_schema() -> dict[str, object]:
 def _framegraph_tool_schema() -> dict[str, object]:
     return {
         "name": "inspect_framegraph",
-        "description": "Inspect the running editor framegraph debugger model without opening its dialog.",
+        "description": "Inspect the running native framegraph debugger without opening its dialog.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -78,11 +78,6 @@ def _framegraph_tool_schema() -> dict[str, object]:
                 "include_pass_json": {
                     "type": "boolean",
                     "description": "Include serialized pass data when available.",
-                    "default": False,
-                },
-                "include_debugger_pass": {
-                    "type": "boolean",
-                    "description": "Include the FrameDebugger pass in pass and schedule lists.",
                     "default": False,
                 },
                 "timeout": {
@@ -100,7 +95,7 @@ def _framegraph_capture_tool_schema() -> dict[str, object]:
     return {
         "name": "capture_framegraph_resource",
         "description": (
-            "Capture a framegraph resource through the running editor FrameDebugger pass and write it as a PNG image."
+            "Capture a resource from the next matching native framegraph execution and write it as a PNG image."
         ),
         "inputSchema": {
             "type": "object",

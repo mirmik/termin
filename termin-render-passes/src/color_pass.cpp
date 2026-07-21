@@ -13,7 +13,7 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
-#include <termin/render/frame_graph_debugger_core.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
 #include <tgfx/resources/tc_shader_registry.h>
@@ -739,21 +739,20 @@ void ColorPass::execute_with_data(
 
     entity_names.clear();
     entity_names.reserve(cached_draw_calls_.size());
-    const std::string& debug_symbol = get_debug_internal_point();
+    const std::string* requested_debug_symbol = ctx.requested_internal_symbol();
+    const std::string debug_symbol = requested_debug_symbol
+        ? *requested_debug_symbol : std::string{};
     if (debug_symbol.empty()) {
         selected_symbol_timing = {};
     }
     auto capture_debug_symbol = [&](const char* entity_name) {
-        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
-            return;
-        }
-        FrameGraphCapture* capture = debug_capture();
-        if (!capture) {
+        if (!ctx.should_capture_internal(entity_name)) {
             return;
         }
 
         ctx2->end_pass();
-        capture->capture_direct_via_ctx2(ctx2, color_tex2, data.rect.width, data.rect.height);
+        ctx.capture_internal(
+            entity_name, color_tex2, data.rect.width, data.rect.height);
         selected_symbol_timing = {};
         selected_symbol_timing.name = debug_symbol;
 

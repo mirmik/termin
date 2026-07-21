@@ -165,7 +165,7 @@ surface/input-manager pointer transport удалён.
 | `termin-render/include/termin/render/execute_context.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/frame_pass.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/tgfx2_bridge.hpp` | tgfx2 типы |
-| `termin-render/include/termin/render/frame_graph_debugger_core.hpp` | tgfx2 типы |
+| `termin-render/include/termin/render/frame_graph_capture.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/shadow.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/resource_spec.hpp` | tgfx2 типы |
 

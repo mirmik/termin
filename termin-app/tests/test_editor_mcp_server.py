@@ -411,11 +411,9 @@ def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
             *,
             target_index=None,
             include_pass_json=False,
-            include_debugger_pass=False,
         ):
             assert target_index == 2
             assert include_pass_json is True
-            assert include_debugger_pass is False
             return {
                 "targets": [{"index": 2, "label": "Editor / Viewport 0"}],
                 "resources": ["hdr", "ldr"],

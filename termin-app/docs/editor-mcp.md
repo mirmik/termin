@@ -236,5 +236,4 @@ and is intended for automation/debugging. It accepts:
 
 - `target_index`: optional target index from a previous snapshot.
 - `include_pass_json`: include serialized pass data where available.
-- `include_debugger_pass`: include the debugger pass in pass and schedule lists.
 - `timeout`: seconds to wait for the editor thread to inspect the framegraph.

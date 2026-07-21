@@ -1034,14 +1034,7 @@ def _compose_native_editor(
 
     from termin.editor_core.rendering_model import RenderingModel
 
-    rendering_model = RenderingModel(
-        engine.rendering_manager,
-        set_debug_display_active=(
-            None
-            if display_workspace is None
-            else display_workspace.set_debug_display_active
-        ),
-    )
+    rendering_model = RenderingModel(engine.rendering_manager)
     rendering_factory_registration = None
     pipeline_reload_binding = None
     if display_workspace is not None:
@@ -1514,7 +1507,6 @@ def _compose_native_editor(
     )
 
     framegraph_debugger_service = EditorFramegraphDebuggerService(
-        get_rendering_controller=lambda: rendering_model,
         rendering_manager=engine.rendering_manager,
         on_request_update=request_editor_render,
     )
@@ -1522,7 +1514,7 @@ def _compose_native_editor(
         "framegraph debugger",
         build_native_framegraph_debugger(
             window_manager,
-            framegraph_debugger_service.model,
+            framegraph_debugger_service.debugger,
             request_render=request_editor_render,
         ),
         cleanup=lambda: framegraph_debugger.close(),
@@ -1882,7 +1874,7 @@ def _compose_native_editor(
                 "pipeline_editor_controller": pipeline_editor_controller,
                 "pipeline_editor": pipeline_editor,
                 "framegraph_debugger": framegraph_debugger_service,
-                "framegraph_debugger_model": framegraph_debugger_service.model,
+                "framegraph_debugger_native": framegraph_debugger_service.debugger,
                 "framegraph_debugger_view": framegraph_debugger,
                 "settings_controller": settings_controller,
                 "settings_dialog": settings_dialog,

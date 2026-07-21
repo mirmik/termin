@@ -16,7 +16,7 @@
 #include <termin/geom/mat44.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/execute_context.hpp>
-#include <termin/render/frame_graph_debugger_core.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>

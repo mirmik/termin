@@ -3,7 +3,7 @@
 
 #include <termin/render/id_pass.hpp>
 #include "termin/render/camera_capability.hpp"
-#include "termin/render/frame_graph_debugger_core.hpp"
+#include "termin/render/frame_graph_capture.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
@@ -250,23 +250,18 @@ void IdPass::execute_with_data_tgfx2(
         ctx.ctx2->use_shader_resource_layout(id_shader.shader);
     };
 
-    const std::string& debug_symbol = get_debug_internal_point();
     int current_pick_id = -1;
     float pick_r = 0.0f;
     float pick_g = 0.0f;
     float pick_b = 0.0f;
 
     auto capture_debug_symbol = [&](const char* entity_name) {
-        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
-            return;
-        }
-        FrameGraphCapture* capture = debug_capture();
-        if (!capture) {
+        if (!ctx.should_capture_internal(entity_name)) {
             return;
         }
 
         ctx.ctx2->end_pass();
-        capture->capture_direct_via_ctx2(ctx.ctx2, color_tex2, rect.width, rect.height);
+        ctx.capture_internal(entity_name, color_tex2, rect.width, rect.height);
         ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
         ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
         restore_id_raster_state();

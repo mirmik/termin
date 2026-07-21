@@ -465,10 +465,17 @@ def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
 def test_framegraph_automation_service_is_toolkit_neutral() -> None:
     legacy = REPO_ROOT / "termin-app/termin/editor_tcgui/framegraph_debugger_service.py"
     canonical = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_service.py"
+    python_model = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_model.py"
+    native_debugger = REPO_ROOT / "termin-engine/include/termin/render/frame_graph_debugger.hpp"
 
     assert not legacy.exists()
+    assert not python_model.exists()
     assert canonical.is_file()
-    assert "tcgui" not in _read_text(canonical)
+    assert native_debugger.is_file()
+    source = _read_text(canonical)
+    assert "tcgui" not in source
+    assert "FrameGraphDebugTarget" not in source
+    assert "reset_capture" not in source
 
 
 def test_launcher_controller_is_toolkit_neutral() -> None:
@@ -551,9 +558,6 @@ def test_domain_python_tests_are_outside_app_tests_package() -> None:
             "termin-engine/tests/test_default_pipeline_specs.py"
         ),
         "termin-app/tests/test_edge_flipping.py": "termin-navmesh/tests/test_edge_flipping.py",
-        "termin-app/tests/test_framegraph_internal_points.py": (
-            "termin-render/tests/test_framegraph_internal_points.py"
-        ),
         "termin-app/tests/test_funnel_algorithm.py": "termin-navmesh/tests/test_funnel_algorithm.py",
         "termin-app/tests/test_general_pose3.py": "termin-base/tests/python/test_general_pose3.py",
         "termin-app/tests/test_general_transform3.py": (

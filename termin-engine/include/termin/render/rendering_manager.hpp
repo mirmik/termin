@@ -68,6 +68,69 @@ struct SceneMountRequest {
     std::string name;
 };
 
+enum class RenderExecutionTargetKind {
+    Viewport,
+    RenderTarget,
+};
+
+struct RenderExecutionTargetId {
+    RenderExecutionTargetKind kind = RenderExecutionTargetKind::RenderTarget;
+    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+    tc_render_target_handle render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+
+    bool operator==(const RenderExecutionTargetId& other) const {
+        return kind == other.kind
+            && tc_viewport_handle_eq(viewport, other.viewport)
+            && tc_render_target_handle_eq(render_target, other.render_target);
+    }
+};
+
+// Value-only description of one target that RenderingManager can currently
+// resolve to a pipeline. Consumers must re-query before use; the handles carry
+// generations and no pointer in this snapshot extends a render object's life.
+struct RenderExecutionTargetInfo {
+    RenderExecutionTargetId id;
+    tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
+    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+    std::string label;
+    bool renderable = false;
+
+    bool operator==(const RenderExecutionTargetInfo& other) const {
+        return id == other.id
+            && tc_display_handle_eq(display, other.display)
+            && scene.index == other.scene.index
+            && scene.generation == other.scene.generation
+            && tc_pipeline_handle_eq(pipeline, other.pipeline)
+            && label == other.label
+            && renderable == other.renderable;
+    }
+};
+
+struct RenderExecutionInfo {
+    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+    std::vector<RenderExecutionTargetId> targets;
+};
+
+// Main-thread observer of actual render executions. Implementations may
+// provide one frame-local capture request. RenderingManager never retains the
+// returned request beyond the matching RenderEngine call.
+class TERMIN_ENGINE_API RenderExecutionObserver {
+public:
+    virtual ~RenderExecutionObserver() = default;
+    virtual void collect_render_demands(
+        std::vector<RenderExecutionTargetId>&
+    ) const {}
+    virtual FrameGraphCaptureRequest* prepare_render_execution(
+        const RenderExecutionInfo& execution
+    ) = 0;
+    virtual void finish_render_execution(
+        const RenderExecutionInfo& execution,
+        FrameGraphCaptureRequest* request
+    ) = 0;
+};
+
 // RenderingManager - manages displays and rendering
 //
 // Owned by EngineCore and passed explicitly to hosts and controllers.
@@ -100,6 +163,7 @@ private:
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
     std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
+    std::vector<RenderExecutionObserver*> render_execution_observers_;
 
 public:
     explicit RenderingManager(RenderTopology& topology);
@@ -136,6 +200,9 @@ public:
         RenderTargetContextProvider provider
     );
     void clear_render_target_context_provider(tc_render_target_kind kind);
+
+    void add_render_execution_observer(RenderExecutionObserver& observer);
+    void remove_render_execution_observer(RenderExecutionObserver& observer);
 
     // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
     tc_pipeline_handle create_pipeline(const std::string& name);
@@ -174,6 +241,11 @@ public:
 
     // Get all editor displays
     const std::vector<tc_display_handle>& editor_displays() const;
+
+    // Query the currently live debugger/inspection targets. This is a pull
+    // API by design: callers reconcile against actual manager state instead
+    // of relying on a loss-prone topology notification history.
+    std::vector<RenderExecutionTargetInfo> execution_targets() const;
 
     // Find display by name (searches both scene and editor displays)
     tc_display_handle get_display_by_name(const std::string& name) const;
@@ -335,10 +407,7 @@ public:
     void present_display(tc_display_handle display);
 
 private:
-    void render_planned_offscreen(
-        tc_display_handle only_display,
-        bool include_unattached_roots
-    );
+    void render_planned_offscreen(tc_display_handle only_display);
 
     // Render single viewport to its output FBO
     void render_viewport_offscreen(tc_viewport_handle viewport);
@@ -366,6 +435,14 @@ private:
         int render_height,
         std::unordered_map<std::string, RenderTargetContext>& contexts,
         std::string& default_context_name
+    );
+
+    std::vector<FrameGraphCaptureRequest*> prepare_render_execution(
+        const RenderExecutionInfo& execution
+    );
+    void finish_render_execution(
+        const RenderExecutionInfo& execution,
+        const std::vector<FrameGraphCaptureRequest*>& requests
     );
 
     // Collect lights from scene (simplified - returns empty for now)

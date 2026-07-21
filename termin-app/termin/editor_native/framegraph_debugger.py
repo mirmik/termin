@@ -1,4 +1,4 @@
-"""Native Framegraph Debugger projection over the shared debugger model."""
+"""Native UI projection over the C++ FrameGraphDebugger."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 from typing import Callable
 import weakref
 
-from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
+from termin.engine import FrameGraphDebuggerMode
 from termin.editor_native.ui_host import NativeUiWindow, NativeUiWindowManager
 from termin.gui_native import (
     Document,
@@ -142,7 +142,7 @@ class NativeFramegraphPreviewSurface:
 @dataclass
 class NativeFramegraphDebugger:
     document: Document
-    model: FramegraphDebuggerModel
+    model: object
     window_manager: NativeUiWindowManager
     root: WidgetRef
     target_combo: object
@@ -187,9 +187,11 @@ class NativeFramegraphDebugger:
             return False
         self._bind_signals()
         self._active = True
-        self.model.refresh_viewports()
+        self.model.refresh()
         self._select_initial_values()
         self.model.connect()
+        self._refresh_lists()
+        self._refresh_selection()
         self._refresh_info()
         try:
             window = self.window_manager.create_window(
@@ -212,21 +214,26 @@ class NativeFramegraphDebugger:
     def update(self) -> bool:
         if not self._active or self.window is None or self.window.closed:
             return False
-        self.model.notify_frame_rendered()
+        self.model.finish_frame()
+        self.model.refresh()
+        self._refresh_lists()
+        self._refresh_selection()
+        self._refresh_info()
+        self._capture_updated()
         return True
 
     def show_resource(self, resource_name: str) -> bool:
         if self.window is None or self.window.closed:
             self.show()
-        resources = self.model.get_resources()
+        resources = self.model.resources()
         if resource_name not in resources:
             _logger.error(
                 "Native framegraph debugger cannot select missing resource '%s'",
                 resource_name,
             )
             return False
-        self.model.set_mode("between")
-        self.model.set_source_resource(resource_name)
+        self.model.mode = FrameGraphDebuggerMode.BetweenPasses
+        self.model.selected_resource = resource_name
         return True
 
     def render_previews(self, context: object) -> None:
@@ -253,12 +260,12 @@ class NativeFramegraphDebugger:
             self.request_render()
 
     def refresh_depth(self) -> str:
-        capture = self.model.core.depth_capture
+        capture = self.model.depth_capture
         if not capture.has_capture() or not capture.capture_tex:
             text = "No depth capture"
         else:
             try:
-                result = self.model.core.presenter.read_depth_normalized(
+                result = self.model.presenter.read_depth_normalized(
                     self.device,
                     capture.capture_tex,
                 )
@@ -300,34 +307,28 @@ class NativeFramegraphDebugger:
         self._deactivate()
 
     def _select_initial_values(self) -> None:
-        passes = self.model.get_passes()
+        targets = self.model.targets
+        if self.model.selected_target_index is None and targets:
+            if not self.model.select_target_at(0):
+                _logger.error(
+                    "Native framegraph debugger failed to select initial target '%s'",
+                    targets[0].label,
+                )
+        passes = self.model.passes()
         if self.model.selected_pass_index is None and passes:
-            self.model.set_selected_pass_by_index(passes[0].index)
-        resources = self.model.get_resources()
-        if not self.model.debug_source_res and resources:
-            self.model.set_source_resource(resources[0])
+            self.model.selected_pass_index = passes[0].index
+        resources = self.model.resources()
+        if not self.model.selected_resource and resources:
+            self.model.selected_resource = resources[0]
 
     def _bind_signals(self) -> None:
-        if self._active:
-            return
-        self.model.lists_changed.connect(self._refresh_lists)
-        self.model.selection_changed.connect(self._refresh_selection)
-        self.model.info_changed.connect(self._refresh_info)
-        self.model.capture_updated.connect(self._capture_updated)
-        self.model.preview_params_changed.connect(self._preview_changed)
-        self.model.hdr_stats_changed.connect(self._hdr_stats_changed)
+        pass
 
     def _deactivate(self) -> None:
         if not self._active:
             return
         self._active = False
         self.model.disconnect()
-        self.model.lists_changed.disconnect(self._refresh_lists)
-        self.model.selection_changed.disconnect(self._refresh_selection)
-        self.model.info_changed.disconnect(self._refresh_info)
-        self.model.capture_updated.disconnect(self._capture_updated)
-        self.model.preview_params_changed.disconnect(self._preview_changed)
-        self.model.hdr_stats_changed.disconnect(self._hdr_stats_changed)
         self.main_preview.close()
         self.depth_preview.close()
 
@@ -336,28 +337,27 @@ class NativeFramegraphDebugger:
         try:
             self.target_combo.clear()
             targets = self.model.targets
-            current_target = self.model.current_viewport
-            selected_target = -1
-            for index, target in enumerate(targets):
+            for target in targets:
                 self.target_combo.add_item(target.label)
-                if target.source is current_target:
-                    selected_target = index
-            self.target_combo.selected_index = selected_target
+            selected_target = self.model.selected_target_index
+            self.target_combo.selected_index = (
+                selected_target if selected_target is not None else -1
+            )
 
             self.resource_combo.clear()
-            resources = self.model.get_resources()
+            resources = self.model.resources()
             for resource in resources:
                 self.resource_combo.add_item(resource)
             self.resource_combo.selected_index = (
-                resources.index(self.model.debug_source_res)
-                if self.model.debug_source_res in resources
+                resources.index(self.model.selected_resource)
+                if self.model.selected_resource in resources
                 else -1
             )
 
             self.pass_combo.clear()
             self.pass_indices.clear()
             selected_pass = -1
-            for row, item in enumerate(self.model.get_passes()):
+            for row, item in enumerate(self.model.passes()):
                 self.pass_combo.add_item(item.display_name)
                 self.pass_indices.append(item.index)
                 if item.index == self.model.selected_pass_index:
@@ -365,7 +365,7 @@ class NativeFramegraphDebugger:
             self.pass_combo.selected_index = selected_pass
 
             self.symbol_combo.clear()
-            symbols = self.model.get_symbols()
+            symbols = self.model.symbols()
             for symbol in symbols:
                 self.symbol_combo.add_item(symbol)
             self.symbol_combo.selected_index = (
@@ -380,18 +380,20 @@ class NativeFramegraphDebugger:
     def _refresh_selection(self, _model=None) -> None:
         self._updating = True
         try:
-            self.mode_combo.selected_index = 0 if self.model.mode == "inside" else 1
+            self.mode_combo.selected_index = (
+                0 if self.model.mode == FrameGraphDebuggerMode.InsidePass else 1
+            )
             self.channel_combo.selected_index = self.model.channel_mode
-            self.pause_check.checked = self.model.debug_paused
+            self.pause_check.checked = self.model.paused
             self.hdr_check.checked = self.model.highlight_hdr
-            self.inside_panel.visible = self.model.mode == "inside"
-            self.between_panel.visible = self.model.mode == "between"
+            self.inside_panel.visible = self.model.mode == FrameGraphDebuggerMode.InsidePass
+            self.between_panel.visible = self.model.mode == FrameGraphDebuggerMode.BetweenPasses
         finally:
             self._updating = False
         self.request_render()
 
     def _refresh_info(self, _model=None) -> None:
-        self.fbo_model.set_html(self.model.format_fbo_info())
+        self.fbo_model.set_html(self.model.format_capture_info())
         self.pipeline_model.set_html(self.model.format_pipeline_info())
         self.pass_json.text = self.model.format_pass_json()
         self.stats_bar.text = self.model.format_render_stats()
@@ -417,7 +419,7 @@ class NativeFramegraphDebugger:
 
 def build_native_framegraph_debugger(
     window_manager: NativeUiWindowManager,
-    model: FramegraphDebuggerModel,
+    model: object,
     *,
     request_render: Callable[[], None],
 ) -> NativeFramegraphDebugger:
@@ -541,15 +543,15 @@ def build_native_framegraph_debugger(
         context,
         main_canvas,
         main_root,
-        model.core.capture,
-        model.core.presenter,
+        model.capture,
+        model.presenter,
     )
     depth_preview = NativeFramegraphPreviewSurface(
         context,
         depth_canvas,
         depth_root,
-        model.core.depth_capture,
-        model.core.presenter,
+        model.depth_capture,
+        model.presenter,
         force_depth=True,
     )
     result = NativeFramegraphDebugger(
@@ -591,51 +593,66 @@ def build_native_framegraph_debugger(
         return weak_result()
 
     target_combo.connect_changed(
-        lambda index, _text: current().model.set_viewport_by_index(index)
+        lambda index, _text: current().model.select_target_at(index)
         if current() is not None and not current()._updating
         else None
     )
-    mode_combo.connect_changed(
-        lambda index, _text: current().model.set_mode("inside" if index == 0 else "between")
-        if current() is not None and not current()._updating
-        else None
-    )
+
+    def mode_changed(index: int, _text: str) -> None:
+        owner = current()
+        if owner is None or owner._updating:
+            return
+        owner.model.mode = (
+            FrameGraphDebuggerMode.InsidePass
+            if index == 0 else FrameGraphDebuggerMode.BetweenPasses
+        )
+
+    mode_combo.connect_changed(mode_changed)
 
     def pass_changed(index: int, _text: str) -> None:
         owner = current()
         if owner is None or owner._updating or not (0 <= index < len(owner.pass_indices)):
             return
-        owner.model.set_selected_pass_by_index(owner.pass_indices[index])
+        owner.model.selected_pass_index = owner.pass_indices[index]
 
     pass_combo.connect_changed(pass_changed)
-    symbol_combo.connect_changed(
-        lambda _index, text: current().model.set_selected_symbol(text or None)
-        if current() is not None and not current()._updating
-        else None
-    )
-    resource_combo.connect_changed(
-        lambda _index, text: current().model.set_source_resource(text)
-        if current() is not None and not current()._updating and text
-        else None
-    )
-    channel_combo.connect_changed(
-        lambda index, _text: current().model.set_channel_mode(index)
-        if current() is not None and not current()._updating
-        else None
-    )
+    def symbol_changed(_index: int, text: str) -> None:
+        owner = current()
+        if owner is not None and not owner._updating:
+            owner.model.selected_symbol = text or ""
+
+    symbol_combo.connect_changed(symbol_changed)
+
+    def resource_changed(_index: int, text: str) -> None:
+        owner = current()
+        if owner is not None and not owner._updating and text:
+            owner.model.selected_resource = text
+
+    resource_combo.connect_changed(resource_changed)
+
+    def channel_changed(index: int, _text: str) -> None:
+        owner = current()
+        if owner is not None and not owner._updating:
+            owner.model.channel_mode = index
+
+    channel_combo.connect_changed(channel_changed)
     pause_check.connect_changed(
         lambda checked: current().model.set_paused(checked)
         if current() is not None and not current()._updating
         else None
     )
-    hdr_check.connect_changed(
-        lambda checked: current().model.set_highlight_hdr(checked)
-        if current() is not None and not current()._updating
-        else None
+    def hdr_changed(checked: bool) -> None:
+        owner = current()
+        if owner is not None and not owner._updating:
+            owner.model.highlight_hdr = checked
+
+    hdr_check.connect_changed(hdr_changed)
+    analyze.connect_clicked(
+        lambda: current()._hdr_stats_changed(current().model.analyze_hdr())
+        if current() is not None else None
     )
-    analyze.connect_clicked(lambda: current().model.analyze_hdr() if current() is not None else None)
     refresh_stats.connect_clicked(
-        lambda: current().model.refresh_render_stats() if current() is not None else None
+        lambda: current()._refresh_info() if current() is not None else None
     )
     refresh_depth.connect_clicked(lambda: current().refresh_depth() if current() is not None else None)
 

@@ -43,6 +43,17 @@ const char* target_name(tc_render_target_handle target) {
     return name && name[0] ? name : "<unnamed>";
 }
 
+bool viewport_is_demanded(
+    tc_viewport_handle viewport,
+    const OffscreenRenderDemand* demands,
+    size_t demand_count
+) {
+    for (size_t i = 0; i < demand_count; ++i) {
+        if (tc_viewport_handle_eq(demands[i].viewport, viewport)) return true;
+    }
+    return false;
+}
+
 void log_job(const char* prefix, const OffscreenRenderJob& job) {
     if (job.kind == OffscreenRenderJobKind::ScenePipeline) {
         tc_log(
@@ -72,7 +83,6 @@ struct OffscreenRenderPlanner::Impl {
     std::vector<OffscreenRenderJob> jobs;
     std::vector<ProducerEntry> producers;
     std::vector<uint8_t> roots;
-    std::vector<uint8_t> attached;
     std::vector<uint8_t> states;
     std::vector<uint32_t> stack;
     std::vector<const char*> pass_reads;
@@ -93,10 +103,8 @@ struct OffscreenRenderPlanner::Impl {
 
     bool prepare_job_scratch(size_t count) {
         roots.resize(count);
-        attached.resize(count);
         states.resize(count);
         std::fill(roots.begin(), roots.end(), 0);
-        std::fill(attached.begin(), attached.end(), 0);
         std::fill(states.begin(), states.end(), VISIT_UNVISITED);
         stack.clear();
         stack.reserve(count);
@@ -268,11 +276,12 @@ struct OffscreenRenderPlanner::Impl {
     bool execute(
         const RenderTopology& source_topology,
         tc_display_handle only_display,
-        bool include_unattached_roots,
         OffscreenRenderJobCallback callback,
         void* callback_user_data,
         OffscreenRenderDiagnosticCallback diagnostics,
-        void* diagnostics_user_data
+        void* diagnostics_user_data,
+        const OffscreenRenderDemand* demands,
+        size_t demand_count
     ) {
         topology = &source_topology;
         job_callback = callback;
@@ -337,7 +346,6 @@ struct OffscreenRenderPlanner::Impl {
             const tc_render_target_handle target = tc_viewport_get_render_target(attachment->viewport);
             const uint32_t producer = producer_for(target);
             if (producer == INVALID_JOB_INDEX) continue;
-            attached[producer] = 1;
 
             const bool selected_display = !tc_display_handle_valid(only_display)
                 || tc_display_handle_eq(attachment->display, only_display);
@@ -354,13 +362,26 @@ struct OffscreenRenderPlanner::Impl {
             }
         }
 
-        if (include_unattached_roots) {
-            for (size_t i = 0; i < jobs.size(); ++i) {
-                if (jobs[i].kind == OffscreenRenderJobKind::RenderTarget
-                        && !attached[i]
-                        && tc_render_target_get_enabled(jobs[i].render_target)) {
-                    roots[i] = 1;
+        for (size_t i = 0; i < demand_count; ++i) {
+            const OffscreenRenderDemand& demand = demands[i];
+            const tc_render_target_handle target = demand.render_target;
+            if (!tc_render_target_alive(target) || !tc_render_target_get_enabled(target)) {
+                continue;
+            }
+            if (tc_viewport_handle_valid(demand.viewport)) {
+                if (!tc_viewport_alive(demand.viewport)
+                        || !tc_viewport_get_enabled(demand.viewport)
+                        || !tc_render_target_handle_eq(
+                            tc_viewport_get_render_target(demand.viewport), target)) {
+                    continue;
                 }
+            }
+            const uint32_t producer = producer_for(target);
+            if (producer == INVALID_JOB_INDEX) continue;
+            roots[producer] = 1;
+            if (jobs[producer].kind == OffscreenRenderJobKind::RenderTarget
+                    && tc_viewport_handle_valid(demand.viewport)) {
+                jobs[producer].viewport = demand.viewport;
             }
         }
 
@@ -385,22 +406,24 @@ OffscreenRenderPlanner::~OffscreenRenderPlanner() {
 bool OffscreenRenderPlanner::execute(
     const RenderTopology& topology,
     tc_display_handle only_display,
-    bool include_unattached_roots,
     OffscreenRenderJobCallback job_callback,
     void* job_user_data,
     OffscreenRenderDiagnosticCallback diagnostic_callback,
-    void* diagnostic_user_data
+    void* diagnostic_user_data,
+    const OffscreenRenderDemand* demands,
+    size_t demand_count
 ) {
     if (!impl_) return false;
     try {
         return impl_->execute(
             topology,
             only_display,
-            include_unattached_roots,
             job_callback,
             job_user_data,
             diagnostic_callback,
-            diagnostic_user_data);
+            diagnostic_user_data,
+            demands,
+            demand_count);
     } catch (const std::bad_alloc&) {
         tc_log(TC_LOG_ERROR, "[RenderingManager] offscreen planner scratch allocation failed");
         if (diagnostic_callback) {
@@ -412,15 +435,22 @@ bool OffscreenRenderPlanner::execute(
     }
 }
 
-void update_viewport_rects(const RenderTopology& topology, tc_display_handle only_display) {
+void update_viewport_rects(
+    const RenderTopology& topology,
+    tc_display_handle only_display,
+    const OffscreenRenderDemand* demands,
+    size_t demand_count
+) {
     for (size_t i = 0; i < topology.viewport_attachment_count(); ++i) {
         const RenderTopology::ViewportAttachment* attachment = topology.viewport_attachment_at(i);
         if (!attachment) continue;
         const tc_display_handle display = attachment->display;
+        const bool demanded = viewport_is_demanded(
+            attachment->viewport, demands, demand_count);
         if (!tc_display_alive(display)
-                || (tc_display_handle_valid(only_display)
+                || (!demanded && tc_display_handle_valid(only_display)
                     && !tc_display_handle_eq(display, only_display))
-                || !tc_display_get_enabled(display)) {
+                || (!demanded && !tc_display_get_enabled(display))) {
             continue;
         }
         tc_render_surface* surface = tc_display_get_surface(display);
@@ -436,16 +466,20 @@ void update_viewport_rects(const RenderTopology& topology, tc_display_handle onl
 
 void sync_viewport_render_target_resolutions(
     const RenderTopology& topology,
-    tc_display_handle only_display
+    tc_display_handle only_display,
+    const OffscreenRenderDemand* demands,
+    size_t demand_count
 ) {
     for (size_t i = 0; i < topology.viewport_attachment_count(); ++i) {
         const RenderTopology::ViewportAttachment* attachment = topology.viewport_attachment_at(i);
         if (!attachment) continue;
         const tc_display_handle display = attachment->display;
+        const bool demanded = viewport_is_demanded(
+            attachment->viewport, demands, demand_count);
         if (!tc_display_alive(display)
-                || (tc_display_handle_valid(only_display)
+                || (!demanded && tc_display_handle_valid(only_display)
                     && !tc_display_handle_eq(display, only_display))
-                || !tc_display_get_enabled(display)) {
+                || (!demanded && !tc_display_get_enabled(display))) {
             continue;
         }
         const tc_viewport_handle viewport = attachment->viewport;
