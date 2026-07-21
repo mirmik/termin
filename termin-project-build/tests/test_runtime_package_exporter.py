@@ -323,6 +323,22 @@ def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
     assert diagnostics == []
 
 
+def test_collect_runtime_refs_accepts_canonical_pipeline_template_mount() -> None:
+    refs = collect_runtime_refs(
+        {
+            "extensions": {
+                "render_mount": {
+                    "pipeline_templates": [
+                        {"uuid": "compiled-pipeline-uuid", "name": "Main Pipeline"}
+                    ]
+                }
+            }
+        }
+    )
+
+    assert refs.pipelines == {"compiled-pipeline-uuid": "Main Pipeline"}
+
+
 def test_collect_runtime_refs_rejects_legacy_mesh_material_inference() -> None:
     diagnostics = []
 

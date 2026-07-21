@@ -15,6 +15,7 @@ GUARD_TEST_MAIN();
 #include <termin/image/image_decode.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
+#include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_shader_program_handle.hpp>
@@ -23,6 +24,8 @@ GUARD_TEST_MAIN();
 extern "C" {
 #include <core/tc_light_capability.h>
 #include <core/tc_scene.h>
+#include <core/tc_scene_render_mount.h>
+#include <render/tc_pipeline_template_registry.h>
 #include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_texture_registry.h>
@@ -46,6 +49,7 @@ std::filesystem::path make_package_root() {
     std::filesystem::create_directories(root / "materials");
     std::filesystem::create_directories(root / "meshes");
     std::filesystem::create_directories(root / "textures");
+    std::filesystem::create_directories(root / "pipelines");
     return root;
 }
 
@@ -449,6 +453,69 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK(std::fabs(lighting->ambient_color[1] - 0.8f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
+}
+
+TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the scene") {
+    const std::filesystem::path root = make_package_root();
+    constexpr const char* pipeline_uuid = "runtime-loader-compiled-pipeline";
+
+    const tc_pipeline_template_payload_desc descriptor = {
+        TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION,
+        "Runtime Compiled Pipeline",
+        nullptr, 0,
+        nullptr, 0,
+        nullptr, 0,
+        nullptr, 0,
+    };
+    const tc_pipeline_template_handle source_handle = tc_pipeline_template_create(
+        "runtime-loader-compiled-pipeline-source", "source");
+    tc_pipeline_template* source = tc_pipeline_template_get(source_handle);
+    REQUIRE(source != nullptr);
+    REQUIRE(tc_pipeline_template_set_payload(source, &descriptor));
+    const size_t payload_size = tc_pipeline_template_serialize(source, nullptr, 0);
+    REQUIRE(payload_size > 0);
+    std::vector<std::uint8_t> payload(payload_size);
+    REQUIRE_EQ(
+        tc_pipeline_template_serialize(source, payload.data(), payload.size()),
+        payload_size);
+    REQUIRE(tc_pipeline_template_remove(source_handle));
+
+    write_binary(root / "pipelines" / "compiled.pipeline-template", payload);
+    write_text(root / "manifest.json", R"({
+  "version": 1,
+  "resources": [
+    {"type": "pipeline", "uuid": "runtime-loader-compiled-pipeline", "name": "Runtime Compiled Pipeline", "path": "pipelines/compiled.pipeline-template"}
+  ],
+  "scene": "scene.json"
+}
+)");
+    write_text(root / "scene.json", R"({
+  "uuid": "runtime-loader-pipeline-scene",
+  "entities": [],
+  "extensions": {
+    "render_mount": {
+      "pipeline_templates": [
+        {"uuid": "runtime-loader-compiled-pipeline"}
+      ],
+      "viewport_configs": [],
+      "render_target_configs": []
+    }
+  }
+}
+)");
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    REQUIRE(result.resources != nullptr);
+    const tc_pipeline_template_handle loaded = tc_pipeline_template_find(pipeline_uuid);
+    REQUIRE(tc_pipeline_template_is_valid(loaded));
+    const tc_pipeline_template* loaded_template = tc_pipeline_template_get(loaded);
+    REQUIRE(loaded_template != nullptr);
+    CHECK_EQ(std::string(loaded_template->header.name), "Runtime Compiled Pipeline");
+    CHECK_EQ(tc_scene_pipeline_template_count(result.scene.handle()), 1u);
+    CHECK(tc_pipeline_template_handle_eq(
+        tc_scene_pipeline_template_at(result.scene.handle(), 0), loaded));
 }
 
 TEST_CASE("RuntimePackageLoader requires an explicit supported shader language") {

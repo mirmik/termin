@@ -26,6 +26,12 @@
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/image/image_decode.hpp>
+#include <termin/render/render_pipeline.hpp>
+#include <termin/render/tc_pipeline_template.hpp>
+
+extern "C" {
+#include <render/tc_pass.h>
+}
 
 namespace termin::runtime {
 
@@ -36,6 +42,7 @@ struct RuntimePackageResourceKeepalive {
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
     std::vector<TcFoliageData> foliage_data;
+    std::vector<TcPipelineTemplate> pipeline_templates;
 };
 
 namespace {
@@ -1281,6 +1288,56 @@ bool load_foliage_data_resource(
     return true;
 }
 
+bool load_pipeline_resource(
+    const std::filesystem::path& root,
+    const nos::trent& entry,
+    RuntimePackageResourceKeepalive& keepalive,
+    std::string& error
+) {
+    const std::string uuid = string_field(entry, "uuid");
+    const std::string rel_path = string_field(entry, "path");
+    if (uuid.empty() || rel_path.empty()) {
+        error = "pipeline resource requires uuid and path";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    const std::vector<std::uint8_t> payload = read_binary_file(package_path(root, rel_path));
+    if (payload.empty()) {
+        error = "pipeline template descriptor is empty for '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    const tc_pipeline_template_handle handle = tc_pipeline_template_deserialize(
+        uuid.c_str(), payload.data(), payload.size());
+    if (tc_pipeline_template_handle_is_invalid(handle)) {
+        error = "failed to deserialize pipeline template '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    TcPipelineTemplate pipeline_template(handle);
+    const tc_pipeline_template* definition = pipeline_template.get();
+    for (uint32_t index = 0; definition && index < definition->pass_count; ++index) {
+        const char* type_name = definition->passes[index].type_name;
+        if (!type_name || !tc_pass_registry_has(type_name)) {
+            error = "pipeline template '" + uuid + "' uses unsupported pass contract '"
+                + (type_name ? type_name : "<missing>") + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+    }
+    try {
+        RenderPipeline validation_instance(pipeline_template);
+        validation_instance.destroy();
+    } catch (const std::exception& ex) {
+        error = "pipeline template '" + uuid + "' cannot be instantiated: " + ex.what();
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    keepalive.pipeline_templates.push_back(std::move(pipeline_template));
+    return true;
+}
+
 bool load_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -1296,7 +1353,7 @@ bool load_resource(
     }
 
     if (type == "pipeline") {
-        return true;
+        return load_pipeline_resource(root, entry, keepalive, error);
     }
     if (type == "foliage_data") {
         return load_foliage_data_resource(root, entry, keepalive, error);
@@ -1365,6 +1422,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
+        termin::bootstrap::bootstrap_runtime();
         const std::filesystem::path manifest_path = package_path(root, "manifest.json");
         if (!std::filesystem::is_regular_file(manifest_path)) {
             result.message = "manifest.json not found in " + root.string();

@@ -27,11 +27,11 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/execute_context.hpp>
-#include <termin/render/graph_compiler.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_engine.hpp>
 #include <termin/render/render_pipeline.hpp>
 #include <termin/render/rendering_manager.hpp>
+#include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/xr/xr_origin_component.hpp>
@@ -518,7 +518,6 @@ struct OpenXRRuntimeScene {
     termin::XrOriginComponent *xr_origin = nullptr;
     termin::Mat44 origin_from_xr_reference = termin::Mat44::identity();
     EyeFrame active_eye_frame;
-    std::unordered_map<std::string, std::filesystem::path> runtime_pipeline_paths;
     bool reference_alignment_initialized = false;
     bool ready = false;
 
@@ -570,78 +569,34 @@ struct OpenXRRuntimeScene {
         return true;
     }
 
-    void install_runtime_pipeline_factory(const std::string &asset_root) {
-        runtime_pipeline_paths.clear();
-        const std::filesystem::path root(asset_root);
-        const std::filesystem::path manifest_path = root / "manifest.json";
-        if (!std::filesystem::is_regular_file(manifest_path)) {
-            return;
-        }
-
-        try {
-            nos::trent manifest = nos::json::parse(read_runtime_text_file(manifest_path));
-            const nos::trent *resources = trent_dict_get(manifest, "resources");
-            if (!resources || !resources->is_list()) {
-                return;
-            }
-
-            for (const nos::trent &resource : resources->as_list()) {
-                if (!resource.is_dict()) {
-                    continue;
-                }
-                if (trent_string_field(resource, "type") != "pipeline") {
-                    continue;
-                }
-
-                const std::string path = trent_string_field(resource, "path");
-                if (path.empty()) {
-                    tc_log_warn("[OpenXR scene] runtime pipeline resource has no path");
-                    continue;
-                }
-
-                const std::filesystem::path full_path = runtime_package_path(root, path);
-                const std::string uuid = trent_string_field(resource, "uuid");
-                const std::string name = trent_string_field(resource, "name");
-                if (!uuid.empty()) {
-                    runtime_pipeline_paths[uuid] = full_path;
-                }
-                if (!name.empty()) {
-                    runtime_pipeline_paths[name] = full_path;
-                }
-                tc_log_info("[OpenXR scene] registered runtime pipeline asset "
-                            "name='%s' uuid='%s' path='%s'",
-                            name.empty() ? "(unnamed)" : name.c_str(), uuid.empty() ? "(none)" : uuid.c_str(),
-                            path.c_str());
-            }
-        } catch (const std::exception &e) {
-            tc_log_error("[OpenXR scene] failed to read runtime pipeline assets: %s", e.what());
-            return;
-        }
-
-        if (runtime_pipeline_paths.empty()) {
-            return;
-        }
-
+    void install_runtime_pipeline_factory() {
         engine->rendering_manager.set_pipeline_factory([this](const std::string &key) -> tc_pipeline_handle {
-            auto it = runtime_pipeline_paths.find(key);
-            if (it == runtime_pipeline_paths.end()) {
-                tc_log_error("[OpenXR scene] runtime pipeline asset '%s' was not found", key.c_str());
+            const tc_pipeline_template_handle template_handle =
+                tc_pipeline_template_find(key.c_str());
+            if (tc_pipeline_template_handle_is_invalid(template_handle)) {
+                tc_log_error(
+                    "[OpenXR scene] compiled runtime pipeline template '%s' was not found",
+                    key.c_str());
                 return TC_PIPELINE_HANDLE_INVALID;
             }
 
             try {
-                std::unique_ptr<termin::RenderPipeline> compiled(tc::compile_graph(read_runtime_text_file(it->second)));
-                if (!compiled || !compiled->is_valid()) {
-                    tc_log_error("[OpenXR scene] failed to compile runtime pipeline '%s'", key.c_str());
+                termin::TcPipelineTemplate pipeline_template(template_handle);
+                termin::RenderPipeline compiled(pipeline_template);
+                if (!compiled.is_valid()) {
+                    tc_log_error("[OpenXR scene] failed to instantiate runtime pipeline '%s'", key.c_str());
                     return TC_PIPELINE_HANDLE_INVALID;
                 }
-                compiled->set_name(key);
-                tc_pipeline_handle handle = compiled->handle();
-                tc_log_info("[OpenXR scene] compiled runtime pipeline '%s' passes=%zu", key.c_str(),
-                            compiled->pass_count());
+                compiled.set_name(key);
+                const tc_pipeline_handle handle = compiled.handle();
+                tc_log_info(
+                    "[OpenXR scene] instantiated compiled runtime pipeline '%s' passes=%zu",
+                    key.c_str(), compiled.pass_count());
                 return handle;
             } catch (const std::exception &e) {
-                tc_log_error("[OpenXR scene] runtime pipeline '%s' compile failed: %s", key.c_str(), e.what());
+                tc_log_error(
+                    "[OpenXR scene] runtime pipeline '%s' instantiation failed: %s",
+                    key.c_str(), e.what());
                 return TC_PIPELINE_HANDLE_INVALID;
             }
         });
@@ -696,7 +651,7 @@ struct OpenXRRuntimeScene {
         );
 
         const tc_render_target_config *xr_config = find_xr_render_target_config(package.scene);
-        install_runtime_pipeline_factory(asset_root);
+        install_runtime_pipeline_factory();
         xr_origin = resolve_runtime_xr_origin(package.scene, xr_config);
         if (!xr_origin) {
             log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");

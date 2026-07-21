@@ -1150,18 +1150,19 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
-    pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline.json"
+    pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline-template"
     assert pipeline_path.exists()
-    pipeline_data = json.loads(pipeline_path.read_text(encoding="utf-8"))
-    assert pipeline_data["uuid"] == pipeline_uuid
-    assert pipeline_data["name"] == "graph_pipeline"
+    pipeline_data = pipeline_path.read_bytes()
+    assert pipeline_data.startswith(b"TPLT\x01\x00\x00\x00")
+    assert b'"nodes"' not in pipeline_data
+    assert b'"connections"' not in pipeline_data
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert {
         "type": "pipeline",
         "uuid": pipeline_uuid,
         "name": "VrPipeline",
-        "path": f"pipelines/{pipeline_uuid}.pipeline.json",
+        "path": f"pipelines/{pipeline_uuid}.pipeline-template",
     } in manifest["resources"]
 
 
@@ -1468,7 +1469,7 @@ def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) 
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
-    assert (result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline.json").exists()
+    assert (result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline-template").exists()
     assert any(
         diagnostic.path == "VrPipeline.pipeline.meta"
         and diagnostic.message.startswith("Runtime exporter failed to inspect pipeline metadata:")
