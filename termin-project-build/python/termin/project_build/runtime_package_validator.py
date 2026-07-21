@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import struct
 from pathlib import Path
 from typing import Any
 
@@ -539,81 +540,168 @@ def _validate_pipeline_resource(
     pipeline_spec_path: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> dict[str, Any] | None:
-    pipeline_spec = _read_json_file(pipeline_spec_path, resource_path, diagnostics)
-    if pipeline_spec is None:
+    try:
+        payload = pipeline_spec_path.read_bytes()
+        pipeline_spec = _decode_pipeline_template(payload)
+    except (OSError, ValueError) as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                f"Runtime pipeline template descriptor is invalid: {exc}",
+            )
+        )
         return None
-
-    for key in ("shader", "shader_uuid"):
-        value = pipeline_spec.get(key)
-        if value is not None and (not isinstance(value, str) or value == ""):
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    "error",
-                    resource_path,
-                    f"Runtime pipeline field '{key}' must be a non-empty string when present",
-                )
-            )
-
-    phases = pipeline_spec.get("phases")
-    if phases is not None:
-        if not isinstance(phases, list):
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    "error",
-                    resource_path,
-                    "Runtime pipeline field 'phases' must be a list when present",
-                )
-            )
-        else:
-            for index, phase in enumerate(phases):
-                _validate_pipeline_phase_shape(resource_path, index, phase, diagnostics)
-
     return pipeline_spec
 
 
-def _validate_pipeline_phase_shape(
-    resource_path: str,
-    index: int,
-    phase: Any,
-    diagnostics: list[RuntimePackageExportDiagnostic],
-) -> None:
-    context = f"{resource_path}:phases[{index}]"
-    if not isinstance(phase, dict):
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                "error",
-                context,
-                "Runtime pipeline phase entry must be an object",
-            )
+def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
+    """Decode and strictly validate the portable tc_pipeline_template payload."""
+
+    offset = 0
+
+    def take(size: int) -> bytes:
+        nonlocal offset
+        if size < 0 or offset > len(payload) or size > len(payload) - offset:
+            raise ValueError("descriptor is truncated")
+        result = payload[offset : offset + size]
+        offset += size
+        return result
+
+    def u32() -> int:
+        return struct.unpack("<I", take(4))[0]
+
+    def i32() -> int:
+        return struct.unpack("<i", take(4))[0]
+
+    def f32() -> float:
+        return struct.unpack("<f", take(4))[0]
+
+    def text() -> str:
+        size = u32()
+        if size > 16 * 1024 * 1024:
+            raise ValueError("descriptor string exceeds the size limit")
+        try:
+            return take(size).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("descriptor contains invalid UTF-8") from exc
+
+    if take(4) != b"TPLT":
+        raise ValueError("descriptor magic must be TPLT")
+    binary_version = u32()
+    descriptor_version = u32()
+    if binary_version != 1:
+        raise ValueError(f"unsupported binary version {binary_version}")
+    if descriptor_version != 1:
+        raise ValueError(f"unsupported descriptor version {descriptor_version}")
+    name = text()
+    if not name:
+        raise ValueError("descriptor name must be non-empty")
+
+    pass_count = u32()
+    resource_count = u32()
+    dependency_count = u32()
+    target_count = u32()
+    if pass_count > 65536 or resource_count > 65536 or target_count > 65536:
+        raise ValueError("descriptor array count exceeds the size limit")
+    if dependency_count > 262144:
+        raise ValueError("descriptor dependency count exceeds the size limit")
+
+    passes: list[dict[str, Any]] = []
+    for index in range(pass_count):
+        type_name = text()
+        pass_name = text()
+        parameters = text()
+        viewport_name = text()
+        if not type_name or not pass_name:
+            raise ValueError(f"pass {index} lacks type or name")
+        if type_name == "UnknownPass":
+            raise ValueError(f"pass {index} uses unsupported UnknownPass contract")
+        if parameters:
+            try:
+                parameter_data = json.loads(parameters)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"pass {index} parameters are not valid JSON") from exc
+            if not isinstance(parameter_data, dict):
+                raise ValueError(f"pass {index} parameters must be a JSON object")
+        passes.append(
+            {
+                "type": type_name,
+                "name": pass_name,
+                "parameters": parameters,
+                "viewport_name": viewport_name,
+            }
         )
-        return
-    mark = phase.get("mark")
-    if mark is not None and (not isinstance(mark, str) or mark == ""):
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                "error",
-                context,
-                "Runtime pipeline phase field 'mark' must be a non-empty string when present",
-            )
+
+    resources: list[dict[str, Any]] = []
+    resource_names: set[str] = set()
+    for index in range(resource_count):
+        resource_name = text()
+        resource_type = text()
+        format_name = text()
+        viewport_name = text()
+        width = i32()
+        height = i32()
+        scale = f32()
+        samples = u32()
+        flags = u32()
+        if not resource_name or not resource_type:
+            raise ValueError(f"resource {index} lacks name or type")
+        if resource_name in resource_names:
+            raise ValueError(f"resource '{resource_name}' is duplicated")
+        if samples == 0:
+            raise ValueError(f"resource '{resource_name}' has zero samples")
+        resource_names.add(resource_name)
+        resources.append(
+            {
+                "name": resource_name,
+                "resource_type": resource_type,
+                "format": format_name,
+                "viewport_name": viewport_name,
+                "width": width,
+                "height": height,
+                "scale": scale,
+                "samples": samples,
+                "flags": flags,
+            }
         )
-    shader = phase.get("shader")
-    if shader is not None and (not isinstance(shader, str) or shader == ""):
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                "error",
-                context,
-                "Runtime pipeline phase field 'shader' must be a non-empty string when present",
-            )
+
+    dependencies: list[dict[str, Any]] = []
+    for index in range(dependency_count):
+        pass_index = u32()
+        resource_name = text()
+        access = u32()
+        if pass_index >= pass_count:
+            raise ValueError(f"dependency {index} references missing pass {pass_index}")
+        if resource_name not in resource_names:
+            raise ValueError(f"dependency {index} references missing resource '{resource_name}'")
+        if access not in (1, 2, 3):
+            raise ValueError(f"dependency {index} has invalid access {access}")
+        dependencies.append(
+            {"pass_index": pass_index, "resource": resource_name, "access": access}
         )
-    shader_uuid = phase.get("shader_uuid")
-    if shader_uuid is not None and (not isinstance(shader_uuid, str) or shader_uuid == ""):
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                "error",
-                context,
-                "Runtime pipeline phase field 'shader_uuid' must be a non-empty string when present",
-            )
+
+    targets: list[dict[str, Any]] = []
+    for _ in range(target_count):
+        targets.append(
+            {
+                "viewport_name": text(),
+                "export_name": text(),
+                "width": i32(),
+                "height": i32(),
+            }
         )
+    if offset != len(payload):
+        raise ValueError("descriptor contains trailing data")
+    return {
+        "binary_version": binary_version,
+        "descriptor_version": descriptor_version,
+        "name": name,
+        "passes": passes,
+        "resources": resources,
+        "dependencies": dependencies,
+        "targets": targets,
+    }
 
 
 def _validate_required_shader_artifact_stages(
@@ -731,6 +819,14 @@ def _validate_scene_pipeline_ref(
     context: str,
 ) -> None:
     pipeline_uuid = value.get("pipeline_uuid")
+    reference_context = f"{context}.pipeline_uuid"
+    if (
+        (not isinstance(pipeline_uuid, str) or pipeline_uuid == "")
+        and ".pipeline_templates[" in context
+        and context.endswith("]")
+    ):
+        pipeline_uuid = value.get("uuid")
+        reference_context = f"{context}.uuid"
     if not isinstance(pipeline_uuid, str) or pipeline_uuid == "":
         return
     _validate_resource_ref(
@@ -738,7 +834,7 @@ def _validate_scene_pipeline_ref(
         "pipeline",
         resource_index,
         diagnostics,
-        f"{context}.pipeline_uuid",
+        reference_context,
     )
 
 
@@ -920,40 +1016,10 @@ def _validate_pipeline_graph(
     resource_index: dict[str, dict[str, Any]],
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
-    for field_name in ("shader", "shader_uuid"):
-        value = pipeline_spec.get(field_name)
-        if isinstance(value, str) and value != "":
-            _validate_resource_ref(value, "shader", resource_index, diagnostics, f"{resource_path}:{field_name}")
-
-    phases = pipeline_spec.get("phases")
-    if not isinstance(phases, list):
-        return
-    seen_marks: set[str] = set()
-    for index, phase in enumerate(phases):
-        if not isinstance(phase, dict):
-            continue
-        phase_context = f"{resource_path}:phases[{index}]"
-        mark = phase.get("mark")
-        if isinstance(mark, str) and mark != "":
-            if mark in seen_marks:
-                diagnostics.append(
-                    RuntimePackageExportDiagnostic(
-                        "error",
-                        phase_context,
-                        f"Runtime pipeline '{pipeline_uuid}' declares duplicate phase mark '{mark}'",
-                    )
-                )
-            seen_marks.add(mark)
-        for field_name in ("shader", "shader_uuid"):
-            value = phase.get(field_name)
-            if isinstance(value, str) and value != "":
-                _validate_resource_ref(
-                    value,
-                    "shader",
-                    resource_index,
-                    diagnostics,
-                    f"{phase_context}.{field_name}",
-                )
+    # Shader/resource closure is emitted as independent manifest resources.
+    # The template itself deliberately contains only backend-neutral execution
+    # descriptors and therefore has no authored graph edges to validate here.
+    del pipeline_uuid, resource_path, pipeline_spec, resource_index, diagnostics
 
 
 def _validate_target_requirements(

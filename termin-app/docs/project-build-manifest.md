@@ -39,6 +39,13 @@ entries such as `shader`, `mesh`, `material`, `pipeline`, and `foliage_data`,
 plus shader artifact target requirements when a profile requests explicit
 shader targets.
 
+Pipeline resources are versioned binary `pipelines/<uuid>.pipeline-template`
+entries containing the compiled, backend-independent `TcPipelineTemplate`.
+Authored graph and pass-list JSON is an editor input only and must never be
+copied into a runtime package. Export validates pass contracts and resource
+dependencies and includes the shader closure required by the compiled
+template before a player is launched.
+
 ## Desktop Bundle
 
 Desktop builds wrap the runtime package in a relocatable bundle:

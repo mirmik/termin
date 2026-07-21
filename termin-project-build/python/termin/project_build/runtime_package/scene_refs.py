@@ -68,7 +68,7 @@ def collect_refs_recursive(
     ref_path: str = "$",
 ) -> None:
     if isinstance(value, dict):
-        collect_pipeline_refs(value, refs)
+        collect_pipeline_refs(value, refs, field_name)
         collect_typed_ref(value, refs, field_name, diagnostics, ref_path)
         for key, child in value.items():
             child_path = f"{ref_path}.{key}" if ref_path != "$" else f"$.{key}"
@@ -118,12 +118,24 @@ def collect_typed_ref(
         )
 
 
-def collect_pipeline_refs(value: dict[str, Any], refs: RuntimeRefs) -> None:
+def collect_pipeline_refs(
+    value: dict[str, Any], refs: RuntimeRefs, field_name: str = ""
+) -> None:
     pipeline_uuid = value.get("pipeline_uuid")
     pipeline_name = value.get("pipeline_name")
     if isinstance(pipeline_uuid, str) and pipeline_uuid != "":
         name = pipeline_name if isinstance(pipeline_name, str) and pipeline_name != "" else pipeline_uuid
         refs.pipelines[pipeline_uuid] = name
+        return
+
+    # Canonical render-mount serialization stores strong template references as
+    # {"uuid": ...} entries under pipeline_templates.
+    if field_name == "pipeline_templates":
+        uuid_value = value.get("uuid")
+        name_value = value.get("name")
+        if isinstance(uuid_value, str) and uuid_value != "":
+            name = name_value if isinstance(name_value, str) and name_value != "" else uuid_value
+            refs.pipelines[uuid_value] = name
 
 
 def collect_project_material_refs(

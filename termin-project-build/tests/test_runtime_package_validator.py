@@ -1,4 +1,5 @@
 import json
+import struct
 from pathlib import Path
 
 from termin.project_build.runtime_package_validator import validate_runtime_package
@@ -91,6 +92,53 @@ def _write_shader_program_resource(package_dir: Path, schema_version: int = 1) -
             ],
         },
     )
+
+
+def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
+    payload = bytearray(b"TPLT")
+
+    def u32(value: int) -> None:
+        payload.extend(struct.pack("<I", value))
+
+    def i32(value: int) -> None:
+        payload.extend(struct.pack("<i", value))
+
+    def f32(value: float) -> None:
+        payload.extend(struct.pack("<f", value))
+
+    def text(value: str) -> None:
+        encoded = value.encode("utf-8")
+        u32(len(encoded))
+        payload.extend(encoded)
+
+    u32(1)  # binary version
+    u32(1)  # descriptor version
+    text("Compiled Pipeline")
+    u32(1)  # passes
+    u32(1)  # resources
+    u32(1)  # dependencies
+    u32(1)  # targets
+    text("ColorPass")
+    text("color")
+    text('{"phase_mark":"opaque"}')
+    text("main")
+    text("OUTPUT")
+    text("external_color")
+    text("")
+    text("main")
+    i32(0)
+    i32(0)
+    f32(1.0)
+    u32(1)
+    u32(0)
+    u32(dependency_pass_index)
+    text("OUTPUT")
+    u32(2)
+    text("main")
+    text("final-color")
+    i32(0)
+    i32(0)
+    return bytes(payload)
 
 
 def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:
@@ -489,20 +537,11 @@ def test_validate_runtime_package_checks_texture_resource_and_material_reference
     ]
 
 
-def test_validate_runtime_package_reports_pipeline_missing_shader_resource(tmp_path: Path) -> None:
+def test_validate_runtime_package_accepts_compiled_pipeline_template(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
-    _write_json(
-        package_dir / "pipelines" / "pipeline-uuid.pipeline.json",
-        {
-            "uuid": "pipeline-uuid",
-            "phases": [
-                {
-                    "mark": "opaque",
-                    "shader": "missing-shader",
-                }
-            ],
-        },
-    )
+    pipeline_path = package_dir / "pipelines" / "pipeline-uuid.pipeline-template"
+    pipeline_path.parent.mkdir(parents=True, exist_ok=True)
+    pipeline_path.write_bytes(_pipeline_template_payload())
     _write_json(
         package_dir / "manifest.json",
         {
@@ -512,21 +551,72 @@ def test_validate_runtime_package_reports_pipeline_missing_shader_resource(tmp_p
                 {
                     "type": "pipeline",
                     "uuid": "pipeline-uuid",
-                    "path": "pipelines/pipeline-uuid.pipeline.json",
+                    "path": "pipelines/pipeline-uuid.pipeline-template",
+                }
+            ],
+        },
+    )
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_checks_canonical_scene_pipeline_template_ref(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / "scene.json",
+        {
+            "uuid": "scene",
+            "extensions": {
+                "render_mount": {
+                    "pipeline_templates": [{"uuid": "missing-pipeline"}]
+                }
+            },
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+    assert len(diagnostics) == 1
+    assert diagnostics[0].path.endswith("pipeline_templates[0].uuid")
+    assert "missing pipeline resource uuid 'missing-pipeline'" in diagnostics[0].message
+
+
+def test_validate_runtime_package_rejects_authored_or_malformed_pipeline_payload(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    pipeline_path = package_dir / "pipelines" / "pipeline-uuid.pipeline-template"
+    pipeline_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(pipeline_path, {"passes": [], "nodes": []})
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            "version": 1,
+            "scene": "scene.json",
+            "resources": [
+                {
+                    "type": "pipeline",
+                    "uuid": "pipeline-uuid",
+                    "path": "pipelines/pipeline-uuid.pipeline-template",
                 }
             ],
         },
     )
 
     diagnostics = validate_runtime_package(package_dir)
-
     assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
         (
             "error",
-            "pipelines/pipeline-uuid.pipeline.json:phases[0].shader",
-            "Runtime package references missing shader resource uuid 'missing-shader'",
+            "pipelines/pipeline-uuid.pipeline-template",
+            "Runtime pipeline template descriptor is invalid: descriptor magic must be TPLT",
         )
     ]
+
+    pipeline_path.write_bytes(_pipeline_template_payload(dependency_pass_index=7))
+    diagnostics = validate_runtime_package(package_dir)
+    assert len(diagnostics) == 1
+    assert "dependency 0 references missing pass 7" in diagnostics[0].message
 
 
 def test_validate_runtime_package_reports_required_shader_target_missing(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ The exporter writes the package contract consumed by termin-runtime:
 
     manifest.json
     scene.json
-    pipelines/*.pipeline.json
+    pipelines/*.pipeline-template
     meshes/*.tmesh.json
     materials/*.tmat.json
     textures/*.texture.json
@@ -21,7 +21,6 @@ under the explicit `dev_smoke` resource policy.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -45,7 +44,7 @@ from termin.project_build.runtime_package.package_files import (
     write_json as _write_json,
 )
 from termin.project_build.runtime_package.pipelines import (
-    safe_package_stem as _safe_pipeline_package_stem,
+    CompiledPipelineExport as _CompiledPipelineExport,
     write_pipelines as _write_pipelines,
 )
 from termin.project_build.runtime_package.scene_refs import (
@@ -135,8 +134,10 @@ def export_runtime_package(
         refs.textures,
     )
     _write_textures(project_root_path, output_dir_path, refs.textures, resources, diagnostics)
-    _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
-    _collect_pipeline_shader_usages(output_dir_path, scene_data, refs.pipelines, diagnostics, shaders)
+    compiled_pipelines = _write_pipelines(
+        project_root_path, output_dir_path, refs.pipelines, resources, diagnostics
+    )
+    _collect_pipeline_shader_usages(scene_data, compiled_pipelines, diagnostics, shaders)
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     _write_shaders(
@@ -178,9 +179,8 @@ def export_runtime_package(
 
 
 def _collect_pipeline_shader_usages(
-    package_dir: Path,
     scene_data: dict[str, Any],
-    pipelines: dict[str, str],
+    pipelines: list[_CompiledPipelineExport],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
 ) -> None:
@@ -191,7 +191,7 @@ def _collect_pipeline_shader_usages(
         from termin.bootstrap import bootstrap_player
         from termin.default_assets.resource_manager import DefaultResourceManager
         from termin.engine import deserialize_scene
-        from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
+        from termin.render_framework import collect_shader_usages_for_pipeline
 
         bootstrap_player()
         resource_manager = DefaultResourceManager.instance()
@@ -220,20 +220,12 @@ def _collect_pipeline_shader_usages(
         return
 
     try:
-        for uuid_value, name in sorted(pipelines.items()):
-            target_name = _safe_pipeline_package_stem(uuid_value or name)
-            pipeline_rel = f"pipelines/{target_name}.pipeline.json"
-            pipeline_path = package_dir / pipeline_rel
-            if not pipeline_path.exists():
-                continue
-
+        for compiled in pipelines:
+            pipeline_rel = compiled.resource_path
             try:
-                with open(pipeline_path, "r", encoding="utf-8") as f:
-                    pipeline_data = json.load(f)
-                if not isinstance(pipeline_data, dict):
-                    raise ValueError("pipeline JSON root must be an object")
-
-                pipeline = RenderPipeline.deserialize(pipeline_data, resource_manager)
+                pipeline = compiled.asset.pipeline
+                if pipeline is None:
+                    raise ValueError("compiled pipeline template could not be instantiated")
                 try:
                     for shader in collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline):
                         shaders[shader.uuid] = _shader_to_spec(shader)
