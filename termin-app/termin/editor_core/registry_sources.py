@@ -223,6 +223,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
     """Build adapters over the public C++ core registry inspection APIs."""
     from tcbase import intern_string_get_all_info
     from termin.materials import tc_material_get_all_info
+    from termin.gui_native import tc_ui_document_registry_get_all_info
     from termin.render_framework import (
         tc_pass_registry_get_all_types,
         tc_pipeline_registry_get_all_info,
@@ -396,6 +397,32 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                     "name",
                     (str(info.get("name", "")), str(info.get("pass_count", 0))),
                     "Pipeline",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "ui-documents",
+            "UI Documents",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("handle", "Handle", 96.0),
+                RegistryColumn("widgets", "Widgets", 72.0),
+                RegistryColumn("roots", "Roots", 64.0),
+                RegistryColumn("overlays", "Overlays", 72.0),
+            ),
+            MappingRegistrySource(
+                tc_ui_document_registry_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "handle",
+                    (
+                        str(info.get("name", "")),
+                        ":".join(str(part) for part in info.get("handle", ())),
+                        str(info.get("live_widget_count", 0)),
+                        str(info.get("root_count", 0)),
+                        str(info.get("overlay_count", 0)),
+                    ),
+                    "UI Document",
                 ),
             ),
         ),

@@ -62,7 +62,7 @@ stays at the asset/import boundary.
 | `tc_viewport` | process-global generation pool | Canonical shape; bootstrap ownership must be made uniform |
 | `tc_render_target` | process-global generation pool | Canonical shape; bootstrap ownership must be made uniform |
 | `tc_display` | process-global generation pool | Canonical storage/interop shape implemented by #685 |
-| `tc_ui_document` | individually allocated raw pointer | Non-canonical; tracked by #691 |
+| `tc_ui_document` | process-global generation pool; explicit handle destroy | Canonical storage/interop shape implemented by #691 |
 | `tc_entity` | scene-owned SoA generation pool | Correct second-level form |
 
 ## Nested polymorphic ownership
@@ -71,7 +71,7 @@ stays at the asset/import boundary.
 | --- | --- | --- |
 | `tc_component` | `tc_entity` | Owner/deleter pattern implemented |
 | `tc_pass` | runtime `tc_pipeline` | Owner/deleter pattern implemented and tested |
-| `tc_widget` | `tc_ui_document` | Document-local handles exist; document storage itself is non-canonical (#691) |
+| `tc_widget` | `tc_ui_document` | Document-local generation handles and explicit language-specific deleters; document identity is a generation handle |
 | `tc_render_surface` | `tc_display` | Owner/deleter pattern implemented by #686; wrappers are non-owning and offscreen storage has no separate pool |
 
 ## Cross-cutting gaps

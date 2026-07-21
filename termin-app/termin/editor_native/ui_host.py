@@ -215,6 +215,7 @@ class NativeUiHost:
         self.window = window
         self.graphics = graphics
         self.device = graphics.device
+        self._owns_document = document is None
         self.document = document if document is not None else Document()
         self.context = graphics.context
         self.draw_list = DrawList()
@@ -512,6 +513,8 @@ class NativeUiHost:
         if self._color_target is not None:
             self.context.destroy_texture(self._color_target)
             self._color_target = None
+        if self._owns_document:
+            self.document.close()
         self.window.close()
 
     def __enter__(self) -> NativeUiHost:
