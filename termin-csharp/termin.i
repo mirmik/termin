@@ -465,11 +465,13 @@ struct KeyEvent {
     KeyEvent(tc_viewport_handle viewport, int key, int scancode, int action, int mods = 0);
 };
 
-// Mouse button constants - match C++ enum class MouseButton
+// C# binding mirror of the canonical tcbase::MouseButton values.
 enum class MouseButton : int {
+    NONE = -1,
     LEFT = 0,
     RIGHT = 1,
-    MIDDLE = 2
+    MIDDLE = 2,
+    OTHER = 3
 };
 
 // Action constants - match C++ enum class Action

@@ -1,5 +1,6 @@
 import pytest
 
+from tcbase import MouseButton
 from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.editor_core.entity_inspector_model import (
     EntityInspectorComponentType,
@@ -17,7 +18,6 @@ from termin.gui_native import (
     PaintContext,
     PointerEvent,
     PointerEventType,
-    PointerButton,
     Rect,
 )
 from termin.inspect import InspectField
@@ -101,7 +101,7 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         assert "enabled" in inspector.fields.field_widgets
         pointer = PointerEvent()
         pointer.type = PointerEventType.Down
-        pointer.button = PointerButton.Right.value
+        pointer.button = MouseButton.RIGHT.value
         pointer.x = inspector.component_list.widget.bounds.x + 8.0
         pointer.y = inspector.component_list.widget.bounds.y + 8.0
         assert document.dispatch_pointer_event(pointer)
