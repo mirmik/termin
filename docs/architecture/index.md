@@ -16,3 +16,4 @@
 - [Player host and embeddable runtime boundary](2026-07-15-player-and-runtime-boundary.md) - `termin-player` as an editor-adjacent CLI/Play Mode host versus `termin-runtime` as an editor-free embeddable native library.
 - [Build profiles and product composition](2026-07-16-build-profiles-and-product-composition.md) - project-owned product recipes, typed target variants, explicit scene/module roots and the boundary between portable intent, local toolchains, resolved requests and artifact manifests.
 - [Display render surface contract](2026-07-19-display-render-surface-contract.md) - целевая граница между `tc_display`, backend-neutral offscreen texture output, display-owned input routing и native window presentation.
+- [Centralized frame memory](2026-07-21-centralized-frame-memory.md) - архитектурный набросок общей CPU frame arena, scoped scratch-регионов, telemetry и политики миграции hot-path allocations.
