@@ -138,8 +138,9 @@ class _WindowManagerTestRouter:
 
 
 class _WindowManagerTestHost:
-    def __init__(self, window, document=None, **options):
+    def __init__(self, window, graphics, document=None, **options):
         self.window = window
+        self.graphics = graphics
         self.document = document or _WindowManagerTestDocument()
         self.font_path = Path("/tmp/editor.ttf")
         self.router = _WindowManagerTestRouter()
@@ -169,7 +170,8 @@ class _WindowManagerTestHost:
 
 def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
     backend = _WindowManagerTestBackend()
-    main_host = _WindowManagerTestHost(_WindowManagerTestWindow(1))
+    graphics = object()
+    main_host = _WindowManagerTestHost(_WindowManagerTestWindow(1), graphics)
     batches = [
         [{"type": "mouse_move", "window_id": 2, "x": 10.0, "y": 20.0}],
         [{"type": "window_close", "window_id": 2}],
@@ -190,6 +192,7 @@ def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
         on_close=lambda: closed.append("secondary"),
     )
 
+    assert secondary.host.graphics is graphics
     assert secondary.host.options["manage_text_input"] is False
     assert secondary.host.document.theme is main_host.document.theme
     assert manager.poll_events() == (True, 1)
