@@ -610,6 +610,7 @@ class NativeUiWindowManager:
         try:
             host = self._host_factory(
                 entry.window,
+                self.main_host.graphics,
                 document=document,
                 font_path=self.main_host.font_path,
                 manage_text_input=False,
