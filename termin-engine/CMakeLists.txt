@@ -58,6 +58,7 @@ set(TERMIN_ENGINE_SOURCES
     src/display_presenter.cpp
     src/engine_core.cpp
     src/default_pipeline_factory.cpp
+    src/frame_graph_debugger.cpp
     src/render_display_registry.cpp
     src/render_frame_planner.cpp
     src/scene_manager.cpp

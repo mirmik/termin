@@ -999,10 +999,10 @@ Phase 12 host notes:
   covered by bundled-Python tests. The legacy tcgui `NodeGraphView` remains only
   because tcgui remains an explicit compatibility frontend; it can now be
   deleted together with that frontend.
-- Framegraph debugging now reuses one `FramegraphDebuggerModel` and one
-  `EditorFramegraphDebuggerService` for native UI, MCP inspection and capture
-  export. The automation service moved from `editor_tcgui` to `editor_core`;
-  both frontends import the canonical owner. The native F12 dialog covers
+- Framegraph debugging now uses one C++ `FrameGraphDebugger`, attached directly
+  to `RenderingManager`, for native UI, MCP inspection and capture export.
+  `EditorFramegraphDebuggerService` is an editor-core automation/export adapter;
+  both frontends project the same native owner. The native F12 dialog covers
   target/mode/pass/symbol/resource selection, stable duplicate-pass indices,
   pause, channel/HDR controls, schedule/pass JSON/timing/stats, main and depth
   previews, and startup `--debug-resource` selection. Preview composition uses
@@ -1010,10 +1010,11 @@ Phase 12 host notes:
   targets before the document draw-list is recorded. `NativeUiHost` exposes a
   removable pre-render callback boundary so changed targets can never leave a
   stale texture handle in the current Vulkan draw list. Closing the dialog
-  disconnects debugger passes and releases preview targets; shutdown also
+  cancels frame-local capture requests and releases preview targets; shutdown also
   unregisters the callback and destroys the dialog tree. Headless tests cover
   F12, reopen/close, presenter options, resize/release, host ordering, MCP
-  compatibility and render-target deduplication.
+  compatibility and render-target deduplication. The former Python model and
+  injected `FrameDebugCapturePass` have been removed.
 - Editor chrome utilities now share toolkit-neutral owners instead of copying
   policy between frontends. `PythonConsoleController` owns the transcript,
   prompt and execution state for the native F6 dialog and the temporary tcgui

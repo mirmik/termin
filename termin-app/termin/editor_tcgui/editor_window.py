@@ -861,7 +861,6 @@ class EditorWindowTcgui:
             )
 
             self._framegraph_debugger_service = EditorFramegraphDebuggerService(
-                get_rendering_controller=lambda: self._rendering_controller,
                 rendering_manager=self._engine.rendering_manager,
                 on_request_update=self._request_viewport_update,
             )

@@ -16,7 +16,7 @@ routing into the same model.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Iterator
 
 from termin.editor_core.signal import Signal
 
@@ -32,12 +32,9 @@ class RenderingModel:
     def __init__(
         self,
         manager: "RenderingManager",
-        *,
-        set_debug_display_active: Callable[["Display | None", bool], None] | None = None,
     ):
         self._manager = manager
         self._topology: "RenderTopology" = manager.topology
-        self._set_debug_display_active = set_debug_display_active
         self._editor_display_handle: tuple[int, int] | None = None
 
         self._selected_display: "Display | None" = None
@@ -161,89 +158,6 @@ class RenderingModel:
                 if vp_scene is not None and vp_scene.equal(scene):
                     return True
         return False
-
-    def get_framegraph_debug_targets_info(self) -> list:
-        """Return render targets that can be inspected by Framegraph Debugger.
-
-        The debugger operates on pipelines, not viewport ownership. Viewport-
-        owned render targets and manager-owned offscreen render targets are
-        therefore exposed through the same target descriptor.
-        """
-        from termin.editor_core.framegraph_debugger_model import FramegraphDebugTarget
-
-        result: list[FramegraphDebugTarget] = []
-        owned_keys: set[tuple[int, int]] = set()
-
-        for display in self._manager.displays:
-            display_name = self._manager.get_display_name(display)
-            for i, viewport in enumerate(display.viewports):
-                viewport_name = viewport.name or f"Viewport {i}"
-                render_target = viewport.render_target
-                if render_target is None:
-                    label = f"{display_name} / {viewport_name}"
-                    result.append(FramegraphDebugTarget(
-                        source=viewport,
-                        label=label,
-                        get_pipeline=lambda viewport=viewport: self._pipeline_for_viewport(viewport),
-                        set_render_active=(
-                            None
-                            if self._set_debug_display_active is None
-                            else lambda active, display=display:
-                                self._set_debug_display_active(display, active)
-                        ),
-                    ))
-                    continue
-
-                owned_keys.add((render_target.index, render_target.generation))
-                rt_name = render_target.name or "RenderTarget"
-                if viewport.managed_by_scene_pipeline:
-                    label = f"[{viewport.managed_by_scene_pipeline}] {viewport_name} / {rt_name}"
-                else:
-                    label = f"{display_name} / {viewport_name} / {rt_name}"
-                result.append(FramegraphDebugTarget(
-                    source=render_target,
-                    label=label,
-                    get_pipeline=lambda viewport=viewport, render_target=render_target:
-                        self._pipeline_for_viewport_render_target(viewport, render_target),
-                    set_render_active=(
-                        None
-                        if self._set_debug_display_active is None
-                        else lambda active, display=display:
-                            self._set_debug_display_active(display, active)
-                    ),
-                ))
-
-        for render_target in self._manager.managed_render_targets:
-            if (render_target.index, render_target.generation) in owned_keys:
-                continue
-            rt_name = render_target.name or "RenderTarget"
-            result.append(FramegraphDebugTarget(
-                source=render_target,
-                label=f"RenderTarget / {rt_name}",
-                get_pipeline=lambda render_target=render_target: render_target.pipeline,
-                set_render_active=(
-                    None
-                    if self._set_debug_display_active is None
-                    else lambda active: self._set_debug_display_active(None, active)
-                ),
-            ))
-
-        return result
-
-    def _pipeline_for_viewport(self, viewport: "Viewport"):
-        managed_by = viewport.managed_by_scene_pipeline
-        if managed_by and viewport.scene is not None:
-            return self._topology.get_pipeline(viewport.scene, managed_by)
-        render_target = viewport.render_target
-        if render_target is not None:
-            return render_target.pipeline
-        return None
-
-    def _pipeline_for_viewport_render_target(self, viewport: "Viewport", render_target):
-        managed_by = viewport.managed_by_scene_pipeline
-        if managed_by and viewport.scene is not None:
-            return self._topology.get_pipeline(viewport.scene, managed_by)
-        return render_target.pipeline
 
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         """Remove a live render target and its scene config entry."""

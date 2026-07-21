@@ -23,6 +23,11 @@ from termin.engine._engine_native import (
 
 TermModulesIntegration = modules.TermModulesIntegration
 RenderingManager = render.RenderingManager
+FrameGraphDebugger = render.FrameGraphDebugger
+FrameGraphDebuggerMode = render.FrameGraphDebuggerMode
+FrameGraphDebuggerPassInfo = render.FrameGraphDebuggerPassInfo
+FrameGraphDebuggerState = render.FrameGraphDebuggerState
+FrameGraphDebuggerSuspendReason = render.FrameGraphDebuggerSuspendReason
 RenderAttachmentContext = render.RenderAttachmentContext
 RenderTopology = render.RenderTopology
 SceneManager = scene.SceneManager
@@ -32,6 +37,11 @@ __all__ = [
     "EngineCore",
     "EngineLoopClient",
     "EngineLoopClientConnection",
+    "FrameGraphDebugger",
+    "FrameGraphDebuggerMode",
+    "FrameGraphDebuggerPassInfo",
+    "FrameGraphDebuggerState",
+    "FrameGraphDebuggerSuspendReason",
     "RenderingManager",
     "RenderAttachmentContext",
     "RenderTopology",

@@ -77,13 +77,11 @@ class EditorMcpServer(TerminMcpServer):
             except (TypeError, ValueError):
                 return self._rpc_error(request_id, -32602, "target_index must be an integer")
         include_pass_json = bool(arguments.get("include_pass_json", False))
-        include_debugger_pass = bool(arguments.get("include_debugger_pass", False))
         timeout = float(arguments.get("timeout", 30.0))
 
         result = self._inspect_framegraph(
             target_index=target_index,
             include_pass_json=include_pass_json,
-            include_debugger_pass=include_debugger_pass,
             timeout=timeout,
         )
         if not result.get("ok", False):
@@ -352,7 +350,6 @@ class EditorMcpServer(TerminMcpServer):
         *,
         target_index: int | None,
         include_pass_json: bool,
-        include_debugger_pass: bool,
         timeout: float,
     ) -> dict[str, object]:
         marker = "__TERMIN_MCP_FRAMEGRAPH_RESULT__"
@@ -362,7 +359,6 @@ class EditorMcpServer(TerminMcpServer):
                 "_termin_mcp_framegraph_result = framegraph_debugger.inspect(",
                 f"    target_index={target_index!r},",
                 f"    include_pass_json={include_pass_json!r},",
-                f"    include_debugger_pass={include_debugger_pass!r},",
                 ")",
                 f"print({json.dumps(marker)} + json.dumps(_termin_mcp_framegraph_result, ensure_ascii=False))",
             ]

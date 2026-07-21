@@ -1,7 +1,7 @@
 #include <termin/render/depth_pass.hpp>
 
 #include <termin/render/camera_capability.hpp>
-#include <termin/render/frame_graph_debugger_core.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_task.hpp>
@@ -333,13 +333,8 @@ void DepthPass::execute_with_data_tgfx2(
         nullptr,
         depth_resources);
 
-    const std::string& debug_symbol = get_debug_internal_point();
     auto capture_debug_symbol = [&](const char* entity_name) {
-        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
-            return;
-        }
-        FrameGraphCapture* capture = debug_capture();
-        if (!capture) {
+        if (!ctx.should_capture_internal(entity_name)) {
             return;
         }
 
@@ -349,8 +344,8 @@ void DepthPass::execute_with_data_tgfx2(
         }
 
         ctx.ctx2->end_pass();
-        capture->capture_direct_via_ctx2(
-            ctx.ctx2,
+        ctx.capture_internal(
+            entity_name,
             capture_tex,
             data.rect.width,
             data.rect.height);
@@ -843,19 +838,17 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         nullptr,
         depth_resources);
 
-    const std::string& debug_symbol = get_debug_internal_point();
     auto capture_debug_symbol = [&](const char* entity_name) {
-        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+        if (!ctx.should_capture_internal(entity_name)) {
             return;
         }
-        FrameGraphCapture* capture = debug_capture();
-        if (!capture || !depth_tex2) {
+        if (!depth_tex2) {
             return;
         }
 
         ctx.ctx2->end_pass();
-        capture->capture_direct_via_ctx2(
-            ctx.ctx2,
+        ctx.capture_internal(
+            entity_name,
             depth_tex2,
             rect.width,
             rect.height);

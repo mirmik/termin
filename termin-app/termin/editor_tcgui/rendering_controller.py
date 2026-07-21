@@ -384,10 +384,6 @@ class RenderingControllerTcgui:
 
         return result
 
-    def get_framegraph_debug_targets_info(self) -> list:
-        """Get render targets/pipelines available to Framegraph Debugger."""
-        return self._model.get_framegraph_debug_targets_info()
-
     # ------------------------------------------------------------------
     # EditorStateIO callbacks
     # ------------------------------------------------------------------

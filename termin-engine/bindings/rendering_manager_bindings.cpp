@@ -3,9 +3,12 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/function.h>
+#include <nanobind/stl/map.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/nanobind.h>
 
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/viewport_render_state.hpp"
@@ -71,6 +74,24 @@ static tc_viewport_handle tuple_to_viewport_handle(const std::tuple<uint32_t, ui
 }
 
 static std::tuple<uint32_t, uint32_t> viewport_handle_to_tuple(tc_viewport_handle h) {
+    return {h.index, h.generation};
+}
+
+static std::tuple<uint32_t, uint32_t> render_target_handle_to_tuple(
+    tc_render_target_handle h
+) {
+    return {h.index, h.generation};
+}
+
+static std::tuple<uint32_t, uint32_t> pipeline_handle_to_tuple(tc_pipeline_handle h) {
+    return {h.index, h.generation};
+}
+
+static std::tuple<uint32_t, uint32_t> display_handle_to_tuple(tc_display_handle h) {
+    return {h.index, h.generation};
+}
+
+static std::tuple<uint32_t, uint32_t> scene_handle_to_tuple(tc_scene_handle h) {
     return {h.index, h.generation};
 }
 
@@ -588,6 +609,150 @@ void bind_rendering_manager(nb::module_& m) {
             return stats;
         }, "Get render statistics for debugging")
     ;
+
+    nb::enum_<RenderExecutionTargetKind>(m, "RenderExecutionTargetKind")
+        .value("Viewport", RenderExecutionTargetKind::Viewport)
+        .value("RenderTarget", RenderExecutionTargetKind::RenderTarget);
+
+    nb::class_<RenderExecutionTargetId>(m, "RenderExecutionTargetId")
+        .def_prop_ro("kind", [](const RenderExecutionTargetId& self) {
+            return self.kind;
+        })
+        .def_prop_ro("viewport_handle", [](const RenderExecutionTargetId& self) {
+            return viewport_handle_to_tuple(self.viewport);
+        })
+        .def_prop_ro("render_target_handle", [](const RenderExecutionTargetId& self) {
+            return render_target_handle_to_tuple(self.render_target);
+        })
+        .def("__eq__", [](const RenderExecutionTargetId& self,
+                            const RenderExecutionTargetId& other) {
+            return self == other;
+        });
+
+    nb::class_<RenderExecutionTargetInfo>(m, "RenderExecutionTargetInfo")
+        .def_prop_ro("id", [](const RenderExecutionTargetInfo& self) {
+            return self.id;
+        })
+        .def_prop_ro("display_handle", [](const RenderExecutionTargetInfo& self) {
+            return display_handle_to_tuple(self.display);
+        })
+        .def_prop_ro("scene_handle", [](const RenderExecutionTargetInfo& self) {
+            return scene_handle_to_tuple(self.scene);
+        })
+        .def_prop_ro("pipeline_handle", [](const RenderExecutionTargetInfo& self) {
+            return pipeline_handle_to_tuple(self.pipeline);
+        })
+        .def_prop_ro("pipeline", [](const RenderExecutionTargetInfo& self) {
+            return pipeline_to_python(self.pipeline);
+        })
+        .def_ro("label", &RenderExecutionTargetInfo::label)
+        .def_ro("renderable", &RenderExecutionTargetInfo::renderable);
+
+    nb::enum_<FrameGraphDebuggerState>(m, "FrameGraphDebuggerState")
+        .value("Unbound", FrameGraphDebuggerState::Unbound)
+        .value("Bound", FrameGraphDebuggerState::Bound)
+        .value("WaitingFrame", FrameGraphDebuggerState::WaitingFrame)
+        .value("Captured", FrameGraphDebuggerState::Captured)
+        .value("Suspended", FrameGraphDebuggerState::Suspended)
+        .value("Error", FrameGraphDebuggerState::Error);
+
+    nb::enum_<FrameGraphDebuggerSuspendReason>(m, "FrameGraphDebuggerSuspendReason")
+        .value("None", FrameGraphDebuggerSuspendReason::None)
+        .value("TargetRemoved", FrameGraphDebuggerSuspendReason::TargetRemoved)
+        .value("PipelineUnavailable", FrameGraphDebuggerSuspendReason::PipelineUnavailable)
+        .value("TargetNotRenderable", FrameGraphDebuggerSuspendReason::TargetNotRenderable);
+
+    nb::enum_<FrameGraphDebuggerMode>(m, "FrameGraphDebuggerMode")
+        .value("BetweenPasses", FrameGraphDebuggerMode::BetweenPasses)
+        .value("InsidePass", FrameGraphDebuggerMode::InsidePass);
+
+    nb::class_<FrameGraphDebuggerPassInfo>(m, "FrameGraphDebuggerPassInfo")
+        .def_ro("index", &FrameGraphDebuggerPassInfo::index)
+        .def_ro("name", &FrameGraphDebuggerPassInfo::name)
+        .def_ro("type", &FrameGraphDebuggerPassInfo::type)
+        .def_ro("enabled", &FrameGraphDebuggerPassInfo::enabled)
+        .def_ro("passthrough", &FrameGraphDebuggerPassInfo::passthrough)
+        .def_ro("reads", &FrameGraphDebuggerPassInfo::reads)
+        .def_ro("writes", &FrameGraphDebuggerPassInfo::writes)
+        .def_ro("internal_symbols", &FrameGraphDebuggerPassInfo::internal_symbols)
+        .def_prop_ro("has_internal_symbols",
+            &FrameGraphDebuggerPassInfo::has_internal_symbols)
+        .def_prop_ro("display_name", &FrameGraphDebuggerPassInfo::display_name);
+
+    nb::class_<FrameGraphDebugger>(m, "FrameGraphDebugger")
+        .def(nb::init<RenderingManager&>(), nb::arg("rendering_manager"),
+             nb::keep_alive<1, 2>())
+        .def("refresh", &FrameGraphDebugger::refresh)
+        .def("finish_frame", &FrameGraphDebugger::finish_frame)
+        .def("select_target_at", &FrameGraphDebugger::select_target_at,
+             nb::arg("index"))
+        .def("clear_selection", &FrameGraphDebugger::clear_selection)
+        .def("request_resource", &FrameGraphDebugger::request_resource,
+             nb::arg("resource"))
+        .def("request_internal", &FrameGraphDebugger::request_internal,
+             nb::arg("pass_index"), nb::arg("symbol"))
+        .def("set_paused", &FrameGraphDebugger::set_paused,
+             nb::arg("paused"))
+        .def("cancel_request", &FrameGraphDebugger::cancel_request)
+        .def("connect", &FrameGraphDebugger::connect)
+        .def("disconnect", &FrameGraphDebugger::disconnect)
+        .def_prop_ro("targets", [](const FrameGraphDebugger& self) {
+            return self.targets();
+        })
+        .def_prop_ro("selected_target_index",
+            &FrameGraphDebugger::selected_target_index)
+        .def_prop_ro("has_selection", &FrameGraphDebugger::has_selection)
+        .def_prop_ro("state", &FrameGraphDebugger::state)
+        .def_prop_ro("suspend_reason", &FrameGraphDebugger::suspend_reason)
+        .def_prop_ro("revision", &FrameGraphDebugger::revision)
+        .def_prop_ro("request_generation", &FrameGraphDebugger::request_generation)
+        .def_prop_ro("requested_resource", &FrameGraphDebugger::requested_resource)
+        .def_prop_ro("paused", &FrameGraphDebugger::paused)
+        .def_prop_rw("mode", &FrameGraphDebugger::mode, &FrameGraphDebugger::set_mode)
+        .def_prop_rw("selected_pass_index",
+            &FrameGraphDebugger::selected_pass_index,
+            &FrameGraphDebugger::set_selected_pass)
+        .def_prop_ro("selected_pass", &FrameGraphDebugger::selected_pass_name)
+        .def_prop_rw("selected_symbol",
+            &FrameGraphDebugger::selected_symbol,
+            &FrameGraphDebugger::set_selected_symbol)
+        .def_prop_rw("selected_resource",
+            &FrameGraphDebugger::selected_resource,
+            &FrameGraphDebugger::set_selected_resource)
+        .def_prop_rw("channel_mode",
+            &FrameGraphDebugger::channel_mode,
+            &FrameGraphDebugger::set_channel_mode)
+        .def_prop_rw("highlight_hdr",
+            &FrameGraphDebugger::highlight_hdr,
+            &FrameGraphDebugger::set_highlight_hdr)
+        .def("passes", &FrameGraphDebugger::passes)
+        .def("schedule", &FrameGraphDebugger::schedule)
+        .def("resources", &FrameGraphDebugger::resources)
+        .def("alias_groups", &FrameGraphDebugger::alias_groups)
+        .def("symbols", &FrameGraphDebugger::symbols)
+        .def("format_capture_info", &FrameGraphDebugger::format_capture_info)
+        .def("format_writer_pass", &FrameGraphDebugger::format_writer_pass)
+        .def("format_pipeline_info", &FrameGraphDebugger::format_pipeline_info)
+        .def("format_pass_json", &FrameGraphDebugger::format_pass_json)
+        .def("format_pass_json_at", &FrameGraphDebugger::format_pass_json_at,
+             nb::arg("pass_index"))
+        .def("format_timing", &FrameGraphDebugger::format_timing)
+        .def("format_render_stats", &FrameGraphDebugger::format_render_stats)
+        .def("analyze_hdr", &FrameGraphDebugger::analyze_hdr)
+        .def_prop_ro("resolved_pipeline_handle", [](const FrameGraphDebugger& self) {
+            return pipeline_handle_to_tuple(self.resolved_pipeline());
+        })
+        .def_prop_ro("capture_tex", &FrameGraphDebugger::capture_tex)
+        .def_prop_ro("depth_capture_tex", &FrameGraphDebugger::depth_capture_tex)
+        .def_prop_ro("capture", [](FrameGraphDebugger& self) -> FrameGraphCapture& {
+            return self.capture();
+        }, nb::rv_policy::reference_internal)
+        .def_prop_ro("depth_capture", [](FrameGraphDebugger& self) -> FrameGraphCapture& {
+            return self.depth_capture();
+        }, nb::rv_policy::reference_internal)
+        .def_prop_ro("presenter", [](FrameGraphDebugger& self) -> FrameGraphPresenter& {
+            return self.presenter();
+        }, nb::rv_policy::reference_internal);
 }
 
 } // namespace termin

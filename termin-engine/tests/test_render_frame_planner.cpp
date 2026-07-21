@@ -20,6 +20,7 @@ namespace {
 using termin::RenderTopology;
 using termin::rendering_manager_detail::OffscreenRenderDiagnostic;
 using termin::rendering_manager_detail::OffscreenRenderDiagnosticKind;
+using termin::rendering_manager_detail::OffscreenRenderDemand;
 using termin::rendering_manager_detail::OffscreenRenderJob;
 using termin::rendering_manager_detail::OffscreenRenderJobKind;
 using termin::rendering_manager_detail::OffscreenRenderPlanner;
@@ -181,17 +182,19 @@ bool execute_plan(
     const RenderTopology& topology,
     Recorder& recorder,
     tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID,
-    bool include_unattached_roots = true
+    const OffscreenRenderDemand* demands = nullptr,
+    size_t demand_count = 0
 ) {
     recorder = Recorder{};
     return planner.execute(
         topology,
         only_display,
-        include_unattached_roots,
         record_job,
         &recorder,
         record_diagnostic,
-        &recorder);
+        &recorder,
+        demands,
+        demand_count);
 }
 
 } // namespace
@@ -220,7 +223,9 @@ int main() {
     tc_render_target_handle producer = tc_render_target_new("FovTarget");
     tc_render_target_handle unused = tc_render_target_new("UnusedHiddenTarget");
     tc_render_target_handle consumer = tc_render_target_new("chronosquad");
-    const tc_render_target_handle render_targets[] = {producer, unused, consumer};
+    tc_render_target_handle unattached = tc_render_target_new("UnattachedTarget");
+    const tc_render_target_handle render_targets[] = {
+        producer, unused, consumer, unattached};
     for (tc_render_target_handle target : render_targets) {
         tc_render_target_set_scene(target, scene);
         if (!topology.register_render_target(target)) return 1;
@@ -228,6 +233,7 @@ int main() {
     tc_render_target_set_pipeline(producer, producer_pipeline.pipeline);
     tc_render_target_set_pipeline(unused, producer_pipeline.pipeline);
     tc_render_target_set_pipeline(consumer, consumer_pipeline.pipeline);
+    tc_render_target_set_pipeline(unattached, producer_pipeline.pipeline);
     const Param consumer_params[] = {
         {"fov", "FovTarget"},
         {"file_tex", "file:test-texture"},
@@ -288,15 +294,35 @@ int main() {
             || !producer_job || tc_viewport_handle_valid(producer_job->viewport)
             || !consumer_job
             || !tc_viewport_handle_eq(consumer_job->viewport, consumer_viewport)
-            || find_target_job(recorder, unused)) {
+            || find_target_job(recorder, unused)
+            || find_target_job(recorder, unattached)) {
         std::fprintf(stderr, "active consumer did not schedule its hidden producer first\n");
         return 1;
     }
 
-    if (!execute_plan(planner, topology, recorder, active_display, false)
+    if (!execute_plan(planner, topology, recorder, active_display)
             || recorder.job_count != 2
             || target_job_index(recorder, producer) >= target_job_index(recorder, consumer)) {
         std::fprintf(stderr, "selected-display plan lost dependency closure\n");
+        return 1;
+    }
+
+    const OffscreenRenderDemand debugger_demand{unused_viewport, unused};
+    if (!execute_plan(
+            planner,
+            topology,
+            recorder,
+            active_display,
+            &debugger_demand,
+            1)
+            || recorder.job_count != 3
+            || !find_target_job(recorder, unused)
+            || !tc_viewport_handle_eq(
+                find_target_job(recorder, unused)->viewport, unused_viewport)
+            || target_job_index(recorder, producer) >= target_job_index(recorder, consumer)) {
+        std::fprintf(
+            stderr,
+            "debugger demand did not activate hidden target with dependency closure\n");
         return 1;
     }
 
@@ -313,7 +339,7 @@ int main() {
     tc_viewport_set_render_target(editor_viewport, editor_target);
     tc_display_add_viewport(editor_display, editor_viewport);
     if (!editor_topology.register_viewport(scene, editor_viewport, editor_display, false)
-            || !execute_plan(planner, editor_topology, recorder, editor_display, false)
+            || !execute_plan(planner, editor_topology, recorder, editor_display)
             || recorder.job_count != 1
             || !find_target_job(recorder, editor_target)
             || !tc_viewport_handle_eq(recorder.jobs[0].viewport, editor_viewport)) {

@@ -4,7 +4,7 @@
 #include "termin/camera/camera_component.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
-#include "termin/render/frame_graph_debugger_core.hpp"
+#include "termin/render/frame_graph_capture.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_pipeline_shader_assembler.hpp"
@@ -859,19 +859,14 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 continue;
             }
 
-            const std::string& debug_symbol = get_debug_internal_point();
             auto capture_debug_symbol = [&](const char* entity_name) {
-                if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
-                    return;
-                }
-                FrameGraphCapture* capture = debug_capture();
-                if (!capture) {
+                if (!ctx.should_capture_internal(entity_name)) {
                     return;
                 }
 
                 end_shadow_pass();
-                capture->capture_direct_via_ctx2(
-                    ctx.ctx2,
+                ctx.capture_internal(
+                    entity_name,
                     depth_tex2,
                     resolution,
                     resolution,

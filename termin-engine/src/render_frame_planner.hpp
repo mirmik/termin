@@ -2,6 +2,7 @@
 
 #include "termin/render/render_topology.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 extern "C" {
@@ -23,6 +24,14 @@ struct OffscreenRenderJob {
     tc_render_target_handle render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
     tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+};
+
+// An explicit consumer keeps this target in the frame even when its display
+// is inactive. The normal dependency walk still schedules every producer
+// required by the demanded target.
+struct OffscreenRenderDemand {
+    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+    tc_render_target_handle render_target = TC_RENDER_TARGET_HANDLE_INVALID;
 };
 
 enum class OffscreenRenderDiagnosticKind {
@@ -56,11 +65,12 @@ public:
     bool execute(
         const RenderTopology& topology,
         tc_display_handle only_display,
-        bool include_unattached_roots,
         OffscreenRenderJobCallback job_callback,
         void* job_user_data,
         OffscreenRenderDiagnosticCallback diagnostic_callback = nullptr,
-        void* diagnostic_user_data = nullptr
+        void* diagnostic_user_data = nullptr,
+        const OffscreenRenderDemand* demands = nullptr,
+        size_t demand_count = 0
     );
 
 private:
@@ -70,12 +80,16 @@ private:
 
 void update_viewport_rects(
     const RenderTopology& topology,
-    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
+    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID,
+    const OffscreenRenderDemand* demands = nullptr,
+    size_t demand_count = 0
 );
 
 void sync_viewport_render_target_resolutions(
     const RenderTopology& topology,
-    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID
+    tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID,
+    const OffscreenRenderDemand* demands = nullptr,
+    size_t demand_count = 0
 );
 
 } // namespace termin::rendering_manager_detail

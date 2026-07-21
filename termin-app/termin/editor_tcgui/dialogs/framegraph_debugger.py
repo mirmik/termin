@@ -1,9 +1,7 @@
 """Framegraph Debugger — visualize intermediate FBOs and debug render passes.
 
-UI layer only. State + business logic lives in
-:class:`termin.editor_core.framegraph_debugger_model.FramegraphDebuggerModel`.
-This file builds tcgui widgets, subscribes to model Signals, and forwards
-widget events back into model setters.
+UI layer only. State and behavior live in the native C++ FrameGraphDebugger.
+This file builds tcgui widgets and forwards widget events to that object.
 """
 from __future__ import annotations
 
@@ -20,7 +18,7 @@ from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.rich_text_view import RichTextView
 from tcgui.widgets.units import px, pct
 
-from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
+from termin.engine import FrameGraphDebuggerMode
 
 
 class CapturePreviewWidget(Widget):
@@ -28,7 +26,7 @@ class CapturePreviewWidget(Widget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._core = None
+        self._debugger = None
         self._capture = None
         self._editor_display = None
         self.channel_mode: int = 0
@@ -38,7 +36,7 @@ class CapturePreviewWidget(Widget):
     def render(self, renderer) -> None:
         renderer.draw_rect(self.x, self.y, self.width, self.height,
                            (0.08, 0.08, 0.08, 1.0))
-        if not self.has_content or self._core is None:
+        if not self.has_content or self._debugger is None:
             return
         capture = self._capture
         if capture is None:
@@ -56,7 +54,7 @@ class CapturePreviewWidget(Widget):
             handle=capture_tex,
             tex_w=tex_w,
             tex_h=tex_h,
-            presenter=self._core.presenter,
+            presenter=self._debugger.presenter,
             channel_mode=5 if is_depth else self.channel_mode,
             highlight_hdr=False if is_depth else self.highlight_hdr,
         )
@@ -66,13 +64,14 @@ class _FramegraphDebuggerHandle:
     """Public handle returned by ``show_framegraph_debugger``.
 
     The editor calls ``update()`` per frame and ``close()`` to tear down.
-    All real state lives in ``self.model``; this class is responsible for
-    turning model signals into widget updates and widget events into
-    model setter calls.
+    All real state lives in the native debugger referenced by ``self.model``;
+    this class only turns widget events into native API calls and projects the
+    returned snapshots into widgets.
     """
 
-    def __init__(self, model: FramegraphDebuggerModel) -> None:
-        self.model = model
+    def __init__(self, debugger, rendering_manager) -> None:
+        self.model = debugger
+        self._rendering_manager = rendering_manager
         self.window_ui = None
         self._native_close = None
         self.visible: bool = False
@@ -112,20 +111,10 @@ class _FramegraphDebuggerHandle:
     # ------------------------------------------------------------------
 
     def bind_signals(self) -> None:
-        self.model.lists_changed.connect(self._on_lists_changed)
-        self.model.selection_changed.connect(self._on_selection_changed)
-        self.model.info_changed.connect(self._on_info_changed)
-        self.model.capture_updated.connect(self._on_capture_updated)
-        self.model.preview_params_changed.connect(self._on_preview_params_changed)
-        self.model.hdr_stats_changed.connect(self._on_hdr_stats_changed)
+        pass
 
     def unbind_signals(self) -> None:
-        self.model.lists_changed.disconnect(self._on_lists_changed)
-        self.model.selection_changed.disconnect(self._on_selection_changed)
-        self.model.info_changed.disconnect(self._on_info_changed)
-        self.model.capture_updated.disconnect(self._on_capture_updated)
-        self.model.preview_params_changed.disconnect(self._on_preview_params_changed)
-        self.model.hdr_stats_changed.disconnect(self._on_hdr_stats_changed)
+        pass
 
     # ------------------------------------------------------------------
     # Model → widget updates
@@ -143,7 +132,7 @@ class _FramegraphDebuggerHandle:
         # existing child toggles visibility, so we swap children.
         if self._panel_slot is not None:
             self._panel_slot.children.clear()
-            if self.model.mode == "inside":
+            if self.model.mode == FrameGraphDebuggerMode.InsidePass:
                 if self._inside_panel is not None:
                     self._panel_slot.add_child(self._inside_panel)
             else:
@@ -155,7 +144,9 @@ class _FramegraphDebuggerHandle:
         # Reflect current selection in combos without triggering events.
         self._updating = True
         if self._mode_combo is not None:
-            self._mode_combo.selected_index = 0 if self.model.mode == "inside" else 1
+            self._mode_combo.selected_index = (
+                0 if self.model.mode == FrameGraphDebuggerMode.InsidePass else 1
+            )
         if self._pass_combo is not None and self.model.selected_pass_index is not None:
             for i, pass_index in enumerate(self._pass_combo_indices):
                 if i >= self._pass_combo.item_count:
@@ -168,16 +159,16 @@ class _FramegraphDebuggerHandle:
                 if self._symbol_combo.item_text(i) == self.model.selected_symbol:
                     self._symbol_combo.selected_index = i
                     break
-        if self._resource_combo is not None and self.model.debug_source_res:
+        if self._resource_combo is not None and self.model.selected_resource:
             for i in range(self._resource_combo.item_count):
-                if self._resource_combo.item_text(i) == self.model.debug_source_res:
+                if self._resource_combo.item_text(i) == self.model.selected_resource:
                     self._resource_combo.selected_index = i
                     break
         self._updating = False
 
     def _on_info_changed(self, _model) -> None:
         if self._fbo_info_label is not None:
-            self._fbo_info_label.text = self.model.format_fbo_info()
+            self._fbo_info_label.text = self.model.format_capture_info()
         if self._writer_pass_label is not None:
             self._writer_pass_label.text = self.model.format_writer_pass()
         if self._pipeline_text is not None:
@@ -216,31 +207,27 @@ class _FramegraphDebuggerHandle:
     def _refresh_viewport_combo(self) -> None:
         if self._viewport_combo is None:
             return
-        viewports = self.model.viewports
+        viewports = self.model.targets
         self._updating = True
         self._viewport_combo.clear()
-        for _, label in viewports:
-            self._viewport_combo.add_item(label)
-        if viewports:
-            current = self.model.current_viewport
-            idx = 0
-            for i, (vp, _) in enumerate(viewports):
-                if vp is current:
-                    idx = i
-                    break
-            self._viewport_combo.selected_index = idx
+        for target in viewports:
+            self._viewport_combo.add_item(target.label)
+        selected_target = self.model.selected_target_index
+        self._viewport_combo.selected_index = (
+            selected_target if selected_target is not None else -1
+        )
         self._updating = False
 
     def _refresh_resource_combo(self) -> None:
         if self._resource_combo is None:
             return
-        names = self.model.get_resources()
+        names = self.model.resources()
         self._updating = True
         self._resource_combo.clear()
         for name in names:
             self._resource_combo.add_item(name)
-        if names and self.model.debug_source_res in names:
-            self._resource_combo.selected_index = names.index(self.model.debug_source_res)
+        if names and self.model.selected_resource in names:
+            self._resource_combo.selected_index = names.index(self.model.selected_resource)
         elif names:
             self._resource_combo.selected_index = 0
         self._updating = False
@@ -248,7 +235,7 @@ class _FramegraphDebuggerHandle:
     def _refresh_pass_combo(self) -> None:
         if self._pass_combo is None:
             return
-        passes_info = self.model.get_passes()
+        passes_info = self.model.passes()
         self._updating = True
         self._pass_combo.clear()
         self._pass_combo_indices = []
@@ -267,7 +254,7 @@ class _FramegraphDebuggerHandle:
     def _refresh_symbol_combo(self) -> None:
         if self._symbol_combo is None:
             return
-        symbols = self.model.get_symbols()
+        symbols = self.model.symbols()
         self._updating = True
         self._symbol_combo.clear()
         selected_index = -1
@@ -285,7 +272,7 @@ class _FramegraphDebuggerHandle:
         if index >= len(self._pass_combo_indices):
             log.warn(f"[FrameDebugger] pass combo index {index} has no pass mapping")
             return
-        self.model.set_selected_pass_by_index(self._pass_combo_indices[index])
+        self.model.selected_pass_index = self._pass_combo_indices[index]
 
     # ------------------------------------------------------------------
     # Per-frame update — editor calls this
@@ -294,7 +281,13 @@ class _FramegraphDebuggerHandle:
     def update(self) -> None:
         if not self.visible:
             return
-        self.model.notify_frame_rendered()
+        self.model.finish_frame()
+        self.model.refresh()
+        self._on_lists_changed(self.model)
+        self._on_selection_changed(self.model)
+        self._on_info_changed(self.model)
+        self._on_capture_updated(self.model)
+        self._on_preview_params_changed(self.model)
 
     def close(self) -> None:
         self._teardown(close_native=True)
@@ -332,16 +325,11 @@ def show_framegraph_debugger(
         log.error("[FrameDebugger] ui.create_window is not available — cannot open")
         return None
 
-    from termin.editor._editor_native import FrameGraphDebuggerCore
+    from termin.engine import FrameGraphDebugger
 
-    core = FrameGraphDebuggerCore()
-    model = FramegraphDebuggerModel(
-        rendering_controller=rendering_controller,
-        core=core,
-        rendering_manager=rendering_manager,
-        on_request_update=on_request_update,
-    )
-    handle = _FramegraphDebuggerHandle(model)
+    core = FrameGraphDebugger(rendering_manager)
+    model = core
+    handle = _FramegraphDebuggerHandle(core, rendering_manager)
 
     # ---- Build UI ----
 
@@ -522,7 +510,7 @@ def show_framegraph_debugger(
 
     preview = CapturePreviewWidget()
     preview.stretch = True
-    preview._core = core
+    preview._debugger = core
     preview._capture = core.capture
     preview._editor_display = editor_display
     handle._preview = preview
@@ -545,7 +533,7 @@ def show_framegraph_debugger(
     depth_preview = CapturePreviewWidget()
     depth_preview.preferred_height = px(180)
     depth_preview.stretch = True
-    depth_preview._core = core
+    depth_preview._debugger = core
     depth_preview._capture = core.depth_capture
     handle._depth_preview = depth_preview
     depth_panel.add_child(depth_preview)
@@ -570,12 +558,15 @@ def show_framegraph_debugger(
     def on_viewport_changed(idx, _text):
         if handle._updating:
             return
-        model.set_viewport_by_index(idx)
+        model.select_target_at(idx)
 
     def on_mode_changed(idx, _text):
         if handle._updating:
             return
-        model.set_mode("inside" if idx == 0 else "between")
+        model.mode = (
+            FrameGraphDebuggerMode.InsidePass
+            if idx == 0 else FrameGraphDebuggerMode.BetweenPasses
+        )
 
     def on_pass_changed(idx, _text):
         if handle._updating or idx < 0:
@@ -585,12 +576,12 @@ def show_framegraph_debugger(
     def on_symbol_changed(idx, text):
         if handle._updating or not text:
             return
-        model.set_selected_symbol(text)
+        model.selected_symbol = text
 
     def on_resource_changed(idx, text):
         if handle._updating or not text:
             return
-        model.set_source_resource(text)
+        model.selected_resource = text
 
     def on_pause_changed(checked):
         model.set_paused(bool(checked))
@@ -598,20 +589,20 @@ def show_framegraph_debugger(
     def on_channel_changed(idx, _text):
         if handle._updating:
             return
-        model.set_channel_mode(idx)
+        model.channel_mode = idx
 
     def on_hdr_highlight_changed(checked):
-        model.set_highlight_hdr(bool(checked))
+        model.highlight_hdr = bool(checked)
 
     def on_analyze_hdr():
-        model.analyze_hdr()
+        handle._on_hdr_stats_changed(model.analyze_hdr())
 
     def on_refresh_depth():
         capture_tex = core.depth_capture.capture_tex
         if not capture_tex:
             status_label.text = "No capture for depth"
             return
-        render_engine = model.rendering_manager.render_engine
+        render_engine = handle._rendering_manager.render_engine
         if render_engine is None:
             status_label.text = "No render engine"
             return
@@ -632,7 +623,7 @@ def show_framegraph_debugger(
             status_label.text = f"Depth error: {e}"
 
     def on_refresh_stats():
-        model.refresh_render_stats()
+        handle._on_info_changed(model)
 
     # Wire widget events
     viewport_combo.on_changed = on_viewport_changed
@@ -666,12 +657,20 @@ def show_framegraph_debugger(
 
     # Subscribe handle to model and do initial population.
     handle.bind_signals()
-    model.refresh_viewports()
-    # ``refresh_viewports`` fires lists_changed but not info_changed, so
-    # pull initial info text now.
+    model.refresh()
+    targets = model.targets
+    if model.selected_target_index is None and targets:
+        if not model.select_target_at(0):
+            log.error(
+                "[FrameDebugger] failed to select initial target "
+                f"'{targets[0].label}'"
+            )
+    model.connect()
+    handle._on_lists_changed(model)
+    handle._on_selection_changed(model)
     handle._on_info_changed(model)
     # Auto-select the first resource so schedule/writer info populate.
     if resource_combo.item_count > 0:
-        model.set_source_resource(resource_combo.item_text(0))
+        model.selected_resource = resource_combo.item_text(0)
 
     return handle

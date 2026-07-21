@@ -447,14 +447,14 @@ telemetry `request source -> rendered outputs`.
 Baseline необходимо сравнивать с player и отдельно смотреть sections
 `UI Compose` / `SceneManager Render`.
 
-Открытый Framegraph Debugger образует feedback loop: каждый loop получает
-`notify_frame_rendered`, модель emits изменения, UI форматирует stats/JSON и
-запрашивает новый scene/UI render:
+Открытый Framegraph Debugger образует feedback loop: каждый loop обновляет
+нативный debugger, UI повторно форматирует stats/JSON и запрашивает
+новый scene/UI render:
 
 - `termin-app/termin/editor_native/framegraph_debugger.py:212-216`;
 - `framegraph_debugger.py:289-292`;
 - `framegraph_debugger.py:392-401`;
-- `termin-app/termin/editor_core/framegraph_debugger_model.py:617-621`.
+- `termin-engine/src/frame_graph_debugger.cpp`.
 
 Baseline нельзя снимать с открытым Framegraph Debugger.
 

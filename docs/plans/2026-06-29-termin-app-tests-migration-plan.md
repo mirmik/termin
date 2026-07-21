@@ -199,7 +199,6 @@ Examples that should normally stay:
 - `test_editor_mcp_server.py`;
 - `test_editor_python_executor.py`;
 - `test_editor_shader_runtime.py`;
-- `test_framegraph_debugger_model_disconnect.py`;
 - `test_game_mode_model.py`;
 - `test_game_mode_ui_controller.py`;
 - `test_gltf_drag_drop.py`;

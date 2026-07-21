@@ -1,5 +1,6 @@
 #include "guard_main.h"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/tc_scene_render_ext.hpp"
@@ -36,6 +37,10 @@ using termin::RenderTopology;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
 using termin::TcPipelineTemplate;
+using termin::FrameGraphDebugger;
+using termin::FrameGraphDebuggerMode;
+using termin::FrameGraphDebuggerState;
+using termin::FrameGraphDebuggerSuspendReason;
 
 namespace {
 
@@ -95,6 +100,25 @@ TcPipelineTemplate make_empty_pipeline_template(const std::string& name)
     REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
     return resource;
 }
+
+class FrameGraphDebuggerProbePass final : public termin::CxxFramePass {
+public:
+    FrameGraphDebuggerProbePass() {
+        pass_name_set("DebuggerProbe");
+    }
+
+    std::set<const char*> compute_reads() const override {
+        return {"input_color"};
+    }
+
+    std::set<const char*> compute_writes() const override {
+        return {"probe_color"};
+    }
+
+    std::vector<std::string> get_internal_symbols() const override {
+        return {"before_probe", "after_probe"};
+    }
+};
 
 } // namespace
 
@@ -872,6 +896,204 @@ TEST_CASE("RenderingManager preserves host viewport until forced scene teardown"
 
     manager.remove_editor_display(editor_display);
     tc_display_free(editor_display);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("FrameGraphDebugger polls live RenderingManager targets")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_display_handle display = tc_display_new("DebugDisplay", nullptr);
+    REQUIRE(tc_display_handle_valid(display));
+    tc_render_target_handle target = tc_render_target_new("DebugTarget");
+    REQUIRE(tc_render_target_handle_valid(target));
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle pipeline = tc_pipeline_create("DebugPipeline");
+    REQUIRE(tc_pipeline_handle_valid(pipeline));
+    tc_render_target_set_pipeline(target, pipeline);
+    tc_viewport_handle viewport = tc_viewport_new("DebugViewport", scene);
+    REQUIRE(tc_viewport_handle_valid(viewport));
+    tc_viewport_set_render_target(viewport, target);
+    tc_display_add_viewport(display, viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    REQUIRE_EQ(debugger.targets().size(), 1u);
+    CHECK(tc_viewport_handle_eq(debugger.targets()[0].id.viewport, viewport));
+    CHECK(tc_render_target_handle_eq(debugger.targets()[0].id.render_target, target));
+    CHECK(debugger.targets()[0].pipeline.index == pipeline.index);
+    CHECK(debugger.targets()[0].pipeline.generation == pipeline.generation);
+    CHECK(debugger.targets()[0].renderable);
+    CHECK(debugger.select_target_at(0));
+    CHECK(debugger.state() == FrameGraphDebuggerState::Bound);
+    CHECK(debugger.resolved_pipeline().index == pipeline.index);
+    CHECK(debugger.resolved_pipeline().generation == pipeline.generation);
+
+    manager.remove_editor_display(display);
+    tc_display_remove_viewport(display, viewport);
+    tc_viewport_free(viewport);
+    tc_pipeline_destroy(pipeline);
+    tc_render_target_free(target);
+    tc_display_free(display);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("FrameGraphDebugger owns pass symbol and resource selection")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    tc_render_target_handle target = tc_render_target_new("DebugTarget");
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle pipeline_handle = tc_pipeline_create("DebugPipeline");
+    RenderPipeline pipeline(pipeline_handle);
+    pipeline.add_pass((new FrameGraphDebuggerProbePass())->tc_pass_ptr());
+    tc_render_target_set_pipeline(target, pipeline_handle);
+    tc_viewport_handle viewport = tc_viewport_new("DebugViewport", scene);
+    tc_viewport_set_render_target(viewport, target);
+    tc_display_handle display = tc_display_new("DebugDisplay", nullptr);
+    tc_display_add_viewport(display, viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    REQUIRE_EQ(debugger.passes().size(), 1u);
+    CHECK_EQ(debugger.passes()[0].name, "DebuggerProbe");
+    REQUIRE_EQ(debugger.passes()[0].reads.size(), 1u);
+    CHECK_EQ(debugger.passes()[0].reads[0], "input_color");
+    REQUIRE_EQ(debugger.passes()[0].writes.size(), 1u);
+    CHECK_EQ(debugger.passes()[0].writes[0], "probe_color");
+    REQUIRE_EQ(debugger.passes()[0].internal_symbols.size(), 2u);
+    CHECK_EQ(debugger.passes()[0].internal_symbols[0], "after_probe");
+    CHECK_EQ(debugger.passes()[0].internal_symbols[1], "before_probe");
+
+    debugger.set_selected_pass(0);
+    CHECK_EQ(debugger.selected_pass_name(), "DebuggerProbe");
+    CHECK_EQ(debugger.selected_symbol(), "before_probe");
+    CHECK(debugger.request_internal(0, "after_probe"));
+    CHECK(debugger.mode() == FrameGraphDebuggerMode::InsidePass);
+    CHECK(debugger.state() == FrameGraphDebuggerState::WaitingFrame);
+    CHECK_FALSE(debugger.request_internal(0, "missing"));
+
+    debugger.set_selected_resource("probe_color");
+    debugger.set_mode(FrameGraphDebuggerMode::BetweenPasses);
+    CHECK_EQ(debugger.selected_resource(), "probe_color");
+    CHECK_EQ(debugger.requested_resource(), "probe_color");
+    CHECK(debugger.state() == FrameGraphDebuggerState::WaitingFrame);
+
+    manager.remove_editor_display(display);
+    tc_display_remove_viewport(display, viewport);
+    tc_viewport_free(viewport);
+    tc_pipeline_destroy(pipeline_handle);
+    tc_render_target_free(target);
+    tc_display_free(display);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("FrameGraphDebugger reconciles pipeline replacement and target removal")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_display_handle display = tc_display_new("DebugDisplay", nullptr);
+    REQUIRE(tc_display_handle_valid(display));
+    tc_render_target_handle target = tc_render_target_new("DebugTarget");
+    REQUIRE(tc_render_target_handle_valid(target));
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle first_pipeline = tc_pipeline_create("FirstPipeline");
+    REQUIRE(tc_pipeline_handle_valid(first_pipeline));
+    tc_render_target_set_pipeline(target, first_pipeline);
+    tc_viewport_handle viewport = tc_viewport_new("DebugViewport", scene);
+    REQUIRE(tc_viewport_handle_valid(viewport));
+    tc_viewport_set_render_target(viewport, target);
+    tc_display_add_viewport(display, viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    REQUIRE(debugger.select_target_at(0));
+    debugger.request_resource("probe_color");
+    CHECK(debugger.state() == FrameGraphDebuggerState::WaitingFrame);
+    const uint64_t first_request_generation = debugger.request_generation();
+
+    tc_pipeline_handle second_pipeline = tc_pipeline_create("SecondPipeline");
+    REQUIRE(tc_pipeline_handle_valid(second_pipeline));
+    tc_render_target_set_pipeline(target, second_pipeline);
+    CHECK(debugger.refresh());
+    CHECK(debugger.state() == FrameGraphDebuggerState::WaitingFrame);
+    CHECK(debugger.resolved_pipeline().index == second_pipeline.index);
+    CHECK(debugger.resolved_pipeline().generation == second_pipeline.generation);
+    CHECK(debugger.request_generation() > first_request_generation);
+
+    manager.remove_editor_display(display);
+    CHECK(debugger.refresh());
+    CHECK(debugger.state() == FrameGraphDebuggerState::Suspended);
+    CHECK(debugger.suspend_reason() == FrameGraphDebuggerSuspendReason::TargetRemoved);
+    CHECK_FALSE(tc_pipeline_handle_valid(debugger.resolved_pipeline()));
+
+    tc_display_remove_viewport(display, viewport);
+    tc_viewport_free(viewport);
+    tc_pipeline_destroy(first_pipeline);
+    tc_pipeline_destroy(second_pipeline);
+    tc_render_target_free(target);
+    tc_display_free(display);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("FrameGraphDebugger exact target follows recreated viewport only on connect")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_display_handle display = tc_display_new("DebugDisplay", nullptr);
+    REQUIRE(tc_display_handle_valid(display));
+    tc_render_target_handle target = tc_render_target_new("DebugTarget");
+    REQUIRE(tc_render_target_handle_valid(target));
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle pipeline = tc_pipeline_create("DebugPipeline");
+    REQUIRE(tc_pipeline_handle_valid(pipeline));
+    tc_render_target_set_pipeline(target, pipeline);
+    tc_viewport_handle first_viewport = tc_viewport_new("DebugViewport", scene);
+    REQUIRE(tc_viewport_handle_valid(first_viewport));
+    tc_viewport_set_render_target(first_viewport, target);
+    tc_display_add_viewport(display, first_viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    REQUIRE(debugger.select_target_at(0));
+    const auto exact_id = debugger.targets()[0].id;
+
+    manager.remove_editor_display(display);
+    tc_display_remove_viewport(display, first_viewport);
+    tc_viewport_free(first_viewport);
+
+    tc_viewport_handle replacement = tc_viewport_new("DebugViewport", scene);
+    REQUIRE(tc_viewport_handle_valid(replacement));
+    tc_viewport_set_render_target(replacement, target);
+    tc_display_add_viewport(display, replacement);
+    manager.add_editor_display(display);
+
+    CHECK(debugger.refresh());
+    REQUIRE_EQ(debugger.targets().size(), 1u);
+    CHECK_FALSE(debugger.targets()[0].id == exact_id);
+    CHECK(debugger.state() == FrameGraphDebuggerState::Suspended);
+    CHECK(debugger.suspend_reason() == FrameGraphDebuggerSuspendReason::TargetRemoved);
+
+    debugger.connect();
+    REQUIRE(debugger.selected_target_index().has_value());
+    CHECK_EQ(*debugger.selected_target_index(), 0u);
+    CHECK(debugger.targets()[0].id == debugger.selected_target()->id);
+    CHECK(debugger.state() == FrameGraphDebuggerState::Bound);
+    CHECK(debugger.suspend_reason() == FrameGraphDebuggerSuspendReason::None);
+
+    manager.remove_editor_display(display);
+    tc_display_remove_viewport(display, replacement);
+    tc_viewport_free(replacement);
+    tc_pipeline_destroy(pipeline);
+    tc_render_target_free(target);
+    tc_display_free(display);
     tc_scene_free(scene);
 }
 

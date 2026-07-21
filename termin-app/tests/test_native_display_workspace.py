@@ -225,20 +225,6 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     assert editor_display.enabled is False
     assert display.enabled is True
     assert second_display.enabled is False
-    workspace.set_debug_display_active(second_display, True)
-    assert editor_display.enabled is False
-    assert display.enabled is True
-    assert second_display.enabled is True
-    workspace.set_debug_display_active(second_display, False)
-    assert editor_display.enabled is False
-    assert display.enabled is True
-    assert second_display.enabled is False
-    workspace.set_debug_display_active(None, True)
-    assert all(candidate.enabled for candidate in workspace.displays)
-    workspace.set_debug_display_active(None, False)
-    assert editor_display.enabled is False
-    assert display.enabled is True
-    assert second_display.enabled is False
     viewport = SimpleNamespace(_viewport_handle=lambda: (7, 3))
     display.add_viewport(viewport)
     workspace.configure_viewport_input(display, viewport)
