@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import atexit
-import sys
 from typing import TYPE_CHECKING
 
 from termin_assets import AssetRuntimeManager
@@ -169,24 +168,11 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self.component_registry.classes.clear()
         self.frame_pass_registry.classes.clear()
 
-        self._clear_default_texture_caches()
-
     def _destroy_cached_pipelines(self) -> None:
         for asset in list(self._pipeline_registry.iter_assets()):
             # Pipeline assets own strong canonical handles, not mutable
             # execution instances. Dropping the handle releases the resource.
             asset.unload()
-
-    def _clear_default_texture_caches(self) -> None:
-        texture_module = sys.modules.get("termin.render.texture")
-        if texture_module is not None:
-            texture_module._white_texture = None
-            texture_module._normal_texture = None
-
-        texture_handle_module = sys.modules.get("termin.render.texture_handle")
-        if texture_handle_module is not None:
-            texture_handle_module._white_texture_handle = None
-            texture_handle_module._normal_texture_handle = None
 
     @classmethod
     def shutdown_instance(cls) -> None:
