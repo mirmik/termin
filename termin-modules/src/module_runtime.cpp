@@ -89,6 +89,20 @@ const char* module_kind_name(ModuleKind kind) {
     return "unknown";
 }
 
+const char* module_state_name(ModuleState state) {
+    switch (state) {
+        case ModuleState::Discovered: return "discovered";
+        case ModuleState::Loading: return "loading";
+        case ModuleState::Loaded: return "loaded";
+        case ModuleState::Unloading: return "unloading";
+        case ModuleState::CleanupFailed: return "cleanup-failed";
+        case ModuleState::Failed: return "failed";
+        case ModuleState::Unloaded: return "unloaded";
+        case ModuleState::Ignored: return "ignored";
+    }
+    return "unknown";
+}
+
 const char* cleanup_phase_name(ModuleCleanupPhase phase) {
     switch (phase) {
         case ModuleCleanupPhase::None: return "none";
@@ -585,31 +599,76 @@ bool ModuleRuntime::load_module_impl(
         load_environment.on_cpp_module_load_failure =
             [this, &cpp_load_failure_handled](
                 const ModuleRecord& record,
-                const std::string& error
+                const std::string& error,
+                std::string& cleanup_error
             ) {
                 cpp_load_failure_handled = true;
                 if (_cpp_callbacks.after_failed_load) {
-                    _cpp_callbacks.after_failed_load(record, error);
+                    return _cpp_callbacks.after_failed_load(record, error, cleanup_error);
                 }
+                return true;
             };
     }
 
     if (!backend->load(*target, load_environment)) {
-        target->state = ModuleState::Failed;
         if (target->error_message.empty()) {
             target->error_message = "Backend load failed";
         }
-        _last_error = target->error_message;
         if (target->spec.kind == ModuleKind::Cpp) {
             if (!cpp_load_failure_handled && _cpp_callbacks.after_failed_load) {
-                _cpp_callbacks.after_failed_load(*target, target->error_message);
+                std::string cleanup_error;
+                if (!_cpp_callbacks.after_failed_load(
+                        *target,
+                        target->error_message,
+                        cleanup_error
+                    ) && !cleanup_error.empty()) {
+                    target->error_message += "; " + cleanup_error;
+                }
             }
         } else {
             if (_python_callbacks.after_failed_load) {
-                _python_callbacks.after_failed_load(*target, target->error_message);
+                std::string cleanup_error;
+                if (!_python_callbacks.after_failed_load(
+                        *target,
+                        target->error_message,
+                        cleanup_error
+                    ) && !cleanup_error.empty()) {
+                    target->error_message += "; " + cleanup_error;
+                }
             }
         }
-        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        if (target->handle) {
+            const std::string load_error = target->error_message;
+            target->state = ModuleState::CleanupFailed;
+            target->cleanup_phase =
+                target->spec.kind == ModuleKind::Cpp && backend->supports_staged_unload()
+                    ? ModuleCleanupPhase::BackendBegin
+                    : ModuleCleanupPhase::BackendUnload;
+            if (unload_module_impl(module_id, false)) {
+                target = find_mutable_record(_records, module_id);
+                target->state = ModuleState::Failed;
+                target->cleanup_phase = ModuleCleanupPhase::None;
+                target->error_message = load_error;
+                _last_error = load_error;
+                emit(ModuleEventKind::Failed, module_id, load_error);
+            } else {
+                target = find_mutable_record(_records, module_id);
+                target->error_message = load_error + "; replacement cleanup failed: " +
+                    target->error_message + "; call unload_module to complete cleanup";
+                _last_error = target->error_message;
+                tc::Log::error(
+                    "ModuleRuntime: failed load retained module='%s' backend='%s' phase='%s'",
+                    module_id.c_str(),
+                    module_kind_name(target->spec.kind),
+                    cleanup_phase_name(target->cleanup_phase)
+                );
+            }
+        } else {
+            target->state = ModuleState::Failed;
+            target->cleanup_phase = ModuleCleanupPhase::None;
+            _last_error = target->error_message;
+            emit(ModuleEventKind::Failed, module_id, target->error_message);
+        }
         return false;
     }
 
@@ -827,35 +886,11 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
         return false;
     }
 
-    const ModuleRecord* current = find(module_id);
-    if (current == nullptr) {
+    if (find(module_id) == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    if (current->state == ModuleState::CleanupFailed ||
-        current->state == ModuleState::Unloading ||
-        current->cleanup_phase != ModuleCleanupPhase::None) {
-        _last_error = "Cannot reload module while cleanup is incomplete at phase '" +
-            std::string(cleanup_phase_name(current->cleanup_phase)) +
-            "'; call unload_module first: " + module_id;
-        emit(ModuleEventKind::Failed, module_id, _last_error);
-        return false;
-    }
-
-    emit(ModuleEventKind::Reloading, module_id);
-
-    std::shared_ptr<IModuleReloadState> reload_state = capture_reload_state(*current);
-
-    const bool was_loaded = is_loaded_or_holding_handle(*current);
-    if (was_loaded && !unload_module_impl(module_id, false)) {
-        return false;
-    }
-
-    if (!load_module_impl(module_id, false)) {
-        return false;
-    }
-
-    return restore_reload_state(module_id, reload_state);
+    return execute_reload({module_id});
 }
 
 bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) {
@@ -873,36 +908,44 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
         return false;
     }
 
-    for (const std::string& affected_id : ordered) {
-        const ModuleRecord* record = find(affected_id);
-        if (record && (
-                record->state == ModuleState::CleanupFailed ||
-                record->state == ModuleState::Unloading ||
-                record->cleanup_phase != ModuleCleanupPhase::None)) {
-            _last_error = "Cannot cascade reload while module cleanup is incomplete at phase '" +
-                std::string(cleanup_phase_name(record->cleanup_phase)) +
-                "': " + affected_id;
-            emit(ModuleEventKind::Failed, affected_id, _last_error);
-            return false;
-        }
-    }
+    return execute_reload(ordered);
+}
 
+bool ModuleRuntime::execute_reload(const std::vector<std::string>& ordered_module_ids) {
     std::unordered_map<std::string, std::shared_ptr<IModuleReloadState>> reload_states;
-    for (const std::string& affected_id : ordered) {
-        ModuleRecord* record = find_mutable_record(_records, affected_id);
+    reload_states.reserve(ordered_module_ids.size());
+
+    // Capture every affected generation before crossing the first semantic
+    // unload boundary. Single-module and cascade reload deliberately share
+    // this exact orchestration path.
+    for (const std::string& module_id : ordered_module_ids) {
+        const ModuleRecord* record = find(module_id);
         if (record == nullptr) {
-            _last_error = "Module not found: " + affected_id;
-            emit(ModuleEventKind::Failed, affected_id, _last_error);
+            _last_error = "Module not found: " + module_id;
+            emit(ModuleEventKind::Failed, module_id, _last_error);
             return false;
         }
-        emit(ModuleEventKind::Reloading, affected_id);
-        reload_states.emplace(affected_id, capture_reload_state(*record));
+        if (record->state == ModuleState::CleanupFailed ||
+            record->state == ModuleState::Unloading ||
+            record->cleanup_phase != ModuleCleanupPhase::None) {
+            _last_error = "Cannot reload module while cleanup is incomplete at phase '" +
+                std::string(cleanup_phase_name(record->cleanup_phase)) +
+                "'; call unload_module first: " + module_id;
+            emit(ModuleEventKind::Failed, module_id, _last_error);
+            return false;
+        }
+        emit(ModuleEventKind::Reloading, module_id);
+        reload_states.emplace(module_id, capture_reload_state(*record));
     }
 
-    for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+    // Unload the complete affected graph before attempting any replacement
+    // load. An unload failure leaves the already processed records Unloaded,
+    // the failing record in its precise failure state, and the untouched tail
+    // active; no new generation has started yet.
+    for (auto it = ordered_module_ids.rbegin(); it != ordered_module_ids.rend(); ++it) {
         const ModuleRecord* record = find(*it);
         if (record == nullptr) {
-            _last_error = "Module not found: " + *it;
+            _last_error = "Module not found while unloading reload plan: " + *it;
             emit(ModuleEventKind::Failed, *it, _last_error);
             return false;
         }
@@ -911,19 +954,54 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
         }
     }
 
-    for (const std::string& affected_id : ordered) {
-        if (!load_module_impl(affected_id, false)) {
+    if (!require_completed_reload_unload(ordered_module_ids)) {
+        return false;
+    }
+
+    for (const std::string& module_id : ordered_module_ids) {
+        if (!load_module_impl(module_id, false)) {
             return false;
         }
 
-        const auto state_it = reload_states.find(affected_id);
+        const auto state_it = reload_states.find(module_id);
         const std::shared_ptr<IModuleReloadState> reload_state =
             state_it != reload_states.end() ? state_it->second : nullptr;
-        if (!restore_reload_state(affected_id, reload_state)) {
+        if (!restore_reload_state(module_id, reload_state)) {
             return false;
         }
     }
 
+    return true;
+}
+
+bool ModuleRuntime::require_completed_reload_unload(
+    const std::vector<std::string>& module_ids
+) {
+    for (const std::string& module_id : module_ids) {
+        const ModuleRecord* record = find(module_id);
+        if (record == nullptr) {
+            _last_error = "Module disappeared before replacement load: " + module_id;
+            emit(ModuleEventKind::Failed, module_id, _last_error);
+            return false;
+        }
+        const bool inactive_state =
+            record->state != ModuleState::Loaded &&
+            record->state != ModuleState::Loading &&
+            record->state != ModuleState::Unloading &&
+            record->state != ModuleState::CleanupFailed;
+        if (inactive_state && record->cleanup_phase == ModuleCleanupPhase::None && !record->handle) {
+            continue;
+        }
+
+        _last_error = "Replacement load blocked because old module generation did not reach "
+            "completed unload: module='" + module_id + "' state='" +
+            module_state_name(record->state) + "' phase='" +
+            cleanup_phase_name(record->cleanup_phase) + "' retained_handle=" +
+            (record->handle ? "yes" : "no");
+        tc::Log::error("ModuleRuntime: %s", _last_error.c_str());
+        emit(ModuleEventKind::Failed, module_id, _last_error);
+        return false;
+    }
     return true;
 }
 

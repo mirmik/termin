@@ -6,6 +6,15 @@ import pytest
 from termin.engine import EngineCore, EngineLoopClient
 
 
+def test_python_engine_requires_an_attached_loop_client() -> None:
+    engine = EngineCore()
+
+    with pytest.raises(RuntimeError, match="requires an attached loop client"):
+        engine.run()
+
+    assert not engine.is_running()
+
+
 def test_python_loop_client_attaches_runs_and_detaches_atomically() -> None:
     engine = EngineCore()
     engine.target_fps = 0.0

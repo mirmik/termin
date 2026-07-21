@@ -76,6 +76,13 @@ TEST_CASE("EngineCore rejects incomplete loop clients without changing its conne
     CHECK(connection.connected());
 }
 
+TEST_CASE("EngineCore refuses to run without an attached loop client") {
+    termin::EngineCore engine;
+
+    CHECK(throws_as<std::logic_error>([&]() { engine.run(); }));
+    CHECK_FALSE(engine.is_running());
+}
+
 TEST_CASE("EngineCore refuses a second client without replacing the first") {
     termin::EngineCore engine;
     int first_polls = 0;

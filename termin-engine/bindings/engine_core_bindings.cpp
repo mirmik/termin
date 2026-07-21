@@ -84,52 +84,12 @@ void bind_engine_core(nb::module_& m) {
            "Atomically attach and consume one complete loop client. "
            "The returned connection controls its lifetime.")
 
-        // Callbacks
-        .def("set_poll_events_callback", [](EngineCore& self, nb::object callback) {
-            if (callback.is_none()) {
-                self.set_poll_events_callback(nullptr);
-            } else {
-                auto cb = std::make_shared<nb::object>(callback);
-                self.set_poll_events_callback([cb]() {
-                    nb::gil_scoped_acquire guard;
-                    (*cb)();
-                });
-            }
-        }, nb::arg("callback"),
-           "Set callback for polling events (Qt, SDL). Called each frame.")
-
-        .def("set_should_continue_callback", [](EngineCore& self, nb::object callback) {
-            if (callback.is_none()) {
-                self.set_should_continue_callback(nullptr);
-            } else {
-                auto cb = std::make_shared<nb::object>(callback);
-                self.set_should_continue_callback([cb]() -> bool {
-                    nb::gil_scoped_acquire guard;
-                    return nb::cast<bool>((*cb)());
-                });
-            }
-        }, nb::arg("callback"),
-           "Set callback to check if loop should continue. Return False to stop.")
-
-        .def("set_on_shutdown_callback", [](EngineCore& self, nb::object callback) {
-            if (callback.is_none()) {
-                self.set_on_shutdown_callback(nullptr);
-            } else {
-                auto cb = std::make_shared<nb::object>(callback);
-                self.set_on_shutdown_callback([cb]() {
-                    nb::gil_scoped_acquire guard;
-                    (*cb)();
-                });
-            }
-        }, nb::arg("callback"),
-           "Set callback for cleanup after main loop ends.")
-
         // Main loop
         .def("tick_and_render", &EngineCore::tick_and_render, nb::arg("dt"),
              "Run one frame: tick scenes, prepare render, render, invoke after-render callback.")
 
         .def("run", &EngineCore::run,
-             "Run blocking main loop. Returns when should_continue returns False or stop() called.")
+             "Run the attached loop client until should_continue returns False or stop() is called.")
 
         .def("stop", &EngineCore::stop,
              "Stop the run() loop")

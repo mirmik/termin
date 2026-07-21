@@ -99,7 +99,7 @@ struct ModuleEnvironment {
     bool sync_live_scenes = true;
     std::function<void(const ModuleRecord&)> before_cpp_module_init;
     std::function<void(const ModuleRecord&)> after_cpp_module_init;
-    std::function<void(const ModuleRecord&, const std::string&)>
+    std::function<bool(const ModuleRecord&, const std::string&, std::string&)>
         on_cpp_module_load_failure;
 };
 

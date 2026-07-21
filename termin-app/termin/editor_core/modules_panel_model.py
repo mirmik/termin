@@ -23,6 +23,20 @@ def format_cleanup_phase(name: str) -> str:
     return "".join(pieces)
 
 
+def module_recovery_hint(state: ModuleState, cleanup_phase=None) -> str | None:
+    """Return the explicit user action for a non-active module failure."""
+    if state == ModuleState.CleanupFailed:
+        if cleanup_phase is None:
+            raise ValueError("cleanup-failed module requires its cleanup phase")
+        return (
+            "run Unload to finish "
+            f"{format_cleanup_phase(cleanup_phase.name)}, then load again"
+        )
+    if state == ModuleState.Failed:
+        return "fix the module error, then load again"
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleRow:
     module_id: str
@@ -85,10 +99,13 @@ class ModulesPanelController:
             elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                 failed += 1
             flags: list[str] = []
-            if record.state == ModuleState.CleanupFailed:
-                flags.append(
-                    f"retry cleanup: {format_cleanup_phase(record.cleanup_phase.name)}"
-                )
+            recovery = (
+                module_recovery_hint(record.state, record.cleanup_phase)
+                if record.state == ModuleState.CleanupFailed
+                else module_recovery_hint(record.state)
+            )
+            if recovery is not None:
+                flags.append(recovery)
             if record.id in dirty:
                 flags.append("dirty")
             if record.id in stale:

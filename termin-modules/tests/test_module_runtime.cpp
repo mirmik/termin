@@ -27,7 +27,9 @@ class FakeCppBackend final : public IModuleBackend {
 public:
     std::vector<std::string> load_calls;
     std::vector<std::string> unload_calls;
+    std::vector<std::string> operation_order;
     std::string fail_load_module;
+    std::string fail_load_after_handle_module;
     std::string fail_unload_module;
     int build_calls = 0;
     ModuleCleanResult clean_result = ModuleCleanResult::NotSupported;
@@ -38,6 +40,7 @@ public:
 
     bool load(ModuleRecord& record, const ModuleEnvironment&) override {
         load_calls.push_back(record.spec.id);
+        operation_order.push_back("load:" + record.spec.id);
         if (record.spec.id == fail_load_module) {
             record.error_message = "load failed: " + record.spec.id;
             return false;
@@ -49,11 +52,16 @@ public:
             handle->loaded_path = config->artifact_path;
         }
         record.handle = handle;
+        if (record.spec.id == fail_load_after_handle_module) {
+            record.error_message = "load failed after handle publication: " + record.spec.id;
+            return false;
+        }
         return true;
     }
 
     bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
         unload_calls.push_back(record.spec.id);
+        operation_order.push_back("unload:" + record.spec.id);
         if (record.spec.id == fail_unload_module) {
             record.error_message = "unload failed: " + record.spec.id;
             return false;
@@ -522,6 +530,88 @@ void test_cascade_reload_stops_on_dependent_load_failure() {
     expect(runtime.find("core")->state == ModuleState::Loaded, "core remains loaded after dependent failure");
     expect(runtime.find("game")->state == ModuleState::Failed, "failed dependent should be marked failed");
     expect(runtime.find("ui")->state == ModuleState::Unloaded, "later dependent remains unloaded");
+}
+
+void test_single_reload_crosses_completed_unload_before_replacement_load() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.module",
+        "name: sample\nbuild:\n  output: build/libsample.so\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "single reload gate discovery");
+    expect(runtime.load_module("sample"), "single reload gate initial load");
+    const std::shared_ptr<IModuleHandle> old_handle = runtime.find("sample")->handle;
+    backend->operation_order.clear();
+
+    expect(runtime.reload_module("sample"), runtime.last_error());
+    expect(
+        backend->operation_order == std::vector<std::string>{"unload:sample", "load:sample"},
+        "single reload must finish old backend unload before replacement load"
+    );
+    expect(runtime.find("sample")->handle != old_handle, "replacement must publish a new handle");
+}
+
+void test_cascade_unload_failure_prevents_every_replacement_load() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "cascade unload failure discovery");
+    expect(runtime.load_all(), "cascade unload failure initial load");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+    backend->operation_order.clear();
+    backend->fail_unload_module = "game";
+
+    expect(!runtime.reload_module_with_dependents("core"), "cascade unload must fail");
+    expect(backend->load_calls.empty(), "no replacement may load after any unload failure");
+    expect(
+        backend->unload_calls == std::vector<std::string>{"ui", "game"},
+        "cascade must stop its unload tail at the failing dependent"
+    );
+    expect(runtime.find("ui")->state == ModuleState::Unloaded,
+           "already cleaned dependent stays unloaded");
+    expect(runtime.find("game")->state == ModuleState::CleanupFailed,
+           "failing dependent exposes retryable cleanup state");
+    expect(runtime.find("core")->state == ModuleState::Loaded,
+           "not-yet-processed dependency keeps its old active generation");
+}
+
+void test_failed_replacement_handle_is_cleaned_before_reporting_failure() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.module",
+        "name: sample\nbuild:\n  output: build/libsample.so\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "failed replacement cleanup discovery");
+    expect(runtime.load_module("sample"), "failed replacement cleanup initial load");
+    backend->operation_order.clear();
+    backend->fail_load_after_handle_module = "sample";
+
+    expect(!runtime.reload_module("sample"), "replacement load failure must propagate");
+    expect(
+        backend->operation_order == std::vector<std::string>{
+            "unload:sample", "load:sample", "unload:sample"
+        },
+        "a partially published replacement handle must be cleaned immediately"
+    );
+    const ModuleRecord* failed = runtime.find("sample");
+    expect(failed->state == ModuleState::Failed, "cleaned replacement failure is non-active");
+    expect(failed->cleanup_phase == ModuleCleanupPhase::None,
+           "successful failed-load cleanup leaves no retry phase");
+    expect(failed->handle == nullptr, "failed replacement leaves no backend handle");
+
+    backend->fail_load_after_handle_module.clear();
+    expect(runtime.load_module("sample"), "later clean load must recover the failed module");
+    expect(runtime.find("sample")->state == ModuleState::Loaded,
+           "later clean load publishes the compatible replacement");
 }
 
 void test_reload_rejects_invalid_descriptor_before_unload() {
@@ -1191,6 +1281,44 @@ void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
     }
 }
 
+void test_cpp_reload_removes_old_shadow_before_publishing_replacement() {
+    TempDir tmp;
+    write_shadow_test_descriptor(tmp.path, "shadow_test");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+
+    expect(runtime.discover(tmp.path), "shadow reload discovery should succeed");
+    expect(runtime.load_module("shadow_test"), "shadow reload initial load should succeed");
+    const auto old_handle = std::dynamic_pointer_cast<CppModuleHandle>(
+        runtime.find("shadow_test")->handle
+    );
+    expect(old_handle != nullptr, "initial native shadow handle should be available");
+    const std::filesystem::path old_path = old_handle->loaded_path;
+    expect(std::filesystem::exists(old_path), "initial native shadow must exist while loaded");
+
+    expect(runtime.reload_module("shadow_test"), runtime.last_error());
+    const auto replacement_handle = std::dynamic_pointer_cast<CppModuleHandle>(
+        runtime.find("shadow_test")->handle
+    );
+    expect(replacement_handle != nullptr, "replacement native shadow handle should be available");
+    expect(replacement_handle->loaded_path != old_path,
+           "replacement must use a distinct native shadow path");
+    expect(!std::filesystem::exists(old_path),
+           "old native shadow must be removed before reload completes");
+    expect(std::filesystem::exists(replacement_handle->loaded_path),
+           "replacement native shadow must remain while loaded");
+
+    expect(runtime.unload_module("shadow_test"), "shadow reload final unload should succeed");
+    expect(count_regular_files(shadow_root) == 0,
+           "shadow reload final unload must leave no native shadow files");
+}
+
 void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
     TempDir tmp;
     write_shadow_test_descriptor(tmp.path, "shadow_test");
@@ -1341,8 +1469,9 @@ void test_native_abi_propagates_structured_init_failure_once() {
     runtime.register_backend(std::make_shared<CppModuleBackend>());
     int failure_callbacks = 0;
     CppModuleCallbacks callbacks;
-    callbacks.after_failed_load = [&](const ModuleRecord&, const std::string&) {
+    callbacks.after_failed_load = [&](const ModuleRecord&, const std::string&, std::string&) {
         ++failure_callbacks;
+        return true;
     };
     runtime.set_cpp_callbacks(std::move(callbacks));
     expect(runtime.discover(tmp.path), "structured init failure discovery should succeed");
@@ -1354,6 +1483,67 @@ void test_native_abi_propagates_structured_init_failure_once() {
            "structured init failure should preserve message");
     expect(runtime.find("abi_init_failure")->handle == nullptr,
            "failed init must not publish native handle");
+}
+
+void test_native_init_failure_retains_library_until_owner_cleanup_completes() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_init_failure",
+        TERMIN_MODULES_TEST_ABI_INIT_FAILURE
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    environment.native_shadow_root = tmp.path / "shadow-cache";
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    CppModuleCallbacks callbacks;
+    callbacks.after_failed_load = [](
+        const ModuleRecord&,
+        const std::string&,
+        std::string& error
+    ) {
+        error = "injected failed-load contribution cleanup failure";
+        return false;
+    };
+    callbacks.before_native_close = [](
+        const ModuleRecord&,
+        std::string& error
+    ) {
+        error = "injected retained contribution";
+        return false;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    expect(runtime.discover(tmp.path), "failed-init cleanup discovery should succeed");
+    expect(!runtime.load_module("abi_init_failure"), "injected native init must fail");
+    const ModuleRecord* failed = runtime.find("abi_init_failure");
+    const auto retained_handle = std::dynamic_pointer_cast<CppModuleHandle>(failed->handle);
+    expect(failed->state == ModuleState::CleanupFailed,
+           "failed owner cleanup must expose a retryable non-active state");
+    expect(failed->cleanup_phase == ModuleCleanupPhase::RevokeContributions,
+           "failed owner cleanup must retain the exact revoke phase");
+    expect(retained_handle != nullptr && retained_handle->native_handle != nullptr,
+           "native library must stay loaded while owner callbacks remain");
+    const std::filesystem::path retained_path = retained_handle->loaded_path;
+    expect(std::filesystem::exists(retained_path),
+           "native shadow must stay present while its library is retained");
+    expect(!runtime.reload_module("abi_init_failure"),
+           "replacement load must be blocked while failed cleanup retains the library");
+
+    CppModuleCallbacks retry_callbacks;
+    retry_callbacks.before_native_close = [](const ModuleRecord&, std::string&) {
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(retry_callbacks));
+    expect(runtime.unload_module("abi_init_failure"),
+           "explicit cleanup retry should release the failed replacement");
+    expect(runtime.find("abi_init_failure")->handle == nullptr,
+           "successful cleanup retry must clear the native handle");
+    expect(!std::filesystem::exists(retained_path),
+           "successful cleanup retry must remove the retained native shadow");
 }
 
 void test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed() {
@@ -1418,6 +1608,18 @@ TEST_CASE("module runtime cascade reload does not load inactive dependents") {
 
 TEST_CASE("module runtime cascade reload stops on dependent load failure") {
     test_cascade_reload_stops_on_dependent_load_failure();
+}
+
+TEST_CASE("module runtime single reload completes unload before replacement load") {
+    test_single_reload_crosses_completed_unload_before_replacement_load();
+}
+
+TEST_CASE("module runtime cascade unload failure blocks every replacement load") {
+    test_cascade_unload_failure_prevents_every_replacement_load();
+}
+
+TEST_CASE("module runtime cleans partial replacement handles before reporting failure") {
+    test_failed_replacement_handle_is_cleaned_before_reporting_failure();
 }
 
 TEST_CASE("module runtime rejects invalid descriptor snapshots before unload") {
@@ -1504,6 +1706,10 @@ TEST_CASE("cpp backend cleans shadow artifacts after repeated unload") {
     test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload();
 }
 
+TEST_CASE("cpp reload removes the old shadow before publishing its replacement") {
+    test_cpp_reload_removes_old_shadow_before_publishing_replacement();
+}
+
 TEST_CASE("cpp backend cleans shadow artifacts after post-copy load failure") {
     test_cpp_backend_cleans_shadow_after_post_copy_load_failure();
 }
@@ -1526,6 +1732,10 @@ TEST_CASE("native ABI rejects version mismatch before registration") {
 
 TEST_CASE("native ABI propagates structured init failure exactly once") {
     test_native_abi_propagates_structured_init_failure_once();
+}
+
+TEST_CASE("native init failure retains its library until owner cleanup completes") {
+    test_native_init_failure_retains_library_until_owner_cleanup_completes();
 }
 
 TEST_CASE("native ABI exposes metadata and retries fallible shutdown") {

@@ -69,11 +69,6 @@ private:
     bool _profile_ui = false;
     bool _shutdown = false;
 
-    // Callbacks for external integration (set from Python)
-    std::function<void()> _poll_events_callback;
-    std::function<bool()> _should_continue_callback;
-    std::function<void()> _on_shutdown_callback;
-
 public:
     EngineCore();
     ~EngineCore();
@@ -100,16 +95,6 @@ public:
     // std::logic_error while another client is attached or the loop is active.
     [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
 
-    // --- Callbacks ---
-    // Called each frame to process UI/input events (Qt, SDL)
-    void set_poll_events_callback(std::function<void()> cb);
-
-    // Called each frame to check if loop should continue
-    void set_should_continue_callback(std::function<bool()> cb);
-
-    // Called after main loop ends (for cleanup)
-    void set_on_shutdown_callback(std::function<void()> cb);
-
     // --- Main loop ---
     // Run one frame: scene tick, before_render, RenderingManager render, after_render callback.
     // Returns true if rendering happened.
@@ -117,7 +102,8 @@ public:
 
     // Run blocking main loop. Calls poll_events and tick_and_render, applying
     // target_fps as a software limit when it is greater than zero.
-    // Returns when should_continue returns false or stop() is called.
+    // Requires an attached loop client. Returns when should_continue returns
+    // false or stop() is called.
     void run();
 
     // Stop the run() loop
