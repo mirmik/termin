@@ -56,6 +56,13 @@ tc_pass (tc_pipeline, рантайм объект)
 tc_widget (tc_ui_document)
 tc_render_surface (tc_display)
 
+`tc_ui_document` хранится в process-owned registry и пересекает C/C++/Python
+границы только как `tc_ui_document_handle`. Вложенный `tc_widget` хранит handle
+владельца, а не адрес документа; уничтожение документа сначала освобождает все
+виджеты их зарегистрированными deleter-ами и лишь затем инвалидирует document
+handle. Для намеренных проверок используется тихий `is_valid`/`is_alive`, а
+операционные resolve-paths логируют протухшие generation handles.
+
 Для pipeline две роли образуют один паттерн, но не один storage type:
 `tc_pipeline_template` — каноничный неизменяемый/versioned шаблон, а
 `tc_pipeline` — его mutable execution instance, владеющий живыми `tc_pass` и

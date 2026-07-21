@@ -281,6 +281,7 @@ class NativeFramegraphDebugger:
         self.depth_preview.close()
         if self.document.is_alive(self.root.handle):
             self.document.destroy_widget_recursive(self.root.handle)
+        self.document.close()
 
     def dismiss(self) -> None:
         if self.window is not None and not self.window.closed:
