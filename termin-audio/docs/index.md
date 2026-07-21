@@ -18,9 +18,11 @@ miniaudio is compiled privately as the device, decoding, mixing, resampling,
 and spatialization backend. Its resource manager is disabled: UUIDs, names,
 lifetime, and serialization remain owned by Termin.
 
-The built-in decoder contract currently covers WAV, MP3, and FLAC. Ogg/Vorbis
-is deliberately not advertised until Termin supplies and tests an explicit
-Vorbis decoding backend.
+The built-in decoder contract covers WAV, MP3, FLAC, and Ogg/Vorbis. Vorbis is
+decoded by the bundled Xiph libogg/libvorbis backend through miniaudio's private
+decoder-vtable boundary. Decoded PCM is copied into the canonical
+`tc_audio_clip` registry; no backend object participates in resource identity or
+lifetime.
 
 Audio asset adapters live in `termin-default-assets` under
 `termin.default_assets.audio`: `AudioClipAsset` declares and loads the canonical

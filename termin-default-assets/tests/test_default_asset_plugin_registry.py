@@ -42,6 +42,7 @@ EXPECTED_IMPORT_EXTENSIONS = {
     ".uiscript": "ui",
     ".voxels": "voxel_grid",
     ".wav": "audio_clip",
+    ".ogg": "audio_clip",
 }
 
 

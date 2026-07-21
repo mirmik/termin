@@ -86,5 +86,70 @@ TEST_CASE("audio voices reference canonical PCM clips and render without a devic
     tc_audio_runtime_shutdown();
 }
 
-GUARD_TEST_MAIN();
+TEST_CASE("Ogg Vorbis clips decode into canonical PCM and render offline") {
+    tc_audio_runtime_init();
+    tc_audio_engine_config config = tc_audio_engine_config_default();
+    config.no_device = true;
+    REQUIRE(tc_audio_engine_init(&config));
 
+    const tc_audio_clip_handle clip_handle = tc_audio_clip_declare(
+        "audio-ogg-fixture",
+        "Ogg fixture",
+        TERMIN_AUDIO_TEST_OGG_PATH
+    );
+    REQUIRE(tc_audio_clip_is_valid(clip_handle));
+    REQUIRE(tc_audio_clip_ensure_loaded(clip_handle));
+
+    const tc_audio_clip* clip = tc_audio_clip_get(clip_handle);
+    REQUIRE(clip != nullptr);
+    CHECK(clip->header.is_loaded != 0);
+    CHECK(clip->sample_format == TC_AUDIO_SAMPLE_FORMAT_F32);
+    CHECK(clip->sample_rate == 8000);
+    CHECK(clip->channels == 1);
+    CHECK(clip->frame_count == 400);
+
+    const tc_audio_voice_handle voice = tc_audio_voice_create(clip_handle);
+    REQUIRE(tc_audio_voice_is_valid(voice));
+    tc_audio_voice_set_spatialization(voice, false);
+    REQUIRE(tc_audio_voice_start(voice));
+
+    std::array<float, 512 * 2> output{};
+    REQUIRE(tc_audio_engine_render(output.data(), 512));
+    bool has_signal = false;
+    for (float sample : output) {
+        if (sample != 0.0f) {
+            has_signal = true;
+            break;
+        }
+    }
+    CHECK(has_signal);
+
+    REQUIRE(tc_audio_voice_destroy(voice));
+    CHECK_FALSE(tc_audio_clip_is_valid(clip_handle));
+    tc_audio_engine_shutdown();
+    tc_audio_runtime_shutdown();
+}
+
+TEST_CASE("malformed Ogg fails without publishing loaded PCM") {
+    tc_audio_runtime_init();
+    const tc_audio_clip_handle clip_handle = tc_audio_clip_declare(
+        "audio-malformed-ogg",
+        "Malformed Ogg",
+        TERMIN_AUDIO_TEST_MALFORMED_OGG_PATH
+    );
+    REQUIRE(tc_audio_clip_is_valid(clip_handle));
+    CHECK_FALSE(tc_audio_clip_ensure_loaded(clip_handle));
+
+    const tc_audio_clip* clip = tc_audio_clip_get(clip_handle);
+    REQUIRE(clip != nullptr);
+    CHECK(clip->header.is_loaded == 0);
+    CHECK(clip->pcm_frames == nullptr);
+    CHECK(clip->frame_count == 0);
+    CHECK(clip->sample_rate == 0);
+    CHECK(clip->channels == 0);
+
+    REQUIRE(tc_audio_clip_destroy(clip_handle));
+    tc_audio_runtime_shutdown();
+}
+
+GUARD_TEST_MAIN();
