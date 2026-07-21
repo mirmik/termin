@@ -28,8 +28,6 @@ class _PipelineCandidate:
     targets: tuple[dict, ...]
     material_names: frozenset[str]
     external_params: tuple[str, ...]
-    resource_views: dict
-    fbo_compositions: dict
     source_format: str
 
 
@@ -66,8 +64,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
         self._source_format: str | None = None
         self._material_names: frozenset[str] = frozenset()
         self._external_params: tuple[str, ...] = ()
-        self._resource_views: dict = {}
-        self._fbo_compositions: dict = {}
         self._resource_manager = None
 
         if data is not None:
@@ -79,18 +75,12 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
     @property
     def pipeline(self) -> "RenderPipeline | None":
         """Create a fresh mutable execution instance from the canonical template."""
-        from termin.render_framework import RenderPipeline, apply_pipeline_template_recipe
+        from termin.render_framework import RenderPipeline
 
         pipeline_template = self.canonical_resource
         if pipeline_template is None:
             return None
-        pipeline = RenderPipeline(pipeline_template)
-        apply_pipeline_template_recipe(
-            pipeline,
-            self._resource_views,
-            self._fbo_compositions,
-        )
-        return pipeline
+        return RenderPipeline(pipeline_template)
 
     @property
     def canonical_resource(self) -> "TcPipelineTemplate | None":
@@ -205,8 +195,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
                 targets=candidate.targets,
                 material_names=candidate.material_names,
                 external_params=external_params,
-                resource_views=candidate.resource_views,
-                fbo_compositions=candidate.fbo_compositions,
                 source_format=candidate.source_format,
             )
         except Exception:
@@ -279,8 +267,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             targets=tuple(dict(item) for item in targets),
             material_names=frozenset(material_pass_materials(data)),
             external_params=external_params,
-            resource_views=dict(resource_views),
-            fbo_compositions=dict(fbo_compositions),
             source_format=source_format,
         )
 
@@ -299,8 +285,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             targets=(),
             material_names=frozenset(material_pass_materials(serialized)),
             external_params=(),
-            resource_views=dict(serialized.get("resource_views", {})),
-            fbo_compositions=dict(serialized.get("fbo_compositions", {})),
             source_format=source_format,
         )
 
@@ -320,8 +304,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
         self._source_format = candidate.source_format
         self._material_names = candidate.material_names
         self._external_params = candidate.external_params
-        self._resource_views = candidate.resource_views
-        self._fbo_compositions = candidate.fbo_compositions
         return True
 
     def _load_content(self, content: bytes | str) -> bool:
@@ -365,8 +347,6 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
         self._source_format = None
         self._material_names = frozenset()
         self._external_params = ()
-        self._resource_views = {}
-        self._fbo_compositions = {}
 
     @classmethod
     def from_pipeline(
