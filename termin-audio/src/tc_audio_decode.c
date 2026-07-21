@@ -7,6 +7,7 @@
 #include <tcbase/tc_log.h>
 
 #include <miniaudio.h>
+#include <extras/decoders/libvorbis/miniaudio_libvorbis.h>
 
 bool tc_audio_backend_decode_file(
     const char* path,
@@ -21,6 +22,11 @@ bool tc_audio_backend_decode_file(
     }
 
     ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, 0);
+    ma_decoding_backend_vtable* custom_backends[] = {
+        ma_decoding_backend_libvorbis,
+    };
+    config.ppCustomBackendVTables = custom_backends;
+    config.customBackendCount = (ma_uint32)(sizeof(custom_backends) / sizeof(custom_backends[0]));
     ma_uint64 decoded_frame_count = 0;
     void* decoded_frames = NULL;
     ma_result result = ma_decode_file(path, &config, &decoded_frame_count, &decoded_frames);
@@ -73,4 +79,3 @@ bool tc_audio_backend_decode_file(
     *channels = (uint16_t)config.channels;
     return true;
 }
-

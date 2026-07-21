@@ -120,6 +120,7 @@ def test_asset_plugin_registry_can_find_default_import_plugins_by_extension() ->
     expected_types = {
         ".obj": "mesh",
         ".wav": "audio_clip",
+        ".ogg": "audio_clip",
         ".png": "texture",
         ".glb": "glb",
     }

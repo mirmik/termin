@@ -15,6 +15,12 @@ Current contents:
 - `miniaudio`: vendored miniaudio v0.11.25 used privately by `termin-audio`
   for decoding, device I/O, mixing, and spatial playback. Termin owns resource
   identity and lifetime; miniaudio's resource manager is disabled.
+- `libogg`: Xiph libogg v1.3.6, commit
+  `be05b13e98b048f0b5a0f5fa8ce514d56db5f822`, BSD-3-Clause; bundled privately
+  by `termin-audio` for Ogg container parsing.
+- `libvorbis`: Xiph libvorbis v1.3.7, commit
+  `0657aee69dec8508a0011f47f3b69d7538e9d262`, BSD-3-Clause; bundled privately
+  by `termin-audio` for Vorbis decoding.
 - `recastnavigation`: Recast/Detour submodule used by app-level navmesh
   builder and pathfinding integration, commit `1078bfe346d9bb560faa748c8fde2e7aae73a3ab`.
 - `openxr-sdk`: Khronos OpenXR SDK submodule used by `termin-openxr` for

@@ -21,6 +21,54 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 set(TERMIN_MINIAUDIO_DIR "${CMAKE_CURRENT_LIST_DIR}/../termin-thirdparty/miniaudio")
+set(TERMIN_LIBOGG_DIR "${CMAKE_CURRENT_LIST_DIR}/../termin-thirdparty/libogg")
+set(TERMIN_LIBVORBIS_DIR "${CMAKE_CURRENT_LIST_DIR}/../termin-thirdparty/libvorbis")
+
+if(NOT EXISTS "${TERMIN_LIBOGG_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "libogg is missing: ${TERMIN_LIBOGG_DIR}. Run: git submodule update --init termin-thirdparty/libogg")
+endif()
+if(NOT EXISTS "${TERMIN_LIBVORBIS_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR
+        "libvorbis is missing: ${TERMIN_LIBVORBIS_DIR}. Run: git submodule update --init termin-thirdparty/libvorbis")
+endif()
+
+# Keep the codec implementation private to termin-audio. The upstream projects
+# are added as static, excluded subdirectories so their install rules and
+# headers do not become part of Termin's public SDK surface.
+function(termin_audio_add_bundled_vorbis)
+    # The pinned Xiph releases predate CMake 4 and CMP0077. Keep compatibility
+    # policy local to their subdirectories without patching upstream sources.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_TESTING OFF)
+    set(INSTALL_DOCS OFF)
+    set(INSTALL_PKG_CONFIG_MODULE OFF)
+    set(INSTALL_CMAKE_PACKAGE_MODULE OFF)
+
+    add_subdirectory(
+        "${TERMIN_LIBOGG_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libogg"
+        EXCLUDE_FROM_ALL
+    )
+
+    # libvorbis 1.3.7 uses FindOgg even when Ogg::ogg already exists. Seed the
+    # legacy result variables while retaining the real target dependency.
+    set(OGG_INCLUDE_DIR "${TERMIN_LIBOGG_DIR}/include")
+    set(OGG_LIBRARY ogg)
+    add_subdirectory(
+        "${TERMIN_LIBVORBIS_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/libvorbis"
+        EXCLUDE_FROM_ALL
+    )
+
+    set_target_properties(ogg vorbis vorbisfile PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+    )
+endfunction()
+
+termin_audio_add_bundled_vorbis()
 
 add_library(termin_audio SHARED
     src/tc_audio_clip_registry.c
@@ -28,6 +76,7 @@ add_library(termin_audio SHARED
     src/tc_audio_engine.c
     src/tc_audio_runtime.c
     ${TERMIN_MINIAUDIO_DIR}/miniaudio.c
+    ${TERMIN_MINIAUDIO_DIR}/extras/decoders/libvorbis/miniaudio_libvorbis.c
 )
 add_library(termin_audio::termin_audio ALIAS termin_audio)
 
@@ -47,7 +96,7 @@ target_include_directories(termin_audio
 )
 target_link_libraries(termin_audio
     PUBLIC tcbase::termin_base
-    PRIVATE Threads::Threads ${CMAKE_DL_LIBS}
+    PRIVATE Threads::Threads ${CMAKE_DL_LIBS} vorbisfile
 )
 if(UNIX AND NOT APPLE)
     target_link_libraries(termin_audio PRIVATE m)
@@ -77,6 +126,10 @@ if(TERMIN_AUDIO_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
     )
     target_link_libraries(termin_audio_runtime_test PRIVATE termin_audio)
+    target_compile_definitions(termin_audio_runtime_test PRIVATE
+        TERMIN_AUDIO_TEST_OGG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/tone.ogg"
+        TERMIN_AUDIO_TEST_MALFORMED_OGG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/malformed.ogg"
+    )
     set_target_properties(termin_audio_runtime_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )

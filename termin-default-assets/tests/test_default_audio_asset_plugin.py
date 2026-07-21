@@ -78,6 +78,17 @@ def test_audio_clip_asset_decodes_wav_into_native_pcm(tmp_path: Path) -> None:
     assert asset.clip.frame_count == 4
 
 
+def test_audio_clip_asset_decodes_ogg_into_native_pcm() -> None:
+    path = Path(__file__).resolve().parents[2] / "termin-audio" / "tests" / "fixtures" / "tone.ogg"
+    asset = AudioClipAsset.from_file(path, uuid="audio-ogg-decode")
+
+    assert asset.ensure_loaded()
+    assert asset.clip.is_loaded
+    assert asset.clip.sample_rate == 8_000
+    assert asset.clip.channels == 1
+    assert asset.clip.frame_count == 400
+
+
 def test_audio_clip_plugins_register_with_asset_registry() -> None:
     registry = AssetTypeRegistry()
 
@@ -87,7 +98,7 @@ def test_audio_clip_plugins_register_with_asset_registry() -> None:
     assert registry.get_import("audio_clip") is not None
     assert registry.get_runtime("audio_clip") is not None
     assert registry.get_for_extension(".WAV")[0].type_id == "audio_clip"
-    assert registry.get_for_extension(".ogg") == []
+    assert registry.get_for_extension(".ogg")[0].type_id == "audio_clip"
 
 
 def test_audio_clip_runtime_plugin_registers_lazy_asset() -> None:

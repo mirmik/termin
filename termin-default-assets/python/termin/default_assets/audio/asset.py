@@ -11,13 +11,13 @@ from termin.audio import TcAudioClip
 
 class AudioClipAsset(Asset):
     """
-    Asset for audio files decoded by the native runtime (.wav, .mp3, .flac).
+    Asset for audio files decoded by the native runtime (.wav, .mp3, .flac, .ogg).
 
     The asset declares a canonical ``TcAudioClip`` by UUID. The native audio
     registry owns decoded PCM and its lifetime.
     """
 
-    SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac"}
+    SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg"}
 
     def __init__(
         self,
