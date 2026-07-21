@@ -30,7 +30,6 @@ EXPECTED_IMPORT_EXTENSIONS = {
     ".material": "material",
     ".navmesh": "navmesh",
     ".obj": "mesh",
-    ".ogg": "audio_clip",
     ".flac": "audio_clip",
     ".mp3": "audio_clip",
     ".pipeline": "pipeline",

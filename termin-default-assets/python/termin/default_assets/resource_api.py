@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from termin.animation import TcAnimationClip
     from termin.animation.asset import AnimationClipAsset
     from termin.default_assets.audio.asset import AudioClipAsset
-    from termin.default_assets.audio.handle import AudioClipHandle
+    from termin.audio import TcAudioClip
     from termin.default_assets.mesh.asset import MeshAsset
     from termin.default_assets.navmesh.asset import NavMeshAsset
     from termin.default_assets.render.material_asset import MaterialAsset
@@ -603,7 +603,7 @@ class DefaultAssetResourceMixin:
     def get_audio_clip_asset(self, name: str) -> Optional["AudioClipAsset"]:
         return self._audio_clip_registry.get_asset(name)
 
-    def get_audio_clip(self, name: str) -> Optional["AudioClipHandle"]:
+    def get_audio_clip(self, name: str) -> Optional["TcAudioClip"]:
         return self._audio_clip_registry.get(name)
 
     def register_audio_clip_asset(
@@ -618,13 +618,13 @@ class DefaultAssetResourceMixin:
     def list_audio_clip_names(self) -> list[str]:
         return self._audio_clip_registry.list_names()
 
-    def find_audio_clip_name(self, handle: "AudioClipHandle") -> Optional[str]:
-        return self._audio_clip_registry.find_name(handle)
+    def find_audio_clip_name(self, clip: "TcAudioClip") -> Optional[str]:
+        return self._audio_clip_registry.find_name(clip)
 
-    def find_audio_clip_uuid(self, handle: "AudioClipHandle") -> Optional[str]:
-        return self._audio_clip_registry.find_uuid(handle)
+    def find_audio_clip_uuid(self, clip: "TcAudioClip") -> Optional[str]:
+        return self._audio_clip_registry.find_uuid(clip)
 
-    def get_audio_clip_by_uuid(self, uuid: str) -> Optional["AudioClipHandle"]:
+    def get_audio_clip_by_uuid(self, uuid: str) -> Optional["TcAudioClip"]:
         return self._audio_clip_registry.get_by_uuid(uuid)
 
     def get_audio_clip_asset_by_uuid(self, uuid: str) -> Optional["AudioClipAsset"]:

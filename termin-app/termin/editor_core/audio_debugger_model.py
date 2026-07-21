@@ -78,7 +78,7 @@ class AudioDebuggerController:
 def create_audio_debugger_controller() -> AudioDebuggerController:
     from termin.audio.audio_engine import AudioEngine
 
-    return AudioDebuggerController(AudioEngine.instance())
+    return AudioDebuggerController(AudioEngine())
 
 
 __all__ = [

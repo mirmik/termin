@@ -39,8 +39,8 @@ Current adapters:
   plugins, and `NavMeshHandle` as a compatibility alias for `TcNavMesh`.
 - `termin.default_assets.voxels`: `VoxelGridAsset`, voxel-grid import/runtime
   plugins.
-- `termin.default_assets.audio`: `AudioClipAsset`, `AudioClipHandle`,
-  audio-clip import/runtime plugins.
+- `termin.default_assets.audio`: `AudioClipAsset` plus audio-clip import/runtime
+  plugins; runtime references use canonical `termin.audio.TcAudioClip` handles.
 - `termin.default_assets.render`: texture, GLSL, material, shader, pipeline
   and scene-pipeline asset adapters/plugins plus render asset helper modules.
 - `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and UI import/runtime

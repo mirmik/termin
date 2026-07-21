@@ -14,6 +14,11 @@ else()
     find_package(termin_base REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_audio termin_audio::termin_audio)
+else()
+    find_package(termin_audio REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_inspect termin_inspect::termin_inspect)
 else()
     find_package(termin_inspect REQUIRED)
@@ -194,6 +199,7 @@ target_include_directories(termin_bootstrap
 target_link_libraries(termin_bootstrap
     PUBLIC
         tcbase::termin_base
+        termin_audio::termin_audio
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_prefab::termin_prefab

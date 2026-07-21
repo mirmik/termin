@@ -11,12 +11,10 @@ from termin.default_assets.audio.asset_plugin import (
     register_audio_clip_import_plugin,
     register_audio_clip_runtime_plugin,
 )
-from termin.default_assets.audio.handle import AudioClipHandle
 
 __all__ = [
     "AudioClipAsset",
     "AudioClipAssetPlugin",
-    "AudioClipHandle",
     "AudioClipImportPlugin",
     "AudioClipRuntimePlugin",
     "create_import_plugin",

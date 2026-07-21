@@ -12,7 +12,7 @@ class AudioClipImportPlugin:
     """Import-side plugin for audio clip source files."""
 
     type_id = "audio_clip"
-    extensions = {".wav", ".ogg", ".mp3", ".flac"}
+    extensions = {".wav", ".mp3", ".flac"}
     priority = 10
 
     def preload(self, path: str) -> "PreLoadResult | None":

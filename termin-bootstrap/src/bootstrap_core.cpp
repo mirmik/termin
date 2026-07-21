@@ -18,6 +18,7 @@
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
 #include <tcbase/tc_string.h>
+#include <termin/audio/tc_audio_runtime.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -108,6 +109,7 @@ void tc_init(void) {
         return;
     }
 
+    tc_audio_runtime_init();
     tc_mesh_init();
     tc_texture_init();
     tc_shader_init();
@@ -145,6 +147,7 @@ void tc_shutdown(void) {
     tc_shader_shutdown();
     tc_texture_shutdown();
     tc_mesh_shutdown();
+    tc_audio_runtime_shutdown();
     tc_component_registry_cleanup();
     tc_pass_registry_cleanup();
     tc_inspect_cleanup();

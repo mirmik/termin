@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
-from termin.default_assets.audio.handle import AudioClipHandle
+from tcbase import log
+from termin.audio import AudioEngine, TcAudioClip, TcAudioVoice
 
 if TYPE_CHECKING:
     from termin.audio.components.audio_listener import AudioListener
@@ -15,12 +15,9 @@ if TYPE_CHECKING:
 
 def _inspect_audio_clip(component: "AudioSource") -> dict[str, str | None] | None:
     clip = component.clip
-    if clip is None or not clip.is_asset:
+    if clip is None or not clip.is_valid:
         return None
-    asset = clip.get_asset()
-    if asset is None:
-        return None
-    return {"uuid": asset.uuid, "name": asset.name}
+    return {"uuid": clip.uuid, "name": clip.name}
 
 
 def _set_inspect_audio_clip(component: "AudioSource", value: dict[str, str | None] | None) -> None:
@@ -28,13 +25,15 @@ def _set_inspect_audio_clip(component: "AudioSource", value: dict[str, str | Non
         component.set_clip(None)
         return
     uuid = value.get("uuid")
-    name = value.get("name")
     if uuid:
-        component.set_clip(AudioClipHandle.from_uuid(uuid))
-    elif name:
-        component.set_clip(AudioClipHandle.from_name(name))
-    else:
-        component.set_clip(None)
+        clip = TcAudioClip.from_uuid(uuid)
+        if clip.is_valid:
+            component.set_clip(clip)
+            return
+        log.error(f"[AudioSource] Audio clip UUID '{uuid}' is not declared")
+    elif value.get("name"):
+        log.error("[AudioSource] Refusing name-only audio clip reference; UUID is required")
+    component.set_clip(None)
 
 
 class AudioSource(PythonComponent):
@@ -108,7 +107,7 @@ class AudioSource(PythonComponent):
 
     def __init__(
         self,
-        clip: AudioClipHandle | None = None,
+        clip: TcAudioClip | None = None,
         volume: float = 1.0,
         pitch: float = 1.0,
         loop: bool = False,
@@ -119,7 +118,7 @@ class AudioSource(PythonComponent):
     ):
         super().__init__(enabled=True)
 
-        self.clip: AudioClipHandle | None = clip
+        self.clip: TcAudioClip | None = clip
         self.volume: float = volume
         self.pitch: float = pitch
         self.loop: bool = loop
@@ -128,13 +127,11 @@ class AudioSource(PythonComponent):
         self.min_distance: float = min_distance
         self.max_distance: float = max_distance
 
-        self._channel: int = -1
-        self._is_playing: bool = False
-        self._is_paused: bool = False
+        self._voice: TcAudioVoice | None = None
 
-    def set_clip(self, clip: AudioClipHandle | None) -> None:
+    def set_clip(self, clip: TcAudioClip | None) -> None:
         """Set the audio clip. Stops playback if currently playing."""
-        if self._is_playing:
+        if self._voice is not None:
             self.stop()
         self.clip = clip
 
@@ -156,90 +153,77 @@ class AudioSource(PythonComponent):
         if self.clip is None:
             return
 
-        audio_clip = self.clip.get()
-        if audio_clip is None or not audio_clip.is_valid:
+        if not self.clip.is_valid or not self.clip.ensure_loaded():
             return
 
-        from termin.audio.audio_engine import AudioEngine
-
-        engine = AudioEngine.instance()
+        engine = AudioEngine()
         if not engine.is_initialized:
             if not engine.initialize():
                 return
 
-        if self._channel >= 0:
-            engine.stop_channel(self._channel)
+        if self._voice is not None:
+            self.stop()
 
-        loops = -1 if self.loop else 0
-        self._channel = engine.play_chunk(audio_clip.chunk, loops=loops)
-
-        if self._channel >= 0:
-            engine.set_channel_volume(self._channel, self.volume)
-            self._is_playing = True
-            self._is_paused = False
+        voice = engine.create_voice(self.clip)
+        if not voice.is_valid:
+            log.error(f"[AudioSource] Failed to create voice for clip '{self.clip.uuid}'")
+            return
+        voice.looping = self.loop
+        voice.volume = self.volume
+        voice.pitch = self.pitch
+        voice.set_spatialization(self.spatial_blend > 0.0)
+        voice.set_distance_range(self.min_distance, self.max_distance)
+        if not voice.start():
+            log.error(f"[AudioSource] Failed to start voice for clip '{self.clip.uuid}'")
+            voice.destroy()
+            return
+        self._voice = voice
 
     def stop(self, fade_out_ms: int = 0) -> None:
         """Stop playback."""
-        if self._channel < 0:
+        if self._voice is None:
             return
-
-        from termin.audio.audio_engine import AudioEngine
-
-        engine = AudioEngine.instance()
-        engine.stop_channel(self._channel, fade_out_ms)
-        self._channel = -1
-        self._is_playing = False
-        self._is_paused = False
+        self._voice.stop(fade_out_ms)
+        if fade_out_ms == 0:
+            self._voice.destroy()
+            self._voice = None
 
     def pause(self) -> None:
         """Pause playback."""
-        if self._channel < 0 or not self._is_playing:
-            return
-
-        from termin.audio.audio_engine import AudioEngine
-
-        AudioEngine.instance().pause_channel(self._channel)
-        self._is_paused = True
+        if self._voice is not None and self._voice.is_playing:
+            self._voice.pause()
 
     def resume(self) -> None:
         """Resume paused playback."""
-        if self._channel < 0 or not self._is_paused:
-            return
-
-        from termin.audio.audio_engine import AudioEngine
-
-        AudioEngine.instance().resume_channel(self._channel)
-        self._is_paused = False
+        if self._voice is not None and self._voice.is_paused:
+            self._voice.resume()
 
     @property
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
-        if self._channel < 0:
-            return False
-
-        from termin.audio.audio_engine import AudioEngine
-
-        return AudioEngine.instance().is_channel_playing(self._channel)
+        return self._voice is not None and self._voice.is_playing
 
     @property
     def is_paused(self) -> bool:
         """Check if audio is paused."""
-        return self._is_paused
+        return self._voice is not None and self._voice.is_paused
 
     def update(self, dt: float) -> None:
         """Update spatial audio positioning."""
-        if not self._is_playing or self._channel < 0:
+        voice = self._voice
+        if voice is None:
             return
 
-        if not self.is_playing and not self._is_paused:
-            self._is_playing = False
-            self._channel = -1
+        if not voice.is_playing and not voice.is_paused:
+            voice.destroy()
+            self._voice = None
             return
 
-        from termin.audio.audio_engine import AudioEngine
-
-        engine = AudioEngine.instance()
-        engine.set_channel_volume(self._channel, self.volume)
+        voice.volume = self.volume
+        voice.pitch = self.pitch
+        voice.looping = self.loop
+        voice.set_spatialization(self.spatial_blend > 0.0)
+        voice.set_distance_range(self.min_distance, self.max_distance)
 
         if self.spatial_blend <= 0.0:
             return
@@ -248,7 +232,7 @@ class AudioSource(PythonComponent):
         if listener is None:
             return
 
-        self._update_spatial_audio(listener, engine)
+        self._update_spatial_audio(listener, AudioEngine(), voice)
 
     def _find_audio_listener(self) -> "AudioListener | None":
         """Find the AudioListener in the scene."""
@@ -266,7 +250,12 @@ class AudioSource(PythonComponent):
                 return listener
         return None
 
-    def _update_spatial_audio(self, listener: "AudioListener", engine) -> None:
+    def _update_spatial_audio(
+        self,
+        listener: "AudioListener",
+        engine: AudioEngine,
+        voice: TcAudioVoice,
+    ) -> None:
         """Update 3D audio positioning based on listener."""
         if self.entity is None or listener.entity is None:
             return
@@ -274,27 +263,9 @@ class AudioSource(PythonComponent):
         source_pos = self.entity.world_transform.position
         listener_pos = listener.entity.world_transform.position
 
-        to_source = source_pos - listener_pos
-        distance = to_source.norm()
+        listener_forward = listener.entity.world_transform.forward
+        engine.set_listener_position(listener_pos.x, listener_pos.y, listener_pos.z)
+        engine.set_listener_direction(listener_forward.x, listener_forward.y, listener_forward.z)
 
-        if distance <= self.min_distance:
-            sdl_distance = 0
-        elif distance >= self.max_distance:
-            sdl_distance = 255
-        else:
-            t = (distance - self.min_distance) / (self.max_distance - self.min_distance)
-            sdl_distance = int(t * 255)
-
-        if distance > 0.001:
-            to_source_norm = to_source / distance
-            listener_forward = listener.entity.world_transform.forward
-            angle_rad = math.atan2(to_source_norm.x, to_source_norm.z)
-            listener_angle = math.atan2(listener_forward.x, listener_forward.z)
-            relative_angle = angle_rad - listener_angle
-            angle_deg = int(math.degrees(relative_angle)) % 360
-        else:
-            angle_deg = 0
-
-        final_distance = int(sdl_distance * self.spatial_blend)
-
-        engine.set_channel_position(self._channel, angle_deg, final_distance)
+        blended_position = listener_pos + (source_pos - listener_pos) * self.spatial_blend
+        voice.set_position(blended_position.x, blended_position.y, blended_position.z)
