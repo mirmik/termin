@@ -966,7 +966,9 @@ bool PythonModuleBackend::load(
             release_module_snapshot(before);
             PyGILState_Release(gil);
             record.handle = handle;
-            unload(record, environment);
+            if (unload(record, environment)) {
+                record.handle.reset();
+            }
             return false;
         }
 
@@ -979,7 +981,9 @@ bool PythonModuleBackend::load(
         release_module_snapshot(before);
         PyGILState_Release(gil);
         record.handle = handle;
-        unload(record, environment);
+        if (unload(record, environment)) {
+            record.handle.reset();
+        }
         return false;
     }
 

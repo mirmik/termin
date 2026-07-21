@@ -88,8 +88,9 @@ int main(int argc, char** argv) {
         .after_reload = [](const ModuleRecord& record) {
             std::cout << "[cpp] reloaded " << record.spec.id << "\n";
         },
-        .after_failed_load = [](const ModuleRecord& record, const std::string& error) {
+        .after_failed_load = [](const ModuleRecord& record, const std::string& error, std::string&) {
             std::cout << "[cpp] failed " << record.spec.id << ": " << error << "\n";
+            return true;
         },
     });
     runtime.set_python_callbacks(PythonModuleCallbacks{
@@ -102,8 +103,9 @@ int main(int argc, char** argv) {
         .after_reload = [](const ModuleRecord& record) {
             std::cout << "[python] reloaded " << record.spec.id << "\n";
         },
-        .after_failed_load = [](const ModuleRecord& record, const std::string& error) {
+        .after_failed_load = [](const ModuleRecord& record, const std::string& error, std::string&) {
             std::cout << "[python] failed " << record.spec.id << ": " << error << "\n";
+            return true;
         },
     });
     runtime.register_backend(std::make_shared<CppModuleBackend>());

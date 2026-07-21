@@ -91,9 +91,11 @@ import entries удаляются позднее, при backend cleanup.
   - сделать пост-обработку после успешного восстановления
 
 - `after_failed_load`
-  - залогировать ошибку
-  - пометить модуль как broken на уровне UI/runtime
-  - выключить owner scope, если load упал
+  - отозвать и проверить partial owner contributions, если load упал
+  - вернуть `false` и cleanup diagnostic, если shared library пока нельзя
+    безопасно закрыть
+  - дополнительную UI-диагностику строить по итоговому `Failed` или
+    `CleanupFailed` event
 
 ### Чего C++ коллбеки делать не должны
 
@@ -141,7 +143,8 @@ import entries удаляются позднее, при backend cleanup.
   - пост-обработка после успешного reload
 
 - `after_failed_load`
-  - логирование и UI-диагностика
+  - проверить cleanup project-owned registrations после failed import
+  - вернуть cleanup status и diagnostic; UI использует итоговое состояние
 
 В интеграции `termin-engine` Python callbacks используются так же, как C++
 callbacks для scene component migration: перед unload module-owned components

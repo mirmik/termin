@@ -98,6 +98,8 @@ private:
         const std::string& module_id,
         const std::shared_ptr<IModuleReloadState>& reload_state
     );
+    bool execute_reload(const std::vector<std::string>& ordered_module_ids);
+    bool require_completed_reload_unload(const std::vector<std::string>& module_ids);
     IModuleBackend* get_backend(ModuleKind kind) const;
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;

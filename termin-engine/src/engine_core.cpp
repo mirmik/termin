@@ -172,18 +172,6 @@ EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient clien
     return EngineLoopClientConnection(_loop_state, _loop_state->generation);
 }
 
-void EngineCore::set_poll_events_callback(std::function<void()> cb) {
-    _poll_events_callback = std::move(cb);
-}
-
-void EngineCore::set_should_continue_callback(std::function<bool()> cb) {
-    _should_continue_callback = std::move(cb);
-}
-
-void EngineCore::set_on_shutdown_callback(std::function<void()> cb) {
-    _on_shutdown_callback = std::move(cb);
-}
-
 void EngineCore::stop() {
     _loop_state->running.store(false);
 }
@@ -249,16 +237,12 @@ void EngineCore::run() {
             tc_log(TC_LOG_ERROR, "[EngineCore] Refusing nested run() call");
             throw std::logic_error("EngineCore::run() is already active");
         }
-        _loop_state->running.store(true);
-        if (_loop_state->client) {
-            loop_client = *_loop_state->client;
-        } else {
-            // Temporary compatibility path for frontends not yet migrated to
-            // attach_loop_client(). Remove together with the legacy setters.
-            loop_client.poll_events = _poll_events_callback;
-            loop_client.should_continue = _should_continue_callback;
-            loop_client.on_shutdown = _on_shutdown_callback;
+        if (!_loop_state->client) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing run() without an attached loop client");
+            throw std::logic_error("EngineCore::run() requires an attached loop client");
         }
+        loop_client = *_loop_state->client;
+        _loop_state->running.store(true);
     }
 
     using clock = std::chrono::steady_clock;

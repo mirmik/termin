@@ -871,8 +871,24 @@ bool CppModuleBackend::load(
         } catch (...) {
             record.diagnostics += "\ncleanup after failed native module init threw across C ABI";
         }
+        bool contributions_clean = true;
+        std::string contribution_cleanup_error;
         if (environment.on_cpp_module_load_failure) {
-            environment.on_cpp_module_load_failure(record, record.error_message);
+            contributions_clean = environment.on_cpp_module_load_failure(
+                record,
+                record.error_message,
+                contribution_cleanup_error
+            );
+        }
+        handle->shutdown_called = true;
+        if (!contributions_clean) {
+            if (contribution_cleanup_error.empty()) {
+                contribution_cleanup_error =
+                    "owner contribution cleanup failed after native module init failure";
+            }
+            record.error_message += "; " + contribution_cleanup_error;
+            record.handle = handle;
+            return false;
         }
         unload_shared_library(native_handle);
         handle->native_handle = nullptr;

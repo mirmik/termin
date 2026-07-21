@@ -454,9 +454,9 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
 
     termin_modules::CppModuleCallbacks cpp_callbacks;
     cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
-                                         const std::string&) {
-        std::string error;
-        cleanup_module_registrations(record, error, false, {});
+                                         const std::string&,
+                                         std::string& error) {
+        return cleanup_module_registrations(record, error, false, {});
     };
     cpp_callbacks.before_unload = cpp_before_unload;
     cpp_callbacks.before_native_close = [sync_live_scenes, scene_provider](
@@ -476,9 +476,9 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
 
     termin_modules::PythonModuleCallbacks python_callbacks;
     python_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
-                                            const std::string&) {
-        std::string error;
-        cleanup_module_registrations(record, error, false, {});
+                                            const std::string&,
+                                            std::string& error) {
+        return cleanup_module_registrations(record, error, false, {});
     };
     python_callbacks.before_module_remove = [sync_live_scenes, scene_provider](
                                                   const termin_modules::ModuleRecord& record,

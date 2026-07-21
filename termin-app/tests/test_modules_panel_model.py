@@ -108,5 +108,27 @@ def test_modules_panel_exposes_retryable_cleanup_phase() -> None:
 
     assert snapshot.status == "1 failed, 1 changed"
     assert snapshot.rows[0].status == "cleanup-failed"
-    assert snapshot.rows[0].details == "cpp (retry cleanup: revoke-contributions, dirty)"
+    assert snapshot.rows[0].details == (
+        "cpp (run Unload to finish revoke-contributions, then load again, dirty)"
+    )
+    controller.close()
+
+
+def test_modules_panel_exposes_failed_reload_recovery_action() -> None:
+    runtime = _Runtime()
+    runtime.records = lambda: [
+        SimpleNamespace(
+            id="core",
+            kind=ModuleKind.Cpp,
+            state=ModuleState.Failed,
+            cleanup_phase=ModuleCleanupPhase.None_,
+        )
+    ]
+    runtime.dirty_modules = lambda: set()
+    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+
+    snapshot = controller.snapshot()
+
+    assert snapshot.rows[0].status == "failed"
+    assert snapshot.rows[0].details == "cpp (fix the module error, then load again)"
     controller.close()
