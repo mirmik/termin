@@ -51,6 +51,11 @@ class AudioListener(PythonComponent):
         """Apply master volume to audio engine."""
         from termin.audio.audio_engine import AudioEngine
 
-        engine = AudioEngine.instance()
+        engine = AudioEngine()
         if engine.is_initialized:
             engine.set_master_volume(self.volume)
+            if self.entity is not None:
+                position = self.entity.world_transform.position
+                forward = self.entity.world_transform.forward
+                engine.set_listener_position(position.x, position.y, position.z)
+                engine.set_listener_direction(forward.x, forward.y, forward.z)

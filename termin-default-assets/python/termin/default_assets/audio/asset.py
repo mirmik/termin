@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
-import ctypes
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from tcbase import log
 from termin_assets import Asset
-
-if TYPE_CHECKING:
-    from termin.audio.audio_clip import AudioClip
+from termin.audio import TcAudioClip
 
 
 class AudioClipAsset(Asset):
     """
-    Asset for audio files (.wav, .ogg, .mp3, .flac).
+    Asset for audio files decoded by the native runtime (.wav, .mp3, .flac).
 
-    SDL_mixer currently loads files directly by path, so this class inherits
-    from Asset directly instead of DataAsset[AudioClip].
+    The asset declares a canonical ``TcAudioClip`` by UUID. The native audio
+    registry owns decoded PCM and its lifetime.
     """
 
-    SUPPORTED_EXTENSIONS = {".wav", ".ogg", ".mp3", ".flac"}
+    SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac"}
 
     def __init__(
         self,
@@ -30,18 +26,21 @@ class AudioClipAsset(Asset):
         uuid: str | None = None,
     ):
         super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._clip: "AudioClip | None" = None
-        self._chunk: ctypes.c_void_p | None = None
+        path = str(self._source_path) if self._source_path is not None else ""
+        self._clip = TcAudioClip.declare(self.uuid, self._name, path)
+        if not self._clip.is_valid:
+            raise RuntimeError(f"Failed to declare native audio clip '{self.uuid}'")
 
     @property
-    def clip(self) -> "AudioClip | None":
+    def clip(self) -> TcAudioClip:
         """Get AudioClip, loading it if needed."""
         if not self._loaded:
             self._load()
+        self._loaded = self._clip.is_loaded
         return self._clip
 
     @property
-    def resource(self) -> "AudioClip | None":
+    def resource(self) -> TcAudioClip:
         """Get the underlying resource."""
         return self.clip
 
@@ -53,17 +52,10 @@ class AudioClipAsset(Asset):
         if self._source_path is None:
             return False
 
-        from termin.audio.audio_clip import AudioClip
-        from termin.audio.audio_engine import AudioEngine
-
-        engine = AudioEngine.instance()
-        chunk = engine.load_chunk(str(self._source_path))
-
-        if chunk is None:
+        self._clip.set_source_path(str(self._source_path))
+        if not self._clip.load_file():
+            log.error(f"[AudioClipAsset] Failed to load: {self._source_path}")
             return False
-
-        self._chunk = chunk
-        self._clip = AudioClip(chunk, duration_ms=0)
         self._loaded = True
         self._bump_version()
 
@@ -72,14 +64,9 @@ class AudioClipAsset(Asset):
 
     def unload(self) -> None:
         """Unload audio data to free memory."""
-        if self._chunk is not None:
-            from termin.audio.audio_engine import AudioEngine
-
-            engine = AudioEngine.instance()
-            engine.free_chunk(self._chunk)
-            self._chunk = None
-
-        self._clip = None
+        if self._clip.is_loaded and not self._clip.unload():
+            log.error(f"[AudioClipAsset] Cannot unload active clip: {self.uuid}")
+            return
         self._loaded = False
 
     def reload(self) -> bool:
@@ -104,6 +91,24 @@ class AudioClipAsset(Asset):
 
         return cls(name=name, source_path=path, uuid=uuid)
 
-    def __del__(self):
-        """Ensure audio data is freed on garbage collection."""
-        self.unload()
+    @Asset.source_path.setter
+    def source_path(self, value: Path | str | None) -> None:
+        self._source_path = Path(value) if value else None
+        if self._source_path is not None:
+            self._clip.set_source_path(str(self._source_path))
+
+    def _rename(self, value: str) -> None:
+        super()._rename(value)
+        self._clip.set_name(value)
+
+    def _adopt_uuid(self, uuid: str) -> None:
+        previous_uuid = self.uuid
+        super()._adopt_uuid(uuid)
+        if uuid == previous_uuid:
+            return
+        path = str(self._source_path) if self._source_path is not None else ""
+        replacement = TcAudioClip.declare(uuid, self._name, path)
+        if not replacement.is_valid:
+            log.error(f"[AudioClipAsset] Failed to adopt native UUID '{uuid}'")
+            raise RuntimeError(f"Failed to declare native audio clip '{uuid}'")
+        self._clip = replacement

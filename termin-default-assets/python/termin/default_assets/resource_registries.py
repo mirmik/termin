@@ -292,14 +292,17 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_audio_clip_registry(self):
         """Create AssetRegistry for audio clips."""
         from termin_assets import AssetRegistry
+        from termin.audio import TcAudioClip
 
         def data_from_asset(asset):
-            from termin.default_assets.audio.handle import AudioClipHandle
-            return AudioClipHandle.from_asset(asset)
+            return asset.clip
 
-        def data_to_asset(handle):
-            if handle is not None:
-                return handle.get_asset()
+        def data_to_asset(clip):
+            if not isinstance(clip, TcAudioClip) or not clip.is_valid:
+                return None
+            for asset in self._audio_clip_registry.iter_assets():
+                if asset.uuid == clip.uuid:
+                    return asset
             return None
 
         def get_asset_class():

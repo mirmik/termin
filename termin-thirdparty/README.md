@@ -12,6 +12,9 @@ Current contents:
 - `glad`: vendored OpenGL loader generated for `termin-graphics`.
 - `stb`: vendored single-header subset used by `termin-graphics` font atlas
   code.
+- `miniaudio`: vendored miniaudio v0.11.25 used privately by `termin-audio`
+  for decoding, device I/O, mixing, and spatial playback. Termin owns resource
+  identity and lifetime; miniaudio's resource manager is disabled.
 - `recastnavigation`: Recast/Detour submodule used by app-level navmesh
   builder and pathfinding integration, commit `1078bfe346d9bb560faa748c8fde2e7aae73a3ab`.
 - `openxr-sdk`: Khronos OpenXR SDK submodule used by `termin-openxr` for
