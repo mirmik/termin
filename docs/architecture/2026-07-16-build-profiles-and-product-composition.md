@@ -222,12 +222,16 @@ The build must not assume that a product contains only one scene.
 
 `modules` names explicit root modules by stable descriptor identity. The module
 registry resolves descriptors and transitive module dependencies. The build
-packages only the resolved closure, not every `.pymodule` or loadable module
-found anywhere under the project root.
+indexes both native `.module` and Python `.pymodule` descriptors, resolves their
+shared dependency graph, and packages only the resolved closure rather than
+every loadable module found anywhere under the project root.
 
 Module descriptors remain responsible for their owned Python packages, native
-artifacts and declared Python distribution requirements. Missing, duplicate or
-ambiguous module identity is a build error.
+artifacts and declared Python distribution requirements. Packaged native
+descriptors reference the already-built artifact and contain no build command,
+so runtime loading cannot accidentally rebuild project sources. Missing,
+duplicate or ambiguous module identity, dependency cycles, missing owned files,
+and packaged-path collisions are build errors.
 
 ### Python distributions
 

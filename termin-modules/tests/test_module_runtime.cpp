@@ -363,6 +363,30 @@ void test_descriptor_parsing_and_discovery() {
     expect(discovered_count == 2, "two discovered events expected");
 }
 
+void test_selected_closure_is_deterministic_and_mixed() {
+    TempDir tmp;
+    write_text_file(tmp.path / "z_python.pymodule",
+                    "name: gameplay\ntype: python\ndependencies: [render, physics]\npackages: []\n");
+    write_text_file(tmp.path / "physics.module",
+                    "name: physics\nbuild:\n  output: build/libphysics.so\n");
+    write_text_file(tmp.path / "render.module",
+                    "name: render\ndependencies: [physics]\nbuild:\n  output: build/librender.so\n");
+    write_text_file(tmp.path / "unused.pymodule", "name: unused\npackages: []\n");
+
+    ModuleRuntime runtime;
+    expect(runtime.discover(tmp.path), "mixed closure discovery should succeed");
+    std::vector<const ModuleRecord*> closure;
+    expect(runtime.resolve_closure({"gameplay"}, closure), runtime.last_error());
+    expect(closure.size() == 3, "closure should exclude unrelated modules");
+    expect(closure[0]->spec.id == "physics", "shared dependency should be first");
+    expect(closure[1]->spec.id == "render", "native dependent should follow dependency");
+    expect(closure[2]->spec.id == "gameplay", "selected root should be last");
+
+    expect(!runtime.resolve_closure({"missing"}, closure), "missing selected root must fail");
+    expect(runtime.last_error() == "Selected module not found: missing",
+           "missing selected root diagnostic should name the root");
+}
+
 void test_descriptor_rejects_explicit_components() {
     TempDir tmp;
 
@@ -1588,6 +1612,10 @@ void test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed() {
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
     test_descriptor_parsing_and_discovery();
+}
+
+TEST_CASE("module runtime resolves deterministic selected mixed closure") {
+    test_selected_closure_is_deterministic_and_mixed();
 }
 
 TEST_CASE("module runtime rejects explicit component descriptor lists") {

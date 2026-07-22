@@ -161,6 +161,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 resource_policy=request.context.resource_policy,
                 python_package_policy=request.python_package_policy,
                 python_requirements=request.python_requirements,
+                modules=request.modules,
             )
             _print_desktop_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)

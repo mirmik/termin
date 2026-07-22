@@ -2,6 +2,7 @@
 
 #include <tcbase/tc_log.hpp>
 
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <sstream>
@@ -264,6 +265,7 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
         return false;
     }
 
+    std::vector<std::filesystem::path> descriptor_paths;
     std::filesystem::recursive_directory_iterator it(project_root);
     std::filesystem::recursive_directory_iterator end;
     while (it != end) {
@@ -301,27 +303,32 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
             continue;
         }
 
+        descriptor_paths.push_back(entry.path());
+        ++it;
+    }
+
+    std::sort(descriptor_paths.begin(), descriptor_paths.end());
+    for (const std::filesystem::path& descriptor_path : descriptor_paths) {
         std::string error;
-        auto spec = _parser->parse(entry.path(), error);
+        auto spec = _parser->parse(descriptor_path, error);
         if (!spec.has_value()) {
             _last_error = error;
-            emit(ModuleEventKind::Failed, entry.path().string(), error);
-            ++it;
+            emit(ModuleEventKind::Failed, descriptor_path.string(), error);
             continue;
         }
 
-        if (find(spec->id) != nullptr) {
-            _last_error = "Duplicate module id: " + spec->id;
+        const ModuleRecord* existing = find(spec->id);
+        if (existing != nullptr) {
+            _last_error = "Duplicate module id '" + spec->id + "' in descriptors '" +
+                existing->spec.descriptor_path.string() + "' and '" + descriptor_path.string() + "'";
             emit(ModuleEventKind::Failed, spec->id, _last_error);
-            ++it;
             continue;
         }
 
         ModuleRecord record;
         record.spec = std::move(*spec);
         _records.push_back(std::move(record));
-        emit(ModuleEventKind::Discovered, _records.back().spec.id, entry.path().string());
-        ++it;
+        emit(ModuleEventKind::Discovered, _records.back().spec.id, descriptor_path.string());
     }
 
     if (!_last_error.empty()) {
@@ -1146,6 +1153,35 @@ const std::string& ModuleRuntime::last_error() const {
     return _last_error;
 }
 
+bool ModuleRuntime::resolve_closure(
+    const std::vector<std::string>& root_module_ids,
+    std::vector<const ModuleRecord*>& ordered
+) {
+    ordered.clear();
+    _last_error.clear();
+
+    std::vector<std::string> roots = root_module_ids;
+    std::sort(roots.begin(), roots.end());
+    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
+
+    std::unordered_map<std::string, int> marks;
+    std::vector<std::string> stack;
+    for (const std::string& root : roots) {
+        const ModuleRecord* record = find(root);
+        if (record == nullptr) {
+            _last_error = "Selected module not found: " + root;
+            tc::Log::error("ModuleRuntime: closure resolution failed: %s", _last_error.c_str());
+            return false;
+        }
+        if (!visit_closure_module(*record, marks, ordered, stack, _last_error)) {
+            tc::Log::error("ModuleRuntime: closure resolution failed: %s", _last_error.c_str());
+            ordered.clear();
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ModuleRuntime::build_load_order(std::vector<ModuleRecord*>& ordered, std::string& error) {
     ordered.clear();
     std::unordered_map<std::string, int> marks;
@@ -1286,6 +1322,47 @@ bool ModuleRuntime::visit_module(
         }
     }
 
+    marks[record.spec.id] = 2;
+    ordered.push_back(&record);
+    return true;
+}
+
+bool ModuleRuntime::visit_closure_module(
+    const ModuleRecord& record,
+    std::unordered_map<std::string, int>& marks,
+    std::vector<const ModuleRecord*>& ordered,
+    std::vector<std::string>& stack,
+    std::string& error
+) const {
+    const int current_mark = marks[record.spec.id];
+    if (current_mark == 2) return true;
+    if (current_mark == 1) {
+        auto cycle_start = std::find(stack.begin(), stack.end(), record.spec.id);
+        std::ostringstream message;
+        message << "Dependency cycle detected: ";
+        for (auto it = cycle_start; it != stack.end(); ++it) {
+            if (it != cycle_start) message << " -> ";
+            message << *it;
+        }
+        message << " -> " << record.spec.id;
+        error = message.str();
+        return false;
+    }
+
+    marks[record.spec.id] = 1;
+    stack.push_back(record.spec.id);
+    std::vector<std::string> dependencies = record.spec.dependencies;
+    std::sort(dependencies.begin(), dependencies.end());
+    dependencies.erase(std::unique(dependencies.begin(), dependencies.end()), dependencies.end());
+    for (const std::string& dependency : dependencies) {
+        const ModuleRecord* dependency_record = find(dependency);
+        if (dependency_record == nullptr) {
+            error = "Missing dependency '" + dependency + "' for module '" + record.spec.id + "'";
+            return false;
+        }
+        if (!visit_closure_module(*dependency_record, marks, ordered, stack, error)) return false;
+    }
+    stack.pop_back();
     marks[record.spec.id] = 2;
     ordered.push_back(&record);
     return true;

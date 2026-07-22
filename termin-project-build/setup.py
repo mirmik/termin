@@ -19,6 +19,7 @@ setup(
     install_requires=[
         "tcbase",
         "termin-project",
+        "termin-modules",
         "termin-default-assets",
         "termin-stdlib",
         "termin-glb",
