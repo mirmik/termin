@@ -450,24 +450,24 @@ local profiles execute only their declared inventories.
 
 ### Phase 5: CI consumes the planner
 
-Initial Linux PR migration status, 2026-07-11: CI has a dedicated planner job
-that validates manifests and publishes the pr/Linux plan JSON. The C++ and
-Python test jobs download that artifact and pass it to planner-backed runners.
-CTest uploads its selection, JUnit, and execution manifest; the Python runner
-writes the corresponding suite execution manifest.
-The verify-pr-linux-plan job consumes both manifests and fails if the PR plan
-has an unaccounted Python suite or native module, or if either executor reports
-a failed entry. Execution verification is fail-closed on schema, profile, and
-platform identity and rejects suites/modules not present in the planner
-artifact, preventing stale or cross-profile reports from satisfying coverage.
+Current migration status, 2026-07-22: every canonical runner derives its
+selection from the checked-out repository manifest. CI no longer publishes or
+downloads a cross-job plan artifact, and runner CLIs no longer accept an
+external plan file. CTest uploads its selection, JUnit, and canonical
+suite-level execution manifest; the Python runner writes the corresponding
+execution manifest. The verification job computes the pr/Linux expected
+manifest again from its checkout and compares both executor fingerprints and
+terminal outcomes. Execution verification is fail-closed on schema, profile,
+platform, expected fingerprint, unknown suites, missing selection/results, and
+failed entries.
 The termin-app installed-bundle acceptance is also declared as a separate
 sdk-installed process-smoke suite, preserving its distinct import contract
-without a pytest root list in workflow YAML. Process-smoke jobs verify their
-selected/executed/failed suite manifest against the exact planner artifact
-before publishing it, using the same fail-closed identity contract.
+without a pytest root list in workflow YAML. Process-smoke jobs compute expected
+coverage locally and verify their selected/executed/failed suite manifest before
+publishing it, using the same fail-closed identity contract.
 The focused D3D11 Windows smoke is likewise a declared Windows process-smoke
-suite; CI consumes its Windows plan artifact and publishes a suite execution
-manifest. Runtime acceptance still depends on the Windows runner.
+suite; CI publishes its execution manifest and diagnostic logs. Runtime
+acceptance still depends on the Windows runner.
 
 - Generate CI matrices from planner JSON.
 - Remove pytest/CTest root lists from workflow YAML.
