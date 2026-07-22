@@ -103,13 +103,18 @@ def test_editor_session_build_rolls_back_across_engine_shutdown_boundary() -> No
 
 def test_native_editor_uses_host_owned_atomic_loop_session() -> None:
     frontend_source = (REPO_ROOT / "termin-app/termin/editor_native/run_editor.py").read_text(encoding="utf-8")
+    event_loop_source = (
+        REPO_ROOT / "termin-app/termin/editor_native/event_loop.py"
+    ).read_text(encoding="utf-8")
     host_source = (REPO_ROOT / "termin-app/cpp/app/main_minimal.cpp").read_text(encoding="utf-8")
 
-    assert "EngineLoopClient(" in frontend_source
-    assert "attach_loop_client(" in frontend_source
-    assert "set_poll_events_callback(" not in frontend_source
-    assert "set_should_continue_callback(" not in frontend_source
-    assert "set_on_shutdown_callback(" not in frontend_source
+    assert "attach_native_editor_event_loop(" in frontend_source
+    assert "EngineLoopClient(" in event_loop_source
+    assert "attach_loop_client(" in event_loop_source
+    combined_frontend_source = frontend_source + event_loop_source
+    assert "set_poll_events_callback(" not in combined_frontend_source
+    assert "set_should_continue_callback(" not in combined_frontend_source
+    assert "set_on_shutdown_callback(" not in combined_frontend_source
     assert "engine.rendering_manager.shutdown()" not in frontend_source
     assert "PyObject* editor_session = initialize_python_editor(engine);" in host_source
     assert 'call_python_editor_method(editor_session, "prepare_engine_shutdown")' in host_source

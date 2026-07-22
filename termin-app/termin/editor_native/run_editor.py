@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from pathlib import Path
 
-from tcbase import log
 from tgfx import Tgfx2Context
 from termin.display import PresentationMode, WindowedGraphicsSession, quit_sdl
 from termin.editor_core.component_editor_extension import (
@@ -79,7 +77,6 @@ from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
 from termin.editor_core.editor_log_model import EditorLogModel
 from termin.editor_core.editor_session_presentation import EditorSessionPresentationModel
-from termin.editor_core.terminal_interrupt import TerminalInterruptController
 from termin.editor_core.render_scene_session import RenderSceneSession
 from termin.editor_core.rendering_factories import (
     PipelineAssetResolver,
@@ -97,6 +94,7 @@ from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.editor_log import build_native_editor_log
 from termin.editor_native.editor_session import EditorSession
+from termin.editor_native.event_loop import attach_native_editor_event_loop
 from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
@@ -177,10 +175,6 @@ from termin.gui_native import Rect, WidgetRef
 _logger = logging.getLogger(__name__)
 
 
-def _game_mode_requires_continuous_render(game_mode_controller) -> bool:
-    return game_mode_controller is not None and game_mode_controller.model.is_game_mode
-
-
 def _complete_editor_scene_render(native_viewport, host) -> None:
     """Finish viewport work and schedule presentation of the produced image."""
     native_viewport.after_render()
@@ -198,14 +192,6 @@ def _close_game_mode_controller(game_mode_controller) -> None:
     game_mode_controller.close()
 
 
-def _smoke_frame_limit() -> int:
-    value = os.environ.get("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", "0")
-    try:
-        return max(int(value), 0)
-    except ValueError:
-        return 0
-
-
 def _compose_native_editor(
     session: EditorSession,
     engine,
@@ -219,7 +205,7 @@ def _compose_native_editor(
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     from termin.editor_core.mcp_server import start_editor_mcp_server
     from termin.editor_core.python_executor import EditorPythonExecutor
-    from termin.engine import EngineLoopClient, create_scene, scene as engine_scene
+    from termin.engine import create_scene, scene as engine_scene
 
     bootstrap_editor()
     configure_editor_resource_manager_factory()
@@ -1939,67 +1925,24 @@ def _compose_native_editor(
         engine.tick_and_render(0.016)
     host.render()
 
-    event_loop_stage = session.begin_stage("event loop")
-    frame_limit = _smoke_frame_limit()
-    frame_count = 0
-    terminal_interrupt = event_loop_stage.own(
-        "terminal interrupt",
-        TerminalInterruptController(),
-        cleanup=lambda: terminal_interrupt.close(),
+    attach_native_editor_event_loop(
+        session,
+        engine,
+        capture_profiler=capture_profiler,
+        window_manager=window_manager,
+        executor=executor,
+        host=host,
+        quest_openxr_build_dialog=quest_openxr_build_dialog,
+        project_file_watcher=project_file_watcher,
+        scene_structure_observer=scene_structure_observer,
+        spacemouse=spacemouse,
+        framegraph_debugger=framegraph_debugger,
+        frame_profiler=frame_profiler,
+        profiler_panel=profiler_panel,
+        game_mode_controller=game_mode_controller,
+        request_editor_render=request_editor_render,
+        window=window,
     )
-
-    def poll_events() -> None:
-        nonlocal frame_count
-        if terminal_interrupt.consume():
-            log.info("[Editor] SIGINT received; requesting native editor shutdown")
-            window.set_should_close(True)
-            return
-        with capture_profiler.section("Events"):
-            keep_running, _routed = window_manager.poll_events()
-        if not keep_running:
-            return
-        with capture_profiler.section("Queued Work"):
-            if executor.process_pending() > 0:
-                host.request_render_update()
-            window_manager.process_deferred()
-            if quest_openxr_build_dialog.poll() > 0:
-                host.request_render_update()
-        with capture_profiler.section("Project Watch"):
-            project_file_watcher.poll()
-        with capture_profiler.section("Observers & Input"):
-            scene_structure_observer.poll()
-            spacemouse.poll()
-        with capture_profiler.section("Debug Tools"):
-            framegraph_debugger.update()
-            frame_profiler.update()
-            if profiler_panel.root.visible and profiler_panel.update():
-                host.request_render_update()
-        with capture_profiler.section("UI Schedule"):
-            if _game_mode_requires_continuous_render(game_mode_controller):
-                # The engine renders the playing scene after this UI callback. Compose
-                # every loop so the frame produced at the end of the previous loop is
-                # presented, and keep the scene render scheduler active for the next one.
-                request_editor_render()
-        with capture_profiler.section("UI Compose"):
-            window_manager.render_requested()
-        frame_count += 1
-        if frame_limit > 0 and frame_count >= frame_limit:
-            window.set_should_close(True)
-
-    def should_continue() -> bool:
-        return not window.should_close()
-
-    loop_client = EngineLoopClient(
-        poll_events=poll_events,
-        should_continue=should_continue,
-        on_shutdown=lambda: None,
-    )
-    loop_connection = event_loop_stage.own(
-        "engine loop connection",
-        engine.attach_loop_client(loop_client),
-        cleanup=lambda: loop_connection.detach(),
-    )
-    terminal_interrupt.install()
 
 
 def init_editor_native(
