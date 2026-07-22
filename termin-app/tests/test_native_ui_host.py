@@ -380,7 +380,7 @@ def test_native_ui_event_router_dispatches_enabled_undo_shortcut():
 
 
 def test_native_editor_continuously_composes_only_in_game_mode():
-    from termin.editor_native.run_editor import _game_mode_requires_continuous_render
+    from termin.editor_native.event_loop import _game_mode_requires_continuous_render
 
     class Model:
         is_game_mode = False
