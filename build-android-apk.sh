@@ -14,6 +14,8 @@ ANDROID_NDK_VERSION_VALUE="${TERMIN_ANDROID_NDK_VERSION:-27.2.12479018}"
 ANDROID_ASSETS_DIR_VALUE="${TERMIN_ANDROID_ASSETS_DIR:-$SCRIPT_DIR/termin-android/assets}"
 ANDROID_APPLICATION_ID_VALUE="${TERMIN_ANDROID_APPLICATION_ID:-org.termin.android}"
 ANDROID_APP_LABEL_VALUE="${TERMIN_ANDROID_APP_LABEL:-Termin Android}"
+ANDROID_VERSION_CODE_VALUE="${TERMIN_ANDROID_VERSION_CODE:-1}"
+ANDROID_VERSION_NAME_VALUE="${TERMIN_ANDROID_VERSION_NAME:-0.1.0}"
 GRADLE_BIN_VALUE="${GRADLE_BIN:-gradle}"
 ANDROID_VARIANT="debug"
 
@@ -75,6 +77,20 @@ while [[ $# -gt 0 ]]; do
         --app-label=*)
             ANDROID_APP_LABEL_VALUE="${1#--app-label=}"
             ;;
+        --version-code)
+            ANDROID_VERSION_CODE_VALUE="$2"
+            shift
+            ;;
+        --version-code=*)
+            ANDROID_VERSION_CODE_VALUE="${1#--version-code=}"
+            ;;
+        --version-name)
+            ANDROID_VERSION_NAME_VALUE="$2"
+            shift
+            ;;
+        --version-name=*)
+            ANDROID_VERSION_NAME_VALUE="${1#--version-name=}"
+            ;;
         --variant)
             ANDROID_VARIANT="$2"
             shift
@@ -93,6 +109,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --assets-dir DIR      APK assets directory (default: ./termin-android/assets)"
             echo "  --application-id ID   Android applicationId (default: org.termin.android)"
             echo "  --app-label LABEL     Android launcher label (default: Termin Android)"
+            echo "  --version-code CODE   Positive Android version code (default: 1)"
+            echo "  --version-name NAME   User-visible version name (default: 0.1.0)"
             echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
             echo "  --variant VARIANT     Gradle variant: debug or release (default: debug)"
             echo "  --help, -h            Show this help"
@@ -169,6 +187,7 @@ echo "NDK version:     $ANDROID_NDK_VERSION_VALUE"
 echo "Assets dir:      $ANDROID_ASSETS_DIR_VALUE"
 echo "Application ID:  $ANDROID_APPLICATION_ID_VALUE"
 echo "App label:       $ANDROID_APP_LABEL_VALUE"
+echo "Version:         $ANDROID_VERSION_NAME_VALUE ($ANDROID_VERSION_CODE_VALUE)"
 echo ""
 
 cd "$PLATFORM_DIR"
@@ -180,7 +199,9 @@ cd "$PLATFORM_DIR"
     -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE" \
     -PterminAndroidAssetsDir="$ANDROID_ASSETS_DIR_VALUE" \
     -PterminAndroidApplicationId="$ANDROID_APPLICATION_ID_VALUE" \
-    -PterminAndroidAppLabel="$ANDROID_APP_LABEL_VALUE"
+    -PterminAndroidAppLabel="$ANDROID_APP_LABEL_VALUE" \
+    -PterminAndroidVersionCode="$ANDROID_VERSION_CODE_VALUE" \
+    -PterminAndroidVersionName="$ANDROID_VERSION_NAME_VALUE"
 
 rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
 

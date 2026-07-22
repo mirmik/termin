@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+from termin.project.application_identity import ProjectApplicationIdentity
 from termin.project.settings import ProjectPlayerWindowSettings, ProjectSettings, RenderSyncMode
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
@@ -135,3 +138,60 @@ def test_project_settings_invalid_player_window_fields_use_defaults() -> None:
     )
 
     assert settings.player_window == ProjectPlayerWindowSettings()
+
+
+def test_project_application_identity_defaults_and_round_trips() -> None:
+    first = ProjectSettings.from_dict({}, project_name="First Game")
+    second = ProjectSettings.from_dict({}, project_name="Second Game")
+
+    assert first.application == ProjectApplicationIdentity(
+        application_id="org.termin.builds.first.game",
+        label="First Game",
+        version_code=1,
+        version_name="0.1.0",
+    )
+    assert first.application.application_id != second.application.application_id
+
+    custom = ProjectSettings.from_dict(
+        {
+            "application": {
+                "id": "com.example.product",
+                "label": "Example Product",
+                "version_code": 42,
+                "version_name": "2.3.1-beta",
+            }
+        },
+        project_name="Ignored Default",
+    )
+    assert ProjectSettings.from_dict(
+        custom.to_dict(),
+        project_name="Ignored Default",
+    ).application == custom.application
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("id", "one-segment", "application.id"),
+        ("id", "com.example.bad-id", "application.id"),
+        ("label", " ", "application.label"),
+        ("version_code", 0, "application.version_code"),
+        ("version_code", True, "application.version_code"),
+        ("version_name", "", "application.version_name"),
+    ],
+)
+def test_project_application_identity_rejects_invalid_values(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    data = {
+        "id": "com.example.product",
+        "label": "Product",
+        "version_code": 1,
+        "version_name": "1.0",
+    }
+    data[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        ProjectSettings.from_dict({"application": data}, project_name="Product")

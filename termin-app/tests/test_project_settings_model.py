@@ -28,6 +28,10 @@ def test_project_settings_controller_persists_normalizes_and_notifies(tmp_path):
         ProjectSettingsSnapshot(
             render_sync_mode=next_mode,
             build_output_dir=" generated\\desktop ",
+            application_id="com.example.editor",
+            application_label="Editor Test",
+            version_code=7,
+            version_name="1.2.3",
             player_width=1920,
             player_height=1080,
             player_fullscreen=False,
@@ -39,6 +43,10 @@ def test_project_settings_controller_persists_normalizes_and_notifies(tmp_path):
 
     assert saved.render_sync_mode == next_mode
     assert saved.build_output_dir == "generated/desktop"
+    assert saved.application_id == "com.example.editor"
+    assert saved.application_label == "Editor Test"
+    assert saved.version_code == 7
+    assert saved.version_name == "1.2.3"
     assert saved.player_width == 1920
     assert saved.player_height == 1080
     assert not saved.player_fullscreen

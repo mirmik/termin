@@ -15,6 +15,11 @@ def test_quest_openxr_controller_build_install_launch_sequence(monkeypatch, tmp_
     apk_path = tmp_path / "dist" / "app.apk"
     build_result = SimpleNamespace(
         apk_path=apk_path,
+        application_id="com.example.quest",
+        application_label="Example Quest",
+        version_code=5,
+        version_name="1.5",
+        launch_activity="android.app.NativeActivity",
         package_result=SimpleNamespace(package_dir=tmp_path / "package"),
         log_path=tmp_path / "build.log",
         diagnostics=[SimpleNamespace(level="warning", path="asset", message="notice")],
@@ -40,8 +45,8 @@ def test_quest_openxr_controller_build_install_launch_sequence(monkeypatch, tmp_
     monkeypatch.setattr(
         project_build,
         "launch_quest_openxr_app",
-        lambda **kwargs: (
-            events.append(("launch", kwargs["log_path"])),
+        lambda application_id, **kwargs: (
+            events.append(("launch", application_id, kwargs["log_path"])),
             kwargs["log_callback"]("launch output"),
         ),
     )
@@ -60,6 +65,7 @@ def test_quest_openxr_controller_build_install_launch_sequence(monkeypatch, tmp_
     assert snapshot.status == "Launch complete"
     assert snapshot.last_apk_path == str(apk_path)
     assert [event[0] for event in events] == ["build", "install", "launch"]
+    assert events[-1][1] == "com.example.quest"
     assert "build output" in snapshot.log_text
     assert "Build warning: asset: notice" in snapshot.log_text
     assert "Launch command sent." in snapshot.log_text

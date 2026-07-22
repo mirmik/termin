@@ -86,6 +86,31 @@ def show_project_settings_dialog(
     build_row.add_child(build_dir_input)
     content.add_child(build_row)
 
+    application_id_input = TextInput()
+    application_id_input.text = snapshot.application_id
+    application_label_input = TextInput()
+    application_label_input.text = snapshot.application_label
+    version_code_spin = SpinBox()
+    version_code_spin.value = snapshot.version_code
+    version_code_spin.min_value = 1
+    version_code_spin.max_value = 2_100_000_000
+    version_code_spin.decimals = 0
+    version_name_input = TextInput()
+    version_name_input.text = snapshot.version_name
+    for label_text, control in (
+        ("Application ID:", application_id_input),
+        ("Application Label:", application_label_input),
+        ("Version Code:", version_code_spin),
+        ("Version Name:", version_name_input),
+    ):
+        application_row = HStack()
+        application_row.spacing = 8
+        application_label = Label()
+        application_label.text = label_text
+        application_row.add_child(application_label)
+        application_row.add_child(control)
+        content.add_child(application_row)
+
     player_window_label = Label()
     player_window_label.text = "Player Window:"
     player_window_label.tooltip = "Default standalone player window used by Run Build and packaged desktop bundles."
@@ -176,6 +201,10 @@ def show_project_settings_dialog(
         return ProjectSettingsSnapshot(
             render_sync_mode=sync_modes[combo.selected_index],
             build_output_dir=build_dir_input.text,
+            application_id=application_id_input.text,
+            application_label=application_label_input.text,
+            version_code=int(version_code_spin.value),
+            version_name=version_name_input.text,
             player_width=int(width_spin.value),
             player_height=int(height_spin.value),
             player_fullscreen=fullscreen_check.checked,

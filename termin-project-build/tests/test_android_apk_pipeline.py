@@ -184,3 +184,29 @@ def test_gradle_metadata_rejects_wrong_application_id(
             variant=android_apk_pipeline.resolve_android_gradle_variant("debug"),
             expected_application_id="org.example.game",
         )
+
+
+def test_quest_launch_uses_exact_application_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from termin.project_build import quest_openxr_build
+
+    adb = tmp_path / "adb"
+    commands: list[list[str]] = []
+    monkeypatch.setattr(quest_openxr_build, "_resolve_adb", lambda _adb: adb)
+
+    def fake_run_deploy_command(cmd, _log_path, _log_callback):
+        commands.append(cmd)
+        return quest_openxr_build.QuestOpenXRDeployResult(cmd, None, "")
+
+    monkeypatch.setattr(
+        quest_openxr_build,
+        "_run_deploy_command",
+        fake_run_deploy_command,
+    )
+
+    results = quest_openxr_build.launch_quest_openxr_app("com.example.quest")
+
+    assert len(results) == 2
+    assert commands[-1] == [str(adb), "shell", "monkey", "-p", "com.example.quest", "1"]

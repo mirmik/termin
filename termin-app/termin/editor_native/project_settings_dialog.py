@@ -41,6 +41,10 @@ class NativeProjectSettingsDialog:
     dialog: object
     render_sync: object
     build_output: object
+    application_id: object
+    application_label: object
+    version_code: object
+    version_name: object
     player_width: object
     player_height: object
     player_fullscreen: object
@@ -75,6 +79,10 @@ class NativeProjectSettingsDialog:
         return ProjectSettingsSnapshot(
             render_sync_mode=RENDER_SYNC_MODES[index],
             build_output_dir=self.build_output.text,
+            application_id=self.application_id.text,
+            application_label=self.application_label.text,
+            version_code=int(self.version_code.value),
+            version_name=self.version_name.text,
             player_width=int(self.player_width.value),
             player_height=int(self.player_height.value),
             player_fullscreen=bool(self.player_fullscreen.checked),
@@ -90,6 +98,10 @@ class NativeProjectSettingsDialog:
         try:
             self.render_sync.selected_index = RENDER_SYNC_MODES.index(snapshot.render_sync_mode)
             self.build_output.text = snapshot.build_output_dir
+            self.application_id.text = snapshot.application_id
+            self.application_label.text = snapshot.application_label
+            self.version_code.value = snapshot.version_code
+            self.version_name.text = snapshot.version_name
             self.player_width.value = snapshot.player_width
             self.player_height.value = snapshot.player_height
             self.player_fullscreen.checked = snapshot.player_fullscreen
@@ -155,6 +167,29 @@ def build_native_project_settings_dialog(
     root.add_fixed_child(_row(document, "Render Sync Mode", render_sync), EDITOR_UI_METRICS.field_row)
     build_output = document.create_text_input()
     root.add_fixed_child(_row(document, "Build Output Dir", build_output), EDITOR_UI_METRICS.field_row)
+    application_id = document.create_text_input()
+    root.add_fixed_child(
+        _row(document, "Application ID", application_id),
+        EDITOR_UI_METRICS.field_row,
+    )
+    application_label = document.create_text_input()
+    root.add_fixed_child(
+        _row(document, "Application Label", application_label),
+        EDITOR_UI_METRICS.field_row,
+    )
+    version_code = document.create_spin_box()
+    version_code.set_range(1.0, 2_100_000_000.0)
+    version_code.step = 1.0
+    version_code.decimals = 0
+    root.add_fixed_child(
+        _row(document, "Version Code", version_code),
+        EDITOR_UI_METRICS.field_row,
+    )
+    version_name = document.create_text_input()
+    root.add_fixed_child(
+        _row(document, "Version Name", version_name),
+        EDITOR_UI_METRICS.field_row,
+    )
     width = document.create_spin_box()
     width.set_range(1.0, 16384.0)
     width.step = 16.0
@@ -190,21 +225,25 @@ def build_native_project_settings_dialog(
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)
     result = NativeProjectSettingsDialog(
-        document,
-        controller,
-        dialog_service,
-        dialog,
-        render_sync,
-        build_output,
-        width,
-        height,
-        fullscreen,
-        vsync,
-        ignored,
-        render_phases,
-        status,
-        viewport,
-        request_render,
+        document=document,
+        controller=controller,
+        dialog_service=dialog_service,
+        dialog=dialog,
+        render_sync=render_sync,
+        build_output=build_output,
+        application_id=application_id,
+        application_label=application_label,
+        version_code=version_code,
+        version_name=version_name,
+        player_width=width,
+        player_height=height,
+        player_fullscreen=fullscreen,
+        player_vsync=vsync,
+        ignored_paths=ignored,
+        render_phases=render_phases,
+        status=status,
+        viewport=viewport,
+        request_render=request_render,
     )
     weak_result = weakref.ref(result)
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from termin.project.settings import load_project_settings
 from termin.project_build.android_apk_pipeline import (
     AndroidApkProduct,
     build_android_apk,
@@ -42,6 +42,9 @@ class AndroidBuildResult:
     apk_path: Path
     log_path: Path
     application_id: str
+    application_label: str
+    version_code: int
+    version_name: str
     launch_activity: str
     diagnostics: list[DiagnosticLike] = field(default_factory=list)
 
@@ -51,6 +54,9 @@ class _AndroidTargetPackagePayload:
     apk_path: Path
     log_path: Path
     application_id: str
+    application_label: str
+    version_code: int
+    version_name: str
     launch_activity: str
 
 
@@ -112,6 +118,9 @@ def build_android_project(
         apk_path=target_payload.apk_path,
         log_path=target_payload.log_path,
         application_id=target_payload.application_id,
+        application_label=target_payload.application_label,
+        version_code=target_payload.version_code,
+        version_name=target_payload.version_name,
         launch_activity=target_payload.launch_activity,
         diagnostics=pipeline_result.diagnostics,
     )
@@ -148,13 +157,13 @@ def _package_android_target(
     abi: str,
     platform: str,
 ) -> TargetPackageStepResult[_AndroidTargetPackagePayload]:
-    application_id = _android_application_id_from_project_name(context.project_name)
+    application = load_project_settings(context.project_root).application
     launch_activity = "org.termin.android.TerminActivity"
     apk_result = build_android_apk(
         product=ANDROID_APK_PRODUCT,
         configuration=context.configuration,
         project_name=context.project_name,
-        application_id=application_id,
+        application_id=application.application_id,
         termin_root=preflight_result.termin_root,
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
@@ -166,9 +175,13 @@ def _package_android_target(
         platform=platform,
         product_arguments=(
             "--application-id",
-            application_id,
+            application.application_id,
             "--app-label",
-            context.project_name,
+            application.label,
+            "--version-code",
+            str(application.version_code),
+            "--version-name",
+            application.version_name,
         ),
     )
 
@@ -176,24 +189,10 @@ def _package_android_target(
         payload=_AndroidTargetPackagePayload(
             apk_path=apk_result.apk_path,
             log_path=apk_result.log_path,
-            application_id=application_id,
+            application_id=application.application_id,
+            application_label=application.label,
+            version_code=application.version_code,
+            version_name=application.version_name,
             launch_activity=launch_activity,
         ),
     )
-
-
-def _android_application_id_from_project_name(project_name: str) -> str:
-    slug = project_name.strip().lower()
-    slug = re.sub(r"[^a-z0-9_]+", ".", slug)
-    slug = re.sub(r"\.+", ".", slug).strip(".")
-    parts = []
-    for part in slug.split("."):
-        if part == "":
-            continue
-        if part[0].isdigit():
-            parts.append(f"p{part}")
-        else:
-            parts.append(part)
-    if not parts:
-        parts = ["project"]
-    return "org.termin.builds." + ".".join(parts)

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from termin.project.settings import load_project_settings
 from termin.project_build.android_apk_pipeline import (
     AndroidApkProduct,
     build_android_apk,
@@ -31,7 +32,6 @@ from termin.project_build.runtime_package_validator import validate_runtime_pack
 from termin.project_build.target_preflight import QuestOpenXRPreflightResult, preflight_quest_openxr_build
 
 
-QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
 QUEST_OPENXR_LAUNCH_ACTIVITY = "android.app.NativeActivity"
 QUEST_OPENXR_APK_PRODUCT = AndroidApkProduct(
     display_name="Quest/OpenXR",
@@ -47,8 +47,11 @@ class QuestOpenXRBuildResult:
     package_result: RuntimePackageExportResult
     apk_path: Path
     log_path: Path
-    application_id: str = QUEST_OPENXR_APPLICATION_ID
-    launch_activity: str = QUEST_OPENXR_LAUNCH_ACTIVITY
+    application_id: str
+    application_label: str
+    version_code: int
+    version_name: str
+    launch_activity: str
     diagnostics: list[DiagnosticLike] = field(default_factory=list)
 
 
@@ -63,6 +66,11 @@ class QuestOpenXRDeployResult:
 class _QuestOpenXRTargetPackagePayload:
     apk_path: Path
     log_path: Path
+    application_id: str
+    application_label: str
+    version_code: int
+    version_name: str
+    launch_activity: str
 
 
 def build_quest_openxr_project(
@@ -124,6 +132,11 @@ def build_quest_openxr_project(
         package_result=pipeline_result.package_result,
         apk_path=target_payload.apk_path,
         log_path=target_payload.log_path,
+        application_id=target_payload.application_id,
+        application_label=target_payload.application_label,
+        version_code=target_payload.version_code,
+        version_name=target_payload.version_name,
+        launch_activity=target_payload.launch_activity,
         diagnostics=pipeline_result.diagnostics,
     )
 
@@ -160,11 +173,12 @@ def _package_quest_openxr_target(
     platform: str,
     log_callback: Callable[[str], None] | None,
 ) -> TargetPackageStepResult[_QuestOpenXRTargetPackagePayload]:
+    application = load_project_settings(context.project_root).application
     apk_result = build_android_apk(
         product=QUEST_OPENXR_APK_PRODUCT,
         configuration=context.configuration,
         project_name=context.project_name,
-        application_id=QUEST_OPENXR_APPLICATION_ID,
+        application_id=application.application_id,
         termin_root=preflight_result.termin_root,
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
@@ -174,6 +188,16 @@ def _package_quest_openxr_target(
         android_sdk_root=preflight_result.android_sdk_root,
         abi=abi,
         platform=platform,
+        product_arguments=(
+            "--application-id",
+            application.application_id,
+            "--app-label",
+            application.label,
+            "--version-code",
+            str(application.version_code),
+            "--version-name",
+            application.version_name,
+        ),
         log_callback=log_callback,
     )
 
@@ -181,6 +205,11 @@ def _package_quest_openxr_target(
         payload=_QuestOpenXRTargetPackagePayload(
             apk_path=apk_result.apk_path,
             log_path=apk_result.log_path,
+            application_id=application.application_id,
+            application_label=application.label,
+            version_code=application.version_code,
+            version_name=application.version_name,
+            launch_activity=QUEST_OPENXR_LAUNCH_ACTIVITY,
         ),
     )
 
@@ -201,6 +230,7 @@ def install_quest_openxr_apk(
 
 
 def launch_quest_openxr_app(
+    application_id: str,
     adb: str | Path | None = None,
     log_path: str | Path | None = None,
     log_callback: Callable[[str], None] | None = None,
@@ -213,7 +243,7 @@ def launch_quest_openxr_app(
             log_callback,
         ),
         _run_deploy_command(
-            [str(adb_bin), "shell", "monkey", "-p", QUEST_OPENXR_APPLICATION_ID, "1"],
+            [str(adb_bin), "shell", "monkey", "-p", application_id, "1"],
             log_path,
             log_callback,
         ),
