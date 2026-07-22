@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
@@ -17,6 +18,7 @@ class BuildContext:
     configuration: str
     resource_policy: str
     entry_scene: Path
+    scenes: tuple[Path, ...]
     dist_dir: Path
     package_dir: Path
     logs_dir: Path
@@ -27,6 +29,7 @@ def create_build_context(
     project_root: str | Path,
     entry_scene: str | Path,
     target: str,
+    scenes: Iterable[str | Path] | None = None,
     output_dir: str | Path | None = None,
     project_name: str | None = None,
     configuration: str = "dev",
@@ -45,6 +48,10 @@ def create_build_context(
         output_dir=output_dir,
     )
     entry_scene_path = _resolve_entry_scene(project_root_path, entry_scene)
+    scene_paths = tuple(
+        _resolve_entry_scene(project_root_path, scene)
+        for scene in (scenes if scenes is not None else (entry_scene_path,))
+    )
 
     return BuildContext(
         project_root=project_root_path,
@@ -53,6 +60,7 @@ def create_build_context(
         configuration=configuration,
         resource_policy=resource_policy,
         entry_scene=entry_scene_path,
+        scenes=scene_paths,
         dist_dir=dist_dir,
         package_dir=dist_dir / "package",
         logs_dir=dist_dir / "logs",

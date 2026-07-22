@@ -105,6 +105,7 @@ def run_project_build_pipeline(
         package_result = export_package(
             project_root=context.project_root,
             entry_scene=context.entry_scene,
+            scenes=context.scenes,
             output_dir=context.package_dir,
             shader_compiler=shader_compiler,
             default_shader_language=default_shader_language,

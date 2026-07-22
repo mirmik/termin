@@ -3,7 +3,7 @@
 The exporter writes the package contract consumed by termin-runtime:
 
     manifest.json
-    scene.json
+    scenes/<project-relative-scene-path>.json
     pipelines/*.pipeline-template
     meshes/*.tmesh.json
     materials/*.tmat.json
@@ -88,6 +88,7 @@ def export_runtime_package(
     project_root: str | Path,
     entry_scene: str | Path,
     output_dir: str | Path,
+    scenes: Iterable[str | Path] | None = None,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
     resource_policy: str = DEFAULT_RESOURCE_POLICY,
@@ -98,18 +99,45 @@ def export_runtime_package(
     project_root_path = Path(project_root).resolve()
     entry_scene_path = _resolve_entry_scene(project_root_path, Path(entry_scene))
     output_dir_path = Path(output_dir).resolve()
+    scene_paths = _resolve_scene_paths(
+        project_root_path,
+        entry_scene_path,
+        scenes if scenes is not None else (entry_scene_path,),
+    )
 
-    scene_data = _read_scene_data(entry_scene_path)
     from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
 
-    repair_glb_animation_player_clip_refs(scene_data)
     diagnostics: list[RuntimePackageExportDiagnostic] = []
-    refs = _collect_runtime_refs(scene_data, diagnostics)
+    scene_documents: dict[str, dict[str, Any]] = {}
+    refs = None
+    for identity, source_path in scene_paths.items():
+        scene_data = _read_scene_data(source_path)
+        repair_glb_animation_player_clip_refs(scene_data)
+        scene_documents[identity] = scene_data
+        scene_refs = _collect_runtime_refs(
+            scene_data,
+            diagnostics,
+            _packaged_scene_path(identity),
+        )
+        if refs is None:
+            refs = scene_refs
+        else:
+            refs.meshes.update(scene_refs.meshes)
+            refs.materials.update(scene_refs.materials)
+            refs.textures.update(scene_refs.textures)
+            refs.pipelines.update(scene_refs.pipelines)
+    if refs is None:
+        raise ValueError("Runtime package must contain at least one scene root")
     _collect_project_material_refs(project_root_path, refs, diagnostics)
 
     _write_clean_package_dir(output_dir_path)
-    scene_path = output_dir_path / "scene.json"
-    _write_json(scene_path, scene_data)
+    packaged_scene_paths: dict[str, Path] = {}
+    for identity, scene_data in scene_documents.items():
+        packaged_path = output_dir_path / _packaged_scene_path(identity)
+        _write_json(packaged_path, scene_data)
+        packaged_scene_paths[identity] = packaged_path
+    entry_identity = entry_scene_path.relative_to(project_root_path).as_posix()
+    scene_path = packaged_scene_paths[entry_identity]
 
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
@@ -137,7 +165,14 @@ def export_runtime_package(
     compiled_pipelines = _write_pipelines(
         project_root_path, output_dir_path, refs.pipelines, resources, diagnostics
     )
-    _collect_pipeline_shader_usages(scene_data, compiled_pipelines, diagnostics, shaders)
+    for identity, scene_data in scene_documents.items():
+        _collect_pipeline_shader_usages(
+            scene_data,
+            compiled_pipelines,
+            diagnostics,
+            shaders,
+            _packaged_scene_path(identity),
+        )
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     _write_shaders(
@@ -158,10 +193,17 @@ def export_runtime_package(
     resources.sort(key=_resource_sort_key)
 
     manifest = {
-        "version": 1,
+        "version": 2,
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
+        "entry_scene": entry_identity,
         "resources": resources,
-        "scene": "scene.json",
+        "scenes": [
+            {
+                "identity": identity,
+                "path": _packaged_scene_path(identity),
+            }
+            for identity in scene_documents
+        ],
     }
     if requested_shader_targets is not None:
         manifest["target_requirements"] = {
@@ -174,8 +216,31 @@ def export_runtime_package(
         package_dir=output_dir_path,
         manifest_path=manifest_path,
         scene_path=scene_path,
+        scene_paths=packaged_scene_paths,
         diagnostics=diagnostics,
     )
+
+
+def _resolve_scene_paths(
+    project_root: Path,
+    entry_scene: Path,
+    scenes: Iterable[str | Path],
+) -> dict[str, Path]:
+    resolved: dict[str, Path] = {}
+    for scene in scenes:
+        scene_path = _resolve_entry_scene(project_root, Path(scene))
+        identity = scene_path.relative_to(project_root).as_posix()
+        if identity in resolved:
+            raise ValueError(f"Duplicate runtime scene identity: {identity}")
+        resolved[identity] = scene_path
+    entry_identity = entry_scene.relative_to(project_root).as_posix()
+    if entry_identity not in resolved:
+        raise ValueError("Runtime package entry scene must occur in the explicit scene roots")
+    return dict(sorted(resolved.items()))
+
+
+def _packaged_scene_path(identity: str) -> str:
+    return f"scenes/{identity}.json"
 
 
 def _collect_pipeline_shader_usages(
@@ -183,6 +248,7 @@ def _collect_pipeline_shader_usages(
     pipelines: list[_CompiledPipelineExport],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
+    scene_path: str,
 ) -> None:
     if not pipelines:
         return
@@ -213,7 +279,7 @@ def _collect_pipeline_shader_usages(
         diagnostics.append(
             RuntimePackageExportDiagnostic(
                 level="error",
-                path="scene.json",
+                path=scene_path,
                 message=f"Runtime exporter failed to deserialize scene for shader usage collection: {exc}",
             )
         )

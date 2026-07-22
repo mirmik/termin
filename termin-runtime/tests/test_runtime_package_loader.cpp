@@ -13,6 +13,7 @@ GUARD_TEST_MAIN();
 
 #include <termin/entity/entity.hpp>
 #include <termin/image/image_decode.hpp>
+#include <termin/scene/scene_manager.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
@@ -148,14 +149,17 @@ std::string material_spec() {
 
 std::string manifest() {
     return R"({
-  "version": 1,
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
   "resources": [
     {"type": "shader", "uuid": "shader-phase-12beb2a809af29f7", "path": "shaders/test.shader.json"},
     {"type": "shader_program", "uuid": "runtime-loader-test-program", "path": "shaders/test.shader-program.json"},
     {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
     {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"}
-  ],
-  "scene": "scene.json"
+  ]
 }
 )";
 }
@@ -189,15 +193,18 @@ std::string material_spec_with_asset_texture() {
 
 std::string manifest_with_packaged_texture() {
     return R"({
-  "version": 1,
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
   "resources": [
     {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
     {"type": "texture", "uuid": "runtime-loader-test-texture", "path": "textures/test.texture.json"},
     {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"},
     {"type": "shader", "uuid": "shader-phase-12beb2a809af29f7", "path": "shaders/test.shader.json"},
     {"type": "shader_program", "uuid": "runtime-loader-test-program", "path": "shaders/test.shader-program.json"}
-  ],
-  "scene": "scene.json"
+  ]
 }
 )";
 }
@@ -482,11 +489,14 @@ TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the sce
 
     write_binary(root / "pipelines" / "compiled.pipeline-template", payload);
     write_text(root / "manifest.json", R"({
-  "version": 1,
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
   "resources": [
     {"type": "pipeline", "uuid": "runtime-loader-compiled-pipeline", "name": "Runtime Compiled Pipeline", "path": "pipelines/compiled.pipeline-template"}
-  ],
-  "scene": "scene.json"
+  ]
 }
 )");
     write_text(root / "scene.json", R"({
@@ -569,8 +579,59 @@ TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or 
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid.ok);
     CHECK_FALSE(invalid.scene.valid());
-    CHECK(invalid.message.find("failed to parse runtime entry scene") != std::string::npos);
+    CHECK(invalid.message.find("failed to parse packaged runtime scene") != std::string::npos);
     CHECK(invalid.message.find("scene.json") != std::string::npos);
+}
+
+TEST_CASE("RuntimePackageLoader resolves and transitions between packaged scene identities") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+    std::filesystem::create_directories(root / "scenes");
+    write_text(root / "scenes" / "Menu.scene.json", R"({
+  "uuid": "runtime-loader-menu-scene",
+  "entities": []
+}
+)");
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest(),
+            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"}",
+            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"},\n"
+            "    {\"identity\": \"Scenes/Menu.scene\", "
+            "\"path\": \"scenes/Menu.scene.json\"}"
+        )
+    );
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+
+    REQUIRE(result.ok);
+    CHECK_EQ(result.entry_scene_identity, "Scenes/Main.scene");
+    REQUIRE_EQ(result.scenes.size(), 2u);
+    REQUIRE(result.find_scene("Scenes/Main.scene").valid());
+    REQUIRE(result.find_scene("Scenes/Menu.scene").valid());
+    CHECK_FALSE(result.find_scene("Scenes/Missing.scene").valid());
+    CHECK_EQ(
+        result.find_scene("Scenes/Menu.scene").source_path(),
+        (root / "scenes" / "Menu.scene.json").string()
+    );
+
+    termin::SceneManager manager;
+    for (const termin::runtime::RuntimePackageScene& packaged_scene : result.scenes) {
+        manager.register_scene(packaged_scene.identity, packaged_scene.scene.handle());
+        manager.set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
+    }
+    manager.set_mode(result.entry_scene_identity, TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode("Scenes/Main.scene"), TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode("Scenes/Menu.scene"), TC_SCENE_MODE_INACTIVE);
+
+    manager.set_mode("Scenes/Main.scene", TC_SCENE_MODE_INACTIVE);
+    manager.set_mode("Scenes/Menu.scene", TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode("Scenes/Main.scene"), TC_SCENE_MODE_INACTIVE);
+    CHECK_EQ(manager.get_mode("Scenes/Menu.scene"), TC_SCENE_MODE_PLAY);
+    manager.unregister_scene("Scenes/Main.scene");
+    manager.unregister_scene("Scenes/Menu.scene");
 }
 
 TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity removal") {
@@ -685,8 +746,8 @@ TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform sep
     write_test_package(root);
 
     const std::vector<std::pair<std::string, std::string>> invalid_paths = {
-        {"\"scene\": \"scene.json\"", "\"scene\": \"../scene.json\""},
-        {"\"scene\": \"scene.json\"", "\"scene\": \".\\\\scene.json\""},
+        {"\"path\": \"scene.json\"", "\"path\": \"../scene.json\""},
+        {"\"path\": \"scene.json\"", "\"path\": \".\\\\scene.json\""},
         {"\"path\": \"shaders/test.shader.json\"", "\"path\": \"/tmp/scene.json\""},
         {"\"path\": \"shaders/test.shader.json\"", "\"path\": \"C:\\\\outside.json\""},
     };

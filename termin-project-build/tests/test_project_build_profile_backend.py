@@ -132,6 +132,7 @@ def test_compile_android_and_quest_requests_use_local_toolchain_context(tmp_path
 
 def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch) -> None:
     project, profiles_path = _write_project(tmp_path)
+    _write_json(project / "Scenes" / "Menu.scene", {"uuid": "menu", "entities": []})
     profile_data = _desktop_profile(
         output_dir="dist/linux-dev",
         runtime={
@@ -141,6 +142,7 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
     )
     profile_data["content"] = _content(
         python={"requirements": ["python-chess"]},
+        scenes=["Scenes/Main.scene", "Scenes/Menu.scene"],
         resources={"policy": "dev_smoke", "include": []},
     )
     _write_profiles(profiles_path, {"dev": profile_data})
@@ -174,7 +176,11 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
     assert calls == [
         {
             "project_root": project.resolve(),
-            "entry_scene": (project / "Scenes/Main.scene").resolve(),
+                "entry_scene": (project / "Scenes/Main.scene").resolve(),
+                "scenes": (
+                    (project / "Scenes/Main.scene").resolve(),
+                    (project / "Scenes/Menu.scene").resolve(),
+                ),
             "output_dir": (project / "dist/linux-dev").resolve(),
             "shader_compiler": None,
             "default_shader_language": "slang",
@@ -252,7 +258,7 @@ def test_profile_build_routes_android_family_typed_request(
     assert calls[0]["gradle"] is None
 
 
-def test_build_rejects_pending_content_features_instead_of_ignoring_them(
+def test_build_accepts_scenes_but_rejects_other_pending_content_features(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -274,7 +280,6 @@ def test_build_rejects_pending_content_features_instead_of_ignoring_them(
 
     assert calls == []
     assert {diagnostic.path.rsplit(".", 1)[-1] for diagnostic in raised.value.diagnostics} == {
-        "scenes",
         "modules",
         "include",
     }
@@ -355,6 +360,27 @@ def test_profile_build_rejects_missing_entry_scene_before_wrapper(
 
     assert calls == []
     assert raised.value.diagnostics[0].code == "project.resolution"
+    assert raised.value.diagnostics[0].path == "profiles.dev.content.scenes[0]"
+
+
+def test_profile_build_reports_missing_secondary_scene_at_profile_path(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(
+        profiles_path,
+        {
+            "dev": _desktop_profile(
+                content=_content(
+                    scenes=["Scenes/Main.scene", "Scenes/Missing.scene"]
+                )
+            )
+        },
+    )
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
+
+    with pytest.raises(ProfileBuildError, match="Selected scene does not exist") as raised:
+        profile_build.build_profile(profile)
+
+    assert raised.value.diagnostics[0].path == "profiles.dev.content.scenes[1]"
 
 
 def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) -> None:

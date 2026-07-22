@@ -35,6 +35,7 @@ def test_create_build_context_uses_project_name_and_default_desktop_dirs(tmp_pat
     assert context.configuration == "dev"
     assert context.resource_policy == "strict"
     assert context.entry_scene == (project / "Scenes" / "Main.scene").resolve()
+    assert context.scenes == ((project / "Scenes" / "Main.scene").resolve(),)
     assert context.dist_dir == (project / "dist" / "desktop" / "ContextGame").resolve()
     assert context.package_dir == context.dist_dir / "package"
     assert context.logs_dir == context.dist_dir / "logs"
@@ -49,6 +50,24 @@ def test_create_build_context_uses_target_default_dist_dirs(tmp_path: Path) -> N
 
     assert android_context.dist_dir == (project / "dist" / "android" / "ContextGame").resolve()
     assert quest_context.dist_dir == (project / "dist" / "quest_openxr" / "ContextGame").resolve()
+
+
+def test_create_build_context_resolves_explicit_scene_roots(tmp_path: Path) -> None:
+    project = _write_project(tmp_path)
+    menu = project / "Scenes" / "Menu.scene"
+    menu.write_text("{}", encoding="utf-8")
+
+    context = create_build_context(
+        project_root=project,
+        entry_scene="Scenes/Main.scene",
+        scenes=("Scenes/Main.scene", menu),
+        target="desktop",
+    )
+
+    assert context.scenes == (
+        (project / "Scenes/Main.scene").resolve(),
+        menu.resolve(),
+    )
 
 
 def test_create_build_context_uses_explicit_output_and_target_options(tmp_path: Path) -> None:

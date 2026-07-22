@@ -47,6 +47,7 @@ class _AndroidTargetPackagePayload:
 def build_android_project(
     project_root: str | Path,
     entry_scene: str | Path,
+    scenes: Iterable[str | Path] | None = None,
     output_dir: str | Path | None = None,
     termin_root: str | Path | None = None,
     build_script: str | Path | None = None,
@@ -62,6 +63,7 @@ def build_android_project(
     context = create_build_context(
         project_root=project_root,
         entry_scene=entry_scene,
+        scenes=scenes,
         target="android",
         output_dir=output_dir,
         configuration=configuration,

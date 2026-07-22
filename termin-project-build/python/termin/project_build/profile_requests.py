@@ -107,6 +107,7 @@ def compile_profile_build_request(
     context = create_build_context(
         project_root=profile.project_root,
         entry_scene=entry_scene,
+        scenes=scenes,
         target=target.kind,
         output_dir=output_dir,
         configuration=profile.configuration,
@@ -144,6 +145,29 @@ def validate_resolved_profile_request(request: ProfileBuildRequest) -> None:
         preflight_project_build_context,
     )
 
+    scene_diagnostics: list[ProfileDiagnostic] = []
+    for index, scene in enumerate(request.scenes):
+        path = f"profiles.{request.name}.content.scenes[{index}]"
+        label = "Entry scene" if scene == request.context.entry_scene else "Selected scene"
+        if not scene.exists():
+            scene_diagnostics.append(
+                ProfileDiagnostic(
+                    code="project.resolution",
+                    path=path,
+                    message=f"{label} does not exist: {scene}",
+                )
+            )
+        elif not scene.is_file():
+            scene_diagnostics.append(
+                ProfileDiagnostic(
+                    code="project.resolution",
+                    path=path,
+                    message=f"{label} is not a file: {scene}",
+                )
+            )
+    if scene_diagnostics:
+        raise ProfileBuildError(diagnostics=tuple(scene_diagnostics))
+
     try:
         preflight_project_build_context(request.context, _target_display_name(request.target))
     except TargetPreflightError as exc:
@@ -159,14 +183,6 @@ def validate_resolved_profile_request(request: ProfileBuildRequest) -> None:
         ) from exc
 
     unsupported: list[ProfileDiagnostic] = []
-    if len(request.scenes) != 1 or request.scenes[0] != request.context.entry_scene:
-        unsupported.append(
-            ProfileDiagnostic(
-                code="profile.feature_pending",
-                path=f"profiles.{request.name}.content.scenes",
-                message="multi-scene package emission is not implemented yet",
-            )
-        )
     if request.modules:
         unsupported.append(
             ProfileDiagnostic(

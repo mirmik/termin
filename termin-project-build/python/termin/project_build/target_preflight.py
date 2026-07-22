@@ -37,6 +37,10 @@ class ProjectBuildContextPreflightResult:
         return self.context.entry_scene
 
     @property
+    def scenes(self) -> tuple[Path, ...]:
+        return self.context.scenes
+
+    @property
     def output_dir(self) -> Path:
         return self.context.dist_dir
 
@@ -76,6 +80,10 @@ def preflight_project_build_context(
 
     _validate_project_root(context.project_root, diagnostics)
     _validate_entry_scene(context.project_root, context.entry_scene, diagnostics)
+    for scene in context.scenes:
+        if scene == context.entry_scene:
+            continue
+        _validate_scene_root(context.project_root, scene, diagnostics)
     _validate_output_dir(context.project_root, context.dist_dir, target_name, diagnostics)
     _raise_if_errors(target_name, diagnostics)
 
@@ -291,6 +299,23 @@ def _validate_entry_scene(
                 f"Entry scene is not a file: {entry_scene}",
             )
         )
+
+
+def _validate_scene_root(
+    project_root: Path,
+    scene: Path,
+    diagnostics: list[BuildDiagnostic],
+) -> None:
+    if project_root.exists() and not _path_is_relative_to(scene, project_root):
+        diagnostics.append(
+            build_error(str(scene), f"Scene root must stay inside project root: {scene}")
+        )
+    if not scene.exists():
+        diagnostics.append(build_error(str(scene), f"Scene root does not exist: {scene}"))
+    elif not scene.is_file():
+        diagnostics.append(build_error(str(scene), f"Scene root is not a file: {scene}"))
+    elif scene.suffix.lower() != ".scene":
+        diagnostics.append(build_error(str(scene), f"Scene root must be a .scene file: {scene}"))
 
 
 def _validate_output_dir(

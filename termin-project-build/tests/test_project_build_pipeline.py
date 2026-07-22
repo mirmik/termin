@@ -54,6 +54,7 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
     def export_package(
         project_root,
         entry_scene,
+        scenes,
         output_dir,
         shader_compiler,
         default_shader_language,
@@ -63,6 +64,7 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
         events.append("export")
         assert project_root == context.project_root
         assert entry_scene == context.entry_scene
+        assert scenes == context.scenes
         assert output_dir == context.package_dir
         assert shader_compiler == tmp_path / "shaderc"
         assert default_shader_language == "slang"
@@ -133,6 +135,7 @@ def test_project_build_pipeline_cleans_runtime_state_after_target_packaging(tmp_
     def export_package(
         project_root,
         entry_scene,
+        scenes,
         output_dir,
         shader_compiler,
         default_shader_language,
@@ -211,6 +214,7 @@ def test_project_build_pipeline_cleans_runtime_state_when_validation_fails(tmp_p
     def export_package(
         project_root,
         entry_scene,
+        scenes,
         output_dir,
         shader_compiler,
         default_shader_language,
@@ -263,6 +267,7 @@ def test_project_build_pipeline_stops_before_target_packaging_when_validation_fa
     def export_package(
         project_root,
         entry_scene,
+        scenes,
         output_dir,
         shader_compiler,
         default_shader_language,
@@ -315,6 +320,7 @@ def test_project_build_pipeline_fails_when_target_packaging_reports_error(tmp_pa
     def export_package(
         project_root,
         entry_scene,
+        scenes,
         output_dir,
         shader_compiler,
         default_shader_language,

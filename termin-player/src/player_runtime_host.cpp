@@ -683,8 +683,8 @@ struct PlayerRuntimeHost::Impl {
     std::optional<TcDisplay> display;
     termin::runtime::RuntimePackageLoadResult package;
     TcSceneRef scene;
-    std::string scene_name = "runtime-scene";
-    bool scene_registered = false;
+    std::string scene_name;
+    std::vector<std::string> registered_scene_names;
     bool scene_attached = false;
     std::vector<tc_viewport_handle> viewports;
     std::vector<tc_viewport_input_manager*> viewport_input_managers;
@@ -744,7 +744,7 @@ struct PlayerRuntimeHost::Impl {
             modules_integration.set_scene_manager(engine->scene_manager);
             load_project_modules();
             load_package();
-            register_scene();
+            register_scenes();
             enable_module_live_scene_sync();
             initialize_window_and_rendering();
             install_runtime_facade();
@@ -888,7 +888,7 @@ struct PlayerRuntimeHost::Impl {
         if (!scene.valid()) {
             throw std::runtime_error("runtime package returned invalid scene");
         }
-        scene_name = scene.name().empty() ? "runtime-scene" : scene.name();
+        scene_name = package.entry_scene_identity;
     }
 
     termin_modules::ModuleEnvironment make_module_environment(bool sync_live_scenes) const {
@@ -995,13 +995,15 @@ struct PlayerRuntimeHost::Impl {
         modules_loaded = false;
     }
 
-    void register_scene() {
+    void register_scenes() {
         SceneManager* manager = &engine->scene_manager;
-        scene_name = scene.name().empty() ? "runtime-scene" : scene.name();
-        manager->register_scene(scene_name, scene.handle());
-        manager->set_scene_path(scene_name, scene.source_path());
+        for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
+            manager->register_scene(packaged_scene.identity, packaged_scene.scene.handle());
+            manager->set_scene_path(packaged_scene.identity, packaged_scene.scene.source_path());
+            manager->set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
+            registered_scene_names.push_back(packaged_scene.identity);
+        }
         manager->set_mode(scene_name, TC_SCENE_MODE_PLAY);
-        scene_registered = true;
     }
 
     tc_display_handle display_factory(const std::string& requested_name) {
@@ -1259,13 +1261,17 @@ struct PlayerRuntimeHost::Impl {
         }
         display.reset();
 
-        if (scene_registered && engine) {
-            engine->scene_manager.unregister_scene(scene_name);
-            scene_registered = false;
+        if (engine) {
+            for (const std::string& registered_name : registered_scene_names) {
+                engine->scene_manager.unregister_scene(registered_name);
+            }
         }
-        if (scene.valid()) {
-            scene.destroy();
-            scene = TcSceneRef();
+        registered_scene_names.clear();
+        scene = TcSceneRef();
+        for (termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
+            if (packaged_scene.scene.valid()) {
+                packaged_scene.scene.destroy();
+            }
         }
         package = termin::runtime::RuntimePackageLoadResult();
 

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import struct
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
 
 
-RUNTIME_PACKAGE_SCHEMA_VERSION = 1
+RUNTIME_PACKAGE_SCHEMA_VERSION = 2
 
 
 def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExportDiagnostic]:
@@ -23,10 +23,15 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
         return diagnostics
 
     _validate_version(manifest, diagnostics)
-    scene = _validate_scene(package_root, manifest, diagnostics)
+    scenes = _validate_scenes(package_root, manifest, diagnostics)
     resource_index = _validate_resources(package_root, manifest, diagnostics)
-    if scene is not None:
-        _validate_scene_resource_references(scene, resource_index, diagnostics)
+    for identity, scene in scenes:
+        _validate_scene_resource_references(
+            scene,
+            resource_index,
+            diagnostics,
+            f"scenes[{identity}]",
+        )
     _validate_resource_graph(resource_index, diagnostics)
     _validate_target_requirements(manifest, resource_index, diagnostics)
     return diagnostics
@@ -103,34 +108,123 @@ def _validate_version(
         )
 
 
-def _validate_scene(
+def _validate_scenes(
     package_root: Path,
     manifest: dict[str, Any],
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> dict[str, Any] | None:
-    scene = manifest.get("scene")
-    if not isinstance(scene, str) or scene == "":
+) -> list[tuple[str, dict[str, Any]]]:
+    entry_scene = manifest.get("entry_scene")
+    if not isinstance(entry_scene, str) or entry_scene == "":
         diagnostics.append(
             RuntimePackageExportDiagnostic(
                 "error",
                 "manifest.json",
-                "Runtime package manifest must contain non-empty string field 'scene'",
+                "Runtime package manifest must contain non-empty string field 'entry_scene'",
             )
         )
-        return None
+        entry_scene = None
 
-    scene_path = _validate_relative_existing_path(package_root, scene, "scene", diagnostics)
-    if scene_path is not None and scene_path.suffix.lower() != ".json":
+    raw_scenes = manifest.get("scenes")
+    if not isinstance(raw_scenes, list) or not raw_scenes:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
-                "warning",
-                scene,
-                "Runtime package scene path does not use .json extension",
+                "error",
+                "manifest.json",
+                "Runtime package manifest field 'scenes' must be a non-empty list",
             )
         )
-    if scene_path is None:
-        return None
-    return _read_json_file(scene_path, scene, diagnostics)
+        return []
+
+    seen_identities: set[str] = set()
+    seen_paths: set[str] = set()
+    result: list[tuple[str, dict[str, Any]]] = []
+    for index, raw_scene in enumerate(raw_scenes):
+        context = f"scenes[{index}]"
+        if not isinstance(raw_scene, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, "Runtime package scene entry must be a JSON object"
+                )
+            )
+            continue
+        identity = raw_scene.get("identity")
+        path = raw_scene.get("path")
+        if not isinstance(identity, str) or identity == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, "Runtime package scene identity must be a non-empty string"
+                )
+            )
+            continue
+        if not _is_portable_scene_identity(identity):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"{context}.identity",
+                    f"Runtime package scene identity must be a normalized project-relative .scene path: {identity}",
+                )
+            )
+            continue
+        if identity in seen_identities:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", f"{context}.identity", f"Duplicate runtime scene identity '{identity}'"
+                )
+            )
+            continue
+        seen_identities.add(identity)
+        if not isinstance(path, str) or path == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, "Runtime package scene path must be a non-empty string"
+                )
+            )
+            continue
+        if path in seen_paths:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", f"{context}.path", f"Duplicate runtime scene path '{path}'"
+                )
+            )
+            continue
+        seen_paths.add(path)
+        scene_path = _validate_relative_existing_path(
+            package_root, path, f"{context}.path", diagnostics
+        )
+        if scene_path is None:
+            continue
+        if scene_path.suffix.lower() != ".json":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", path, "Runtime package scene path must use .json extension"
+                )
+            )
+            continue
+        scene = _read_json_file(scene_path, path, diagnostics)
+        if scene is not None:
+            result.append((identity, scene))
+
+    if entry_scene is not None and entry_scene not in seen_identities:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "entry_scene",
+                f"Runtime package entry scene '{entry_scene}' is absent from the scene table",
+            )
+        )
+    return result
+
+
+def _is_portable_scene_identity(identity: str) -> bool:
+    if "\\" in identity or ":" in identity or identity.endswith("/"):
+        return False
+    path = PurePosixPath(identity)
+    return (
+        not path.is_absolute()
+        and all(part not in ("", ".", "..") for part in path.parts)
+        and path.as_posix() == identity
+        and path.suffix.lower() == ".scene"
+    )
 
 
 def _validate_resources(
@@ -760,8 +854,9 @@ def _validate_scene_resource_references(
     scene: dict[str, Any],
     resource_index: dict[str, dict[str, Any]],
     diagnostics: list[RuntimePackageExportDiagnostic],
+    context: str = "scene",
 ) -> None:
-    _validate_scene_refs_recursive(scene, resource_index, diagnostics, "scene")
+    _validate_scene_refs_recursive(scene, resource_index, diagnostics, context)
 
 
 def _validate_scene_refs_recursive(
