@@ -21,8 +21,10 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
   `tcplot`) остаются допустимыми исключениями.
 - Component spec packages (`*_component_specs`, `*_render_specs`) являются частью
   owning distribution и не должны становиться отдельными internal dependencies.
-- `termin-app` является umbrella/application distribution и не должен
-  переупаковывать namespace, уже принадлежащие extracted packages.
+- `termin-app` не является distribution. Его editor/launcher-модули входят в
+  SDK как application-owned payload по
+  `build-system/application-python-payloads.json` и не участвуют в этой
+  таблице library packages.
 
 ## Validation
 
@@ -91,5 +93,4 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
 | `termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
 | `termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
-| `termin-app` | `termin-app` | `termin`, `termin.*` excluding extracted packages | Editor/application umbrella package. |
 | `tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |

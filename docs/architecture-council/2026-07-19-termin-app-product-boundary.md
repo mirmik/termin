@@ -4,6 +4,11 @@
 
 Статус: Accepted
 
+Реализация: #680 завершает app-payload/distribution часть решения. Editor
+payload устанавливается по `build-system/application-python-payloads.json`, а
+`termin-app` удалён из wheel/package/runtime metadata. Удаление отдельного
+host-derived bundle pipeline остаётся в #681.
+
 ## Контекст
 
 `termin-app` исторически одновременно выглядит как C++ приложение и как

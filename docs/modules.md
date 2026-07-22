@@ -329,10 +329,12 @@ Source of truth: [termin-app docs](https://github.com/mirmik/termin-monorepo/blo
 Основное приложение/редактор. Архитектурно это C++ executable product и
 application composition root, а не independently installable Python library.
 Editor-specific Python modules и `termin.editor._editor_native` являются
-внутренним payload приложения, устанавливаемым вместе с editor runtime в SDK.
-Текущий `termin-app` wheel и отдельный host-derived bundle pipeline являются
-незавершённой миграцией; принятое направление и границы удаления зафиксированы
-в [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
+внутренним payload приложения. Их явные source roots задаёт
+`build-system/application-python-payloads.json`; Stage 3 устанавливает их в SDK
+после library wheels и проверяет отдельно от distribution metadata. У
+`termin-app` больше нет `setup.py`, wheel или записи в общем package manifest.
+Оставшийся host-derived bundle pipeline удаляется отдельно в #681; граница
+зафиксирована в [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
 
 tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
 

@@ -9,6 +9,9 @@ sdk/wheels/
 These wheels are SDK-backed. They contain Python packages and native binding
 modules copied from the CMake build output, but shared runtime libraries remain
 in `sdk/lib`. This avoids duplicating the same C++ libraries into every wheel.
+The editor application is deliberately absent: `termin-app` has no wheel, and
+its `termin.editor`/launcher payload is installed only into the SDK application
+runtime from `build-system/application-python-payloads.json`.
 
 External Python projects should install Termin packages from the wheelhouse with
 `TERMIN_SDK` pointing at the SDK:
@@ -26,4 +29,4 @@ of Pillow.
 
 For local development from source, `./install-pip-packages.sh` remains the
 host-environment install path. It uses the same package list as
-`./build-sdk-wheels.sh`.
+`./build-sdk-wheels.sh` and therefore installs library distributions only.

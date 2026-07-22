@@ -211,8 +211,8 @@ int main(int argc, char* argv[]) {
         const char* smoke_code = R"(
 import json
 import tcbase
-import termin.editor
-print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__file__}))
+import termin.launcher
+print(json.dumps({"tcbase": tcbase.__file__, "termin_launcher": termin.launcher.__file__}))
 )";
         const int result = PyRun_SimpleString(smoke_code);
         if (result != 0) {
