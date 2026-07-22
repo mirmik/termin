@@ -123,6 +123,25 @@ normal builds, and `termin_runner run --profile`. Unknown fields and targets
 fail before build work starts. Local SDK/compiler/Gradle paths are toolchain
 inputs and are never serialized into the portable profile.
 
+Inspect the canonical local capability report without starting a build:
+
+```bash
+python -m termin.project_build.profile_build capabilities \
+  --project-root PROJECT \
+  --profiles-path project_settings/build_profiles.json \
+  --profile PROFILE \
+  --json
+```
+
+The JSON is the same `inspect_profile_capabilities()` report available to the
+editor. Tool paths merge per field as installation defaults < environment <
+editor-local settings < invocation arguments. Supported environment overrides
+are `TERMIN_SDK`, `TERMIN_ROOT`, `TERMIN_ANDROID_SDK_ROOT` (with
+`ANDROID_SDK_ROOT`/`ANDROID_HOME` aliases), `TERMIN_SHADERC`, `TERMIN_FXC`,
+`TERMIN_ANDROID_BUILD_SCRIPT`, `TERMIN_QUEST_OPENXR_BUILD_SCRIPT`, `GRADLE_BIN`
+and `ADB`. The `build` and `capabilities` subcommands also accept corresponding
+explicit path options; these have highest precedence.
+
 The v2 model already reserves explicit scene, module, Python-requirement and
 resource roots. Builds currently reject non-trivial roots with a structured
 `profile.feature_pending` diagnostic until their dependency-closure stages are

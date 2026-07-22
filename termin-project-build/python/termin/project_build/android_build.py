@@ -65,7 +65,9 @@ def build_android_project(
     entry_scene: str | Path,
     scenes: Iterable[str | Path] | None = None,
     output_dir: str | Path | None = None,
+    sdk_root: str | Path | None = None,
     termin_root: str | Path | None = None,
+    android_sdk_root: str | Path | None = None,
     build_script: str | Path | None = None,
     gradle: str | Path | None = None,
     shader_compiler: str | Path | None = None,
@@ -92,6 +94,8 @@ def build_android_project(
         prepare_output=_prepare_android_output,
         run_target_preflight=lambda: _android_target_preflight(
             termin_root=termin_root,
+            sdk_root=sdk_root,
+            android_sdk_root=android_sdk_root,
             build_script=build_script,
             gradle=gradle,
             abi=abi,
@@ -132,6 +136,8 @@ def _prepare_android_output(context: BuildContext) -> None:
 
 def _android_target_preflight(
     termin_root: str | Path | None,
+    sdk_root: str | Path | None,
+    android_sdk_root: str | Path | None,
     build_script: str | Path | None,
     gradle: str | Path | None,
     abi: str,
@@ -139,6 +145,8 @@ def _android_target_preflight(
 ) -> TargetPreflightStepResult[AndroidPreflightResult]:
     preflight_result = preflight_android_build(
         termin_root=termin_root,
+        sdk_root=sdk_root,
+        android_sdk_root=android_sdk_root,
         build_script=build_script,
         gradle=gradle,
         abi=abi,

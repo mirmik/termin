@@ -86,6 +86,7 @@ def run_project_build_pipeline(
     run_target_preflight: TargetPreflightStep[PreflightPayloadT],
     package_target: TargetPackageStep[PreflightPayloadT, TargetPayloadT],
     shader_compiler: str | Path | None = None,
+    fxc: str | Path | None = None,
     default_shader_language: str = "slang",
     shader_targets: Iterable[str] | None = None,
     target_platform: tuple[str, str] | None = None,
@@ -115,6 +116,8 @@ def run_project_build_pipeline(
         )
         if target_platform is not None:
             export_kwargs["target_platform"] = target_platform
+        if fxc is not None:
+            export_kwargs["fxc"] = fxc
         package_result = export_package(**export_kwargs)
         package_validation_diagnostics = validate_package(package_result.package_dir)
         pre_target_diagnostics = [

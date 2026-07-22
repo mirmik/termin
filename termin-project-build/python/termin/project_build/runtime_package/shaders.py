@@ -169,10 +169,19 @@ def write_shaders(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader_compiler: str | Path | None,
     requested_targets: tuple[str, ...] | None,
+    fxc: Path | None = None,
 ) -> None:
     compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     for shader in sorted(shaders.values(), key=lambda item: item.uuid):
-        write_shader(package_dir, resources, diagnostics, shader, compiler, requested_targets)
+        write_shader(
+            package_dir,
+            resources,
+            diagnostics,
+            shader,
+            compiler,
+            requested_targets,
+            fxc,
+        )
 
 
 def shader_program_to_spec(program: Any) -> dict[str, Any]:
@@ -261,6 +270,7 @@ def write_shader(
     shader: ShaderSpec,
     compiler: Path | None,
     requested_targets: tuple[str, ...] | None,
+    fxc: Path | None = None,
 ) -> None:
     targets = shader_targets_for_language(
         shader.language,
@@ -335,6 +345,7 @@ def write_shader(
                 f"{shader.name or shader.uuid}:vertex",
                 shader.vertex_entry,
                 program_source_paths,
+                fxc,
             )
             compile_shader_stage(
                 compiler,
@@ -346,6 +357,7 @@ def write_shader(
                 f"{shader.name or shader.uuid}:fragment",
                 shader.fragment_entry,
                 program_source_paths,
+                fxc,
             )
             if geometry_source_path is not None:
                 compile_shader_stage(
@@ -358,6 +370,7 @@ def write_shader(
                     f"{shader.name or shader.uuid}:geometry",
                     shader.geometry_entry,
                     program_source_paths,
+                    fxc,
                 )
 
     shader_spec: dict[str, Any] = {
@@ -424,6 +437,7 @@ def write_default_pipeline_shader_artifacts(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader_compiler: str | Path | None,
     requested_targets: tuple[str, ...] | None = None,
+    fxc: Path | None = None,
 ) -> None:
     compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     if compiler is None:
@@ -433,7 +447,14 @@ def write_default_pipeline_shader_artifacts(
         )
 
     for shader in default_pipeline_engine_shaders():
-        write_engine_shader_artifact(package_dir, diagnostics, shader, compiler, requested_targets)
+        write_engine_shader_artifact(
+            package_dir,
+            diagnostics,
+            shader,
+            compiler,
+            requested_targets,
+            fxc,
+        )
 
 
 def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
@@ -551,6 +572,7 @@ def write_engine_shader_artifact(
     shader: EngineShaderArtifact,
     compiler: Path,
     requested_targets: tuple[str, ...] | None = None,
+    fxc: Path | None = None,
 ) -> None:
     del diagnostics
     targets = shader_targets_for_language(
@@ -589,6 +611,7 @@ def write_engine_shader_artifact(
                 package_dir / "shaders" / target / artifact_filename(shader.uuid, target, "vertex", "vert"),
                 f"{shader.name}:vertex",
                 shader.vertex_entry,
+                fxc=fxc,
             )
 
     if shader.fragment_source == "":
@@ -611,6 +634,7 @@ def write_engine_shader_artifact(
             package_dir / "shaders" / target / artifact_filename(shader.uuid, target, "fragment", "frag"),
             f"{shader.name}:fragment",
             shader.fragment_entry,
+            fxc=fxc,
         )
 
 
@@ -667,6 +691,7 @@ def compile_shader_stage(
     debug_name: str,
     entry: str = "main",
     program_source_paths: tuple[Path, ...] = (),
+    fxc: Path | None = None,
 ) -> None:
     cmd = executable_command(compiler) + [
         str(compiler),
@@ -688,6 +713,8 @@ def compile_shader_stage(
     ]
     for program_source_path in program_source_paths:
         cmd.extend(["--program-source", str(program_source_path)])
+    if target == "d3d11" and fxc is not None:
+        cmd.extend(["--fxc", str(fxc)])
     result = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip()

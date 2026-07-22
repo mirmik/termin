@@ -15,16 +15,7 @@ from termin.project_build.profiles import (
     QuestOpenXRTarget,
     resolve_project_path,
 )
-@dataclass(frozen=True)
-class ToolchainContext:
-    """Local-only tool overrides; never serialized into a project profile."""
-
-    shader_compiler: Path | None = None
-    sdk_root: Path | None = None
-    termin_root: Path | None = None
-    android_build_script: Path | None = None
-    quest_openxr_build_script: Path | None = None
-    gradle: Path | None = None
+from termin.project_build.toolchains import ToolchainContext
 
 
 @dataclass(frozen=True)
@@ -38,6 +29,7 @@ class ProfileBuildRequest:
     modules: tuple[str, ...]
     resource_includes: tuple[str, ...]
     shader_compiler: Path | None
+    fxc: Path | None
     default_shader_language: str
     runtime_backends: tuple[str, ...]
     sdk_root: Path | None
@@ -48,6 +40,7 @@ class ProfileBuildRequest:
     gradle: Path | None
     abi: str | None
     platform: str | None
+    toolchain: ToolchainContext
 
 
 def compile_profile_build_request(
@@ -124,6 +117,7 @@ def compile_profile_build_request(
         modules=profile.content.modules,
         resource_includes=profile.content.resource_includes,
         shader_compiler=local.shader_compiler,
+        fxc=local.fxc,
         default_shader_language="slang",
         runtime_backends=runtime_backends,
         sdk_root=local.sdk_root if isinstance(target, DesktopTarget) else None,
@@ -134,6 +128,7 @@ def compile_profile_build_request(
         gradle=local.gradle if not isinstance(target, DesktopTarget) else None,
         abi=abi,
         platform=platform,
+        toolchain=local,
     )
 
 

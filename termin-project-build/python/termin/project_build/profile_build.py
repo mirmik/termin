@@ -5,12 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 from typing import Any, Sequence
 
 from termin.project_build.android_build import build_android_project
+from termin.project_build.capability_reports import (
+    ToolchainCapabilityReport,
+    inspect_profile_capabilities,
+    inspect_request_capabilities,
+)
 from termin.project_build.desktop_build import build_desktop_project
 from termin.project_build.pipeline import ProjectBuildPipelineError
 from termin.project_build.profile_requests import (
@@ -23,10 +27,10 @@ from termin.project_build.profiles import (
     BuildProfile,
     BuildProfileStore,
     ProfileBuildError,
-    ProfileDiagnostic,
     load_build_profile,
 )
 from termin.project_build.quest_openxr_build import build_quest_openxr_project
+from termin.project_build.toolchains import create_local_toolchain_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
@@ -46,6 +50,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return show_profile_from_args(args)
         if args.command == "resolve":
             return resolve_profile_from_args(args)
+        if args.command == "capabilities":
+            return capabilities_from_args(args)
         if args.command == "desktop":
             return _build_desktop_from_args(args)
     except ProfileBuildError as exc:
@@ -66,16 +72,18 @@ def build_profile_from_args(args: argparse.Namespace) -> int:
             f"profile '{profile.name}' target mismatch: C++ launcher selected "
             f"'{args.target}', profile file contains '{profile.target_kind}'"
         )
-    request = compile_profile_build_request(
+    report = inspect_profile_capabilities(
         profile,
-        ToolchainContext(shader_compiler=args.shader_compiler),
+        invocation_overrides=_toolchain_context_from_args(args),
     )
+    request = compile_profile_build_request(profile, report.context)
     if args.dry_run:
         _print_request_summary(request)
+        _print_capability_report(report)
         print("Dry run: build execution skipped.")
         return 0
     validate_resolved_profile_request(request)
-    _validate_request_capabilities(request)
+    _raise_for_capability_errors(report)
     return execute_profile_build_request(request)
 
 
@@ -117,6 +125,19 @@ def resolve_profile_from_args(args: argparse.Namespace) -> int:
     return 0
 
 
+def capabilities_from_args(args: argparse.Namespace) -> int:
+    profile = load_build_profile(args.project_root, args.profiles_path, args.profile)
+    report = inspect_profile_capabilities(
+        profile,
+        invocation_overrides=_toolchain_context_from_args(args),
+    )
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    else:
+        _print_capability_report(report)
+    return 0 if report.buildable else 2
+
+
 def normalize_profile_build_request(
     profile: BuildProfile,
     shader_compiler: Path | None = None,
@@ -135,13 +156,16 @@ def build_profile(
     shader_compiler: Path | None = None,
     toolchain: ToolchainContext | None = None,
 ) -> int:
-    request = normalize_profile_build_request(
+    if shader_compiler is not None and toolchain is not None:
+        raise ValueError("pass either shader_compiler or toolchain, not both")
+    invocation = toolchain or ToolchainContext(shader_compiler=shader_compiler)
+    local = create_local_toolchain_context(invocation_overrides=invocation)
+    request = compile_profile_build_request(
         profile,
-        shader_compiler=shader_compiler,
-        toolchain=toolchain,
+        local,
     )
     validate_resolved_profile_request(request)
-    _validate_request_capabilities(request)
+    _raise_for_capability_errors(inspect_request_capabilities(request))
     return execute_profile_build_request(request)
 
 
@@ -154,6 +178,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 scenes=request.scenes,
                 output_dir=request.context.dist_dir,
                 shader_compiler=request.shader_compiler,
+                fxc=request.fxc,
                 default_shader_language=request.default_shader_language,
                 shader_targets=request.runtime_backends,
                 sdk_root=request.sdk_root,
@@ -176,7 +201,9 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 entry_scene=request.context.entry_scene,
                 scenes=request.scenes,
                 output_dir=request.context.dist_dir,
+                sdk_root=request.toolchain.sdk_root,
                 termin_root=request.termin_root,
+                android_sdk_root=request.toolchain.android_sdk_root,
                 build_script=request.build_script,
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
@@ -198,7 +225,9 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 entry_scene=request.context.entry_scene,
                 scenes=request.scenes,
                 output_dir=request.context.dist_dir,
+                sdk_root=request.toolchain.sdk_root,
                 termin_root=request.termin_root,
+                android_sdk_root=request.toolchain.android_sdk_root,
                 build_script=request.build_script,
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
@@ -218,57 +247,9 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
     raise AssertionError(f"Unhandled typed build request target: {request.target}")
 
 
-def _validate_request_capabilities(request: ProfileBuildRequest) -> None:
-    if request.target == "desktop" and "d3d11" in request.runtime_backends:
-        if request.shader_compiler is None and not _d3d11_shader_compiler_available(request.sdk_root):
-            raise ProfileBuildError(
-                diagnostics=(
-                    ProfileDiagnostic(
-                        code="capability.shader_compiler",
-                        path="toolchain.shader_compiler",
-                        message=(
-                            f"profile '{request.name}' requests runtime backend 'd3d11', but fxc "
-                            "was not found; D3D11 shader artifacts require TERMIN_FXC, fxc in "
-                            "PATH, or fxc under TERMIN_SDK/bin"
-                        ),
-                    ),
-                )
-            )
-    host_os = "windows" if os.name == "nt" else "linux"
-    if request.target == "desktop" and request.target_os != host_os:
-        raise ProfileBuildError(
-            diagnostics=(
-                ProfileDiagnostic(
-                    code="capability.host_platform",
-                    path="toolchain.host_platform",
-                    message=(
-                        f"profile '{request.name}' targets desktop {request.target_os}, but this "
-                        f"host is {host_os}; cross-platform desktop toolchain validation is not "
-                        "implemented yet"
-                    ),
-                ),
-            )
-        )
-
-
-def _d3d11_shader_compiler_available(sdk_root: Path | None) -> bool:
-    explicit = os.environ.get("TERMIN_FXC")
-    if explicit:
-        return Path(explicit).is_file()
-    if shutil.which("fxc") is not None:
-        return True
-
-    sdk_candidates = []
-    if sdk_root is not None:
-        sdk_candidates.append(sdk_root)
-    env_sdk = os.environ.get("TERMIN_SDK")
-    if env_sdk:
-        sdk_candidates.append(Path(env_sdk))
-    for sdk in sdk_candidates:
-        if (sdk / "bin" / "fxc").is_file() or (sdk / "bin" / "fxc.exe").is_file():
-            return True
-
-    return os.name == "nt"
+def _raise_for_capability_errors(report: ToolchainCapabilityReport) -> None:
+    if report.diagnostics:
+        raise ProfileBuildError(diagnostics=report.diagnostics)
 
 
 def _create_parser() -> argparse.ArgumentParser:
@@ -280,7 +261,7 @@ def _create_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--profiles-path", type=Path, required=True)
     build_parser.add_argument("--profile", required=True)
     build_parser.add_argument("--target", default=None)
-    build_parser.add_argument("--shader-compiler", type=Path, default=None)
+    _add_toolchain_args(build_parser)
     build_parser.add_argument("--dry-run", action="store_true")
 
     profiles_parser = subparsers.add_parser("profiles", help="List typed project build profiles")
@@ -298,6 +279,15 @@ def _create_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("--profile", required=True)
     resolve_parser.add_argument("--request-output", type=Path, required=True)
 
+    capabilities_parser = subparsers.add_parser(
+        "capabilities",
+        help="Inspect local toolchain capabilities for one profile",
+    )
+    _add_profile_document_args(capabilities_parser)
+    capabilities_parser.add_argument("--profile", required=True)
+    _add_toolchain_args(capabilities_parser)
+    capabilities_parser.add_argument("--json", action="store_true")
+
     desktop_parser = subparsers.add_parser(
         "desktop",
         help="Build desktop project artifacts using the direct argument form",
@@ -306,6 +296,7 @@ def _create_parser() -> argparse.ArgumentParser:
     desktop_parser.add_argument("--entry-scene", type=Path, required=True)
     desktop_parser.add_argument("--output-dir", type=Path, required=True)
     desktop_parser.add_argument("--shader-compiler", type=Path, default=None)
+    desktop_parser.add_argument("--fxc", type=Path, default=None)
     desktop_parser.add_argument(
         "--shader-target",
         action="append",
@@ -322,6 +313,32 @@ def _add_profile_document_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--profiles-path", type=Path, required=True)
 
 
+def _add_toolchain_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--sdk-root", type=Path, default=None)
+    parser.add_argument("--termin-root", type=Path, default=None)
+    parser.add_argument("--android-sdk-root", type=Path, default=None)
+    parser.add_argument("--shader-compiler", type=Path, default=None)
+    parser.add_argument("--fxc", type=Path, default=None)
+    parser.add_argument("--android-build-script", type=Path, default=None)
+    parser.add_argument("--quest-openxr-build-script", type=Path, default=None)
+    parser.add_argument("--gradle", type=Path, default=None)
+    parser.add_argument("--adb", type=Path, default=None)
+
+
+def _toolchain_context_from_args(args: argparse.Namespace) -> ToolchainContext:
+    return ToolchainContext(
+        sdk_root=args.sdk_root,
+        termin_root=args.termin_root,
+        android_sdk_root=args.android_sdk_root,
+        shader_compiler=args.shader_compiler,
+        fxc=args.fxc,
+        android_build_script=args.android_build_script,
+        quest_openxr_build_script=args.quest_openxr_build_script,
+        gradle=args.gradle,
+        adb=args.adb,
+    )
+
+
 def _build_desktop_from_args(args: argparse.Namespace) -> int:
     project_root = args.project_root.resolve()
     result = build_desktop_project(
@@ -329,6 +346,7 @@ def _build_desktop_from_args(args: argparse.Namespace) -> int:
         entry_scene=_resolve_direct_path(project_root, args.entry_scene),
         output_dir=_resolve_direct_path(project_root, args.output_dir),
         shader_compiler=args.shader_compiler,
+        fxc=args.fxc,
         shader_targets=tuple(args.shader_targets) if args.shader_targets is not None else None,
     )
     _print_desktop_result(result)
@@ -365,6 +383,12 @@ def _print_request_summary(request: ProfileBuildRequest) -> None:
     print(f"Entry scene: {summary['entry_scene']}")
     print(f"Output dir: {summary['output_dir']}")
     print(f"Runtime backends: {', '.join(request.runtime_backends)}")
+
+
+def _print_capability_report(report: ToolchainCapabilityReport) -> None:
+    print(f"Local capabilities: {'buildable' if report.buildable else 'unavailable'}")
+    for diagnostic in report.diagnostics:
+        print(f"{diagnostic.code}: {diagnostic.path}: {diagnostic.message}")
 
 
 def _print_desktop_result(result: Any) -> None:

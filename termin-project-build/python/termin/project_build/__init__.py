@@ -25,9 +25,22 @@ from termin.project_build.profiles import (
 )
 from termin.project_build.profile_requests import (
     ProfileBuildRequest,
-    ToolchainContext,
     compile_profile_build_request,
     validate_resolved_profile_request,
+)
+from termin.project_build.capability_reports import (
+    ToolchainCapabilityReport,
+    inspect_profile_capabilities,
+    inspect_request_capabilities,
+)
+from termin.project_build.toolchains import (
+    EnvironmentToolchainContextProvider,
+    SDKInstallationToolchainContextProvider,
+    StaticToolchainContextProvider,
+    ToolchainContext,
+    ToolchainContextProvider,
+    create_local_toolchain_context,
+    resolve_toolchain_context,
 )
 
 
@@ -92,6 +105,7 @@ __all__ = [
     "DesktopSDKCapabilities",
     "DesktopTarget",
     "DiagnosticLike",
+    "EnvironmentToolchainContextProvider",
     "ProfileBuildError",
     "ProfileBuildRequest",
     "ProfileContent",
@@ -106,6 +120,8 @@ __all__ = [
     "RuntimePackageExportResult",
     "SDKCapabilities",
     "SDKToolCapabilities",
+    "SDKInstallationToolchainContextProvider",
+    "StaticToolchainContextProvider",
     "TargetPackageStepResult",
     "TargetPreflightStepResult",
     "build_android_project",
@@ -123,6 +139,12 @@ __all__ = [
     "resolve_project_path",
     "run_project_build_pipeline",
     "ToolchainContext",
+    "ToolchainCapabilityReport",
+    "ToolchainContextProvider",
+    "create_local_toolchain_context",
+    "inspect_profile_capabilities",
+    "inspect_request_capabilities",
+    "resolve_toolchain_context",
     "validate_runtime_package",
     "validate_build_profile",
     "validate_resolved_profile_request",

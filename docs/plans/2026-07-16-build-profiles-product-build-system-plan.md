@@ -258,6 +258,11 @@ Exit criteria:
 
 ## Stage 6: separate portable intent from local capabilities
 
+Status: implemented by #494. The canonical provider chain and capability
+report live in `termin.project_build.toolchains` and
+`termin.project_build.capability_reports`; the profile-build CLI consumes the
+same API exposed to editor code.
+
 1. Remove project-profile fields for SDK root, shader compiler, Gradle, build
    script, ADB and speculative `toolchain.execution`.
 2. Define `ToolchainContext` providers for SDK installation defaults,
