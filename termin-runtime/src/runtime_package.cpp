@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 #include <inspect/tc_kind_cpp.hpp>
@@ -410,6 +411,24 @@ std::filesystem::path package_path(const std::filesystem::path& root, const std:
         throw std::runtime_error("runtime package path escapes bundle root: " + rel);
     }
     return candidate;
+}
+
+void validate_scene_identity(const std::string& identity) {
+    if (identity.empty() || identity.front() == '/' || identity.back() == '/' ||
+        identity.find('\\') != std::string::npos || identity.find(':') != std::string::npos ||
+        !lowercase_copy(identity).ends_with(".scene")) {
+        throw std::runtime_error(
+            "runtime scene identity must be a project-relative .scene path: " + identity
+        );
+    }
+    const std::filesystem::path path(identity);
+    for (const std::filesystem::path& component : path) {
+        if (component == "." || component == "..") {
+            throw std::runtime_error(
+                "runtime scene identity must not contain dot segments: " + identity
+            );
+        }
+    }
 }
 
 
@@ -1398,19 +1417,33 @@ TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::stri
         scene_data = nos::json::parse(scene_json);
     } catch (const std::exception& ex) {
         throw std::runtime_error(
-            "failed to parse runtime entry scene '" + rel_path + "': " + ex.what()
+            "failed to parse packaged runtime scene '" + rel_path + "': " + ex.what()
         );
     }
     TcSceneRef scene = TcSceneRef::create("runtime-scene");
     if (!scene.valid()) {
         throw std::runtime_error("failed to create runtime scene");
     }
-    scene.set_source_path(scene_path.string());
-    scene.load_from_data(scene_data);
+    try {
+        scene.set_source_path(scene_path.string());
+        scene.load_from_data(scene_data);
+    } catch (...) {
+        scene.destroy();
+        throw;
+    }
     return scene;
 }
 
 } // namespace
+
+TcSceneRef RuntimePackageLoadResult::find_scene(const std::string& identity) const {
+    for (const RuntimePackageScene& packaged_scene : scenes) {
+        if (packaged_scene.identity == identity) {
+            return packaged_scene.scene;
+        }
+    }
+    return TcSceneRef();
+}
 
 RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path) {
     RuntimePackageLoadResult result;
@@ -1431,6 +1464,11 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
         }
 
         const nos::trent manifest = nos::json::parse(read_text_file(manifest_path));
+        if (number_field(manifest, "version", 0.0) != 2.0) {
+            result.message = "runtime package manifest requires version 2";
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return result;
+        }
         const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
         std::filesystem::path shader_root = root;
         if (artifact_root_field) {
@@ -1490,14 +1528,47 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
             }
         }
 
-        const std::string scene_path = string_field(manifest, "scene");
-        if (scene_path.empty()) {
-            result.message = "manifest scene path is missing";
+        result.entry_scene_identity = string_field(manifest, "entry_scene");
+        if (result.entry_scene_identity.empty()) {
+            result.message = "manifest entry_scene identity is missing";
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
-
-        result.scene = load_runtime_scene(root, scene_path);
+        const nos::trent* scenes = dict_get(manifest, "scenes");
+        if (!scenes || !scenes->is_list() || scenes->as_list().empty()) {
+            result.message = "manifest scenes must be a non-empty list";
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return result;
+        }
+        std::unordered_set<std::string> scene_identities;
+        std::unordered_set<std::string> scene_paths;
+        for (const nos::trent& entry : scenes->as_list()) {
+            const std::string identity = string_field(entry, "identity");
+            const std::string scene_path = string_field(entry, "path");
+            if (identity.empty() || scene_path.empty()) {
+                throw std::runtime_error(
+                    "runtime scene entries require non-empty identity and path"
+                );
+            }
+            validate_scene_identity(identity);
+            if (!scene_identities.insert(identity).second) {
+                throw std::runtime_error("duplicate runtime scene identity '" + identity + "'");
+            }
+            if (!scene_paths.insert(scene_path).second) {
+                throw std::runtime_error("duplicate runtime scene path '" + scene_path + "'");
+            }
+            result.scenes.push_back(RuntimePackageScene{
+                identity,
+                scene_path,
+                load_runtime_scene(root, scene_path),
+            });
+        }
+        result.scene = result.find_scene(result.entry_scene_identity);
+        if (!result.scene.valid()) {
+            throw std::runtime_error(
+                "entry scene '" + result.entry_scene_identity + "' is absent from manifest scenes"
+            );
+        }
         result.ok = result.scene.valid();
         result.message = result.ok ? "ok" : "scene is invalid";
         if (result.ok) {
@@ -1509,6 +1580,13 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
             );
         }
     } catch (const std::exception& ex) {
+        for (RuntimePackageScene& packaged_scene : result.scenes) {
+            if (packaged_scene.scene.valid()) {
+                packaged_scene.scene.destroy();
+            }
+        }
+        result.scenes.clear();
+        result.scene = TcSceneRef();
         result.ok = false;
         result.message = ex.what();
         tc_log_error("RuntimePackageLoader: %s", result.message.c_str());

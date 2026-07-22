@@ -290,6 +290,7 @@ def test_build_desktop_project_writes_bundle_contract(
     )
     _write_json(project / "DesktopGame.terminproj", {"version": 1, "name": "DesktopGame"})
     _write_json(project / "Main.scene", {"uuid": "desktop-scene", "entities": []})
+    _write_json(project / "Menu.scene", {"uuid": "desktop-menu-scene", "entities": []})
     _write_json(
         project / "game.pymodule",
         {
@@ -325,6 +326,7 @@ def test_build_desktop_project_writes_bundle_contract(
     result = build_desktop_project(
         project_root=project,
         entry_scene="Main.scene",
+        scenes=("Main.scene", "Menu.scene"),
         output_dir=legacy_output,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
         sdk_root=sdk_root,
@@ -333,7 +335,7 @@ def test_build_desktop_project_writes_bundle_contract(
     assert result.dist_dir == legacy_output.resolve()
     assert result.app_manifest_path == result.dist_dir / "app.json"
     assert result.package_result.manifest_path == result.dist_dir / "package" / "manifest.json"
-    assert result.package_result.scene_path == result.dist_dir / "package" / "scene.json"
+    assert result.package_result.scene_path == result.dist_dir / "package" / "scenes/Main.scene.json"
     assert result.python_result.manifest_path == result.dist_dir / "package" / "python" / "modules.json"
     assert result.runtime_result.python_home == result.dist_dir / "lib" / "python3.10"
     assert result.runtime_result.python_package_policy == "minimal_strict"
@@ -403,7 +405,17 @@ def test_build_desktop_project_writes_bundle_contract(
         "package": {
             "root": "package",
             "manifest": "package/manifest.json",
-            "scene": "package/scene.json",
+            "entry_scene": "Main.scene",
+            "scenes": [
+                {
+                    "identity": "Main.scene",
+                    "path": "package/scenes/Main.scene.json",
+                },
+                {
+                    "identity": "Menu.scene",
+                    "path": "package/scenes/Menu.scene.json",
+                },
+            ],
         },
         "runtime": {
             "launcher": "DesktopGame",
@@ -436,12 +448,16 @@ def test_build_desktop_project_writes_bundle_contract(
             },
         },
         "entry": {
-            "scene": "package/scene.json",
+            "scene_identity": "Main.scene",
         },
     }
 
     package_manifest = json.loads(result.package_result.manifest_path.read_text(encoding="utf-8"))
-    assert package_manifest["scene"] == "scene.json"
+    assert package_manifest["entry_scene"] == "Main.scene"
+    assert package_manifest["scenes"] == [
+        {"identity": "Main.scene", "path": "scenes/Main.scene.json"},
+        {"identity": "Menu.scene", "path": "scenes/Menu.scene.json"},
+    ]
     assert "shader_artifact_root" not in package_manifest
     python_manifest = json.loads(result.python_result.manifest_path.read_text(encoding="utf-8"))
     assert python_manifest == {

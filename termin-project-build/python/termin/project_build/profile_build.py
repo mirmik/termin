@@ -151,6 +151,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
             result = build_desktop_project(
                 project_root=request.context.project_root,
                 entry_scene=request.context.entry_scene,
+                scenes=request.scenes,
                 output_dir=request.context.dist_dir,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
@@ -170,6 +171,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
             result = build_android_project(
                 project_root=request.context.project_root,
                 entry_scene=request.context.entry_scene,
+                scenes=request.scenes,
                 output_dir=request.context.dist_dir,
                 termin_root=request.termin_root,
                 build_script=request.build_script,
@@ -191,6 +193,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
             result = build_quest_openxr_project(
                 project_root=request.context.project_root,
                 entry_scene=request.context.entry_scene,
+                scenes=request.scenes,
                 output_dir=request.context.dist_dir,
                 termin_root=request.termin_root,
                 build_script=request.build_script,

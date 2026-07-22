@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <termin/runtime/termin_runtime_api.h>
 #include <termin/tc_scene.hpp>
@@ -17,12 +18,23 @@ struct ShaderRuntimeConfiguration {
     bool dev_compile_enabled = false;
 };
 
+struct RuntimePackageScene {
+    std::string identity;
+    std::string package_path;
+    TcSceneRef scene;
+};
+
 struct RuntimePackageLoadResult {
     bool ok = false;
     std::string message;
+    std::string entry_scene_identity;
+    std::vector<RuntimePackageScene> scenes;
+    // Convenience alias for the entry in ``scenes``.
     TcSceneRef scene;
     std::shared_ptr<RuntimePackageResourceKeepalive> resources;
     ShaderRuntimeConfiguration shader_runtime;
+
+    TERMIN_RUNTIME_API TcSceneRef find_scene(const std::string& identity) const;
 };
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {

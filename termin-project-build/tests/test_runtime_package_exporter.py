@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -464,7 +465,14 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     assert "editor" not in scene_data
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["scene"] == "scene.json"
+    assert manifest["version"] == 2
+    assert manifest["entry_scene"] == "Scenes/Main.scene"
+    assert manifest["scenes"] == [
+        {
+            "identity": "Scenes/Main.scene",
+            "path": "scenes/Scenes/Main.scene.json",
+        }
+    ]
     assert "shader_artifact_root" not in manifest
     assert manifest["resources"] == [
         {
@@ -493,6 +501,86 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
         "Runtime exporter used fallback material because registry entry is unavailable"
         in diagnostic_messages
     )
+
+
+@full_runtime_package_exporter
+def test_export_runtime_package_emits_multi_scene_closure(tmp_path: Path) -> None:
+    project = tmp_path / "MultiSceneGame"
+    main_scene = project / "Scenes" / "Main.scene"
+    menu_scene = project / "Scenes" / "Menu.scene"
+    _write_json(
+        main_scene,
+        {
+            "uuid": "main-scene",
+            "entities": [
+                {
+                    "components": [
+                        {
+                            "data": {
+                                "mesh": {
+                                    "type": "uuid",
+                                    "uuid": "main-mesh",
+                                    "name": "Main Mesh",
+                                    "kind": "tc_mesh",
+                                }
+                            }
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+    _write_json(
+        menu_scene,
+        {
+            "uuid": "menu-scene",
+            "entities": [
+                {
+                    "components": [
+                        {
+                            "data": {
+                                "mesh": {
+                                    "type": "uuid",
+                                    "uuid": "menu-mesh",
+                                    "name": "Menu Mesh",
+                                    "kind": "tc_mesh",
+                                }
+                            }
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene=main_scene,
+        scenes=(main_scene, menu_scene),
+        output_dir=tmp_path / "bundle/package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+        resource_policy="dev_smoke",
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    shutil.rmtree(project)
+    assert manifest["entry_scene"] == "Scenes/Main.scene"
+    assert manifest["scenes"] == [
+        {
+            "identity": "Scenes/Main.scene",
+            "path": "scenes/Scenes/Main.scene.json",
+        },
+        {
+            "identity": "Scenes/Menu.scene",
+            "path": "scenes/Scenes/Menu.scene.json",
+        },
+    ]
+    assert set(result.scene_paths) == {"Scenes/Main.scene", "Scenes/Menu.scene"}
+    assert all(path.is_file() for path in result.scene_paths.values())
+    assert (result.package_dir / "meshes/main-mesh.tmesh.json").is_file()
+    assert (result.package_dir / "meshes/menu-mesh.tmesh.json").is_file()
+    resource_uuids = {resource.get("uuid") for resource in manifest["resources"]}
+    assert {"main-mesh", "menu-mesh"} <= resource_uuids
 
 
 @full_runtime_package_exporter

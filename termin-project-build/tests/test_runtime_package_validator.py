@@ -2,7 +2,13 @@ import json
 import struct
 from pathlib import Path
 
+import pytest
+
 from termin.project_build.runtime_package_validator import validate_runtime_package
+
+
+SCENE_IDENTITY = "Scenes/Main.scene"
+SCENE_PATH = "scenes/Scenes/Main.scene.json"
 
 
 def _write_json(path: Path, data: dict | list) -> None:
@@ -10,15 +16,26 @@ def _write_json(path: Path, data: dict | list) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _scene_manifest(
+    *,
+    identity: str = SCENE_IDENTITY,
+    path: str = SCENE_PATH,
+) -> dict[str, object]:
+    return {
+        "version": 2,
+        "entry_scene": identity,
+        "scenes": [{"identity": identity, "path": path}],
+    }
+
+
 def _write_valid_package(tmp_path: Path) -> Path:
     package_dir = tmp_path / "package"
-    _write_json(package_dir / "scene.json", {"uuid": "scene"})
+    _write_json(package_dir / SCENE_PATH, {"uuid": "scene"})
     _write_json(package_dir / "meshes" / "mesh-uuid.tmesh.json", {"uuid": "mesh-uuid"})
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "mesh",
@@ -167,8 +184,7 @@ def test_validate_runtime_package_rejects_path_escape(tmp_path: Path) -> None:
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "../scene.json",
+            **_scene_manifest(path="../scene.json"),
             "resources": [],
         },
     )
@@ -178,10 +194,68 @@ def test_validate_runtime_package_rejects_path_escape(tmp_path: Path) -> None:
     assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
         (
             "error",
-            "scene",
+            "scenes[0].path",
             "Runtime package path escapes package root: ../scene.json",
         )
     ]
+
+
+def test_validate_runtime_package_rejects_missing_entry_and_duplicate_scene_identity(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(package_dir / "scenes/Scenes/Menu.scene.json", {"uuid": "menu"})
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            "version": 2,
+            "entry_scene": "Scenes/Missing.scene",
+            "scenes": [
+                {"identity": SCENE_IDENTITY, "path": SCENE_PATH},
+                {
+                    "identity": SCENE_IDENTITY,
+                    "path": "scenes/Scenes/Menu.scene.json",
+                },
+            ],
+            "resources": [],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert [(diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
+        ("scenes[1].identity", f"Duplicate runtime scene identity '{SCENE_IDENTITY}'"),
+        (
+            "entry_scene",
+            "Runtime package entry scene 'Scenes/Missing.scene' is absent from the scene table",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "identity",
+    ["../Main.scene", "Scenes\\Main.scene", "C:/Scenes/Main.scene"],
+)
+def test_validate_runtime_package_rejects_non_portable_scene_identity(
+    tmp_path: Path,
+    identity: str,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(identity=identity),
+            "resources": [],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert diagnostics[0].path == "scenes[0].identity"
+    assert diagnostics[0].message == (
+        "Runtime package scene identity must be a normalized project-relative .scene path: "
+        f"{identity}"
+    )
 
 
 def test_validate_runtime_package_rejects_duplicate_resource_uuid(tmp_path: Path) -> None:
@@ -203,8 +277,7 @@ def test_validate_runtime_package_rejects_duplicate_resource_uuid(tmp_path: Path
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "mesh",
@@ -242,8 +315,7 @@ def test_validate_runtime_package_accepts_shader_artifacts(tmp_path: Path) -> No
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "shader",
@@ -264,8 +336,7 @@ def test_validate_runtime_package_accepts_versioned_shader_program(tmp_path: Pat
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "shader",
@@ -291,8 +362,7 @@ def test_validate_runtime_package_rejects_incompatible_shader_program_schema(tmp
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "shader",
@@ -344,8 +414,7 @@ def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "shader",
@@ -375,7 +444,7 @@ def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path
 def test_validate_runtime_package_reports_scene_missing_material_resource(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_json(
-        package_dir / "scene.json",
+        package_dir / SCENE_PATH,
         {
             "uuid": "scene",
             "entities": [
@@ -403,7 +472,7 @@ def test_validate_runtime_package_reports_scene_missing_material_resource(tmp_pa
     assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
         (
             "error",
-            "scene.entities[0].components[0].data.material",
+                f"scenes[{SCENE_IDENTITY}].entities[0].components[0].data.material",
             "Runtime package references missing material resource uuid 'missing-material'",
         )
     ]
@@ -412,7 +481,7 @@ def test_validate_runtime_package_reports_scene_missing_material_resource(tmp_pa
 def test_validate_runtime_package_rejects_legacy_scene_resource_ref(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_json(
-        package_dir / "scene.json",
+        package_dir / SCENE_PATH,
         {
             "uuid": "scene",
             "entities": [
@@ -439,7 +508,7 @@ def test_validate_runtime_package_rejects_legacy_scene_resource_ref(tmp_path: Pa
     assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
         (
             "error",
-            "scene.entities[0].components[0].data.material",
+                f"scenes[{SCENE_IDENTITY}].entities[0].components[0].data.material",
             "Runtime package rejected legacy material resource ref from legacy field name; "
             "add kind='tc_material' or role='material' to the uuid ref",
         )
@@ -464,8 +533,7 @@ def test_validate_runtime_package_reports_material_phase_missing_shader(tmp_path
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "material",
@@ -513,8 +581,7 @@ def test_validate_runtime_package_checks_texture_resource_and_material_reference
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {"type": "shader", "uuid": "shader-uuid", "path": "shaders/shader-uuid.shader.json"},
                 {"type": "material", "uuid": "material-uuid", "path": "materials/material-uuid.tmat.json"},
@@ -545,8 +612,7 @@ def test_validate_runtime_package_accepts_compiled_pipeline_template(tmp_path: P
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "pipeline",
@@ -565,7 +631,7 @@ def test_validate_runtime_package_checks_canonical_scene_pipeline_template_ref(
 ) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_json(
-        package_dir / "scene.json",
+        package_dir / SCENE_PATH,
         {
             "uuid": "scene",
             "extensions": {
@@ -592,8 +658,7 @@ def test_validate_runtime_package_rejects_authored_or_malformed_pipeline_payload
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "resources": [
                 {
                     "type": "pipeline",
@@ -629,8 +694,7 @@ def test_validate_runtime_package_reports_required_shader_target_missing(tmp_pat
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 1,
-            "scene": "scene.json",
+            **_scene_manifest(),
             "target_requirements": {
                 "shader_targets": ["vulkan", "opengl"],
             },

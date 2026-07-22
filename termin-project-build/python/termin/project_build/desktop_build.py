@@ -46,6 +46,7 @@ class _DesktopTargetPackagePayload:
 def build_desktop_project(
     project_root: str | Path,
     entry_scene: str | Path,
+    scenes: Iterable[str | Path] | None = None,
     output_dir: str | Path | None = None,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
@@ -59,6 +60,7 @@ def build_desktop_project(
     context = create_build_context(
         project_root=project_root,
         entry_scene=entry_scene,
+        scenes=scenes,
         target="desktop",
         output_dir=output_dir,
         configuration=configuration,
@@ -108,7 +110,7 @@ def _desktop_target_preflight(
 
 def _package_desktop_target(
     context: BuildContext,
-    _package_result: RuntimePackageExportResult,
+    package_result: RuntimePackageExportResult,
     preflight_result: DesktopPreflightResult,
     python_package_policy: str,
     python_requirements: tuple[str, ...],
@@ -140,6 +142,14 @@ def _package_desktop_target(
         for module in python_result.modules
     ]
     project_settings = _load_project_settings(context.project_root)
+    entry_scene_identity = context.entry_scene.relative_to(context.project_root).as_posix()
+    packaged_scenes = [
+        {
+            "identity": identity,
+            "path": f"package/{path.relative_to(package_result.package_dir).as_posix()}",
+        }
+        for identity, path in package_result.scene_paths.items()
+    ]
 
     _write_app_manifest(
         app_manifest_path,
@@ -151,7 +161,8 @@ def _package_desktop_target(
             "package": {
                 "root": "package",
                 "manifest": "package/manifest.json",
-                "scene": "package/scene.json",
+                "entry_scene": entry_scene_identity,
+                "scenes": packaged_scenes,
             },
             "runtime": {
                 "launcher": _relative_runtime_path(context.dist_dir, runtime_result.launcher_path),
@@ -178,7 +189,7 @@ def _package_desktop_target(
                 },
             },
             "entry": {
-                "scene": "package/scene.json",
+                "scene_identity": entry_scene_identity,
             },
         },
     )

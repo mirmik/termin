@@ -141,6 +141,10 @@ Exit criteria:
 
 ### Scene roots
 
+Status: implemented by #489. Runtime package schema v2 owns the explicit scene
+table and entry identity; exporter, validator, native loader and player consume
+the same stable project-relative identities.
+
 1. Replace the single-scene exporter contract with entry scene plus an explicit
    scene-root set.
 2. Require the entry scene to be present in that set.

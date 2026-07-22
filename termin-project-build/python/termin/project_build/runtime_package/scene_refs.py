@@ -54,9 +54,10 @@ def read_scene_data(scene_path: Path) -> dict[str, Any]:
 def collect_runtime_refs(
     scene_data: dict[str, Any],
     diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
+    diagnostic_path: str = "scene.json",
 ) -> RuntimeRefs:
     refs = RuntimeRefs()
-    collect_refs_recursive(scene_data, refs, "", diagnostics, "$")
+    collect_refs_recursive(scene_data, refs, "", diagnostics, "$", diagnostic_path)
     return refs
 
 
@@ -66,17 +67,27 @@ def collect_refs_recursive(
     field_name: str,
     diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
     ref_path: str = "$",
+    diagnostic_path: str = "scene.json",
 ) -> None:
     if isinstance(value, dict):
         collect_pipeline_refs(value, refs, field_name)
-        collect_typed_ref(value, refs, field_name, diagnostics, ref_path)
+        collect_typed_ref(value, refs, field_name, diagnostics, ref_path, diagnostic_path)
         for key, child in value.items():
             child_path = f"{ref_path}.{key}" if ref_path != "$" else f"$.{key}"
-            collect_refs_recursive(child, refs, key, diagnostics, child_path)
+            collect_refs_recursive(
+                child, refs, key, diagnostics, child_path, diagnostic_path
+            )
         return
     if isinstance(value, list):
         for index, child in enumerate(value):
-            collect_refs_recursive(child, refs, field_name, diagnostics, f"{ref_path}[{index}]")
+            collect_refs_recursive(
+                child,
+                refs,
+                field_name,
+                diagnostics,
+                f"{ref_path}[{index}]",
+                diagnostic_path,
+            )
 
 
 def collect_typed_ref(
@@ -85,6 +96,7 @@ def collect_typed_ref(
     field_name: str,
     diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
     ref_path: str = "$",
+    diagnostic_path: str = "scene.json",
 ) -> None:
     uuid_value = value.get("uuid")
     type_value = value.get("type")
@@ -105,6 +117,7 @@ def collect_typed_ref(
             legacy_resource_ref_reason(value, field_name, "mesh"),
             "mesh",
             ref_path,
+            diagnostic_path,
         )
     material_reason = resource_ref_match_reason(value, field_name, "material")
     if material_reason is not None:
@@ -115,6 +128,7 @@ def collect_typed_ref(
             legacy_resource_ref_reason(value, field_name, "material"),
             "material",
             ref_path,
+            diagnostic_path,
         )
 
 
@@ -239,6 +253,7 @@ def append_rejected_legacy_ref_diagnostic(
     reason: str | None,
     resource_type: str,
     ref_path: str,
+    diagnostic_path: str = "scene.json",
 ) -> None:
     if diagnostics is None or reason is None:
         return
@@ -251,7 +266,7 @@ def append_rejected_legacy_ref_diagnostic(
     diagnostics.append(
         RuntimePackageExportDiagnostic(
             level="error",
-            path="scene.json",
+            path=diagnostic_path,
             message=(
                 f"Runtime exporter rejected legacy {resource_type} resource ref from {reason} "
                 f"at {ref_path}; add {canonical_hint} to the uuid ref"

@@ -25,6 +25,7 @@ class RuntimePackageExportResult:
     package_dir: Path
     manifest_path: Path
     scene_path: Path
+    scene_paths: dict[str, Path] = field(default_factory=dict)
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
 
