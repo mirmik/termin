@@ -330,13 +330,14 @@ def test_build_desktop_project_writes_bundle_contract(
         output_dir=legacy_output,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
         sdk_root=sdk_root,
+        modules=("game",),
     )
 
     assert result.dist_dir == legacy_output.resolve()
     assert result.app_manifest_path == result.dist_dir / "app.json"
     assert result.package_result.manifest_path == result.dist_dir / "package" / "manifest.json"
     assert result.package_result.scene_path == result.dist_dir / "package" / "scenes/Main.scene.json"
-    assert result.python_result.manifest_path == result.dist_dir / "package" / "python" / "modules.json"
+    assert result.module_result.manifest_path == result.dist_dir / "package" / "modules" / "modules.json"
     assert result.runtime_result.python_home == result.dist_dir / "lib" / "python3.10"
     assert result.runtime_result.python_package_policy == "minimal_strict"
     assert result.runtime_result.python_runtime_manifest_path == result.dist_dir / "python-runtime.json"
@@ -349,14 +350,14 @@ def test_build_desktop_project_writes_bundle_contract(
         "vsync": vsync,
     }
     assert result.package_result.manifest_path.exists()
-    assert result.python_result.manifest_path.exists()
+    assert result.module_result.manifest_path.exists()
     assert result.runtime_result.python_runtime_manifest_path.exists()
     assert not (result.dist_dir / "build.json").exists()
     assert not (result.dist_dir / "assets").exists()
-    assert (result.dist_dir / "package" / "python" / "game.pymodule").exists()
-    assert (result.dist_dir / "package" / "python" / "Scripts" / "__init__.py").exists()
-    assert (result.dist_dir / "package" / "python" / "Scripts" / "Controller.py").exists()
-    assert not (result.dist_dir / "package" / "python" / "Scripts" / "__pycache__").exists()
+    assert (result.dist_dir / "package" / "modules" / "descriptors" / "game.pymodule").exists()
+    assert (result.dist_dir / "package" / "modules" / "python" / "Scripts" / "__init__.py").exists()
+    assert (result.dist_dir / "package" / "modules" / "python" / "Scripts" / "Controller.py").exists()
+    assert not (result.dist_dir / "package" / "modules" / "python" / "Scripts" / "__pycache__").exists()
     assert result.runtime_result.launcher_path == result.dist_dir / "DesktopGame"
     assert (result.dist_dir / "DesktopGame").exists()
     assert not (result.dist_dir / "bin" / "termin_player").exists()
@@ -419,16 +420,19 @@ def test_build_desktop_project_writes_bundle_contract(
         },
         "runtime": {
             "launcher": "DesktopGame",
+            "modules": {
+                "enabled": True,
+                "root": "package/modules",
+                "manifest": "package/modules/modules.json",
+                "roots": ["game"],
+                "closure": ["game"],
+                "descriptors": ["package/modules/descriptors/game.pymodule"],
+            },
             "python": {
                 "enabled": True,
                 "home": "lib/python3.10",
                 "package_policy": "minimal_strict",
                 "runtime_manifest": "python-runtime.json",
-                "project_modules": "package/python",
-                "module_manifest": "package/python/modules.json",
-                "descriptors": [
-                    "package/python/game.pymodule",
-                ],
             },
             "native_library_dirs": [
                 "lib",
@@ -459,14 +463,18 @@ def test_build_desktop_project_writes_bundle_contract(
         {"identity": "Menu.scene", "path": "scenes/Menu.scene.json"},
     ]
     assert "shader_artifact_root" not in package_manifest
-    python_manifest = json.loads(result.python_result.manifest_path.read_text(encoding="utf-8"))
-    assert python_manifest == {
-        "version": 1,
+    module_manifest = json.loads(result.module_result.manifest_path.read_text(encoding="utf-8"))
+    assert module_manifest == {
+        "version": 2,
+        "format": "termin.project_modules",
+        "roots": ["game"],
+        "closure": ["game"],
         "modules": [
             {
                 "name": "game",
-                "descriptor": "game.pymodule",
-                "root": ".",
+                "kind": "python",
+                "dependencies": [],
+                "descriptor": "descriptors/game.pymodule",
                 "packages": [
                     "Scripts",
                 ],
@@ -474,10 +482,11 @@ def test_build_desktop_project_writes_bundle_contract(
                     "python-chess",
                 ],
                 "files": [
-                    "Scripts/Controller.py",
-                    "Scripts/__init__.py",
-                    "game.pymodule",
+                    "descriptors/game.pymodule",
+                    "python/Scripts/Controller.py",
+                    "python/Scripts/__init__.py",
                 ],
+                "native_artifact": None,
             },
         ],
         "diagnostics": [],

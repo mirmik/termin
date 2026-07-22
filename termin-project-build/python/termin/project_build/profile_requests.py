@@ -183,23 +183,12 @@ def validate_resolved_profile_request(request: ProfileBuildRequest) -> None:
         ) from exc
 
     unsupported: list[ProfileDiagnostic] = []
-    if request.modules:
+    if request.modules and request.target != "desktop":
         unsupported.append(
             ProfileDiagnostic(
                 code="profile.feature_pending",
                 path=f"profiles.{request.name}.content.modules",
-                message="selected module closure packaging is not implemented yet",
-            )
-        )
-    elif any(request.context.project_root.rglob("*.pymodule")):
-        unsupported.append(
-            ProfileDiagnostic(
-                code="profile.feature_pending",
-                path=f"profiles.{request.name}.content.modules",
-                message=(
-                    "the project contains module descriptors, but selected module closure "
-                    "packaging is not implemented yet"
-                ),
+                message="selected project modules are currently supported only for desktop bundles",
             )
         )
     if request.resource_includes:

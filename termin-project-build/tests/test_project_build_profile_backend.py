@@ -143,6 +143,7 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
     profile_data["content"] = _content(
         python={"requirements": ["python-chess"]},
         scenes=["Scenes/Main.scene", "Scenes/Menu.scene"],
+        modules=["gameplay"],
         resources={"policy": "dev_smoke", "include": []},
     )
     _write_profiles(profiles_path, {"dev": profile_data})
@@ -190,6 +191,7 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
             "resource_policy": "dev_smoke",
             "python_package_policy": "sdk_broad_copy",
             "python_requirements": ("python-chess",),
+            "modules": ("gameplay",),
         }
     ]
 
@@ -258,7 +260,7 @@ def test_profile_build_routes_android_family_typed_request(
     assert calls[0]["gradle"] is None
 
 
-def test_build_accepts_scenes_but_rejects_other_pending_content_features(
+def test_build_accepts_scenes_and_modules_but_rejects_pending_resource_roots(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -279,10 +281,7 @@ def test_build_accepts_scenes_but_rejects_other_pending_content_features(
         profile_build.build_profile(profile)
 
     assert calls == []
-    assert {diagnostic.path.rsplit(".", 1)[-1] for diagnostic in raised.value.diagnostics} == {
-        "modules",
-        "include",
-    }
+    assert {diagnostic.path.rsplit(".", 1)[-1] for diagnostic in raised.value.diagnostics} == {"include"}
 
 
 def test_build_rejects_d3d11_without_local_fxc(tmp_path: Path, monkeypatch) -> None:

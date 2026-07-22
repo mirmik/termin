@@ -1,6 +1,7 @@
 #include "termin_modules/module_descriptor_parser.hpp"
 
 #include <tcbase/tc_trent.hpp>
+#include <tcbase/tc_trent_json.hpp>
 #include <tcbase/tc_trent_yaml.hpp>
 
 #include <fstream>
@@ -152,7 +153,10 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
 
     tc::trent root;
     try {
-        root = tc::yaml::parse(text);
+        const size_t first_content = text.find_first_not_of(" \t\r\n");
+        const bool is_json = first_content != std::string::npos &&
+            (text[first_content] == '{' || text[first_content] == '[');
+        root = is_json ? tc::json::parse(text) : tc::yaml::parse(text);
     } catch (const std::exception& e) {
         error = "Failed to parse descriptor " + path.string() + ": " + e.what();
         return std::nullopt;

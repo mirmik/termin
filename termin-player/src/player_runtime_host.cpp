@@ -556,12 +556,13 @@ struct AppManifest {
     fs::path app_manifest_path;
     fs::path package_root;
     fs::path package_manifest_path;
+    fs::path project_modules_root;
     fs::path project_python_root;
     fs::path module_manifest_path;
     std::vector<std::string> shader_targets;
     std::string project_name = "Termin Player";
     PlayerWindowSettings window;
-    bool python_enabled = false;
+    bool modules_enabled = false;
 };
 
 AppManifest load_app_manifest(const fs::path& app_manifest_path) {
@@ -593,19 +594,19 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
     manifest.shader_targets = package_shader_targets(manifest.package_manifest_path);
 
     const nos::trent* runtime = dict_get(root, "runtime");
-    const nos::trent* python = runtime && runtime->is_dict() ? dict_get(*runtime, "python") : nullptr;
-    if (python && python->is_dict()) {
-        manifest.python_enabled = bool_field(*python, "enabled", false);
-        manifest.project_python_root = relative_to_root(
+    const nos::trent* modules = runtime && runtime->is_dict() ? dict_get(*runtime, "modules") : nullptr;
+    if (modules && modules->is_dict()) {
+        manifest.modules_enabled = bool_field(*modules, "enabled", false);
+        manifest.project_modules_root = relative_to_root(
             manifest.bundle_root,
-            string_field(*python, "project_modules", "package/python")
+            string_field(*modules, "root", "package/modules")
         );
+        manifest.project_python_root = manifest.project_modules_root / "python";
         manifest.module_manifest_path = relative_to_root(
             manifest.bundle_root,
-            string_field(*python, "module_manifest", "package/python/modules.json")
+            string_field(*modules, "manifest", "package/modules/modules.json")
         );
     }
-
     return manifest;
 }
 
@@ -896,7 +897,7 @@ struct PlayerRuntimeHost::Impl {
         environment.sdk_prefix = bundle_root;
         environment.cmake_prefix_path = bundle_root;
         environment.lib_dir = bundle_root / "lib";
-        environment.project_root = manifest.project_python_root;
+        environment.project_root = manifest.project_modules_root;
         environment.project_venv_path = fs::path();
         environment.python_executable = "";
         environment.use_project_venv = false;
@@ -943,19 +944,26 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void load_project_modules() {
-        if (!manifest.python_enabled) {
+        if (!manifest.modules_enabled) {
             return;
         }
-        if (!fs::is_directory(manifest.project_python_root)) {
+        if (!fs::is_directory(manifest.project_modules_root)) {
             tc_log_error(
-                "termin_player: Python modules enabled but directory is missing: %s",
-                manifest.project_python_root.string().c_str()
+                "termin_player: project modules enabled but directory is missing: %s",
+                manifest.project_modules_root.string().c_str()
+            );
+            return;
+        }
+        if (!fs::is_regular_file(manifest.module_manifest_path)) {
+            tc_log_error(
+                "termin_player: project module manifest is missing: %s",
+                manifest.module_manifest_path.string().c_str()
             );
             return;
         }
 
         configure_modules_runtime(false);
-        modules_runtime.discover(manifest.project_python_root);
+        modules_runtime.discover(manifest.project_modules_root);
         if (!modules_runtime.last_error().empty()) {
             tc_log_error("termin_player: module discovery failed: %s", modules_runtime.last_error().c_str());
         }

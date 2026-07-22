@@ -108,6 +108,22 @@ NB_MODULE(_termin_modules_native, m) {
             auto config = std::dynamic_pointer_cast<PythonModuleConfig>(self.spec.config);
             return config ? config->packages : std::vector<std::string>{};
         })
+        .def_prop_ro("python_requirements", [](const ModuleRecord& self) -> std::vector<std::string> {
+            auto config = std::dynamic_pointer_cast<PythonModuleConfig>(self.spec.config);
+            return config ? config->requirements : std::vector<std::string>{};
+        })
+        .def_prop_ro("native_artifact_path", [](const ModuleRecord& self) -> std::string {
+            auto config = std::dynamic_pointer_cast<CppModuleConfig>(self.spec.config);
+            return config ? config->artifact_path.string() : "";
+        })
+        .def_prop_ro("ignored", [](const ModuleRecord& self) {
+            if (self.spec.kind == ModuleKind::Cpp) {
+                auto config = std::dynamic_pointer_cast<CppModuleConfig>(self.spec.config);
+                return config && config->ignored;
+            }
+            auto config = std::dynamic_pointer_cast<PythonModuleConfig>(self.spec.config);
+            return config && config->ignored;
+        })
         .def_ro("state", &ModuleRecord::state)
         .def_ro("cleanup_phase", &ModuleRecord::cleanup_phase)
         .def_prop_ro("error_message", [](const ModuleRecord& self) {
@@ -157,6 +173,17 @@ NB_MODULE(_termin_modules_native, m) {
         .def("find", [](const ModuleRuntime& self, const std::string& module_id) -> const ModuleRecord* {
             return self.find(module_id);
         }, nb::arg("module_id"), nb::rv_policy::reference)
+        .def("resolve_closure", [](ModuleRuntime& self, const std::vector<std::string>& roots) {
+            std::vector<const ModuleRecord*> ordered;
+            if (!self.resolve_closure(roots, ordered)) {
+                throw std::runtime_error(self.last_error());
+            }
+            nb::list result;
+            for (const ModuleRecord* record : ordered) {
+                result.append(nb::cast(record, nb::rv_policy::reference));
+            }
+            return result;
+        }, nb::arg("root_module_ids"))
         .def_prop_ro("last_error", [](const ModuleRuntime& self) {
             return sanitize_external_text(self.last_error());
         })

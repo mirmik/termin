@@ -67,6 +67,10 @@ public:
 
     const ModuleRecord* find(const std::string& module_id) const;
     std::vector<const ModuleRecord*> list() const;
+    bool resolve_closure(
+        const std::vector<std::string>& root_module_ids,
+        std::vector<const ModuleRecord*>& ordered
+    );
 
     const std::string& last_error() const;
 
@@ -92,6 +96,13 @@ private:
         std::vector<ModuleRecord*>& ordered,
         std::string& error
     );
+    bool visit_closure_module(
+        const ModuleRecord& record,
+        std::unordered_map<std::string, int>& marks,
+        std::vector<const ModuleRecord*>& ordered,
+        std::vector<std::string>& stack,
+        std::string& error
+    ) const;
     bool refresh_descriptor_snapshot();
     std::shared_ptr<IModuleReloadState> capture_reload_state(const ModuleRecord& record) const;
     bool restore_reload_state(

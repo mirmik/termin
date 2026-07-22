@@ -21,7 +21,10 @@ from termin.project_build.pipeline import (
     TargetPreflightStepResult,
     run_project_build_pipeline,
 )
-from termin.project_build.python_module_packager import PythonModuleBundleResult, package_python_modules
+from termin.project_build.project_module_packager import (
+    ProjectModuleBundleResult,
+    package_project_modules,
+)
 from termin.project_build.runtime_package_exporter import RuntimePackageExportResult
 from termin.project_build.target_preflight import DesktopPreflightResult, preflight_desktop_build
 
@@ -30,7 +33,7 @@ from termin.project_build.target_preflight import DesktopPreflightResult, prefli
 class DesktopBuildResult:
     dist_dir: Path
     package_result: RuntimePackageExportResult
-    python_result: PythonModuleBundleResult
+    module_result: ProjectModuleBundleResult
     runtime_result: DesktopRuntimeBundleResult
     app_manifest_path: Path
     diagnostics: list[DiagnosticLike] = field(default_factory=list)
@@ -38,7 +41,7 @@ class DesktopBuildResult:
 
 @dataclass
 class _DesktopTargetPackagePayload:
-    python_result: PythonModuleBundleResult
+    module_result: ProjectModuleBundleResult
     runtime_result: DesktopRuntimeBundleResult
     app_manifest_path: Path
 
@@ -56,6 +59,7 @@ def build_desktop_project(
     resource_policy: str = "strict",
     python_package_policy: str = MINIMAL_PYTHON_PACKAGE_POLICY,
     python_requirements: Iterable[str] | None = None,
+    modules: Iterable[str] | None = None,
 ) -> DesktopBuildResult:
     context = create_build_context(
         project_root=project_root,
@@ -81,6 +85,7 @@ def build_desktop_project(
             preflight_result,
             python_package_policy,
             tuple(python_requirements or ()),
+            tuple(modules or ()),
         ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
@@ -91,7 +96,7 @@ def build_desktop_project(
     return DesktopBuildResult(
         dist_dir=context.dist_dir,
         package_result=pipeline_result.package_result,
-        python_result=target_payload.python_result,
+        module_result=target_payload.module_result,
         runtime_result=target_payload.runtime_result,
         app_manifest_path=target_payload.app_manifest_path,
         diagnostics=pipeline_result.diagnostics,
@@ -114,19 +119,17 @@ def _package_desktop_target(
     preflight_result: DesktopPreflightResult,
     python_package_policy: str,
     python_requirements: tuple[str, ...],
+    selected_modules: tuple[str, ...],
 ) -> TargetPackageStepResult[_DesktopTargetPackagePayload]:
-    python_result = package_python_modules(
+    module_result = package_project_modules(
         project_root=context.project_root,
-        output_dir=context.package_dir / "python",
+        output_dir=context.package_dir / "modules",
+        selected_modules=selected_modules,
     )
-    resolved_python_requirements = [
+    resolved_python_requirements = list(dict.fromkeys((
         *python_requirements,
-        *[
-            requirement
-            for module in python_result.modules
-            for requirement in module.requirements
-        ],
-    ]
+        *module_result.requirements,
+    )))
     runtime_result = package_desktop_runtime(
         dist_dir=context.dist_dir,
         requirements=resolved_python_requirements,
@@ -137,10 +140,7 @@ def _package_desktop_target(
     )
 
     app_manifest_path = context.dist_dir / "app.json"
-    python_descriptors = [
-        f"package/python/{module.descriptor}"
-        for module in python_result.modules
-    ]
+    module_descriptors = [f"package/modules/{module.descriptor}" for module in module_result.modules]
     project_settings = _load_project_settings(context.project_root)
     entry_scene_identity = context.entry_scene.relative_to(context.project_root).as_posix()
     packaged_scenes = [
@@ -166,17 +166,22 @@ def _package_desktop_target(
             },
             "runtime": {
                 "launcher": _relative_runtime_path(context.dist_dir, runtime_result.launcher_path),
+                "modules": {
+                    "enabled": bool(module_result.modules),
+                    "root": "package/modules",
+                    "manifest": "package/modules/modules.json",
+                    "roots": list(module_result.roots),
+                    "closure": [module.name for module in module_result.modules],
+                    "descriptors": module_descriptors,
+                },
                 "python": {
-                    "enabled": bool(python_result.modules),
+                    "enabled": True,
                     "home": _relative_runtime_path(context.dist_dir, runtime_result.python_home),
                     "package_policy": runtime_result.python_package_policy,
                     "runtime_manifest": _relative_runtime_path(
                         context.dist_dir,
                         runtime_result.python_runtime_manifest_path,
                     ),
-                    "project_modules": "package/python",
-                    "module_manifest": "package/python/modules.json",
-                    "descriptors": python_descriptors,
                 },
                 "native_library_dirs": _runtime_native_library_dirs(context.dist_dir, runtime_result),
                 "window": project_settings.player_window.to_dict(),
@@ -196,12 +201,12 @@ def _package_desktop_target(
 
     return TargetPackageStepResult(
         payload=_DesktopTargetPackagePayload(
-            python_result=python_result,
+            module_result=module_result,
             runtime_result=runtime_result,
             app_manifest_path=app_manifest_path,
         ),
         diagnostics=[
-            *python_result.diagnostics,
+            *module_result.diagnostics,
             *runtime_result.diagnostics,
         ],
     )
