@@ -70,6 +70,7 @@ def __getattr__(name: str):
         "declare_voxel_grid_asset",
         "set_voxel_grid_asset_data",
         "set_voxel_grid_asset_metadata",
+        "tc_voxel_grid_get_all_info",
     ):
         try:
             from termin.voxels._voxels_native import (
@@ -78,6 +79,7 @@ def __getattr__(name: str):
                 declare_voxel_grid_asset,
                 set_voxel_grid_asset_data,
                 set_voxel_grid_asset_metadata,
+                tc_voxel_grid_get_all_info,
             )
         except ImportError as exc:
             from tcbase import log
@@ -89,6 +91,7 @@ def __getattr__(name: str):
             "declare_voxel_grid_asset": declare_voxel_grid_asset,
             "set_voxel_grid_asset_data": set_voxel_grid_asset_data,
             "set_voxel_grid_asset_metadata": set_voxel_grid_asset_metadata,
+            "tc_voxel_grid_get_all_info": tc_voxel_grid_get_all_info,
         }
         globals().update(exports)
         return exports[name]
@@ -156,4 +159,5 @@ __all__ = [
     "declare_voxel_grid_asset",
     "set_voxel_grid_asset_data",
     "set_voxel_grid_asset_metadata",
+    "tc_voxel_grid_get_all_info",
 ]

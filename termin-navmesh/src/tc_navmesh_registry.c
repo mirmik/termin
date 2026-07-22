@@ -176,7 +176,7 @@ tc_navmesh_handle tc_navmesh_declare(const char* uuid, const char* name) {
 
 tc_navmesh* tc_navmesh_get(tc_navmesh_handle h) {
     if (!g_initialized) return NULL;
-    return (tc_navmesh*)tc_pool_get(&g_navmesh_pool, h);
+    return (tc_navmesh*)tc_pool_get_checked(&g_navmesh_pool, h, "tc_navmesh");
 }
 
 bool tc_navmesh_is_valid(tc_navmesh_handle h) {

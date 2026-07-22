@@ -635,6 +635,25 @@ NB_MODULE(_voxels_native, m) {
         return grid.is_valid();
     }, nb::arg("uuid"), nb::arg("name") = "");
 
+    m.def("tc_voxel_grid_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_voxel_grid_info* infos = tc_voxel_grid_get_all_info(&count);
+        for (size_t i = 0; i < count; ++i) {
+            nb::dict info;
+            info["handle"] = nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
+            info["uuid"] = std::string(infos[i].uuid);
+            info["name"] = infos[i].name ? std::string(infos[i].name) : "";
+            info["source_path"] = infos[i].source_path ? std::string(infos[i].source_path) : "";
+            info["ref_count"] = infos[i].ref_count;
+            info["version"] = infos[i].version;
+            info["is_loaded"] = infos[i].is_loaded != 0;
+            result.append(info);
+        }
+        free(infos);
+        return result;
+    });
+
     m.def("set_voxel_grid_asset_metadata",
           [](const std::string& uuid, const std::string& name, const std::string& source_path) {
               TcVoxelGrid grid = TcVoxelGrid::declare(uuid, name);

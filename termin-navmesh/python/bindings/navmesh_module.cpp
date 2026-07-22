@@ -675,6 +675,26 @@ void bind_recast_navmesh_builder(nb::module_& m) {
 NB_MODULE(_navmesh_native, m) {
     m.doc() = "NavMesh native module (RecastNavMeshBuilderComponent)";
     termin::bind_recast_navmesh_builder(m);
+    m.def("tc_navmesh_get_all_info", []() {
+        nb::list result;
+        size_t count = 0;
+        tc_navmesh_info* infos = tc_navmesh_get_all_info(&count);
+        for (size_t i = 0; i < count; ++i) {
+            nb::dict info;
+            info["handle"] = nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
+            info["uuid"] = std::string(infos[i].uuid);
+            info["name"] = infos[i].name ? std::string(infos[i].name) : "";
+            info["agent_type"] = infos[i].agent_type ? std::string(infos[i].agent_type) : "";
+            info["ref_count"] = infos[i].ref_count;
+            info["version"] = infos[i].version;
+            info["tile_count"] = infos[i].tile_count;
+            info["memory_bytes"] = infos[i].memory_bytes;
+            info["is_loaded"] = infos[i].is_loaded != 0;
+            result.append(info);
+        }
+        free(infos);
+        return result;
+    });
     m.def("register_navmesh_kind_handlers", &termin::register_navmesh_kind_handlers,
         "Register navmesh_handle kind handlers explicitly.");
 }

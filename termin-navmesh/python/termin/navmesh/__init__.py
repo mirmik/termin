@@ -48,6 +48,7 @@ _NATIVE_EXPORT_NAMES = frozenset(
         "set_navmesh_bake_visitor_registration_owner",
         "set_navmesh_load_callback",
         "set_detour_navmesh_asset_data",
+        "tc_navmesh_get_all_info",
         "unregister_navmesh_bake_visitor_owner",
     }
 )
@@ -99,6 +100,7 @@ def _load_native_exports() -> dict[str, object]:
             navmesh_bake_to_world_point,
             navmesh_world_to_bake_point,
             set_detour_navmesh_asset_data,
+            tc_navmesh_get_all_info,
             set_navmesh_bake_visitor_registration_owner,
             set_navmesh_load_callback,
             unregister_navmesh_bake_visitor_owner,
@@ -139,6 +141,7 @@ def _load_native_exports() -> dict[str, object]:
         "set_navmesh_bake_visitor_registration_owner": set_navmesh_bake_visitor_registration_owner,
         "set_navmesh_load_callback": set_navmesh_load_callback,
         "set_detour_navmesh_asset_data": set_detour_navmesh_asset_data,
+        "tc_navmesh_get_all_info": tc_navmesh_get_all_info,
         "unregister_navmesh_bake_visitor_owner": unregister_navmesh_bake_visitor_owner,
     }
     globals().update(exports)
@@ -193,5 +196,6 @@ __all__ = [
     "set_navmesh_bake_visitor_registration_owner",
     "set_navmesh_load_callback",
     "set_detour_navmesh_asset_data",
+    "tc_navmesh_get_all_info",
     "unregister_navmesh_bake_visitor_owner",
 ]
