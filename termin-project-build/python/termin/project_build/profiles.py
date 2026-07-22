@@ -246,6 +246,15 @@ class BuildProfileStore:
         return destination
 
 
+def validate_build_profile(profile: BuildProfile) -> tuple[ProfileDiagnostic, ...]:
+    """Return typed schema diagnostics without mutating or normalizing ``profile``."""
+    try:
+        _validate_typed_profile(profile)
+    except ProfileBuildError as exc:
+        return exc.diagnostics
+    return ()
+
+
 def load_build_profile(
     project_root: Path,
     profiles_path: Path,

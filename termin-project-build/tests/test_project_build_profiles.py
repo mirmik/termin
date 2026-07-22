@@ -11,6 +11,7 @@ from termin.project_build.profiles import (
     ProfileBuildError,
     ProfileContent,
     QuestOpenXRTarget,
+    validate_build_profile,
 )
 
 
@@ -150,6 +151,28 @@ def test_profile_store_typed_update_duplicate_and_delete(tmp_path: Path) -> None
     assert stored.project_root == project_root.resolve()
     assert duplicate.name == "release"
     assert store.profile_names() == ("release",)
+
+
+def test_typed_profile_validation_is_non_mutating(tmp_path: Path) -> None:
+    profile = BuildProfile(
+        name="",
+        project_root=tmp_path,
+        target=DesktopTarget(os="linux", arch="x86_64", backends=("vulkan",)),
+        configuration="dev",
+        content=ProfileContent(
+            entry_scene=Path("Scenes/Main.scene"),
+            scenes=(Path("Scenes/Main.scene"),),
+            modules=(),
+            python_requirements=(),
+            resource_policy="strict",
+            resource_includes=(),
+        ),
+    )
+
+    diagnostics = validate_build_profile(profile)
+
+    assert diagnostics[0].code == "profile.name"
+    assert profile.name == ""
 
 
 @pytest.mark.parametrize(
