@@ -6,6 +6,7 @@ from termin.editor_core.registry_sources import (
     NavMeshRegistrySource,
     SceneRegistrySource,
     WatchedFileSource,
+    build_core_registry_pages,
     build_resource_manager_pages,
 )
 from termin.editor_core.registry_viewer_model import RegistryCollectionController
@@ -110,6 +111,60 @@ def test_resource_manager_pages_and_component_source_are_toolkit_neutral():
     component_row = tuple(ResourceComponentSource(manager).load_rows())[0]
     assert component_row.stable_id == "FakeComponent"
     assert "FakeResourceManager" not in component_row.details
+
+
+def test_core_registry_exposes_all_canonical_resource_pools_by_uuid(monkeypatch):
+    import tgfx
+    import termin.animation as animation
+    import termin.navmesh as navmesh
+    import termin.render_framework as render_framework
+    import termin.skeleton as skeleton
+    import termin.voxels as voxels
+
+    monkeypatch.setattr(
+        tgfx,
+        "shader_program_get_all_info",
+        lambda: [{"uuid": "program-uuid", "name": "Program", "is_loaded": True}],
+    )
+    monkeypatch.setattr(
+        render_framework,
+        "tc_pipeline_template_get_all_info",
+        lambda: [{"uuid": "pipeline-uuid", "name": "Pipeline", "is_loaded": True}],
+    )
+    monkeypatch.setattr(
+        animation,
+        "tc_animation_get_all_info",
+        lambda: [{"uuid": "animation-uuid", "name": "Animation", "is_loaded": False}],
+    )
+    monkeypatch.setattr(
+        skeleton,
+        "tc_skeleton_get_all_info",
+        lambda: [{"uuid": "skeleton-uuid", "name": "Skeleton", "is_loaded": True}],
+    )
+    monkeypatch.setattr(
+        navmesh,
+        "tc_navmesh_get_all_info",
+        lambda: [{"uuid": "navmesh-uuid", "name": "NavMesh", "is_loaded": True}],
+    )
+    monkeypatch.setattr(
+        voxels,
+        "tc_voxel_grid_get_all_info",
+        lambda: [{"uuid": "voxel-uuid", "name": "Voxel", "is_loaded": False}],
+    )
+
+    pages = {page.stable_id: page for page in build_core_registry_pages()}
+    expected = {
+        "shader-programs": "program-uuid",
+        "pipeline-templates": "pipeline-uuid",
+        "animations": "animation-uuid",
+        "skeletons": "skeleton-uuid",
+        "navmesh-resources": "navmesh-uuid",
+        "voxel-grids": "voxel-uuid",
+    }
+    for page_id, uuid in expected.items():
+        rows = tuple(pages[page_id].source.load_rows())
+        assert [row.stable_id for row in rows] == [uuid]
+        assert f"uuid: {uuid}" in rows[0].details
 
 
 class FakeProcessor:

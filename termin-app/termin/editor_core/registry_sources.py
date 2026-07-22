@@ -222,14 +222,19 @@ class NavMeshRegistrySource:
 def build_core_registry_pages() -> tuple[RegistryPage, ...]:
     """Build adapters over the public C++ core registry inspection APIs."""
     from tcbase import intern_string_get_all_info
+    from termin.animation import tc_animation_get_all_info
     from termin.materials import tc_material_get_all_info
+    from termin.navmesh import tc_navmesh_get_all_info
+    from termin.skeleton import tc_skeleton_get_all_info
+    from termin.voxels import tc_voxel_grid_get_all_info
     from termin.gui_native import tc_ui_document_registry_get_all_info
     from termin.render_framework import (
         tc_pass_registry_get_all_types,
         tc_pipeline_registry_get_all_info,
+        tc_pipeline_template_get_all_info,
     )
     from termin.scene._scene_native import component_registry_get_all_info, soa_registry_get_all_info
-    from tgfx import shader_get_all_info, tc_texture_get_all_info
+    from tgfx import shader_get_all_info, shader_program_get_all_info, tc_texture_get_all_info
     from tmesh import tc_mesh_get_all_info
 
     pages = (
@@ -246,7 +251,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                 tc_mesh_get_all_info,
                 lambda info: _mapping_row(
                     info,
-                    "name",
+                    "uuid",
                     (
                         str(info.get("name", "")),
                         str(info.get("vertex_count", 0)),
@@ -270,7 +275,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                 tc_texture_get_all_info,
                 lambda info: _mapping_row(
                     info,
-                    "name",
+                    "uuid",
                     (
                         str(info.get("name", "")),
                         f"{info.get('width', 0)}x{info.get('height', 0)}",
@@ -294,7 +299,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                 shader_get_all_info,
                 lambda info: _mapping_row(
                     info,
-                    "name",
+                    "uuid",
                     (
                         str(info.get("name", "")),
                         "variant" if info.get("is_variant") else "standard",
@@ -318,7 +323,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                 tc_material_get_all_info,
                 lambda info: _mapping_row(
                     info,
-                    "name",
+                    "uuid",
                     (
                         str(info.get("name", "")),
                         str(info.get("phase_count", 0)),
@@ -326,6 +331,162 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
                         str(info.get("version", 0)),
                     ),
                     "Material",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "shader-programs",
+            "Shader Programs",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("phases", "Phases", 64.0),
+            ),
+            MappingRegistrySource(
+                shader_program_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("phase_count", 0)),
+                    ),
+                    "Shader Program",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "pipeline-templates",
+            "Pipeline Templates",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("passes", "Passes", 64.0),
+            ),
+            MappingRegistrySource(
+                tc_pipeline_template_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("pass_count", 0)),
+                    ),
+                    "Pipeline Template",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "animations",
+            "Animations",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("channels", "Channels", 76.0),
+            ),
+            MappingRegistrySource(
+                tc_animation_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("channel_count", 0)),
+                    ),
+                    "Animation",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "skeletons",
+            "Skeletons",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("bones", "Bones", 64.0),
+            ),
+            MappingRegistrySource(
+                tc_skeleton_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("bone_count", 0)),
+                    ),
+                    "Skeleton",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "navmesh-resources",
+            "NavMesh Resources",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("tiles", "Tiles", 64.0),
+            ),
+            MappingRegistrySource(
+                tc_navmesh_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("tile_count", 0)),
+                    ),
+                    "NavMesh Resource",
+                ),
+            ),
+        ),
+        RegistryPage(
+            "voxel-grids",
+            "Voxel Grids",
+            (
+                RegistryColumn("name", "Name", stretch=2.0),
+                RegistryColumn("loaded", "Loaded", 72.0),
+                RegistryColumn("version", "Version", 72.0),
+                RegistryColumn("refs", "Refs", 60.0),
+                RegistryColumn("source", "Source", stretch=1.0),
+            ),
+            MappingRegistrySource(
+                tc_voxel_grid_get_all_info,
+                lambda info: _mapping_row(
+                    info,
+                    "uuid",
+                    (
+                        str(info.get("name", "")),
+                        "yes" if info.get("is_loaded") else "no",
+                        str(info.get("version", 0)),
+                        str(info.get("ref_count", 0)),
+                        str(info.get("source_path", "")),
+                    ),
+                    "Voxel Grid",
                 ),
             ),
         ),

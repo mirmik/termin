@@ -20,6 +20,19 @@ TERMIN_VOXELS_API bool tc_voxel_grid_destroy(tc_voxel_grid_handle h);
 TERMIN_VOXELS_API bool tc_voxel_grid_contains(const char* uuid);
 TERMIN_VOXELS_API size_t tc_voxel_grid_count(void);
 
+typedef struct tc_voxel_grid_info {
+    tc_voxel_grid_handle handle;
+    char uuid[TC_UUID_SIZE];
+    const char* name;
+    const char* source_path;
+    uint32_t ref_count;
+    uint32_t version;
+    uint8_t is_loaded;
+    uint8_t _pad[7];
+} tc_voxel_grid_info;
+
+TERMIN_VOXELS_API tc_voxel_grid_info* tc_voxel_grid_get_all_info(size_t* count);
+
 TERMIN_VOXELS_API void tc_voxel_grid_set_load_callback(
     tc_voxel_grid_handle h,
     tc_voxel_grid_load_fn callback,

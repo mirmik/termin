@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 
 static tc_pool g_voxel_grid_pool;
 static tc_resource_map* g_uuid_to_index = nullptr;
@@ -170,7 +171,8 @@ tc_voxel_grid_handle tc_voxel_grid_declare(const char* uuid, const char* name) {
 
 tc_voxel_grid* tc_voxel_grid_get(tc_voxel_grid_handle h) {
     if (!g_initialized) return nullptr;
-    return static_cast<tc_voxel_grid*>(tc_pool_get(&g_voxel_grid_pool, h));
+    return static_cast<tc_voxel_grid*>(
+        tc_pool_get_checked(&g_voxel_grid_pool, h, "tc_voxel_grid"));
 }
 
 bool tc_voxel_grid_is_valid(tc_voxel_grid_handle h) {
@@ -192,6 +194,40 @@ bool tc_voxel_grid_contains(const char* uuid) {
 
 size_t tc_voxel_grid_count(void) {
     return g_initialized ? tc_pool_count(&g_voxel_grid_pool) : 0;
+}
+
+tc_voxel_grid_info* tc_voxel_grid_get_all_info(size_t* count) {
+    if (!count) return nullptr;
+    *count = 0;
+    const size_t grid_count = tc_voxel_grid_count();
+    if (grid_count == 0) return nullptr;
+
+    auto* infos = static_cast<tc_voxel_grid_info*>(
+        std::calloc(grid_count, sizeof(tc_voxel_grid_info)));
+    if (!infos) {
+        tc_log_error("tc_voxel_grid_get_all_info: allocation failed");
+        return nullptr;
+    }
+
+    size_t output_index = 0;
+    for (uint32_t index = 0;
+         index < g_voxel_grid_pool.capacity && output_index < grid_count;
+         ++index) {
+        if (g_voxel_grid_pool.states[index] != TC_SLOT_OCCUPIED) continue;
+        auto* grid = static_cast<tc_voxel_grid*>(
+            tc_pool_get_unchecked(&g_voxel_grid_pool, index));
+        tc_voxel_grid_info* info = &infos[output_index++];
+        info->handle.index = index;
+        info->handle.generation = g_voxel_grid_pool.generations[index];
+        std::memcpy(info->uuid, grid->uuid, sizeof(info->uuid));
+        info->name = grid->name;
+        info->source_path = grid->source_path;
+        info->ref_count = grid->ref_count;
+        info->version = grid->version;
+        info->is_loaded = grid->is_loaded;
+    }
+    *count = output_index;
+    return infos;
 }
 
 void tc_voxel_grid_set_load_callback(
