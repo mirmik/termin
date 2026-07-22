@@ -21,6 +21,7 @@ from termin.project_build.profiles import (
     QuestOpenXRTarget,
     load_build_profile,
     resolve_project_path,
+    validate_build_profile,
 )
 from termin.project_build.profile_requests import (
     ProfileBuildRequest,
@@ -123,5 +124,6 @@ __all__ = [
     "run_project_build_pipeline",
     "ToolchainContext",
     "validate_runtime_package",
+    "validate_build_profile",
     "validate_resolved_profile_request",
 ]

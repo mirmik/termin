@@ -75,6 +75,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_handle, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `project_session_controller.py` | Общий lifecycle проекта: stdlib sync, shader runtime, project modules, `InitScript.py`, resource scan и восстановление project root. UI frontend передаёт callbacks для ошибок и progress presentation. |
+| `build_profiles_model.py` | Черновая коллекция Build Profiles: выбор, CRUD из явных шаблонов, diagnostics/dirty/save/revert и capabilities действий. Файловое хранение и выполнение действий подключаются через отдельные сервисы. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
 | `profiler_capture.py` | Арбитраж process-global секционного профайлера для legacy summary-панели. Bounded capture нового Frame Profiler хранится в C, а его модели и анализ принадлежат C++ `FrameProfilerController`. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |

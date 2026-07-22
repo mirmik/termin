@@ -494,6 +494,7 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "python_console_model.py",
         "project_settings_model.py",
         "project_build_controller.py",
+        "build_profiles_model.py",
         "navigation_settings_model.py",
         "settings_model.py",
         "scene_settings_model.py",
