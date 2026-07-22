@@ -26,6 +26,12 @@ def terminAndroidApplicationId = providers.gradleProperty("terminAndroidApplicat
 def terminAndroidAppLabel = providers.gradleProperty("terminAndroidAppLabel")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_APP_LABEL"))
         .orElse("Termin Android")
+def terminAndroidVersionCode = providers.gradleProperty("terminAndroidVersionCode")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_VERSION_CODE"))
+        .orElse("1")
+def terminAndroidVersionName = providers.gradleProperty("terminAndroidVersionName")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_VERSION_NAME"))
+        .orElse("0.1.0")
 
 android {
     namespace "org.termin.android"
@@ -36,8 +42,8 @@ android {
         applicationId terminAndroidApplicationId.get()
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "0.1.0"
+        versionCode terminAndroidVersionCode.get().toInteger()
+        versionName terminAndroidVersionName.get()
         manifestPlaceholders = [
                 terminAndroidAppLabel: terminAndroidAppLabel.get()
         ]

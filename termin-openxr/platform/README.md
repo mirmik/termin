@@ -7,17 +7,24 @@ Build from the repository root:
 
 ```bash
 ./build-sdk-android.sh --abi arm64-v8a --platform android-26
-./build-quest-openxr-apk.sh --gradle /path/to/gradle-8.x/bin/gradle
+./build-quest-openxr-apk.sh --application-id org.example.openxr \
+  --gradle /path/to/gradle-8.x/bin/gradle
 ```
 
 Pass `--variant debug` (the default) or `--variant release`. Release builds use
 the shared Android signing contract documented in `docs/build-system.md` and
 require all four `TERMIN_ANDROID_SIGNING_*` environment variables.
 
+Project builds pass the canonical `project_settings/project.json` application
+identity through `--application-id`, `--app-label`, `--version-code`, and
+`--version-name`. Standalone smoke invocations may pass the same options
+explicitly.
+
 Install and launch on a connected headset:
 
 ```bash
-./build-quest-openxr-apk.sh --gradle /path/to/gradle-8.x/bin/gradle --launch
+./build-quest-openxr-apk.sh --application-id org.example.openxr \
+  --gradle /path/to/gradle-8.x/bin/gradle --launch
 ```
 
 `--launch` wakes the device through ADB before sending the launcher intent. The

@@ -25,6 +25,12 @@ def test_create_project_writes_manifest_settings_and_default_scene(tmp_path):
     }
     assert json.loads((settings_dir / "project.json").read_text(encoding="utf-8")) == {
         "render_sync_mode": "none",
+        "application": {
+            "id": "org.termin.builds.sample",
+            "label": "Sample",
+            "version_code": 1,
+            "version_name": "0.1.0",
+        },
     }
 
     navigation = json.loads((settings_dir / "navigation.json").read_text(encoding="utf-8"))

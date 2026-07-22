@@ -19,6 +19,10 @@ from pathlib import PurePosixPath
 from typing import Optional
 
 from tcbase import log
+from termin.project.application_identity import (
+    ProjectApplicationIdentity,
+    default_project_application_identity,
+)
 from termin.render import (
     PROJECT_RENDER_PHASE_CAPACITY,
     RenderSyncMode as CRenderSyncMode,
@@ -134,6 +138,9 @@ class ProjectSettings:
         default_factory=lambda: [""] * PROJECT_RENDER_PHASE_CAPACITY
     )
     player_window: ProjectPlayerWindowSettings = field(default_factory=ProjectPlayerWindowSettings)
+    application: ProjectApplicationIdentity = field(
+        default_factory=lambda: default_project_application_identity("Termin Project")
+    )
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -143,10 +150,11 @@ class ProjectSettings:
             "ignored_resource_paths": list(self.ignored_resource_paths),
             "render_phase_names": list(self.render_phase_names),
             "player_window": self.player_window.to_dict(),
+            "application": self.application.to_dict(),
         }
 
     @staticmethod
-    def from_dict(data: dict) -> "ProjectSettings":
+    def from_dict(data: dict, *, project_name: str = "Termin Project") -> "ProjectSettings":
         """Deserialize from dictionary."""
         sync_mode_str = data.get("render_sync_mode", "none")
         try:
@@ -166,6 +174,10 @@ class ProjectSettings:
         )
         render_phase_names = _normalize_render_phase_names(data.get("render_phase_names"))
         player_window = ProjectPlayerWindowSettings.from_dict(data.get("player_window"))
+        application = ProjectApplicationIdentity.from_dict(
+            data.get("application"),
+            project_name=project_name,
+        )
 
         return ProjectSettings(
             render_sync_mode=sync_mode,
@@ -173,7 +185,12 @@ class ProjectSettings:
             ignored_resource_paths=ignored_resource_paths,
             render_phase_names=render_phase_names,
             player_window=player_window,
+            application=application,
         )
+
+    @staticmethod
+    def for_project(project_name: str) -> "ProjectSettings":
+        return ProjectSettings(application=default_project_application_identity(project_name))
 
 
 class ProjectSettingsManager:
@@ -222,19 +239,22 @@ class ProjectSettingsManager:
     def _load(self) -> None:
         """Load settings from file and sync to C."""
         path = self._get_settings_path()
+        project_name = _read_project_name(self._project_path)
         if path is None or not path.exists():
-            self._settings = ProjectSettings()
+            self._settings = ProjectSettings.for_project(project_name)
             self._sync_to_c()
             return
 
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self._settings = ProjectSettings.from_dict(data)
+            if not isinstance(data, dict):
+                raise ValueError("project settings root must be an object")
+            self._settings = ProjectSettings.from_dict(data, project_name=project_name)
             self._sync_to_c()
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to load settings: {e}")
-            self._settings = ProjectSettings()
+            self._settings = ProjectSettings.for_project(project_name)
             self._sync_to_c()
 
     def _sync_to_c(self) -> None:
@@ -319,6 +339,25 @@ class ProjectSettingsManager:
                 default=DEFAULT_PLAYER_WINDOW_VSYNC,
                 field_name="player_window.vsync",
             ),
+        )
+        self.save()
+
+    def set_application_identity(
+        self,
+        application_id: str,
+        label: str,
+        version_code: int,
+        version_name: str,
+    ) -> None:
+        """Validate, set, and save product application identity."""
+        self._settings.application = ProjectApplicationIdentity.from_dict(
+            {
+                "id": application_id,
+                "label": label,
+                "version_code": version_code,
+                "version_name": version_name,
+            },
+            project_name=_read_project_name(self._project_path),
         )
         self.save()
 
@@ -433,3 +472,35 @@ def _bool_field(value: object, *, default: bool, field_name: str) -> bool:
         log.warning(f"[ProjectSettings] {field_name} must be a boolean, using {default}")
         return default
     return value
+
+
+def load_project_settings(project_root: str | Path) -> ProjectSettings:
+    """Strictly load canonical settings for build and tooling consumers."""
+    root = Path(project_root).resolve()
+    project_name = _read_project_name(root)
+    path = root / "project_settings" / "project.json"
+    if not path.exists():
+        return ProjectSettings.for_project(project_name)
+    with path.open("r", encoding="utf-8") as settings_file:
+        data = json.load(settings_file)
+    if not isinstance(data, dict):
+        raise ValueError(f"Project settings root must be an object: {path}")
+    return ProjectSettings.from_dict(data, project_name=project_name)
+
+
+def _read_project_name(project_root: Path | None) -> str:
+    if project_root is None:
+        return "Termin Project"
+    project_files = sorted(project_root.glob("*.terminproj"))
+    if not project_files:
+        return project_root.name or "Termin Project"
+    project_file = project_files[0]
+    try:
+        data = json.loads(project_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return project_file.stem
+    if isinstance(data, dict):
+        name = data.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return project_file.stem

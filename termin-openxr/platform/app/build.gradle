@@ -20,6 +20,23 @@ def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion"
 def terminOpenXRAssetsDir = providers.gradleProperty("terminOpenXRAssetsDir")
         .orElse(providers.environmentVariable("TERMIN_OPENXR_ASSETS_DIR"))
         .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
+def terminAndroidApplicationId = providers.gradleProperty("terminAndroidApplicationId")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_APPLICATION_ID"))
+if (!terminAndroidApplicationId.isPresent()) {
+    throw new GradleException(
+            "Quest/OpenXR application ID is required. " +
+            "Pass -PterminAndroidApplicationId or set TERMIN_ANDROID_APPLICATION_ID."
+    )
+}
+def terminAndroidAppLabel = providers.gradleProperty("terminAndroidAppLabel")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_APP_LABEL"))
+        .orElse("Termin OpenXR")
+def terminAndroidVersionCode = providers.gradleProperty("terminAndroidVersionCode")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_VERSION_CODE"))
+        .orElse("1")
+def terminAndroidVersionName = providers.gradleProperty("terminAndroidVersionName")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_VERSION_NAME"))
+        .orElse("0.1.0")
 
 android {
     namespace "org.termin.openxr"
@@ -27,11 +44,14 @@ android {
     ndkVersion terminAndroidNdkVersion.get()
 
     defaultConfig {
-        applicationId "org.termin.openxr"
+        applicationId terminAndroidApplicationId.get()
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "0.1.0"
+        versionCode terminAndroidVersionCode.get().toInteger()
+        versionName terminAndroidVersionName.get()
+        manifestPlaceholders = [
+                terminAndroidAppLabel: terminAndroidAppLabel.get()
+        ]
 
         ndk {
             abiFilters terminAndroidAbi.get()

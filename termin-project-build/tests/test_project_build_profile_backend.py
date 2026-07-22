@@ -234,6 +234,9 @@ def test_profile_build_routes_android_family_typed_request(
             package_result=_package_result(tmp_path),
             log_path=kwargs["output_dir"] / "logs/build.log",
             application_id="org.termin.product",
+            application_label="Termin Product",
+            version_code=1,
+            version_name="0.1.0",
             launch_activity="android.app.NativeActivity",
             diagnostics=[],
         )

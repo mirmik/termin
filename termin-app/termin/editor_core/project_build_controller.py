@@ -92,6 +92,10 @@ class ProjectBuildController:
 
         self._log_to_console(f"Android APK: {result.apk_path}")
         self._log_to_console(f"Android applicationId: {result.application_id}")
+        self._log_to_console(
+            f"Android identity: {result.application_label}, "
+            f"version {result.version_name} ({result.version_code})"
+        )
         self._log_to_console(f"Android launch: {result.application_id}/{result.launch_activity}")
         self._log_to_console(f"Android package: {result.package_result.package_dir}")
         self._log_to_console(f"Android build log: {result.log_path}")

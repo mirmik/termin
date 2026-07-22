@@ -12,6 +12,8 @@ import tempfile
 import uuid
 from pathlib import Path, PureWindowsPath
 
+from termin.project.application_identity import default_project_application_identity
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -328,7 +330,13 @@ def _write_project_contents(project_dir: Path, name: str, final_scene_file: Path
 
     settings_dir = project_dir / "project_settings"
     settings_dir.mkdir()
-    _write_json(settings_dir / "project.json", {"render_sync_mode": "none"})
+    _write_json(
+        settings_dir / "project.json",
+        {
+            "render_sync_mode": "none",
+            "application": default_project_application_identity(name).to_dict(),
+        },
+    )
 
     navmesh_area_names = [""] * 64
     navmesh_area_names[0] = "Walkable"

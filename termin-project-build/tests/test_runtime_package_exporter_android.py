@@ -17,6 +17,17 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     project.mkdir()
     _write_json(project / "AndroidGame.terminproj", {"version": 1, "name": "AndroidGame"})
     _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "application": {
+                "id": "com.example.androidgame",
+                "label": "Android Game",
+                "version_code": 17,
+                "version_name": "1.7.0",
+            }
+        },
+    )
 
     termin_root = tmp_path / "termin-root"
     apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "android-game.apk"
@@ -31,7 +42,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
             "@echo off\n"
             f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
             f"<NUL set /p dummy=APK>\"{apk_source}\"\n"
-            f">\"{apk_metadata}\" echo {{\"applicationId\":\"org.termin.builds.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}\n"
+            f">\"{apk_metadata}\" echo {{\"applicationId\":\"com.example.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}\n"
             "echo %*\n",
             encoding="utf-8",
         )
@@ -41,7 +52,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
             "set -e\n"
             f"mkdir -p '{apk_source.parent}'\n"
             f"printf APK > '{apk_source}'\n"
-            f"printf '%s' '{{\"applicationId\":\"org.termin.builds.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}' > '{apk_metadata}'\n"
+            f"printf '%s' '{{\"applicationId\":\"com.example.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}' > '{apk_metadata}'\n"
             "printf '%s\\n' \"$@\"\n",
             encoding="utf-8",
         )
@@ -74,7 +85,10 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
 
     assert result.apk_path == project / "dist" / "android" / "AndroidGame" / "apk" / "AndroidGame-debug.apk"
     assert result.apk_path.read_bytes() == b"APK"
-    assert result.application_id == "org.termin.builds.androidgame"
+    assert result.application_id == "com.example.androidgame"
+    assert result.application_label == "Android Game"
+    assert result.version_code == 17
+    assert result.version_name == "1.7.0"
     assert result.launch_activity == "org.termin.android.TerminActivity"
     assert result.package_result.manifest_path.exists()
     log_text = result.log_path.read_text(encoding="utf-8")
@@ -83,9 +97,11 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     assert "--sdk-root" in log_text
     assert str(termin_root / "sdk" / "android") in log_text
     assert "--application-id" in log_text
-    assert "org.termin.builds.androidgame" in log_text
+    assert "com.example.androidgame" in log_text
     assert "--app-label" in log_text
-    assert "AndroidGame" in log_text
+    assert "Android Game" in log_text
+    assert "--version-code 17" in log_text
+    assert "--version-name 1.7.0" in log_text
     assert "--variant debug" in log_text
     assert validated_package_dirs == [result.package_result.package_dir]
     assert validation_diagnostic in result.diagnostics
@@ -97,6 +113,17 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
     project.mkdir()
     _write_json(project / "QuestGame.terminproj", {"version": 1, "name": "QuestGame"})
     _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "application": {
+                "id": "com.example.questgame",
+                "label": "Quest Game",
+                "version_code": 23,
+                "version_name": "2.3.0",
+            }
+        },
+    )
 
     termin_root = tmp_path / "termin-root"
     apk_source = (
@@ -143,7 +170,7 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
             "@echo off\n"
             f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
             f"<NUL set /p dummy=QUESTAPK>\"{apk_source}\"\n"
-            f">\"{apk_metadata}\" echo {{\"applicationId\":\"org.termin.openxr\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}\n"
+            f">\"{apk_metadata}\" echo {{\"applicationId\":\"com.example.questgame\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}\n"
             "echo %*\n",
             encoding="utf-8",
         )
@@ -153,7 +180,7 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
             "set -e\n"
             f"mkdir -p '{apk_source.parent}'\n"
             f"printf QUESTAPK > '{apk_source}'\n"
-            f"printf '%s' '{{\"applicationId\":\"org.termin.openxr\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}' > '{apk_metadata}'\n"
+            f"printf '%s' '{{\"applicationId\":\"com.example.questgame\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}' > '{apk_metadata}'\n"
             "printf '%s\\n' \"$@\"\n",
             encoding="utf-8",
         )
@@ -186,7 +213,10 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
 
     assert result.apk_path == project / "dist" / "quest_openxr" / "QuestGame" / "apk" / "QuestGame-quest-openxr-debug.apk"
     assert result.apk_path.read_bytes() == b"QUESTAPK"
-    assert result.application_id == "org.termin.openxr"
+    assert result.application_id == "com.example.questgame"
+    assert result.application_label == "Quest Game"
+    assert result.version_code == 23
+    assert result.version_name == "2.3.0"
     assert result.launch_activity == "android.app.NativeActivity"
     assert result.package_result.manifest_path.exists()
     log_text = result.log_path.read_text(encoding="utf-8")
@@ -195,5 +225,9 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
     assert "--sdk-root" in log_text
     assert str(termin_root / "sdk" / "android") in log_text
     assert "--variant debug" in log_text
+    assert "--application-id com.example.questgame" in log_text
+    assert "--app-label Quest Game" in log_text
+    assert "--version-code 23" in log_text
+    assert "--version-name 2.3.0" in log_text
     assert validated_package_dirs == [result.package_result.package_dir]
     assert validation_diagnostic in result.diagnostics

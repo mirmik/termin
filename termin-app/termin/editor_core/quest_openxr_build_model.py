@@ -47,6 +47,7 @@ class QuestOpenXRBuildController:
         self._busy = False
         self._lines = ["Ready.", "Connect and wake the Quest before Install or Launch."]
         self._last_apk_path: Path | None = None
+        self._last_application_id: str | None = None
         self.changed = Signal()
 
     @property
@@ -124,6 +125,7 @@ class QuestOpenXRBuildController:
         except Exception as error:
             raise RuntimeError(f"Build failed: {error}") from error
         self._last_apk_path = Path(result.apk_path)
+        self._last_application_id = result.application_id
         self._defer(lambda: self._report_build(result))
         return self._last_apk_path
 
@@ -143,17 +145,26 @@ class QuestOpenXRBuildController:
         self._defer(lambda: self._report_install(result))
 
     def _launch(self) -> None:
-        self._post_log("Launch: org.termin.openxr")
+        application_id = self._resolve_application_id()
+        self._post_log(f"Launch: {application_id}")
         from termin.project_build import launch_quest_openxr_app
 
         try:
             launch_quest_openxr_app(
+                application_id,
                 log_path=self._deploy_log_path(),
                 log_callback=self._post_log,
             )
         except Exception as error:
             raise RuntimeError(f"Launch failed: {error}") from error
         self._defer(self._report_launch)
+
+    def _resolve_application_id(self) -> str:
+        if self._last_application_id is not None:
+            return self._last_application_id
+        from termin.project.settings import load_project_settings
+
+        return load_project_settings(self.project_root).application.application_id
 
     def _resolve_apk_path(self) -> Path:
         if self._last_apk_path is not None:
@@ -179,6 +190,10 @@ class QuestOpenXRBuildController:
     def _report_build(self, result) -> None:
         self._status = "Build complete"
         self._append_log(f"APK: {result.apk_path}")
+        self._append_log(
+            f"Identity: {result.application_id}/{result.launch_activity}; "
+            f"{result.application_label} {result.version_name} ({result.version_code})"
+        )
         self._append_log(f"Package: {result.package_result.package_dir}")
         self._append_log(f"Build log: {result.log_path}")
         for diagnostic in result.diagnostics:

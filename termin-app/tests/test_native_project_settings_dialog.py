@@ -36,6 +36,10 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     assert first_row.children[0].bounds.width == EDITOR_UI_METRICS.form_label
     assert root.children[-1].bounds.height == EDITOR_UI_METRICS.status_row
     dialog.build_output.text = "out"
+    dialog.application_id.text = "com.example.native"
+    dialog.application_label.text = "Native Game"
+    dialog.version_code.value = 9
+    dialog.version_name.text = "3.0"
     dialog.ignored_paths.text = "cache\ngenerated/assets"
     dialog.player_width.value = 1600
     dialog.player_height.value = 900
@@ -45,6 +49,10 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
 
     saved = ProjectSettingsController(manager).load()
     assert saved.build_output_dir == "out"
+    assert saved.application_id == "com.example.native"
+    assert saved.application_label == "Native Game"
+    assert saved.version_code == 9
+    assert saved.version_name == "3.0"
     assert saved.ignored_resource_paths == ("cache", "generated/assets")
     assert saved.player_width == 1600
     assert saved.player_height == 900

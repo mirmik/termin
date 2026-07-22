@@ -17,6 +17,10 @@ RENDER_SYNC_MODES = tuple(RenderSyncMode)
 class ProjectSettingsSnapshot:
     render_sync_mode: RenderSyncMode
     build_output_dir: str
+    application_id: str
+    application_label: str
+    version_code: int
+    version_name: str
     player_width: int
     player_height: int
     player_fullscreen: bool
@@ -45,6 +49,10 @@ class ProjectSettingsController:
         return ProjectSettingsSnapshot(
             render_sync_mode=settings.render_sync_mode,
             build_output_dir=settings.build_output_dir,
+            application_id=settings.application.application_id,
+            application_label=settings.application.label,
+            version_code=settings.application.version_code,
+            version_name=settings.application.version_name,
             player_width=int(settings.player_window.width),
             player_height=int(settings.player_window.height),
             player_fullscreen=bool(settings.player_window.fullscreen),
@@ -82,6 +90,18 @@ class ProjectSettingsController:
             self._manager.set_render_sync_mode(snapshot.render_sync_mode)
             if self._on_render_settings_changed is not None:
                 self._on_render_settings_changed()
+        if (
+            before.application_id != snapshot.application_id
+            or before.application_label != snapshot.application_label
+            or before.version_code != snapshot.version_code
+            or before.version_name != snapshot.version_name
+        ):
+            self._manager.set_application_identity(
+                snapshot.application_id,
+                snapshot.application_label,
+                snapshot.version_code,
+                snapshot.version_name,
+            )
         if (
             before.player_width != int(snapshot.player_width)
             or before.player_height != int(snapshot.player_height)
