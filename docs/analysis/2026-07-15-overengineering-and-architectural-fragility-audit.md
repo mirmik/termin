@@ -537,6 +537,12 @@ Linux и Windows должны использовать одинаковые inve
 - #484 `[qa] Simplify test planning to enforced capabilities`;
 - umbrella #263 `[repo/qa] Build manifest-driven repository control plane`.
 
+Статус реализации 2026-07-23: #541 удаляет общие suite-level
+`environment/capabilities` из manifest и модели. Реальный process-smoke gate
+сохранён под явным executor-specific именем `required_capabilities`; CTest
+capability labels и configuration classifications остаются исполняемым
+контрактом. Старые поля fail-closed отклоняются parser-ом.
+
 ## Дополнительные признаки незавершённых миграций
 
 ### Value model

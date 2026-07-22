@@ -169,6 +169,14 @@ Minimum fields:
 - isolation, timeout, and optional sharding metadata;
 - an explicit reason for any non-automatic classification.
 
+Implemented contract update, 2026-07-23: suite-level `environment` and generic
+`capabilities` were removed because the planner never enforced them. Profiles
+and platforms remain the common scheduling dimensions. Process-smoke suites
+may declare executor-specific `required_capabilities`, which their adapter
+checks before dispatch; CTest capability requirements remain in configured
+CTest labels and native source classifications. The parser rejects the removed
+fields instead of silently accepting the obsolete schema.
+
 Concrete native test names remain owned by CMake. Native tests should receive
 consistent CTest labels for module, tier, backend, and window/device requirements.
 The repository doctor consumes CTest JSON and verifies it against module/test
