@@ -105,7 +105,12 @@ def _install_settings_manager(monkeypatch, tmp_path: Path) -> ProjectSettingsMan
     manager = ProjectSettingsManager()
     manager.set_project_path(tmp_path)
     manager._settings = ProjectSettings(
-        player_window=ProjectPlayerWindowSettings(width=1600, height=900, fullscreen=True),
+        player_window=ProjectPlayerWindowSettings(
+            width=1600,
+            height=900,
+            fullscreen=True,
+            vsync=True,
+        ),
     )
     monkeypatch.setattr(ProjectSettingsManager, "_instance", manager)
     return manager
@@ -126,15 +131,19 @@ def test_project_settings_dialog_player_window_does_not_rescan_resources(monkeyp
     dialog = _FakeDialog.last
     assert dialog is not None
     fullscreen = _find_widget(dialog.content, _FakeCheckbox, text="Fullscreen")
+    vsync = _find_widget(dialog.content, _FakeCheckbox, text="VSync")
 
     fullscreen.checked = False
     fullscreen.on_changed(False)
+    vsync.checked = False
+    vsync.on_changed(False)
     dialog.on_result("Close")
 
     assert manager.settings.player_window == ProjectPlayerWindowSettings(
         width=1600,
         height=900,
         fullscreen=False,
+        vsync=False,
     )
     assert resource_callbacks == []
     assert render_callbacks == []

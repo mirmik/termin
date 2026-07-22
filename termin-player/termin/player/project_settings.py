@@ -18,6 +18,7 @@ SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
+DEFAULT_PLAYER_WINDOW_VSYNC = True
 PROJECT_RENDER_PHASE_CAPACITY = 48
 
 
@@ -26,6 +27,7 @@ class ProjectPlayerWindowSettings:
     width: int = DEFAULT_PLAYER_WINDOW_WIDTH
     height: int = DEFAULT_PLAYER_WINDOW_HEIGHT
     fullscreen: bool = DEFAULT_PLAYER_WINDOW_FULLSCREEN
+    vsync: bool = DEFAULT_PLAYER_WINDOW_VSYNC
 
     @staticmethod
     def from_dict(data: object) -> "ProjectPlayerWindowSettings":
@@ -49,6 +51,11 @@ class ProjectPlayerWindowSettings:
                 data.get("fullscreen"),
                 default=DEFAULT_PLAYER_WINDOW_FULLSCREEN,
                 field_name="player_window.fullscreen",
+            ),
+            vsync=_bool_field(
+                data.get("vsync"),
+                default=DEFAULT_PLAYER_WINDOW_VSYNC,
+                field_name="player_window.vsync",
             ),
         )
 

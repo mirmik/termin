@@ -120,7 +120,7 @@ def test_player_runtime_uses_project_window_settings(tmp_path: Path):
     settings_path = tmp_path / "project_settings" / "project.json"
     settings_path.parent.mkdir()
     settings_path.write_text(
-        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false}}',
+        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false, "vsync": false}}',
         encoding="utf-8",
     )
 
@@ -129,13 +129,14 @@ def test_player_runtime_uses_project_window_settings(tmp_path: Path):
     assert runtime.width == 1440
     assert runtime.height == 810
     assert runtime.fullscreen is False
+    assert runtime.vsync is False
 
 
 def test_player_runtime_explicit_window_args_override_project_settings(tmp_path: Path):
     settings_path = tmp_path / "project_settings" / "project.json"
     settings_path.parent.mkdir()
     settings_path.write_text(
-        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false}}',
+        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false, "vsync": false}}',
         encoding="utf-8",
     )
 
@@ -150,6 +151,62 @@ def test_player_runtime_explicit_window_args_override_project_settings(tmp_path:
     assert runtime.width == 800
     assert runtime.height == 600
     assert runtime.fullscreen is True
+    assert runtime.vsync is False
+
+
+def test_player_runtime_old_project_window_settings_default_to_vsync(tmp_path: Path):
+    settings_path = tmp_path / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        '{"player_window": {"width": 1024, "height": 576, "fullscreen": false}}',
+        encoding="utf-8",
+    )
+
+    runtime = PlayerRuntime(project_path=tmp_path, scene_name="scene.scene")
+
+    assert runtime.vsync is True
+
+
+def test_player_backend_window_receives_requested_presentation_mode():
+    from termin.display import PresentationMode
+    from termin.player.runtime import _create_player_backend_window
+
+    calls = []
+
+    class GraphicsSession:
+        def create_window(self, title, width, height, *, presentation_mode):
+            calls.append((title, width, height, presentation_mode))
+            return object()
+
+    _create_player_backend_window(
+        GraphicsSession(),
+        title="Game",
+        width=1280,
+        height=720,
+        vsync=False,
+    )
+
+    assert calls == [("Game", 1280, 720, PresentationMode.IMMEDIATE)]
+
+
+def test_player_backend_window_reports_unsupported_requested_mode():
+    from termin.player.runtime import _create_player_backend_window
+
+    class GraphicsSession:
+        def create_window(self, _title, _width, _height, *, presentation_mode):
+            raise RuntimeError(f"unsupported {presentation_mode}")
+
+    with pytest.raises(
+        RuntimeError,
+        match="requested presentation mode 'immediate'",
+    ):
+        _create_player_backend_window(
+            GraphicsSession(),
+            title="Game",
+            width=1280,
+            height=720,
+            vsync=False,
+        )
 
 
 def test_python_player_cli_exposes_source_modes_only(monkeypatch, capsys) -> None:

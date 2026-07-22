@@ -477,6 +477,7 @@ struct PlayerWindowSettings {
     int width = 1280;
     int height = 720;
     bool fullscreen = true;
+    bool vsync = true;
 };
 
 int positive_window_int_field(
@@ -546,6 +547,7 @@ PlayerWindowSettings player_window_settings_from_manifest(const nos::trent& root
     settings.width = positive_window_int_field(*window, "width", settings.width, "runtime.window");
     settings.height = positive_window_int_field(*window, "height", settings.height, "runtime.window");
     settings.fullscreen = window_bool_field(*window, "fullscreen", settings.fullscreen, "runtime.window");
+    settings.vsync = window_bool_field(*window, "vsync", settings.vsync, "runtime.window");
     return settings;
 }
 
@@ -1015,10 +1017,25 @@ struct PlayerRuntimeHost::Impl {
         const int window_width = cli.width > 0 ? cli.width : manifest.window.width;
         const int window_height = cli.height > 0 ? cli.height : manifest.window.height;
         const bool fullscreen = cli.fullscreen.value_or(manifest.window.fullscreen);
+        const tgfx::PresentationMode presentation_mode = manifest.window.vsync
+            ? tgfx::PresentationMode::VSync
+            : tgfx::PresentationMode::Immediate;
 
         graphics_session = create_native_windowed_graphics();
-        window = graphics_session->create_window(WindowConfig{
-            manifest.project_name, window_width, window_height});
+        try {
+            window = graphics_session->create_window(WindowConfig{
+                manifest.project_name,
+                window_width,
+                window_height,
+                presentation_mode,
+            });
+        } catch (const std::exception& error) {
+            throw std::runtime_error(
+                "failed to create player window with requested presentation mode '" +
+                std::string(manifest.window.vsync ? "vsync" : "immediate") +
+                "': " + error.what()
+            );
+        }
         engine->rendering_manager.render_engine()->set_graphics_host(
             graphics_session->graphics());
         if (fullscreen) {

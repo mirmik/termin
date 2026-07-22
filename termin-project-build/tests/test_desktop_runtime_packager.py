@@ -268,14 +268,23 @@ def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
     return compiler
 
 @full_runtime_package_exporter
-def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
+@pytest.mark.parametrize("vsync", [True, False])
+def test_build_desktop_project_writes_bundle_contract(
+    tmp_path: Path,
+    vsync: bool,
+) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()
     project_render_phase_names = ["gameplay_overlay", *([""] * 47)]
     _write_json(
         project / "project_settings" / "project.json",
         {
-            "player_window": {"width": 1366, "height": 768, "fullscreen": False},
+            "player_window": {
+                "width": 1366,
+                "height": 768,
+                "fullscreen": False,
+                "vsync": vsync,
+            },
             "render_phase_names": project_render_phase_names,
         },
     )
@@ -335,6 +344,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         "width": 1366,
         "height": 768,
         "fullscreen": False,
+        "vsync": vsync,
     }
     assert result.package_result.manifest_path.exists()
     assert result.python_result.manifest_path.exists()
@@ -415,6 +425,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
                 "width": 1366,
                 "height": 768,
                 "fullscreen": False,
+                "vsync": vsync,
             },
             "render_phase_names": project_render_phase_names,
             "mcp": {

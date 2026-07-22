@@ -124,6 +124,11 @@ def show_project_settings_dialog(
     fullscreen_check.text = "Fullscreen"
     fullscreen_check.checked = snapshot.player_fullscreen
     player_window_row.add_child(fullscreen_check)
+
+    vsync_check = Checkbox()
+    vsync_check.text = "VSync"
+    vsync_check.checked = snapshot.player_vsync
+    player_window_row.add_child(vsync_check)
     content.add_child(player_window_row)
 
     def _apply_player_window() -> None:
@@ -131,11 +136,13 @@ def show_project_settings_dialog(
             int(width_spin.value),
             int(height_spin.value),
             fullscreen_check.checked,
+            vsync_check.checked,
         )
 
     width_spin.on_changed = lambda _value: _apply_player_window()
     height_spin.on_changed = lambda _value: _apply_player_window()
     fullscreen_check.on_changed = lambda _checked: _apply_player_window()
+    vsync_check.on_changed = lambda _checked: _apply_player_window()
 
     ignored_label = Label()
     ignored_label.text = "Ignored Resource Paths:"
@@ -172,6 +179,7 @@ def show_project_settings_dialog(
             player_width=int(width_spin.value),
             player_height=int(height_spin.value),
             player_fullscreen=fullscreen_check.checked,
+            player_vsync=vsync_check.checked,
             ignored_resource_paths=tuple(_ignored_paths_from_text(ignored_paths_input.text)),
             render_phase_names=tuple(phases_input.text.split("\n")),
         )

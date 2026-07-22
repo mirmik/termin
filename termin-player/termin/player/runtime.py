@@ -63,11 +63,38 @@ def _resolve_player_window_settings(
         width=_resolve_positive_window_int(width, base.width, "width"),
         height=_resolve_positive_window_int(height, base.height, "height"),
         fullscreen=_resolve_window_bool(fullscreen, base.fullscreen, "fullscreen"),
+        vsync=base.vsync,
     )
 
 
 def _load_project_player_window_settings(project_path: Path):
     return load_project_runtime_settings(project_path).player_window
+
+
+def _create_player_backend_window(
+    graphics_session,
+    *,
+    title: str,
+    width: int,
+    height: int,
+    vsync: bool,
+):
+    from termin.display import PresentationMode
+
+    presentation_mode = PresentationMode.VSYNC if vsync else PresentationMode.IMMEDIATE
+    try:
+        return graphics_session.create_window(
+            title,
+            width,
+            height,
+            presentation_mode=presentation_mode,
+        )
+    except Exception as error:
+        requested_mode = "vsync" if vsync else "immediate"
+        raise RuntimeError(
+            "failed to create player window with requested presentation mode "
+            f"'{requested_mode}': {error}"
+        ) from error
 
 
 def _resolve_positive_window_int(value: object, default: int, field_name: str) -> int:
@@ -123,6 +150,7 @@ class PlayerRuntime:
         self.height = window_settings.height
         self.title = title
         self.fullscreen = window_settings.fullscreen
+        self.vsync = window_settings.vsync
         self.render_phase_names = load_project_runtime_settings(self.project_path).render_phase_names
         self.mcp_enabled = bool(mcp_enabled)
         self.mcp_options = mcp_options if mcp_options is not None else {}
@@ -223,8 +251,12 @@ class PlayerRuntime:
 
         try:
             self._graphics_session = WindowedGraphicsSession.create_native()
-            self.window = self._graphics_session.create_window(
-                self.title, self.width, self.height
+            self.window = _create_player_backend_window(
+                self._graphics_session,
+                title=self.title,
+                width=self.width,
+                height=self.height,
+                vsync=self.vsync,
             )
             manager.render_engine.set_graphics_host(self._graphics_session.graphics)
             from tgfx import Tgfx2Context
