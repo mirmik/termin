@@ -141,14 +141,21 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($WindowTests) {
-    Build-CMakeTarget -BuildDir $BuildDir -BuildType $BuildType -Target "backend_window_d3d11_present" -BuildJobs $BuildJobs
-    if ($LASTEXITCODE -ne 0) {
-        throw "backend_window_d3d11_present build failed"
+    foreach ($target in @(
+        "tgfx2_d3d11_window",
+        "termin_window_backend_d3d11_present"
+    )) {
+        Build-CMakeTarget -BuildDir $BuildDir -BuildType $BuildType -Target $target -BuildJobs $BuildJobs
+        if ($LASTEXITCODE -ne 0) {
+            throw "$target build failed"
+        }
     }
 
-    & ctest --test-dir $BuildDir -C $BuildType -R "^backend_window_d3d11_present$" --output-on-failure
+    & ctest --test-dir $BuildDir -C $BuildType `
+        -R "^(tgfx2_d3d11_window|termin_window_backend_d3d11_present|termin_window_backend_d3d11_present_immediate)$" `
+        --output-on-failure
     if ($LASTEXITCODE -ne 0) {
-        throw "backend_window_d3d11_present failed"
+        throw "D3D11 window presentation tests failed"
     }
 }
 
