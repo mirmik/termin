@@ -429,7 +429,9 @@ Runtime package validation:
   gate for now. Runtime loaders should still stay defensive, but this phase
   does not introduce a generated validation report consumed at load time.
   `validate_runtime_package(...)` now validates package JSON graph references
-  and optional `target_requirements.shader_targets` before target packaging.
+  and optional target requirements before target packaging. The current desktop
+  contract records `target_requirements.platform` plus ordered
+  `target_requirements.backends` and rejects shader artifact family divergence.
 
 Legacy path:
 

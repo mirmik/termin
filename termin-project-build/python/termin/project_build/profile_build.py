@@ -155,8 +155,10 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 output_dir=request.context.dist_dir,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
-                shader_targets=request.shader_targets,
+                shader_targets=request.runtime_backends,
                 sdk_root=request.sdk_root,
+                target_os=request.target_os,
+                target_arch=request.target_arch,
                 configuration=request.context.configuration,
                 resource_policy=request.context.resource_policy,
                 python_package_policy=request.python_package_policy,
@@ -179,7 +181,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
-                shader_targets=request.shader_targets,
+                shader_targets=request.runtime_backends,
                 abi=request.abi,
                 platform=request.platform,
                 configuration=request.context.configuration,
@@ -201,7 +203,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
-                shader_targets=request.shader_targets,
+                shader_targets=request.runtime_backends,
                 abi=request.abi,
                 platform=request.platform,
                 configuration=request.context.configuration,
@@ -217,7 +219,7 @@ def execute_profile_build_request(request: ProfileBuildRequest) -> int:
 
 
 def _validate_request_capabilities(request: ProfileBuildRequest) -> None:
-    if request.target == "desktop" and "d3d11" in request.shader_targets:
+    if request.target == "desktop" and "d3d11" in request.runtime_backends:
         if request.shader_compiler is None and not _d3d11_shader_compiler_available(request.sdk_root):
             raise ProfileBuildError(
                 diagnostics=(
@@ -341,7 +343,7 @@ def _resolve_direct_path(project_root: Path, path: Path) -> Path:
 
 def _request_summary(request: ProfileBuildRequest) -> dict[str, object]:
     return {
-        "backends": list(request.shader_targets),
+        "backends": list(request.runtime_backends),
         "entry_scene": str(request.context.entry_scene),
         "modules": list(request.modules),
         "output_dir": str(request.context.dist_dir),
@@ -362,7 +364,7 @@ def _print_request_summary(request: ProfileBuildRequest) -> None:
         print(f"Target platform: {summary['target_os']}/{summary['target_arch']}")
     print(f"Entry scene: {summary['entry_scene']}")
     print(f"Output dir: {summary['output_dir']}")
-    print(f"Runtime backends: {', '.join(request.shader_targets)}")
+    print(f"Runtime backends: {', '.join(request.runtime_backends)}")
 
 
 def _print_desktop_result(result: Any) -> None:

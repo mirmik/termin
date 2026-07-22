@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -25,6 +27,8 @@ class SDKToolCapabilities:
 
 @dataclass(frozen=True)
 class DesktopSDKCapabilities:
+    os: str = ""
+    arch: str = ""
     player: bool = False
     native_libraries: bool = False
     python_runtime: bool = False
@@ -214,6 +218,8 @@ def _load_manifest_capabilities(
             termin_player=_relative_tool_path(sdk_root, tools_data.get("termin_player")),
         ),
         desktop=DesktopSDKCapabilities(
+            os=_required_desktop_target_field(desktop_data, "os", manifest_path),
+            arch=_required_desktop_target_field(desktop_data, "arch", manifest_path),
             player=_bool_field(desktop_data, "player", tools_data.get("termin_player") is not None),
             native_libraries=_bool_field(desktop_data, "native_libraries", False),
             python_runtime=_bool_field(desktop_data, "python_runtime", False),
@@ -267,6 +273,8 @@ def _synthesize_capabilities(
         sdk_version="",
         tools=tools,
         desktop=DesktopSDKCapabilities(
+            os=_synthesized_desktop_os(sdk_root),
+            arch=_host_desktop_arch(),
             player=tools.termin_player is not None and tools.termin_player.is_file(),
             native_libraries=_has_native_libraries(sdk_root),
             python_runtime=_has_python_runtime(sdk_root),
@@ -360,6 +368,37 @@ def _string_field(data: Mapping[str, Any], key: str, default: str) -> str:
     if not isinstance(value, str):
         raise SDKCapabilityError(f"SDK capability field '{key}' must be a string")
     return value
+
+
+def _required_desktop_target_field(data: Mapping[str, Any], key: str, path: Path) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or value == "":
+        raise SDKCapabilityError(
+            f"{path} desktop capability field '{key}' must be a non-empty string"
+        )
+    supported = {"os": {"linux", "windows"}, "arch": {"x86_64"}}[key]
+    if value not in supported:
+        raise SDKCapabilityError(
+            f"{path} desktop capability field '{key}' has unsupported value {value!r}; "
+            f"expected one of: {', '.join(sorted(supported))}"
+        )
+    return value
+
+
+def _synthesized_desktop_os(sdk_root: Path | None) -> str:
+    if sdk_root is not None and (
+        (sdk_root / "bin" / "termin_player.exe").is_file()
+        or (sdk_root / "python" / "Lib" / "os.py").is_file()
+    ):
+        return "windows"
+    return "windows" if sys.platform == "win32" else "linux"
+
+
+def _host_desktop_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        return "x86_64"
+    return machine
 
 
 def _bool_field(data: Mapping[str, Any], key: str, default: bool) -> bool:

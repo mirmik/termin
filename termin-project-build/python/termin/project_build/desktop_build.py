@@ -10,6 +10,7 @@ from pathlib import Path
 
 from termin.project.settings import ProjectSettings
 from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.capabilities import load_sdk_capabilities
 from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.desktop_runtime_packager import (
     DesktopRuntimeBundleResult,
@@ -55,12 +56,20 @@ def build_desktop_project(
     default_shader_language: str = "slang",
     shader_targets: Iterable[str] | None = None,
     sdk_root: str | Path | None = None,
+    target_os: str | None = None,
+    target_arch: str | None = None,
     configuration: str = "dev",
     resource_policy: str = "strict",
     python_package_policy: str = MINIMAL_PYTHON_PACKAGE_POLICY,
     python_requirements: Iterable[str] | None = None,
     modules: Iterable[str] | None = None,
 ) -> DesktopBuildResult:
+    sdk_capabilities = load_sdk_capabilities(sdk_root=sdk_root)
+    resolved_target_os = target_os or sdk_capabilities.desktop.os
+    resolved_target_arch = target_arch or sdk_capabilities.desktop.arch
+    runtime_backends = tuple(shader_targets) if shader_targets is not None else (
+        ("d3d11",) if resolved_target_os == "windows" else ("vulkan", "opengl")
+    )
     context = create_build_context(
         project_root=project_root,
         entry_scene=entry_scene,
@@ -69,6 +78,12 @@ def build_desktop_project(
         output_dir=output_dir,
         configuration=configuration,
         resource_policy=resource_policy,
+        target_options={
+            "desktop": {
+                "os": resolved_target_os,
+                "arch": resolved_target_arch,
+            }
+        },
     )
     pipeline_result = run_project_build_pipeline(
         context=context,
@@ -78,7 +93,11 @@ def build_desktop_project(
             build_context.project_root,
             build_context.dist_dir,
         ),
-        run_target_preflight=lambda: _desktop_target_preflight(sdk_root),
+        run_target_preflight=lambda: _desktop_target_preflight(
+            sdk_root,
+            resolved_target_os,
+            resolved_target_arch,
+        ),
         package_target=lambda build_context, package_result, preflight_result: _package_desktop_target(
             build_context,
             package_result,
@@ -89,7 +108,8 @@ def build_desktop_project(
         ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
-        shader_targets=shader_targets,
+        shader_targets=runtime_backends,
+        target_platform=(resolved_target_os, resolved_target_arch),
     )
     target_payload = pipeline_result.target_package_result.payload
 
@@ -105,8 +125,14 @@ def build_desktop_project(
 
 def _desktop_target_preflight(
     sdk_root: str | Path | None,
+    target_os: str | None,
+    target_arch: str | None,
 ) -> TargetPreflightStepResult[DesktopPreflightResult]:
-    preflight_result = preflight_desktop_build(sdk_root=sdk_root)
+    preflight_result = preflight_desktop_build(
+        sdk_root=sdk_root,
+        target_os=target_os,
+        target_arch=target_arch,
+    )
     return TargetPreflightStepResult(
         payload=preflight_result,
         diagnostics=preflight_result.diagnostics,
@@ -142,6 +168,12 @@ def _package_desktop_target(
     app_manifest_path = context.dist_dir / "app.json"
     module_descriptors = [f"package/modules/{module.descriptor}" for module in module_result.modules]
     project_settings = _load_project_settings(context.project_root)
+    desktop_options = context.target_options["desktop"]
+    if not isinstance(desktop_options, dict):
+        raise TypeError("Desktop build target options must be an object")
+    target_os = desktop_options.get("os") or preflight_result.capabilities.desktop.os
+    target_arch = desktop_options.get("arch") or preflight_result.capabilities.desktop.arch
+    runtime_backends = package_result.runtime_backends
     entry_scene_identity = context.entry_scene.relative_to(context.project_root).as_posix()
     packaged_scenes = [
         {
@@ -156,7 +188,11 @@ def _package_desktop_target(
         {
             "version": 1,
             "format": "termin.desktop_bundle",
-            "target": "desktop",
+            "target": {
+                "kind": "desktop",
+                "os": target_os,
+                "arch": target_arch,
+            },
             "project_name": context.project_name,
             "package": {
                 "root": "package",
@@ -165,6 +201,7 @@ def _package_desktop_target(
                 "scenes": packaged_scenes,
             },
             "runtime": {
+                "backends": list(runtime_backends),
                 "launcher": _relative_runtime_path(context.dist_dir, runtime_result.launcher_path),
                 "modules": {
                     "enabled": bool(module_result.modules),

@@ -383,7 +383,9 @@ checks scene mesh/material/pipeline references against the packaged resource
 index, material phase shader references, pipeline shader references, shader
 source paths, required vertex/fragment artifacts per shader target, duplicate
 material/pipeline phase marks, and optional
-`target_requirements.shader_targets`. Reuse from runtime loader paths remains a
+`target_requirements.backends`. Packaged desktop startup additionally compares
+this order with `app.json:runtime.backends` before backend initialization.
+Reuse from other runtime loader paths remains a
 later defensive validation improvement; build-time validation is currently the
 authoritative packaging gate.
 
@@ -636,6 +638,8 @@ Example:
   "sdk_version": "0.1.0",
   "platforms": {
     "desktop": {
+      "os": "linux",
+      "arch": "x86_64",
       "vulkan": true,
       "opengl": true,
       "sdl": true,
@@ -671,6 +675,11 @@ each ABI in `android/<abi>/share/termin/android-capabilities.json` and merges
 those records into the root manifest. Fallback discovery trusts this per-ABI
 metadata; a `termin_openxrConfig.cmake` file by itself is deliberately not proof
 of OpenXR headers, an installed loader or Vulkan support.
+
+Status 2026-07-22: desktop SDK installation writes explicit normalized
+`platforms.desktop.os/arch`. Typed desktop build preflight requires those values
+to match the requested profile target, and the resulting app/runtime manifests
+record the same platform together with one ordered backend contract.
 
 ## Cache and Incrementality
 

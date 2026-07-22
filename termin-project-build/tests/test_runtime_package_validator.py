@@ -696,7 +696,7 @@ def test_validate_runtime_package_reports_required_shader_target_missing(tmp_pat
         {
             **_scene_manifest(),
             "target_requirements": {
-                "shader_targets": ["vulkan", "opengl"],
+                "backends": ["vulkan", "opengl"],
             },
             "resources": [
                 {
@@ -714,6 +714,7 @@ def test_validate_runtime_package_reports_required_shader_target_missing(tmp_pat
         (
             "error",
             "shaders/shader-uuid.shader.json",
-            "Runtime shader 'shader-uuid' is missing required target artifacts: opengl",
+            "Runtime shader 'shader-uuid' artifact backends ['vulkan'] do not match "
+            "runtime backend order ['vulkan', 'opengl']",
         )
     ]

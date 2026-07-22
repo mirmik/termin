@@ -88,6 +88,7 @@ def run_project_build_pipeline(
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
     shader_targets: Iterable[str] | None = None,
+    target_platform: tuple[str, str] | None = None,
     export_package: RuntimePackageExporter = export_runtime_package,
     validate_package: RuntimePackageValidator = validate_runtime_package,
     cleanup_runtime_state: RuntimeStateCleanup = cleanup_project_build_runtime_state,
@@ -102,7 +103,7 @@ def run_project_build_pipeline(
 
         preload_project_resources(context.project_root, preload_log_tag)
 
-        package_result = export_package(
+        export_kwargs = dict(
             project_root=context.project_root,
             entry_scene=context.entry_scene,
             scenes=context.scenes,
@@ -112,6 +113,9 @@ def run_project_build_pipeline(
             shader_targets=shader_targets,
             resource_policy=context.resource_policy,
         )
+        if target_platform is not None:
+            export_kwargs["target_platform"] = target_platform
+        package_result = export_package(**export_kwargs)
         package_validation_diagnostics = validate_package(package_result.package_dir)
         pre_target_diagnostics = [
             *project_preflight_result.diagnostics,

@@ -1,4 +1,5 @@
 import shutil
+import json
 from pathlib import Path
 
 import pytest
@@ -278,6 +279,55 @@ def test_preflight_desktop_accepts_windows_sdk_layout(tmp_path: Path, monkeypatc
     assert result.capabilities.desktop.native_libraries is True
     assert result.capabilities.desktop.python_runtime is True
     assert result.diagnostics == []
+
+
+@pytest.mark.parametrize(
+    ("sdk_os", "sdk_arch", "target_os", "target_arch", "expected"),
+    [
+        ("windows", "x86_64", "linux", "x86_64", "requests linux/x86_64"),
+        ("linux", "x86_64", "linux", "arm64", "requests linux/arm64"),
+    ],
+)
+def test_preflight_desktop_rejects_sdk_target_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+    sdk_os: str,
+    sdk_arch: str,
+    target_os: str,
+    target_arch: str,
+    expected: str,
+) -> None:
+    monkeypatch.delenv("TERMIN_SDK", raising=False)
+    sdk_root = _write_desktop_sdk(tmp_path)
+    (sdk_root / "termin-sdk-capabilities.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "sdk_version": "test",
+                "platforms": {
+                    "desktop": {
+                        "os": sdk_os,
+                        "arch": sdk_arch,
+                        "player": True,
+                        "native_libraries": True,
+                        "python_runtime": True,
+                        "builtin_shaders": False,
+                    }
+                },
+                "tools": {"termin_player": "bin/termin_player"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_desktop_build(
+            sdk_root=sdk_root,
+            target_os=target_os,
+            target_arch=target_arch,
+        )
+
+    assert expected in str(exc_info.value)
 
 
 def test_preflight_desktop_reports_missing_python_runtime(tmp_path: Path, monkeypatch) -> None:
