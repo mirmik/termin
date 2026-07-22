@@ -343,6 +343,19 @@ def test_build_desktop_project_writes_bundle_contract(
     assert result.runtime_result.python_runtime_manifest_path == result.dist_dir / "python-runtime.json"
     assert result.app_manifest_path.exists()
     app_manifest = json.loads(result.app_manifest_path.read_text(encoding="utf-8"))
+    assert app_manifest["target"] == {
+        "kind": "desktop",
+        "os": "linux",
+        "arch": "x86_64",
+    }
+    assert app_manifest["runtime"]["backends"] == ["vulkan", "opengl"]
+    package_manifest = json.loads(
+        result.package_result.manifest_path.read_text(encoding="utf-8")
+    )
+    assert package_manifest["target_requirements"] == {
+        "platform": {"os": "linux", "arch": "x86_64"},
+        "backends": ["vulkan", "opengl"],
+    }
     assert app_manifest["runtime"]["window"] == {
         "width": 1366,
         "height": 768,
@@ -401,7 +414,11 @@ def test_build_desktop_project_writes_bundle_contract(
     assert app_manifest == {
         "version": 1,
         "format": "termin.desktop_bundle",
-        "target": "desktop",
+            "target": {
+                "kind": "desktop",
+                "os": "linux",
+                "arch": "x86_64",
+            },
         "project_name": "DesktopGame",
         "package": {
             "root": "package",
@@ -418,8 +435,9 @@ def test_build_desktop_project_writes_bundle_contract(
                 },
             ],
         },
-        "runtime": {
-            "launcher": "DesktopGame",
+            "runtime": {
+                "backends": ["vulkan", "opengl"],
+                "launcher": "DesktopGame",
             "modules": {
                 "enabled": True,
                 "root": "package/modules",
@@ -1982,7 +2000,7 @@ def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path
     assert (result.package_dir / "shaders" / "d3d11" / f"{shader_uuid}.ps.cso").read_bytes() == b"ARTIFACT-d3d11"
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["target_requirements"]["shader_targets"] == ["vulkan", "opengl", "d3d11"]
+    assert manifest["target_requirements"]["backends"] == ["vulkan", "opengl", "d3d11"]
 
     calls = [
         json.loads(line)

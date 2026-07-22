@@ -95,6 +95,8 @@ def preflight_project_build_context(
 
 def preflight_desktop_build(
     sdk_root: str | Path | None,
+    target_os: str | None = None,
+    target_arch: str | None = None,
 ) -> DesktopPreflightResult:
     target_name = "Desktop"
     diagnostics: list[BuildDiagnostic] = []
@@ -115,7 +117,7 @@ def preflight_desktop_build(
         )
         _raise_if_errors(target_name, diagnostics)
 
-    _validate_desktop_capabilities(capabilities, diagnostics)
+    _validate_desktop_capabilities(capabilities, diagnostics, target_os, target_arch)
     _raise_if_errors(target_name, diagnostics)
 
     resolved_sdk_root = capabilities.sdk_root
@@ -455,10 +457,29 @@ def _load_capabilities(
 def _validate_desktop_capabilities(
     capabilities: SDKCapabilities,
     diagnostics: list[BuildDiagnostic],
+    target_os: str | None,
+    target_arch: str | None,
 ) -> None:
     sdk_root = capabilities.sdk_root
     if sdk_root is None:
         return
+
+    if target_os is not None and capabilities.desktop.os != target_os:
+        diagnostics.append(
+            build_error(
+                str(capabilities.manifest_path or sdk_root),
+                f"Desktop SDK targets {capabilities.desktop.os}/{capabilities.desktop.arch}, "
+                f"but the build profile requests {target_os}/{target_arch or capabilities.desktop.arch}",
+            )
+        )
+    if target_arch is not None and capabilities.desktop.arch != target_arch:
+        diagnostics.append(
+            build_error(
+                str(capabilities.manifest_path or sdk_root),
+                f"Desktop SDK targets {capabilities.desktop.os}/{capabilities.desktop.arch}, "
+                f"but the build profile requests {target_os or capabilities.desktop.os}/{target_arch}",
+            )
+        )
 
     if not capabilities.desktop.player:
         diagnostics.append(

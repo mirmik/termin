@@ -206,46 +206,73 @@ bool bool_field(const nos::trent& t, const char* key, bool def = false) {
     return value->as_bool();
 }
 
-std::vector<std::string> package_shader_targets(const fs::path& manifest_path) {
+bool vector_contains(const std::vector<std::string>& values, const std::string& value);
+std::string canonical_backend_name(const std::string& value);
+
+std::vector<std::string> required_backend_list(
+    const nos::trent& owner,
+    const char* field,
+    const std::string& context
+) {
+    const nos::trent* values = dict_get(owner, field);
+    if (!values || !values->is_list() || values->as_list().empty()) {
+        throw std::runtime_error(context + " must be a non-empty list");
+    }
     std::vector<std::string> result;
-    if (!fs::is_regular_file(manifest_path)) {
-        tc_log_warn("termin_player: package manifest not found for backend selection: %s", manifest_path.string().c_str());
-        return result;
-    }
-
-    const nos::trent root = nos::json::parse(read_text_file(manifest_path));
-    if (!root.is_dict()) {
-        tc_log_warn("termin_player: package manifest root is not an object: %s", manifest_path.string().c_str());
-        return result;
-    }
-    const nos::trent* requirements = dict_get(root, "target_requirements");
-    if (!requirements || !requirements->is_dict()) {
-        return result;
-    }
-    const nos::trent* shader_targets = dict_get(*requirements, "shader_targets");
-    if (!shader_targets || !shader_targets->is_list()) {
-        return result;
-    }
-
-    for (const nos::trent& item : shader_targets->as_list()) {
-        if (!item.is_string()) {
-            tc_log_warn("termin_player: package shader_targets contains a non-string entry");
-            continue;
+    size_t index = 0;
+    for (const nos::trent& item : values->as_list()) {
+        if (!item.is_string() || item.as_string().empty()) {
+            throw std::runtime_error(
+                context + "[" + std::to_string(index) + "] must be a non-empty string"
+            );
         }
-        std::string target = item.as_string();
-        if (target.empty()) {
-            tc_log_warn("termin_player: package shader_targets contains an empty entry");
-            continue;
+        const std::string backend = canonical_backend_name(item.as_string());
+        const tgfx::BackendType type = tgfx::backend_from_name(backend);
+        if (type == tgfx::BackendType::Null) {
+            throw std::runtime_error(context + " contains unsupported backend '" + item.as_string() + "'");
         }
-        if (std::find(result.begin(), result.end(), target) == result.end()) {
-            result.push_back(std::move(target));
+        if (vector_contains(result, backend)) {
+            throw std::runtime_error(context + " contains duplicate backend '" + backend + "'");
         }
+        result.push_back(backend);
+        ++index;
     }
     return result;
 }
 
+std::vector<std::string> package_runtime_backends(const fs::path& manifest_path) {
+    if (!fs::is_regular_file(manifest_path)) {
+        throw std::runtime_error("package manifest not found for backend selection: " + manifest_path.string());
+    }
+
+    const nos::trent root = nos::json::parse(read_text_file(manifest_path));
+    if (!root.is_dict()) {
+        throw std::runtime_error("package manifest root is not an object: " + manifest_path.string());
+    }
+    const nos::trent* requirements = dict_get(root, "target_requirements");
+    if (!requirements || !requirements->is_dict()) {
+        throw std::runtime_error("package manifest target_requirements must be an object");
+    }
+    return required_backend_list(
+        *requirements,
+        "backends",
+        "package manifest target_requirements.backends"
+    );
+}
+
 bool vector_contains(const std::vector<std::string>& values, const std::string& value) {
     return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+std::string join_strings(const std::vector<std::string>& values, const char* separator) {
+    std::ostringstream stream;
+    for (size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) {
+            stream << separator;
+        }
+        stream << values[index];
+    }
+    return stream.str();
 }
 
 std::string lowercase(std::string value) {
@@ -262,16 +289,6 @@ std::string canonical_backend_name(const std::string& value) {
         return tgfx::backend_name(backend);
     }
     return lowered;
-}
-
-std::string select_package_backend(const std::vector<std::string>& shader_targets) {
-    for (const std::string& target : shader_targets) {
-        tgfx::BackendType backend = tgfx::backend_from_name(target);
-        if (tgfx::backend_is_compiled(backend)) {
-            return target;
-        }
-    }
-    return tgfx::backend_name(tgfx::compiled_default_backend());
 }
 
 fs::path relative_to_root(const fs::path& root, const std::string& value) {
@@ -559,7 +576,7 @@ struct AppManifest {
     fs::path project_modules_root;
     fs::path project_python_root;
     fs::path module_manifest_path;
-    std::vector<std::string> shader_targets;
+    std::vector<std::string> runtime_backends;
     std::string project_name = "Termin Player";
     PlayerWindowSettings window;
     bool modules_enabled = false;
@@ -591,9 +608,24 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
         manifest.bundle_root,
         string_field(*package, "manifest", "package/manifest.json")
     );
-    manifest.shader_targets = package_shader_targets(manifest.package_manifest_path);
-
     const nos::trent* runtime = dict_get(root, "runtime");
+    if (!runtime || !runtime->is_dict()) {
+        throw std::runtime_error("app manifest field 'runtime' must be an object");
+    }
+    manifest.runtime_backends = required_backend_list(
+        *runtime,
+        "backends",
+        "app manifest runtime.backends"
+    );
+    const std::vector<std::string> package_backends = package_runtime_backends(
+        manifest.package_manifest_path
+    );
+    if (manifest.runtime_backends != package_backends) {
+        throw std::runtime_error(
+            "app manifest runtime.backends does not match package manifest "
+            "target_requirements.backends"
+        );
+    }
     const nos::trent* modules = runtime && runtime->is_dict() ? dict_get(*runtime, "modules") : nullptr;
     if (modules && modules->is_dict()) {
         manifest.modules_enabled = bool_field(*modules, "enabled", false);
@@ -689,6 +721,7 @@ struct PlayerRuntimeHost::Impl {
     bool scene_attached = false;
     std::vector<tc_viewport_handle> viewports;
     std::vector<tc_viewport_input_manager*> viewport_input_managers;
+    std::vector<std::string> backend_attempts;
 
     termin_modules::ModuleRuntime modules_runtime;
     TermModulesIntegration modules_integration;
@@ -705,28 +738,7 @@ struct PlayerRuntimeHost::Impl {
             manifest = load_app_manifest(cli.app_manifest_override);
             bundle_root = manifest.bundle_root;
 
-            if (!cli.backend.empty()) {
-                set_env_value("TERMIN_BACKEND", cli.backend);
-                const std::string canonical_backend = canonical_backend_name(cli.backend);
-                if (!manifest.shader_targets.empty() && !vector_contains(manifest.shader_targets, canonical_backend)) {
-                    tc_log_error(
-                        "termin_player: --backend=%s is not listed in package shader_targets",
-                        cli.backend.c_str()
-                    );
-                }
-            } else if (std::getenv("TERMIN_BACKEND") == nullptr) {
-                const std::string selected_backend = select_package_backend(manifest.shader_targets);
-                set_env_value("TERMIN_BACKEND", selected_backend);
-                tc_log_info("termin_player: selected TERMIN_BACKEND=%s", selected_backend.c_str());
-            } else if (!manifest.shader_targets.empty()) {
-                const char* env_backend = std::getenv("TERMIN_BACKEND");
-                if (env_backend != nullptr && !vector_contains(manifest.shader_targets, canonical_backend_name(env_backend))) {
-                    tc_log_error(
-                        "termin_player: TERMIN_BACKEND=%s is not listed in package shader_targets",
-                        env_backend
-                    );
-                }
-            }
+            configure_backend_attempts();
 
             set_env_if_missing("TERMIN_SDK", bundle_root);
             configure_bundle_runtime_paths(bundle_root, exe_dir);
@@ -769,6 +781,46 @@ struct PlayerRuntimeHost::Impl {
         if (engine) {
             engine->stop();
         }
+    }
+
+    void configure_backend_attempts() {
+        std::string explicit_backend;
+        const char* override_source = nullptr;
+        if (!cli.backend.empty()) {
+            explicit_backend = canonical_backend_name(cli.backend);
+            override_source = "--backend";
+        } else {
+            const char* environment_backend = std::getenv("TERMIN_BACKEND");
+            if (environment_backend != nullptr && environment_backend[0] != '\0') {
+                explicit_backend = canonical_backend_name(environment_backend);
+                override_source = "TERMIN_BACKEND";
+            }
+        }
+
+        if (override_source != nullptr) {
+            if (!vector_contains(manifest.runtime_backends, explicit_backend)) {
+                throw std::runtime_error(
+                    std::string(override_source) + " selects backend '" + explicit_backend +
+                    "', which is not packaged; available backends: " +
+                    join_strings(manifest.runtime_backends, ", ")
+                );
+            }
+            backend_attempts = {explicit_backend};
+            set_env_value("TERMIN_BACKEND", explicit_backend);
+            tc_log_info(
+                "termin_player: explicit %s override selects packaged backend '%s' without fallback",
+                override_source,
+                explicit_backend.c_str()
+            );
+            return;
+        }
+
+        backend_attempts = manifest.runtime_backends;
+        set_env_value("TERMIN_BACKEND", backend_attempts.front());
+        tc_log_info(
+            "termin_player: packaged backend initialization order: %s",
+            join_strings(backend_attempts, ", ").c_str()
+        );
     }
 
     bool consume_shutdown_signal() {
@@ -1031,19 +1083,41 @@ struct PlayerRuntimeHost::Impl {
             ? tgfx::PresentationMode::VSync
             : tgfx::PresentationMode::Immediate;
 
-        graphics_session = create_native_windowed_graphics();
-        try {
-            window = graphics_session->create_window(WindowConfig{
-                manifest.project_name,
-                window_width,
-                window_height,
-                presentation_mode,
-            });
-        } catch (const std::exception& error) {
+        for (const std::string& backend : backend_attempts) {
+            if (!tgfx::backend_is_compiled(tgfx::backend_from_name(backend))) {
+                tc_log_error(
+                    "termin_player: packaged backend '%s' is not compiled into this player",
+                    backend.c_str()
+                );
+                continue;
+            }
+            set_env_value("TERMIN_BACKEND", backend);
+            tc_log_info("termin_player: initializing packaged backend '%s'", backend.c_str());
+            try {
+                std::unique_ptr<WindowedGraphicsSession> candidate_session =
+                    create_native_windowed_graphics();
+                BackendWindowPtr candidate_window = candidate_session->create_window(WindowConfig{
+                    manifest.project_name,
+                    window_width,
+                    window_height,
+                    presentation_mode,
+                });
+                graphics_session = std::move(candidate_session);
+                window = std::move(candidate_window);
+                tc_log_info("termin_player: initialized packaged backend '%s'", backend.c_str());
+                break;
+            } catch (const std::exception& error) {
+                tc_log_error(
+                    "termin_player: backend '%s' initialization failed: %s",
+                    backend.c_str(),
+                    error.what()
+                );
+            }
+        }
+        if (!graphics_session || !window) {
             throw std::runtime_error(
-                "failed to create player window with requested presentation mode '" +
-                std::string(manifest.window.vsync ? "vsync" : "immediate") +
-                "': " + error.what()
+                "failed to initialize any requested packaged backend with presentation mode '" +
+                std::string(manifest.window.vsync ? "vsync" : "immediate") + "'"
             );
         }
         engine->rendering_manager.render_engine()->set_graphics_host(

@@ -28,6 +28,8 @@ def test_sdk_capabilities_read_manifest(tmp_path: Path, monkeypatch) -> None:
             "sdk_version": "0.1.0",
             "platforms": {
                 "desktop": {
+                    "os": "linux",
+                    "arch": "x86_64",
                     "player": True,
                     "native_libraries": True,
                     "python_runtime": True,
@@ -60,6 +62,8 @@ def test_sdk_capabilities_read_manifest(tmp_path: Path, monkeypatch) -> None:
     assert capabilities.tools.termin_shaderc == sdk_root.resolve() / "bin" / "termin_shaderc"
     assert capabilities.tools.termin_player == sdk_root.resolve() / "bin" / "termin_player"
     assert capabilities.desktop.player is True
+    assert capabilities.desktop.os == "linux"
+    assert capabilities.desktop.arch == "x86_64"
     assert capabilities.desktop.python_runtime is True
     assert capabilities.android.abis == ("arm64-v8a", "x86_64")
     assert capabilities.android.has_abi("arm64-v8a")
@@ -205,4 +209,24 @@ def test_sdk_capabilities_reject_invalid_manifest_version(tmp_path: Path, monkey
     )
 
     with pytest.raises(SDKCapabilityError, match="unsupported SDK capability version 2"):
+        load_sdk_capabilities(sdk_root=sdk_root)
+
+
+def test_sdk_capabilities_reject_unsupported_desktop_target(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("TERMIN_SDK", raising=False)
+    sdk_root = tmp_path / "sdk"
+    _write_json(
+        sdk_root / "termin-sdk-capabilities.json",
+        {
+            "version": 1,
+            "platforms": {
+                "desktop": {
+                    "os": "macos",
+                    "arch": "x86_64",
+                }
+            },
+        },
+    )
+
+    with pytest.raises(SDKCapabilityError, match="unsupported value 'macos'"):
         load_sdk_capabilities(sdk_root=sdk_root)

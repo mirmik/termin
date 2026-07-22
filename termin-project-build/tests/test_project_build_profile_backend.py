@@ -90,7 +90,7 @@ def test_compile_desktop_request_is_pure_and_uses_profile_defaults(tmp_path: Pat
     assert request.context.entry_scene == (project / "Scenes/Main.scene").resolve()
     assert request.context.dist_dir == (project / "dist/dev").resolve()
     assert request.context.target_options == {"desktop": {"os": "linux", "arch": "x86_64"}}
-    assert request.shader_targets == ("vulkan", "opengl")
+    assert request.runtime_backends == ("vulkan", "opengl")
     assert request.shader_compiler is None
     assert request.sdk_root is None
 
@@ -116,7 +116,7 @@ def test_compile_android_and_quest_requests_use_local_toolchain_context(tmp_path
     assert android.target_os == "android"
     assert android.abi == "x86_64"
     assert android.platform == "android-29"
-    assert android.shader_targets == ("vulkan",)
+    assert android.runtime_backends == ("vulkan",)
     assert android.build_script == tmp_path / "build-android.sh"
     assert android.gradle == tmp_path / "gradle"
     assert android.context.target_options == {"android": {"abi": "x86_64", "ndk_api": 29}}
@@ -187,6 +187,8 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
             "default_shader_language": "slang",
             "shader_targets": ("vulkan", "opengl"),
             "sdk_root": None,
+            "target_os": "linux",
+            "target_arch": "x86_64",
             "configuration": "dev",
             "resource_policy": "dev_smoke",
             "python_package_policy": "sdk_broad_copy",

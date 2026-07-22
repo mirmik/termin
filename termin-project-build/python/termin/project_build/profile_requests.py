@@ -39,7 +39,7 @@ class ProfileBuildRequest:
     resource_includes: tuple[str, ...]
     shader_compiler: Path | None
     default_shader_language: str
-    shader_targets: tuple[str, ...]
+    runtime_backends: tuple[str, ...]
     sdk_root: Path | None
     python_package_policy: str
     python_requirements: tuple[str, ...]
@@ -74,7 +74,7 @@ def compile_profile_build_request(
         }
         target_os = target.os
         target_arch = target.arch
-        shader_targets = target.backends
+        runtime_backends = target.backends
         python_package_policy = target.python_package_policy
         abi = None
         platform = None
@@ -85,7 +85,7 @@ def compile_profile_build_request(
         }
         target_os = "android"
         target_arch = target.abi
-        shader_targets = ("vulkan",)
+        runtime_backends = ("vulkan",)
         python_package_policy = "minimal_strict"
         abi = target.abi
         platform = f"android-{target.ndk_api}"
@@ -96,7 +96,7 @@ def compile_profile_build_request(
         }
         target_os = "android"
         target_arch = target.abi
-        shader_targets = ("vulkan",)
+        runtime_backends = ("vulkan",)
         python_package_policy = "minimal_strict"
         abi = target.abi
         platform = f"android-{target.ndk_api}"
@@ -125,7 +125,7 @@ def compile_profile_build_request(
         resource_includes=profile.content.resource_includes,
         shader_compiler=local.shader_compiler,
         default_shader_language="slang",
-        shader_targets=shader_targets,
+        runtime_backends=runtime_backends,
         sdk_root=local.sdk_root if isinstance(target, DesktopTarget) else None,
         python_package_policy=python_package_policy,
         python_requirements=profile.content.python_requirements,

@@ -1135,37 +1135,67 @@ def _validate_target_requirements(
         )
         return
 
-    shader_targets = requirements.get("shader_targets")
-    if shader_targets is not None:
-        if not isinstance(shader_targets, list):
+    platform = requirements.get("platform")
+    if platform is not None:
+        if not isinstance(platform, dict):
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",
-                    "manifest.json:target_requirements.shader_targets",
-                    "Runtime package target_requirements.shader_targets must be a list",
+                    "manifest.json:target_requirements.platform",
+                    "Runtime package target platform must be an object",
                 )
             )
         else:
-            _validate_required_shader_targets(shader_targets, resource_index, diagnostics)
+            for field in ("os", "arch"):
+                value = platform.get(field)
+                if not isinstance(value, str) or value == "":
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            f"manifest.json:target_requirements.platform.{field}",
+                            f"Runtime package target platform {field} must be a non-empty string",
+                        )
+                    )
+
+    backends = requirements.get("backends")
+    if not isinstance(backends, list) or not backends:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "manifest.json:target_requirements.backends",
+                "Runtime package target requirements must contain a non-empty backends list",
+            )
+        )
+    else:
+        _validate_required_backends(backends, resource_index, diagnostics)
 
 
-def _validate_required_shader_targets(
-    shader_targets: list[Any],
+def _validate_required_backends(
+    backends: list[Any],
     resource_index: dict[str, dict[str, Any]],
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
-    required_targets: list[str] = []
-    for index, target_name in enumerate(shader_targets):
-        if not isinstance(target_name, str) or target_name == "":
+    required_backends: list[str] = []
+    for index, backend_name in enumerate(backends):
+        if not isinstance(backend_name, str) or backend_name not in {"vulkan", "opengl", "d3d11"}:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",
-                    f"manifest.json:target_requirements.shader_targets[{index}]",
-                    "Runtime package shader target requirement must be a non-empty string",
+                    f"manifest.json:target_requirements.backends[{index}]",
+                    "Runtime package backend must be one of: vulkan, opengl, d3d11",
                 )
             )
             continue
-        required_targets.append(target_name)
+        if backend_name in required_backends:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"manifest.json:target_requirements.backends[{index}]",
+                    f"Runtime package backend order contains duplicate '{backend_name}'",
+                )
+            )
+            continue
+        required_backends.append(backend_name)
 
     for shader_uuid, resource in resource_index.items():
         if resource.get("type") != "shader":
@@ -1176,15 +1206,16 @@ def _validate_required_shader_targets(
         artifacts = spec.get("artifacts")
         if not isinstance(artifacts, dict):
             continue
-        for target_name in required_targets:
-            if target_name not in artifacts:
-                diagnostics.append(
-                    RuntimePackageExportDiagnostic(
-                        "error",
-                        _resource_path(resource),
-                        f"Runtime shader '{shader_uuid}' is missing required target artifacts: {target_name}",
-                    )
+        artifact_backends = list(artifacts)
+        if set(artifact_backends) != set(required_backends):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    _resource_path(resource),
+                    f"Runtime shader '{shader_uuid}' artifact backends {artifact_backends} "
+                    f"do not match runtime backend order {required_backends}",
                 )
+            )
 
 
 def _validate_resource_ref(

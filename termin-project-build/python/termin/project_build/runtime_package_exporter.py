@@ -93,6 +93,7 @@ def export_runtime_package(
     default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
     resource_policy: str = DEFAULT_RESOURCE_POLICY,
     shader_targets: Iterable[str] | None = None,
+    target_platform: tuple[str, str] | None = None,
 ) -> RuntimePackageExportResult:
     _validate_resource_policy(resource_policy)
     requested_shader_targets = _normalize_shader_targets(shader_targets)
@@ -205,10 +206,16 @@ def export_runtime_package(
             for identity in scene_documents
         ],
     }
-    if requested_shader_targets is not None:
-        manifest["target_requirements"] = {
-            "shader_targets": list(requested_shader_targets),
-        }
+    if requested_shader_targets is not None or target_platform is not None:
+        target_requirements: dict[str, Any] = {}
+        if target_platform is not None:
+            target_requirements["platform"] = {
+                "os": target_platform[0],
+                "arch": target_platform[1],
+            }
+        if requested_shader_targets is not None:
+            target_requirements["backends"] = list(requested_shader_targets)
+        manifest["target_requirements"] = target_requirements
     manifest_path = output_dir_path / "manifest.json"
     _write_json(manifest_path, manifest)
 
@@ -218,6 +225,7 @@ def export_runtime_package(
         scene_path=scene_path,
         scene_paths=packaged_scene_paths,
         diagnostics=diagnostics,
+        runtime_backends=requested_shader_targets or (),
     )
 
 
