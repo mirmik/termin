@@ -44,6 +44,7 @@ class NativeProjectSettingsDialog:
     player_width: object
     player_height: object
     player_fullscreen: object
+    player_vsync: object
     ignored_paths: object
     render_phases: object
     status: object
@@ -77,6 +78,7 @@ class NativeProjectSettingsDialog:
             player_width=int(self.player_width.value),
             player_height=int(self.player_height.value),
             player_fullscreen=bool(self.player_fullscreen.checked),
+            player_vsync=bool(self.player_vsync.checked),
             ignored_resource_paths=tuple(
                 line.strip() for line in self.ignored_paths.text.splitlines() if line.strip()
             ),
@@ -91,6 +93,7 @@ class NativeProjectSettingsDialog:
             self.player_width.value = snapshot.player_width
             self.player_height.value = snapshot.player_height
             self.player_fullscreen.checked = snapshot.player_fullscreen
+            self.player_vsync.checked = snapshot.player_vsync
             self.ignored_paths.text = "\n".join(snapshot.ignored_resource_paths)
             self.render_phases.text = "\n".join(snapshot.render_phase_names)
             self.status.text = "Project settings are stored in project_settings/project.json"
@@ -111,6 +114,7 @@ class NativeProjectSettingsDialog:
             int(self.player_width.value),
             int(self.player_height.value),
             self.player_fullscreen.checked,
+            self.player_vsync.checked,
         )
         self.status.text = "Player window saved"
         self.request_render()
@@ -166,6 +170,11 @@ def build_native_project_settings_dialog(
     fullscreen = document.create_checkbox(False)
     fullscreen_row.add_fixed_child(_ref(document, fullscreen), 30.0)
     root.add_fixed_child(fullscreen_row, EDITOR_UI_METRICS.field_row)
+    vsync_row = document.create_hstack("project-settings-vsync")
+    vsync_row.add_stretch_child(document.create_label("Player VSync"))
+    vsync = document.create_checkbox(True)
+    vsync_row.add_fixed_child(_ref(document, vsync), 30.0)
+    root.add_fixed_child(vsync_row, EDITOR_UI_METRICS.field_row)
     root.add_fixed_child(document.create_label("Ignored Resource Paths"), EDITOR_UI_METRICS.section_row)
     ignored = document.create_text_area()
     root.add_fixed_child(_ref(document, ignored), 120.0)
@@ -190,6 +199,7 @@ def build_native_project_settings_dialog(
         width,
         height,
         fullscreen,
+        vsync,
         ignored,
         render_phases,
         status,
@@ -211,6 +221,9 @@ def build_native_project_settings_dialog(
         lambda _value: owner().apply_player_window() if owner() is not None else None
     )
     fullscreen.connect_changed(
+        lambda _value: owner().apply_player_window() if owner() is not None else None
+    )
+    vsync.connect_changed(
         lambda _value: owner().apply_player_window() if owner() is not None else None
     )
 

@@ -31,6 +31,7 @@ def test_project_settings_controller_persists_normalizes_and_notifies(tmp_path):
             player_width=1920,
             player_height=1080,
             player_fullscreen=False,
+            player_vsync=False,
             ignored_resource_paths=(" cache ", "cache", "generated/assets"),
             render_phase_names=initial.render_phase_names,
         )
@@ -41,6 +42,7 @@ def test_project_settings_controller_persists_normalizes_and_notifies(tmp_path):
     assert saved.player_width == 1920
     assert saved.player_height == 1080
     assert not saved.player_fullscreen
+    assert not saved.player_vsync
     assert saved.ignored_resource_paths == ("cache", "generated/assets")
     assert resource_changes == [True]
     assert render_changes == [True]
@@ -54,11 +56,17 @@ def test_project_settings_controller_player_window_does_not_notify_resources(tmp
         on_resource_settings_changed=lambda: resource_changes.append(True),
     )
 
-    snapshot = controller.set_player_window(800, 600, False)
+    snapshot = controller.set_player_window(800, 600, False, False)
 
-    assert (snapshot.player_width, snapshot.player_height, snapshot.player_fullscreen) == (
+    assert (
+        snapshot.player_width,
+        snapshot.player_height,
+        snapshot.player_fullscreen,
+        snapshot.player_vsync,
+    ) == (
         800,
         600,
+        False,
         False,
     )
     assert resource_changes == []

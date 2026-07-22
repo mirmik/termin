@@ -40,6 +40,7 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     dialog.player_width.value = 1600
     dialog.player_height.value = 900
     dialog.player_fullscreen.checked = False
+    dialog.player_vsync.checked = False
     assert dialog.dialog.activate("close")
 
     saved = ProjectSettingsController(manager).load()
@@ -47,6 +48,7 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     assert saved.ignored_resource_paths == ("cache", "generated/assets")
     assert saved.player_width == 1600
     assert saved.player_height == 900
+    assert not saved.player_vsync
     assert resources == [True]
     assert dialog.show()
 

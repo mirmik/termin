@@ -20,6 +20,7 @@ class ProjectSettingsSnapshot:
     player_width: int
     player_height: int
     player_fullscreen: bool
+    player_vsync: bool
     ignored_resource_paths: tuple[str, ...]
     render_phase_names: tuple[str, ...]
 
@@ -47,6 +48,7 @@ class ProjectSettingsController:
             player_width=int(settings.player_window.width),
             player_height=int(settings.player_window.height),
             player_fullscreen=bool(settings.player_window.fullscreen),
+            player_vsync=bool(settings.player_window.vsync),
             ignored_resource_paths=tuple(settings.ignored_resource_paths),
             render_phase_names=tuple(settings.render_phase_names),
         )
@@ -64,8 +66,14 @@ class ProjectSettingsController:
         width: int,
         height: int,
         fullscreen: bool,
+        vsync: bool,
     ) -> ProjectSettingsSnapshot:
-        self._manager.set_player_window(int(width), int(height), bool(fullscreen))
+        self._manager.set_player_window(
+            int(width),
+            int(height),
+            bool(fullscreen),
+            bool(vsync),
+        )
         return self.load()
 
     def save(self, snapshot: ProjectSettingsSnapshot) -> ProjectSettingsSnapshot:
@@ -78,11 +86,13 @@ class ProjectSettingsController:
             before.player_width != int(snapshot.player_width)
             or before.player_height != int(snapshot.player_height)
             or before.player_fullscreen != bool(snapshot.player_fullscreen)
+            or before.player_vsync != bool(snapshot.player_vsync)
         ):
             self._manager.set_player_window(
                 int(snapshot.player_width),
                 int(snapshot.player_height),
                 bool(snapshot.player_fullscreen),
+                bool(snapshot.player_vsync),
             )
         resource_before = (
             before.build_output_dir,

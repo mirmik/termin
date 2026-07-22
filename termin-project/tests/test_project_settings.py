@@ -109,6 +109,7 @@ def test_project_settings_normalizes_player_window() -> None:
                 "width": 1600,
                 "height": 900,
                 "fullscreen": False,
+                "vsync": False,
             }
         }
     )
@@ -117,6 +118,7 @@ def test_project_settings_normalizes_player_window() -> None:
         width=1600,
         height=900,
         fullscreen=False,
+        vsync=False,
     )
 
 
@@ -127,6 +129,7 @@ def test_project_settings_invalid_player_window_fields_use_defaults() -> None:
                 "width": 0,
                 "height": True,
                 "fullscreen": "no",
+                "vsync": "sometimes",
             }
         }
     )

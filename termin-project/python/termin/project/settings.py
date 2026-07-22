@@ -31,6 +31,7 @@ SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
+DEFAULT_PLAYER_WINDOW_VSYNC = True
 _BUILTIN_RENDER_PHASE_NAMES = frozenset({
     "opaque", "transparent", "normal", "depth", "id", "shadow", "ui",
     "editor", "editor_debug", "editor_debug_transparent",
@@ -71,12 +72,14 @@ class ProjectPlayerWindowSettings:
     width: int = DEFAULT_PLAYER_WINDOW_WIDTH
     height: int = DEFAULT_PLAYER_WINDOW_HEIGHT
     fullscreen: bool = DEFAULT_PLAYER_WINDOW_FULLSCREEN
+    vsync: bool = DEFAULT_PLAYER_WINDOW_VSYNC
 
     def to_dict(self) -> dict:
         return {
             "width": self.width,
             "height": self.height,
             "fullscreen": self.fullscreen,
+            "vsync": self.vsync,
         }
 
     @staticmethod
@@ -102,6 +105,11 @@ class ProjectPlayerWindowSettings:
                 data.get("fullscreen"),
                 default=DEFAULT_PLAYER_WINDOW_FULLSCREEN,
                 field_name="player_window.fullscreen",
+            ),
+            vsync=_bool_field(
+                data.get("vsync"),
+                default=DEFAULT_PLAYER_WINDOW_VSYNC,
+                field_name="player_window.vsync",
             ),
         )
 
@@ -282,7 +290,13 @@ class ProjectSettingsManager:
         self._settings.render_phase_names = normalized
         self.save()
 
-    def set_player_window(self, width: int, height: int, fullscreen: bool) -> None:
+    def set_player_window(
+        self,
+        width: int,
+        height: int,
+        fullscreen: bool,
+        vsync: bool,
+    ) -> None:
         """Set standalone player window defaults and save."""
         self._settings.player_window = ProjectPlayerWindowSettings(
             width=_positive_int_field(
@@ -299,6 +313,11 @@ class ProjectSettingsManager:
                 fullscreen,
                 default=DEFAULT_PLAYER_WINDOW_FULLSCREEN,
                 field_name="player_window.fullscreen",
+            ),
+            vsync=_bool_field(
+                vsync,
+                default=DEFAULT_PLAYER_WINDOW_VSYNC,
+                field_name="player_window.vsync",
             ),
         )
         self.save()
