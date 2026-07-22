@@ -211,8 +211,10 @@ class _WindowManager:
         self.main_host = _WindowHost(Document(), context)
         self.main_host.device = object()
         self.windows = []
+        self.create_options = []
 
-    def create_window(self, _title, _width, _height, *, document, on_close, **_options):
+    def create_window(self, _title, _width, _height, *, document, on_close, **options):
+        self.create_options.append(options)
         window = _ManagedWindow(_WindowHost(document, self.main_host.context), on_close)
         self.windows.append(window)
         return window
@@ -366,6 +368,7 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     assert model.selected_target_index == 0
     assert debugger.target_combo.selected_index == 0
     assert debugger.window is window_manager.windows[-1]
+    assert window_manager.create_options[-1]["always_on_top"] is True
     assert debugger.render_previews in debugger.window.host.callbacks
     assert model.selected_pass_index == 3
     assert model.selected_symbol == "opaque"

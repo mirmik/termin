@@ -199,6 +199,7 @@ class NativeFramegraphDebugger:
                 1180,
                 760,
                 document=self.document,
+                always_on_top=True,
                 on_close=self._on_window_closed,
             )
         except Exception:

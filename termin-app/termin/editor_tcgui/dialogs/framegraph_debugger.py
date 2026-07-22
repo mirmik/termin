@@ -640,7 +640,7 @@ def show_framegraph_debugger(
 
     # ---- Create dedicated window ----
 
-    window_ui = ui.create_window("Framegraph Debugger", 950, 700)
+    window_ui = ui.create_window("Framegraph Debugger", 950, 700, True)
     if window_ui is None:
         log.error("[FrameDebugger] create_window returned None")
         return None
