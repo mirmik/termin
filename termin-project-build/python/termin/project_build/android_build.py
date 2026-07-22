@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 import re
-import shutil
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from termin.project_build.android_apk_pipeline import (
+    AndroidApkProduct,
+    build_android_apk,
+    prepare_android_apk_output,
+)
 from termin.project_build.build_context import BuildContext, create_build_context
 from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.pipeline import (
@@ -21,8 +24,15 @@ from termin.project_build.runtime_package_exporter import (
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
-from termin.project_build.target_build_common import read_log_tail
 from termin.project_build.target_preflight import AndroidPreflightResult, preflight_android_build
+
+
+ANDROID_APK_PRODUCT = AndroidApkProduct(
+    display_name="Android",
+    gradle_build_dir="android-gradle",
+    artifact_qualifier="",
+    log_filename="android-build.log",
+)
 
 
 @dataclass
@@ -108,8 +118,7 @@ def build_android_project(
 
 
 def _prepare_android_output(context: BuildContext) -> None:
-    (context.dist_dir / "apk").mkdir(parents=True, exist_ok=True)
-    context.logs_dir.mkdir(parents=True, exist_ok=True)
+    prepare_android_apk_output(context.dist_dir, context.logs_dir)
 
 
 def _android_target_preflight(
@@ -141,90 +150,36 @@ def _package_android_target(
 ) -> TargetPackageStepResult[_AndroidTargetPackagePayload]:
     application_id = _android_application_id_from_project_name(context.project_name)
     launch_activity = "org.termin.android.TerminActivity"
-    log_path = context.logs_dir / "android-build.log"
-    _run_android_build_script(
+    apk_result = build_android_apk(
+        product=ANDROID_APK_PRODUCT,
+        configuration=context.configuration,
+        project_name=context.project_name,
+        application_id=application_id,
+        termin_root=preflight_result.termin_root,
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
-        log_path=log_path,
+        dist_dir=context.dist_dir,
+        logs_dir=context.logs_dir,
         gradle=preflight_result.gradle,
         android_sdk_root=preflight_result.android_sdk_root,
         abi=abi,
         platform=platform,
-        application_id=application_id,
-        app_label=context.project_name,
+        product_arguments=(
+            "--application-id",
+            application_id,
+            "--app-label",
+            context.project_name,
+        ),
     )
-
-    source_apk = (
-        preflight_result.termin_root
-        / "build"
-        / "android-gradle"
-        / "app"
-        / "outputs"
-        / "apk"
-        / "debug"
-        / "app-debug.apk"
-    )
-    if not source_apk.exists():
-        raise FileNotFoundError(f"Android build did not produce APK: {source_apk}")
-
-    apk_path = context.dist_dir / "apk" / f"{context.project_name}-debug.apk"
-    shutil.copy2(source_apk, apk_path)
 
     return TargetPackageStepResult(
         payload=_AndroidTargetPackagePayload(
-            apk_path=apk_path,
-            log_path=log_path,
+            apk_path=apk_result.apk_path,
+            log_path=apk_result.log_path,
             application_id=application_id,
             launch_activity=launch_activity,
         ),
     )
-
-
-def _run_android_build_script(
-    build_script: Path,
-    package_dir: Path,
-    log_path: Path,
-    gradle: Path | None,
-    android_sdk_root: Path,
-    abi: str,
-    platform: str,
-    application_id: str,
-    app_label: str,
-) -> None:
-    cmd = [
-        str(build_script),
-        "--assets-dir",
-        str(package_dir),
-        "--sdk-root",
-        str(android_sdk_root),
-        "--abi",
-        abi,
-        "--platform",
-        platform,
-        "--application-id",
-        application_id,
-        "--app-label",
-        app_label,
-    ]
-    if gradle is not None:
-        cmd.extend(["--gradle", str(gradle)])
-
-    result = subprocess.run(
-        cmd,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(
-        result.stdout + result.stderr,
-        encoding="utf-8",
-    )
-    if result.returncode != 0:
-        log_tail = read_log_tail(log_path)
-        raise RuntimeError(
-            f"Android build failed with exit code {result.returncode}; see {log_path}\n{log_tail}"
-        )
 
 
 def _android_application_id_from_project_name(project_name: str) -> str:

@@ -19,7 +19,8 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
 
     termin_root = tmp_path / "termin-root"
-    apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "android-game.apk"
+    apk_metadata = apk_source.parent / "output-metadata.json"
     (termin_root / "sdk" / "android" / "arm64-v8a" / "lib").mkdir(parents=True)
     build_script = termin_root / ("build-android-apk.cmd" if os.name == "nt" else "build-android-apk.sh")
     marker_script = termin_root / "build-android-apk.sh"
@@ -30,6 +31,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
             "@echo off\n"
             f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
             f"<NUL set /p dummy=APK>\"{apk_source}\"\n"
+            f">\"{apk_metadata}\" echo {{\"applicationId\":\"org.termin.builds.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}\n"
             "echo %*\n",
             encoding="utf-8",
         )
@@ -39,6 +41,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
             "set -e\n"
             f"mkdir -p '{apk_source.parent}'\n"
             f"printf APK > '{apk_source}'\n"
+            f"printf '%s' '{{\"applicationId\":\"org.termin.builds.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}' > '{apk_metadata}'\n"
             "printf '%s\\n' \"$@\"\n",
             encoding="utf-8",
         )
@@ -83,6 +86,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     assert "org.termin.builds.androidgame" in log_text
     assert "--app-label" in log_text
     assert "AndroidGame" in log_text
+    assert "--variant debug" in log_text
     assert validated_package_dirs == [result.package_result.package_dir]
     assert validation_diagnostic in result.diagnostics
 
@@ -103,8 +107,9 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
         / "outputs"
         / "apk"
         / "debug"
-        / "app-debug.apk"
+        / "quest-game.apk"
     )
+    apk_metadata = apk_source.parent / "output-metadata.json"
     sdk_config = (
         termin_root
         / "sdk"
@@ -138,6 +143,7 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
             "@echo off\n"
             f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
             f"<NUL set /p dummy=QUESTAPK>\"{apk_source}\"\n"
+            f">\"{apk_metadata}\" echo {{\"applicationId\":\"org.termin.openxr\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}\n"
             "echo %*\n",
             encoding="utf-8",
         )
@@ -147,6 +153,7 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
             "set -e\n"
             f"mkdir -p '{apk_source.parent}'\n"
             f"printf QUESTAPK > '{apk_source}'\n"
+            f"printf '%s' '{{\"applicationId\":\"org.termin.openxr\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}' > '{apk_metadata}'\n"
             "printf '%s\\n' \"$@\"\n",
             encoding="utf-8",
         )
@@ -187,5 +194,6 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
     assert str(result.package_result.package_dir) in log_text
     assert "--sdk-root" in log_text
     assert str(termin_root / "sdk" / "android") in log_text
+    assert "--variant debug" in log_text
     assert validated_package_dirs == [result.package_result.package_dir]
     assert validation_diagnostic in result.diagnostics

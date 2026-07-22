@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the Termin Android debug APK.
+# Build a Termin Android APK.
 
 set -e
 
@@ -15,7 +15,7 @@ ANDROID_ASSETS_DIR_VALUE="${TERMIN_ANDROID_ASSETS_DIR:-$SCRIPT_DIR/termin-androi
 ANDROID_APPLICATION_ID_VALUE="${TERMIN_ANDROID_APPLICATION_ID:-org.termin.android}"
 ANDROID_APP_LABEL_VALUE="${TERMIN_ANDROID_APP_LABEL:-Termin Android}"
 GRADLE_BIN_VALUE="${GRADLE_BIN:-gradle}"
-GRADLE_TASK="assembleDebug"
+ANDROID_VARIANT="debug"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -75,12 +75,12 @@ while [[ $# -gt 0 ]]; do
         --app-label=*)
             ANDROID_APP_LABEL_VALUE="${1#--app-label=}"
             ;;
-        --task)
-            GRADLE_TASK="$2"
+        --variant)
+            ANDROID_VARIANT="$2"
             shift
             ;;
-        --task=*)
-            GRADLE_TASK="${1#--task=}"
+        --variant=*)
+            ANDROID_VARIANT="${1#--variant=}"
             ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
@@ -94,7 +94,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --application-id ID   Android applicationId (default: org.termin.android)"
             echo "  --app-label LABEL     Android launcher label (default: Termin Android)"
             echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
-            echo "  --task TASK           Gradle task (default: assembleDebug)"
+            echo "  --variant VARIANT     Gradle variant: debug or release (default: debug)"
             echo "  --help, -h            Show this help"
             echo ""
             echo "Environment:"
@@ -119,6 +119,19 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+case "$ANDROID_VARIANT" in
+    debug)
+        GRADLE_TASK="assembleDebug"
+        ;;
+    release)
+        GRADLE_TASK="assembleRelease"
+        ;;
+    *)
+        echo "ERROR: Unsupported Android variant: $ANDROID_VARIANT (expected debug or release)." >&2
+        exit 1
+        ;;
+esac
 
 if ! command -v "$GRADLE_BIN_VALUE" >/dev/null 2>&1; then
     echo "ERROR: Gradle executable not found: $GRADLE_BIN_VALUE" >&2
@@ -148,6 +161,7 @@ echo "Gradle home:     $GRADLE_USER_HOME"
 echo "Project cache:   $GRADLE_PROJECT_CACHE_DIR"
 echo "Project:         $PLATFORM_DIR"
 echo "Task:            $GRADLE_TASK"
+echo "Variant:         $ANDROID_VARIANT"
 echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
 echo "ABI:             $ANDROID_ABI_VALUE"
 echo "Platform:        $ANDROID_PLATFORM_VALUE"
@@ -171,4 +185,4 @@ cd "$PLATFORM_DIR"
 rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
 
 echo ""
-echo "APK: $ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/debug/app-debug.apk"
+echo "Gradle APK metadata: $ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/$ANDROID_VARIANT/output-metadata.json"

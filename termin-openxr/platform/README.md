@@ -10,6 +10,10 @@ Build from the repository root:
 ./build-quest-openxr-apk.sh --gradle /path/to/gradle-8.x/bin/gradle
 ```
 
+Pass `--variant debug` (the default) or `--variant release`. Release builds use
+the shared Android signing contract documented in `docs/build-system.md` and
+require all four `TERMIN_ANDROID_SIGNING_*` environment variables.
+
 Install and launch on a connected headset:
 
 ```bash
