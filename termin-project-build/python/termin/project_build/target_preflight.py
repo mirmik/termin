@@ -148,6 +148,8 @@ def preflight_android_build(
     gradle: str | Path | None,
     abi: str = "arm64-v8a",
     platform: str = "android-26",
+    sdk_root: str | Path | None = None,
+    android_sdk_root: str | Path | None = None,
 ) -> AndroidPreflightResult:
     payload = _preflight_android_apk_build(
         termin_root=termin_root,
@@ -157,6 +159,8 @@ def preflight_android_build(
         platform=platform,
         target_name="Android",
         default_build_script=ANDROID_BUILD_SCRIPT,
+        sdk_root=sdk_root,
+        android_sdk_root=android_sdk_root,
     )
     return AndroidPreflightResult(
         termin_root=payload.termin_root,
@@ -174,6 +178,8 @@ def preflight_quest_openxr_build(
     gradle: str | Path | None,
     abi: str,
     platform: str,
+    sdk_root: str | Path | None = None,
+    android_sdk_root: str | Path | None = None,
 ) -> QuestOpenXRPreflightResult:
     payload = _preflight_android_apk_build(
         termin_root=termin_root,
@@ -183,6 +189,8 @@ def preflight_quest_openxr_build(
         platform=platform,
         target_name="Quest/OpenXR",
         default_build_script=QUEST_OPENXR_BUILD_SCRIPT,
+        sdk_root=sdk_root,
+        android_sdk_root=android_sdk_root,
         validate_product_capabilities=_validate_quest_openxr_capabilities,
     )
     return QuestOpenXRPreflightResult(
@@ -204,6 +212,8 @@ def _preflight_android_apk_build(
     platform: str,
     target_name: str,
     default_build_script: str,
+    sdk_root: str | Path | None = None,
+    android_sdk_root: str | Path | None = None,
     validate_product_capabilities: Callable[
         [SDKCapabilities, str, str, Path, list[BuildDiagnostic]], None
     ]
@@ -220,8 +230,9 @@ def _preflight_android_apk_build(
     _raise_if_errors(target_name, diagnostics)
 
     capabilities = _load_capabilities(
-        sdk_root=None,
+        sdk_root=sdk_root,
         termin_root=resolved_termin_root,
+        android_sdk_root=android_sdk_root,
         target_name=target_name,
         diagnostics=diagnostics,
     )
@@ -449,11 +460,13 @@ def _load_capabilities(
     termin_root: Path | None,
     target_name: str,
     diagnostics: list[BuildDiagnostic],
+    android_sdk_root: str | Path | None = None,
 ) -> SDKCapabilities:
     try:
         return load_sdk_capabilities(
             sdk_root=sdk_root,
             termin_root=termin_root,
+            android_sdk_root=android_sdk_root,
         )
     except SDKCapabilityError as exc:
         diagnostics.append(

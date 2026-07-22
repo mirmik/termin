@@ -90,6 +90,7 @@ def export_runtime_package(
     output_dir: str | Path,
     scenes: Iterable[str | Path] | None = None,
     shader_compiler: str | Path | None = None,
+    fxc: str | Path | None = None,
     default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
     resource_policy: str = DEFAULT_RESOURCE_POLICY,
     shader_targets: Iterable[str] | None = None,
@@ -183,6 +184,7 @@ def export_runtime_package(
         diagnostics,
         shader_compiler,
         requested_shader_targets,
+        Path(fxc).resolve() if fxc is not None else None,
     )
     _write_shader_programs(output_dir_path, shader_programs, resources)
     _write_default_pipeline_shader_artifacts(
@@ -190,6 +192,7 @@ def export_runtime_package(
         diagnostics,
         shader_compiler,
         requested_shader_targets,
+        Path(fxc).resolve() if fxc is not None else None,
     )
     resources.sort(key=_resource_sort_key)
 

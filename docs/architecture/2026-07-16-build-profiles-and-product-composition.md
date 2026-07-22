@@ -74,6 +74,30 @@ settings, but not from the portable project profile.
 Toolchain discovery reports capabilities. It never mutates a profile or
 silently substitutes a different target/backend.
 
+Local providers merge paths per field in one fixed low-to-high precedence
+order:
+
+1. defaults inferred from the running SDK/source installation;
+2. environment overrides;
+3. editor-local settings;
+4. explicit invocation overrides.
+
+After that merge, unset tools are derived from the final SDK, Termin and
+Android roots and then from `PATH`. This ordering matters: overriding only an
+SDK root must make its `bin/termin_shaderc` the derived compiler instead of
+retaining a compiler inferred from the lower-precedence SDK. The resolved
+context covers the Termin SDK and build roots, Termin Android SDK,
+`termin_shaderc`, FXC, Android/Quest build scripts, Gradle and ADB.
+
+`inspect_profile_capabilities()` is the canonical read-only report boundary
+for both editor code and CLI. Codes are stable by condition, including
+`capability.<tool>.missing`, `capability.<tool>.invalid`,
+`capability.sdk.target_mismatch`, `capability.android_sdk.abi_mismatch`,
+`capability.quest_openxr.mismatch` and
+`capability.host_platform.mismatch`. Human messages may become more specific;
+consumers branch on codes. An unavailable foreign-platform executor therefore
+disables local build but never makes the typed profile invalid.
+
 ### `BuildRequest`
 
 The request compiler combines a typed profile, project settings and a

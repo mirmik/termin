@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from termin.project_build import profile_build
+from termin.project_build.capability_reports import ToolchainCapabilityReport
 from termin.project_build.profile_requests import ToolchainContext, compile_profile_build_request
 from termin.project_build.profiles import BuildProfileStore, ProfileBuildError
 
@@ -75,6 +76,23 @@ def _package_result(tmp_path: Path) -> SimpleNamespace:
     manifest_path = package_dir / "manifest.json"
     _write_json(manifest_path, {"resources": []})
     return SimpleNamespace(package_dir=package_dir, manifest_path=manifest_path)
+
+
+def _allow_routing_without_local_preflight(
+    monkeypatch,
+    context: ToolchainContext | None = None,
+) -> None:
+    local = context or ToolchainContext()
+
+    def inspect(profile, **_kwargs):
+        return ToolchainCapabilityReport(
+            profile_name=profile.name,
+            target=profile.target_kind,
+            context=local,
+            diagnostics=(),
+        )
+
+    monkeypatch.setattr(profile_build, "inspect_profile_capabilities", inspect)
 
 
 def test_compile_desktop_request_is_pure_and_uses_profile_defaults(tmp_path: Path) -> None:
@@ -159,6 +177,7 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
         )
 
     monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+    _allow_routing_without_local_preflight(monkeypatch)
 
     assert profile_build.main(
         [
@@ -184,6 +203,7 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
                 ),
             "output_dir": (project / "dist/linux-dev").resolve(),
             "shader_compiler": None,
+            "fxc": None,
             "default_shader_language": "slang",
             "shader_targets": ("vulkan", "opengl"),
             "sdk_root": None,
@@ -242,6 +262,11 @@ def test_profile_build_routes_android_family_typed_request(
         )
 
     monkeypatch.setattr(profile_build, builder_name, fake_builder)
+    local = ToolchainContext(
+        sdk_root=tmp_path / "sdk",
+        android_sdk_root=tmp_path / "android-sdk",
+    )
+    _allow_routing_without_local_preflight(monkeypatch, local)
 
     assert profile_build.main(
         [
@@ -260,6 +285,8 @@ def test_profile_build_routes_android_family_typed_request(
     assert calls[0]["abi"] == expected["abi"]
     assert calls[0]["platform"] == expected["platform"]
     assert calls[0]["shader_targets"] == ("vulkan",)
+    assert calls[0]["sdk_root"] == tmp_path / "sdk"
+    assert calls[0]["android_sdk_root"] == tmp_path / "android-sdk"
     assert calls[0]["termin_root"] is None
     assert calls[0]["build_script"] is None
     assert calls[0]["gradle"] is None
@@ -298,14 +325,16 @@ def test_build_rejects_d3d11_without_local_fxc(tmp_path: Path, monkeypatch) -> N
     profile = BuildProfileStore.load(project, profiles_path).get_profile("windows")
     calls: list[dict] = []
     monkeypatch.setattr(profile_build, "build_desktop_project", lambda **kwargs: calls.append(kwargs))
-    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: False)
 
-    with pytest.raises(ProfileBuildError, match="runtime backend 'd3d11'.*fxc") as raised:
-        profile_build.build_profile(profile)
+    with pytest.raises(ProfileBuildError) as raised:
+        profile_build.build_profile(
+            profile,
+            toolchain=ToolchainContext(fxc=tmp_path / "missing-fxc"),
+        )
 
     assert calls == []
-    assert raised.value.diagnostics[0].code == "capability.shader_compiler"
-    assert raised.value.diagnostics[0].path == "toolchain.shader_compiler"
+    diagnostics = {diagnostic.code: diagnostic for diagnostic in raised.value.diagnostics}
+    assert diagnostics["capability.fxc.invalid"].path == "toolchain.fxc"
 
 
 def test_explicit_shader_compiler_is_local_context_not_profile_data(tmp_path: Path) -> None:
