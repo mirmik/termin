@@ -360,21 +360,10 @@ if(WIN32 AND SDL2_DLL)
     termin_install_sdl2_runtime(${CMAKE_INSTALL_BINDIR})
 endif()
 
-# Install termin-app Python sources (editor, launcher, project tooling, facades).
-# Native modules and extracted subproject packages install their own files into
-# the same namespace; this adds the app-level Python modules they do not own.
-install(DIRECTORY ${TERMIN_ROOT}/termin/
-    DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-    PATTERN "*.pyo" EXCLUDE
-    PATTERN "*.so" EXCLUDE
-    PATTERN "*.dll" EXCLUDE
-    PATTERN "*.dylib" EXCLUDE
-    PATTERN "*.egg-info" EXCLUDE
-    PATTERN "tests" EXCLUDE
-    PATTERN "include" EXCLUDE
-)
+# Python sources for the editor and launcher are application payload, not a
+# CMake-installed namespace or a Python distribution.  Stage 3 of the SDK
+# build installs the explicit roots from
+# build-system/application-python-payloads.json after library wheels.
 
 # Desktop/application icon. Keep this outside the versioned Python layout so
 # launchers and .desktop files have a stable path across Python upgrades.

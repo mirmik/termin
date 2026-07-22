@@ -319,7 +319,12 @@ int main(int argc, char* argv[]) {
 import json
 import tcbase
 import termin.editor
-print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__file__}))
+import termin.editor._editor_native
+print(json.dumps({
+    "tcbase": tcbase.__file__,
+    "termin_editor": termin.editor.__file__,
+    "termin_editor_native": termin.editor._editor_native.__file__,
+}))
 )";
         const int result = PyRun_SimpleString(smoke_code);
         if (result != 0) {
