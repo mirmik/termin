@@ -2,6 +2,8 @@ plugins {
     id "com.android.application"
 }
 
+apply from: new File(rootProject.projectDir.parentFile.parentFile, "build-system/android-release-signing.gradle")
+
 def terminRoot = rootProject.projectDir.parentFile.parentFile
 def terminAndroidSdkRoot = providers.gradleProperty("terminAndroidSdkRoot")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_SDK_ROOT"))

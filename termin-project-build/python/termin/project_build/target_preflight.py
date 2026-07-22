@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from termin.project_build.build_context import BuildContext
 from termin.project_build.capabilities import SDKCapabilities, SDKCapabilityError, load_sdk_capabilities
@@ -70,6 +71,16 @@ class QuestOpenXRPreflightResult:
     gradle: Path | None
     capabilities: SDKCapabilities
     diagnostics: list[BuildDiagnostic] = field(default_factory=list)
+
+
+@dataclass
+class _AndroidApkPreflightPayload:
+    termin_root: Path
+    build_script: Path
+    android_sdk_root: Path
+    gradle: Path | None
+    capabilities: SDKCapabilities
+    diagnostics: list[BuildDiagnostic]
 
 
 def preflight_project_build_context(
@@ -138,51 +149,22 @@ def preflight_android_build(
     abi: str = "arm64-v8a",
     platform: str = "android-26",
 ) -> AndroidPreflightResult:
-    target_name = "Android"
-    diagnostics: list[BuildDiagnostic] = []
-
-    resolved_termin_root = _resolve_required_termin_root(
-        termin_root,
-        build_script,
-        ANDROID_BUILD_SCRIPT,
-        target_name,
-        diagnostics,
+    payload = _preflight_android_apk_build(
+        termin_root=termin_root,
+        build_script=build_script,
+        gradle=gradle,
+        abi=abi,
+        platform=platform,
+        target_name="Android",
+        default_build_script=ANDROID_BUILD_SCRIPT,
     )
-    _raise_if_errors(target_name, diagnostics)
-
-    capabilities = _load_capabilities(
-        sdk_root=None,
-        termin_root=resolved_termin_root,
-        target_name=target_name,
-        diagnostics=diagnostics,
-    )
-    _raise_if_errors(target_name, diagnostics)
-
-    resolved_build_script = _resolve_build_script(
-        resolved_termin_root,
-        build_script,
-        ANDROID_BUILD_SCRIPT,
-        target_name,
-        diagnostics,
-    )
-    _validate_android_capabilities(
-        capabilities,
-        abi,
-        platform,
-        resolved_termin_root,
-        target_name,
-        diagnostics,
-    )
-    resolved_gradle = _resolve_checked_gradle(gradle, target_name, diagnostics)
-    _raise_if_errors(target_name, diagnostics)
-
     return AndroidPreflightResult(
-        termin_root=resolved_termin_root,
-        build_script=resolved_build_script,
-        android_sdk_root=capabilities.android.sdk_root,
-        gradle=resolved_gradle,
-        capabilities=capabilities,
-        diagnostics=diagnostics,
+        termin_root=payload.termin_root,
+        build_script=payload.build_script,
+        android_sdk_root=payload.android_sdk_root,
+        gradle=payload.gradle,
+        capabilities=payload.capabilities,
+        diagnostics=payload.diagnostics,
     )
 
 
@@ -193,13 +175,45 @@ def preflight_quest_openxr_build(
     abi: str,
     platform: str,
 ) -> QuestOpenXRPreflightResult:
-    target_name = "Quest/OpenXR"
-    diagnostics: list[BuildDiagnostic] = []
+    payload = _preflight_android_apk_build(
+        termin_root=termin_root,
+        build_script=build_script,
+        gradle=gradle,
+        abi=abi,
+        platform=platform,
+        target_name="Quest/OpenXR",
+        default_build_script=QUEST_OPENXR_BUILD_SCRIPT,
+        validate_product_capabilities=_validate_quest_openxr_capabilities,
+    )
+    return QuestOpenXRPreflightResult(
+        termin_root=payload.termin_root,
+        build_script=payload.build_script,
+        android_sdk_root=payload.android_sdk_root,
+        gradle=payload.gradle,
+        capabilities=payload.capabilities,
+        diagnostics=payload.diagnostics,
+    )
 
+
+def _preflight_android_apk_build(
+    *,
+    termin_root: str | Path | None,
+    build_script: str | Path | None,
+    gradle: str | Path | None,
+    abi: str,
+    platform: str,
+    target_name: str,
+    default_build_script: str,
+    validate_product_capabilities: Callable[
+        [SDKCapabilities, str, str, Path, list[BuildDiagnostic]], None
+    ]
+    | None = None,
+) -> _AndroidApkPreflightPayload:
+    diagnostics: list[BuildDiagnostic] = []
     resolved_termin_root = _resolve_required_termin_root(
         termin_root,
         build_script,
-        QUEST_OPENXR_BUILD_SCRIPT,
+        default_build_script,
         target_name,
         diagnostics,
     )
@@ -216,7 +230,7 @@ def preflight_quest_openxr_build(
     resolved_build_script = _resolve_build_script(
         resolved_termin_root,
         build_script,
-        QUEST_OPENXR_BUILD_SCRIPT,
+        default_build_script,
         target_name,
         diagnostics,
     )
@@ -230,17 +244,18 @@ def preflight_quest_openxr_build(
     )
     _raise_if_errors(target_name, diagnostics)
 
-    _validate_quest_openxr_capabilities(
-        capabilities,
-        abi,
-        platform,
-        resolved_termin_root,
-        diagnostics,
-    )
+    if validate_product_capabilities is not None:
+        validate_product_capabilities(
+            capabilities,
+            abi,
+            platform,
+            resolved_termin_root,
+            diagnostics,
+        )
     resolved_gradle = _resolve_checked_gradle(gradle, target_name, diagnostics)
     _raise_if_errors(target_name, diagnostics)
 
-    return QuestOpenXRPreflightResult(
+    return _AndroidApkPreflightPayload(
         termin_root=resolved_termin_root,
         build_script=resolved_build_script,
         android_sdk_root=capabilities.android.sdk_root,

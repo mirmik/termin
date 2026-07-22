@@ -10,6 +10,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from termin.project_build.android_apk_pipeline import (
+    AndroidApkProduct,
+    build_android_apk,
+    prepare_android_apk_output,
+)
 from termin.project_build.build_context import BuildContext, create_build_context, resolve_build_dist_dir
 from termin.project_build.common import read_project_name
 from termin.project_build.diagnostics import DiagnosticLike
@@ -23,12 +28,17 @@ from termin.project_build.runtime_package_exporter import (
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
-from termin.project_build.target_build_common import read_log_tail
 from termin.project_build.target_preflight import QuestOpenXRPreflightResult, preflight_quest_openxr_build
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
 QUEST_OPENXR_LAUNCH_ACTIVITY = "android.app.NativeActivity"
+QUEST_OPENXR_APK_PRODUCT = AndroidApkProduct(
+    display_name="Quest/OpenXR",
+    gradle_build_dir="android-gradle-openxr",
+    artifact_qualifier="quest-openxr",
+    log_filename="quest-openxr-build.log",
+)
 
 
 @dataclass
@@ -119,8 +129,7 @@ def build_quest_openxr_project(
 
 
 def _prepare_quest_openxr_output(context: BuildContext) -> None:
-    (context.dist_dir / "apk").mkdir(parents=True, exist_ok=True)
-    context.logs_dir.mkdir(parents=True, exist_ok=True)
+    prepare_android_apk_output(context.dist_dir, context.logs_dir)
 
 
 def _quest_openxr_target_preflight(
@@ -151,11 +160,16 @@ def _package_quest_openxr_target(
     platform: str,
     log_callback: Callable[[str], None] | None,
 ) -> TargetPackageStepResult[_QuestOpenXRTargetPackagePayload]:
-    log_path = context.logs_dir / "quest-openxr-build.log"
-    _run_quest_build_script(
+    apk_result = build_android_apk(
+        product=QUEST_OPENXR_APK_PRODUCT,
+        configuration=context.configuration,
+        project_name=context.project_name,
+        application_id=QUEST_OPENXR_APPLICATION_ID,
+        termin_root=preflight_result.termin_root,
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
-        log_path=log_path,
+        dist_dir=context.dist_dir,
+        logs_dir=context.logs_dir,
         gradle=preflight_result.gradle,
         android_sdk_root=preflight_result.android_sdk_root,
         abi=abi,
@@ -163,26 +177,10 @@ def _package_quest_openxr_target(
         log_callback=log_callback,
     )
 
-    source_apk = (
-        preflight_result.termin_root
-        / "build"
-        / "android-gradle-openxr"
-        / "app"
-        / "outputs"
-        / "apk"
-        / "debug"
-        / "app-debug.apk"
-    )
-    if not source_apk.exists():
-        raise FileNotFoundError(f"Quest/OpenXR build did not produce APK: {source_apk}")
-
-    apk_path = context.dist_dir / "apk" / f"{context.project_name}-quest-openxr-debug.apk"
-    shutil.copy2(source_apk, apk_path)
-
     return TargetPackageStepResult(
         payload=_QuestOpenXRTargetPackagePayload(
-            apk_path=apk_path,
-            log_path=log_path,
+            apk_path=apk_result.apk_path,
+            log_path=apk_result.log_path,
         ),
     )
 
@@ -242,40 +240,6 @@ def default_quest_openxr_log_path(
     return dist_dir / "logs" / "quest-openxr-deploy.log"
 
 
-def _run_quest_build_script(
-    build_script: Path,
-    package_dir: Path,
-    log_path: Path,
-    gradle: Path | None,
-    android_sdk_root: Path,
-    abi: str,
-    platform: str,
-    log_callback: Callable[[str], None] | None,
-) -> None:
-    cmd = [
-        str(build_script),
-        "--assets-dir",
-        str(package_dir),
-        "--sdk-root",
-        str(android_sdk_root),
-        "--abi",
-        abi,
-        "--platform",
-        platform,
-    ]
-    if gradle is not None:
-        cmd.extend(["--gradle", str(gradle)])
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text("", encoding="utf-8")
-    returncode = _run_logged_process(cmd, log_path, log_callback)
-    if returncode != 0:
-        log_tail = read_log_tail(log_path)
-        raise RuntimeError(
-            f"Quest/OpenXR build failed with exit code {returncode}; see {log_path}\n{log_tail}"
-        )
-
-
 def _resolve_adb(adb: str | Path | None) -> Path:
     if adb is not None:
         adb_text = str(adb)
@@ -324,15 +288,6 @@ def _run_deploy_command(
         log_path=resolved_log_path,
         output=output,
     )
-
-
-def _run_logged_process(
-    cmd: list[str],
-    log_path: Path,
-    log_callback: Callable[[str], None] | None,
-) -> int:
-    output, returncode = _run_logged_process_capture(cmd, log_path, log_callback)
-    return returncode
 
 
 def _run_logged_process_capture(
