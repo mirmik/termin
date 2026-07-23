@@ -223,11 +223,21 @@ does not acquire GPU ownership or a Python/numpy dependency.
 Python exposes the same hierarchy:
 
 ```python
-with WindowedGraphicsSession.create_native() as session:
-    document = Document()
-    with GuiWindowHost.create(session, document, config) as window:
+session = WindowedGraphicsSession.create_native()
+document = Document()
+try:
+    with GuiWindowHost(
+        session,
+        document,
+        title="Diffusion Editor",
+        width=1280,
+        height=720,
+    ) as window:
         while window.tick():
             update_application_state()
+finally:
+    document.close()
+    session.close()
 ```
 
 The binding:
@@ -238,6 +248,12 @@ The binding:
 - logs a lifetime violation if an object reaches finalization while still
   active;
 - exposes typed host services and leases instead of raw device addresses.
+
+Tools that do not inject an application-owned graphics session can use
+`StandaloneGuiApplication(...)` as a context manager. Its `document` and
+`window_host` properties are the same public Python types and remain borrowed
+views of the C++ standalone composition; closing the application invalidates
+both views in host/document/session order.
 
 Python may remain the application bootstrap and policy layer. It does not own a
 parallel renderer/event/lifetime implementation.
