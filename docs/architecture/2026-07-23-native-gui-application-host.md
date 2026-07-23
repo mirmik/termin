@@ -7,6 +7,13 @@ implemented by #616 and applies the canonical graphics ownership established
 by #703 in
 [Graphics Host and Window Session](2026-07-21-graphics-host-and-window-session.md).
 
+The shared presentation-neutral frame implementation and isolated/offscreen
+composition are refined further in
+[Native GUI Windowed and Headless Host](2026-07-23-native-gui-windowed-headless-host.md).
+In this document, ownership attributed to `GuiWindowHost` includes resources
+owned by its composed `GuiApplicationHost`; the window wrapper itself remains
+the platform adapter.
+
 ## Problem
 
 `termin-gui-native` now provides a public C++ `ApplicationHost` that is useful
@@ -367,6 +374,8 @@ borrowed pointers or pretending the session was closed successfully.
   and #736.
 - #722 moves Framegraph Debugger controller/view composition into C++ on the
   public window host; it does not add a debugger-specific graphics runtime.
+- #741–#746 reuse the same frame implementation for isolated/offscreen editor
+  execution; they do not introduce another GUI or engine runtime.
 
 ## Non-goals
 
