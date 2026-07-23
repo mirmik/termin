@@ -7,8 +7,10 @@ Accepted target model for #741. This decision refines
 without replacing its canonical graphics ownership or public windowed
 composition.
 
-Implementation is split into #742, #743, #744, #745 and #746. The virtual
-display E2E path remains separate in #623.
+Implementation is split into #742, #743, #744, #745 and #746. The shared frame
+core (#742) and typed input/platform boundaries (#743) are implemented. The
+owning offscreen composition begins at #744. The virtual-display E2E path
+remains separate in #623.
 
 ## Problem
 
@@ -55,8 +57,8 @@ Environment behavior is supplied through typed boundaries:
 2. An input source supplies ordered `WindowEvent` values and close requests.
 3. Platform services provide text-input state, clipboard and cursor behavior.
 
-The exact public type names may be adjusted during implementation, but these
-roles must remain separate and typed. Missing mandatory behavior is diagnosed;
+These roles are implemented as the typed `GuiFrameEndpoint`, `GuiInputSource`
+and `GuiPlatformServices` contracts. Missing mandatory behavior is diagnosed;
 the production offscreen path does not inherit `BackendWindow` and does not
 fill window methods with no-ops.
 
@@ -127,11 +129,13 @@ One owner-thread tick has the same ordering in both modes:
 10. run `after_ui_frame` extensions;
 11. publish the completed color texture to the frame endpoint.
 
-The windowed frame endpoint publishes by presenting into its
-`BackendWindow`. The offscreen endpoint publishes by advancing a latest-frame
-generation associated with the color texture. Readback, MCP capture and
-streaming consume that published frame explicitly; offscreen publication is
-not a disguised no-op presentation.
+The windowed frame endpoint publishes by presenting into its `BackendWindow`.
+The offscreen endpoint publishes a generation, color texture and the physical
+extent captured for that generation. A later resize changes the next render
+extent but does not reinterpret the preceding publication. Explicit blocking
+RGBA-float readback waits for the host device and reads that published
+texture; MCP capture and streaming can build on the same publication rather
+than a disguised no-op presentation.
 
 Frame extensions continue to receive the same `GuiWindowFrame`-equivalent
 typed view of graphics identity, device, output texture and extent. They do not
@@ -204,11 +208,15 @@ common host renders into ordinary textures and does not create a swapchain.
 
 ## Migration
 
-1. #742 extracts the presentation-neutral frame core while keeping
+1. #742 extracted the presentation-neutral frame core while keeping
    `GuiWindowHost` as the reference consumer.
-2. #743 separates input and platform services and removes the fake-window
-   requirement from injection tests.
-3. #744 adds the owning isolated/offscreen composition and C++/Python API.
+2. #743 separated input and platform services. `GuiApplicationHost` now owns
+   the common event/deferred/render tick; `QueuedGuiInputSource` and
+   `InMemoryGuiPlatformServices` exercise pointer, key, text, close, clipboard,
+   cursor and text-input behavior without a window.
+3. #744 added the owning isolated/offscreen composition and C++/Python API,
+   including resizable publication, synthetic input, observable in-memory
+   services and explicit pixel readback without SDL or `DISPLAY`.
 4. #737 migrates the production editor to the shared host contract.
 5. #745 selects windowed or offscreen composition around one shared editor
    bootstrap.
