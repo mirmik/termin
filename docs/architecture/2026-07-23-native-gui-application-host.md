@@ -203,9 +203,12 @@ Editor screenshot/MCP routing, project services, viewport policy and debug-tool
 commands remain in `termin-app`. They may be implemented as application-owned
 extensions, but they are not methods on the generic host.
 
-Arbitrary Python callbacks do not receive a raw `RenderContext2`. Python uses
-bound native extensions and host services. This keeps frame nesting, device
-identity and shutdown enforceable.
+The generic Python callback receives no `GuiFrame` or raw `RenderContext2`.
+The production editor's application-owned adapter may invoke existing preview
+presenters through its borrowed `Tgfx2Context` facade during
+`before_ui_frame`, but it never begins/ends the frame, allocates the host color
+target or presents it. This is a migration boundary for editor-specific
+presenters, not a second host API.
 
 ## Dynamic texture leases
 
@@ -351,14 +354,15 @@ borrowed pointers or pretending the session was closed successfully.
 3. Rebuild the current standalone behavior as `StandaloneGuiApplication` and
    migrate Tally/showcase without regressing the installed SDK consumer.
 4. Publish Python bindings with keep-alive and deterministic-close tests.
-5. Replace Python `NativeUiHost` rendering/event ownership with the public
-   window host while keeping editor-only policy as extensions/adapters.
+5. **Done in #737:** replace Python `NativeUiHost` rendering/event ownership
+   with the public window host while keeping editor-only shortcut, file-drop,
+   preview and screenshot policy as extensions/adapters.
 6. Move Frame Profiler and Framegraph Debugger document/view composition to
    C++ window objects using the same host.
 7. Add the dynamic texture lease from #596 and migrate one-shot editor preview
    uploads to it.
-8. Remove the old Python host implementation after no production consumer owns
-   rendering or window lifecycle through it.
+8. **Done in #737:** remove the old Python event/render-target/present
+   implementation after migrating the editor, secondary tools and launcher.
 
 ## Card consequences
 

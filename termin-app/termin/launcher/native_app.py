@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+import time
 from typing import Callable
 
 from termin.gui_native import (
@@ -401,7 +402,7 @@ def _smoke_frame_limit() -> int:
 
 def run_native_launcher(controller: LauncherController) -> None:
     """Own the native launcher window until an editor starts or it closes."""
-    from termin.display import WindowedGraphicsSession, quit_sdl, wait_sdl_events_timeout
+    from termin.display import WindowedGraphicsSession, quit_sdl
     from termin.editor_core.application_icon import apply_editor_window_icon
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
     from termin.editor_native.ui_host import NativeUiHost
@@ -414,10 +415,16 @@ def run_native_launcher(controller: LauncherController) -> None:
     release_background = None
     projection = None
     try:
-        window = graphics_session.create_window("Termin Launcher", 1024, 640)
-        apply_editor_window_icon(window)
         graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
-        host = NativeUiHost(window, graphics)
+        host = NativeUiHost(
+            graphics_session,
+            graphics=graphics,
+            title="Termin Launcher",
+            width=1024,
+            height=640,
+        )
+        window = host.window
+        apply_editor_window_icon(window)
         release_background = _install_background(host)
         projection = NativeLauncherProjection(
             host.document,
@@ -428,15 +435,13 @@ def run_native_launcher(controller: LauncherController) -> None:
         frame_count = 0
         host.render()
         while not window.should_close() and not controller.state.should_quit:
-            for event in wait_sdl_events_timeout(100):
-                result = host.router.route(event)
-                if not result.keep_running:
-                    window.set_should_close(True)
-                    break
-                if result.routed:
-                    host.request_render_update()
+            keep_running, _event_count = host.poll_events()
+            if not keep_running:
+                break
             if host.render_requested:
                 host.render()
+            else:
+                time.sleep(0.01)
             frame_count += 1
             if frame_limit > 0 and frame_count >= frame_limit:
                 window.set_should_close(True)
@@ -448,8 +453,6 @@ def run_native_launcher(controller: LauncherController) -> None:
             release_background()
         if host is not None:
             host.close()
-        if window is not None:
-            window.close()
         try:
             graphics_session.close()
         finally:

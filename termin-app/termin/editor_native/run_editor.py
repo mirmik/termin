@@ -240,29 +240,27 @@ def _compose_native_editor(
         WindowedGraphicsSession.create_native(),
         cleanup=lambda: graphics_session.close(),
     )
-    window = platform_stage.own(
-        "editor window",
-        graphics_session.create_window(
-            "Termin Editor — Native UI",
-            1280,
-            720,
-            presentation_mode=presentation_mode,
-        ),
-        cleanup=lambda: window.close(),
-    )
-    apply_editor_window_icon(window)
     render_engine.set_graphics_host(graphics_session.graphics)
     render_engine.ensure_tgfx2()
-    window.maximize()
     graphics = platform_stage.own(
         "graphics context",
         Tgfx2Context.from_runtime(graphics_session.graphics),
     )
     host = platform_stage.own(
         "native UI host",
-        NativeUiHost(window, graphics),
+        NativeUiHost(
+            graphics_session,
+            graphics=graphics,
+            title="Termin Editor — Native UI",
+            width=1280,
+            height=720,
+            presentation_mode=presentation_mode,
+        ),
         cleanup=lambda: host.close(),
     )
+    window = host.window
+    apply_editor_window_icon(window)
+    window.maximize()
     window_manager = platform_stage.own(
         "native window manager",
         NativeUiWindowManager(host, graphics_session=graphics_session),
@@ -272,7 +270,7 @@ def _compose_native_editor(
         "native editor shell",
         build_native_editor_shell(host.document),
     )
-    host.router.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
+    host.event_policy.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
     file_menu = shell.menu_route("file")
     edit_menu = shell.menu_route("edit")
     view_menu = shell.menu_route("view")
@@ -714,7 +712,7 @@ def _compose_native_editor(
             y,
         )
 
-    host.router.file_drop_handler = drop_project_file
+    host.event_policy.file_drop_handler = drop_project_file
 
     viewport_list_controller = ViewportListController()
     viewport_list = build_native_viewport_list(
