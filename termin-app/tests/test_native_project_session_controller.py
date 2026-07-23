@@ -96,17 +96,15 @@ class _Runtime:
     last_error = ""
 
 
-def test_native_module_operation_runs_owner_action_on_deferred_editor_thread(monkeypatch):
+def test_native_module_operation_runs_followup_action_directly(monkeypatch):
     monkeypatch.setattr(native_session, "RichTextModel", _RichTextModel)
     document = _Document()
-    deferred = []
     renders = []
     completions = []
     owner_calls = []
     operation = native_session.NativeModuleOperationDialog(
         document,
         viewport=lambda: object(),
-        defer=deferred.append,
         request_render=lambda: renders.append(True),
         runtime=_Runtime(),
         title="Load Project Modules",
@@ -117,10 +115,6 @@ def test_native_module_operation_runs_owner_action_on_deferred_editor_thread(mon
     )
 
     operation.start()
-
-    assert document.dialog.open
-    assert len(deferred) == 1
-    deferred.pop()()
 
     assert owner_calls == [True]
     assert completions == [True]
@@ -134,7 +128,6 @@ def test_native_module_operation_updates_real_native_label_binding():
     operation = native_session.NativeModuleOperationDialog(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
-        defer=lambda _callback: None,
         request_render=lambda: None,
         runtime=_Runtime(),
         title="Load Project Modules",
@@ -168,7 +161,6 @@ def test_native_project_session_controller_configures_startup_operation(monkeypa
     controller = native_session.NativeProjectSessionController(
         document=object(),
         viewport=lambda: object(),
-        defer=lambda callback: callback(),
         request_render=lambda: None,
         set_project_state=lambda *_args: None,
         log_to_console=lambda _message: None,

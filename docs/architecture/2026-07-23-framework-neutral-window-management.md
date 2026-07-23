@@ -20,7 +20,7 @@ The native UI migration combined several independent responsibilities in
 - OS-window ownership and process-global event routing;
 - native-widget input and platform-service adaptation;
 - document layout, paint and GPU rendering;
-- frame scheduling, deferred work and application close policy;
+- frame scheduling and application close policy;
 - standalone and offscreen application composition.
 
 That composition works, but it makes the native widget toolkit appear to own
@@ -221,9 +221,12 @@ for (WindowHandle handle : windows.handles()) {
 ```
 
 `WindowContent` above is application notation, not a `termin-window` type.
-Rendering and presentation remain sequential on the graphics owner thread.
-Closing a secondary window removes only that handle and its application-owned
-content; it does not affect the graphics session or other windows.
+The UI layer imposes no creator/owner-thread affinity and provides no deferred
+callback queue. Callers may update documents, adapters and renderer state from
+their current thread; applications coordinate genuinely concurrent recording
+against a shared graphics context. Closing a secondary window removes only
+that handle and its application-owned content; it does not affect the graphics
+session or other windows.
 
 ## Headless execution
 
@@ -259,7 +262,7 @@ path, while isolated rendering validates no-display execution.
 | clipboard/cursor/text-input bridge | optional native-widget window adapter |
 | document tree, interaction and invalidation | `termin-gui-native` core |
 | document paint and GUI GPU resources | native-widget renderer primitives |
-| frame/update scheduling and deferred application work | application composition |
+| frame/update scheduling | application composition |
 | OS-window presentation | `BackendWindow` invoked by selected content adapter |
 | isolated output publication/readback | offscreen document composition |
 | main/secondary and exit policy | application composition |

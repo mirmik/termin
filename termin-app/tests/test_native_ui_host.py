@@ -71,11 +71,6 @@ class _WindowManagerTestContent:
     def request_render_update(self):
         self.render_requested = True
 
-    def process_deferred(self):
-        result = self.deferred_count
-        self.deferred_count = 0
-        return result
-
     def render(self):
         self.render_requested = False
         self.render_count += 1
