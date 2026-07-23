@@ -218,6 +218,39 @@ stale widget handles and use after host shutdown are diagnosed errors.
 The core `Canvas` widget continues to store a non-owning `TextureHandle`; it
 does not acquire GPU ownership or a Python/numpy dependency.
 
+The public C++ surface is `DynamicTextureLease(GuiWindowHost&)`. An owned lease
+accepts tightly packed RGBA8 bytes through `set_rgba8()` and
+`update_region_rgba8()`. A same-size full update preserves the handle; a size
+change creates and uploads the replacement before destroying the old texture,
+then updates every bound Canvas. `clear()` returns the lease to reusable
+`Empty` state, while idempotent `release()` permanently detaches it.
+
+Borrowing requires both `GraphicsHost& texture_owner` and `TextureHandle`.
+`TextureHandle` contains only a device-local integer and cannot prove its
+graphics domain by itself, so accepting a bare handle would make mismatch
+detection impossible. The lease compares the typed owner with the window
+host's canonical graphics identity and verifies that the handle denotes a live
+sampled texture. It never destroys a borrowed texture.
+
+Canvas bindings are stored as document widget handles, not raw Canvas
+pointers. Every update resolves and type-checks those handles before touching
+GPU state. Destruction or resize refreshes the Canvas's non-owning texture id,
+and stale Canvas bindings fail with a logged error. Host shutdown invalidates
+all leases and destroys every remaining owned texture exactly once before
+renderer/device teardown.
+
+The Python projection accepts C-contiguous `uint8[height, width, 4]` arrays:
+
+```python
+lease = DynamicTextureLease(window)
+lease.bind_canvas(canvas)
+lease.set_rgba8(image)
+lease.update_region_rgba8(x, y, changed_pixels)
+```
+
+Numpy conversion and shape validation live exclusively in the binding. The
+C++ lease and Canvas have no numpy dependency.
+
 ## Python projection
 
 Python exposes the same hierarchy:
