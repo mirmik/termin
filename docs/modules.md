@@ -32,6 +32,19 @@ Source of truth: [termin-base docs](https://github.com/mirmik/termin-monorepo/bl
 
 Кандидаты на перенос сюда: малые общие value-типы и utilities без знания graphics/render/scene.
 
+### termin-dispatch
+
+Source of truth: [termin-dispatch docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-dispatch/docs/index.md)
+
+Optional language-neutral deferred-execution primitive для application
+composition. Канонический C ABI, C++ wrapper и Python binding используют одну
+native очередь. Модуль не создаёт потоков, не назначает owner thread и
+исполняет callbacks только при явном `drain` вызывающей программой.
+
+`termin-dispatch` не является engine scheduler, UI host или window event loop и
+не интегрируется автоматически в приложения Termin. Host-specific wakeup и
+выбор фазы обслуживания остаются ответственностью embedding application.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)

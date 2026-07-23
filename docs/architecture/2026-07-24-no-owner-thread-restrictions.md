@@ -23,8 +23,8 @@ created an object or initialized a subsystem. In particular, code must not:
   `Live module mutation must run on the integration owner thread`;
 - require application, editor, Python or plugin code to marshal an otherwise
   valid operation to a privileged thread;
-- expose generic `defer(callback)` queues that hide when and where application
-  work will execute;
+- expose hidden host-owned `defer(callback)` queues that obscure when and where
+  application work will execute or exist only to satisfy owner-thread checks;
 - use owner-thread affinity as a substitute for synchronization, immutable
   snapshots, transactional publication or explicit lifetime management;
 - document a public method as safe only on an implicit owner/UI/render thread.
@@ -65,11 +65,16 @@ through callbacks. A progress callback updates the presentation model and may
 present an intermediate UI frame without moving the operation itself to another
 thread.
 
-Generic UI deferral is prohibited. Event handlers invoke their actions directly;
-controllers publish progress directly through signals or callbacks. A queue may
-exist only at an unavoidable and explicit concurrency boundary, such as an MCP
-server handing a request to an engine executor. Such a queue is part of the
-subsystem protocol, not an application-level escape hatch named `defer`.
+Termin applications currently do not acquire background execution or hidden UI
+deferral. Event handlers invoke their actions directly; controllers publish
+progress directly through signals or callbacks.
+
+An embedding application may explicitly own a caller-driven dispatcher at a
+real concurrency boundary. `termin-dispatch` provides this as an optional SDK
+tool: it creates no threads, has no privileged drain thread, and executes work
+only when the application calls `drain`. This does not permit an engine
+subsystem to smuggle owner-thread affinity back in under the name `defer`.
+Application composition and engine thread policy remain separate decisions.
 
 Future parallel execution requires an explicit design for task ownership,
 dependencies, cancellation, completion, error propagation and publication.

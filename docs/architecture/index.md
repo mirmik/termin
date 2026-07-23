@@ -18,6 +18,7 @@
 - [Display render surface contract](2026-07-19-display-render-surface-contract.md) - целевая граница между `tc_display`, backend-neutral offscreen texture output, display-owned input routing и native window presentation.
 - [Framework-neutral window management](2026-07-23-framework-neutral-window-management.md) - целевая граница `termin-window::WindowManager`, application-owned window content, optional UI adapters и независимой headless document composition.
 - [No owner-thread restrictions](2026-07-24-no-owner-thread-restrictions.md) - обязательный запрет creator/owner/UI/render-thread affinity в engine API и правила замены таких ограничений внутренней синхронизацией и транзакционными границами.
+- [Language-neutral deferred dispatcher](2026-07-24-language-neutral-deferred-dispatcher.md) - optional caller-driven `termin-dispatch` с каноническим C ABI, C++/Python projections и без автоматической интеграции в Termin applications.
 - [Centralized frame memory](2026-07-21-centralized-frame-memory.md) - архитектурный набросок общей CPU frame arena, scoped scratch-регионов, telemetry и политики миграции hot-path allocations.
 - [Graphics host and window session](2026-07-21-graphics-host-and-window-session.md) - каноническое владение application graphics domain через `GraphicsHost` и композиционный lifetime `WindowedGraphicsSession`.
 
