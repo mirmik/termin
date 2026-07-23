@@ -1,10 +1,10 @@
 """Native UI host and production editor migration package."""
 
 from .ui_host import (
+    EditorWindowRegistry,
+    EditorWindowSlot,
     NativeUiEventPolicy,
-    NativeUiHost,
-    NativeUiWindow,
-    NativeUiWindowManager,
+    NativeWidgetContent,
     resolve_native_ui_font,
 )
 from .shell import NativeEditorShell, build_native_editor_shell
@@ -94,10 +94,10 @@ from .scene_manager_dialog import (
 )
 
 __all__ = [
+    "EditorWindowRegistry",
+    "EditorWindowSlot",
     "NativeUiEventPolicy",
-    "NativeUiHost",
-    "NativeUiWindow",
-    "NativeUiWindowManager",
+    "NativeWidgetContent",
     "NativeEditorShell",
     "NativeProfilerPanel",
     "NativeFrameProfiler",

@@ -7,9 +7,11 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/vector.h>
 
 #include <cstdint>
 #include <array>
+#include <functional>
 #include <stdexcept>
 #include <string>
 
@@ -18,6 +20,7 @@
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_backend_window.hpp"
 #include "termin/input/window_input_bridge.hpp"
+#include "termin/window/window_manager.hpp"
 
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -559,6 +562,50 @@ void bind_sdl(nb::module_& m) {
             })
         .def("close", &WindowedGraphicsSession::close,
             "Close GraphicsHost and platform state after all windows are closed.");
+
+    nb::class_<WindowHandle>(m, "WindowHandle")
+        .def_ro("slot", &WindowHandle::slot)
+        .def_ro("generation", &WindowHandle::generation)
+        .def("__bool__", [](WindowHandle self) {
+            return static_cast<bool>(self);
+        })
+        .def("__eq__", [](WindowHandle self, WindowHandle other) {
+            return self == other;
+        })
+        .def("__hash__", [](WindowHandle self) {
+            return WindowHandleHash{}(self);
+        })
+        .def("__repr__", [](WindowHandle self) {
+            return "WindowHandle(slot=" + std::to_string(self.slot) +
+                ", generation=" + std::to_string(self.generation) + ")";
+        });
+
+    nb::class_<WindowManager>(m, "WindowManager")
+        .def(nb::init<WindowedGraphicsSession&>(), nb::arg("graphics_session"),
+            nb::keep_alive<1, 2>(),
+            "Own a framework-neutral window collection on one graphics session.")
+        .def("create_window",
+            [](WindowManager& self, const std::string& title, int width, int height,
+               tgfx::PresentationMode presentation_mode) {
+                return self.create_window(WindowConfig{
+                    title, width, height, presentation_mode});
+            },
+            nb::arg("title"), nb::arg("width"), nb::arg("height"),
+            nb::arg("presentation_mode") = tgfx::PresentationMode::VSync)
+        .def("destroy_window", &WindowManager::destroy_window, nb::arg("handle"))
+        .def("contains", &WindowManager::contains, nb::arg("handle"))
+        .def_prop_ro("handles", &WindowManager::handles)
+        .def_prop_ro("size", &WindowManager::size)
+        .def("window",
+            [](WindowManager& self, WindowHandle handle) -> BackendWindow& {
+                return self.window(handle);
+            },
+            nb::arg("handle"), nb::rv_policy::reference_internal)
+        .def("pump_events", &WindowManager::pump_events)
+        .def("pending_event_count", &WindowManager::pending_event_count,
+            nb::arg("handle"))
+        .def("close", &WindowManager::close)
+        .def_prop_ro("is_open", &WindowManager::is_open);
 }
 
 } // namespace termin

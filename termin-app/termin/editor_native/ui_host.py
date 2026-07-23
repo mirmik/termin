@@ -9,13 +9,13 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Callable
+from typing import Callable, Protocol
 
-from termin.display import PresentationMode
+from termin.display import WindowHandle, WindowManager
 from tgfx import Tgfx2Context
 from termin.gui_native import (
     Document,
-    GuiWindowHost,
+    GuiWindowAdapter,
     Size,
     StyleRole,
 )
@@ -72,24 +72,21 @@ def resolve_native_ui_font(configured: str | Path | None = None) -> Path:
     )
 
 
-class NativeUiHost:
-    """Editor policy adapter around the native application/window host.
+class NativeWidgetContent:
+    """Application-side native-widget content attached to one managed window.
 
-    ``GuiWindowHost`` owns the event, frame, render-target and presentation
-    lifecycle.  This wrapper keeps only editor-specific callbacks, generated
-    preview textures and screenshot routing.
+    The C++ ``GuiWindowAdapter`` remains the actual UI/window integration.
+    This object owns only editor features layered beside it: the document,
+    shortcut/drop policy, preview textures and screenshot routing.
     """
 
     def __init__(
         self,
-        graphics_session: object,
+        window_manager: WindowManager,
+        window_handle: WindowHandle,
         document: Document | None = None,
         *,
         graphics: Tgfx2Context | None = None,
-        title: str = "Termin",
-        width: int = 1280,
-        height: int = 720,
-        presentation_mode: PresentationMode = PresentationMode.VSYNC,
         font_path: str | Path | None = None,
         file_drop_handler: FileDropHandler | None = None,
         enable_text_input: bool = True,
@@ -99,25 +96,23 @@ class NativeUiHost:
         self.document = document if document is not None else Document()
         resolved_font = resolve_native_ui_font(font_path)
         self.font_path = resolved_font
-        self._gui_host = GuiWindowHost(
-            graphics_session,
+        self.window_manager = window_manager
+        self.window_handle = window_handle
+        self.adapter = GuiWindowAdapter(
+            window_manager,
+            window_handle,
             self.document,
-            title=title,
-            width=width,
-            height=height,
-            presentation_mode=presentation_mode,
             font_path=str(resolved_font),
             font_size=15,
             enable_text_input=enable_text_input,
-            continuous_rendering=False,
         )
-        self.window = self._gui_host.window
+        self.window = self.adapter.window
         if always_on_top:
             self.window.set_always_on_top(True)
         self.graphics = (
             graphics
             if graphics is not None
-            else Tgfx2Context.from_runtime(graphics_session.graphics)
+            else Tgfx2Context.from_runtime(self.adapter.graphics)
         )
         self.device = self.graphics.device
         self.context = self.graphics.context
@@ -127,18 +122,21 @@ class NativeUiHost:
         self._closed = False
         self._pre_render_callbacks: list[PreRenderCallback] = []
         self._image_previews: list[_ImagePreview] = []
-        self._gui_host.set_event_interceptor(self._intercept_event)
-        self._gui_host.set_frame_callbacks(self._before_ui_frame)
+        self.adapter.set_before_frame_callback(self._before_ui_frame)
 
     @property
     def color_target(self):
         """Current host-owned render target for screenshot/MCP readback."""
 
-        return self._gui_host.color_target
+        return self.adapter.color_target
 
     def poll_events(self) -> tuple[bool, int]:
-        count = self._gui_host.pump_events()
-        return not self._gui_host.should_close, count
+        count = self.adapter.consume_pending_events(
+            self.window_manager,
+            self.window_handle,
+            self._intercept_event,
+        )
+        return not self.adapter.should_close, count
 
     def _intercept_event(self, event: dict[str, object]) -> bool:
         event_type = event.get("type")
@@ -169,13 +167,13 @@ class NativeUiHost:
 
     def defer(self, callback: Callable[[], None]) -> None:
         """Schedule a callback for the UI owner thread from any thread."""
-        self._gui_host.defer(callback)
+        self.adapter.defer(callback)
 
     def process_deferred(self) -> int:
-        return self._gui_host.run_deferred()
+        return self.adapter.run_deferred()
 
     def render(self) -> bool:
-        return self._gui_host.render_frame()
+        return self.adapter.render_frame()
 
     def _before_ui_frame(self) -> None:
         self._sync_color_picker_surfaces()
@@ -197,10 +195,10 @@ class NativeUiHost:
 
     def register_color_picker(self, picker: object) -> None:
         """Arrange for a native ColorPicker's generated surfaces to use GPU textures."""
-        self._gui_host.register_color_picker(picker)
+        self.adapter.register_color_picker(picker)
 
     def unregister_color_picker(self, picker: object) -> None:
-        self._gui_host.unregister_color_picker(picker)
+        self.adapter.unregister_color_picker(picker)
 
     def _sync_color_picker_surfaces(self) -> None:
         # ColorPicker GPU surfaces are synchronized by GuiApplicationHost's
@@ -294,11 +292,11 @@ class NativeUiHost:
         self.request_render_update()
 
     def request_render_update(self) -> None:
-        self._gui_host.request_repaint()
+        self.adapter.request_repaint()
 
     @property
     def render_requested(self) -> bool:
-        return self._gui_host.repaint_requested
+        return self.adapter.repaint_requested
 
     def capture_screenshot(
         self,
@@ -313,13 +311,13 @@ class NativeUiHost:
         # here so readback can never observe the previous target contents.
         if not self.render():
             raise RuntimeError("native UI cannot compose a frame for screenshot capture")
-        self._gui_host.wait_idle()
-        color_target = self._gui_host.color_target
+        self.adapter.wait_idle()
+        color_target = self.adapter.color_target
         if not color_target:
             raise RuntimeError("native UI has not rendered a frame for screenshot capture")
         from termin.mcp.screenshot import capture_texture_screenshot
 
-        width, height = self._gui_host.framebuffer_size
+        width, height = self.adapter.framebuffer_size
         return capture_texture_screenshot(
             color_target,
             self.device,
@@ -336,29 +334,41 @@ class NativeUiHost:
         if self._closed:
             return
         self._closed = True
-        self._gui_host.set_event_interceptor(None)
-        self._gui_host.set_frame_callbacks(None, None)
+        self.adapter.set_before_frame_callback(None)
         self._pre_render_callbacks.clear()
         for preview in tuple(self._image_previews):
             self._release_image_preview(preview)
-        self._gui_host.close()
+        self.adapter.close()
         if self._owns_document:
             self.document.close()
 
-    def __enter__(self) -> NativeUiHost:
+    def __enter__(self) -> NativeWidgetContent:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.close()
 
 
-@dataclass
-class NativeUiWindow:
-    """A secondary OS window and the native UI host attached to it."""
+class WindowContent(Protocol):
+    """Content contract selected by the application for a managed window."""
 
-    manager: "NativeUiWindowManager"
-    entry: object
-    host: NativeUiHost
+    window: object
+    render_requested: bool
+
+    def poll_events(self) -> tuple[bool, int]: ...
+    def process_deferred(self) -> int: ...
+    def render(self) -> bool: ...
+    def request_render_update(self) -> None: ...
+    def close(self) -> None: ...
+
+
+@dataclass
+class EditorWindowSlot:
+    """Application policy for one framework-neutral managed OS window."""
+
+    registry: "EditorWindowRegistry"
+    handle: WindowHandle
+    content: WindowContent
     _on_close: Callable[[], None] | None = None
     _closed: bool = False
 
@@ -368,33 +378,31 @@ class NativeUiWindow:
 
     def request_render_update(self) -> None:
         if not self._closed:
-            self.host.request_render_update()
+            self.content.request_render_update()
 
     def close(self) -> None:
         if not self._closed:
-            self.manager.destroy_window(self)
+            self.registry.destroy_window(self)
 
 
-class NativeUiWindowManager:
-    """Drive native hosts that share one canonical windowed graphics session."""
+class EditorWindowRegistry:
+    """Editor-owned mapping from native window handles to selected content."""
 
     def __init__(
         self,
-        main_host: NativeUiHost,
-        *,
-        graphics_session: object | None = None,
-        host_factory: Callable[..., NativeUiHost] | None = None,
+        window_manager: WindowManager,
+        main_handle: WindowHandle,
+        main_content: WindowContent,
     ) -> None:
-        self.main_host = main_host
-        if graphics_session is None:
-            raise ValueError("NativeUiWindowManager requires a graphics runtime")
-        self._graphics_session = graphics_session
-        self._host_factory = host_factory if host_factory is not None else NativeUiHost
-        self._windows: list[NativeUiWindow] = []
+        if not window_manager.contains(main_handle):
+            raise ValueError("main window handle is not owned by the window manager")
+        self.window_manager = window_manager
+        self.main = EditorWindowSlot(self, main_handle, main_content)
+        self._windows: list[EditorWindowSlot] = []
         self._closed = False
 
     @property
-    def windows(self) -> tuple[NativeUiWindow, ...]:
+    def windows(self) -> tuple[EditorWindowSlot, ...]:
         return tuple(self._windows)
 
     def create_window(
@@ -406,34 +414,41 @@ class NativeUiWindowManager:
         document: Document | None = None,
         always_on_top: bool = False,
         on_close: Callable[[], None] | None = None,
-    ) -> NativeUiWindow:
+        content_factory: Callable[[WindowManager, WindowHandle], WindowContent] | None = None,
+    ) -> EditorWindowSlot:
         if self._closed:
-            raise RuntimeError("native UI window manager is closed")
+            raise RuntimeError("editor window registry is closed")
+        handle = self.window_manager.create_window(title, width, height)
         try:
-            host = self._host_factory(
-                self._graphics_session,
-                document=document,
-                graphics=self.main_host.graphics,
-                title=title,
-                width=width,
-                height=height,
-                font_path=self.main_host.font_path,
-                enable_text_input=False,
-                always_on_top=always_on_top,
-            )
-            # Secondary tools must inherit the complete editor theme, not just
-            # the default font size used when their renderer was constructed.
-            host.document.theme = self.main_host.document.theme
+            if content_factory is None:
+                main_content = self.main.content
+                if not isinstance(main_content, NativeWidgetContent):
+                    raise ValueError(
+                        "native widget content requires an explicit content_factory"
+                    )
+                content = NativeWidgetContent(
+                    self.window_manager,
+                    handle,
+                    document=document,
+                    graphics=main_content.graphics,
+                    font_path=main_content.font_path,
+                    enable_text_input=False,
+                    always_on_top=always_on_top,
+                )
+                content.document.theme = main_content.document.theme
+            else:
+                content = content_factory(self.window_manager, handle)
         except Exception:
+            self.window_manager.destroy_window(handle)
             raise
 
-        window = NativeUiWindow(self, host.window, host, on_close)
+        window = EditorWindowSlot(self, handle, content, on_close)
         self._windows.append(window)
         return window
 
-    def destroy_window(self, window: NativeUiWindow) -> None:
-        if window.manager is not self:
-            raise ValueError("secondary native UI window belongs to another manager")
+    def destroy_window(self, window: EditorWindowSlot) -> None:
+        if window.registry is not self:
+            raise ValueError("editor window belongs to another registry")
         if window._closed:
             return
         window._closed = True
@@ -444,38 +459,47 @@ class NativeUiWindowManager:
                 window._on_close()
         except Exception:
             _logger.exception("native secondary-window close callback failed")
+        content_error: Exception | None = None
+        try:
+            window.content.close()
+        except Exception as error:
+            content_error = error
+            _logger.exception("editor secondary-window content close failed")
         finally:
-            window.host.close()
+            if self.window_manager.contains(window.handle):
+                self.window_manager.destroy_window(window.handle)
+        if content_error is not None:
+            raise content_error
 
     def poll_events(self) -> tuple[bool, int]:
         if self._closed:
             return False, 0
-        keep_running, routed = self.main_host.poll_events()
+        routed = self.window_manager.pump_events()
+        keep_running, _main_consumed = self.main.content.poll_events()
         if not keep_running:
             return False, routed
         for window in tuple(self._windows):
             if window.closed:
                 continue
-            secondary_running, secondary_routed = window.host.poll_events()
-            routed += secondary_routed
+            secondary_running, _secondary_consumed = window.content.poll_events()
             if not secondary_running:
                 self.destroy_window(window)
         return True, routed
 
     def process_deferred(self) -> int:
-        processed = self.main_host.process_deferred()
+        processed = self.main.content.process_deferred()
         for window in tuple(self._windows):
             if not window.closed:
-                processed += window.host.process_deferred()
+                processed += window.content.process_deferred()
         return processed
 
     def render_requested(self) -> int:
         rendered = 0
-        hosts = (self.main_host,) + tuple(
-            window.host for window in self._windows if not window.closed
+        contents = (self.main.content,) + tuple(
+            window.content for window in self._windows if not window.closed
         )
-        for host in hosts:
-            if host.render_requested and host.render():
+        for content in contents:
+            if content.render_requested and content.render():
                 rendered += 1
         return rendered
 
@@ -483,6 +507,25 @@ class NativeUiWindowManager:
         if self._closed:
             return
         self._closed = True
+        close_errors: list[Exception] = []
         for window in tuple(self._windows):
-            self.destroy_window(window)
-        self.main_host.close()
+            try:
+                self.destroy_window(window)
+            except Exception as error:
+                close_errors.append(error)
+        self.main._closed = True
+        try:
+            self.main.content.close()
+        except Exception as error:
+            _logger.exception("editor main-window content close failed")
+            close_errors.append(error)
+        finally:
+            try:
+                if self.window_manager.contains(self.main.handle):
+                    self.window_manager.destroy_window(self.main.handle)
+            finally:
+                self.window_manager.close()
+        if close_errors:
+            raise RuntimeError(
+                f"editor window registry close failed for {len(close_errors)} content object(s)"
+            ) from close_errors[0]

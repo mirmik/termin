@@ -402,26 +402,31 @@ def _smoke_frame_limit() -> int:
 
 def run_native_launcher(controller: LauncherController) -> None:
     """Own the native launcher window until an editor starts or it closes."""
-    from termin.display import WindowedGraphicsSession, quit_sdl
+    from termin.display import WindowManager, WindowedGraphicsSession, quit_sdl
     from termin.editor_core.application_icon import apply_editor_window_icon
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
     from tgfx import Tgfx2Context
 
     configure_sdk_shader_runtime("launcher-native")
     graphics_session = WindowedGraphicsSession.create_native()
+    window_manager = None
     window = None
     host = None
     release_background = None
     projection = None
     try:
         graphics = Tgfx2Context.from_runtime(graphics_session.graphics)
-        host = NativeUiHost(
-            graphics_session,
+        window_manager = WindowManager(graphics_session)
+        window_handle = window_manager.create_window(
+            "Termin Launcher",
+            1024,
+            640,
+        )
+        host = NativeWidgetContent(
+            window_manager,
+            window_handle,
             graphics=graphics,
-            title="Termin Launcher",
-            width=1024,
-            height=640,
         )
         window = host.window
         apply_editor_window_icon(window)
@@ -435,6 +440,7 @@ def run_native_launcher(controller: LauncherController) -> None:
         frame_count = 0
         host.render()
         while not window.should_close() and not controller.state.should_quit:
+            window_manager.pump_events()
             keep_running, _event_count = host.poll_events()
             if not keep_running:
                 break
@@ -453,6 +459,8 @@ def run_native_launcher(controller: LauncherController) -> None:
             release_background()
         if host is not None:
             host.close()
+        if window_manager is not None:
+            window_manager.close()
         try:
             graphics_session.close()
         finally:

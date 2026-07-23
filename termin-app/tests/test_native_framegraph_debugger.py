@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from termin.engine import FrameGraphDebuggerMode
 from termin.editor_native.framegraph_debugger import (
     NativeFramegraphPreviewSurface,
@@ -192,12 +194,12 @@ class _WindowHost:
 
 class _ManagedWindow:
     def __init__(self, host, on_close):
-        self.host = host
+        self.content = host
         self.on_close = on_close
         self.closed = False
 
     def request_render_update(self):
-        self.host.request_render_update()
+        self.content.request_render_update()
 
     def close(self):
         if self.closed:
@@ -210,6 +212,7 @@ class _WindowManager:
     def __init__(self, context):
         self.main_host = _WindowHost(Document(), context)
         self.main_host.device = object()
+        self.main = SimpleNamespace(content=self.main_host)
         self.windows = []
         self.create_options = []
 
@@ -369,7 +372,7 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     assert debugger.target_combo.selected_index == 0
     assert debugger.window is window_manager.windows[-1]
     assert window_manager.create_options[-1]["always_on_top"] is True
-    assert debugger.render_previews in debugger.window.host.callbacks
+    assert debugger.render_previews in debugger.window.content.callbacks
     assert model.selected_pass_index == 3
     assert model.selected_symbol == "opaque"
     assert model.selected_resource == "RT_COLOR"
@@ -397,7 +400,7 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     first_window = debugger.window
     debugger.dismiss()
     assert first_window.closed
-    assert first_window.host.callbacks == []
+    assert first_window.content.callbacks == []
     assert model.disconnect_count == 1
     assert not debugger.update()
 
