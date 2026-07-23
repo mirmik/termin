@@ -82,7 +82,6 @@ def test_native_editor_event_loop_polls_services_and_honors_frame_limit() -> Non
 
     event_loop.poll_events()
 
-    services.window_manager.process_deferred.assert_called_once_with()
     services.project_file_watcher.poll.assert_called_once_with()
     services.scene_structure_observer.poll.assert_called_once_with()
     services.spacemouse.poll.assert_called_once_with()

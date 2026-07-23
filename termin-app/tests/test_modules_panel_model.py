@@ -58,9 +58,8 @@ class _ImmediateThread:
 def test_modules_panel_snapshot_and_async_reload_are_toolkit_neutral(monkeypatch) -> None:
     monkeypatch.setattr(model_module.threading, "Thread", _ImmediateThread)
     runtime = _Runtime()
-    deferred = []
     snapshots = []
-    controller = ModulesPanelController(runtime, defer=deferred.append)
+    controller = ModulesPanelController(runtime)
     controller.set_changed_handler(snapshots.append)
 
     snapshot = controller.snapshot()
@@ -69,10 +68,6 @@ def test_modules_panel_snapshot_and_async_reload_are_toolkit_neutral(monkeypatch
 
     controller.select("core")
     assert controller.reload_selected()
-    assert controller.snapshot().operation_running
-
-    while deferred:
-        deferred.pop(0)()
 
     assert runtime.calls == [("prepare", {}), ("reload", "core")]
     assert not controller.snapshot().operation_running
@@ -84,7 +79,7 @@ def test_modules_panel_snapshot_and_async_reload_are_toolkit_neutral(monkeypatch
 
 def test_modules_panel_rejects_selection_operation_without_selection() -> None:
     runtime = _Runtime()
-    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+    controller = ModulesPanelController(runtime)
 
     assert not controller.build_selected()
     assert runtime.calls == []
@@ -102,7 +97,7 @@ def test_modules_panel_exposes_retryable_cleanup_phase() -> None:
             cleanup_phase=ModuleCleanupPhase.RevokeContributions,
         )
     ]
-    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+    controller = ModulesPanelController(runtime)
 
     snapshot = controller.snapshot()
 
@@ -125,7 +120,7 @@ def test_modules_panel_exposes_failed_reload_recovery_action() -> None:
         )
     ]
     runtime.dirty_modules = lambda: set()
-    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+    controller = ModulesPanelController(runtime)
 
     snapshot = controller.snapshot()
 

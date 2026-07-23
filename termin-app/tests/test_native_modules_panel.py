@@ -34,7 +34,7 @@ class _Runtime:
 def test_native_modules_panel_projects_runtime_and_selection() -> None:
     document = Document()
     runtime = _Runtime()
-    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+    controller = ModulesPanelController(runtime)
     panel = build_native_modules_panel(document, controller)
 
     assert panel.table_model.row_count == 1
@@ -53,7 +53,7 @@ def test_modules_shortcut_docks_native_debug_panel() -> None:
     document = Document()
     shell = build_native_editor_shell(document)
     runtime = _Runtime()
-    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+    controller = ModulesPanelController(runtime)
     panel = build_native_modules_panel(document, controller)
     shell.debug_tabs.add_page("Modules", panel.root)
 

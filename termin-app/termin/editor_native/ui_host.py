@@ -165,13 +165,6 @@ class NativeWidgetContent:
             )
         return False
 
-    def defer(self, callback: Callable[[], None]) -> None:
-        """Schedule a callback for the UI owner thread from any thread."""
-        self.adapter.defer(callback)
-
-    def process_deferred(self) -> int:
-        return self.adapter.run_deferred()
-
     def render(self) -> bool:
         return self.adapter.render_frame()
 
@@ -304,11 +297,11 @@ class NativeWidgetContent:
         output_path: str | None = None,
         include_image: bool = False,
     ) -> dict[str, object]:
-        """Capture the composed native editor UI from the owner thread."""
+        """Capture the composed native editor UI."""
 
         # MCP execution may drain a newly queued screenshot request in the same
-        # owner-thread batch as a preceding UI mutation. Compose synchronously
-        # here so readback can never observe the previous target contents.
+        # execution batch as a preceding UI mutation. Compose synchronously here
+        # so readback can never observe the previous target contents.
         if not self.render():
             raise RuntimeError("native UI cannot compose a frame for screenshot capture")
         self.adapter.wait_idle()
@@ -356,7 +349,6 @@ class WindowContent(Protocol):
     render_requested: bool
 
     def poll_events(self) -> tuple[bool, int]: ...
-    def process_deferred(self) -> int: ...
     def render(self) -> bool: ...
     def request_render_update(self) -> None: ...
     def close(self) -> None: ...
@@ -485,13 +477,6 @@ class EditorWindowRegistry:
             if not secondary_running:
                 self.destroy_window(window)
         return True, routed
-
-    def process_deferred(self) -> int:
-        processed = self.main.content.process_deferred()
-        for window in tuple(self._windows):
-            if not window.closed:
-                processed += window.content.process_deferred()
-        return processed
 
     def render_requested(self) -> int:
         rendered = 0

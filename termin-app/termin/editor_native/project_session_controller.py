@@ -19,10 +19,8 @@ _logger = logging.getLogger(__name__)
 class NativeModuleOperationDialog:
     """Modal progress surface for a non-cancellable project module operation.
 
-    Artifact preparation runs on a worker thread.  Module registration and all
-    widget mutation remain on the native editor owner thread through ``defer``.
-    This mirrors the established tcgui lifecycle instead of merely decorating
-    startup with a fake progress indicator.
+    Artifact preparation, module registration and progress projection may all
+    proceed on the worker thread; native UI has no thread-affinity gate.
     """
 
     def __init__(
@@ -30,7 +28,6 @@ class NativeModuleOperationDialog:
         document: Document,
         *,
         viewport: Callable[[], Rect],
-        defer: Callable[[Callable[[], None]], None],
         request_render: Callable[[], None],
         runtime,
         title: str,
@@ -43,7 +40,6 @@ class NativeModuleOperationDialog:
             raise ValueError("module operation requires worker_action or owner_action")
         self.document = document
         self.viewport = viewport
-        self.defer = defer
         self.request_render = request_render
         self.runtime = runtime
         self.worker_action = worker_action
@@ -87,7 +83,7 @@ class NativeModuleOperationDialog:
             raise RuntimeError("failed to show native module operation dialog")
         self.request_render()
         if self.worker_action is None:
-            self.defer(self._run_owner_action)
+            self._run_followup_action()
             return
         worker = threading.Thread(
             target=self._run_worker_action,
@@ -108,11 +104,7 @@ class NativeModuleOperationDialog:
         self.request_render()
 
     def _on_build_output(self, module_id: str, line: str) -> None:
-        self.defer(
-            lambda module_id=module_id, line=line: self._append_log(
-                f"[{module_id}] {line}"
-            )
-        )
+        self._append_log(f"[{module_id}] {line}")
 
     def _run_worker_action(self) -> None:
         success = False
@@ -133,11 +125,11 @@ class NativeModuleOperationDialog:
                 _logger.exception("Native module operation could not remove its output listener")
 
         if success and self.owner_action is not None:
-            self.defer(self._run_owner_action)
+            self._run_followup_action()
         else:
-            self.defer(lambda: self._finish(success, error_message))
+            self._finish(success, error_message)
 
-    def _run_owner_action(self) -> None:
+    def _run_followup_action(self) -> None:
         success = False
         error_message = ""
         try:
@@ -147,7 +139,7 @@ class NativeModuleOperationDialog:
                 error_message = self.runtime.last_error
         except Exception as error:
             error_message = str(error)
-            _logger.exception("Native module owner-thread operation failed")
+            _logger.exception("Native module follow-up operation failed")
         self._finish(success, error_message)
 
     def _finish(self, success: bool, error_message: str) -> None:
@@ -187,13 +179,11 @@ class NativeProjectSessionController(CoreProjectSessionController):
         *,
         document: Document,
         viewport: Callable[[], Rect],
-        defer: Callable[[Callable[[], None]], None],
         request_render: Callable[[], None],
         **kwargs,
     ) -> None:
         self._document = document
         self._viewport = viewport
-        self._defer = defer
         self._request_render = request_render
         self._active_operation: NativeModuleOperationDialog | None = None
         super().__init__(run_module_operation=self._run_module_operation, **kwargs)
@@ -218,7 +208,6 @@ class NativeProjectSessionController(CoreProjectSessionController):
         operation = NativeModuleOperationDialog(
             self._document,
             viewport=self._viewport,
-            defer=self._defer,
             request_render=self._request_render,
             runtime=runtime,
             title="Load Project Modules",

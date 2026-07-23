@@ -350,7 +350,6 @@ def _compose_native_editor(
 
     modules_controller = ModulesPanelController(
         get_project_modules_runtime(engine.scene_manager),
-        defer=host.defer,
     )
     modules_panel = diagnostics_stage.own(
         "modules panel",
@@ -1559,7 +1558,6 @@ def _compose_native_editor(
     project_session_controller = NativeProjectSessionController(
         document=host.document,
         viewport=editor_viewport,
-        defer=host.defer,
         request_render=request_editor_render,
         set_project_state=lambda _project_dir, project_name: session_presentation.update(project_name=project_name),
         log_to_console=log_build_message,

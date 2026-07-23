@@ -54,11 +54,10 @@ class ModulesSnapshot:
 
 
 class ModulesPanelController:
-    """Own module-panel state while keeping runtime mutations on the owner thread."""
+    """Own module-panel state across direct caller and worker updates."""
 
-    def __init__(self, runtime, *, defer: Callable[[Callable[[], None]], None]) -> None:
+    def __init__(self, runtime) -> None:
         self.runtime = runtime
-        self._defer = defer
         self._selected_module: str | None = None
         self._operation_running = False
         self._operation_message = ""
@@ -226,11 +225,11 @@ class ModulesPanelController:
         self._publish()
 
         if worker_action is None:
-            self._defer(lambda: self._finish_owner(owner_action))
+            self._finish_operation(owner_action)
             return True
 
         def output(module_id: str, line: str) -> None:
-            self._defer(lambda: self._append_log(f"[{module_id}] {line}"))
+            self._append_log(f"[{module_id}] {line}")
 
         def worker() -> None:
             success = False
@@ -249,21 +248,21 @@ class ModulesPanelController:
                 except Exception:
                     _logger.exception("Failed to remove module build output listener")
             if success and owner_action is not None:
-                self._defer(lambda: self._finish_owner(owner_action))
+                self._finish_operation(owner_action)
             else:
-                self._defer(lambda: self._finish(success, error))
+                self._finish(success, error)
 
         threading.Thread(target=worker, name="EditorModulesOperation", daemon=False).start()
         return True
 
-    def _finish_owner(self, owner_action) -> None:
+    def _finish_operation(self, owner_action) -> None:
         try:
             success = bool(owner_action())
             error = "" if success else self.runtime.last_error
         except Exception as exc:
             success = False
             error = str(exc)
-            _logger.exception("Module owner-thread operation failed")
+            _logger.exception("Module follow-up operation failed")
         self._finish(success, error)
 
     def _append_log(self, message: str) -> None:
@@ -281,7 +280,7 @@ class ModulesPanelController:
         if event.message:
             _logger.info("Module %s", event.message)
         if not self._operation_running:
-            self._defer(self._publish)
+            self._publish()
 
     def _publish(self) -> None:
         if self._changed is not None:
