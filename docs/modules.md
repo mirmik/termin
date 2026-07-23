@@ -136,7 +136,15 @@ Source of truth: [termin-window docs](https://github.com/mirmik/termin-monorepo/
 Lightweight boundary для native windows, portable window events и физической
 презентации tgfx texture. Concrete implementation `SDLBackendWindow` живёт
 здесь. Модуль не зависит от scene, engine display/input routing, render или
-materials; полный runtime явно соединяет `BackendWindow` с `termin-display`.
+materials.
+
+Framework-neutral `WindowManager` владеет коллекцией `BackendWindow`,
+generational handles, единым process-global event pump, per-window event
+batches и deterministic close order. Он не хранит UI objects/controllers, не
+задаёт main/secondary роли, render scheduling или application-exit policy.
+Application composition связывает `WindowHandle` с выбранным UI framework,
+raw renderer или другим содержимым. Целевой контракт описан в
+[Framework-neutral window management](architecture/2026-07-23-framework-neutral-window-management.md).
 
 ## UI And Tools
 
@@ -151,6 +159,13 @@ Source of truth: [termin-gui docs](https://github.com/mirmik/termin-monorepo/blo
 Рендеринг виджетов должен использовать facade из [termin-graphics](#termin-graphics), а не дублировать низкоуровневые GPU primitives.
 
 `termin-gui-native` — экспериментальный C ABI/C++ прототип будущего native UI document; он не заменяет текущий Python `termin-gui`, пока контракт владения, handles и polyglot widget vtable не будет проверен на базовых виджетах.
+
+Native widget/document core не владеет OS windows, `WindowedGraphicsSession`,
+application loop или main/secondary policy. Необязательный leaf adapter может
+зависеть от `termin-window` для перевода `WindowEvent`, clipboard/cursor/text
+input и presentation integration; обратной зависимости из `termin-window` в
+UI нет. Headless composition использует document/rendering primitives без
+`termin-window`.
 
 ### tcplot
 

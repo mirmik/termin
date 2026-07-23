@@ -2,10 +2,14 @@
 
 ## Status
 
-Accepted target model for #741. This decision refines
-[Native GUI Application Host](2026-07-23-native-gui-application-host.md)
-without replacing its canonical graphics ownership or public windowed
-composition.
+Historical implementation model for #741. The presentation/input/readback
+mechanics implemented by #742–#744 remain migration foundation, but sharing a
+`GuiApplicationHost` between windowed and headless execution is no longer the
+target architecture. The current decision is
+[Framework-Neutral Window Management](2026-07-23-framework-neutral-window-management.md):
+windowed applications use the framework-neutral `termin-window` manager and an
+optional GUI adapter, while headless execution uses document/rendering
+primitives without `termin-window` or an application host.
 
 Implementation is split into #742, #743, #744, #745 and #746. The shared frame
 core (#742) and typed input/platform boundaries (#743) are implemented. The
