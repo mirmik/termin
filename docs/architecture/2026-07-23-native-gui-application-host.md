@@ -2,9 +2,13 @@
 
 ## Status
 
-Accepted target model for #593. This decision refines the standalone host
-implemented by #616 and applies the canonical graphics ownership established
-by #703 in
+Historical migration model implemented by #616 and #735–#737. Its canonical
+graphics ownership and per-window lifetime findings remain valid, but its
+`GuiApplicationHost`/`GuiWindowHost` ownership boundary is superseded by
+[Framework-Neutral Window Management](2026-07-23-framework-neutral-window-management.md).
+Do not use this note as the target module-placement decision for new code.
+
+This document applied the canonical graphics ownership established by #703 in
 [Graphics Host and Window Session](2026-07-21-graphics-host-and-window-session.md).
 
 The shared presentation-neutral frame implementation and isolated/offscreen
