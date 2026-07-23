@@ -8,7 +8,7 @@ from typing import Callable
 import weakref
 
 from termin.engine import FrameGraphDebuggerMode
-from termin.editor_native.ui_host import NativeUiWindow, NativeUiWindowManager
+from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 from termin.gui_native import (
     Document,
     EdgeInsets,
@@ -143,7 +143,7 @@ class NativeFramegraphPreviewSurface:
 class NativeFramegraphDebugger:
     document: Document
     model: object
-    window_manager: NativeUiWindowManager
+    window_manager: EditorWindowRegistry
     root: WidgetRef
     target_combo: object
     mode_combo: object
@@ -172,7 +172,7 @@ class NativeFramegraphDebugger:
     depth_preview: NativeFramegraphPreviewSurface
     request_scene_render: Callable[[], None]
     device: object
-    window: NativeUiWindow | None = None
+    window: EditorWindowSlot | None = None
     pass_indices: list[int] = field(default_factory=list)
     _updating: bool = False
     _active: bool = False
@@ -206,9 +206,9 @@ class NativeFramegraphDebugger:
             self._deactivate()
             raise
         self.window = window
-        self.main_preview.context = window.host.context
-        self.depth_preview.context = window.host.context
-        window.host.add_pre_render_callback(self.render_previews)
+        self.main_preview.context = window.content.context
+        self.depth_preview.context = window.content.context
+        window.content.add_pre_render_callback(self.render_previews)
         self.request_render()
         return True
 
@@ -303,7 +303,7 @@ class NativeFramegraphDebugger:
     def _on_window_closed(self) -> None:
         window = self.window
         if window is not None:
-            window.host.remove_pre_render_callback(self.render_previews)
+            window.content.remove_pre_render_callback(self.render_previews)
         self.window = None
         self._deactivate()
 
@@ -419,7 +419,7 @@ class NativeFramegraphDebugger:
 
 
 def build_native_framegraph_debugger(
-    window_manager: NativeUiWindowManager,
+    window_manager: EditorWindowRegistry,
     model: object,
     *,
     request_render: Callable[[], None],
@@ -539,7 +539,7 @@ def build_native_framegraph_debugger(
     timing_bar = document.create_status_bar("Timing: no selection")
     root.add_fixed_child(_ref(document, timing_bar), 24.0)
 
-    context = window_manager.main_host.context
+    context = window_manager.main.content.context
     main_preview = NativeFramegraphPreviewSurface(
         context,
         main_canvas,
@@ -586,7 +586,7 @@ def build_native_framegraph_debugger(
         main_preview=main_preview,
         depth_preview=depth_preview,
         request_scene_render=request_render,
-        device=window_manager.main_host.device,
+        device=window_manager.main.content.device,
     )
     weak_result = weakref.ref(result)
 

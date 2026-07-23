@@ -88,8 +88,11 @@ native UI. UI-код здесь добавлять нельзя.
 
 ### `termin/editor_native/` — production native UI
 
-Native frontend композирует главное окно и modeless secondary OS windows через
-`NativeUiWindowManager`. `profiler_panel.py` остаётся лёгкой сглаженной сводкой
+Native frontend хранит прикладное соответствие `WindowHandle → content` в
+`EditorWindowRegistry`; сами окна и единый pump событий принадлежат нативному
+`termin-window::WindowManager`. Native widgets подключаются к конкретному окну
+прямым C++ `GuiWindowAdapter`, без Python host/adapter façade.
+`profiler_panel.py` остаётся лёгкой сглаженной сводкой
 в dock, а `frame_profiler.py` — отдельный raw-frame frontend: bounded timeline,
 пауза/follow, hitch navigation, `Include UI` и несглаженное дерево выбранного
 кадра. Кнопка `Capture` включает дешёвый сбор interval/active/cadence и может

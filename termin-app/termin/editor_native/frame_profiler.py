@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import weakref
 
 from termin.editor._editor_native import FrameProfilerController
-from termin.editor_native.ui_host import NativeUiWindow, NativeUiWindowManager
+from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 from termin.gui_native import (
     Document,
     EdgeInsets,
@@ -31,13 +31,13 @@ def _ref(document: Document, reference) -> WidgetRef:
 @dataclass
 class NativeFrameProfiler:
     document: Document
-    window_manager: NativeUiWindowManager
+    window_manager: EditorWindowRegistry
     controller: FrameProfilerController
     root: WidgetRef
     toolbar: object
     timeline: object
     section_table: object
-    window: NativeUiWindow | None = None
+    window: EditorWindowSlot | None = None
     _closed: bool = False
     _syncing_selection: bool = False
 
@@ -113,7 +113,7 @@ class NativeFrameProfiler:
 
 
 def build_native_frame_profiler(
-    window_manager: NativeUiWindowManager,
+    window_manager: EditorWindowRegistry,
     controller: FrameProfilerController,
 ) -> NativeFrameProfiler:
     document = Document()

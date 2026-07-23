@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from tgfx import Tgfx2Context
-from termin.display import PresentationMode, WindowedGraphicsSession, quit_sdl
+from termin.display import PresentationMode, WindowManager, WindowedGraphicsSession, quit_sdl
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
@@ -167,7 +167,7 @@ from termin.editor_native.registry_viewer import (
 )
 from termin.editor_native.scene_tree import build_native_scene_tree
 from termin.editor_native.shell import build_native_editor_shell
-from termin.editor_native.ui_host import NativeUiHost, NativeUiWindowManager
+from termin.editor_native.ui_host import EditorWindowRegistry, NativeWidgetContent
 from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
 
@@ -246,24 +246,31 @@ def _compose_native_editor(
         "graphics context",
         Tgfx2Context.from_runtime(graphics_session.graphics),
     )
+    native_windows = platform_stage.own(
+        "framework-neutral window manager",
+        WindowManager(graphics_session),
+        cleanup=lambda: native_windows.close(),
+    )
+    main_window_handle = native_windows.create_window(
+        "Termin Editor — Native UI",
+        1280,
+        720,
+        presentation_mode,
+    )
     host = platform_stage.own(
-        "native UI host",
-        NativeUiHost(
-            graphics_session,
+        "native widget content",
+        NativeWidgetContent(
+            native_windows,
+            main_window_handle,
             graphics=graphics,
-            title="Termin Editor — Native UI",
-            width=1280,
-            height=720,
-            presentation_mode=presentation_mode,
         ),
-        cleanup=lambda: host.close(),
     )
     window = host.window
     apply_editor_window_icon(window)
     window.maximize()
     window_manager = platform_stage.own(
-        "native window manager",
-        NativeUiWindowManager(host, graphics_session=graphics_session),
+        "editor window registry",
+        EditorWindowRegistry(native_windows, main_window_handle, host),
         cleanup=lambda: window_manager.close(),
     )
     shell = platform_stage.own(

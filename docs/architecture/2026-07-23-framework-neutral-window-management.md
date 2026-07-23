@@ -265,13 +265,15 @@ path, while isolated rendering validates no-display execution.
 | main/secondary and exit policy | application composition |
 | shader/runtime setup | graphics/application composition root |
 
-`GuiApplicationHost`, `GuiWindowHost`, `StandaloneGuiApplication`, Python
-`NativeUiHost` and `NativeUiWindowManager` are transitional compatibility
-APIs. `OffscreenGuiComposition`, `DocumentRenderer` and
-`GuiWindowAdapter` are the implemented target contracts from #757/#758;
-`OffscreenGuiApplication` remains only a Python compatibility alias until
-#760. The remaining host mechanics are migrated before the types and
-`termin_gui_native::application_host` export are removed.
+`GuiApplicationHost`, `GuiWindowHost` and `StandaloneGuiApplication` are
+transitional compatibility APIs. `WindowManager`, `OffscreenGuiComposition`,
+`DocumentRenderer` and `GuiWindowAdapter` are the implemented target
+contracts. Python binds these native types and their methods directly; it must
+not introduce binding-only proxy classes or framework facades over them.
+The editor's `EditorWindowRegistry` is application policy: it maps native
+handles to application-selected content and does not replace `WindowManager`
+or `GuiWindowAdapter`. `OffscreenGuiApplication` remains only a compatibility
+alias until #760.
 
 ## Lifetime and shutdown
 
@@ -301,8 +303,8 @@ consumers before closing its isolated `GraphicsHost`; it has no window phase.
    widget/document core independently consumable.
 4. **#758:** recompose offscreen execution around document/rendering contracts,
    without application/window host ownership.
-5. **#759:** migrate the editor to application-owned window slots and remove
-   Python `NativeUiWindowManager`.
+5. **#759:** migrate the editor to application-owned `EditorWindowSlot`
+   records and remove Python `NativeUiWindowManager`.
 6. **#745/#746:** connect and verify no-display editor execution.
 7. **#760:** migrate remaining consumers and remove the compatibility host API.
 

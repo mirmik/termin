@@ -12,6 +12,8 @@ try:
         BackendWindowSystem,
         PresentationMode,
         SDLBackendWindow,
+        WindowHandle,
+        WindowManager,
         WindowedGraphicsSession,
         SystemCursorShape,
         get_clipboard_text,
@@ -29,6 +31,8 @@ except ImportError as e:
     BackendWindowSystem = None
     PresentationMode = None
     SDLBackendWindow = None
+    WindowHandle = None
+    WindowManager = None
     WindowedGraphicsSession = None
     SystemCursorShape = None
     get_clipboard_text = None
@@ -70,6 +74,8 @@ __all__ = [
     "BackendWindowSystem",
     "PresentationMode",
     "SDLBackendWindow",
+    "WindowHandle",
+    "WindowManager",
     "WindowedGraphicsSession",
     "SystemCursorShape",
     "get_clipboard_text",

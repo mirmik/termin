@@ -7,8 +7,8 @@ import pytest
 
 from tcbase import Key
 from termin.editor_native import (
+    EditorWindowRegistry,
     NativeUiEventPolicy,
-    NativeUiWindowManager,
     build_native_editor_shell,
     resolve_native_ui_font,
 )
@@ -52,13 +52,13 @@ class _WindowManagerTestDocument:
         self.theme = object()
 
 
-class _WindowManagerTestHost:
+class _WindowManagerTestContent:
     _next_window_id = 1
 
-    def __init__(self, session, document=None, *, graphics=None, **options):
+    def __init__(self, document=None, *, graphics=None, **options):
         self.window = _WindowManagerTestWindow(self._next_window_id)
         type(self)._next_window_id += 1
-        self.graphics = graphics if graphics is not None else session.graphics
+        self.graphics = graphics
         self.document = document or _WindowManagerTestDocument()
         self.font_path = Path("/tmp/editor.ttf")
         self.render_requested = False
@@ -91,42 +91,83 @@ class _WindowManagerTestHost:
         self.window.close()
 
 
-def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
+class _NativeWindowManagerProbe:
+    def __init__(self):
+        self._handles = {1}
+        self._next_handle = 2
+        self.pump_count = 0
+        self.destroyed = []
+        self.closed = False
+
+    def contains(self, handle):
+        return handle in self._handles
+
+    def create_window(self, _title, _width, _height):
+        handle = self._next_handle
+        self._next_handle += 1
+        self._handles.add(handle)
+        return handle
+
+    def destroy_window(self, handle):
+        self._handles.remove(handle)
+        self.destroyed.append(handle)
+
+    def pump_events(self):
+        self.pump_count += 1
+        return 1
+
+    def close(self):
+        self.closed = True
+        self._handles.clear()
+
+
+def test_editor_window_registry_routes_renders_and_closes_secondary_windows():
     graphics = object()
-    session = SimpleNamespace(graphics=graphics)
-    main_host = _WindowManagerTestHost(session, graphics=graphics)
+    native_windows = _NativeWindowManagerProbe()
+    main_host = _WindowManagerTestContent(graphics=graphics)
     main_host.event_results = [(True, 0), (True, 0), (False, 0)]
-    manager = NativeUiWindowManager(
-        main_host,
-        graphics_session=session,
-        host_factory=_WindowManagerTestHost,
-    )
+    manager = EditorWindowRegistry(native_windows, 1, main_host)
     closed = []
+    secondary_content = None
+
+    def create_content(_manager, _handle):
+        nonlocal secondary_content
+        secondary_content = _WindowManagerTestContent(
+            _WindowManagerTestDocument(),
+            graphics=graphics,
+            enable_text_input=False,
+        )
+        secondary_content.document.theme = main_host.document.theme
+        return secondary_content
+
     secondary = manager.create_window(
         "Debugger",
         800,
         600,
-        document=_WindowManagerTestDocument(),
         on_close=lambda: closed.append("secondary"),
+        content_factory=create_content,
     )
 
-    assert secondary.host.graphics is graphics
-    assert secondary.host.options["enable_text_input"] is False
-    assert secondary.host.document.theme is main_host.document.theme
-    secondary.host.event_results = [(True, 1), (False, 0)]
+    assert secondary.content is secondary_content
+    assert secondary.content.graphics is graphics
+    assert secondary.content.options["enable_text_input"] is False
+    assert secondary.content.document.theme is main_host.document.theme
+    secondary.content.event_results = [(True, 1), (False, 0)]
     assert manager.poll_events() == (True, 1)
-    secondary.host.request_render_update()
+    assert native_windows.pump_count == 1
+    secondary.content.request_render_update()
     assert manager.render_requested() == 1
-    assert secondary.host.render_count == 1
+    assert secondary.content.render_count == 1
 
-    assert manager.poll_events() == (True, 0)
+    assert manager.poll_events() == (True, 1)
     assert secondary.closed
-    assert secondary.host.closed
+    assert secondary.content.closed
     assert closed == ["secondary"]
     assert manager.windows == ()
-    assert manager.poll_events() == (False, 0)
+    assert manager.poll_events() == (False, 1)
     manager.close()
     assert main_host.closed
+    assert native_windows.closed
 
 
 def test_native_menu_activation_route_filters_local_command_id_collisions():
@@ -156,7 +197,7 @@ def test_native_ui_key_codes_match_canonical_platform_values():
 
 
 def test_native_ui_event_policy_intercepts_file_drop_without_owning_event_dispatch():
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
     drops = []
 
@@ -164,7 +205,7 @@ def test_native_ui_event_policy_intercepts_file_drop_without_owning_event_dispat
         drops.append((path, x, y, modifiers))
         return True
 
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     host.event_policy = NativeUiEventPolicy(file_drop_handler=handle_drop)
     assert host._intercept_event(
         {
@@ -179,12 +220,12 @@ def test_native_ui_event_policy_intercepts_file_drop_without_owning_event_dispat
 
 
 def test_native_ui_event_policy_consumes_enabled_shortcut_and_ignores_repeats():
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
     document = Document()
     shell = build_native_editor_shell(document)
     shell.edit_menu_model.set_enabled(shell.undo_command, True)
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     host.event_policy = NativeUiEventPolicy(
         shortcut_dispatcher=shell.menu_bar.dispatch_shortcut,
     )
@@ -395,9 +436,9 @@ def test_editor_cli_accepts_legacy_tcgui_backend_for_migration_comparison(monkey
 
 
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     calls = []
 
     class GuiHost:
@@ -407,7 +448,7 @@ def test_native_screenshot_composes_current_document_before_readback(monkeypatch
         def wait_idle(self):
             calls.append("wait-idle")
 
-    host._gui_host = GuiHost()
+    host.adapter = GuiHost()
     host.device = object()
 
     def render():
@@ -433,7 +474,7 @@ def test_native_screenshot_composes_current_document_before_readback(monkeypatch
 
 
 def test_native_ui_host_pre_render_runs_before_document_paint():
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
     calls = []
 
@@ -450,8 +491,8 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
         def request_repaint(self):
             self.repaint_requested = True
 
-    host = NativeUiHost.__new__(NativeUiHost)
-    host._gui_host = GuiHost()
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
+    host.adapter = GuiHost()
     host.context = object()
     host._image_previews = []
 
@@ -468,7 +509,7 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
 
 
 def test_native_ui_host_uploads_image_preview_through_render_context():
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
     class Handle:
         valid = True
@@ -498,11 +539,11 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
         def destroy_texture(self, texture) -> None:
             self.destroyed.append(texture)
 
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     host.document = Document()
     host.context = Context()
     host._image_previews = []
-    host._gui_host = SimpleNamespace(request_repaint=lambda: None)
+    host.adapter = SimpleNamespace(request_repaint=lambda: None)
     image = Image()
 
     release = host.register_image_preview(
@@ -521,7 +562,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
 def test_native_ui_host_can_upload_full_resolution_ui_artwork():
     import numpy as np
 
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
     class Handle:
         valid = True
@@ -545,11 +586,11 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
             self.created.append((width, height))
             return "artwork-texture"
 
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     host.document = Document()
     host.context = Context()
     host._image_previews = []
-    host._gui_host = SimpleNamespace(request_repaint=lambda: None)
+    host.adapter = SimpleNamespace(request_repaint=lambda: None)
 
     host.register_image_preview(
         Image(),
@@ -562,9 +603,9 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
 
 
 def test_native_ui_host_applies_font_size_to_all_theme_roles():
-    from termin.editor_native.ui_host import NativeUiHost
+    from termin.editor_native.ui_host import NativeWidgetContent
 
-    host = NativeUiHost.__new__(NativeUiHost)
+    host = NativeWidgetContent.__new__(NativeWidgetContent)
     host.document = Document()
     gui_host = SimpleNamespace(repaint_requested=False)
 
@@ -572,7 +613,7 @@ def test_native_ui_host_applies_font_size_to_all_theme_roles():
         gui_host.repaint_requested = True
 
     gui_host.request_repaint = request_repaint
-    host._gui_host = gui_host
+    host.adapter = gui_host
 
     host.apply_font_size(18.0)
 
