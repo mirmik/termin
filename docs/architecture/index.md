@@ -17,3 +17,5 @@
 - [Build profiles and product composition](2026-07-16-build-profiles-and-product-composition.md) - project-owned product recipes, typed target variants, explicit scene/module roots and the boundary between portable intent, local toolchains, resolved requests and artifact manifests.
 - [Display render surface contract](2026-07-19-display-render-surface-contract.md) - целевая граница между `tc_display`, backend-neutral offscreen texture output, display-owned input routing и native window presentation.
 - [Centralized frame memory](2026-07-21-centralized-frame-memory.md) - архитектурный набросок общей CPU frame arena, scoped scratch-регионов, telemetry и политики миграции hot-path allocations.
+- [Graphics host and window session](2026-07-21-graphics-host-and-window-session.md) - каноническое владение application graphics domain через `GraphicsHost` и композиционный lifetime `WindowedGraphicsSession`.
+- [Native GUI application host](2026-07-23-native-gui-application-host.md) - целевая multi-window модель `GuiWindowHost`, standalone-композиции, Python projection, extension API и dynamic texture leases поверх единственного `GraphicsHost`.

@@ -1,5 +1,11 @@
 # Native Editor Migration Host
 
+> Historical migration state: this note documents the Python
+> `termin.editor_native.NativeUiHost` stage that established the first native
+> editor frontend. The final cross-application ownership model supersedes that
+> host boundary with a borrowed C++ `GuiWindowHost`; see
+> [Native GUI Application Host](2026-07-23-native-gui-application-host.md).
+
 ## Decision
 
 Editor UI migration starts with one native host/root, not by embedding isolated

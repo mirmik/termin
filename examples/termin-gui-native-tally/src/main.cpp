@@ -36,17 +36,17 @@ std::optional<size_t> parse_frame_limit(int argc, char **argv) {
   return result;
 }
 
-ui::ApplicationHostConfig make_host_config() {
-  ui::ApplicationHostConfig config;
-  config.window = termin::WindowConfig{std::string(kApplicationName), 420, 260};
-  config.font_size = 16;
-  config.clear_color = {0.025f, 0.03f, 0.04f, 1.0f};
+ui::StandaloneGuiApplicationConfig make_host_config() {
+  ui::StandaloneGuiApplicationConfig config;
+  config.gui.window = termin::WindowConfig{std::string(kApplicationName), 420, 260};
+  config.gui.font_size = 16;
+  config.gui.clear_color = {0.025f, 0.03f, 0.04f, 1.0f};
   return config;
 }
 
 class TallyApplication {
 public:
-  TallyApplication() : host_(document_, make_host_config()) {
+  TallyApplication() : application_(make_host_config()) {
     build_interface();
   }
 
@@ -54,20 +54,21 @@ public:
   TallyApplication &operator=(const TallyApplication &) = delete;
 
   int run(std::optional<size_t> frame_limit) {
-    while (!host_.should_close() &&
+    auto &host = application_.window_host();
+    while (!host.should_close() &&
            (!frame_limit.has_value() ||
-            host_.rendered_frame_count() < *frame_limit)) {
-      if (!host_.tick()) {
+            host.rendered_frame_count() < *frame_limit)) {
+      if (!host.tick()) {
         break;
       }
     }
-    host_.wait_idle();
+    host.wait_idle();
     return 0;
   }
 
 private:
   void build_interface() {
-    ui::DocumentBuilder builder(document_);
+    ui::DocumentBuilder builder(application_.document());
     auto &root = builder.make_root<ui::VStack>("tally-root");
     auto &title = builder.make<ui::Label>("A tiny native tally", 18.0f);
     count_label_ = &builder.make<ui::Label>("0", 44.0f);
@@ -102,11 +103,11 @@ private:
   void refresh_count() {
     const std::string value = std::to_string(count_);
     count_label_->set_text(value);
-    host_.window().set_title(std::string(kApplicationName) + " - " + value);
+    application_.window_host().window().set_title(
+        std::string(kApplicationName) + " - " + value);
   }
 
-  ui::Document document_;
-  ui::ApplicationHost host_;
+  ui::StandaloneGuiApplication application_;
   int count_ = 0;
   ui::Label *count_label_ = nullptr;
 };
