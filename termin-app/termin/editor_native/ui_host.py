@@ -9,33 +9,13 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from queue import Empty, SimpleQueue
 from typing import Callable
 
-from termin.display import (
-    BackendWindowManager,
-    SDLBackendWindow,
-    SystemCursorShape,
-    get_clipboard_text,
-    poll_sdl_events,
-    set_clipboard_text,
-    set_system_cursor,
-    start_text_input,
-    stop_text_input,
-)
+from termin.display import PresentationMode
 from tgfx import Tgfx2Context
 from termin.gui_native import (
     Document,
-    CursorIntent,
-    DrawList,
-    DrawListRenderer,
-    KeyCode,
-    KeyEvent,
-    KeyEventType,
-    PaintContext,
-    PointerEvent,
-    PointerEventType,
-    Rect,
+    GuiWindowHost,
     Size,
     StyleRole,
 )
@@ -48,10 +28,10 @@ PreRenderCallback = Callable[[object], None]
 ShortcutDispatcher = Callable[[int, int], bool]
 
 
-@dataclass(frozen=True)
-class RouteResult:
-    keep_running: bool = True
-    routed: bool = False
+@dataclass
+class NativeUiEventPolicy:
+    file_drop_handler: FileDropHandler | None = None
+    shortcut_dispatcher: ShortcutDispatcher | None = None
 
 
 @dataclass
@@ -92,231 +72,112 @@ def resolve_native_ui_font(configured: str | Path | None = None) -> Path:
     )
 
 
-class NativeUiEventRouter:
-    """Translate neutral SDL event dictionaries into native document events."""
-
-    def __init__(
-        self,
-        document: Document,
-        window_id: int,
-        file_drop_handler: FileDropHandler | None = None,
-        shortcut_dispatcher: ShortcutDispatcher | None = None,
-    ) -> None:
-        self.document = document
-        self.window_id = int(window_id)
-        self.file_drop_handler = file_drop_handler
-        self.shortcut_dispatcher = shortcut_dispatcher
-
-    @staticmethod
-    def _key_code(value: int) -> KeyCode:
-        try:
-            return KeyCode(value)
-        except ValueError:
-            _logger.debug("native UI ignored unsupported key code %d", value)
-            return KeyCode.Unknown
-
-    def route(self, event: dict[str, object]) -> RouteResult:
-        event_type = event.get("type")
-        if event_type == "quit":
-            return RouteResult(keep_running=False)
-
-        event_window_id = int(event.get("window_id", 0))
-        if event_type == "window_close":
-            return RouteResult(keep_running=event_window_id != self.window_id)
-        if event_window_id not in (0, self.window_id):
-            return RouteResult()
-        if event_type == "window_refresh":
-            return RouteResult(routed=True)
-
-        if event_type in ("mouse_move", "mouse_down", "mouse_up", "mouse_wheel", "mouse_leave"):
-            pointer = PointerEvent()
-            pointer.x = float(event.get("x", 0.0))
-            pointer.y = float(event.get("y", 0.0))
-            pointer.modifiers = int(event.get("mods", 0))
-            pointer.button = int(event.get("button", 0))
-            pointer.click_count = max(1, int(event.get("click_count", 1)))
-            pointer.wheel_x = float(event.get("dx", 0.0))
-            pointer.wheel_y = float(event.get("dy", 0.0))
-            pointer.type = {
-                "mouse_move": PointerEventType.Move,
-                "mouse_down": PointerEventType.Down,
-                "mouse_up": PointerEventType.Up,
-                "mouse_wheel": PointerEventType.Wheel,
-                "mouse_leave": PointerEventType.Leave,
-            }[event_type]
-            self.document.dispatch_pointer_event(pointer)
-            return RouteResult(routed=True)
-
-        if event_type in ("key_down", "key_up"):
-            key_value = int(event.get("key", -1))
-            modifiers = int(event.get("mods", 0))
-            if (
-                event_type == "key_down"
-                and not bool(event.get("repeat", False))
-                and self.shortcut_dispatcher is not None
-                and self.shortcut_dispatcher(key_value, modifiers)
-            ):
-                return RouteResult(routed=True)
-            key = KeyEvent()
-            key.type = KeyEventType.Down if event_type == "key_down" else KeyEventType.Up
-            key.key = self._key_code(key_value)
-            key.modifiers = modifiers
-            key.repeat = bool(event.get("repeat", False))
-            self.document.dispatch_key_event(key)
-            return RouteResult(routed=True)
-
-        if event_type == "text_input":
-            text = event.get("text", "")
-            if not isinstance(text, str):
-                _logger.error("native UI text_input event contains non-string text")
-                return RouteResult()
-            self.document.dispatch_text_event(text)
-            return RouteResult(routed=True)
-
-        if event_type == "file_drop":
-            path = event.get("path")
-            if not isinstance(path, str) or not path:
-                _logger.error("native UI file_drop event has an empty path")
-                return RouteResult()
-            if self.file_drop_handler is None:
-                return RouteResult()
-            routed = self.file_drop_handler(
-                path,
-                float(event.get("x", 0.0)),
-                float(event.get("y", 0.0)),
-                int(event.get("mods", 0)),
-            )
-            return RouteResult(routed=bool(routed))
-
-        return RouteResult()
-
-
 class NativeUiHost:
-    """Own render/input services for a native document attached to one window."""
+    """Editor policy adapter around the native application/window host.
+
+    ``GuiWindowHost`` owns the event, frame, render-target and presentation
+    lifecycle.  This wrapper keeps only editor-specific callbacks, generated
+    preview textures and screenshot routing.
+    """
 
     def __init__(
         self,
-        window: SDLBackendWindow,
-        graphics: Tgfx2Context,
+        graphics_session: object,
         document: Document | None = None,
         *,
+        graphics: Tgfx2Context | None = None,
+        title: str = "Termin",
+        width: int = 1280,
+        height: int = 720,
+        presentation_mode: PresentationMode = PresentationMode.VSYNC,
         font_path: str | Path | None = None,
         file_drop_handler: FileDropHandler | None = None,
-        manage_text_input: bool = True,
+        enable_text_input: bool = True,
+        always_on_top: bool = False,
     ) -> None:
-        if (
-            poll_sdl_events is None
-            or get_clipboard_text is None
-            or set_clipboard_text is None
-            or set_system_cursor is None
-            or SystemCursorShape is None
-        ):
-            raise RuntimeError("termin-display SDL platform bindings are unavailable")
-        self.window = window
-        self.graphics = graphics
-        self.device = graphics.device
         self._owns_document = document is None
         self.document = document if document is not None else Document()
-        self.context = graphics.context
-        self.draw_list = DrawList()
-        self.paint_context = PaintContext(self.draw_list)
-        self.renderer = DrawListRenderer()
         resolved_font = resolve_native_ui_font(font_path)
         self.font_path = resolved_font
-        if not self.renderer.set_default_font_path(str(resolved_font), 15):
-            raise RuntimeError(f"failed to configure native UI font: {resolved_font}")
-        self.renderer.bind_text_measurer(self.document)
-        self.document.set_clipboard_handlers(get_clipboard_text, set_clipboard_text)
-        self.router = NativeUiEventRouter(
+        self._gui_host = GuiWindowHost(
+            graphics_session,
             self.document,
-            window.window_id(),
+            title=title,
+            width=width,
+            height=height,
+            presentation_mode=presentation_mode,
+            font_path=str(resolved_font),
+            font_size=15,
+            enable_text_input=enable_text_input,
+            continuous_rendering=False,
+        )
+        self.window = self._gui_host.window
+        if always_on_top:
+            self.window.set_always_on_top(True)
+        self.graphics = (
+            graphics
+            if graphics is not None
+            else Tgfx2Context.from_runtime(graphics_session.graphics)
+        )
+        self.device = self.graphics.device
+        self.context = self.graphics.context
+        self.event_policy = NativeUiEventPolicy(
             file_drop_handler=file_drop_handler,
         )
-        self._color_target = None
-        self._target_size = (0, 0)
         self._closed = False
-        self._render_requested = True
         self._pre_render_callbacks: list[PreRenderCallback] = []
-        self._color_pickers: list[object] = []
         self._image_previews: list[_ImagePreview] = []
-        self._deferred: SimpleQueue[Callable[[], None]] = SimpleQueue()
-        self._manage_text_input = bool(manage_text_input)
-        self.document.set_cursor_changed_handler(self._apply_cursor_intent)
-        self._apply_cursor_intent(self.document.cursor_intent)
-        if self._manage_text_input:
-            start_text_input()
-
-    @staticmethod
-    def _apply_cursor_intent(cursor: CursorIntent) -> None:
-        shapes = {
-            CursorIntent.Default: SystemCursorShape.Default,
-            CursorIntent.Text: SystemCursorShape.Text,
-            CursorIntent.Hand: SystemCursorShape.Hand,
-            CursorIntent.Crosshair: SystemCursorShape.Crosshair,
-            CursorIntent.Move: SystemCursorShape.Move,
-            CursorIntent.ResizeHorizontal: SystemCursorShape.ResizeHorizontal,
-            CursorIntent.ResizeVertical: SystemCursorShape.ResizeVertical,
-            CursorIntent.ResizeNwse: SystemCursorShape.ResizeNwse,
-            CursorIntent.ResizeNesw: SystemCursorShape.ResizeNesw,
-        }
-        shape = shapes.get(cursor)
-        if shape is None:
-            _logger.error("native UI host received unresolved cursor intent %s", cursor)
-            shape = SystemCursorShape.Default
-        set_system_cursor(shape)
+        self._gui_host.set_event_interceptor(self._intercept_event)
+        self._gui_host.set_frame_callbacks(self._before_ui_frame)
 
     @property
     def color_target(self):
         """Current host-owned render target for screenshot/MCP readback."""
 
-        return self._color_target
+        return self._gui_host.color_target
 
     def poll_events(self) -> tuple[bool, int]:
-        routed = 0
-        for event in poll_sdl_events():
-            result = self.router.route(event)
-            routed += int(result.routed)
-            if not result.keep_running:
-                self.window.set_should_close(True)
-                return False, routed
-        return not self.window.should_close(), routed
+        count = self._gui_host.pump_events()
+        return not self._gui_host.should_close, count
+
+    def _intercept_event(self, event: dict[str, object]) -> bool:
+        event_type = event.get("type")
+        if event_type == "key_down":
+            dispatcher = self.event_policy.shortcut_dispatcher
+            return bool(
+                dispatcher is not None
+                and not bool(event.get("repeat", False))
+                and dispatcher(int(event.get("key", -1)), int(event.get("mods", 0)))
+            )
+        if event_type == "file_drop":
+            handler = self.event_policy.file_drop_handler
+            path = event.get("path")
+            if handler is None:
+                return False
+            if not isinstance(path, str) or not path:
+                _logger.error("native UI received a file-drop event without a path")
+                return False
+            return bool(
+                handler(
+                    path,
+                    float(event.get("x", 0.0)),
+                    float(event.get("y", 0.0)),
+                    int(event.get("mods", 0)),
+                )
+            )
+        return False
 
     def defer(self, callback: Callable[[], None]) -> None:
         """Schedule a callback for the UI owner thread from any thread."""
-        self._deferred.put(callback)
+        self._gui_host.defer(callback)
 
     def process_deferred(self) -> int:
-        processed = 0
-        while True:
-            try:
-                callback = self._deferred.get_nowait()
-            except Empty:
-                break
-            try:
-                callback()
-            except Exception:
-                _logger.exception("Native UI deferred callback failed")
-            processed += 1
-        if processed:
-            self.request_render_update()
-        return processed
+        return self._gui_host.run_deferred()
 
     def render(self) -> bool:
-        width, height = self.window.framebuffer_size()
-        if width <= 0 or height <= 0:
-            return False
-        # Consume the request that led to this frame before composition. Any
-        # layout/pre-render callback may request a follow-up frame; do not erase
-        # that new request after present.
-        self._render_requested = False
-        if self._color_target is None or self._target_size != (width, height):
-            if self._color_target is not None:
-                self.context.destroy_texture(self._color_target)
-            self._color_target = self.context.create_color_attachment(width, height)
-            self._target_size = (width, height)
+        return self._gui_host.render_frame()
 
-        self.document.layout_roots(Rect(0.0, 0.0, float(width), float(height)))
-        self.context.begin_frame()
+    def _before_ui_frame(self) -> None:
         self._sync_color_picker_surfaces()
         self._sync_image_previews()
         for callback in tuple(self._pre_render_callbacks):
@@ -325,21 +186,6 @@ class NativeUiHost:
             except Exception:
                 _logger.exception("Native UI pre-render callback failed")
                 raise
-        self.draw_list.clear()
-        self.document.paint(self.paint_context)
-        self.context.begin_pass(
-            self._color_target,
-            clear_color_enabled=True,
-            r=0.03,
-            g=0.035,
-            b=0.045,
-            a=1.0,
-        )
-        self.renderer.render(self.context, self.draw_list, width, height)
-        self.context.end_pass()
-        self.context.end_frame()
-        self.window.present(self._color_target)
-        return True
 
     def add_pre_render_callback(self, callback: PreRenderCallback) -> None:
         if callback not in self._pre_render_callbacks:
@@ -351,28 +197,15 @@ class NativeUiHost:
 
     def register_color_picker(self, picker: object) -> None:
         """Arrange for a native ColorPicker's generated surfaces to use GPU textures."""
-
-        handle = picker.handle
-        if not self.document.is_alive(handle):
-            raise RuntimeError("cannot register a stale native ColorPicker")
-        if not any(existing.handle == handle for existing in self._color_pickers):
-            self._color_pickers.append(picker)
+        self._gui_host.register_color_picker(picker)
 
     def unregister_color_picker(self, picker: object) -> None:
-        handle = picker.handle
-        for index, existing in enumerate(self._color_pickers):
-            if existing.handle == handle:
-                self.renderer.release_color_picker_surfaces(existing)
-                del self._color_pickers[index]
-                return
+        self._gui_host.unregister_color_picker(picker)
 
     def _sync_color_picker_surfaces(self) -> None:
-        for picker in tuple(self._color_pickers):
-            if not self.document.is_alive(picker.handle):
-                _logger.error("native ColorPicker was destroyed without host unregistration")
-                self._color_pickers.remove(picker)
-                continue
-            self.renderer.sync_color_picker_surfaces(self.context, picker)
+        # ColorPicker GPU surfaces are synchronized by GuiApplicationHost's
+        # renderer before document paint.
+        return
 
     def register_image_preview(
         self,
@@ -461,11 +294,11 @@ class NativeUiHost:
         self.request_render_update()
 
     def request_render_update(self) -> None:
-        self._render_requested = True
+        self._gui_host.request_repaint()
 
     @property
     def render_requested(self) -> bool:
-        return self._render_requested
+        return self._gui_host.repaint_requested
 
     def capture_screenshot(
         self,
@@ -480,14 +313,15 @@ class NativeUiHost:
         # here so readback can never observe the previous target contents.
         if not self.render():
             raise RuntimeError("native UI cannot compose a frame for screenshot capture")
-        self.device.wait_idle()
-        if self._color_target is None:
+        self._gui_host.wait_idle()
+        color_target = self._gui_host.color_target
+        if not color_target:
             raise RuntimeError("native UI has not rendered a frame for screenshot capture")
         from termin.mcp.screenshot import capture_texture_screenshot
 
-        width, height = self._target_size
+        width, height = self._gui_host.framebuffer_size
         return capture_texture_screenshot(
-            self._color_target,
+            color_target,
             self.device,
             width=width,
             height=height,
@@ -502,20 +336,14 @@ class NativeUiHost:
         if self._closed:
             return
         self._closed = True
-        self.document.set_cursor_changed_handler(None)
+        self._gui_host.set_event_interceptor(None)
+        self._gui_host.set_frame_callbacks(None, None)
         self._pre_render_callbacks.clear()
-        self._color_pickers.clear()
         for preview in tuple(self._image_previews):
             self._release_image_preview(preview)
-        if self._manage_text_input:
-            stop_text_input()
-        self.renderer.release_gpu()
-        if self._color_target is not None:
-            self.context.destroy_texture(self._color_target)
-            self._color_target = None
+        self._gui_host.close()
         if self._owns_document:
             self.document.close()
-        self.window.close()
 
     def __enter__(self) -> NativeUiHost:
         return self
@@ -531,6 +359,7 @@ class NativeUiWindow:
     manager: "NativeUiWindowManager"
     entry: object
     host: NativeUiHost
+    _on_close: Callable[[], None] | None = None
     _closed: bool = False
 
     @property
@@ -547,43 +376,22 @@ class NativeUiWindow:
 
 
 class NativeUiWindowManager:
-    """Own and drive all native UI windows in one editor process.
-
-    SDL has one process-global event queue, so individual hosts cannot poll it
-    independently.  This manager drains the queue once, routes each event by
-    window id, and composes every host that requested an update.  Secondary
-    windows use the same explicit host graphics runtime through
-    :class:`BackendWindowManager`.
-    """
+    """Drive native hosts that share one canonical windowed graphics session."""
 
     def __init__(
         self,
         main_host: NativeUiHost,
         *,
         graphics_session: object | None = None,
-        backend_manager: object | None = None,
-        event_source: Callable[[], list[dict[str, object]]] | None = None,
         host_factory: Callable[..., NativeUiHost] | None = None,
     ) -> None:
-        if BackendWindowManager is None and backend_manager is None:
-            raise RuntimeError("termin-display BackendWindowManager is unavailable")
         self.main_host = main_host
-        if backend_manager is None and graphics_session is None:
+        if graphics_session is None:
             raise ValueError("NativeUiWindowManager requires a graphics runtime")
-        self._backend = (
-            backend_manager
-            if backend_manager is not None
-            else BackendWindowManager(graphics_session)
-        )
-        self._event_source = event_source if event_source is not None else poll_sdl_events
+        self._graphics_session = graphics_session
         self._host_factory = host_factory if host_factory is not None else NativeUiHost
         self._windows: list[NativeUiWindow] = []
         self._closed = False
-        self._main_entry = self._backend.register_main(
-            main_host.window,
-            host_data=main_host,
-            on_destroy=lambda _entry: main_host.close(),
-        )
 
     @property
     def windows(self) -> tuple[NativeUiWindow, ...]:
@@ -601,45 +409,25 @@ class NativeUiWindowManager:
     ) -> NativeUiWindow:
         if self._closed:
             raise RuntimeError("native UI window manager is closed")
-        entry = self._backend.create_window(
-            title,
-            width,
-            height,
-            always_on_top=always_on_top,
-        )
         try:
             host = self._host_factory(
-                entry.window,
-                self.main_host.graphics,
+                self._graphics_session,
                 document=document,
+                graphics=self.main_host.graphics,
+                title=title,
+                width=width,
+                height=height,
                 font_path=self.main_host.font_path,
-                manage_text_input=False,
+                enable_text_input=False,
+                always_on_top=always_on_top,
             )
             # Secondary tools must inherit the complete editor theme, not just
             # the default font size used when their renderer was constructed.
             host.document.theme = self.main_host.document.theme
         except Exception:
-            self._backend.destroy_window(entry)
             raise
 
-        window = NativeUiWindow(self, entry, host)
-
-        def destroy_secondary(_entry) -> None:
-            if window._closed:
-                return
-            window._closed = True
-            if window in self._windows:
-                self._windows.remove(window)
-            try:
-                if on_close is not None:
-                    on_close()
-            except Exception:
-                _logger.exception("native secondary-window close callback failed")
-            finally:
-                host.close()
-
-        entry.host_data = host
-        entry.on_destroy = destroy_secondary
+        window = NativeUiWindow(self, host.window, host, on_close)
         self._windows.append(window)
         return window
 
@@ -648,48 +436,31 @@ class NativeUiWindowManager:
             raise ValueError("secondary native UI window belongs to another manager")
         if window._closed:
             return
-        self._backend.destroy_window(window.entry)
+        window._closed = True
+        if window in self._windows:
+            self._windows.remove(window)
+        try:
+            if window._on_close is not None:
+                window._on_close()
+        except Exception:
+            _logger.exception("native secondary-window close callback failed")
+        finally:
+            window.host.close()
 
     def poll_events(self) -> tuple[bool, int]:
         if self._closed:
             return False, 0
-        routed = 0
-        for event in self._event_source():
-            event_type = event.get("type")
-            if event_type == "quit":
-                self.main_host.window.set_should_close(True)
-                return False, routed
-
-            window_id = int(event.get("window_id", 0))
-            if event_type == "window_close":
-                entry = self._backend.get_entry_for_window_id(window_id)
-                if entry is None:
-                    continue
-                if entry.is_main:
-                    self.main_host.window.set_should_close(True)
-                    return False, routed
-                self._backend.destroy_window(entry)
+        keep_running, routed = self.main_host.poll_events()
+        if not keep_running:
+            return False, routed
+        for window in tuple(self._windows):
+            if window.closed:
                 continue
-
-            entry = (
-                self._backend.get_entry_for_window_id(window_id)
-                if window_id
-                else self._main_entry
-            )
-            if entry is None:
-                continue
-            host = entry.host_data
-            result = host.router.route(event)
-            if not result.keep_running:
-                if entry.is_main:
-                    self.main_host.window.set_should_close(True)
-                    return False, routed
-                self._backend.destroy_window(entry)
-                continue
-            if result.routed:
-                routed += 1
-                host.request_render_update()
-        return not self.main_host.window.should_close(), routed
+            secondary_running, secondary_routed = window.host.poll_events()
+            routed += secondary_routed
+            if not secondary_running:
+                self.destroy_window(window)
+        return True, routed
 
     def process_deferred(self) -> int:
         processed = self.main_host.process_deferred()
@@ -700,9 +471,10 @@ class NativeUiWindowManager:
 
     def render_requested(self) -> int:
         rendered = 0
-        entries = tuple(self._backend.entries)
-        for entry in entries:
-            host = entry.host_data
+        hosts = (self.main_host,) + tuple(
+            window.host for window in self._windows if not window.closed
+        )
+        for host in hosts:
             if host.render_requested and host.render():
                 rendered += 1
         return rendered
@@ -711,4 +483,6 @@ class NativeUiWindowManager:
         if self._closed:
             return
         self._closed = True
-        self._backend.destroy_all()
+        for window in tuple(self._windows):
+            self.destroy_window(window)
+        self.main_host.close()

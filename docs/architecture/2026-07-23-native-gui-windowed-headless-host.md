@@ -217,7 +217,10 @@ common host renders into ordinary textures and does not create a swapchain.
 3. #744 added the owning isolated/offscreen composition and C++/Python API,
    including resizable publication, synthetic input, observable in-memory
    services and explicit pixel readback without SDL or `DISPLAY`.
-4. #737 migrates the production editor to the shared host contract.
+4. #737 migrated the production editor, secondary tool windows and launcher to
+   the shared host contract. Python retains editor policy adapters, while
+   `GuiApplicationHost` owns event dispatch, deferred work, frame recording,
+   render-target lifetime and presentation.
 5. #745 selects windowed or offscreen composition around one shared editor
    bootstrap.
 6. #746 adds the no-display editor MCP/readback smoke.

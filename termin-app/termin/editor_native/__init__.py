@@ -1,11 +1,10 @@
 """Native UI host and production editor migration package."""
 
 from .ui_host import (
-    NativeUiEventRouter,
+    NativeUiEventPolicy,
     NativeUiHost,
     NativeUiWindow,
     NativeUiWindowManager,
-    RouteResult,
     resolve_native_ui_font,
 )
 from .shell import NativeEditorShell, build_native_editor_shell
@@ -95,7 +94,7 @@ from .scene_manager_dialog import (
 )
 
 __all__ = [
-    "NativeUiEventRouter",
+    "NativeUiEventPolicy",
     "NativeUiHost",
     "NativeUiWindow",
     "NativeUiWindowManager",
@@ -128,7 +127,6 @@ __all__ = [
     "NativeNavMeshAreasDialog",
     "NativeSpaceMouseSettingsDialog",
     "NativeSceneManagerDialog",
-    "RouteResult",
     "build_native_editor_shell",
     "build_native_profiler_panel",
     "connect_profiler_menu_toggle",

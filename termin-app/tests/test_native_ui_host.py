@@ -6,9 +6,8 @@ import numpy as np
 import pytest
 
 from tcbase import Key
-from termin.display import SystemCursorShape
 from termin.editor_native import (
-    NativeUiEventRouter,
+    NativeUiEventPolicy,
     NativeUiWindowManager,
     build_native_editor_shell,
     resolve_native_ui_font,
@@ -18,41 +17,15 @@ from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandKind,
-    CursorIntent,
     Document,
     DrawCommandType,
     DrawList,
     DrawListRenderer,
-    EventResult,
     KeyCode,
-    PointerEventType,
     PaintContext,
     Rect,
     StyleRole,
-    Widget,
 )
-
-
-class EventProbe(Widget):
-    def __init__(self) -> None:
-        self.pointer_events = []
-        self.key_events = []
-        self.text_events = []
-
-    def layout(self, rect) -> None:
-        self.bounds = rect
-
-    def pointer_event(self, event):
-        self.pointer_events.append((event.type, event.button, event.click_count, event.modifiers))
-        return EventResult.Handled
-
-    def key_event(self, event):
-        self.key_events.append((event.type, event.key, event.modifiers, event.repeat))
-        return EventResult.Handled
-
-    def text_event(self, text):
-        self.text_events.append(text)
-        return EventResult.Handled
 
 
 class _WindowManagerTestWindow:
@@ -74,81 +47,26 @@ class _WindowManagerTestWindow:
         self.closed = True
 
 
-class _WindowManagerTestBackend:
-    def __init__(self):
-        self.entries = []
-        self.next_window_id = 2
-
-    def register_main(self, window, *, host_data=None, on_destroy=None):
-        entry = SimpleNamespace(
-            window=window,
-            is_main=True,
-            host_data=host_data,
-            on_destroy=on_destroy,
-        )
-        self.entries.append(entry)
-        return entry
-
-    def create_window(self, _title, _width, _height, *, always_on_top=False):
-        window = _WindowManagerTestWindow(self.next_window_id)
-        self.next_window_id += 1
-        entry = SimpleNamespace(
-            window=window,
-            is_main=False,
-            host_data=None,
-            on_destroy=None,
-            always_on_top=always_on_top,
-        )
-        self.entries.append(entry)
-        return entry
-
-    def get_entry_for_window_id(self, window_id):
-        for entry in self.entries:
-            if entry.window.window_id() == window_id:
-                return entry
-        return None
-
-    def destroy_window(self, entry):
-        if entry not in self.entries or entry.is_main:
-            return
-        if entry.on_destroy is not None:
-            entry.on_destroy(entry)
-        self.entries.remove(entry)
-        entry.window.close()
-
-    def destroy_all(self):
-        for entry in list(self.entries):
-            if entry.on_destroy is not None:
-                entry.on_destroy(entry)
-        self.entries.clear()
-
-
 class _WindowManagerTestDocument:
     def __init__(self):
         self.theme = object()
 
 
-class _WindowManagerTestRouter:
-    def __init__(self):
-        self.events = []
-
-    def route(self, event):
-        self.events.append(event)
-        return SimpleNamespace(keep_running=True, routed=True)
-
-
 class _WindowManagerTestHost:
-    def __init__(self, window, graphics, document=None, **options):
-        self.window = window
-        self.graphics = graphics
+    _next_window_id = 1
+
+    def __init__(self, session, document=None, *, graphics=None, **options):
+        self.window = _WindowManagerTestWindow(self._next_window_id)
+        type(self)._next_window_id += 1
+        self.graphics = graphics if graphics is not None else session.graphics
         self.document = document or _WindowManagerTestDocument()
         self.font_path = Path("/tmp/editor.ttf")
-        self.router = _WindowManagerTestRouter()
         self.render_requested = False
         self.render_count = 0
         self.deferred_count = 0
         self.closed = False
         self.options = options
+        self.event_results = []
 
     def request_render_update(self):
         self.render_requested = True
@@ -163,24 +81,24 @@ class _WindowManagerTestHost:
         self.render_count += 1
         return True
 
+    def poll_events(self):
+        if self.event_results:
+            return self.event_results.pop(0)
+        return True, 0
+
     def close(self):
         self.closed = True
         self.window.close()
 
 
 def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
-    backend = _WindowManagerTestBackend()
     graphics = object()
-    main_host = _WindowManagerTestHost(_WindowManagerTestWindow(1), graphics)
-    batches = [
-        [{"type": "mouse_move", "window_id": 2, "x": 10.0, "y": 20.0}],
-        [{"type": "window_close", "window_id": 2}],
-        [{"type": "window_close", "window_id": 1}],
-    ]
+    session = SimpleNamespace(graphics=graphics)
+    main_host = _WindowManagerTestHost(session, graphics=graphics)
+    main_host.event_results = [(True, 0), (True, 0), (False, 0)]
     manager = NativeUiWindowManager(
         main_host,
-        backend_manager=backend,
-        event_source=lambda: batches.pop(0),
+        graphics_session=session,
         host_factory=_WindowManagerTestHost,
     )
     closed = []
@@ -193,11 +111,11 @@ def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
     )
 
     assert secondary.host.graphics is graphics
-    assert secondary.host.options["manage_text_input"] is False
+    assert secondary.host.options["enable_text_input"] is False
     assert secondary.host.document.theme is main_host.document.theme
+    secondary.host.event_results = [(True, 1), (False, 0)]
     assert manager.poll_events() == (True, 1)
-    assert len(secondary.host.router.events) == 1
-    assert secondary.host.render_requested
+    secondary.host.request_render_update()
     assert manager.render_requested() == 1
     assert secondary.host.render_count == 1
 
@@ -206,10 +124,7 @@ def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
     assert secondary.host.closed
     assert closed == ["secondary"]
     assert manager.windows == ()
-    assert not main_host.window.should_close()
-
     assert manager.poll_events() == (False, 0)
-    assert main_host.window.should_close()
     manager.close()
     assert main_host.closed
 
@@ -240,130 +155,37 @@ def test_native_ui_key_codes_match_canonical_platform_values():
     assert KeyCode.S.value == Key.S.value
 
 
-def test_native_ui_event_router_preserves_click_keys_text_and_file_drop():
-    document = Document()
-    probe = EventProbe()
-    handle = document.adopt_root(probe, "native-editor-event-probe")
-    probe.focusable = True
-    document.layout_roots(Rect(0.0, 0.0, 320.0, 200.0))
-    assert document.set_focus(handle)
+def test_native_ui_event_policy_intercepts_file_drop_without_owning_event_dispatch():
+    from termin.editor_native.ui_host import NativeUiHost
+
     drops = []
 
     def handle_drop(path, x, y, modifiers):
         drops.append((path, x, y, modifiers))
         return True
 
-    router = NativeUiEventRouter(
-        document,
-        17,
-        file_drop_handler=handle_drop,
-    )
-
-    result = router.route(
-        {
-            "type": "mouse_down",
-            "window_id": 17,
-            "x": 12.0,
-            "y": 14.0,
-            "button": 0,
-            "click_count": 2,
-            "mods": 3,
-        }
-    )
-    assert result.keep_running and result.routed
-    assert [event[0] for event in probe.pointer_events] == [
-        PointerEventType.Enter,
-        PointerEventType.Down,
-    ]
-    assert probe.pointer_events[-1] == (PointerEventType.Down, 0, 2, 3)
-
-    assert router.route({"type": "mouse_leave", "window_id": 17}).routed
-    assert probe.pointer_events[-1][0] == PointerEventType.Leave
-    assert not document.hovered_widget
-
-    result = router.route(
-        {
-            "type": "key_down",
-            "window_id": 17,
-            "key": Key.S.value,
-            "mods": 2,
-            "repeat": True,
-        }
-    )
-    assert result.routed
-    assert probe.key_events[0][1:] == (KeyCode.S, 2, True)
-
-    assert router.route({"type": "text_input", "window_id": 17, "text": "Привет"}).routed
-    assert probe.text_events == ["Привет"]
-
-    assert router.route(
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.event_policy = NativeUiEventPolicy(file_drop_handler=handle_drop)
+    assert host._intercept_event(
         {
             "type": "file_drop",
-            "window_id": 17,
             "path": "/tmp/scene.glb",
             "x": 20.0,
             "y": 30.0,
             "mods": 1,
         }
-    ).routed
+    )
     assert drops == [("/tmp/scene.glb", 20.0, 30.0, 1)]
 
-    assert router.route({"type": "window_refresh", "window_id": 17}).routed
-    assert not router.route({"type": "window_refresh", "window_id": 18}).routed
-    assert not router.route({"type": "mouse_move", "window_id": 18}).routed
-    assert router.route({"type": "window_close", "window_id": 18}).keep_running
-    assert not router.route({"type": "window_close", "window_id": 17}).keep_running
-    assert not router.route({"type": "quit"}).keep_running
 
+def test_native_ui_event_policy_consumes_enabled_shortcut_and_ignores_repeats():
+    from termin.editor_native.ui_host import NativeUiHost
 
-def test_native_ui_host_maps_every_semantic_cursor_to_sdl(monkeypatch):
-    from termin.editor_native import ui_host
-
-    applied = []
-    monkeypatch.setattr(ui_host, "set_system_cursor", applied.append)
-    expected = {
-        CursorIntent.Default: SystemCursorShape.Default,
-        CursorIntent.Text: SystemCursorShape.Text,
-        CursorIntent.Hand: SystemCursorShape.Hand,
-        CursorIntent.Crosshair: SystemCursorShape.Crosshair,
-        CursorIntent.Move: SystemCursorShape.Move,
-        CursorIntent.ResizeHorizontal: SystemCursorShape.ResizeHorizontal,
-        CursorIntent.ResizeVertical: SystemCursorShape.ResizeVertical,
-        CursorIntent.ResizeNwse: SystemCursorShape.ResizeNwse,
-        CursorIntent.ResizeNesw: SystemCursorShape.ResizeNesw,
-    }
-    for cursor, shape in expected.items():
-        ui_host.NativeUiHost._apply_cursor_intent(cursor)
-        assert applied[-1] == shape
-
-
-def test_native_ui_event_router_dispatches_global_shortcuts_before_focused_widget():
-    document = Document()
-    shell = build_native_editor_shell(document)
-    router = NativeUiEventRouter(
-        document,
-        window_id=7,
-        shortcut_dispatcher=shell.menu_bar.dispatch_shortcut,
-    )
-    activated = []
-    shell.menu_route("debug").connect_activated(
-        lambda _menu, command_id, _command: activated.append(command_id)
-    )
-
-    result = router.route(
-        {"type": "key_down", "window_id": 7, "key": Key.F7.value, "mods": 0}
-    )
-    assert result.routed
-    assert activated == [shell.profiler_command]
-
-
-def test_native_ui_event_router_dispatches_enabled_undo_shortcut():
     document = Document()
     shell = build_native_editor_shell(document)
     shell.edit_menu_model.set_enabled(shell.undo_command, True)
-    router = NativeUiEventRouter(
-        document,
-        window_id=7,
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.event_policy = NativeUiEventPolicy(
         shortcut_dispatcher=shell.menu_bar.dispatch_shortcut,
     )
     activated = []
@@ -371,12 +193,13 @@ def test_native_ui_event_router_dispatches_enabled_undo_shortcut():
         lambda _menu, command_id, _command: activated.append(command_id)
     )
 
-    result = router.route(
-        {"type": "key_down", "window_id": 7, "key": ord("Z"), "mods": 2}
+    assert host._intercept_event(
+        {"type": "key_down", "key": ord("Z"), "mods": 2, "repeat": False}
     )
-
-    assert result.routed
     assert activated == [shell.undo_command]
+    assert not host._intercept_event(
+        {"type": "key_down", "key": ord("Z"), "mods": 2, "repeat": True}
+    )
 
 
 def test_native_editor_continuously_composes_only_in_game_mode():
@@ -575,19 +398,20 @@ def test_native_screenshot_composes_current_document_before_readback(monkeypatch
     from termin.editor_native.ui_host import NativeUiHost
 
     host = NativeUiHost.__new__(NativeUiHost)
-    host._color_target = "previous-target"
-    host._target_size = (320, 200)
     calls = []
 
-    class Device:
+    class GuiHost:
+        color_target = "current-target"
+        framebuffer_size = (320, 200)
+
         def wait_idle(self):
             calls.append("wait-idle")
 
-    host.device = Device()
+    host._gui_host = GuiHost()
+    host.device = object()
 
     def render():
         calls.append("render")
-        host._color_target = "current-target"
         return True
 
     host.render = render
@@ -613,57 +437,24 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
 
     calls = []
 
-    class Window:
-        def framebuffer_size(self):
-            return 320, 200
+    class GuiHost:
+        repaint_requested = True
 
-        def present(self, target):
-            calls.append(("present", target))
-
-    class Context:
-        def create_color_attachment(self, width, height):
-            calls.append(("create", width, height))
-            return "target"
-
-        def begin_frame(self):
+        def render_frame(self):
             calls.append("begin-frame")
-
-        def begin_pass(self, target, **_options):
-            calls.append(("begin-pass", target))
-
-        def end_pass(self):
-            calls.append("end-pass")
-
-        def end_frame(self):
-            calls.append("end-frame")
-
-    class Document:
-        def layout_roots(self, _rect):
-            calls.append("layout")
-
-        def paint(self, _context):
+            host._before_ui_frame()
             calls.append("paint")
+            calls.append("present")
+            return True
 
-    class DrawList:
-        def clear(self):
-            calls.append("clear")
-
-    class Renderer:
-        def render(self, _context, _draw_list, width, height):
-            calls.append(("render", width, height))
+        def request_repaint(self):
+            self.repaint_requested = True
 
     host = NativeUiHost.__new__(NativeUiHost)
-    host.window = Window()
-    host.context = Context()
-    host.document = Document()
-    host.draw_list = DrawList()
-    host.paint_context = object()
-    host.renderer = Renderer()
-    host._color_target = None
-    host._target_size = (0, 0)
-    host._render_requested = True
-    host._color_pickers = []
+    host._gui_host = GuiHost()
+    host.context = object()
     host._image_previews = []
+
     def pre_render(_context):
         calls.append("pre-render")
         host.request_render_update()
@@ -672,7 +463,7 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
 
     assert host.render()
     assert calls.index("begin-frame") < calls.index("pre-render") < calls.index("paint")
-    assert calls[-1] == ("present", "target")
+    assert calls[-1] == "present"
     assert host.render_requested
 
 
@@ -711,7 +502,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
     host.document = Document()
     host.context = Context()
     host._image_previews = []
-    host._render_requested = False
+    host._gui_host = SimpleNamespace(request_repaint=lambda: None)
     image = Image()
 
     release = host.register_image_preview(
@@ -758,7 +549,7 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
     host.document = Document()
     host.context = Context()
     host._image_previews = []
-    host._render_requested = False
+    host._gui_host = SimpleNamespace(request_repaint=lambda: None)
 
     host.register_image_preview(
         Image(),
@@ -775,7 +566,13 @@ def test_native_ui_host_applies_font_size_to_all_theme_roles():
 
     host = NativeUiHost.__new__(NativeUiHost)
     host.document = Document()
-    host._render_requested = False
+    gui_host = SimpleNamespace(repaint_requested=False)
+
+    def request_repaint():
+        gui_host.repaint_requested = True
+
+    gui_host.request_repaint = request_repaint
+    host._gui_host = gui_host
 
     host.apply_font_size(18.0)
 
