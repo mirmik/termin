@@ -17,7 +17,6 @@ namespace termin_modules {
 class TERMIN_MODULES_API ModuleRuntime {
 public:
     using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
-    using MutationThreadChecker = std::function<bool(std::string&)>;
 
 private:
     ModuleEnvironment _environment;
@@ -28,7 +27,6 @@ private:
     std::vector<ModuleRecord> _records;
     ModuleEventCallback _event_callback;
     BuildOutputCallback _build_output_callback;
-    MutationThreadChecker _mutation_thread_checker;
     std::vector<std::filesystem::path> _discovery_ignored_roots;
     std::string _last_error;
     bool _backend_environments_prepared = false;
@@ -47,7 +45,6 @@ public:
     void set_python_callbacks(PythonModuleCallbacks callbacks);
     void set_event_callback(ModuleEventCallback callback);
     void set_build_output_callback(BuildOutputCallback callback);
-    void set_mutation_thread_checker(MutationThreadChecker checker);
     void set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser);
     void set_discovery_ignored_roots(std::vector<std::filesystem::path> roots);
     void register_backend(std::shared_ptr<IModuleBackend> backend);
@@ -117,7 +114,6 @@ private:
     bool is_discovery_ignored(const std::filesystem::path& path) const;
     bool load_module_impl(const std::string& module_id, bool refresh_descriptors);
     bool unload_module_impl(const std::string& module_id, bool refresh_descriptor);
-    bool ensure_mutation_thread(const char* operation);
     bool prepare_backend_environments();
     bool teardown_backend_environments();
 };

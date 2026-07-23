@@ -5,11 +5,6 @@ import termin.project_build as project_build
 
 from termin.editor_core.quest_openxr_build_model import QuestOpenXRBuildController
 
-
-def _run_now(_label, worker) -> None:
-    worker()
-
-
 def test_quest_openxr_controller_build_install_launch_sequence(monkeypatch, tmp_path) -> None:
     events = []
     apk_path = tmp_path / "dist" / "app.apk"
@@ -54,12 +49,9 @@ def test_quest_openxr_controller_build_install_launch_sequence(monkeypatch, tmp_
         tmp_path,
         "Scenes/Main.scene",
         tmp_path / "out",
-        start_worker=_run_now,
     )
 
     assert controller.build_install_launch()
-    assert controller.snapshot.busy
-    assert controller.process_pending() == 10
     snapshot = controller.snapshot
     assert not snapshot.busy
     assert snapshot.status == "Launch complete"
@@ -79,11 +71,9 @@ def test_quest_openxr_controller_reports_worker_failure(monkeypatch, tmp_path) -
     controller = QuestOpenXRBuildController(
         tmp_path,
         "Main.scene",
-        start_worker=_run_now,
     )
 
     assert controller.build_only()
-    controller.process_pending()
     assert not controller.snapshot.busy
     assert controller.snapshot.status == "Build failed"
     assert "Build failed: compiler missing" in controller.snapshot.log_text

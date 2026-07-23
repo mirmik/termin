@@ -64,5 +64,6 @@ termin_python -m termin.project_modules.warmup warmup --project /path/to/project
 termin_python -m termin.project_modules.warmup warmup --project /path/to/project --rebuild-module gameplay
 ```
 
-После успешного subprocess build editor выполняет load/reload commit на своём
-owner thread. CLI process не разделяет с editor CWD, interpreter или registries.
+После успешного subprocess build editor выполняет load/reload commit через
+thread-neutral runtime API. CLI process не разделяет с editor CWD, interpreter
+или registries.

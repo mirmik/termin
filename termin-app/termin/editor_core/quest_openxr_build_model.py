@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from queue import Empty, SimpleQueue
-import threading
 from typing import Callable
 
 from termin.editor_core.signal import Signal
@@ -33,16 +31,11 @@ class QuestOpenXRBuildController:
         output_dir: str | Path | None = None,
         *,
         on_log: Callable[[str], None] | None = None,
-        defer: Callable[[Callable[[], None]], None] | None = None,
-        start_worker: Callable[[str, Callable[[], None]], None] | None = None,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.entry_scene = Path(entry_scene)
         self.output_dir = Path(output_dir).resolve() if output_dir is not None else None
         self._on_log = on_log
-        self._pending: SimpleQueue[Callable[[], None]] = SimpleQueue()
-        self._defer = defer or self._pending.put
-        self._start_worker = start_worker or self._start_thread
         self._status = "Idle"
         self._busy = False
         self._lines = ["Ready.", "Connect and wake the Quest before Install or Launch."]
@@ -61,36 +54,25 @@ class QuestOpenXRBuildController:
             last_apk_path=None if self._last_apk_path is None else str(self._last_apk_path),
         )
 
-    def process_pending(self) -> int:
-        processed = 0
-        while True:
-            try:
-                callback = self._pending.get_nowait()
-            except Empty:
-                break
-            callback()
-            processed += 1
-        return processed
-
     def build_only(self) -> bool:
-        return self._run_async("Build", self._build)
+        return self._run("Build", self._build)
 
     def install_only(self) -> bool:
-        return self._run_async("Install", self._install)
+        return self._run("Install", self._install)
 
     def launch_only(self) -> bool:
-        return self._run_async("Launch", self._launch)
+        return self._run("Launch", self._launch)
 
     def build_install(self) -> bool:
-        return self._run_async("Build + Install", lambda: (self._build(), self._install()))
+        return self._run("Build + Install", lambda: (self._build(), self._install()))
 
     def build_install_launch(self) -> bool:
-        return self._run_async(
+        return self._run(
             "Build + Install + Launch",
             lambda: (self._build(), self._install(), self._launch()),
         )
 
-    def _run_async(self, label: str, action: Callable[[], object]) -> bool:
+    def _run(self, label: str, action: Callable[[], object]) -> bool:
         if self._busy:
             self._append_log("Another Quest/OpenXR action is already running.")
             return False
@@ -98,17 +80,13 @@ class QuestOpenXRBuildController:
         self._status = f"{label}..."
         self._publish()
 
-        def worker() -> None:
-            try:
-                action()
-            except Exception as error:
-                _logger.exception("Quest/OpenXR %s failed", label)
-                message = str(error)
-                self._defer(lambda: self._finish_failed(label, message))
-                return
-            self._defer(self._finish_complete)
-
-        self._start_worker(label, worker)
+        try:
+            action()
+        except Exception as error:
+            _logger.exception("Quest/OpenXR %s failed", label)
+            self._finish_failed(label, str(error))
+            return True
+        self._finish_complete()
         return True
 
     def _build(self) -> Path:
@@ -126,7 +104,7 @@ class QuestOpenXRBuildController:
             raise RuntimeError(f"Build failed: {error}") from error
         self._last_apk_path = Path(result.apk_path)
         self._last_application_id = result.application_id
-        self._defer(lambda: self._report_build(result))
+        self._report_build(result)
         return self._last_apk_path
 
     def _install(self) -> None:
@@ -142,7 +120,7 @@ class QuestOpenXRBuildController:
             )
         except Exception as error:
             raise RuntimeError(f"Install failed: {error}") from error
-        self._defer(lambda: self._report_install(result))
+        self._report_install(result)
 
     def _launch(self) -> None:
         application_id = self._resolve_application_id()
@@ -157,7 +135,7 @@ class QuestOpenXRBuildController:
             )
         except Exception as error:
             raise RuntimeError(f"Launch failed: {error}") from error
-        self._defer(self._report_launch)
+        self._report_launch()
 
     def _resolve_application_id(self) -> str:
         if self._last_application_id is not None:
@@ -179,7 +157,7 @@ class QuestOpenXRBuildController:
         return Path(default_quest_openxr_log_path(self.project_root, self.output_dir))
 
     def _post_log(self, message: str) -> None:
-        self._defer(lambda: self._append_log(message))
+        self._append_log(message)
 
     def _append_log(self, message: str) -> None:
         self._lines.append(str(message))
@@ -223,14 +201,5 @@ class QuestOpenXRBuildController:
 
     def _publish(self) -> None:
         self.changed.emit(self.snapshot)
-
-    @staticmethod
-    def _start_thread(label: str, worker: Callable[[], None]) -> None:
-        threading.Thread(
-            target=worker,
-            name=f"QuestOpenXR-{label}",
-            daemon=True,
-        ).start()
-
 
 __all__ = ["QuestOpenXRBuildController", "QuestOpenXRBuildSnapshot"]

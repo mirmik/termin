@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 from pathlib import Path
-import threading
 
 from termin.editor_core.project_session_controller import (
     ProjectSessionController as CoreProjectSessionController,
@@ -17,33 +16,29 @@ _logger = logging.getLogger(__name__)
 
 
 class NativeModuleOperationDialog:
-    """Modal progress surface for a non-cancellable project module operation.
-
-    Artifact preparation, module registration and progress projection may all
-    proceed on the worker thread; native UI has no thread-affinity gate.
-    """
+    """Modal progress surface for one synchronous project module operation."""
 
     def __init__(
         self,
         document: Document,
         *,
         viewport: Callable[[], Rect],
-        request_render: Callable[[], None],
+        refresh_ui: Callable[[], None],
         runtime,
         title: str,
         start_message: str,
-        worker_action: Callable[[], bool] | None,
-        owner_action: Callable[[], bool] | None,
+        prepare_action: Callable[[], bool] | None,
+        followup_action: Callable[[], bool] | None,
         on_complete: Callable[[bool], None],
     ) -> None:
-        if worker_action is None and owner_action is None:
-            raise ValueError("module operation requires worker_action or owner_action")
+        if prepare_action is None and followup_action is None:
+            raise ValueError("module operation requires prepare_action or followup_action")
         self.document = document
         self.viewport = viewport
-        self.request_render = request_render
+        self.refresh_ui = refresh_ui
         self.runtime = runtime
-        self.worker_action = worker_action
-        self.owner_action = owner_action
+        self.prepare_action = prepare_action
+        self.followup_action = followup_action
         self.on_complete = on_complete
         self._started = False
         self._finished = False
@@ -81,16 +76,8 @@ class NativeModuleOperationDialog:
         self._started = True
         if not self.dialog.show(self.viewport()):
             raise RuntimeError("failed to show native module operation dialog")
-        self.request_render()
-        if self.worker_action is None:
-            self._run_followup_action()
-            return
-        worker = threading.Thread(
-            target=self._run_worker_action,
-            name="NativeEditorModulesOperation",
-            daemon=False,
-        )
-        worker.start()
+        self.refresh_ui()
+        self._run_operation()
 
     def _append_log(self, message: str, *, advance_progress: bool = True) -> None:
         if self._finished:
@@ -101,45 +88,31 @@ class NativeModuleOperationDialog:
         if advance_progress:
             self._line_count += 1
             self.progress.value = min(0.92, 0.08 + self._line_count * 0.025)
-        self.request_render()
+        self.refresh_ui()
 
     def _on_build_output(self, module_id: str, line: str) -> None:
         self._append_log(f"[{module_id}] {line}")
 
-    def _run_worker_action(self) -> None:
-        success = False
+    def _run_operation(self) -> None:
+        success = True
         error_message = ""
         self.runtime.add_build_output_listener(self._on_build_output)
         try:
-            assert self.worker_action is not None
-            success = bool(self.worker_action())
+            if self.prepare_action is not None:
+                success = bool(self.prepare_action())
+            if success and self.followup_action is not None:
+                success = bool(self.followup_action())
             if not success:
                 error_message = self.runtime.last_error
         except Exception as error:
             error_message = str(error)
-            _logger.exception("Native module worker operation failed")
+            success = False
+            _logger.exception("Native module operation failed")
         finally:
             try:
                 self.runtime.remove_build_output_listener(self._on_build_output)
             except Exception:
                 _logger.exception("Native module operation could not remove its output listener")
-
-        if success and self.owner_action is not None:
-            self._run_followup_action()
-        else:
-            self._finish(success, error_message)
-
-    def _run_followup_action(self) -> None:
-        success = False
-        error_message = ""
-        try:
-            assert self.owner_action is not None
-            success = bool(self.owner_action())
-            if not success:
-                error_message = self.runtime.last_error
-        except Exception as error:
-            error_message = str(error)
-            _logger.exception("Native module follow-up operation failed")
         self._finish(success, error_message)
 
     def _finish(self, success: bool, error_message: str) -> None:
@@ -154,13 +127,12 @@ class NativeModuleOperationDialog:
             message = f"Failed: {error_message}" if error_message else "Failed."
             self._append_log(message, advance_progress=False)
         self._finished = True
-        self.request_render()
+        self.refresh_ui()
+        self.close()
         try:
             self.on_complete(success)
         except Exception:
             _logger.exception("Native module operation completion callback failed")
-        finally:
-            self.close()
 
     def close(self) -> None:
         if self.dialog.open:
@@ -168,7 +140,7 @@ class NativeModuleOperationDialog:
         if self.document.is_alive(self.dialog.handle):
             if not self.document.destroy_widget_recursive(self.dialog.handle):
                 _logger.error("Native module operation dialog destruction failed")
-        self.request_render()
+        self.refresh_ui()
 
 
 class NativeProjectSessionController(CoreProjectSessionController):
@@ -179,12 +151,12 @@ class NativeProjectSessionController(CoreProjectSessionController):
         *,
         document: Document,
         viewport: Callable[[], Rect],
-        request_render: Callable[[], None],
+        refresh_ui: Callable[[], None],
         **kwargs,
     ) -> None:
         self._document = document
         self._viewport = viewport
-        self._request_render = request_render
+        self._refresh_ui = refresh_ui
         self._active_operation: NativeModuleOperationDialog | None = None
         super().__init__(run_module_operation=self._run_module_operation, **kwargs)
 
@@ -208,12 +180,12 @@ class NativeProjectSessionController(CoreProjectSessionController):
         operation = NativeModuleOperationDialog(
             self._document,
             viewport=self._viewport,
-            request_render=self._request_render,
+            refresh_ui=self._refresh_ui,
             runtime=runtime,
             title="Load Project Modules",
             start_message=f"Loading project modules: {project_root.name}",
-            worker_action=lambda: runtime.prepare_module_artifacts(project_root=project_root),
-            owner_action=lambda: runtime.load_project(project_root),
+            prepare_action=lambda: runtime.prepare_module_artifacts(project_root=project_root),
+            followup_action=lambda: runtime.load_project(project_root),
             on_complete=finished,
         )
         self._active_operation = operation

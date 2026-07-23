@@ -13,7 +13,6 @@
 #include <tc_inspect_cpp.hpp>
 #include <inspect/tc_runtime_type_registry.h>
 
-#include <thread>
 #include <stdexcept>
 
 namespace termin {
@@ -390,14 +389,6 @@ void TermModulesIntegration::clear_scene_provider() {
 
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
-    const std::thread::id owner_thread = std::this_thread::get_id();
-    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
-        if (std::this_thread::get_id() == owner_thread) {
-            return true;
-        }
-        error = "Live module mutation must run on the integration owner thread";
-        return false;
-    });
     const bool sync_live_scenes = _environment.sync_live_scenes;
     const SceneProvider scene_provider = _scene_provider;
     if (sync_live_scenes && !scene_provider) {

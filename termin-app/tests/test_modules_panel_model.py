@@ -1,8 +1,12 @@
 from types import SimpleNamespace
 
-from termin.editor_core import modules_panel_model as model_module
 from termin.editor_core.modules_panel_model import ModulesPanelController
-from termin_modules import ModuleCleanupPhase, ModuleKind, ModuleState
+from termin_modules import (
+    ModuleCleanupPhase,
+    ModuleEventKind,
+    ModuleKind,
+    ModuleState,
+)
 
 
 class _Runtime:
@@ -45,18 +49,7 @@ class _Runtime:
         return True
 
 
-class _ImmediateThread:
-    def __init__(self, *, target, name, daemon) -> None:
-        assert name == "EditorModulesOperation"
-        assert not daemon
-        self.target = target
-
-    def start(self) -> None:
-        self.target()
-
-
-def test_modules_panel_snapshot_and_async_reload_are_toolkit_neutral(monkeypatch) -> None:
-    monkeypatch.setattr(model_module.threading, "Thread", _ImmediateThread)
+def test_modules_panel_snapshot_and_synchronous_reload_are_toolkit_neutral() -> None:
     runtime = _Runtime()
     snapshots = []
     controller = ModulesPanelController(runtime)
@@ -75,6 +68,40 @@ def test_modules_panel_snapshot_and_async_reload_are_toolkit_neutral(monkeypatch
     assert snapshots
     controller.close()
     assert runtime.listeners == []
+
+
+def test_modules_panel_discovery_snapshot_suppresses_reentrant_failure() -> None:
+    runtime = _Runtime()
+    stale_calls = 0
+
+    def stale_modules():
+        nonlocal stale_calls
+        stale_calls += 1
+        event = SimpleNamespace(
+            kind=ModuleEventKind.Failed,
+            module_id="core",
+            message="descriptor snapshot rejected",
+        )
+        for listener in tuple(runtime.listeners):
+            listener(event)
+        return []
+
+    runtime.stale_modules = stale_modules
+    snapshots = []
+    controller = ModulesPanelController(runtime)
+    controller.set_changed_handler(snapshots.append)
+
+    discovered = SimpleNamespace(
+        kind=ModuleEventKind.Discovered,
+        module_id="core",
+        message="",
+    )
+    runtime.listeners[0](discovered)
+
+    assert stale_calls == 1
+    assert len(snapshots) == 1
+    assert snapshots[0].selected_module is None
+    controller.close()
 
 
 def test_modules_panel_rejects_selection_operation_without_selection() -> None:

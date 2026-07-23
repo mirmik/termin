@@ -39,8 +39,8 @@ class ProjectSessionController(CoreProjectSessionController):
                 runtime,
                 title="Load Project Modules",
                 start_message=f"Loading project modules: {project_root.name}",
-                worker_action=lambda: runtime.prepare_module_artifacts(project_root=project_root),
-                owner_action=lambda: runtime.load_project(project_root),
+                prepare_action=lambda: runtime.prepare_module_artifacts(project_root=project_root),
+                followup_action=lambda: runtime.load_project(project_root),
                 on_complete=on_complete,
             )
 

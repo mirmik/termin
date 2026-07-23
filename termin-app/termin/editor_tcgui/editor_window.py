@@ -1315,8 +1315,8 @@ class EditorWindowTcgui:
             modules_runtime,
             title="Prepare Modules for Play",
             start_message="Building changed project modules...",
-            worker_action=modules_runtime.prepare_module_artifacts,
-            owner_action=lambda: True,
+            prepare_action=modules_runtime.prepare_module_artifacts,
+            followup_action=lambda: True,
             on_complete=finish,
         )
 

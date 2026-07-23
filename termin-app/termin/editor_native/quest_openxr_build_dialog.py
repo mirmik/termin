@@ -55,11 +55,6 @@ class NativeQuestOpenXRBuildDialog:
             button.widget.enabled = not snapshot.busy
         self.request_render()
 
-    def poll(self) -> int:
-        if self.controller is None:
-            return 0
-        return self.controller.process_pending()
-
     def close(self) -> None:
         if self._closed:
             return

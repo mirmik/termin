@@ -1,4 +1,4 @@
-"""Owner-thread coalescing bridge from scene events to hierarchy rebuilds."""
+"""Coalescing bridge from scene events to hierarchy rebuilds."""
 
 from __future__ import annotations
 

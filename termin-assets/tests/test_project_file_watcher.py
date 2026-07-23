@@ -275,3 +275,40 @@ def test_rescan_adds_new_files_discovered_since_previous_scan(tmp_path: Path) ->
     assert processor.initial_added == [str(first_path), str(second_path)]
     assert processor.added == [str(first_path), str(second_path)]
     assert processor.removed == []
+
+
+def test_initial_scan_logs_progress_and_per_asset_duration(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    first_path = tmp_path / "first.asset"
+    second_path = tmp_path / "second.asset"
+    first_path.write_text("first", encoding="utf-8")
+    second_path.write_text("second", encoding="utf-8")
+    messages: list[str] = []
+    monkeypatch.setattr(watcher_module.log, "info", messages.append)
+
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(RecordingLifecyclePreLoader())
+    watcher._scan_directory(str(tmp_path))
+
+    assert messages[0].startswith(
+        f"[AssetScan] begin root='{tmp_path}' thread="
+    )
+    assert any("[AssetScan] discovered candidates=2 " in message for message in messages)
+    asset_begins = [
+        message for message in messages if message.startswith("[AssetLoad] begin")
+    ]
+    asset_ends = [
+        message for message in messages if message.startswith("[AssetLoad] end")
+    ]
+    assert len(asset_begins) == 2
+    assert "operation=initial type=asset index=1/2" in asset_begins[0]
+    assert f"path='{first_path}'" in asset_begins[0]
+    assert "operation=initial type=asset index=2/2" in asset_begins[1]
+    assert f"path='{second_path}'" in asset_begins[1]
+    assert len(asset_ends) == 2
+    assert all("status=ok duration_ms=" in message for message in asset_ends)
+    assert messages[-1].startswith(
+        "[AssetScan] complete candidates=2 processed=2 duration_ms="
+    )

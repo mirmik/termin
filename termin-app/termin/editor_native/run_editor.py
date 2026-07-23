@@ -291,6 +291,11 @@ def _compose_native_editor(
         engine.scene_manager.request_render()
         host.request_render_update()
 
+    def refresh_editor_ui() -> None:
+        """Present UI mutations made by a synchronous long-running operation."""
+        request_editor_render()
+        host.render()
+
     diagnostics_stage = session.begin_stage("diagnostics UI")
     session_presentation = diagnostics_stage.own(
         "session presentation",
@@ -350,6 +355,7 @@ def _compose_native_editor(
 
     modules_controller = ModulesPanelController(
         get_project_modules_runtime(engine.scene_manager),
+        progress_callback=refresh_editor_ui,
     )
     modules_panel = diagnostics_stage.own(
         "modules panel",
@@ -1558,7 +1564,7 @@ def _compose_native_editor(
     project_session_controller = NativeProjectSessionController(
         document=host.document,
         viewport=editor_viewport,
-        request_render=request_editor_render,
+        refresh_ui=refresh_editor_ui,
         set_project_state=lambda _project_dir, project_name: session_presentation.update(project_name=project_name),
         log_to_console=log_build_message,
         rescan_file_resources=rescan_file_resources,

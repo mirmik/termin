@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-import threading
 from typing import Callable
 
 from termin_modules import ModuleEvent, ModuleState
@@ -56,13 +55,20 @@ class ModulesSnapshot:
 class ModulesPanelController:
     """Own module-panel state across direct caller and worker updates."""
 
-    def __init__(self, runtime) -> None:
+    def __init__(
+        self,
+        runtime,
+        *,
+        progress_callback: Callable[[], None] | None = None,
+    ) -> None:
         self.runtime = runtime
+        self._progress_callback = progress_callback
         self._selected_module: str | None = None
         self._operation_running = False
         self._operation_message = ""
         self._operation_log: list[str] = []
         self._changed: Callable[[ModulesSnapshot], None] | None = None
+        self._publishing = False
         self.runtime.add_listener(self._on_runtime_event)
 
     def set_changed_handler(
@@ -215,7 +221,7 @@ class ModulesPanelController:
             _logger.error("Modules %s requires a selected module", operation)
         return self._selected_module
 
-    def _run(self, message: str, worker_action, owner_action) -> bool:
+    def _run(self, message: str, prepare_action, followup_action) -> bool:
         if self._operation_running:
             _logger.warning("Ignoring module operation while another operation is running")
             return False
@@ -224,46 +230,30 @@ class ModulesPanelController:
         self._operation_log = [message]
         self._publish()
 
-        if worker_action is None:
-            self._finish_operation(owner_action)
-            return True
-
         def output(module_id: str, line: str) -> None:
             self._append_log(f"[{module_id}] {line}")
 
-        def worker() -> None:
-            success = False
-            error = ""
-            self.runtime.add_build_output_listener(output)
-            try:
-                success = bool(worker_action())
-                if not success:
-                    error = self.runtime.last_error
-            except Exception as exc:
-                error = str(exc)
-                _logger.exception("Module worker operation failed")
-            finally:
-                try:
-                    self.runtime.remove_build_output_listener(output)
-                except Exception:
-                    _logger.exception("Failed to remove module build output listener")
-            if success and owner_action is not None:
-                self._finish_operation(owner_action)
-            else:
-                self._finish(success, error)
-
-        threading.Thread(target=worker, name="EditorModulesOperation", daemon=False).start()
-        return True
-
-    def _finish_operation(self, owner_action) -> None:
+        success = True
+        error = ""
+        self.runtime.add_build_output_listener(output)
         try:
-            success = bool(owner_action())
-            error = "" if success else self.runtime.last_error
+            if prepare_action is not None:
+                success = bool(prepare_action())
+            if success and followup_action is not None:
+                success = bool(followup_action())
+            if not success:
+                error = self.runtime.last_error
         except Exception as exc:
             success = False
             error = str(exc)
-            _logger.exception("Module follow-up operation failed")
+            _logger.exception("Module operation failed")
+        finally:
+            try:
+                self.runtime.remove_build_output_listener(output)
+            except Exception:
+                _logger.exception("Failed to remove module build output listener")
         self._finish(success, error)
+        return success
 
     def _append_log(self, message: str) -> None:
         self._operation_log.append(message)
@@ -283,5 +273,12 @@ class ModulesPanelController:
             self._publish()
 
     def _publish(self) -> None:
-        if self._changed is not None:
+        if self._changed is None or self._publishing:
+            return
+        self._publishing = True
+        try:
             self._changed(self.snapshot())
+        finally:
+            self._publishing = False
+        if self._progress_callback is not None:
+            self._progress_callback()

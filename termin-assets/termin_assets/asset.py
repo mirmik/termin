@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 
+from tcbase import log
 from termin_assets.identifiable import Identifiable
 
 
@@ -103,13 +106,13 @@ class Asset(Identifiable):
         """Ensure asset data is loaded."""
         if self._loaded:
             return True
-        return self._load()
+        return self._run_load_operation("load")
 
     def reload(self) -> bool:
         """Reload asset data from source_path."""
         if self._source_path is None:
             return False
-        result = self._load()
+        result = self._run_load_operation("reload")
         if result:
             self._bump_version()
         return result
@@ -117,6 +120,36 @@ class Asset(Identifiable):
     def unload(self) -> None:
         """Unload asset data."""
         self._loaded = False
+
+    def _run_load_operation(self, operation: str) -> bool:
+        started_at = time.perf_counter()
+        thread_id = threading.get_ident()
+        source_path = "" if self._source_path is None else str(self._source_path)
+        type_name = type(self).__name__
+        log.info(
+            f"[AssetRuntimeLoad] begin operation={operation} type={type_name} "
+            f"name='{self._name}' uuid='{self.uuid}' path='{source_path}' "
+            f"thread={thread_id}"
+        )
+        try:
+            result = bool(self._load())
+        except Exception:
+            log.error(
+                f"[AssetRuntimeLoad] end operation={operation} type={type_name} "
+                f"name='{self._name}' uuid='{self.uuid}' status=failed "
+                f"duration_ms={(time.perf_counter() - started_at) * 1000.0:.3f} "
+                f"path='{source_path}' thread={thread_id}",
+                exc_info=True,
+            )
+            raise
+        log.info(
+            f"[AssetRuntimeLoad] end operation={operation} type={type_name} "
+            f"name='{self._name}' uuid='{self.uuid}' "
+            f"status={'ok' if result else 'failed'} "
+            f"duration_ms={(time.perf_counter() - started_at) * 1000.0:.3f} "
+            f"path='{source_path}' thread={thread_id}"
+        )
+        return result
 
     def serialize_ref(self) -> dict:
         """Serialize asset reference for scene saving."""

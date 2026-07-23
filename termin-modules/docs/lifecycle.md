@@ -28,7 +28,13 @@ records. Деструктор выполняет ту же попытку shutdo
 
 - дескриптор парсится через `ModuleDescriptorParser`
 - создаётся `ModuleSpec`
-- в runtime добавляется `ModuleRecord` со статусом `Discovered`
+- во временном batch создаётся `ModuleRecord` со статусом `Discovered`
+
+Runtime публикует batch атомарно: все успешно разобранные records сначала
+становятся видимы вместе и проходят подготовку backend environments, и только
+после этого для них испускаются события `Discovered`. Поэтому listener события
+может синхронно запросить `list()`, descriptor snapshot или `needs_rebuild()` и
+не увидит частичный dependency-граф, зависящий от порядка имён descriptor-файлов.
 
 Во время поиска пропускаются служебные директории:
 
@@ -270,26 +276,26 @@ runtime немедленно проводит его через тот же clea
 ошибке init не закрывает shared library, пока cleanup owner contributions не
 подтвердил успех.
 
-### Owner-thread boundary в editor
+### Thread-neutral boundary в editor
 
-`TermModulesIntegration::configure_runtime()` привязывает live mutation к
-потоку, на котором создана integration. `load`, `unload`, `reload`, `rebuild` и
-shutdown fail-closed до backend/registry вызовов, если их вызвали с другого
-потока; `last_error` содержит operation и thread-contract diagnostic.
+Module runtime не привязывает live mutation к creator/owner thread и не
+отклоняет `load`, `unload`, `reload`, `rebuild` или shutdown по identity
+вызывающего потока. Этот контракт следует engine-wide правилу
+[No Owner-Thread Restrictions](../../docs/architecture/2026-07-24-no-owner-thread-restrictions.md).
 
 Editor progress dialog разделяет операцию на две части:
 
 1. build/clean/rebuild выполняется non-daemon worker-ом через отдельный
    `sdk/bin/termin_python -m termin.project_modules.warmup` process; у него свой
    runtime, CWD, Python interpreter и registries
-2. live unload/load, UnknownComponent migration и registry commit ставятся через
-   `UI.defer()` и выполняются после текущего UI/render compose на owner thread
+2. live unload/load, UnknownComponent migration и registry commit выполняются
+   через общий runtime API без caller-side thread-affinity precondition
 
 Это сохраняет отзывчивость UI во время native build и исключает изменение CWD,
 scene или process-global registries из module worker. Диалог нельзя закрыть до
-завершения build; worker не daemon. При shutdown незавершённый build может
-закончить только isolated phase, а live commit без обработки owner-thread queue
-не выполняется. Play gate использует ту же prebuild/owner-commit схему.
+завершения build; worker не daemon. При shutdown незавершённый build завершает
+isolated phase перед live commit. Play gate использует ту же prebuild/commit
+схему.
 
 Python wrappers на module-owned live objects, удерживаемые console/MCP/tooling
 вне управляемой сцены, считаются настоящими live references и блокируют unload.
@@ -303,7 +309,7 @@ live create/change/remove события помечают модуль dirty.
 
 Применение изменений выполняется явным действием (`Reload Changed` /
 `Build & Reload Changed`) или Play-gate перед входом в Game Mode. Play-gate
-сначала запускает isolated artifact preparation, затем на owner thread вызывает
+сначала запускает isolated artifact preparation, затем вызывает
 editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
 reload-ятся через dependency-aware cascade, а уже подготовленный C++ artifact
 не требует долгого build в commit phase. Если build/reload падает, Play не стартует, модуль остаётся в

@@ -23,7 +23,7 @@ layer.
 - layout, paint, render, present and deterministic shutdown ordering;
 - SDL pointer/key/text translation, including host click counts;
 - document clipboard services and a typed file-drop callback boundary;
-- owner-thread PNG readback of the composed color target for screenshots/MCP.
+- synchronous PNG readback of the composed color target for screenshots/MCP.
 
 `NativeUiHost` is owned by the editor session; it is not the application
 composition root and is never owned by `EngineCore`. The canonical attachment,
@@ -51,7 +51,8 @@ temporary compatibility imports for legacy consumers. MCP screenshot capture
 is an injected callable in the executor namespace, not a hard-coded lookup of
 `EditorWindowTcgui._fbo_surface`. The native host injects its composed target;
 the legacy editor injects its viewport surface. Both frontends therefore share
-one transport, owner-thread queue and tool schema without sharing UI objects.
+one transport, explicit editor executor and tool schema without sharing UI
+objects.
 
 The platform event key values and `tc_ui_key_code` now use the same
 `tcbase.Key`/GLFW-compatible integer contract. The host does not maintain a
@@ -117,7 +118,7 @@ production panels do not infer layout from preferred sizes.
 
 The end-to-end gate enabled the panel and UI profiling through the editor MCP,
 observed 13 live section rows, captured a 1280x720 composed screenshot and then
-closed the window on the editor owner thread. The same work fixed an ABI bug
+closed the window through the editor loop. The same work fixed an ABI bug
 where policy-aware `append_child` attempted a C++ cast on Python widget bodies;
 the bridge now branches on `native_language`, with registry lifecycle coverage.
 
@@ -145,7 +146,7 @@ uses weak owner references, preventing `Document → callback → view → Docum
 cycles; isolated nanobind lifetime gates remain clean. MCP QA used a real
 project, observed 52 InspectRegistry rows, filtered component details and
 captured both composed surfaces. Screenshot capture now forces one synchronous
-owner-thread compose before readback, preventing a just-enqueued UI mutation
+compose before readback, preventing a just-enqueued UI mutation
 from racing the previous render target contents.
 
 Core Registry and Resource Manager now use `RegistryCatalogController`, which
@@ -167,7 +168,7 @@ The native Debug menu exposes Core Registry on F9 and Resource Manager on F10.
 
 `create_editor_project_file_watcher()` is now the shared production composition
 boundary for module, component and default-asset processors. Both frontends use
-it; native watches the selected project, polls on the owner thread and disables
+it; native watches the selected project, polls during the editor loop and disables
 the observer during shutdown. Resource Manager adds a hierarchical Watched
 Files page for extension counts, directories, processors and tracked resource
 names. `NavMeshRegistry.instances()` exposes an immutable sorted snapshot so

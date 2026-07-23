@@ -499,13 +499,9 @@ class Menu(Widget):
                     return True
                 if it.enabled and it.on_click:
                     callback = it.on_click
-            ui = self._ui
             self._hide_menu_chain()
             if callback is not None:
-                if ui is not None:
-                    ui.defer(callback)
-                else:
-                    callback()
+                callback()
             return True
         if key == Key.RIGHT:
             if 0 <= self._hovered_index < len(self.items):

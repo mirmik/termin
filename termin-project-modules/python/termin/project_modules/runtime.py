@@ -345,8 +345,8 @@ class ProjectModulesRuntime:
 
         This method is safe to call from an editor worker: the subprocess owns
         its own module runtime and cannot mutate this process' scenes or global
-        registries. The editor must perform the subsequent load/reload commit on
-        its owner thread.
+        registries. A subsequent load/reload commit has no caller-thread
+        affinity; the runtime owns any serialization required by its state.
         """
         self._ensure_open()
         self._background_error = ""

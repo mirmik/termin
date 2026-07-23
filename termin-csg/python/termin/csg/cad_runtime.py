@@ -50,7 +50,6 @@ def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 76
             if app.dirty:
                 app.render_scene(scene_renderer)
             texture = ui.render_compose(width, height, background_color=(0.10, 0.10, 0.12, 1.0))
-            ui.process_deferred()
             if texture is not None:
                 window.present(texture)
     finally:

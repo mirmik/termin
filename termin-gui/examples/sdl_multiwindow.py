@@ -128,7 +128,6 @@ class _WindowManager:
         for e in list(self._windows):
             vw, vh = e.window.framebuffer_size()
             tex = e.ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
-            e.ui.process_deferred()
             if tex is not None:
                 e.window.present(tex)
 
