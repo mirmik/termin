@@ -213,10 +213,6 @@ void ModuleRuntime::set_build_output_callback(BuildOutputCallback callback) {
     }
 }
 
-void ModuleRuntime::set_mutation_thread_checker(MutationThreadChecker checker) {
-    _mutation_thread_checker = std::move(checker);
-}
-
 void ModuleRuntime::set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser) {
     _parser = std::move(parser);
 }
@@ -308,6 +304,10 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
     }
 
     std::sort(descriptor_paths.begin(), descriptor_paths.end());
+    std::vector<ModuleRecord> discovered_records;
+    discovered_records.reserve(descriptor_paths.size());
+    std::unordered_map<std::string, std::filesystem::path> discovered_descriptors;
+    discovered_descriptors.reserve(descriptor_paths.size());
     for (const std::filesystem::path& descriptor_path : descriptor_paths) {
         std::string error;
         auto spec = _parser->parse(descriptor_path, error);
@@ -317,24 +317,37 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
             continue;
         }
 
-        const ModuleRecord* existing = find(spec->id);
-        if (existing != nullptr) {
+        const auto [existing, inserted] =
+            discovered_descriptors.emplace(spec->id, descriptor_path);
+        if (!inserted) {
             _last_error = "Duplicate module id '" + spec->id + "' in descriptors '" +
-                existing->spec.descriptor_path.string() + "' and '" + descriptor_path.string() + "'";
+                existing->second.string() + "' and '" + descriptor_path.string() + "'";
             emit(ModuleEventKind::Failed, spec->id, _last_error);
             continue;
         }
 
         ModuleRecord record;
         record.spec = std::move(*spec);
-        _records.push_back(std::move(record));
-        emit(ModuleEventKind::Discovered, _records.back().spec.id, descriptor_path.string());
+        discovered_records.push_back(std::move(record));
     }
 
     if (!_last_error.empty()) {
         return false;
     }
-    return prepare_backend_environments();
+
+    _records = std::move(discovered_records);
+    if (!prepare_backend_environments()) {
+        return false;
+    }
+
+    for (const ModuleRecord& record : _records) {
+        emit(
+            ModuleEventKind::Discovered,
+            record.spec.id,
+            record.spec.descriptor_path.string()
+        );
+    }
+    return true;
 }
 
 bool ModuleRuntime::shutdown() {
@@ -343,10 +356,6 @@ bool ModuleRuntime::shutdown() {
         _last_error.clear();
         return true;
     }
-    if (!ensure_mutation_thread("shutdown")) {
-        return false;
-    }
-
     std::vector<std::string> failures;
     for (const std::string& module_id : ordered) {
         bool unloaded = false;
@@ -478,9 +487,6 @@ bool ModuleRuntime::teardown_backend_environments() {
 }
 
 bool ModuleRuntime::load_all() {
-    if (!ensure_mutation_thread("load_all")) {
-        return false;
-    }
     if (!refresh_descriptor_snapshot()) {
         return false;
     }
@@ -502,9 +508,6 @@ bool ModuleRuntime::load_all() {
 }
 
 bool ModuleRuntime::load_module(const std::string& module_id) {
-    if (!ensure_mutation_thread("load_module")) {
-        return false;
-    }
     return load_module_impl(module_id, true);
 }
 
@@ -696,9 +699,6 @@ bool ModuleRuntime::load_module_impl(
 }
 
 bool ModuleRuntime::unload_module(const std::string& module_id) {
-    if (!ensure_mutation_thread("unload_module")) {
-        return false;
-    }
     return unload_module_impl(module_id, true);
 }
 
@@ -886,9 +886,6 @@ bool ModuleRuntime::unload_module_impl(
 }
 
 bool ModuleRuntime::reload_module(const std::string& module_id) {
-    if (!ensure_mutation_thread("reload_module")) {
-        return false;
-    }
     if (!refresh_descriptor_snapshot()) {
         return false;
     }
@@ -901,9 +898,6 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) {
-    if (!ensure_mutation_thread("reload_module_with_dependents")) {
-        return false;
-    }
     if (!refresh_descriptor_snapshot()) {
         return false;
     }
@@ -1098,9 +1092,6 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::rebuild_module(const std::string& module_id) {
-    if (!ensure_mutation_thread("rebuild_module")) {
-        return false;
-    }
     if (!refresh_descriptor_snapshot()) {
         return false;
     }
@@ -1377,22 +1368,6 @@ void ModuleRuntime::emit(ModuleEventKind kind, const std::string& module_id, con
     if (_event_callback) {
         _event_callback(ModuleEvent{kind, module_id, message});
     }
-}
-
-bool ModuleRuntime::ensure_mutation_thread(const char* operation) {
-    if (!_mutation_thread_checker) {
-        return true;
-    }
-    std::string error;
-    if (_mutation_thread_checker(error)) {
-        return true;
-    }
-    _last_error = error.empty()
-        ? std::string("Module runtime mutation called from the wrong thread: ") + operation
-        : error + " (operation: " + operation + ")";
-    tc::Log::error("ModuleRuntime: %s", _last_error.c_str());
-    emit(ModuleEventKind::Failed, "<runtime>", _last_error);
-    return false;
 }
 
 bool ModuleRuntime::refresh_descriptor_snapshot() {

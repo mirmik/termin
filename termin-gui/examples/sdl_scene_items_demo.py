@@ -176,7 +176,6 @@ def main():
                 elif et == sdl2.SDL_TEXTINPUT:
                     ui.text_input(event.text.text.decode("utf-8"))
 
-            ui.process_deferred()
 
             w, h = window.framebuffer_size()
             tex = ui.render_compose(w, h, background_color=(0.08, 0.08, 0.10, 1.0))

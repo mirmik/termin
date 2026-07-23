@@ -50,7 +50,7 @@ between environments:
 - draw list, paint context, renderer and color target;
 - layout, paint and GPU frame recording;
 - typed frame extensions;
-- repaint and owner-thread deferred work;
+- repaint state;
 - dynamic texture leases;
 - deterministic release of host-owned GPU resources.
 
@@ -118,20 +118,19 @@ controller for headless execution.
 
 ## Frame contract
 
-One owner-thread tick has the same ordering in both modes:
+One application tick has the same ordering in both modes:
 
 1. drain ordered events from the input source and dispatch them to `Document`;
-2. execute the current batch of deferred callbacks;
-3. stop if the input source or application requested close;
-4. skip rendering unless continuous rendering or repaint state requires it;
-5. read the current physical pixel extent from the frame endpoint;
-6. allocate or resize the host-owned color target;
-7. run `before_ui_frame` extensions;
-8. layout and paint the `Document`;
-9. record and submit the native UI frame through the canonical
+2. stop if the input source or application requested close;
+3. skip rendering unless continuous rendering or repaint state requires it;
+4. read the current physical pixel extent from the frame endpoint;
+5. allocate or resize the host-owned color target;
+6. run `before_ui_frame` extensions;
+7. layout and paint the `Document`;
+8. record and submit the native UI frame through the canonical
    `RenderContext2`;
-10. run `after_ui_frame` extensions;
-11. publish the completed color texture to the frame endpoint.
+9. run `after_ui_frame` extensions;
+10. publish the completed color texture to the frame endpoint.
 
 The windowed frame endpoint publishes by presenting into its `BackendWindow`.
 The offscreen endpoint publishes a generation, color texture and the physical
@@ -148,8 +147,8 @@ receive `RenderContext2` and cannot create nested frames.
 ## Input and platform services
 
 The common host consumes backend-neutral `WindowEvent` values. A windowed
-source polls its `BackendWindow`; a headless source owns an ordered,
-owner-thread-drained queue populated by tests, MCP or automation.
+source polls its `BackendWindow`; a headless source owns an ordered input queue
+populated by tests, MCP or automation and drained as the first tick stage.
 
 Synthetic events follow the same coordinate and focus rules as window events.
 They are not direct mutations of widget internals. Pointer coordinates use

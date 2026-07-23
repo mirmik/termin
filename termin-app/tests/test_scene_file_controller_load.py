@@ -299,3 +299,63 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
     assert ("attach-editor", "loaded", {"restore_state": False}) in calls
     assert ("attach-render", "loaded") in calls
     assert ("last-scene", path) in calls
+
+
+def test_successful_load_logs_realtime_stage_boundaries(monkeypatch, tmp_path) -> None:
+    calls: list[object] = []
+    messages: list[str] = []
+    staged_scene = _Scene(calls)
+    controller, _manager, _active_name = _build_controller(
+        monkeypatch,
+        calls,
+        staged_scene=staged_scene,
+    )
+    monkeypatch.setattr(scene_file_controller_module.log, "info", messages.append)
+    path = _write_scene(tmp_path)
+
+    controller.load_scene_from_file(path)
+
+    expected_stages = [
+        "parse",
+        "extract",
+        "repair",
+        "staging-create",
+        "deserialize",
+        "editor-start",
+        "unknown-component-upgrade",
+        "editor-state",
+        "commit",
+        "commit-detach-editor",
+        "commit-detach-render",
+        "commit-close-old-scene",
+        "commit-register-scene",
+        "commit-project-settings",
+        "commit-scene-tree",
+        "commit-observe-scene",
+        "commit-attach-editor",
+        "commit-attach-render",
+        "commit-rendering-changed",
+        "commit-viewport-update",
+        "commit-window-title",
+    ]
+    begin_positions = [
+        next(
+            index
+            for index, message in enumerate(messages)
+            if f"stage-begin stage={stage} " in message
+        )
+        for stage in expected_stages
+    ]
+
+    assert messages[0].startswith(f"[SceneLoad] begin path='{path}' thread=")
+    assert begin_positions == sorted(begin_positions)
+    assert all(
+        any(
+            f"stage-end stage={stage} " in message
+            and "duration_ms=" in message
+            and "elapsed_ms=" in message
+            for message in messages
+        )
+        for stage in expected_stages
+    )
+    assert messages[-1].startswith("[SceneLoad] complete elapsed_ms=")

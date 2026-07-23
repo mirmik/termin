@@ -259,7 +259,7 @@ private:
 
 TERMIN_PREFAB_API void register_prefab_component_types();
 
-// Scene APIs are single-owner-thread APIs. These queries return a mutation-safe
+// These queries return a mutation-safe
 // snapshot of live generational handles but do not add cross-thread safety.
 TERMIN_PREFAB_API std::vector<Entity> find_live_prefab_instances(
     const std::string& prefab_asset_uuid

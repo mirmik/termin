@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 from typing import Callable
 
 from tcbase import log
@@ -23,15 +22,14 @@ def show_module_operation_dialog(
     *,
     title: str,
     start_message: str,
-    worker_action: Callable[[], bool] | None = None,
-    owner_action: Callable[[], bool] | None = None,
+    prepare_action: Callable[[], bool] | None = None,
+    followup_action: Callable[[], bool] | None = None,
     on_complete: Callable[[bool], None],
     auto_close: bool = True,
 ) -> None:
-    """Run isolated build work off-thread and live mutation on the UI owner thread."""
-    if worker_action is None and owner_action is None:
-        raise ValueError("module operation requires worker_action or owner_action")
-    owner_thread_id = threading.get_ident()
+    """Run a module operation synchronously and project progress through callbacks."""
+    if prepare_action is None and followup_action is None:
+        raise ValueError("module operation requires prepare_action or followup_action")
     content = VStack()
     content.spacing = 8
     content.preferred_width = px(640)
@@ -61,8 +59,7 @@ def show_module_operation_dialog(
     dlg = Dialog()
     dlg.title = title
     dlg.content = content
-    # Module operations are not cancellable mid-build. A non-daemon worker owns
-    # no live editor state; its commit is queued back to this UI thread.
+    # Module operations are not cancellable mid-build.
     dlg.buttons = []
     dlg.default_button = ""
     dlg.cancel_button = ""
@@ -84,17 +81,10 @@ def show_module_operation_dialog(
             progress.value = min(0.92, 0.08 + line_count * 0.025)
         request_layout()
 
-    def defer(callback: Callable[[], None]) -> None:
-        ui.defer(callback)
-
     def on_build_output(module_id: str, line: str) -> None:
-        defer(lambda module_id=module_id, line=line: append_log(f"[{module_id}] {line}"))
+        append_log(f"[{module_id}] {line}")
 
     def finish(success: bool, error_message: str = "") -> None:
-        if threading.get_ident() != owner_thread_id:
-            log.error(f"{_TAG} finish callback escaped the UI owner thread")
-            success = False
-            error_message = "Module operation completion ran on the wrong thread"
         progress.value = 1.0 if success else 0.0
         if success:
             status_label.text = "Complete"
@@ -114,49 +104,27 @@ def show_module_operation_dialog(
             dlg.cancel_button = "Close"
         request_layout()
 
-    def run_owner_action() -> None:
-        if threading.get_ident() != owner_thread_id:
-            finish(False, "Live module commit ran on the wrong thread")
-            return
-        success = False
-        error_message = ""
-        try:
-            assert owner_action is not None
-            success = owner_action()
-            if not success:
-                error_message = runtime.last_error
-        except Exception as exc:
-            error_message = str(exc)
-            log.error(f"{_TAG} {title} failed: {error_message}", exc_info=True)
-        finish(success, error_message)
-
-    def worker() -> None:
-        success = False
+    def run_operation() -> None:
+        success = True
         error_message = ""
         runtime.add_build_output_listener(on_build_output)
         try:
-            assert worker_action is not None
-            success = worker_action()
+            if prepare_action is not None:
+                success = prepare_action()
+            if success and followup_action is not None:
+                success = followup_action()
             if not success:
                 error_message = runtime.last_error
         except Exception as exc:
             error_message = str(exc)
             log.error(f"{_TAG} {title} failed: {error_message}", exc_info=True)
+            success = False
         finally:
             try:
                 runtime.remove_build_output_listener(on_build_output)
             except Exception:
                 log.error(f"{_TAG} failed to remove build output listener", exc_info=True)
-
-        if success and owner_action is not None:
-            defer(run_owner_action)
-        else:
-            defer(lambda: finish(success, error_message))
+        finish(success, error_message)
 
     dlg.show(ui, windowed=False)
-    if worker_action is None:
-        defer(run_owner_action)
-        return
-
-    thread = threading.Thread(target=worker, name=f"ModuleOperation-{title}", daemon=False)
-    thread.start()
+    run_operation()

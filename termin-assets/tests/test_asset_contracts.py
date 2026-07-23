@@ -24,6 +24,7 @@ from termin_assets import (
     write_spec_file,
 )
 import termin_assets.plugin_discovery as plugin_discovery
+from termin_assets import asset as asset_module
 
 
 def test_asset_core_classes_are_exported() -> None:
@@ -70,6 +71,33 @@ def test_data_asset_reload_preserves_live_data_when_new_content_is_rejected(tmp_
     assert asset.cached_data == "live-data"
     assert asset.is_loaded
     assert asset.version == 0
+
+
+def test_asset_runtime_load_logs_begin_and_end_with_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "probe.memory"
+    source.write_text("payload", encoding="utf-8")
+    messages: list[str] = []
+    monkeypatch.setattr(asset_module.log, "info", messages.append)
+    asset = MemoryAsset(
+        name="probe",
+        source_path=source,
+        uuid="probe-uuid",
+    )
+
+    assert asset.ensure_loaded()
+
+    assert messages[0].startswith(
+        "[AssetRuntimeLoad] begin operation=load type=MemoryAsset "
+        "name='probe' uuid='probe-uuid'"
+    )
+    assert f"path='{source}'" in messages[0]
+    assert messages[1].startswith(
+        "[AssetRuntimeLoad] end operation=load type=MemoryAsset "
+        "name='probe' uuid='probe-uuid' status=ok duration_ms="
+    )
 
 
 def test_runtime_manager_get_or_create_embedded_asset_uses_runtime_registry() -> None:

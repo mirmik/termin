@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 
 from termin.editor_native import project_session_controller as native_session
 from termin.gui_native import Document, Rect
@@ -95,28 +96,43 @@ class _RichTextModel:
 class _Runtime:
     last_error = ""
 
+    def __init__(self) -> None:
+        self.output_listeners = []
 
-def test_native_module_operation_runs_followup_action_directly(monkeypatch):
+    def add_build_output_listener(self, callback) -> None:
+        self.output_listeners.append(callback)
+
+    def remove_build_output_listener(self, callback) -> None:
+        self.output_listeners.remove(callback)
+
+
+def test_native_module_operation_runs_synchronously_and_refreshes_progress(monkeypatch):
     monkeypatch.setattr(native_session, "RichTextModel", _RichTextModel)
     document = _Document()
     renders = []
     completions = []
-    owner_calls = []
+    action_threads = []
+    caller_thread = threading.get_ident()
+
+    def complete(success: bool) -> None:
+        assert document.destroyed == [document.dialog.handle]
+        completions.append(success)
+
     operation = native_session.NativeModuleOperationDialog(
         document,
         viewport=lambda: object(),
-        request_render=lambda: renders.append(True),
+        refresh_ui=lambda: renders.append(True),
         runtime=_Runtime(),
         title="Load Project Modules",
         start_message="Loading project modules: test-project",
-        worker_action=None,
-        owner_action=lambda: owner_calls.append(True) or True,
-        on_complete=completions.append,
+        prepare_action=lambda: action_threads.append(threading.get_ident()) or True,
+        followup_action=lambda: action_threads.append(threading.get_ident()) or True,
+        on_complete=complete,
     )
 
     operation.start()
 
-    assert owner_calls == [True]
+    assert action_threads == [caller_thread, caller_thread]
     assert completions == [True]
     assert operation.log_model.text == "Complete."
     assert document.destroyed == [document.dialog.handle]
@@ -128,12 +144,12 @@ def test_native_module_operation_updates_real_native_label_binding():
     operation = native_session.NativeModuleOperationDialog(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
-        request_render=lambda: None,
+        refresh_ui=lambda: None,
         runtime=_Runtime(),
         title="Load Project Modules",
         start_message="Loading project modules: test-project",
-        worker_action=None,
-        owner_action=lambda: True,
+        prepare_action=None,
+        followup_action=lambda: True,
         on_complete=lambda _success: None,
     )
 
@@ -161,7 +177,7 @@ def test_native_project_session_controller_configures_startup_operation(monkeypa
     controller = native_session.NativeProjectSessionController(
         document=object(),
         viewport=lambda: object(),
-        request_render=lambda: None,
+        refresh_ui=lambda: None,
         set_project_state=lambda *_args: None,
         log_to_console=lambda _message: None,
         rescan_file_resources=lambda: None,
@@ -180,7 +196,7 @@ def test_native_project_session_controller_configures_startup_operation(monkeypa
 
     assert captured["title"] == "Load Project Modules"
     assert captured["start_message"] == f"Loading project modules: {tmp_path.name}"
-    assert captured["worker_action"]()
-    assert captured["owner_action"]()
+    assert captured["prepare_action"]()
+    assert captured["followup_action"]()
     assert completions == [True]
     assert controller.active_module_operation is None

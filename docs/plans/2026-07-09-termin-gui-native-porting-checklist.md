@@ -836,7 +836,7 @@ Phase 12 host notes:
   is available.
 - Executor, MCP server and shader-runtime services moved to `editor_core`.
   Screenshot capture is provider-injected, so native composed UI and legacy
-  viewport capture use the same owner-thread MCP flow. The end-to-end native
+  viewport capture use the same explicit MCP executor flow. The end-to-end native
   gate captured a 1280x720 PNG through the stock MCP client and then stopped
   the editor through `execute_python_script` with clean server/engine shutdown.
 - `RegistryCollectionController` and `ProjectBrowserController` own filtering,
@@ -865,7 +865,7 @@ Phase 12 host notes:
   valid.
 - The native entrypoint now owns the same production `ProjectFileWatcher`
   composition as tcgui, including 17 module/component/default-asset
-  processors, owner-thread polling and deterministic disable on shutdown. The
+  processors, editor-loop polling and deterministic disable on shutdown. The
   processor factory moved into `editor_core`; a real project bootstrap produced
   31 watcher nodes. `NavMeshRegistry.instances()` replaces the legacy viewer's
   direct access to `_instances`.

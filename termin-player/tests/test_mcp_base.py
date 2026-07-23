@@ -11,12 +11,12 @@ from termin.player.mcp_server import (
 )
 
 
-def test_python_script_executor_runs_queued_work_on_owner_thread() -> None:
-    owner_thread = threading.get_ident()
+def test_python_script_executor_runs_queued_work_on_processing_thread() -> None:
+    processing_thread = threading.get_ident()
     executor = PythonScriptExecutor(
         lambda: {
             "value": 41,
-            "owner_thread": owner_thread,
+            "processing_thread": processing_thread,
             "threading": threading,
         }
     )
@@ -25,7 +25,7 @@ def test_python_script_executor_runs_queued_work_on_owner_thread() -> None:
     def worker() -> None:
         result_holder.append(
             executor.execute_script_from_any_thread(
-                "print(value + 1)\nprint(threading.get_ident() == owner_thread)",
+                "print(value + 1)\nprint(threading.get_ident() == processing_thread)",
                 timeout=2.0,
             )
         )

@@ -254,8 +254,8 @@ from one that expanded the arena.
 
 ## Concurrency model
 
-The current rendering path is predominantly owner-thread and sequential, but
-the allocator contract should not require that forever.
+The current rendering path is sequential, but the allocator contract should
+not require that forever or expose caller thread identity as a precondition.
 
 A single mutex-protected arena shared by all future jobs would centralize
 contention. The preferred extension is a central `EngineFrameMemory` owner

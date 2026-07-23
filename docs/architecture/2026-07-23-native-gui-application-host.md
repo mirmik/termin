@@ -103,7 +103,7 @@ windows use distinct documents even when they share one graphics domain.
 - the UI draw list, paint context and renderer;
 - the resizable per-window color target;
 - layout, paint, frame submission and presentation for that window;
-- repaint state and owner-thread deferred work;
+- repaint state;
 - host-created UI GPU resources and their deterministic release.
 
 `GuiWindowHost` does not own:
@@ -173,14 +173,11 @@ There is no primary/secondary graphics ownership distinction. Every
 window and independent document/render target.
 
 The application loop owns the collection of window hosts. It drains/routes
-platform events and ticks requested windows sequentially on the graphics owner
-thread. Recording or presenting two windows concurrently, nesting
-`RenderContext2` frames, or updating a window host from a background thread is
-outside this contract.
-
-Deferred work may be submitted from another thread, but it is executed only on
-the owner thread at a documented point before the next frame. Failures are
-logged and propagated; a failed callback is not silently ignored.
+platform events and ticks requested windows sequentially. Recording or
+presenting two windows concurrently and nesting `RenderContext2` frames are
+outside this contract. The host exposes no generic callback deferral API;
+application actions run directly and publish progress through explicit
+callbacks.
 
 ## Extension boundary
 
@@ -224,10 +221,11 @@ exclusive modes:
 - borrowed texture: referenced for presentation but never destroyed by the
   lease.
 
-Create, full update, rectangular update, resize/recreate, clear and release run
-on the graphics owner thread. Each operation checks host liveness and graphics
-domain identity. Updating a visible lease requests repaint. Device mismatch,
-stale widget handles and use after host shutdown are diagnosed errors.
+Create, full update, rectangular update, resize/recreate, clear and release are
+serialized by the host without caller thread-identity checks. Each operation
+checks host liveness and graphics domain identity. Updating a visible lease
+requests repaint. Device mismatch, stale widget handles and use after host
+shutdown are diagnosed errors.
 
 The core `Canvas` widget continues to store a non-owning `TextureHandle`; it
 does not acquire GPU ownership or a Python/numpy dependency.

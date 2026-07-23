@@ -73,6 +73,6 @@ pretending dangling presentation objects are safe.
 There is no primary/secondary window distinction. Vulkan and D3D11 allocate a
 surface/swapchain per window. SDL/OpenGL keeps one platform-owned context and
 makes it current against the target compatible window. Presentation and the
-shared `RenderContext2` remain owner-thread/sequential facilities until a
-separate concurrency design is accepted.
-
+shared `RenderContext2` remain sequential facilities until a separate
+concurrency design is accepted. This ordering does not impose thread identity
+checks on callers.

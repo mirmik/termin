@@ -103,7 +103,6 @@ class BackendWindowManager(_BaseManager):
         if vw <= 0 or vh <= 0:
             return
         tex = ui.render_compose(vw, vh, background_color=self.WINDOW_BG)
-        ui.process_deferred()
         if tex is None:
             return
         entry.window.present(tex)

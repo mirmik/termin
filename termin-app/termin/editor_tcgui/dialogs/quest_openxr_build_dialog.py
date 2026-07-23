@@ -29,7 +29,6 @@ def show_quest_openxr_build_dialog(
         entry_scene,
         output_dir,
         on_log=on_log,
-        defer=ui.defer,
     )
     content = VStack()
     content.spacing = 8

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from collections.abc import Iterable
@@ -370,6 +371,11 @@ class ProjectFileWatcher:
         previously_watched_files: Set[str] | None = None,
     ) -> None:
         """Recursively scan directory and process resource files."""
+        scan_started_at = time.perf_counter()
+        scan_thread_id = threading.get_ident()
+        log.info(
+            f"[AssetScan] begin root='{path}' thread={scan_thread_id}"
+        )
         pending_files: list[tuple[int, str, str]] = []
 
         for root, dirs, files in os.walk(path):
@@ -405,12 +411,30 @@ class ProjectFileWatcher:
                         pending_files.append((priority, file_path, ext))
 
         pending_files.sort(key=lambda x: (x[0], x[1]))
+        log.info(
+            f"[AssetScan] discovered candidates={len(pending_files)} "
+            f"elapsed_ms={(time.perf_counter() - scan_started_at) * 1000.0:.3f} "
+            f"root='{path}' thread={scan_thread_id}"
+        )
 
-        for _priority, file_path, _ext in pending_files:
+        processed_count = 0
+        for index, (_priority, file_path, _ext) in enumerate(pending_files, start=1):
             if previously_watched_files is not None and file_path in previously_watched_files:
                 self._watched_files.add(file_path)
                 continue
-            self._add_file(file_path, initial_scan=True)
+            self._add_file(
+                file_path,
+                initial_scan=True,
+                progress=(index, len(pending_files)),
+            )
+            processed_count += 1
+
+        log.info(
+            f"[AssetScan] complete candidates={len(pending_files)} "
+            f"processed={processed_count} "
+            f"duration_ms={(time.perf_counter() - scan_started_at) * 1000.0:.3f} "
+            f"root='{path}' thread={scan_thread_id}"
+        )
 
     def _start_observer(self, path: str) -> None:
         """Start watchdog observer for live file change detection."""
@@ -470,7 +494,13 @@ class ProjectFileWatcher:
             return os.path.splitext(base_path)[1].lower() or None
         return None
 
-    def _add_file(self, path: str, *, initial_scan: bool = False) -> None:
+    def _add_file(
+        self,
+        path: str,
+        *,
+        initial_scan: bool = False,
+        progress: tuple[int, int] | None = None,
+    ) -> None:
         """Register a file with its processor."""
         self._watched_files.add(path)
 
@@ -483,7 +513,13 @@ class ProjectFileWatcher:
                 if processor is not None:
                     resource_path = path[:-5]
                     try:
-                        processor.on_spec_changed(path, resource_path)
+                        self._run_processor_operation(
+                            "initial-meta" if initial_scan else "meta",
+                            processor,
+                            path,
+                            lambda: processor.on_spec_changed(path, resource_path),
+                            progress=progress,
+                        )
                     except Exception:
                         log.exception(f"[ProjectFileWatcher] Error processing meta {path}")
             return
@@ -492,9 +528,20 @@ class ProjectFileWatcher:
         if processor is not None:
             try:
                 if initial_scan:
-                    processor.on_initial_file_added(path)
+                    self._run_processor_operation(
+                        "initial",
+                        processor,
+                        path,
+                        lambda: processor.on_initial_file_added(path),
+                        progress=progress,
+                    )
                 else:
-                    processor.on_file_added(path)
+                    self._run_processor_operation(
+                        "add",
+                        processor,
+                        path,
+                        lambda: processor.on_file_added(path),
+                    )
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error processing {path}")
 
@@ -515,7 +562,12 @@ class ProjectFileWatcher:
         processor = self._processors.get(ext)
         try:
             if processor is not None:
-                processor.on_file_removed(path)
+                self._run_processor_operation(
+                    "remove",
+                    processor,
+                    path,
+                    lambda: processor.on_file_removed(path),
+                )
         except Exception:
             log.exception(f"[ProjectFileWatcher] Error removing {path}")
         finally:
@@ -531,7 +583,12 @@ class ProjectFileWatcher:
                 if processor is not None:
                     resource_path = path[:-5]
                     try:
-                        processor.on_spec_changed(path, resource_path)
+                        self._run_processor_operation(
+                            "meta-reload",
+                            processor,
+                            path,
+                            lambda: processor.on_spec_changed(path, resource_path),
+                        )
                     except Exception:
                         log.exception(f"[ProjectFileWatcher] Error processing meta {path}")
             return
@@ -539,9 +596,52 @@ class ProjectFileWatcher:
         processor = self._processors.get(ext)
         if processor is not None:
             try:
-                processor.on_file_changed(path)
+                self._run_processor_operation(
+                    "reload",
+                    processor,
+                    path,
+                    lambda: processor.on_file_changed(path),
+                )
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error reloading {path}")
+
+    def _run_processor_operation(
+        self,
+        operation: str,
+        processor: FilePreLoader,
+        path: str,
+        action: Callable[[], None],
+        *,
+        progress: tuple[int, int] | None = None,
+    ) -> None:
+        started_at = time.perf_counter()
+        thread_id = threading.get_ident()
+        progress_text = (
+            ""
+            if progress is None
+            else f" index={progress[0]}/{progress[1]}"
+        )
+        log.info(
+            f"[AssetLoad] begin operation={operation} "
+            f"type={processor.resource_type}{progress_text} "
+            f"path='{path}' thread={thread_id}"
+        )
+        try:
+            action()
+        except Exception:
+            log.info(
+                f"[AssetLoad] end operation={operation} "
+                f"type={processor.resource_type} status=failed "
+                f"duration_ms={(time.perf_counter() - started_at) * 1000.0:.3f} "
+                f"path='{path}' thread={thread_id}"
+            )
+            raise
+        log.info(
+            f"[AssetLoad] end operation={operation} "
+            f"type={processor.resource_type} status=ok "
+            f"duration_ms={(time.perf_counter() - started_at) * 1000.0:.3f} "
+            f"path='{path}' thread={thread_id}"
+        )
 
     def _ignored_roots(self) -> tuple[Path, ...]:
         if self._project_path is None:

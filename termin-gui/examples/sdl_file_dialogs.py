@@ -231,7 +231,6 @@ def main():
         if not running:
             break
 
-        ui.process_deferred()
 
         vw, vh = window.framebuffer_size()
         tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))

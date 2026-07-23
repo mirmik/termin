@@ -124,8 +124,6 @@ ui.text_input(text)
 ### Deferred actions
 
 ```python
-ui.defer(callback)       # выполнить callback после текущего цикла
-ui.process_deferred()    # обработать очередь (вызывается автоматически)
 ```
 
 ### Интеграция с окном

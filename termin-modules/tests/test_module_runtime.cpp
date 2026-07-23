@@ -363,6 +363,55 @@ void test_descriptor_parsing_and_discovery() {
     expect(discovered_count == 2, "two discovered events expected");
 }
 
+void test_discovery_events_observe_committed_descriptor_batch() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "a_dependent.module",
+        "name: dependent\n"
+        "dependencies: [core]\n"
+        "build:\n"
+        "  output: build/libdependent.so\n"
+    );
+    write_text_file(
+        tmp.path / "z_core.module",
+        "name: core\n"
+        "build:\n"
+        "  output: build/libcore.so\n"
+    );
+
+    ModuleRuntime runtime;
+    make_runtime(runtime);
+    size_t discovered_count = 0;
+    bool first_event_is_dependent = false;
+    bool complete_graph_visible = true;
+    bool snapshot_query_succeeded = false;
+    runtime.set_event_callback([&](const ModuleEvent& event) {
+        if (event.kind != ModuleEventKind::Discovered) {
+            return;
+        }
+        if (discovered_count == 0) {
+            first_event_is_dependent = event.module_id == "dependent";
+        }
+        ++discovered_count;
+        complete_graph_visible =
+            complete_graph_visible &&
+            runtime.find("dependent") != nullptr &&
+            runtime.find("core") != nullptr &&
+            runtime.list().size() == 2;
+        if (event.module_id == "dependent") {
+            (void)runtime.needs_rebuild("dependent");
+            snapshot_query_succeeded = runtime.last_error().empty();
+        }
+    });
+
+    expect(runtime.discover(tmp.path), runtime.last_error());
+    expect(first_event_is_dependent, "test must publish the dependent descriptor first");
+    expect(discovered_count == 2, "both committed records must publish discovery events");
+    expect(complete_graph_visible, "discovery listeners must observe the complete record batch");
+    expect(snapshot_query_succeeded,
+           "snapshot query from the dependent discovery listener must see its dependency");
+}
+
 void test_selected_closure_is_deterministic_and_mixed() {
     TempDir tmp;
     write_text_file(tmp.path / "z_python.pymodule",
@@ -879,33 +928,25 @@ void test_python_environment_prepare_failure_aborts_discovery() {
            "environment diagnostics must remain visible on discovered records");
 }
 
-void test_live_mutation_thread_guard_fails_before_backend_calls() {
+void test_live_mutation_accepts_non_creator_thread() {
     TempDir tmp;
     write_text_file(tmp.path / "guarded.module", "name: guarded\nbuild:\n  output: build/libguarded.so\n");
 
     ModuleRuntime runtime;
     auto backend = make_runtime(runtime);
-    const std::thread::id owner_thread = std::this_thread::get_id();
-    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
-        if (std::this_thread::get_id() == owner_thread) return true;
-        error = "injected wrong-thread mutation";
-        return false;
-    });
-    expect(runtime.discover(tmp.path), "guarded module discovery should succeed");
+    expect(runtime.discover(tmp.path), "module discovery should succeed");
 
-    bool worker_result = true;
+    bool worker_result = false;
     std::thread worker([&runtime, &worker_result]() {
         worker_result = runtime.load_module("guarded");
     });
     worker.join();
 
-    expect(!worker_result, "wrong-thread load must fail closed");
-    expect(runtime.last_error().find("injected wrong-thread mutation") != std::string::npos,
-           "wrong-thread diagnostic expected");
-    expect(backend->load_calls.empty(), "thread guard must run before backend load");
-    expect(runtime.find("guarded")->state == ModuleState::Discovered,
-           "wrong-thread attempt must not mutate module state");
-    expect(runtime.load_module("guarded"), "owner-thread load should succeed");
+    expect(worker_result, "load must not depend on the calling thread identity");
+    expect(runtime.last_error().empty(), "cross-thread load must not publish a thread-affinity error");
+    expect(backend->load_calls.size() == 1, "cross-thread load must reach the backend exactly once");
+    expect(runtime.find("guarded")->state == ModuleState::Loaded,
+           "cross-thread load must complete the normal state transition");
 }
 
 void test_cycle_detection() {
@@ -1614,6 +1655,10 @@ TEST_CASE("module runtime parses descriptors and discovers modules") {
     test_descriptor_parsing_and_discovery();
 }
 
+TEST_CASE("module runtime publishes discovery events after committing the descriptor batch") {
+    test_discovery_events_observe_committed_descriptor_batch();
+}
+
 TEST_CASE("module runtime resolves deterministic selected mixed closure") {
     test_selected_closure_is_deterministic_and_mixed();
 }
@@ -1682,8 +1727,8 @@ TEST_CASE("module runtime rolls back failed Python environment prepare") {
     test_python_environment_prepare_failure_aborts_discovery();
 }
 
-TEST_CASE("module runtime rejects live mutation from a non-owner thread") {
-    test_live_mutation_thread_guard_fails_before_backend_calls();
+TEST_CASE("module runtime accepts live mutation from a non-creator thread") {
+    test_live_mutation_accepts_non_creator_thread();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {

@@ -75,8 +75,6 @@ class NativeEditorEventLoop:
         with self._capture_profiler.section("Queued Work"):
             if self._executor.process_pending() > 0:
                 self._host.request_render_update()
-            if self._quest_openxr_build_dialog.poll() > 0:
-                self._host.request_render_update()
         with self._capture_profiler.section("Project Watch"):
             self._project_file_watcher.poll()
         with self._capture_profiler.section("Observers & Input"):
