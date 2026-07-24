@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
 
@@ -6,7 +7,7 @@ from termin.editor_core.foliage_layer_editor_extension import FoliageLayerEditor
 from termin.editor_native.component_extensions import NativeComponentExtensionContext
 from termin.editor_native.foliage_extension import project_native_foliage_extension
 from termin.editor_native.metrics import EDITOR_UI_METRICS
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 class _ComponentRef:
@@ -28,7 +29,7 @@ def _find(root, debug_name: str):
 
 
 def test_native_foliage_projector_tracks_shared_extension_state_and_lifetime():
-    document = Document()
+    document = tc_ui_document_create()
     renders: list[bool] = []
     context = NativeComponentExtensionContext(
         engine=object(),
@@ -69,12 +70,14 @@ def test_native_foliage_projector_tracks_shared_extension_state_and_lifetime():
     assert context.active_viewport_tools == 0
     assert not context.dispatch_viewport_click(object())
     assert not context.dispatch_viewport_key(object())
+    tc_ui_document_destroy(document)
 
 
 def test_native_component_extension_context_dispatches_latest_handler_first():
+    document = tc_ui_document_create()
     context = NativeComponentExtensionContext(
         engine=object(),
-        document=Document(),
+        document=document,
         request_render=lambda: None,
         resource_manager=object(),
     )
@@ -101,3 +104,4 @@ def test_native_component_extension_context_dispatches_latest_handler_first():
     context.remove_viewport_pointer_handler(first)
     context.remove_viewport_click_interceptor(second)
     context.remove_viewport_click_interceptor(first)
+    tc_ui_document_destroy(document)

@@ -11,19 +11,19 @@ from termin.editor_core.scene_manager_model import (
     SceneManagerSnapshot,
     SceneMode,
 )
-from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
 from .metrics import EDITOR_UI_METRICS
 
 
-def _ref(document: Document, widget) -> WidgetRef:
+def _ref(document: TcDocument, widget) -> WidgetRef:
     return widget if isinstance(widget, WidgetRef) else document.ref(widget.handle)
 
 
 @dataclass
 class NativeSceneManagerDialog:
-    document: Document
+    document: TcDocument
     controller: SceneManagerController
     dialog_service: NativeDialogService
     dialog: object

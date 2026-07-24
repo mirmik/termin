@@ -10,7 +10,7 @@ setup(
     description="Quadratic optimization, FEM, multibody dynamics, and robotics helpers for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=find_namespace_packages(
         where="python",
         include=["termin.fem", "termin.fem.*", "termin.linalg", "termin.linalg.*", "termin.robot", "termin.robot.*"],

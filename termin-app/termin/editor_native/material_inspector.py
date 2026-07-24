@@ -15,7 +15,7 @@ from termin.editor_core.material_inspector_model import (
     material_vector,
 )
 from termin.editor_core.material_texture_sources import MaterialTextureSourceCatalog
-from termin.gui_native import Color, Document, EdgeInsets, Size, WidgetRef
+from termin.gui_native import Color, TcDocument, EdgeInsets, Size, WidgetRef
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
@@ -30,7 +30,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class NativeMaterialInspector:
-    document: Document
+    document: TcDocument
     controller: MaterialInspectorController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -273,7 +273,7 @@ class NativeMaterialInspector:
 
 
 def build_native_material_inspector(
-    document: Document,
+    document: TcDocument,
     controller: MaterialInspectorController,
     *,
     request_render: Callable[[], None],

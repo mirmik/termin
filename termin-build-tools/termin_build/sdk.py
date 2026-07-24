@@ -12,6 +12,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 from .artifact_manifest import (
     BUILD_MANIFEST_KIND,
@@ -27,8 +28,10 @@ from .application_payload import (
     load_application_payloads,
 )
 from .package_manifest import PackageEntry, load_manifest, repo_root_from
-from .python_abi import PythonAbiIdentity
+from .python_abi import PythonAbiError, PythonAbiIdentity
+from .python_toolchain import PythonToolchainError, ensure_python_toolchain
 from .sdk_python_layout import (
+    _bundled_python_dir_name,
     _copy_tree_contents,
     _find_bundled_python_dir,
     _is_windows,
@@ -38,6 +41,11 @@ from .sdk_python_layout import (
     resolve_sdk_python_layout,
 )
 from .sdk_capabilities import write_android_capabilities, write_desktop_capabilities
+from .wheelhouse import (
+    WheelhouseError,
+    supported_wheel_tags,
+    validate_locked_wheelhouse,
+)
 
 
 RUNTIME_LOCK_RELATIVE = Path("build-system/python-runtime-lock.txt")
@@ -378,17 +386,55 @@ def _ensure_linux_python_shared_library(sdk_prefix: Path, info: dict[str, object
     )
 
 
-def ensure_bundled_python_cli(sdk_prefix: Path) -> None:
+def ensure_bundled_python_cli(
+    sdk_prefix: Path,
+    *,
+    python_executable: Path | None = None,
+) -> None:
     if not _is_windows():
         return
+    py_exec = (
+        str(python_executable)
+        if python_executable is not None
+        else _python_executable()
+    )
     _copy_windows_python_runtime_executables(
         sdk_prefix,
-        _python_version_and_paths(_python_executable()),
+        _python_version_and_paths(py_exec),
     )
 
 
-def ensure_bundled_python_runtime(sdk_prefix: Path) -> Path:
-    py_exec = _python_executable()
+def _remove_incompatible_bundled_python_runtimes(
+    sdk_prefix: Path,
+    info: Mapping[str, object],
+) -> None:
+    if _is_windows():
+        return
+    lib_dir = sdk_prefix / "lib"
+    expected_name = _bundled_python_dir_name(
+        str(info["version"]),
+        free_threaded=bool(info.get("free_threaded", False)),
+    )
+    for candidate in sorted(lib_dir.glob("python3.*")):
+        if not candidate.is_dir() or candidate.name == expected_name:
+            continue
+        print(
+            "Removing incompatible bundled Python runtime during ABI migration: "
+            f"{candidate}"
+        )
+        shutil.rmtree(candidate)
+
+
+def ensure_bundled_python_runtime(
+    sdk_prefix: Path,
+    *,
+    python_executable: Path | None = None,
+) -> Path:
+    py_exec = (
+        str(python_executable)
+        if python_executable is not None
+        else _python_executable()
+    )
     info = _python_version_and_paths(py_exec)
     version = str(info["version"])
     stdlib = Path(str(info["stdlib"]))
@@ -399,7 +445,10 @@ def ensure_bundled_python_runtime(sdk_prefix: Path) -> Path:
     if _is_windows():
         bundled_py_dir = sdk_prefix / "python" / "Lib"
     else:
-        bundled_py_dir = sdk_prefix / "lib" / f"python{version}"
+        bundled_py_dir = sdk_prefix / "lib" / _bundled_python_dir_name(
+            version,
+            free_threaded=bool(info.get("free_threaded", False)),
+        )
     bundled_site_packages = bundled_py_dir / "site-packages"
     if _is_windows():
         (sdk_prefix / "bin").mkdir(parents=True, exist_ok=True)
@@ -473,10 +522,15 @@ def _artifact_roots(build_dir: Path) -> list[Path]:
     return roots
 
 
-def _find_native_artifact(build_dir: Path, target: str) -> Path | None:
+def _find_native_artifact(
+    build_dir: Path,
+    target: str,
+    *,
+    python_abi: PythonAbiIdentity,
+) -> Path | None:
     patterns = (
-        f"{target}.*.so",
-        f"{target}.*.pyd",
+        f"{target}.{python_abi.soabi}.so",
+        f"{target}.{python_abi.soabi}.pyd",
         f"{target}.pyd",
         f"{target}.so",
     )
@@ -617,7 +671,11 @@ def write_artifacts(
     )
 
     for owner, ownership, owner_features, native_extension in extension_owners:
-        build_path = _find_native_artifact(build_dir, native_extension.target)
+        build_path = _find_native_artifact(
+            build_dir,
+            native_extension.target,
+            python_abi=python_abi,
+        )
         if build_path is None:
             if native_extension.optional:
                 continue
@@ -723,21 +781,35 @@ def install_python_packages(
     repo_root: Path,
     sdk_prefix: Path,
     build_dir: Path,
+    *,
+    python_executable: Path | None = None,
 ) -> int:
-    py_exec = _python_executable()
+    py_exec = str(python_executable) if python_executable else _python_executable()
     info = _python_version_and_paths(py_exec)
+    target_python_abi = PythonAbiIdentity.from_runtime_probe(
+        info,
+        context="SDK target Python",
+    )
+    _remove_incompatible_bundled_python_runtimes(sdk_prefix, info)
     try:
         bundled_py_dir = _find_bundled_python_dir(
             sdk_prefix,
             expected_version=str(info["version"]),
+            expected_free_threaded=bool(info.get("free_threaded", False)),
         )
     except RuntimeError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     if bundled_py_dir is None or not (bundled_py_dir / "ensurepip").is_dir():
         reason = "not found" if bundled_py_dir is None else "missing ensurepip"
-        print(f"Bundled Python stdlib {reason}; syncing it from host Python.")
-        bundled_py_dir = ensure_bundled_python_runtime(sdk_prefix)
+        print(
+            f"Bundled Python stdlib {reason}; "
+            "syncing it from the selected target Python."
+        )
+        bundled_py_dir = ensure_bundled_python_runtime(
+            sdk_prefix,
+            python_executable=Path(py_exec),
+        )
     if bundled_py_dir is None:
         print(
             f"ERROR: failed to create bundled Python stdlib under {sdk_prefix / 'lib'}/python3.*",
@@ -746,7 +818,10 @@ def install_python_packages(
         return 1
     _remove_linux_python_config_artifacts(bundled_py_dir)
     _ensure_linux_python_shared_library(sdk_prefix, info)
-    ensure_bundled_python_cli(sdk_prefix)
+    ensure_bundled_python_cli(
+        sdk_prefix,
+        python_executable=Path(py_exec),
+    )
 
     bundled_site_packages = bundled_py_dir / "site-packages"
     print(f"Bundled Python stdlib:        {bundled_py_dir}")
@@ -760,7 +835,10 @@ def install_python_packages(
         return 1
 
     try:
-        build_python = _ensure_sdk_python_build_environment(repo_root)
+        build_python = _ensure_sdk_python_build_environment(
+            repo_root,
+            base_python=Path(py_exec),
+        )
     except RuntimeError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
@@ -793,14 +871,22 @@ def install_python_packages(
             sdk_prefix=sdk_prefix,
             site_packages=bundled_site_packages,
             resolve_native_artifact=lambda target: _find_native_artifact(
-                build_dir, target
+                build_dir,
+                target,
+                python_abi=target_python_abi,
             ),
+            runtime_python_abi=target_python_abi,
         )
     except RuntimeError as error:
         print(f"ERROR: failed to install application Python payload: {error}", file=sys.stderr)
         return 1
     try:
-        write_python_runtime_manifest(repo_root, sdk_prefix, bundled_site_packages)
+        write_python_runtime_manifest(
+            repo_root,
+            sdk_prefix,
+            bundled_site_packages,
+            runtime_python_abi=target_python_abi,
+        )
     except RuntimeError as error:
         print(f"ERROR: failed to write SDK Python runtime manifest: {error}", file=sys.stderr)
         return 1
@@ -811,14 +897,24 @@ def prepare_build_python_runtime(sdk_prefix: Path) -> int:
     if _is_windows():
         return 0
 
-    info = _python_version_and_paths(_python_executable())
+    py_exec = _python_executable()
+    info = _python_version_and_paths(py_exec)
+    _remove_incompatible_bundled_python_runtimes(sdk_prefix, info)
     try:
         bundled_py_dir = _find_bundled_python_dir(
             sdk_prefix,
             expected_version=str(info["version"]),
+            expected_free_threaded=bool(info.get("free_threaded", False)),
         )
-        if bundled_py_dir is None:
-            bundled_py_dir = ensure_bundled_python_runtime(sdk_prefix)
+        if (
+            bundled_py_dir is None
+            or not (bundled_py_dir / "os.py").is_file()
+            or not (bundled_py_dir / "ensurepip").is_dir()
+        ):
+            bundled_py_dir = ensure_bundled_python_runtime(
+                sdk_prefix,
+                python_executable=Path(py_exec),
+            )
         else:
             _remove_linux_python_config_artifacts(bundled_py_dir)
             _ensure_linux_python_shared_library(sdk_prefix, info)
@@ -854,16 +950,56 @@ def _build_environment_python(environment_root: Path) -> Path:
     return environment_root / "bin" / "python"
 
 
-def _ensure_sdk_python_build_environment(repo_root: Path) -> Path:
+def _ensure_sdk_python_build_environment(
+    repo_root: Path,
+    *,
+    base_python: Path | None = None,
+) -> Path:
     requirements = repo_root / SDK_BUILD_REQUIREMENTS_RELATIVE
     if not requirements.is_file():
         raise RuntimeError(f"SDK Python build requirements are missing: {requirements}")
     environment_root = _sdk_build_environment_root(repo_root)
     build_python = _build_environment_python(environment_root)
     stamp = environment_root / "python-sdk-build-requirements.txt"
+    selected_base = base_python or Path(_python_executable())
+    expected_abi = PythonAbiIdentity.from_runtime_probe(
+        _python_version_and_paths(str(selected_base)),
+        context="SDK Python build environment base",
+    )
+    if build_python.is_file():
+        actual_base: Path | None = None
+        try:
+            existing_info = _python_version_and_paths(str(build_python))
+            actual_abi = PythonAbiIdentity.from_runtime_probe(
+                existing_info,
+                context="existing SDK Python build environment",
+            )
+            base_value = existing_info.get("base_executable")
+            if isinstance(base_value, str) and base_value:
+                actual_base = Path(base_value).resolve()
+        except (PythonAbiError, OSError, RuntimeError):
+            actual_abi = None
+        selected_base = selected_base.resolve()
+        base_mismatch = (
+            actual_base is not None and actual_base != selected_base
+        )
+        if actual_abi != expected_abi or base_mismatch:
+            rendered = (
+                actual_abi.canonical_json()
+                if actual_abi is not None
+                else "unreadable"
+            )
+            if base_mismatch:
+                rendered += f", base={actual_base}"
+            print(
+                "Recreating SDK Python build environment for ABI "
+                f"{expected_abi.canonical_json()}, base={selected_base} "
+                f"(existing: {rendered})"
+            )
+            shutil.rmtree(environment_root)
     if not build_python.is_file():
         result = _run(
-            [_python_executable(), "-m", "venv", str(environment_root)],
+            [str(selected_base), "-m", "venv", str(environment_root)],
             cwd=repo_root,
             env=os.environ.copy(),
         )
@@ -900,31 +1036,72 @@ def _prepare_external_runtime_wheels(
 ) -> int:
     lock_path = repo_root / RUNTIME_LOCK_RELATIVE
     try:
-        _load_runtime_lock(repo_root)
+        runtime_lock = _load_runtime_lock(repo_root)
+        python_abi = PythonAbiIdentity.from_runtime_probe(
+            _python_version_and_paths(str(build_python)),
+            context="SDK Python build environment",
+        )
+        target_tags = supported_wheel_tags(build_python)
     except RuntimeError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     wheel_dir.mkdir(parents=True, exist_ok=True)
     if os.environ.get("TERMIN_PYTHON_RUNTIME_OFFLINE") == "1":
         print(f"Using offline SDK runtime wheelhouse: {wheel_dir}")
+        try:
+            validate_locked_wheelhouse(
+                wheel_dir,
+                runtime_lock,
+                python_abi=python_abi,
+                supported_tags=target_tags,
+            )
+        except WheelhouseError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 1
         return 0
     print(f"Preparing pinned SDK runtime wheels: {wheel_dir}")
-    return _run(
-        [
-            str(build_python),
-            "-m",
-            "pip",
-            "wheel",
-            "--no-build-isolation",
-            "--no-deps",
-            "--wheel-dir",
-            str(wheel_dir),
-            "-r",
-            str(lock_path),
-        ],
-        cwd=repo_root,
-        env=os.environ.copy(),
+    wheel_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="external-wheels.",
+        dir=wheel_dir.parent,
+    ) as temporary_root:
+        prepared = Path(temporary_root) / "wheels"
+        prepared.mkdir()
+        result = _run(
+            [
+                str(build_python),
+                "-m",
+                "pip",
+                "wheel",
+                "--no-build-isolation",
+                "--no-deps",
+                "--wheel-dir",
+                str(prepared),
+                "-r",
+                str(lock_path),
+            ],
+            cwd=repo_root,
+            env=os.environ.copy(),
+        )
+        if result != 0:
+            return result
+        try:
+            validate_locked_wheelhouse(
+                prepared,
+                runtime_lock,
+                python_abi=python_abi,
+                supported_tags=target_tags,
+            )
+        except WheelhouseError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 1
+        shutil.rmtree(wheel_dir)
+        prepared.replace(wheel_dir)
+    print(
+        f"Validated {len(runtime_lock)} exact runtime wheels for "
+        f"{python_abi.wheel_abi_tag}"
     )
+    return 0
 
 
 def _install_prepared_runtime_wheels(
@@ -934,6 +1111,21 @@ def _install_prepared_runtime_wheels(
     local_wheels: Path,
     build_python: Path,
 ) -> int:
+    try:
+        runtime_lock = _load_runtime_lock(repo_root)
+        python_abi = PythonAbiIdentity.from_runtime_probe(
+            _python_version_and_paths(str(build_python)),
+            context="SDK Python build environment",
+        )
+        validate_locked_wheelhouse(
+            external_wheels,
+            runtime_lock,
+            python_abi=python_abi,
+            supported_tags=supported_wheel_tags(build_python),
+        )
+    except RuntimeError as error:
+        print(f"ERROR: cannot install SDK Python runtime: {error}", file=sys.stderr)
+        return 1
     wheels = sorted(local_wheels.glob("*.whl"))
     expected_local_count = len(load_manifest(repo_root))
     if len(wheels) != expected_local_count:
@@ -1369,6 +1561,8 @@ def build_wheelhouse(
     sdk_prefix: Path,
     build_dir: Path,
     stage_args: list[str],
+    *,
+    python_executable: Path | None = None,
 ) -> int:
     try:
         wheel_dir, effective_build_dir, force = _parse_wheelhouse_args(
@@ -1386,7 +1580,10 @@ def build_wheelhouse(
     print(f"Using TERMIN_BINDINGS_DIR={bindings_dir}")
     print(f"Wheelhouse: {wheel_dir}")
     try:
-        build_python = _ensure_sdk_python_build_environment(repo_root)
+        build_python = _ensure_sdk_python_build_environment(
+            repo_root,
+            base_python=python_executable,
+        )
     except RuntimeError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
@@ -1529,6 +1726,7 @@ from .sdk_runtime_metadata import (
     write_python_runtime_manifest,
 )
 from .sdk_verification import (
+    verify_nanobind_extensions,
     verify_no_duplicate_libraries as verify_no_duplicate_libraries,
     verify_python_runtime_manifest as verify_python_runtime_manifest,
     verify_python_wheelhouse as verify_python_wheelhouse,
@@ -1549,6 +1747,14 @@ def _bundled_site_packages_hint(sdk_prefix: Path) -> Path:
     return sdk_prefix / "lib" / "python3.*" / "site-packages"
 
 
+def prepare_pinned_python_build_environment(repo_root: Path) -> Path:
+    toolchain = ensure_python_toolchain(repo_root)
+    return _ensure_sdk_python_build_environment(
+        repo_root,
+        base_python=toolchain.python_executable,
+    )
+
+
 def run_sdk_build(
     repo_root: Path,
     build_type: str,
@@ -1560,9 +1766,20 @@ def run_sdk_build(
     sdk_prefix = Path(os.environ.get("SDK_PREFIX", str(repo_root / "sdk")))
     build_dir = _build_dir(repo_root, build_type)
     build_env = os.environ.copy()
-    build_python = _python_executable()
-    build_env["PYTHON_BIN"] = build_python
-    build_env["PYTHON_EXECUTABLE"] = build_python
+    if dry_run:
+        print("+ ensure pinned free-threaded Python toolchain")
+        build_python = Path(_python_executable())
+    else:
+        try:
+            build_python = prepare_pinned_python_build_environment(repo_root)
+        except (PythonAbiError, PythonToolchainError, OSError, RuntimeError) as error:
+            print(
+                f"ERROR: failed to prepare pinned Python toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
+    build_env["PYTHON_BIN"] = str(build_python)
+    build_env["PYTHON_EXECUTABLE"] = str(build_python)
 
     print("")
     print("========================================")
@@ -1604,7 +1821,12 @@ def run_sdk_build(
             f"{_bundled_site_packages_hint(sdk_prefix)}"
         )
     else:
-        result = install_python_packages(repo_root, sdk_prefix, build_dir)
+        result = install_python_packages(
+            repo_root,
+            sdk_prefix,
+            build_dir,
+            python_executable=build_python,
+        )
         if result != 0:
             return result
 
@@ -1625,7 +1847,13 @@ def run_sdk_build(
             wheel_args = list(stage_args)
             if "--force" not in wheel_args and "-f" not in wheel_args:
                 wheel_args.insert(0, "--force")
-            result = build_wheelhouse(repo_root, sdk_prefix, build_dir, wheel_args)
+            result = build_wheelhouse(
+                repo_root,
+                sdk_prefix,
+                build_dir,
+                wheel_args,
+                python_executable=build_python,
+            )
             if result != 0:
                 return result
     else:
@@ -1807,6 +2035,11 @@ def main(argv: list[str] | None = None) -> int:
         help="SDK install prefix. Defaults to SDK_PREFIX or ./sdk.",
     )
 
+    subparsers.add_parser(
+        "prepare-python-toolchain",
+        help="Materialize the pinned free-threaded Python build environment.",
+    )
+
     resolve_python_parser = subparsers.add_parser(
         "resolve-python-layout",
         help="Validate the SDK Python ABI and print its site-packages path.",
@@ -1845,6 +2078,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Run SDK duplicate/stale artifact checks.",
     )
     verify_parser.add_argument("--build-type", default="Release")
+
+    import_gate_parser = subparsers.add_parser(
+        "verify-python-import-graph",
+        help="Import the installed SDK graph and require the GIL to remain disabled.",
+    )
+    import_gate_parser.add_argument(
+        "--sdk-prefix",
+        type=Path,
+        default=None,
+        help="SDK install prefix. Defaults to SDK_PREFIX or ./sdk.",
+    )
 
     build_parser = subparsers.add_parser(
         "build",
@@ -1902,16 +2146,46 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "install-python":
         build_dir = _build_dir(repo_root, args.build_type)
         sdk_prefix = Path(os.environ.get("SDK_PREFIX", str(repo_root / "sdk")))
+        try:
+            python_executable = prepare_pinned_python_build_environment(repo_root)
+        except (
+            PythonAbiError,
+            PythonToolchainError,
+            OSError,
+            RuntimeError,
+        ) as error:
+            print(
+                f"ERROR: failed to prepare pinned Python toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
         return install_python_packages(
             repo_root=repo_root,
             sdk_prefix=sdk_prefix,
             build_dir=build_dir,
+            python_executable=python_executable,
         )
     if args.command == "prepare-build-python-runtime":
         sdk_prefix = args.sdk_prefix
         if sdk_prefix is None:
             sdk_prefix = Path(os.environ.get("SDK_PREFIX", str(repo_root / "sdk")))
         return prepare_build_python_runtime(sdk_prefix)
+    if args.command == "prepare-python-toolchain":
+        try:
+            python_executable = prepare_pinned_python_build_environment(repo_root)
+        except (
+            PythonAbiError,
+            PythonToolchainError,
+            OSError,
+            RuntimeError,
+        ) as error:
+            print(
+                f"ERROR: failed to prepare pinned Python toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
+        print(python_executable.resolve())
+        return 0
     if args.command == "resolve-python-layout":
         try:
             site_packages = resolve_sdk_python_layout(
@@ -1956,16 +2230,35 @@ def main(argv: list[str] | None = None) -> int:
         wheel_args = list(unknown_args)
         if "--force" not in wheel_args and "-f" not in wheel_args:
             wheel_args.insert(0, "--force")
+        try:
+            python_executable = prepare_pinned_python_build_environment(repo_root)
+        except (
+            PythonAbiError,
+            PythonToolchainError,
+            OSError,
+            RuntimeError,
+        ) as error:
+            print(
+                f"ERROR: failed to prepare pinned Python toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
         return build_wheelhouse(
             repo_root=repo_root,
             sdk_prefix=sdk_prefix,
             build_dir=build_dir,
             stage_args=wheel_args,
+            python_executable=python_executable,
         )
     if args.command == "verify-sdk":
         build_dir = _build_dir(repo_root, args.build_type)
         sdk_prefix = Path(os.environ.get("SDK_PREFIX", str(repo_root / "sdk")))
         return verify_sdk(sdk_prefix=sdk_prefix, build_dir=build_dir)
+    if args.command == "verify-python-import-graph":
+        sdk_prefix = args.sdk_prefix or Path(
+            os.environ.get("SDK_PREFIX", str(repo_root / "sdk"))
+        )
+        return verify_nanobind_extensions(sdk_prefix.resolve())
     if args.command == "build":
         build_type = "Debug" if args.debug else "Release"
         stage_args = list(unknown_args)

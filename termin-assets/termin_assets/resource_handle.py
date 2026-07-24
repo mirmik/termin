@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Generic, TypeVar
 
-from tcbase import log
+from tcbase import clear_resource_loader, log, set_resource_loader
 from termin_assets.asset import Asset
 
 T = TypeVar("T")
@@ -13,10 +13,47 @@ AssetT = TypeVar("AssetT", bound=Asset)
 _resource_manager_factory: Callable[[], object] | None = None
 
 
+def _load_resource_by_uuid(uuid: str) -> bool:
+    resource_manager = get_resource_manager()
+    if resource_manager is None:
+        log.error(f"[ResourceLoader] No canonical ResourceManager for UUID '{uuid}'")
+        return False
+
+    try:
+        asset = resource_manager.get_asset_by_uuid(uuid)
+    except Exception:
+        log.error(
+            f"[ResourceLoader] ResourceManager lookup failed for UUID '{uuid}'",
+            exc_info=True,
+        )
+        return False
+
+    if asset is None:
+        log.error(f"[ResourceLoader] No canonical Asset for UUID '{uuid}'")
+        return False
+
+    try:
+        if asset.ensure_loaded():
+            return True
+    except Exception:
+        log.error(
+            f"[ResourceLoader] Asset.ensure_loaded() raised for UUID '{uuid}'",
+            exc_info=True,
+        )
+        return False
+
+    log.error(f"[ResourceLoader] Asset.ensure_loaded() failed for UUID '{uuid}'")
+    return False
+
+
 def set_resource_manager_factory(factory: Callable[[], object] | None) -> None:
-    """Set factory used by ResourceHandle.from_name()."""
+    """Set the canonical manager factory and its process UUID loader bridge."""
     global _resource_manager_factory
     _resource_manager_factory = factory
+    if factory is None:
+        clear_resource_loader()
+    else:
+        set_resource_loader(_load_resource_by_uuid)
 
 
 def get_resource_manager() -> object | None:

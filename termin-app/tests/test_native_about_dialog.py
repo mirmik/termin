@@ -1,11 +1,12 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.about_model import EditorAboutInfo
 from termin.editor_native.about_dialog import build_native_about_dialog
 from termin.editor_native.metrics import EDITOR_UI_METRICS
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 def test_native_about_dialog_escapes_info_reopens_and_releases():
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     dialog = build_native_about_dialog(
         document,
@@ -26,3 +27,4 @@ def test_native_about_dialog_escapes_info_reopens_and_releases():
     dialog.close()
     assert not document.is_alive(dialog.dialog.handle)
     assert renders
+    tc_ui_document_destroy(document)

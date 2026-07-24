@@ -158,9 +158,9 @@ dist/<app>/
   <app>
   app.json
   lib/
-    libpython3.10.so*
+    libpython3.14t.so*
     libtermin_*.so*
-    python3.10/
+    python3.14t/
       site-packages/
         termin/
         tcgui/

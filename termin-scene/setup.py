@@ -19,7 +19,7 @@ setup(
     description="Scene/entity system Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.scene"],
     package_dir={"termin.scene": "python/termin/scene"},
     install_requires=["termin-nanobind", "termin-inspect", "tcbase"],

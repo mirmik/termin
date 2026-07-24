@@ -4,7 +4,7 @@ import numpy as np
 
 from termin.image import write_png_rgba8_file
 from termin.default_assets.resource_manager import DefaultResourceManager
-from termin_assets import PreLoadResult
+from termin_assets import PreLoadResult, set_resource_manager_factory
 from tgfx import TcTexture, tc_texture_ensure_loaded, tc_texture_is_loaded
 
 
@@ -16,6 +16,7 @@ def test_texture_file_registration_declares_lazy_core_texture(tmp_path: Path) ->
     write_png_rgba8_file(texture_path, pixels)
 
     rm = DefaultResourceManager()
+    set_resource_manager_factory(lambda: rm)
     try:
         result = PreLoadResult(
             resource_type="texture",
@@ -44,4 +45,5 @@ def test_texture_file_registration_declares_lazy_core_texture(tmp_path: Path) ->
         assert tc_texture_is_loaded(loaded)
         assert asset.is_loaded
     finally:
+        set_resource_manager_factory(None)
         rm.clear_runtime_state()

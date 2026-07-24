@@ -8,14 +8,14 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.about_model import EditorAboutInfo
-from termin.gui_native import DialogAction, Document, Rect, RichTextModel, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, RichTextModel, Size, WidgetRef
 
 from .metrics import EDITOR_UI_METRICS
 
 
 @dataclass
 class NativeAboutDialog:
-    document: Document
+    document: TcDocument
     info: EditorAboutInfo
     dialog: object
     root: WidgetRef
@@ -45,7 +45,7 @@ class NativeAboutDialog:
 
 
 def build_native_about_dialog(
-    document: Document,
+    document: TcDocument,
     info: EditorAboutInfo,
     *,
     viewport: Callable[[], Rect],

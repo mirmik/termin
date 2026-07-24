@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -5,7 +6,7 @@ from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.project_settings_dialog import build_native_project_settings_dialog
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 from termin.project.settings import ProjectSettingsManager
 
 
@@ -14,7 +15,7 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     manager.set_project_path(tmp_path)
     resources = []
     renders = []
-    document = Document()
+    document = tc_ui_document_create()
     viewport = lambda: Rect(0.0, 0.0, 900.0, 650.0)
     render = lambda: renders.append(True)
     service = NativeDialogService(document, viewport=viewport, request_render=render)
@@ -67,3 +68,4 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     gc.collect()
     assert reference() is None
     assert renders
+    tc_ui_document_destroy(document)

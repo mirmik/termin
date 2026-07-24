@@ -12,7 +12,7 @@ from termin.editor_core.project_settings_model import (
     ProjectSettingsSnapshot,
     RENDER_SYNC_MODES,
 )
-from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
 from .metrics import EDITOR_UI_METRICS
@@ -21,11 +21,11 @@ from .metrics import EDITOR_UI_METRICS
 _logger = logging.getLogger(__name__)
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-def _row(document: Document, label: str, control) -> WidgetRef:
+def _row(document: TcDocument, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"project-settings-{label.lower().replace(' ', '-')}")
     row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
@@ -35,7 +35,7 @@ def _row(document: Document, label: str, control) -> WidgetRef:
 
 @dataclass
 class NativeProjectSettingsDialog:
-    document: Document
+    document: TcDocument
     controller: ProjectSettingsController
     dialog_service: NativeDialogService
     dialog: object
@@ -149,7 +149,7 @@ class NativeProjectSettingsDialog:
 
 
 def build_native_project_settings_dialog(
-    document: Document,
+    document: TcDocument,
     controller: ProjectSettingsController,
     *,
     dialog_service: NativeDialogService,

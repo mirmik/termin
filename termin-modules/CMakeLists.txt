@@ -78,14 +78,20 @@ if(TERMIN_BUILD_PYTHON)
         endif()
     endif()
 
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
 
     # Shared library: PythonModuleBackend (uses Python C API)
     add_library(termin_modules_python SHARED
         src/module_python_backend.cpp
     )
-    target_link_libraries(termin_modules_python PUBLIC termin_modules Python::Python)
+    target_link_libraries(termin_modules_python
+        PUBLIC termin_modules
+        PRIVATE Python::Python termin_python_host::termin_python_host
+    )
     target_include_directories(termin_modules_python PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>

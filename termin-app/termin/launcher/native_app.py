@@ -12,7 +12,7 @@ from termin.gui_native import (
     CollectionItem,
     CollectionModel,
     Color,
-    Document,
+    TcDocument,
     EdgeInsets,
     ImageFit,
     StyleField,
@@ -30,7 +30,7 @@ class NativeLauncherProjection:
 
     def __init__(
         self,
-        document: Document,
+        document: TcDocument,
         controller: LauncherController,
         *,
         request_render: Callable[[], None] = lambda: None,

@@ -4,6 +4,7 @@ project(termin_player LANGUAGES CXX)
 include(GNUInstallDirs)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 include(TerminRpath)
+include(TerminPython)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,8 +16,6 @@ else()
     set(OPTIMIZE_FLAGS -O3)
 endif()
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-
 set(_termin_player_has_sdl OFF)
 if(TARGET termin_display)
     get_target_property(_termin_display_public_defs termin_display INTERFACE_COMPILE_DEFINITIONS)
@@ -26,6 +25,10 @@ if(TARGET termin_display)
 endif()
 
 if(TARGET termin_modules_python AND _termin_player_has_sdl)
+    termin_require_canonical_python(Interpreter Development)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_player
         src/app/termin_player.cpp
         src/player_runtime_host.cpp
@@ -37,6 +40,7 @@ if(TARGET termin_modules_python AND _termin_player_has_sdl)
     )
     target_link_libraries(termin_player PRIVATE
         Python::Python
+        termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
         termin_runtime::termin_runtime
         tgfx::termin_graphics2

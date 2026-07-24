@@ -109,8 +109,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(TerminDependencies)
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
-    set(Python_EXECUTABLE "${Python_EXECUTABLE}" CACHE FILEPATH "Python interpreter used for Termin bindings" FORCE)
+    include(TerminPython)
+    termin_require_canonical_python(Interpreter Development)
 
     execute_process(
         COMMAND "${Python_EXECUTABLE}" -c "import nanobind, pathlib; print(pathlib.Path(nanobind.__file__).resolve().parent / 'cmake')"
@@ -174,6 +174,9 @@ set(USE_SYSTEM_SDL2 ${TERMIN_ENABLE_SDL} CACHE BOOL "" FORCE)
 
 if(TERMIN_BUILD_PYTHON)
     add_subdirectory(termin-nanobind-sdk)
+    set(TERMIN_NANOBIND_RUNTIME_TARGET "nanobind-ft")
+    include(termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
+    add_subdirectory(termin-python-host)
 endif()
 
 add_subdirectory(termin-base)

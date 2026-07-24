@@ -1,9 +1,10 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
 
 from termin.editor_native.camera_overlay import NativeEditorCameraOverlayProjection
-from termin.gui_native import Document, EventResult, PointerEvent, PointerEventType, Rect
+from termin.gui_native import TcDocument, EventResult, PointerEvent, PointerEventType, Rect
 
 
 class _Controller:
@@ -47,7 +48,7 @@ class _Entity:
 
 
 class _Viewport:
-    def __init__(self, document: Document, controller) -> None:
+    def __init__(self, document: TcDocument, controller) -> None:
         self.document = document
         self.camera = SimpleNamespace(entity=_Entity(controller))
         self.interaction = SimpleNamespace(transform_gizmo=object())
@@ -68,7 +69,7 @@ class _Viewport:
 
 
 def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     controller = _Controller()
     viewport = _Viewport(document, controller)
 
@@ -93,10 +94,11 @@ def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes() ->
     assert controller.unbind_count == 1
     assert viewport.loaded is None
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_camera_overlay_rebinds_actions_to_new_scene_controller() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     first = _Controller()
     viewport = _Viewport(document, first)
     projection = NativeEditorCameraOverlayProjection.create(viewport)
@@ -123,3 +125,4 @@ def test_native_camera_overlay_rebinds_actions_to_new_scene_controller() -> None
     assert second.bindings
     recreated.close()
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)

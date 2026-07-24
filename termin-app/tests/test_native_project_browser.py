@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_native import build_native_project_browser, resolve_native_ui_font
 from termin.gui_native import (
-    Document,
+    TcDocument,
     DrawList,
     DrawListRenderer,
     PaintContext,
@@ -23,7 +24,7 @@ def _project(root: Path, file_count: int = 20) -> None:
     (root / "Assets" / "mesh.stl").write_text("solid", encoding="utf-8")
 
 
-def _bind_font(document: Document) -> DrawListRenderer:
+def _bind_font(document: TcDocument) -> DrawListRenderer:
     renderer = DrawListRenderer()
     assert renderer.set_default_font_path(str(resolve_native_ui_font()), 15)
     renderer.bind_text_measurer(document)
@@ -32,7 +33,7 @@ def _bind_font(document: Document) -> DrawListRenderer:
 
 def test_native_project_browser_tree_grid_navigation_context_and_virtualization(tmp_path: Path):
     _project(tmp_path, file_count=2_000)
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     clipboard = []
     selected = []
@@ -144,3 +145,4 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     assert draw_list.command_count > 20
     assert renders
     renderer.release_gpu()
+    tc_ui_document_destroy(document)

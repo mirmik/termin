@@ -2,7 +2,13 @@ from pathlib import Path
 
 import numpy as np
 
-from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
+from termin_assets import (
+    AssetContext,
+    AssetTypeRegistry,
+    PreLoadResult,
+    set_resource_manager_factory,
+)
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.mesh.asset import MeshAsset
 from termin.default_assets.mesh.asset_plugin import (
     create_import_plugin,
@@ -11,7 +17,7 @@ from termin.default_assets.mesh.asset_plugin import (
     register_mesh_runtime_plugin,
 )
 from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
-from tmesh import Mesh3
+from tmesh import Mesh3, TcMesh, tc_mesh_ensure_loaded, tc_mesh_is_loaded
 
 
 class FakeResourceManager:
@@ -117,6 +123,39 @@ def test_mesh_runtime_plugin_registers_lazy_asset() -> None:
     assert asset.uuid == "mesh-uuid"
     assert asset.source_path == Path("/tmp/triangle.obj")
     assert asset._scale == 2.0
+
+
+def test_mesh_native_resource_lazy_loads_by_canonical_uuid(tmp_path: Path) -> None:
+    mesh_path = tmp_path / "triangle.obj"
+    mesh_path.write_text(
+        "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n",
+        encoding="utf-8",
+    )
+    manager = DefaultResourceManager()
+    set_resource_manager_factory(lambda: manager)
+    try:
+        manager.register_file(
+            PreLoadResult(
+                resource_type="mesh",
+                path=str(mesh_path),
+                content=None,
+                uuid="lazy-mesh-uuid",
+                spec_data={"uuid": "lazy-mesh-uuid"},
+            )
+        )
+
+        asset = manager.get_mesh_asset_by_uuid("lazy-mesh-uuid")
+        resource = TcMesh.from_uuid("lazy-mesh-uuid")
+        assert asset is not None
+        assert resource.is_valid
+        assert not tc_mesh_is_loaded(resource)
+
+        assert tc_mesh_ensure_loaded(resource)
+        assert tc_mesh_is_loaded(resource)
+        assert asset.is_loaded
+    finally:
+        set_resource_manager_factory(None)
+        manager.clear_runtime_state()
 
 
 def test_mesh_runtime_reload_stays_in_asset_layer() -> None:

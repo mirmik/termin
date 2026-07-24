@@ -14,10 +14,12 @@ from typing import Callable, Protocol
 from termin.display import WindowHandle, WindowManager
 from tgfx import Tgfx2Context
 from termin.gui_native import (
-    Document,
+    TcDocument,
     GuiWindowAdapter,
     Size,
     StyleRole,
+    tc_ui_document_create,
+    tc_ui_document_destroy,
 )
 
 
@@ -84,7 +86,7 @@ class NativeWidgetContent:
         self,
         window_manager: WindowManager,
         window_handle: WindowHandle,
-        document: Document | None = None,
+        document: TcDocument | None = None,
         *,
         graphics: Tgfx2Context | None = None,
         font_path: str | Path | None = None,
@@ -93,27 +95,43 @@ class NativeWidgetContent:
         always_on_top: bool = False,
     ) -> None:
         self._owns_document = document is None
-        self.document = document if document is not None else Document()
-        resolved_font = resolve_native_ui_font(font_path)
+        self.document = document if document is not None else tc_ui_document_create()
+        try:
+            resolved_font = resolve_native_ui_font(font_path)
+        except Exception:
+            if self._owns_document:
+                tc_ui_document_destroy(self.document)
+            raise
         self.font_path = resolved_font
         self.window_manager = window_manager
         self.window_handle = window_handle
-        self.adapter = GuiWindowAdapter(
-            window_manager,
-            window_handle,
-            self.document,
-            font_path=str(resolved_font),
-            font_size=15,
-            enable_text_input=enable_text_input,
-        )
+        try:
+            self.adapter = GuiWindowAdapter(
+                window_manager,
+                window_handle,
+                self.document,
+                font_path=str(resolved_font),
+                font_size=15,
+                enable_text_input=enable_text_input,
+            )
+        except Exception:
+            if self._owns_document:
+                tc_ui_document_destroy(self.document)
+            raise
         self.window = self.adapter.window
-        if always_on_top:
-            self.window.set_always_on_top(True)
-        self.graphics = (
-            graphics
-            if graphics is not None
-            else Tgfx2Context.from_runtime(self.adapter.graphics)
-        )
+        try:
+            if always_on_top:
+                self.window.set_always_on_top(True)
+            self.graphics = (
+                graphics
+                if graphics is not None
+                else Tgfx2Context.from_runtime(self.adapter.graphics)
+            )
+        except Exception:
+            self.adapter.close()
+            if self._owns_document:
+                tc_ui_document_destroy(self.document)
+            raise
         self.device = self.graphics.device
         self.context = self.graphics.context
         self.event_policy = NativeUiEventPolicy(
@@ -333,7 +351,7 @@ class NativeWidgetContent:
             self._release_image_preview(preview)
         self.adapter.close()
         if self._owns_document:
-            self.document.close()
+            tc_ui_document_destroy(self.document)
 
     def __enter__(self) -> NativeWidgetContent:
         return self
@@ -403,7 +421,7 @@ class EditorWindowRegistry:
         width: int,
         height: int,
         *,
-        document: Document | None = None,
+        document: TcDocument | None = None,
         always_on_top: bool = False,
         on_close: Callable[[], None] | None = None,
         content_factory: Callable[[WindowManager, WindowHandle], WindowContent] | None = None,

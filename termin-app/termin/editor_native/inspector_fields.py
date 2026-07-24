@@ -22,7 +22,7 @@ from termin.gui_native import (
     CollectionItem,
     CollectionModel,
     Color,
-    Document,
+    TcDocument,
     EdgeInsets,
     Size,
     WidgetRef,
@@ -79,7 +79,7 @@ def _color_label(value: tuple[float, float, float, float]) -> str:
 
 
 def build_native_color_control(
-    document: Document,
+    document: TcDocument,
     color: tuple[float, float, float, float],
     *,
     debug_name: str,
@@ -137,7 +137,7 @@ class NativeVec3ListFieldWidgets:
 
 @dataclass
 class NativeInspectorFields:
-    document: Document
+    document: TcDocument
     controller: InspectorFieldsController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -821,7 +821,7 @@ class NativeInspectorFields:
 
 
 def build_native_inspector_fields(
-    document: Document,
+    document: TcDocument,
     controller: InspectorFieldsController,
     *,
     request_render: Callable[[], None],

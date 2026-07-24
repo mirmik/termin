@@ -122,7 +122,7 @@ set(TERMIN_BOOTSTRAP_SOURCES
 )
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     if(COMMAND termin_require_package)
         termin_require_package(termin_input termin_input::termin_input)
@@ -237,9 +237,9 @@ if(TERMIN_BUILD_PYTHON)
             termin_input::termin_input
             termin_display::termin_display
         PRIVATE
-            nanobind
             Python::Python
     )
+    termin_nanobind_link_runtime(termin_bootstrap PRIVATE)
 endif()
 
 set_target_properties(termin_bootstrap PROPERTIES

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from termin_nanobind import runtime
 
 
@@ -12,6 +14,20 @@ class _DllDirectoryHandle:
 
     def close(self) -> None:
         self.closed = True
+
+
+def test_logical_nanobind_name_requires_free_threaded_runtime(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runtime.sysconfig,
+        "get_config_var",
+        lambda name: 1 if name == "Py_GIL_DISABLED" else None,
+    )
+    assert runtime._abi_runtime_library_name("nanobind") == "nanobind-ft"
+    assert runtime._abi_runtime_library_name("termin_base") == "termin_base"
+
+    monkeypatch.setattr(runtime.sysconfig, "get_config_var", lambda _name: 0)
+    with pytest.raises(ImportError, match="CPython 3.14t"):
+        runtime._abi_runtime_library_name("nanobind")
 
 
 def test_windows_dll_directory_handles_are_retained_idempotently_and_can_close(tmp_path, monkeypatch) -> None:

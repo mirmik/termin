@@ -90,7 +90,11 @@ def test_sdk_build_propagates_one_absolute_python_to_child_stages(
 ):
     interpreter = tmp_path / "python"
     interpreter.write_text("", encoding="utf-8")
-    monkeypatch.setattr(sdk, "_python_executable", lambda: str(interpreter))
+    monkeypatch.setattr(
+        sdk,
+        "prepare_pinned_python_build_environment",
+        lambda _root: interpreter,
+    )
     captured = []
 
     def run(command, *, cwd, env=None):
@@ -156,6 +160,11 @@ def test_linux_sdk_build_skips_csharp_unless_requested(tmp_path, monkeypatch, ca
     interpreter.write_text("", encoding="utf-8")
     monkeypatch.setattr(sdk, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk, "_python_executable", lambda: str(interpreter))
+    monkeypatch.setattr(
+        sdk,
+        "prepare_pinned_python_build_environment",
+        lambda _root: interpreter,
+    )
 
     result = sdk.run_sdk_build(
         repo_root=tmp_path,
@@ -177,6 +186,16 @@ def test_linux_sdk_build_can_request_csharp(tmp_path, monkeypatch, capsys):
     interpreter = tmp_path / "python"
     interpreter.write_text("", encoding="utf-8")
     monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _python: {
+            "version": "3.10",
+            "soabi": "cpython-310-x86_64-linux-gnu",
+            "free_threaded": False,
+            "py_gil_disabled": False,
+        },
+    )
     monkeypatch.setattr(sdk, "_python_executable", lambda: str(interpreter))
 
     result = sdk.run_sdk_build(
@@ -208,6 +227,11 @@ def test_sdk_build_verification_policy_follows_wheelhouse_stage(
     verification_policies = []
 
     monkeypatch.setattr(sdk, "_python_executable", lambda: str(interpreter))
+    monkeypatch.setattr(
+        sdk,
+        "prepare_pinned_python_build_environment",
+        lambda _root: interpreter,
+    )
     monkeypatch.setattr(sdk, "_run", lambda *args, **kwargs: 0)
     monkeypatch.setattr(sdk, "install_python_packages", lambda *args, **kwargs: 0)
     monkeypatch.setattr(sdk, "build_wheelhouse", lambda *args, **kwargs: 0)
@@ -271,7 +295,6 @@ def test_sdk_runtime_seed_includes_pytest_and_excludes_heavy_optional_packages()
         "packaging",
         "pluggy",
         "pygments",
-        "pyassimp",
         "pytest",
         "pyyaml",
         "tomli",
@@ -556,7 +579,18 @@ def test_external_runtime_wheels_are_built_from_exact_lock(tmp_path, monkeypatch
     wheel_dir = repo_root / "build" / "python-runtime" / "external-wheels"
     commands = []
 
-    monkeypatch.setattr(sdk, "_python_executable", lambda: "python")
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _python: {
+            "version": "3.14",
+            "soabi": "cpython-314t-x86_64-linux-gnu",
+            "free_threaded": True,
+            "py_gil_disabled": True,
+        },
+    )
+    monkeypatch.setattr(sdk, "supported_wheel_tags", lambda _python: {"py3-none-any"})
+    monkeypatch.setattr(sdk, "validate_locked_wheelhouse", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         sdk,
         "_run",
@@ -566,20 +600,18 @@ def test_external_runtime_wheels_are_built_from_exact_lock(tmp_path, monkeypatch
     result = sdk._prepare_external_runtime_wheels(repo_root, wheel_dir, Path("python"))
 
     assert result == 0
-    assert commands == [
-        [
-            "python",
-            "-m",
-            "pip",
-            "wheel",
-            "--no-build-isolation",
-            "--no-deps",
-            "--wheel-dir",
-            str(wheel_dir),
-            "-r",
-            str(lock_path),
-        ]
+    assert len(commands) == 1
+    assert commands[0][:6] == [
+        "python",
+        "-m",
+        "pip",
+        "wheel",
+        "--no-build-isolation",
+        "--no-deps",
     ]
+    assert commands[0][6] == "--wheel-dir"
+    assert Path(commands[0][7]).parent.parent == wheel_dir.parent
+    assert commands[0][8:] == ["-r", str(lock_path)]
 
 
 def test_sdk_python_build_environment_uses_pinned_tools(tmp_path, monkeypatch):
@@ -593,6 +625,16 @@ def test_sdk_python_build_environment_uses_pinned_tools(tmp_path, monkeypatch):
     build_python.touch()
     commands = []
     monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _python: {
+            "version": "3.14",
+            "soabi": "cpython-314t-x86_64-linux-gnu",
+            "free_threaded": True,
+            "py_gil_disabled": True,
+        },
+    )
     monkeypatch.setattr(
         sdk,
         "_run",
@@ -682,16 +724,23 @@ def test_sdk_python_install_repairs_existing_runtime_shared_libpython(
         "_python_version_and_paths",
         lambda _py_exec: {
             "version": "3.10",
+            "soabi": "cpython-310-x86_64-linux-gnu",
+            "free_threaded": False,
+            "py_gil_disabled": False,
             "stdlib": str(tmp_path / "unused"),
             "libdir": str(host_libdir),
             "sitepackages": [],
         },
     )
-    monkeypatch.setattr(sdk, "ensure_bundled_python_cli", lambda _sdk_prefix: None)
+    monkeypatch.setattr(
+        sdk,
+        "ensure_bundled_python_cli",
+        lambda _sdk_prefix, **_kwargs: None,
+    )
     monkeypatch.setattr(
         sdk,
         "_ensure_sdk_python_build_environment",
-        lambda _root: Path("build-python"),
+        lambda _root, **_kwargs: Path("build-python"),
     )
     monkeypatch.setattr(sdk, "_prepare_external_runtime_wheels", lambda *_args: 0)
     monkeypatch.setattr(sdk, "_build_local_package_wheels", lambda **_kwargs: 0)
@@ -701,7 +750,11 @@ def test_sdk_python_install_repairs_existing_runtime_shared_libpython(
         "install_application_payloads",
         lambda **_kwargs: Path("application-manifest"),
     )
-    monkeypatch.setattr(sdk, "write_python_runtime_manifest", lambda *_args: Path("manifest"))
+    monkeypatch.setattr(
+        sdk,
+        "write_python_runtime_manifest",
+        lambda *_args, **_kwargs: Path("manifest"),
+    )
 
     result = sdk.install_python_packages(
         repo_root=repo_root,
@@ -723,6 +776,8 @@ def test_prepare_build_python_runtime_sanitizes_sdk_before_cmake(
     config_dir = bundled_py_dir / "config-3.10-x86_64-linux-gnu"
     host_libdir = tmp_path / "host" / "lib"
     config_dir.mkdir(parents=True)
+    (bundled_py_dir / "ensurepip").mkdir()
+    (bundled_py_dir / "os.py").write_text("", encoding="utf-8")
     (config_dir / "libpython3.10.a").write_bytes(b"static")
     host_libdir.mkdir(parents=True)
     (host_libdir / "libpython3.10.so").write_bytes(b"shared")
@@ -779,6 +834,44 @@ def test_prepare_build_python_runtime_creates_runtime_for_clean_sdk(
     assert (sdk_prefix / "lib" / "libpython3.10.so").read_bytes() == b"shared"
 
 
+def test_prepare_build_python_runtime_migrates_to_free_threaded_layout(
+    tmp_path,
+    monkeypatch,
+):
+    sdk_prefix = tmp_path / "sdk"
+    stale_runtime = sdk_prefix / "lib" / "python3.10"
+    stale_runtime.mkdir(parents=True)
+    stdlib = tmp_path / "host" / "lib" / "python3.14t"
+    host_libdir = tmp_path / "host" / "lib"
+    (stdlib / "ensurepip").mkdir(parents=True)
+    (stdlib / "os.py").write_text("", encoding="utf-8")
+    (host_libdir / "libpython3.14t.so").write_bytes(b"shared")
+
+    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk, "_python_executable", lambda: "python")
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _py_exec: {
+            "version": "3.14",
+            "soabi": "cpython-314t-x86_64-linux-gnu",
+            "free_threaded": True,
+            "py_gil_disabled": True,
+            "stdlib": str(stdlib),
+            "libdir": str(host_libdir),
+            "sitepackages": [],
+        },
+    )
+
+    result = sdk.prepare_build_python_runtime(sdk_prefix)
+
+    assert result == 0
+    assert not stale_runtime.exists()
+    assert (sdk_prefix / "lib" / "python3.14t" / "os.py").is_file()
+    assert (sdk_prefix / "lib" / "python3.14t" / "site-packages").is_dir()
+    assert (sdk_prefix / "lib" / "libpython3.14t.so").read_bytes() == b"shared"
+
+
 def test_sdk_python_layout_rejects_multiple_runtime_abis(tmp_path, monkeypatch):
     sdk_prefix = tmp_path / "sdk"
     (sdk_prefix / "lib" / "python3.10" / "site-packages").mkdir(parents=True)
@@ -810,6 +903,28 @@ def test_sdk_python_layout_rejects_active_python_abi_mismatch(tmp_path, monkeypa
 
     with pytest.raises(RuntimeError, match="SDK Python ABI mismatch"):
         sdk.resolve_sdk_python_layout(sdk_prefix)
+
+
+def test_sdk_python_layout_resolves_free_threaded_stdlib_suffix(
+    tmp_path,
+    monkeypatch,
+):
+    sdk_prefix = tmp_path / "sdk"
+    site_packages = sdk_prefix / "lib" / "python3.14t" / "site-packages"
+    site_packages.mkdir(parents=True)
+
+    monkeypatch.setattr(sdk_python_layout, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk_python_layout, "_python_executable", lambda: "python")
+    monkeypatch.setattr(
+        sdk_python_layout,
+        "_python_version_and_paths",
+        lambda _py_exec: {
+            "version": "3.14",
+            "free_threaded": True,
+        },
+    )
+
+    assert sdk.resolve_sdk_python_layout(sdk_prefix) == site_packages
 
 
 def test_sdk_python_layout_can_require_native_bindings(tmp_path, monkeypatch):
@@ -1128,16 +1243,23 @@ def test_sdk_python_install_builds_wheels_then_installs_offline_and_writes_manif
         "_python_version_and_paths",
         lambda _py_exec: {
             "version": "3.10",
+            "soabi": "cpython-310-x86_64-linux-gnu",
+            "free_threaded": False,
+            "py_gil_disabled": False,
             "stdlib": str(tmp_path / "unused"),
             "libdir": str(tmp_path / "unused"),
             "sitepackages": [],
         },
     )
-    monkeypatch.setattr(sdk, "ensure_bundled_python_cli", lambda _sdk_prefix: None)
+    monkeypatch.setattr(
+        sdk,
+        "ensure_bundled_python_cli",
+        lambda _sdk_prefix, **_kwargs: None,
+    )
     monkeypatch.setattr(
         sdk,
         "_ensure_sdk_python_build_environment",
-        lambda _root: Path("build-python"),
+        lambda _root, **_kwargs: Path("build-python"),
     )
     monkeypatch.setattr(sdk, "_runtime_wheel_dirs", lambda _root: (Path("external"), Path("local")))
     monkeypatch.setattr(
@@ -1169,7 +1291,7 @@ def test_sdk_python_install_builds_wheels_then_installs_offline_and_writes_manif
     monkeypatch.setattr(
         sdk,
         "write_python_runtime_manifest",
-        lambda *args: calls.append(("manifest", args)) or Path("manifest"),
+        lambda *args, **_kwargs: calls.append(("manifest", args)) or Path("manifest"),
     )
 
     result = sdk.install_python_packages(
@@ -1235,7 +1357,12 @@ def test_runtime_manifest_records_declared_distributions_and_verifies_hashes(
     )
     monkeypatch.setattr(sdk_runtime_metadata, "_python_executable", lambda: "python")
 
-    output = sdk.write_python_runtime_manifest(repo_root, sdk_prefix, site_packages)
+    output = sdk.write_python_runtime_manifest(
+        repo_root,
+        sdk_prefix,
+        site_packages,
+        runtime_python_abi=artifact_manifest.PythonAbiIdentity.current(),
+    )
 
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["python_abi"] == artifact_manifest.PythonAbiIdentity.current().to_dict()
@@ -1268,7 +1395,12 @@ def test_runtime_manifest_rejects_undeclared_and_modified_distributions(
         },
     )
     monkeypatch.setattr(sdk_runtime_metadata, "_python_executable", lambda: "python")
-    sdk.write_python_runtime_manifest(repo_root, sdk_prefix, site_packages)
+    sdk.write_python_runtime_manifest(
+        repo_root,
+        sdk_prefix,
+        site_packages,
+        runtime_python_abi=artifact_manifest.PythonAbiIdentity.current(),
+    )
 
     payload.write_text("VALUE = 2\n", encoding="utf-8")
     _write_test_distribution(site_packages, "unexpected", "1.0", "unexpected")
@@ -1337,7 +1469,10 @@ def test_write_artifacts_records_install_path_and_runtime_dependencies(
     build_bin.mkdir(parents=True)
     install_pkg.mkdir(parents=True)
 
-    build_artifact = build_bin / "_sample_native.cpython-310-x86_64-linux-gnu.so"
+    build_artifact = (
+        build_bin
+        / f"_sample_native.{artifact_manifest.PythonAbiIdentity.current().soabi}.so"
+    )
     install_artifact = install_pkg / build_artifact.name
     build_artifact.write_text("native", encoding="utf-8")
     install_artifact.write_text("native", encoding="utf-8")
@@ -1467,6 +1602,16 @@ def test_write_artifacts_supports_windows_pyd_layout(tmp_path, monkeypatch):
     ]
     monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
     monkeypatch.setattr(sdk, "_is_windows", lambda: True)
+    monkeypatch.setattr(
+        sdk.PythonAbiIdentity,
+        "current",
+        lambda: sdk.PythonAbiIdentity(
+            version="3.10",
+            soabi="cp310-win_amd64",
+            free_threaded=False,
+            py_gil_disabled=False,
+        ),
+    )
 
     result = sdk.write_artifacts(
         repo_root=repo_root,
@@ -1518,6 +1663,16 @@ def test_write_artifacts_prefers_windows_config_pyd_over_stale_bin_copy(
     ]
     monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
     monkeypatch.setattr(sdk, "_is_windows", lambda: True)
+    monkeypatch.setattr(
+        sdk.PythonAbiIdentity,
+        "current",
+        lambda: sdk.PythonAbiIdentity(
+            version="3.12",
+            soabi="cp312-win_amd64",
+            free_threaded=False,
+            py_gil_disabled=False,
+        ),
+    )
 
     result = sdk.write_artifacts(
         repo_root=repo_root,

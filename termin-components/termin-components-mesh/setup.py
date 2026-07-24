@@ -19,7 +19,7 @@ setup(
     description="Mesh components Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.mesh", "termin_mesh_component_specs"],
     package_dir={
         "termin.mesh": "python/termin/mesh",

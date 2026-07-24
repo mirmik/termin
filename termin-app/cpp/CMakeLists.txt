@@ -11,6 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminSDL2)
 include(TerminTestMetadata)
+include(TerminPython)
 
 # Project root - either from parent CMakeLists.txt or compute from here
 if(NOT DEFINED TERMIN_ROOT)
@@ -44,13 +45,9 @@ else()
     set(OPTIMIZE_FLAGS -O3)
 endif()
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-
-execute_process(
-    COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    OUTPUT_VARIABLE PYTHON_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(TERMIN_BUILD_PYTHON OR BUILD_EDITOR_MINIMAL OR BUILD_LAUNCHER)
+    termin_require_canonical_python(Interpreter Development)
+endif()
 
 # Install prefix for Python modules only.
 # Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
@@ -58,7 +55,8 @@ if(BUILD_STANDALONE OR TERMIN_BUILD_MONOREPO)
     if(WIN32)
         set(TERMIN_PYTHON_INSTALL_DIR "python/Lib/site-packages/termin")
     else()
-        set(TERMIN_PYTHON_INSTALL_DIR "lib/python${PYTHON_VERSION}/site-packages/termin")
+        set(TERMIN_PYTHON_INSTALL_DIR
+            "lib/${TERMIN_PYTHON_STDLIB_DIR_NAME}/site-packages/termin")
     endif()
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/${TERMIN_PYTHON_INSTALL_DIR}")
 else()
@@ -228,6 +226,9 @@ endif()
 option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
 
 if(BUILD_EDITOR_MINIMAL)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_editor
         app/main_minimal.cpp
         termin/editor/gizmo_types.cpp
@@ -238,6 +239,7 @@ if(BUILD_EDITOR_MINIMAL)
     )
     target_link_libraries(termin_editor PRIVATE
         Python::Python
+        termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
         termin_render::termin_render
@@ -263,6 +265,9 @@ endif()
 option(BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" OFF)
 
 if(BUILD_LAUNCHER)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_launcher
         app/main_launcher.cpp
     )
@@ -270,7 +275,12 @@ if(BUILD_LAUNCHER)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${Python_INCLUDE_DIRS}
     )
-    target_link_libraries(termin_launcher PRIVATE Python::Python)
+    target_link_libraries(
+        termin_launcher
+        PRIVATE
+            Python::Python
+            termin_python_host::termin_python_host
+    )
     target_compile_options(termin_launcher PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     target_compile_definitions(termin_launcher PRIVATE TERMIN_HOST_PYTHON_PATHS="${TERMIN_HOST_PYTHON_PATHS_STR}")
     set_target_properties(termin_launcher PROPERTIES
@@ -305,6 +315,7 @@ if(BUILD_TESTS)
         termin/editor/component_editor_visual.cpp
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp
+        termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_profiler_controller.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from dataclasses import dataclass
 
@@ -10,7 +11,6 @@ from termin.editor_core.component_editor_extension import (
     ComponentExtensionPresentation,
 )
 from termin.editor_native.component_extensions import NativeComponentExtensionProjectorRegistry
-from termin.gui_native import Document
 
 
 @dataclass
@@ -110,7 +110,7 @@ def test_component_extension_session_clears_presentation_when_detach_fails():
 
 
 def test_native_component_extension_projector_registry_owns_frontend_boundary():
-    document = Document()
+    document = tc_ui_document_create()
     registry = NativeComponentExtensionProjectorRegistry(document)
     extension = _Extension("native", [])
 
@@ -123,3 +123,4 @@ def test_native_component_extension_projector_registry_owns_frontend_boundary():
     assert presentation.right_panel.debug_name == "native-extension-test-panel"
     with pytest.raises(KeyError, match="Missing"):
         registry.project(extension, "Missing")
+    tc_ui_document_destroy(document)

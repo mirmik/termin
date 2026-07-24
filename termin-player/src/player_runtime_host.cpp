@@ -8,11 +8,13 @@
 #include <chrono>
 #include <cctype>
 #include <csignal>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -28,6 +30,7 @@
 #include <termin/modules/term_modules_integration.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/platform/sdl_backend_window.hpp>
+#include <termin/python_host/python_host.hpp>
 #include <termin/input/window_input_bridge.hpp>
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/tc_display_handle.hpp>
@@ -59,6 +62,7 @@ namespace fs = std::filesystem;
 namespace termin::player {
 
 PlayerRuntimeHost::Impl* g_active_host = nullptr;
+std::mutex g_active_host_mutex;
 
 namespace {
 
@@ -334,37 +338,6 @@ std::string python_string_literal(const fs::path& path) {
     }
     out.push_back('\'');
     return out;
-}
-
-std::string python_argv_literal(const std::vector<std::string>& args) {
-    std::string out = "[";
-    for (size_t i = 0; i < args.size(); ++i) {
-        if (i > 0) {
-            out += ", ";
-        }
-        out += "'";
-        for (char ch : args[i]) {
-            if (ch == '\\' || ch == '\'') {
-                out.push_back('\\');
-            }
-            out.push_back(ch);
-        }
-        out += "'";
-    }
-    out += "]";
-    return out;
-}
-
-void set_python_argv(int argc, char** argv) {
-    std::vector<wchar_t*> wargv;
-    wargv.reserve(static_cast<size_t>(argc));
-    for (int i = 0; i < argc; ++i) {
-        wargv.push_back(Py_DecodeLocale(argv[i], nullptr));
-    }
-    PySys_SetArgvEx(argc, wargv.data(), 0);
-    for (wchar_t* item : wargv) {
-        PyMem_RawFree(item);
-    }
 }
 
 struct CliOptions {
@@ -652,20 +625,32 @@ PyMethodDef native_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
+#if PY_VERSION_HEX >= 0x030D0000
+PyModuleDef_Slot native_slots[] = {
+    {Py_mod_multiple_interpreters, Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED},
+    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+    {0, nullptr},
+};
+#endif
+
 PyModuleDef native_module = {
     PyModuleDef_HEAD_INIT,
     "_termin_player_native",
     "Native bridge for packaged termin_player.",
-    -1,
+    0,
     native_methods,
+#if PY_VERSION_HEX >= 0x030D0000
+    native_slots,
+#else
     nullptr,
+#endif
     nullptr,
     nullptr,
     nullptr,
 };
 
 PyObject* init_native_module() {
-    return PyModule_Create(&native_module);
+    return PyModuleDef_Init(&native_module);
 }
 
 void ensure_native_module_registered() {
@@ -673,7 +658,11 @@ void ensure_native_module_registered() {
     if (registered) {
         return;
     }
-    PyImport_AppendInittab("_termin_player_native", init_native_module);
+    if (PyImport_AppendInittab("_termin_player_native", init_native_module) != 0) {
+        throw std::runtime_error(
+            "failed to register builtin module _termin_player_native"
+        );
+    }
     registered = true;
 }
 
@@ -706,8 +695,8 @@ struct PlayerRuntimeHost::Impl {
     fs::path bundle_root;
     fs::path python_stdlib;
     bool python_initialized = false;
-    bool quit_requested = false;
-    int exit_code = 0;
+    std::atomic<bool> quit_requested{false};
+    std::atomic<int> exit_code{0};
 
     std::unique_ptr<EngineCore> engine;
     std::unique_ptr<WindowedGraphicsSession> graphics_session;
@@ -727,11 +716,16 @@ struct PlayerRuntimeHost::Impl {
     bool modules_configured = false;
     bool module_live_scene_sync_enabled = false;
     bool modules_loaded = false;
+    bool runtime_bootstrapped = false;
 
     int run(int argc, char** argv) {
         try {
             exe_dir = get_executable_dir();
             bundle_root = resolve_bundle_root(exe_dir);
+            if (argc == 2
+                && std::strcmp(argv[1], "--termin-python-layout-smoke") == 0) {
+                return run_python_layout_smoke(argv[0]);
+            }
             cli = parse_cli(argc, argv, bundle_root);
             apply_smoke_env(cli);
             manifest = load_app_manifest(cli.app_manifest_override);
@@ -748,9 +742,10 @@ struct PlayerRuntimeHost::Impl {
                 throw std::runtime_error("bundled Python stdlib was not found under " + bundle_root.string());
             }
 
-            initialize_python(argc, argv);
+            initialize_python();
             install_player_signal_handlers();
             termin::bootstrap::bootstrap_player();
+            runtime_bootstrapped = true;
 
             engine = std::make_unique<EngineCore>();
             modules_integration.set_scene_manager(engine->scene_manager);
@@ -762,7 +757,7 @@ struct PlayerRuntimeHost::Impl {
             install_runtime_facade();
             run_loop();
             shutdown();
-            return exit_code;
+            return exit_code.load();
         } catch (const std::exception& ex) {
             tc_log_error("termin_player: %s", ex.what());
             std::cerr << "termin_player: " << ex.what() << "\n";
@@ -771,12 +766,56 @@ struct PlayerRuntimeHost::Impl {
         }
     }
 
-    void request_quit(int requested_exit_code) {
-        exit_code = requested_exit_code;
-        quit_requested = true;
-        if (window) {
-            window->set_should_close(true);
+    int run_python_layout_smoke(const char* executable) {
+        set_env_if_missing("TERMIN_SDK", bundle_root);
+        configure_bundle_runtime_paths(bundle_root, exe_dir);
+        python_stdlib = find_python_stdlib(bundle_root);
+        if (python_stdlib.empty()) {
+            throw std::runtime_error(
+                "bundled Python stdlib was not found under " + bundle_root.string()
+            );
         }
+        cli.python_argv = {executable};
+        const char* smoke_code = R"(
+import json
+import sys
+import sysconfig
+import _termin_player_native
+print(json.dumps({
+    "module": _termin_player_native.__name__,
+    "soabi": sysconfig.get_config_var("SOABI"),
+    "free_threaded": bool(sysconfig.get_config_var("Py_GIL_DISABLED")),
+    "gil_enabled": sys._is_gil_enabled(),
+}))
+)";
+        for (int cycle = 0; cycle < 2; ++cycle) {
+            initialize_python();
+            const int script_result = PyRun_SimpleString(smoke_code);
+            if (script_result != 0) {
+                PyErr_Print();
+                tc_log_error(
+                    "termin_player: Python layout smoke script failed on cycle %d",
+                    cycle
+                );
+            }
+            const int finalize_result = termin::python_host::finalize();
+            python_initialized = false;
+            if (finalize_result != 0) {
+                tc_log_error(
+                    "termin_player: Python finalization failed on smoke cycle %d",
+                    cycle
+                );
+            }
+            if (script_result != 0 || finalize_result != 0) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    void request_quit(int requested_exit_code) {
+        exit_code.store(requested_exit_code);
+        quit_requested.store(true);
         if (engine) {
             engine->stop();
         }
@@ -832,33 +871,26 @@ struct PlayerRuntimeHost::Impl {
         return true;
     }
 
-    void initialize_python(int argc, char** argv) {
+    void initialize_python() {
         ensure_native_module_registered();
 
-        static std::string python_home_str =
+        termin::python_host::Config config;
+        config.host_name = "termin_player";
+        config.argv = cli.python_argv;
+        config.isolated = true;
+        config.use_environment = false;
+        config.home =
 #ifdef _WIN32
-            python_stdlib.parent_path().string();
+            python_stdlib.parent_path();
 #else
-            bundle_root.string();
+            bundle_root;
 #endif
-        python_home_str =
-#ifdef _WIN32
-            python_stdlib.parent_path().string();
-#else
-            bundle_root.string();
-#endif
-        static std::wstring python_home_wstr;
-        python_home_wstr.assign(python_home_str.begin(), python_home_str.end());
-        Py_SetPythonHome(python_home_wstr.c_str());
-        Py_NoSiteFlag = 0;
-        Py_IgnoreEnvironmentFlag = 1;
-
-        Py_Initialize();
-        if (!Py_IsInitialized()) {
-            throw std::runtime_error("failed to initialize Python");
+        const termin::python_host::InitResult initialized =
+            termin::python_host::initialize(config);
+        if (!initialized.ok) {
+            throw std::runtime_error(initialized.error);
         }
         python_initialized = true;
-        set_python_argv(argc, argv);
 
         fs::path site_packages = python_stdlib / "site-packages";
         fs::path project_python = manifest.project_python_root;
@@ -868,8 +900,7 @@ struct PlayerRuntimeHost::Impl {
             "project_python = " + python_string_literal(project_python) + "\n"
             "for p in (site_packages, project_python):\n"
             "    if p and p not in sys.path:\n"
-            "        sys.path.insert(0, p)\n"
-            "sys.argv = " + python_argv_literal(cli.python_argv) + "\n";
+            "        sys.path.insert(0, p)\n";
 
         if (PyRun_SimpleString(code.c_str()) != 0) {
             PyErr_Print();
@@ -1275,7 +1306,10 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void run_loop() {
-        g_active_host = this;
+        {
+            std::lock_guard<std::mutex> lock(g_active_host_mutex);
+            g_active_host = this;
+        }
         auto loop_connection = engine->attach_loop_client(EngineLoopClient{
             .poll_events = [this]() {
                 consume_shutdown_signal();
@@ -1286,7 +1320,7 @@ struct PlayerRuntimeHost::Impl {
             },
             .should_continue = [this]() {
                 consume_shutdown_signal();
-                return !quit_requested && window && !window->should_close();
+                return !quit_requested.load() && window && !window->should_close();
             },
             .on_shutdown = []() {},
         });
@@ -1309,7 +1343,10 @@ struct PlayerRuntimeHost::Impl {
         engine->run();
         render_present();
         loop_connection.detach();
-        g_active_host = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(g_active_host_mutex);
+            g_active_host = nullptr;
+        }
     }
 
     void render_present() {
@@ -1320,7 +1357,10 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void shutdown() {
-        g_active_host = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(g_active_host_mutex);
+            g_active_host = nullptr;
+        }
         clear_runtime_facade();
         unload_project_modules();
 
@@ -1370,7 +1410,10 @@ struct PlayerRuntimeHost::Impl {
             graphics_session.reset();
         }
 
-        termin::bootstrap::shutdown_runtime();
+        if (runtime_bootstrapped) {
+            termin::bootstrap::shutdown_runtime();
+            runtime_bootstrapped = false;
+        }
 
         // Deliberately do not call Py_FinalizeEx() here. The editor follows the
         // same rule: native destructors and callbacks can still touch Python, and
@@ -1386,6 +1429,7 @@ PyObject* native_request_quit(PyObject*, PyObject* args) {
     if (!PyArg_ParseTuple(args, "|i", &exit_code)) {
         return nullptr;
     }
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
     if (g_active_host != nullptr) {
         g_active_host->request_quit(exit_code);
     }
@@ -1393,17 +1437,19 @@ PyObject* native_request_quit(PyObject*, PyObject* args) {
 }
 
 PyObject* native_should_quit(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
     if (g_active_host == nullptr) {
         Py_RETURN_FALSE;
     }
-    if (g_active_host->quit_requested) {
+    if (g_active_host->quit_requested.load()) {
         Py_RETURN_TRUE;
     }
     Py_RETURN_FALSE;
 }
 
 PyObject* native_exit_code(PyObject*, PyObject*) {
-    int exit_code = g_active_host == nullptr ? 0 : g_active_host->exit_code;
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    int exit_code = g_active_host == nullptr ? 0 : g_active_host->exit_code.load();
     return PyLong_FromLong(exit_code);
 }
 

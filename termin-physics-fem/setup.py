@@ -10,7 +10,7 @@ setup(
     description="Experimental FEM scene physics components for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=find_namespace_packages(
         where="python",
         include=["termin.physics_fem", "termin.physics_fem.*"],

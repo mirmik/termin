@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from collections.abc import Callable
 
@@ -9,7 +10,7 @@ from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.scene_hierarchy_model import SceneHierarchyController
 from termin.editor_core.undo_stack import UndoStack
 from termin.editor_native.scene_tree import build_native_scene_tree
-from termin.gui_native import Document, Rect, TreeDropPosition
+from termin.gui_native import Rect, TreeDropPosition
 from termin.scene import TcScene
 
 
@@ -67,7 +68,7 @@ def test_native_scene_tree_projects_selection_actions_and_drag_drop() -> None:
             on_object_selected=selected.append,
         )
         renders: list[bool] = []
-        document = Document()
+        document = tc_ui_document_create()
         tree = build_native_scene_tree(
             document,
             controller,
@@ -97,6 +98,7 @@ def test_native_scene_tree_projects_selection_actions_and_drag_drop() -> None:
         assert renders
     finally:
         scene.destroy()
+    tc_ui_document_destroy(document)
 
 
 def test_native_scene_tree_external_drop_hit_testing() -> None:
@@ -109,7 +111,7 @@ def test_native_scene_tree_external_drop_hit_testing() -> None:
             dialog_service=ImmediateDialogService(),
             on_object_selected=lambda _obj: None,
         )
-        document = Document()
+        document = tc_ui_document_create()
         tree = build_native_scene_tree(
             document,
             controller,
@@ -126,6 +128,7 @@ def test_native_scene_tree_external_drop_hit_testing() -> None:
         assert position == "inside"
     finally:
         scene.destroy()
+    tc_ui_document_destroy(document)
 
 
 def test_native_scene_tree_collapse_all_keeps_selected_branch_collapsed() -> None:
@@ -140,7 +143,7 @@ def test_native_scene_tree_collapse_all_keeps_selected_branch_collapsed() -> Non
             dialog_service=ImmediateDialogService(),
             on_object_selected=lambda _obj: None,
         )
-        document = Document()
+        document = tc_ui_document_create()
         tree = build_native_scene_tree(
             document,
             controller,
@@ -163,3 +166,4 @@ def test_native_scene_tree_collapse_all_keeps_selected_branch_collapsed() -> Non
         assert tree.tree_widget.selected_node == tree.id_nodes[child.uuid]
     finally:
         scene.destroy()
+    tc_ui_document_destroy(document)

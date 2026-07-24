@@ -11,7 +11,7 @@ from termin.editor_core.pipeline_inspector_model import (
     PipelineInspectorController,
     PipelineInspectorSnapshot,
 )
-from termin.gui_native import Document, Size, WidgetRef
+from termin.gui_native import TcDocument, Size, WidgetRef
 
 from .resource_inspectors import _clear, _label_row
 
@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class NativePipelineInspector:
-    document: Document
+    document: TcDocument
     controller: PipelineInspectorController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -70,7 +70,7 @@ class NativePipelineInspector:
 
 
 def build_native_pipeline_inspector(
-    document: Document,
+    document: TcDocument,
     controller: PipelineInspectorController,
     *,
     request_render: Callable[[], None],

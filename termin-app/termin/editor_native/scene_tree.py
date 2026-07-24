@@ -17,7 +17,7 @@ from termin.gui_native import (
     CollectionItem,
     CommandData,
     CommandModel,
-    Document,
+    TcDocument,
     Point,
     Rect,
     Size,
@@ -33,13 +33,13 @@ _logger = logging.getLogger(__name__)
 _ROW_HEIGHT = 28.0
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeSceneTree:
-    document: Document
+    document: TcDocument
     controller: SceneHierarchyController
     root: WidgetRef
     tree_root: WidgetRef
@@ -226,7 +226,7 @@ class NativeSceneTree:
 
 
 def build_native_scene_tree(
-    document: Document,
+    document: TcDocument,
     controller: SceneHierarchyController,
     *,
     viewport: Callable[[], Rect],

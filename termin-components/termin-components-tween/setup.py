@@ -10,7 +10,7 @@ setup(
     description="Tween manager scene component for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=["termin.tween_components", "termin_tween_component_specs"],
     package_dir={
         "termin.tween_components": "python/termin/tween_components",

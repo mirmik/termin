@@ -10,7 +10,7 @@ setup(
     description="Voxel scene and render components for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=[
         "termin_voxel_components",
         "termin_voxel_component_specs",

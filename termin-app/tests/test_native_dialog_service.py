@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 import pytest
 
@@ -6,7 +7,6 @@ from tcbase import MouseButton
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
-    Document,
     KeyCode,
     KeyEvent,
     KeyEventType,
@@ -24,7 +24,7 @@ def _key(key: KeyCode) -> KeyEvent:
 
 
 def test_native_dialog_service_delivers_input_and_releases_dialog() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     renders: list[bool] = []
     service = NativeDialogService(
         document,
@@ -40,10 +40,11 @@ def test_native_dialog_service_delivers_input_and_releases_dialog() -> None:
     assert service.active_count == 0
     assert document.live_widget_count == 0
     assert len(renders) == 2
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_maps_choice_cancel_to_none() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     service = NativeDialogService(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
@@ -63,10 +64,11 @@ def test_native_dialog_service_maps_choice_cancel_to_none() -> None:
     assert values == [None]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_delivers_color_and_releases_dialog() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     service = NativeDialogService(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
@@ -80,10 +82,11 @@ def test_native_dialog_service_delivers_color_and_releases_dialog() -> None:
     assert values == [pytest.approx((0.1, 0.2, 0.3, 0.4))]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_registers_and_releases_color_picker() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     registered = []
     released = []
     service = NativeDialogService(
@@ -100,10 +103,11 @@ def test_native_dialog_service_registers_and_releases_color_picker() -> None:
     assert document.dispatch_key_event(_key(KeyCode.Enter))
     assert released == registered
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_delivers_color_from_default_button_click() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     service = NativeDialogService(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
@@ -127,10 +131,11 @@ def test_native_dialog_service_delivers_color_from_default_button_click() -> Non
     assert values == [pytest.approx((0.1, 0.2, 0.3, 0.4))]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_layer_mask_roundtrip_and_lifetime() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     service = NativeDialogService(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
@@ -150,10 +155,11 @@ def test_native_dialog_service_layer_mask_roundtrip_and_lifetime() -> None:
     assert values == [0b101]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)
 
 
 def test_native_dialog_service_save_file_delivers_path_and_releases_dialog(tmp_path) -> None:
-    document = Document()
+    document = tc_ui_document_create()
     service = NativeDialogService(
         document,
         viewport=lambda: Rect(0.0, 0.0, 800.0, 600.0),
@@ -173,3 +179,4 @@ def test_native_dialog_service_save_file_delivers_path_and_releases_dialog(tmp_p
     assert values == [str(tmp_path / "main.pipeline")]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+    tc_ui_document_destroy(document)

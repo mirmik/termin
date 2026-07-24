@@ -2,6 +2,8 @@
 #include "termin_modules/text_encoding.hpp"
 
 #include <Python.h>
+
+#include "termin/python_host/python_host.hpp"
 #include <tcbase/tc_log.hpp>
 
 #include <cstdio>
@@ -1030,9 +1032,15 @@ bool PythonModuleBackend::ensure_interpreter(std::string& error) const {
     error.clear();
 
     if (!Py_IsInitialized()) {
-        Py_Initialize();
-        if (!Py_IsInitialized()) {
-            error = "Failed to initialize Python interpreter";
+        termin::python_host::Config config;
+        config.host_name = "termin_modules";
+        config.argv = {"termin_modules"};
+        config.isolated = false;
+        config.use_environment = true;
+        const termin::python_host::InitResult initialized =
+            termin::python_host::initialize(config);
+        if (!initialized.ok) {
+            error = initialized.error;
             return false;
         }
     }
