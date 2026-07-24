@@ -228,6 +228,9 @@ endif()
 option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
 
 if(BUILD_EDITOR_MINIMAL)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_editor
         app/main_minimal.cpp
         termin/editor/gizmo_types.cpp
@@ -238,6 +241,7 @@ if(BUILD_EDITOR_MINIMAL)
     )
     target_link_libraries(termin_editor PRIVATE
         Python::Python
+        termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
         termin_render::termin_render
@@ -263,6 +267,9 @@ endif()
 option(BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" OFF)
 
 if(BUILD_LAUNCHER)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_launcher
         app/main_launcher.cpp
     )
@@ -270,7 +277,12 @@ if(BUILD_LAUNCHER)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${Python_INCLUDE_DIRS}
     )
-    target_link_libraries(termin_launcher PRIVATE Python::Python)
+    target_link_libraries(
+        termin_launcher
+        PRIVATE
+            Python::Python
+            termin_python_host::termin_python_host
+    )
     target_compile_options(termin_launcher PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     target_compile_definitions(termin_launcher PRIVATE TERMIN_HOST_PYTHON_PATHS="${TERMIN_HOST_PYTHON_PATHS_STR}")
     set_target_properties(termin_launcher PROPERTIES
