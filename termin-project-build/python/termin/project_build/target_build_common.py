@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 
@@ -39,15 +40,8 @@ def resolve_gradle(gradle: str | Path | None) -> Path | None:
     if env_gradle:
         return Path(env_gradle).expanduser().resolve()
 
-    home = Path.home()
-    for candidate in [
-        home / "soft" / "gradle-8" / "bin" / "gradle",
-        home / "soft" / "gradle-8.10.2" / "bin" / "gradle",
-    ]:
-        if candidate.exists():
-            return candidate.resolve()
-
-    return None
+    path_gradle = shutil.which("gradle")
+    return Path(path_gradle).resolve() if path_gradle else None
 
 
 def read_log_tail(log_path: Path, max_lines: int = 40) -> str:

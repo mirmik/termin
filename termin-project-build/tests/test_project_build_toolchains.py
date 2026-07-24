@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -133,6 +134,40 @@ def test_resolver_normalizes_static_provider_paths(tmp_path: Path) -> None:
         path_search=lambda _name: None,
     )
     assert context.sdk_root == (Path.cwd() / relative).resolve()
+
+
+def test_explicit_environment_does_not_leak_process_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tools = tmp_path / "process-tools"
+    _write_tool(tools / ("termin_shaderc.exe" if os.name == "nt" else "termin_shaderc"))
+    _write_tool(tools / ("gradle.exe" if os.name == "nt" else "gradle"))
+    monkeypatch.setenv("PATH", str(tools))
+
+    context = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(),
+        environ={},
+    )
+
+    assert context.shader_compiler is None
+    assert context.gradle is None
+
+
+def test_supplied_environment_path_drives_tool_discovery(tmp_path: Path) -> None:
+    tools = tmp_path / "environment-tools"
+    shaderc = _write_tool(
+        tools / ("termin_shaderc.exe" if os.name == "nt" else "termin_shaderc")
+    )
+    gradle = _write_tool(tools / ("gradle.exe" if os.name == "nt" else "gradle"))
+
+    context = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(),
+        environ={"PATH": str(tools)},
+    )
+
+    assert context.shader_compiler == shaderc.resolve()
+    assert context.gradle == gradle.resolve()
 
 
 def test_desktop_report_is_stable_and_does_not_mutate_profile(tmp_path: Path) -> None:
