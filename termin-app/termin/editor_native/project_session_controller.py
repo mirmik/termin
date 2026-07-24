@@ -9,7 +9,7 @@ from pathlib import Path
 from termin.editor_core.project_session_controller import (
     ProjectSessionController as CoreProjectSessionController,
 )
-from termin.gui_native import Document, EdgeInsets, Rect, RichTextModel, Size
+from termin.gui_native import TcDocument, EdgeInsets, Rect, RichTextModel, Size
 
 
 _logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class NativeModuleOperationDialog:
 
     def __init__(
         self,
-        document: Document,
+        document: TcDocument,
         *,
         viewport: Callable[[], Rect],
         refresh_ui: Callable[[], None],
@@ -149,7 +149,7 @@ class NativeProjectSessionController(CoreProjectSessionController):
     def __init__(
         self,
         *,
-        document: Document,
+        document: TcDocument,
         viewport: Callable[[], Rect],
         refresh_ui: Callable[[], None],
         **kwargs,

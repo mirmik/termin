@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 
-from termin.gui_native import Document, WidgetRef
+from termin.gui_native import TcDocument, WidgetRef
 
 from .metrics import EDITOR_UI_METRICS
 
@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class NativeToolInspector:
-    document: Document
+    document: TcDocument
     root: WidgetRef
     empty: WidgetRef
     panels: dict[str, WidgetRef] = field(default_factory=dict)
@@ -58,7 +58,7 @@ class NativeToolInspector:
             self.active_key = normalized
 
 
-def build_native_tool_inspector(document: Document) -> NativeToolInspector:
+def build_native_tool_inspector(document: TcDocument) -> NativeToolInspector:
     root = document.create_vstack("native-tool-inspector")
     root.set_layout_padding(EDITOR_UI_METRICS.embedded_panel_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)

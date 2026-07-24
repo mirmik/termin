@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import logging
 import weakref
 
-from termin.gui_native import Document, Size, WidgetRef
+from termin.gui_native import TcDocument, Size, WidgetRef
 
 from .editor_viewport import NativeEditorViewport
 
@@ -31,7 +31,7 @@ class NativeDisplayWorkspace:
     def __init__(
         self,
         *,
-        document: Document,
+        document: TcDocument,
         tabs,
         root: WidgetRef,
         editor_page: WidgetRef,
@@ -66,7 +66,7 @@ class NativeDisplayWorkspace:
     @classmethod
     def create(
         cls,
-        document: Document,
+        document: TcDocument,
         parent: WidgetRef,
         *,
         device,

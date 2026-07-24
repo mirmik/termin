@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import pytest
 
 from tcbase import MouseButton
@@ -9,7 +10,6 @@ from termin.editor_core.entity_inspector_model import (
 from termin.editor_core.undo_stack import UndoStack
 from termin.editor_native import build_native_entity_inspector, resolve_native_ui_font
 from termin.gui_native import (
-    Document,
     DrawList,
     DrawListRenderer,
     KeyCode,
@@ -69,7 +69,7 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
             soa_component_type_collector=lambda: ("NativeInspectorSoAProbe",),
         )
         controller.set_scene(scene)
-        document = Document()
+        document = tc_ui_document_create()
         renderer = DrawListRenderer()
         assert renderer.set_default_font_path(str(resolve_native_ui_font()), 15)
         renderer.bind_text_measurer(document)
@@ -170,3 +170,4 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
     finally:
         scene.destroy()
         ComponentRegistry.instance().unregister_python(probe_type)
+    tc_ui_document_destroy(document)

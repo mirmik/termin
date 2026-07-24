@@ -16,7 +16,7 @@ from termin.gui_native import (
     CollectionItem,
     CommandData,
     CommandModel,
-    Document,
+    TcDocument,
     Point,
     Rect,
     Size,
@@ -32,7 +32,7 @@ InputDialogHandler = Callable[[str, str, str, Callable[[str | None], None]], Non
 
 @dataclass
 class NativeViewportList:
-    document: Document
+    document: TcDocument
     controller: ViewportListController
     root: WidgetRef
     tree_widget: object
@@ -161,7 +161,7 @@ class NativeViewportList:
 
 
 def build_native_viewport_list(
-    document: Document,
+    document: TcDocument,
     controller: ViewportListController,
     *,
     viewport: Callable[[], Rect],

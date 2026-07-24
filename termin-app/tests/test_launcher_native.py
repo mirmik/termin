@@ -1,10 +1,11 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 import importlib
 import sys
 from pathlib import Path
 
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 from termin.launcher.controller import LaunchResult, LauncherController, LauncherServices
 from termin.launcher.native_app import NativeLauncherProjection
 
@@ -49,7 +50,7 @@ def make_controller(
 
 
 def test_native_launcher_main_projection_has_stable_actions_and_selection() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     controller = make_controller()
     projection = NativeLauncherProjection(document, controller)
     document.layout_roots(Rect(0.0, 0.0, 1024.0, 640.0))
@@ -65,6 +66,7 @@ def test_native_launcher_main_projection_has_stable_actions_and_selection() -> N
     assert projection.widgets["open"].widget.enabled
     assert projection.widgets["remove"].widget.enabled
     projection.close()
+    tc_ui_document_destroy(document)
 
 
 def test_native_launcher_activation_and_all_main_actions_use_controller() -> None:
@@ -73,7 +75,8 @@ def test_native_launcher_activation_and_all_main_actions_use_controller() -> Non
         choose_project_file=lambda: "/external/Game.terminproj",
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
     )
-    projection = NativeLauncherProjection(Document(), controller)
+    document = tc_ui_document_create()
+    projection = NativeLauncherProjection(document, controller)
 
     projection._project_activated(0, projection.models["recent"].item(0))
     assert launched == ["/projects/First/First.terminproj"]
@@ -91,6 +94,7 @@ def test_native_launcher_activation_and_all_main_actions_use_controller() -> Non
     assert len(controller.state.recent_projects) == 2
     assert all(project.path != "/external/Game.terminproj" for project in controller.state.recent_projects)
     projection.close()
+    tc_ui_document_destroy(document)
 
 
 def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> None:
@@ -99,7 +103,8 @@ def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> 
         choose_directory=lambda: "/workspace",
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
     )
-    projection = NativeLauncherProjection(Document(), controller)
+    document = tc_ui_document_create()
+    projection = NativeLauncherProjection(document, controller)
 
     projection._show_new_project()
     assert projection.root.stable_id == "launcher.new-project"
@@ -116,6 +121,7 @@ def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> 
     projection._show_main()
     assert projection.root.stable_id == "launcher.main"
     projection.close()
+    tc_ui_document_destroy(document)
 
 
 def test_default_launcher_module_import_does_not_load_tcgui_widgets() -> None:

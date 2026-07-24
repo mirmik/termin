@@ -11,7 +11,7 @@ from termin.gui_native import (
     CommandData,
     CommandKind,
     CommandModel,
-    Document,
+    TcDocument,
     FrameTimeModel,
     Size,
     TableColumn,
@@ -24,7 +24,7 @@ from termin.gui_native import (
 )
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
@@ -102,7 +102,7 @@ class NativeProfilerPanel:
 
 
 def build_native_profiler_panel(
-    document: Document,
+    document: TcDocument,
     controller: ProfilerController,
 ) -> NativeProfilerPanel:
     root = document.create_vstack("native-profiler-panel")

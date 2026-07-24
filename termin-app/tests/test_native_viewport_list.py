@@ -1,8 +1,9 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from dataclasses import dataclass, field
 
 from termin.editor_core.viewport_list_model import ViewportListController, ViewportNodeKind
 from termin.editor_native import NativeViewportList, build_native_viewport_list
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 @dataclass
@@ -39,7 +40,7 @@ def test_native_viewport_list_projects_selection_actions_and_rename():
     controller = ViewportListController()
     controller.set_displays([display])
     controller.set_render_targets([target])
-    document = Document()
+    document = tc_ui_document_create()
     dialogs = []
 
     def show_input(title, message, default, callback):
@@ -91,3 +92,4 @@ def test_native_viewport_list_projects_selection_actions_and_rename():
     panel.node_ids.clear()
     panel.id_nodes.clear()
     assert document.destroy_widget_recursive(panel.root.handle)
+    tc_ui_document_destroy(document)

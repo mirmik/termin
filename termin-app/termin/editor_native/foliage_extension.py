@@ -9,7 +9,7 @@ from termin.editor_core.component_editor_extension import (
     ComponentEditorExtension,
     ComponentExtensionPresentation,
 )
-from termin.gui_native import Document, Size
+from termin.gui_native import TcDocument, Size
 
 from .metrics import EDITOR_UI_METRICS
 
@@ -23,7 +23,7 @@ _logger = logging.getLogger(__name__)
 
 def project_native_foliage_extension(
     extension: ComponentEditorExtension,
-    document: Document,
+    document: TcDocument,
 ) -> ComponentExtensionPresentation:
     from termin.editor_core.foliage_layer_editor_extension import FoliageLayerEditorExtension
 

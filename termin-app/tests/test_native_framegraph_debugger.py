@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from types import SimpleNamespace
 
 from termin.engine import FrameGraphDebuggerMode
@@ -8,7 +9,6 @@ from termin.editor_native.framegraph_debugger import (
 )
 from termin.editor_native.shell import build_native_editor_shell
 from termin.gui_native import (
-    Document,
     EventResult,
     Point,
     PointerEvent,
@@ -210,7 +210,8 @@ class _ManagedWindow:
 
 class _WindowManager:
     def __init__(self, context):
-        self.main_host = _WindowHost(Document(), context)
+        self.document = tc_ui_document_create()
+        self.main_host = _WindowHost(self.document, context)
         self.main_host.device = object()
         self.main = SimpleNamespace(content=self.main_host)
         self.windows = []
@@ -221,6 +222,9 @@ class _WindowManager:
         window = _ManagedWindow(_WindowHost(document, self.main_host.context), on_close)
         self.windows.append(window)
         return window
+
+    def destroy(self):
+        tc_ui_document_destroy(self.document)
 
 
 def test_native_framegraph_preview_surface_presents_resizes_and_releases():
@@ -344,10 +348,11 @@ def test_native_framegraph_canvases_keep_independent_fit_zoom_and_pixel_status()
     _click(debugger.main_fit_button)
     assert debugger.main_preview.canvas.fit_mode
     debugger.close()
+    window_manager.destroy()
 
 
 def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     model = _Model()
     context = _Context()
@@ -412,3 +417,5 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     assert window_manager.windows[-1].closed
     assert not debugger.document.is_alive(debugger_root)
     assert renders
+    tc_ui_document_destroy(document)
+    window_manager.destroy()

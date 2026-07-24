@@ -1,4 +1,5 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.procedural_mesh_extension import (
     project_native_procedural_mesh_extension,
 )
-from termin.gui_native import Document, EventResult, PointerEvent, PointerEventType, Rect
+from termin.gui_native import EventResult, PointerEvent, PointerEventType, Rect
 
 
 class _Component:
@@ -126,7 +127,7 @@ def _viewport_click(x: float, y: float):
 
 
 def test_native_procedural_mesh_projector_mutates_shared_document_and_state():
-    document = Document()
+    document = tc_ui_document_create()
     renders: list[bool] = []
     context = NativeComponentExtensionContext(
         engine=object(),
@@ -205,6 +206,7 @@ def test_native_procedural_mesh_projector_mutates_shared_document_and_state():
     assert component.dirty_count == 5
     assert "operations=0" in summary.name
     extension.detach()
+    tc_ui_document_destroy(document)
 
 
 def test_procedural_mesh_model_rejects_commands_without_component_cleanly():
@@ -228,7 +230,7 @@ def test_native_procedural_wall_and_transform_params_use_shared_commands():
     )
     assert operation is not None
 
-    document = Document()
+    document = tc_ui_document_create()
     context = NativeComponentExtensionContext(
         engine=object(),
         document=document,
@@ -264,6 +266,7 @@ def test_native_procedural_wall_and_transform_params_use_shared_commands():
     assert component.dirty_count == 4
     assert component.regenerate_count == 4
     extension.detach()
+    tc_ui_document_destroy(document)
 
 
 def test_native_procedural_extrude_vector_uses_shared_command():
@@ -273,7 +276,7 @@ def test_native_procedural_extrude_vector_uses_shared_command():
         ProceduralPlane(),
     )
     assert contour is not None
-    document = Document()
+    document = tc_ui_document_create()
     context = NativeComponentExtensionContext(
         engine=object(),
         document=document,
@@ -296,6 +299,7 @@ def test_native_procedural_extrude_vector_uses_shared_command():
     assert component.dirty_count == 2
     assert component.regenerate_count == 2
     extension.detach()
+    tc_ui_document_destroy(document)
 
 
 def test_native_procedural_plane_contour_and_path_point_params():
@@ -311,7 +315,7 @@ def test_native_procedural_plane_contour_and_path_point_params():
     )
     assert contour is not None
     assert path is not None
-    document = Document()
+    document = tc_ui_document_create()
     context = NativeComponentExtensionContext(
         engine=object(),
         document=document,
@@ -347,6 +351,7 @@ def test_native_procedural_plane_contour_and_path_point_params():
     assert component.dirty_count == 3
     assert component.regenerate_count == 3
     extension.detach()
+    tc_ui_document_destroy(document)
 
 
 def test_native_procedural_viewport_drag_uses_shared_interaction_and_updates_panel():
@@ -356,7 +361,7 @@ def test_native_procedural_viewport_drag_uses_shared_interaction_and_updates_pan
         ProceduralPlane(),
     )
     assert contour is not None
-    document = Document()
+    document = tc_ui_document_create()
     tool_states: list[int] = []
     context = NativeComponentExtensionContext(
         engine=object(),
@@ -390,13 +395,15 @@ def test_native_procedural_viewport_drag_uses_shared_interaction_and_updates_pan
     assert component.dirty_count == 1
     assert component.regenerate_count == 1
     extension.detach()
+    tc_ui_document_destroy(document)
 
 
 def test_native_procedural_draw_click_uses_native_geometry_fallback():
     component = _Component()
+    document = tc_ui_document_create()
     context = NativeComponentExtensionContext(
         engine=object(),
-        document=Document(),
+        document=document,
         request_render=lambda: None,
         resource_manager=SimpleNamespace(),
         viewport_geometry=_Geometry(),
@@ -409,3 +416,4 @@ def test_native_procedural_draw_click_uses_native_geometry_fallback():
     assert extension.controller.draft.points == pytest.approx([(0.5, 0.75, 0.0)])
     assert extension.snapshot.mode == "draw_sketch"
     extension.detach()
+    tc_ui_document_destroy(document)

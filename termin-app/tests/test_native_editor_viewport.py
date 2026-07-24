@@ -1,11 +1,12 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
 
 import pytest
 
 from termin.editor_native.editor_viewport import NativeEditorViewport
-from termin.gui_native import Document, UiScriptLoader
+from termin.gui_native import UiScriptLoader
 
 
 class _Surface:
@@ -304,7 +305,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     _Attachment.instances.clear()
     _Interaction._instance = None
 
-    document = Document()
+    document = tc_ui_document_create()
     parent = document.create_vstack("viewport-parent")
     manager = _RenderingManager()
     renders = []
@@ -384,6 +385,7 @@ root:
     assert not overlay_root.alive
     assert not runtime.root.alive
     assert document.live_widget_count == 1
+    tc_ui_document_destroy(document)
 
 
 def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():

@@ -15,7 +15,7 @@ from termin.editor_core.resource_inspector_models import (
     TextureInspectorController,
     TextureInspectorSnapshot,
 )
-from termin.gui_native import Color, Document, EdgeInsets, Size, WidgetRef
+from termin.gui_native import Color, TcDocument, EdgeInsets, Size, WidgetRef
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
@@ -23,14 +23,14 @@ _logger = logging.getLogger(__name__)
 PreviewHandler = Callable[[object, object], Callable[[], None]]
 
 
-def _clear(document: Document, root: WidgetRef, controls: dict[str, object]) -> None:
+def _clear(document: TcDocument, root: WidgetRef, controls: dict[str, object]) -> None:
     for child in tuple(root.children):
         if not document.destroy_widget_recursive(child.handle):
             _logger.error("Failed to destroy resource inspector row: %s", child.debug_name)
     controls.clear()
 
 
-def _row(document: Document, label: str, key: str) -> WidgetRef:
+def _row(document: TcDocument, label: str, key: str) -> WidgetRef:
     row = document.create_hstack(f"native-resource-row-{key}")
     row.set_layout_spacing(4.0)
     row.set_layout_padding(EdgeInsets(0.0, 1.0, 0.0, 1.0))
@@ -42,7 +42,7 @@ def _row(document: Document, label: str, key: str) -> WidgetRef:
 
 
 def _label_row(
-    document: Document,
+    document: TcDocument,
     root: WidgetRef,
     controls: dict[str, object],
     label: str,
@@ -57,7 +57,7 @@ def _label_row(
 
 
 def _checkbox_row(
-    document: Document,
+    document: TcDocument,
     root: WidgetRef,
     controls: dict[str, object],
     label: str,
@@ -75,7 +75,7 @@ def _checkbox_row(
 
 @dataclass
 class NativeTextureInspector:
-    document: Document
+    document: TcDocument
     controller: TextureInspectorController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -140,7 +140,7 @@ class NativeTextureInspector:
 
 @dataclass
 class NativeMeshInspector:
-    document: Document
+    document: TcDocument
     controller: MeshInspectorController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -240,7 +240,7 @@ class NativeMeshInspector:
 
 @dataclass
 class NativeGlbInspector:
-    document: Document
+    document: TcDocument
     controller: GlbInspectorController
     root: WidgetRef
     request_render: Callable[[], None]
@@ -295,7 +295,7 @@ class NativeGlbInspector:
 
 
 def build_native_resource_inspectors(
-    document: Document,
+    document: TcDocument,
     *,
     resource_manager,
     request_render: Callable[[], None],

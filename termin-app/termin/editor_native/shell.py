@@ -8,7 +8,7 @@ from termin.gui_native import (
     CommandData,
     CommandKind,
     CommandModel,
-    Document,
+    TcDocument,
     MenuBarEntry,
     Size,
     WidgetRef,
@@ -147,7 +147,7 @@ class NativeEditorShell:
 
 
 def _append(
-    document: Document,
+    document: TcDocument,
     parent: WidgetRef,
     reference,
     preferred: Size,
@@ -163,7 +163,7 @@ def _append(
     return child
 
 
-def build_native_editor_shell(document: Document) -> NativeEditorShell:
+def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
     root = document.create_vstack("native-editor-root")
     root.stable_id = "editor.root"
     if not document.add_root(root.handle):

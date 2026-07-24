@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 from termin.editor_core.resource_inspector_models import (
     GlbInspectorSnapshot,
@@ -5,7 +6,6 @@ from termin.editor_core.resource_inspector_models import (
     TextureInspectorSnapshot,
 )
 from termin.editor_native.resource_inspectors import build_native_resource_inspectors
-from termin.gui_native import Document
 
 
 class _ResourceManager:
@@ -17,7 +17,7 @@ class _ResourceManager:
 
 
 def test_native_resource_inspectors_project_snapshots():
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     texture, mesh, glb = build_native_resource_inspectors(
         document,
@@ -70,5 +70,6 @@ def test_native_resource_inspectors_project_snapshots():
 
     for inspector in (texture, mesh, glb):
         assert document.destroy_widget_recursive(inspector.root.handle)
+    tc_ui_document_destroy(document)
     del texture, mesh, glb, document
     gc.collect()
