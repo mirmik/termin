@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Exercise the supported Xvfb/Mesa editor path and its MCP lifecycle."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _write_project(project_root: Path) -> Path:
+    project_root.mkdir(parents=True)
+    project_file = project_root / "VirtualDisplaySmoke.terminproj"
+    project_file.write_text(
+        json.dumps({"version": 1, "name": "VirtualDisplaySmoke"}, indent=2),
+        encoding="utf-8",
+    )
+    (project_root / "Main.scene").write_text(
+        json.dumps({"scene": {"entities": []}}, indent=2),
+        encoding="utf-8",
+    )
+    settings = project_root / "project_settings"
+    settings.mkdir()
+    (settings / "project.json").write_text(
+        json.dumps(
+            {
+                "render_sync_mode": "none",
+                "build_output_dir": "dist",
+                "ignored_resource_paths": [],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (settings / ".editor_state.json").write_text(
+        json.dumps({"last_scene": str(project_root / "Main.scene")}, indent=2),
+        encoding="utf-8",
+    )
+    return project_file
+
+
+def _run_helper(
+    helper: Path,
+    session_file: Path,
+    command: list[str],
+    *,
+    timeout: float = 15.0,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(helper), "--session", str(session_file), *command],
+        cwd=_repo_root(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _wait_for_mcp(
+    process: subprocess.Popen[str],
+    helper: Path,
+    session_file: Path,
+    timeout: float,
+) -> None:
+    deadline = time.monotonic() + timeout
+    last_output = ""
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise SmokeError(
+                f"Virtual-display editor exited before MCP became ready, "
+                f"code={process.returncode}"
+            )
+        result = _run_helper(helper, session_file, ["tools-list"])
+        last_output = result.stdout
+        if result.returncode == 0:
+            return
+        time.sleep(0.25)
+    raise SmokeError(f"Timed out waiting for editor MCP.\n{last_output}")
+
+
+def _require_success(result: subprocess.CompletedProcess[str], description: str) -> str:
+    if result.returncode != 0:
+        raise SmokeError(
+            f"{description} failed with code {result.returncode}:\n{result.stdout}"
+        )
+    return result.stdout
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--keep-temp", action="store_true")
+    args = parser.parse_args()
+
+    root = _repo_root()
+    wrapper = root / "scripts" / "termin-editor-virtual-display"
+    helper = root / "scripts" / "termin-editor-mcp"
+    editor = root / "sdk" / "bin" / "termin_editor"
+    for path, label in (
+        (wrapper, "virtual-display wrapper"),
+        (helper, "editor MCP helper"),
+        (editor, "SDK editor"),
+    ):
+        if not path.is_file():
+            raise SmokeError(f"{label} not found: {path}")
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="termin-editor-virtual-display-smoke-"))
+    project_file = _write_project(temp_dir / "project")
+    session_file = temp_dir / "session.json"
+    log_path = temp_dir / "editor.log"
+    environment = os.environ.copy()
+    environment["HOME"] = str(temp_dir / "home")
+
+    process: subprocess.Popen[str] | None = None
+    try:
+        command = [
+            str(wrapper),
+            "--editor",
+            str(editor),
+            "--session-file",
+            str(session_file),
+            str(project_file),
+        ]
+        print("[virtual-display-smoke] command:", " ".join(command), flush=True)
+        print("[virtual-display-smoke] log:", log_path, flush=True)
+        with log_path.open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                command,
+                cwd=root,
+                env=environment,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+            _wait_for_mcp(process, helper, session_file, args.timeout)
+            _require_success(
+                _run_helper(helper, session_file, ["initialize"]),
+                "MCP initialize",
+            )
+            tools_output = _require_success(
+                _run_helper(helper, session_file, ["tools-list"]),
+                "MCP tools/list",
+            )
+            if "execute_python_script" not in tools_output:
+                raise SmokeError(
+                    "MCP tools/list did not advertise execute_python_script:\n"
+                    f"{tools_output}"
+                )
+            probe_output = _require_success(
+                _run_helper(
+                    helper,
+                    session_file,
+                    [
+                        "exec",
+                        (
+                            "import json; print(json.dumps({"
+                            "'project_path': project_path, "
+                            "'has_scene': scene is not None}))"
+                        ),
+                    ],
+                ),
+                "MCP editor probe",
+            )
+            if str(project_file.parent) not in probe_output or '"has_scene": true' not in probe_output:
+                raise SmokeError(
+                    "MCP editor probe did not confirm the project and scene:\n"
+                    f"{probe_output}"
+                )
+            _require_success(
+                _run_helper(
+                    helper,
+                    session_file,
+                    ["exec", "request_editor_close(); print('close requested')"],
+                ),
+                "MCP clean shutdown request",
+            )
+            try:
+                return_code = process.wait(timeout=20.0)
+            except subprocess.TimeoutExpired as exc:
+                raise SmokeError(
+                    "Editor did not exit after request_editor_close()"
+                ) from exc
+            if return_code != 0:
+                raise SmokeError(
+                    f"Virtual-display editor exited with code {return_code}"
+                )
+
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        required_markers = (
+            "[virtual-display] Mesa preflight:",
+            "llvmpipe",
+            "GLSL=4.60",
+            "[EngineCore] Shutdown complete",
+        )
+        missing = [marker for marker in required_markers if marker not in log_text]
+        if missing:
+            raise SmokeError(
+                f"Editor log is missing clean virtual-display evidence: {missing}\n"
+                f"{log_text}"
+            )
+        print("[virtual-display-smoke] PASS", flush=True)
+        return 0
+    except Exception:
+        if log_path.is_file():
+            print(
+                f"[virtual-display-smoke] log tail ({log_path}):",
+                file=sys.stderr,
+            )
+            for line in log_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()[-100:]:
+                print(line, file=sys.stderr)
+        raise
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=8.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5.0)
+        if args.keep_temp:
+            print("[virtual-display-smoke] kept temp:", temp_dir, flush=True)
+        else:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeError as exc:
+        print(f"[virtual-display-smoke] FAIL: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

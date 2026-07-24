@@ -1613,11 +1613,14 @@ def _compose_native_editor(
             _logger.exception("Native standard library deployment failed")
             dialog_service.show_error("Deploy Standard Library", str(error))
 
+    def request_editor_close() -> None:
+        window.set_should_close(True)
+
     file_actions = {
         shell.close_scene_command: scene_file_controller.close_scene,
         shell.load_material_command: choose_material,
         shell.deploy_stdlib_command: deploy_stdlib,
-        shell.exit_command: lambda: window.set_should_close(True),
+        shell.exit_command: request_editor_close,
     }
 
     def on_file_action(_menu_index: int, command_id: int, _command) -> None:
@@ -1841,6 +1844,7 @@ def _compose_native_editor(
                 "scene_manager": engine.scene_manager,
                 "capture_editor_screenshot": host.capture_screenshot,
                 "request_render_update": request_editor_render,
+                "request_editor_close": request_editor_close,
                 "profiler_controller": profiler_controller,
                 "profiler_panel": profiler_panel,
                 "profiler_capture_coordinator": profiler_capture_coordinator,
