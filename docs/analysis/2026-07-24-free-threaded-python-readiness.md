@@ -79,7 +79,7 @@ watchdog обращаются к native-библиотекам через `ctype
 - [Assimp threading](https://the-asset-importer-lib-documentation.readthedocs.io/en/latest/usage/use_the_lib.html#threading);
 - [GLFW thread safety](https://www.glfw.org/docs/latest/intro_guide.html#thread_safety).
 
-## Главный build blocker: общий nanobind runtime
+## Общий nanobind runtime
 
 nanobind умеет собирать free-threaded extensions начиная с версии 2.2.0. Для
 этого `nanobind_add_module()` получает `FREE_THREADED`. Параметр:
@@ -92,19 +92,18 @@ nanobind умеет собирать free-threaded extensions начиная с 
 которые должны обмениваться типами. Все Termin extensions обязаны использовать
 один вариант общего `libnanobind`.
 
-Сейчас `termin-nanobind-sdk/cmake/nanobindConfig.cmake.in` явно завершает
-конфигурацию с ошибкой при `ARG_FREE_THREADED`. README описывает это как
-намеренное ограничение SDK. Следовательно, текущая система сборки не может
-даже выразить free-threaded вариант.
-
-Нужен отдельный согласованный SDK configuration, а не локальное добавление
-флага в один модуль:
+Реализован отдельный согласованный SDK configuration без локального добавления
+флага в каждый модуль:
 
 1. Python runtime выбирается как обычный CPython или CPython 3.14t.
-2. `libnanobind` строится для выбранного ABI.
-3. Все Termin native wheels строятся тем же frontend и ABI.
-4. Runtime lock материализует только совместимые wheels.
-5. SDK smoke проверяет, что после импорта всех native-модулей
+2. SDK строит `libnanobind.so` либо отдельный `libnanobind-ft.so`.
+3. Канонический CMake wrapper применяет профиль ко всем `NB_SHARED` modules и
+   C++ bridges; package config сверяет полный Python SOABI.
+4. Автоматическая инвентаризация сопоставляет каждый `NB_MODULE` с ровно одним
+   каноническим target.
+5. Все Termin native wheels строятся тем же frontend и ABI.
+6. Runtime lock материализует только совместимые wheels.
+7. SDK smoke проверяет, что после импорта всех native-модулей
    `sys._is_gil_enabled()` остаётся `False`.
 
 Импорт хотя бы одного extension, не объявившего поддержку free threading,

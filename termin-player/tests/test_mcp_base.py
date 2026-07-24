@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import threading
+import time
 
 from termin.mcp import PythonExecutionResult, PythonScriptExecutor, TerminMcpConfig, TerminMcpServer
 from termin.player.mcp_server import (
@@ -32,7 +33,13 @@ def test_python_script_executor_runs_queued_work_on_processing_thread() -> None:
 
     thread = threading.Thread(target=worker)
     thread.start()
-    assert executor.process_pending() == 1
+    deadline = time.monotonic() + 1.0
+    processed = 0
+    while processed == 0 and time.monotonic() < deadline:
+        processed = executor.process_pending()
+        if processed == 0:
+            time.sleep(0.001)
+    assert processed == 1
     thread.join(timeout=2.0)
 
     assert len(result_holder) == 1

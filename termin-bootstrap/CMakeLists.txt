@@ -237,9 +237,9 @@ if(TERMIN_BUILD_PYTHON)
             termin_input::termin_input
             termin_display::termin_display
         PRIVATE
-            nanobind
             Python::Python
     )
+    termin_nanobind_link_runtime(termin_bootstrap PRIVATE)
 endif()
 
 set_target_properties(termin_bootstrap PROPERTIES
