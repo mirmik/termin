@@ -212,6 +212,21 @@ if(TERMIN_HAS_RECAST)
             NAME termin_navmesh_detour_linear_paths_test
             COMMAND termin_navmesh_detour_linear_paths_test
         )
+
+        add_executable(termin_navmesh_debug_shader_contract_test
+            tests/test_navmesh_debug_shader_contract.cpp
+        )
+        target_include_directories(termin_navmesh_debug_shader_contract_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+        )
+        target_link_libraries(termin_navmesh_debug_shader_contract_test
+            PRIVATE termin_navmesh_components
+        )
+        termin_set_rpath_test(termin_navmesh_debug_shader_contract_test)
+        add_test(
+            NAME termin_navmesh_debug_shader_contract_test
+            COMMAND termin_navmesh_debug_shader_contract_test
+        )
     endif()
 endif()
 

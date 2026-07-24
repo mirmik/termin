@@ -342,7 +342,8 @@ private:
             "termin_off_mesh_link_debug_shader",
             OFF_MESH_LINK_DEBUG_PHASE,
             30,
-            state);
+            state,
+            position_only_debug_shader_contract());
 
         if (!phase) {
             tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] failed to add debug material phase");
