@@ -1,186 +1,22 @@
-from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
+from pathlib import Path
 from types import SimpleNamespace
 
-from termin.engine import FrameGraphDebuggerMode
+import termin.editor_native.framegraph_debugger as framegraph_module
+from termin.editor._editor_native import FrameGraphDebuggerView
 from termin.editor_native.framegraph_debugger import (
-    NativeFramegraphPreviewSurface,
     build_native_framegraph_debugger,
     connect_framegraph_debugger_command,
 )
-from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import (
-    EventResult,
-    Point,
-    PointerEvent,
-    PointerEventType,
-    Rect,
-)
+from termin.engine import EngineCore, FrameGraphDebugger
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 
-class _Capture:
-    def __init__(self, *, ready=False, is_depth=False):
-        self.ready = ready
-        self.is_depth = is_depth
-        self.capture_tex = object() if ready else None
-        self.width = 64
-        self.height = 32
-
-    def has_capture(self):
-        return self.ready
-
-
-class _Presenter:
-    def __init__(self):
-        self.draws = []
-
-    def render(self, *args):
-        self.draws.append(args)
-
-    def read_depth_normalized(self, _device, _texture):
-        return b"pixels", 64, 32
-
-
-class _PassItem:
-    index = 3
-    name = "Color"
-    display_name = "Color *"
-
-
-class _Target:
-    def __init__(self):
-        self.label = "Editor / Main"
-        self.renderable = True
-
-
-class _Model:
-    def __init__(self):
-        self.capture = _Capture()
-        self.depth_capture = _Capture(is_depth=True)
-        self.presenter = _Presenter()
-        self.targets = [_Target()]
-        self.selected_target_index = None
-        self.selected_target_calls = []
-        self.mode = FrameGraphDebuggerMode.InsidePass
-        self._selected_pass_index = None
-        self.selected_symbol = None
-        self.selected_resource = ""
-        self.channel_mode = 0
-        self.paused = False
-        self.highlight_hdr = False
-        self.disconnect_count = 0
-        self.connect_count = 0
-
-    @property
-    def selected_pass_index(self):
-        return self._selected_pass_index
-
-    @selected_pass_index.setter
-    def selected_pass_index(self, index):
-        self._selected_pass_index = index
-        self.selected_symbol = "opaque" if index is not None else ""
-
-    @property
-    def selected_pass(self):
-        return "Color" if self.selected_pass_index is not None else ""
-
-    def refresh(self):
-        pass
-
-    def passes(self):
-        return [_PassItem()]
-
-    def symbols(self):
-        return ["opaque"] if self.selected_pass_index is not None else []
-
-    def resources(self):
-        return ["RT_COLOR"]
-
-    def select_target_at(self, index):
-        self.selected_target_calls.append(index)
-        self.selected_target_index = index
-        return True
-
-    def set_paused(self, paused):
-        self.paused = paused
-
-    def analyze_hdr(self):
-        return "HDR: none"
-
-    def finish_frame(self):
-        pass
-
-    def cancel_request(self):
-        self.disconnect_count += 1
-
-    def connect(self):
-        self.connect_count += 1
-
-    def disconnect(self):
-        self.disconnect_count += 1
-
-    def format_capture_info(self):
-        return "<b>RT_COLOR</b>"
-
-    def format_pipeline_info(self):
-        return "<pre>Color: {} -&gt; {RT_COLOR}</pre>"
-
-    def format_pass_json(self):
-        return '{"pass": "Color"}'
-
-    def format_render_stats(self):
-        return "Scenes: 1"
-
-    def format_timing(self):
-        return "CPU: 1ms"
-
-
-class _Context:
-    def __init__(self):
-        self.created = []
-        self.destroyed = []
-
-    def create_color_attachment(self, width, height):
-        target = object()
-        self.created.append((width, height, target))
-        return target
-
-    def destroy_texture(self, target):
-        self.destroyed.append(target)
-
-
-class _Image:
-    def __init__(self):
-        self.textures = []
-        self.fit_mode = True
-        self.zoom = 1.0
-        self.widget = self
-        self.bounds = Rect(0.0, 0.0, 320.0, 240.0)
-
-    def set_texture(self, texture, size):
-        self.textures.append((texture, size))
-
-    def clear_texture(self):
-        self.textures.append((None, None))
-
-    def fit_in_view(self):
-        self.fit_mode = True
-        self.zoom = 0.5
-
-    def set_zoom(self, zoom, _anchor):
-        self.fit_mode = False
-        self.zoom = zoom
-
-
-class _Root:
-    visible = True
-
-
-class _WindowHost:
-    def __init__(self, document, context):
+class _Content:
+    def __init__(self, document):
         self.document = document
-        self.context = context
         self.callbacks = []
         self.render_requests = 0
+        self.device = object()
 
     def add_pre_render_callback(self, callback):
         self.callbacks.append(callback)
@@ -192,10 +28,10 @@ class _WindowHost:
         self.render_requests += 1
 
 
-class _ManagedWindow:
-    def __init__(self, host, on_close):
-        self.content = host
-        self.on_close = on_close
+class _Window:
+    def __init__(self, document, on_close):
+        self.content = _Content(document)
+        self._on_close = on_close
         self.closed = False
 
     def request_render_update(self):
@@ -205,217 +41,172 @@ class _ManagedWindow:
         if self.closed:
             return
         self.closed = True
-        self.on_close()
+        self._on_close()
 
 
 class _WindowManager:
-    def __init__(self, context):
-        self.document = tc_ui_document_create()
-        self.main_host = _WindowHost(self.document, context)
-        self.main_host.device = object()
-        self.main = SimpleNamespace(content=self.main_host)
+    def __init__(self):
+        self.main_document = tc_ui_document_create()
+        self.main = SimpleNamespace(content=_Content(self.main_document))
         self.windows = []
         self.create_options = []
 
     def create_window(self, _title, _width, _height, *, document, on_close, **options):
         self.create_options.append(options)
-        window = _ManagedWindow(_WindowHost(document, self.main_host.context), on_close)
+        window = _Window(document, on_close)
         self.windows.append(window)
         return window
 
-    def destroy(self):
-        tc_ui_document_destroy(self.document)
+    def close(self):
+        tc_ui_document_destroy(self.main_document)
 
 
-def test_native_framegraph_preview_surface_presents_resizes_and_releases():
-    context = _Context()
-    image = _Image()
-    capture = _Capture(ready=True)
-    presenter = _Presenter()
-    root = _Root()
-    preview = NativeFramegraphPreviewSurface(
-        context,
-        image,
-        root,
-        capture,
-        presenter,
-        channel_mode=4,
-        highlight_hdr=True,
-    )
+class _NativeView:
+    def __init__(self, document, model, request_render):
+        self.document = document
+        self.model = model
+        self.request_render = request_render
+        self.active = False
+        self.closed = False
+        self.activate_count = 0
+        self.deactivate_count = 0
+        self.update_count = 0
+        self.resources = []
+        self.preview_contexts = []
 
-    assert preview.render(context)
-    assert root.visible
-    assert len(context.created) == 1
-    draw = presenter.draws[-1]
-    assert draw[-2:] == (4, True)
-    assert image.textures[-1][1].width == 64
-    assert preview.status_text() == "Source: 64x32 | Zoom: Fit (100%) | Pixel: —"
+    def activate(self):
+        if self.active:
+            return False
+        self.active = True
+        self.activate_count += 1
+        self.request_render()
+        return True
 
-    preview.update_cursor(Point(12.75, 7.25))
-    assert preview.status_text() == "Source: 64x32 | Zoom: Fit (100%) | Pixel: 12, 7"
-    preview.actual_size()
-    assert preview.status_text() == "Source: 64x32 | Zoom: 100% | Pixel: 12, 7"
+    def deactivate(self):
+        if self.active:
+            self.active = False
+            self.deactivate_count += 1
 
-    capture.width = 128
-    assert preview.render(context)
-    assert context.destroyed == [context.created[0][2]]
-    preview.force_depth = True
-    assert preview.render(context)
-    assert presenter.draws[-1][-2:] == (5, False)
+    def update(self):
+        self.update_count += 1
+        return self.active
 
-    preview.close()
-    assert context.destroyed[-1] == context.created[-1][2]
-    assert root.visible
+    def show_resource(self, resource):
+        self.resources.append(resource)
+        return resource == "RT_COLOR"
 
+    def render_previews(self, context):
+        self.preview_contexts.append(context)
+        return True
 
-def test_native_framegraph_preview_keeps_layout_slot_while_capture_arrives():
-    context = _Context()
-    image = _Image()
-    capture = _Capture(ready=False)
-    preview = NativeFramegraphPreviewSurface(
-        context,
-        image,
-        _Root(),
-        capture,
-        _Presenter(),
-    )
+    def refresh_depth(self, _device):
+        return "Depth: 64x32 read OK"
 
-    assert not preview.render(context)
-    assert preview.root.visible
-    assert image.textures == []
-
-    capture.ready = True
-    capture.capture_tex = object()
-    assert preview.render(context)
-    assert preview.root.visible
-    assert len(context.created) == 1
-    assert image.textures[-1][0] == context.created[0][2]
-
-    capture.ready = False
-    capture.capture_tex = None
-    assert not preview.render(context)
-    assert image.textures[-1] == (None, None)
+    def close(self):
+        self.deactivate()
+        self.closed = True
 
 
-def _click(button) -> None:
-    bounds = button.widget.bounds
-    pointer = PointerEvent()
-    pointer.x = bounds.x + bounds.width * 0.5
-    pointer.y = bounds.y + bounds.height * 0.5
-    pointer.type = PointerEventType.Down
-    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
-    pointer.type = PointerEventType.Up
-    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
+class _MenuBar:
+    def __init__(self):
+        self.activated = None
+
+    def connect_activated(self, callback):
+        self.activated = callback
 
 
-def test_native_framegraph_canvases_keep_independent_fit_zoom_and_pixel_status():
-    model = _Model()
-    context = _Context()
-    window_manager = _WindowManager(context)
+def test_framegraph_debugger_python_layer_is_window_bootstrap(monkeypatch):
+    monkeypatch.setattr(framegraph_module, "FrameGraphDebuggerView", _NativeView)
+    manager = _WindowManager()
+    scene_renders = []
+    model = object()
     debugger = build_native_framegraph_debugger(
-        window_manager,
+        manager,
         model,
-        request_render=lambda: None,
-    )
-    debugger.show()
-    debugger.document.layout_roots(Rect(0.0, 0.0, 1180.0, 760.0))
-
-    debugger.main_preview.target_size = (64, 32)
-    debugger.depth_preview.target_size = (64, 32)
-    debugger._refresh_preview_statuses()
-
-    assert debugger.main_preview.canvas.fit_mode
-    assert debugger.depth_preview.canvas.fit_mode
-    assert "Source: 64x32" in debugger.main_status.text
-    _click(debugger.main_actual_button)
-    assert not debugger.main_preview.canvas.fit_mode
-    assert debugger.main_preview.canvas.zoom == 1.0
-    assert debugger.depth_preview.canvas.fit_mode
-
-    target_point = debugger.main_preview.canvas.image_to_widget(Point(12.0, 7.0))
-    pointer = PointerEvent()
-    pointer.type = PointerEventType.Move
-    pointer.x = target_point.x
-    pointer.y = target_point.y
-    assert (
-        debugger.main_preview.canvas.widget.dispatch_pointer_event(pointer)
-        == EventResult.Handled
-    )
-    assert "Zoom: 100%" in debugger.main_status.text
-    assert "Pixel:" in debugger.main_status.text
-    assert "Pixel: —" not in debugger.main_status.text
-
-    _click(debugger.main_fit_button)
-    assert debugger.main_preview.canvas.fit_mode
-    debugger.close()
-    window_manager.destroy()
-
-
-def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
-    document = tc_ui_document_create()
-    shell = build_native_editor_shell(document)
-    model = _Model()
-    context = _Context()
-    window_manager = _WindowManager(context)
-    renders = []
-    debugger = build_native_framegraph_debugger(
-        window_manager,
-        model,
-        request_render=lambda: renders.append(True),
-    )
-    assert debugger.document.root_count == 1
-    assert debugger.document.root_at(0) == debugger.root.handle
-    connect_framegraph_debugger_command(
-        shell.menu_bar,
-        shell.framegraph_debugger_command,
-        debugger,
+        request_render=lambda: scene_renders.append(True),
     )
 
+    assert debugger.model is model
+    assert debugger.view.document == debugger.document
     assert debugger.show()
-    assert model.selected_target_calls == [0]
-    assert model.selected_target_index == 0
-    assert debugger.target_combo.selected_index == 0
-    assert debugger.window is window_manager.windows[-1]
-    assert window_manager.create_options[-1]["always_on_top"] is True
-    assert debugger.render_previews in debugger.window.content.callbacks
-    assert model.selected_pass_index == 3
-    assert model.selected_symbol == "opaque"
-    assert model.selected_resource == "RT_COLOR"
-    assert debugger.pass_indices == [3]
-    assert debugger.pass_json.text == '{"pass": "Color"}'
-    assert debugger.stats_bar.text == "Scenes: 1"
-    assert debugger.inside_panel.visible
-    assert not debugger.between_panel.visible
-    assert debugger.update()
-
-    # A missing exact target must not be painted as item zero.  Reconnecting
-    # the native session will choose a live target explicitly; ordinary UI
-    # refresh remains an honest projection of the native selection.
-    model.selected_target_index = None
-    assert debugger.update()
-    assert debugger.target_combo.selected_index == -1
-    assert model.select_target_at(0)
-    assert debugger.update()
-    assert debugger.target_combo.selected_index == 0
-
-    debugger.mode_combo.selected_index = 1
-    debugger.update()
-    assert model.mode == FrameGraphDebuggerMode.BetweenPasses
-    assert debugger.between_panel.visible
+    assert debugger.view.activate_count == 1
+    assert manager.create_options[-1]["always_on_top"] is True
     first_window = debugger.window
+    assert debugger.view.render_previews in first_window.content.callbacks
+    assert debugger.update()
+    assert debugger.view.update_count == 1
+    assert debugger.show_resource("RT_COLOR")
+    assert debugger.refresh_depth() == "Depth: 64x32 read OK"
+
+    first_window.content.callbacks[0]("render-context")
+    assert debugger.view.preview_contexts == ["render-context"]
     debugger.dismiss()
     assert first_window.closed
     assert first_window.content.callbacks == []
-    assert model.disconnect_count == 1
+    assert debugger.view.deactivate_count == 1
     assert not debugger.update()
 
     assert debugger.show()
-    assert debugger.window is window_manager.windows[-1]
-    debugger_root = debugger.root.handle
+    assert debugger.window is manager.windows[-1]
     debugger.close()
-    assert model.disconnect_count == 2
-    assert window_manager.windows[-1].closed
-    assert not debugger.document.is_alive(debugger_root)
-    assert renders
-    tc_ui_document_destroy(document)
-    window_manager.destroy()
+    assert debugger.view.closed
+    assert debugger.view.deactivate_count == 2
+    assert not debugger.document.valid
+    assert scene_renders
+    manager.close()
+
+
+def test_framegraph_debugger_command_opens_native_view(monkeypatch):
+    monkeypatch.setattr(framegraph_module, "FrameGraphDebuggerView", _NativeView)
+    manager = _WindowManager()
+    debugger = build_native_framegraph_debugger(
+        manager,
+        object(),
+        request_render=lambda: None,
+    )
+    menu_bar = _MenuBar()
+    command_id = 71
+    connect_framegraph_debugger_command(
+        menu_bar,
+        command_id,
+        debugger,
+    )
+
+    menu_bar.activated(0, command_id, object())
+    assert debugger.window is manager.windows[-1]
+
+    debugger.close()
+    manager.close()
+
+
+def test_framegraph_debugger_python_module_contains_no_widget_projection():
+    source = (
+        Path(framegraph_module.__file__)
+        .read_text(encoding="utf-8")
+    )
+
+    assert "FrameGraphDebuggerView" in source
+    assert "create_vstack" not in source
+    assert "create_canvas" not in source
+    assert "connect_changed" not in source
+    assert "NativeFramegraphPreviewSurface" not in source
+
+
+def test_native_framegraph_view_binding_builds_into_tc_document():
+    engine = EngineCore()
+    document = tc_ui_document_create()
+    debugger = FrameGraphDebugger(engine.rendering_manager)
+    view = FrameGraphDebuggerView(document, debugger, lambda: None)
+    try:
+        assert view.root_stable_id == "editor.framegraph-debugger"
+        assert document.root_count == 1
+        assert view.activate()
+        assert view.state_status_text == "Unbound"
+        view.close()
+        assert document.root_count == 0
+    finally:
+        view.close()
+        tc_ui_document_destroy(document)
+        del view
+        del debugger
+        engine.shutdown()

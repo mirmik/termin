@@ -1002,7 +1002,10 @@ Phase 12 host notes:
 - Framegraph debugging now uses one C++ `FrameGraphDebugger`, attached directly
   to `RenderingManager`, for native UI, MCP inspection and capture export.
   `EditorFramegraphDebuggerService` is an editor-core automation/export adapter;
-  both frontends project the same native owner. The native F12 dialog covers
+  both frontends project the same native owner. The production F12 widget tree,
+  callbacks, state synchronization and preview target lifecycle now live in
+  C++ `FrameGraphDebuggerView`; Python only attaches that view to the editor's
+  secondary-window and pre-render boundaries. The native F12 dialog covers
   target/mode/pass/symbol/resource selection, stable duplicate-pass indices,
   pause, channel/HDR controls, schedule/pass JSON/timing/stats, main and depth
   previews, and startup `--debug-resource` selection. Preview composition uses

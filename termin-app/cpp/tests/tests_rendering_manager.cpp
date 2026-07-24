@@ -1,4 +1,5 @@
 #include "guard_main.h"
+#include "termin/editor/frame_graph_debugger_view.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/render_attachment_context.hpp"
@@ -32,12 +33,18 @@ extern "C" {
 #include "tgfx/resources/tc_texture_registry.h"
 }
 
+#include <termin/gui_native/combo_box.hpp>
+#include <termin/gui_native/box_layout.hpp>
+#include <termin/gui_native/status_bar.hpp>
+#include <termin/gui_native/tc_document.hpp>
+
 using termin::RenderingManager;
 using termin::RenderTopology;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
 using termin::TcPipelineTemplate;
 using termin::FrameGraphDebugger;
+using termin::FrameGraphDebuggerView;
 using termin::FrameGraphDebuggerMode;
 using termin::FrameGraphDebuggerState;
 using termin::FrameGraphDebuggerSuspendReason;
@@ -935,6 +942,100 @@ TEST_CASE("FrameGraphDebugger polls live RenderingManager targets")
     tc_display_remove_viewport(display, viewport);
     tc_viewport_free(viewport);
     tc_pipeline_destroy(pipeline);
+    tc_render_target_free(target);
+    tc_display_free(display);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps document lifecycle explicit")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    FrameGraphDebugger debugger(manager);
+    const tc_ui_document_handle handle = tc_ui_document_create();
+    REQUIRE(tc_ui_document_is_valid(handle));
+    termin::gui_native::TcDocument document(handle);
+    int render_requests = 0;
+
+    FrameGraphDebuggerView view(
+        document, debugger, [&render_requests]() { ++render_requests; });
+    REQUIRE_EQ(tc_ui_document_root_count(handle), 1u);
+    CHECK_EQ(std::string(view.root_widget()->stable_id()), "editor.framegraph-debugger");
+    CHECK_EQ(std::string(view.target_combo()->stable_id()), "editor.framegraph.target");
+    CHECK_EQ(std::string(view.mode_combo()->stable_id()), "editor.framegraph.mode");
+    CHECK_EQ(std::string(view.pass_combo()->stable_id()), "editor.framegraph.pass");
+    CHECK_EQ(std::string(view.symbol_combo()->stable_id()), "editor.framegraph.symbol");
+    CHECK_EQ(std::string(view.resource_combo()->stable_id()), "editor.framegraph.resource");
+
+    CHECK(view.activate());
+    CHECK(view.active());
+    CHECK_EQ(view.state_status()->text(), "Unbound");
+    view.mode_combo()->set_selected_index(1);
+    CHECK(debugger.mode() == FrameGraphDebuggerMode::BetweenPasses);
+    CHECK_FALSE(view.inside_panel()->visible());
+    CHECK(view.between_panel()->visible());
+    CHECK(render_requests > 0);
+
+    const tc_widget_handle root = view.root_handle();
+    view.close();
+    CHECK(view.closed());
+    CHECK_FALSE(tc_ui_document_is_alive(handle, root));
+    CHECK(tc_ui_document_is_valid(handle));
+    tc_ui_document_destroy(handle);
+}
+
+TEST_CASE("FrameGraphDebuggerView projects topology, actions, selection and suspension")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    tc_render_target_handle target = tc_render_target_new("DebugTarget");
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle pipeline_handle = tc_pipeline_create("DebugPipeline");
+    RenderPipeline pipeline(pipeline_handle);
+    pipeline.add_pass((new FrameGraphDebuggerProbePass())->tc_pass_ptr());
+    tc_render_target_set_pipeline(target, pipeline_handle);
+    tc_viewport_handle viewport = tc_viewport_new("DebugViewport", scene);
+    tc_viewport_set_render_target(viewport, target);
+    tc_display_handle display = tc_display_new("DebugDisplay", nullptr);
+    tc_display_add_viewport(display, viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    const tc_ui_document_handle handle = tc_ui_document_create();
+    termin::gui_native::TcDocument document(handle);
+    FrameGraphDebuggerView view(document, debugger);
+
+    REQUIRE(view.activate());
+    REQUIRE(debugger.selected_target_index().has_value());
+    CHECK_EQ(*debugger.selected_target_index(), 0u);
+    REQUIRE(debugger.selected_pass_index().has_value());
+    CHECK_EQ(*debugger.selected_pass_index(), 0u);
+    CHECK_EQ(debugger.selected_symbol(), "before_probe");
+    REQUIRE_EQ(view.pass_indices().size(), 1u);
+    CHECK_EQ(view.pass_indices()[0], 0u);
+    CHECK_EQ(view.target_combo()->selected_index(), 0);
+    CHECK_EQ(view.pass_combo()->selected_index(), 0);
+
+    view.mode_combo()->set_selected_index(1);
+    REQUIRE(view.resource_combo()->item_count() > 0);
+    view.resource_combo()->set_selected_index(0);
+    const std::string selected_resource = debugger.selected_resource();
+    CHECK_FALSE(selected_resource.empty());
+    CHECK(view.show_resource(selected_resource));
+    CHECK(debugger.mode() == FrameGraphDebuggerMode::BetweenPasses);
+
+    manager.remove_editor_display(display);
+    CHECK(view.update());
+    CHECK(debugger.state() == FrameGraphDebuggerState::Suspended);
+    CHECK_EQ(view.state_status()->text(), "Suspended: target removed");
+    CHECK_EQ(debugger.selected_resource(), selected_resource);
+
+    view.close();
+    tc_ui_document_destroy(handle);
+    tc_display_remove_viewport(display, viewport);
+    tc_viewport_free(viewport);
+    tc_pipeline_destroy(pipeline_handle);
     tc_render_target_free(target);
     tc_display_free(display);
     tc_scene_free(scene);

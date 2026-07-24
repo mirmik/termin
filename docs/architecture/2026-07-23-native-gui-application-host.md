@@ -332,8 +332,9 @@ EditorSession
     └── GuiWindowHost
 ```
 
-Frame Profiler and Framegraph Debugger UI construction moves to C++. Python is
-limited to bootstrap/menu composition while those paths remain Python-hosted.
+Framegraph Debugger UI construction is implemented in C++ by #722. Python is
+limited to window/bootstrap/menu composition and the existing editor update
+loop. Frame Profiler remains a separate migration.
 Debug preview textures borrow resources from the same graphics domain and never
 create a separate device or session.
 
@@ -366,8 +367,8 @@ borrowed pointers or pretending the session was closed successfully.
 5. **Done in #737:** replace Python `NativeUiHost` rendering/event ownership
    with the public window host while keeping editor-only shortcut, file-drop,
    preview and screenshot policy as extensions/adapters.
-6. Move Frame Profiler and Framegraph Debugger document/view composition to
-   C++ window objects using the same host.
+6. **Framegraph Debugger done in #722:** move tool document/view composition
+   into C++ using the same host. Frame Profiler remains separate.
 7. Add the dynamic texture lease from #596 and migrate one-shot editor preview
    uploads to it.
 8. **Done in #737:** remove the old Python event/render-target/present
@@ -385,8 +386,9 @@ borrowed pointers or pretending the session was closed successfully.
 - #738 moves Frame Profiler view/window composition to C++ after #737.
 - #596 implements the graphics-domain-bound dynamic texture lease after #735
   and #736.
-- #722 moves Framegraph Debugger controller/view composition into C++ on the
-  public window host; it does not add a debugger-specific graphics runtime.
+- **Done in #722:** Framegraph Debugger view composition, callbacks, state
+  projection and preview-target lifecycle live in C++ on the public window
+  host; no debugger-specific graphics runtime was added.
 - #741–#746 reuse the same frame implementation for isolated/offscreen editor
   execution; they do not introduce another GUI or engine runtime.
 

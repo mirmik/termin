@@ -1,7 +1,8 @@
 # Native Framegraph Debugger
 
-Status: native debugger ownership and frame-local capture integration are
-implemented. Python contains frontend and automation adapters only.
+Status: native debugger ownership, frame-local capture integration and the
+production native-widget view are implemented in C++. Python contains window
+bootstrap and automation adapters only.
 
 ## Ownership
 
@@ -21,9 +22,11 @@ the selection to the live pipeline.
 
 `framegraph_debugger_model.py` and `FrameGraphDebugTarget` no longer exist.
 The Python `EditorFramegraphDebuggerService` is an MCP/export adapter over the
-same native debugger. The native-widget and legacy tcgui dialogs are UI
-projections which create a debugger and forward widget events to its bound C++
-API; they do not discover targets or mutate pipelines themselves.
+same native debugger. `FrameGraphDebuggerView` is the production C++ widget
+projection: it builds the complete tree in an application-owned `TcDocument`,
+owns callbacks and selection synchronization, and presents both captures. The
+legacy tcgui dialog remains a compatibility frontend; it does not discover
+targets or mutate pipelines itself.
 
 ## Capture lifecycle
 
@@ -49,9 +52,10 @@ reconciliation happen independently of either operation.
 ## Preview composition
 
 `FrameGraphCapture` owns copied textures and `FrameGraphPresenter` owns preview
-rendering/HDR analysis. UI frontends may create temporary sampled targets for
-composition, but do not own capture state. Targets are recreated on size
-changes and released when their window closes.
+rendering/HDR analysis. `FrameGraphDebuggerView` creates the temporary sampled
+targets in the window's existing graphics domain, recreates them on size
+changes and releases them on window deactivation or close. It does not own
+capture state or create a device/session.
 
 The native UI host renders previews during its pre-render callback, inside the
 active tgfx2 frame and before `Document.paint()` records texture identities.
@@ -61,7 +65,7 @@ referenced by the current Vulkan frame.
 ## Production wiring
 
 The editor creates one native debugger through the service and shares it with
-the dialog and MCP namespace. F12 opens the debugger. Opening or updating a
-dialog refreshes its projection, while render executions also drive the native
-observer lifecycle. `RenderingModel` is no longer part of target discovery or
-capture connection.
+the C++ view and MCP namespace. F12 opens the debugger. Python only creates the
+secondary window, attaches the C++ pre-render callback and forwards the editor
+update loop. `RenderingModel` is no longer part of target discovery or capture
+connection.

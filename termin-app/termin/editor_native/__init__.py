@@ -39,7 +39,6 @@ from .pipeline_editor import (
 )
 from .framegraph_debugger import (
     NativeFramegraphDebugger,
-    NativeFramegraphPreviewSurface,
     build_native_framegraph_debugger,
     connect_framegraph_debugger_command,
 )
@@ -113,7 +112,6 @@ __all__ = [
     "NativeViewportList",
     "NativePipelineEditor",
     "NativeFramegraphDebugger",
-    "NativeFramegraphPreviewSurface",
     "NativePythonConsole",
     "NativeSettingsDialog",
     "NativeAboutDialog",
