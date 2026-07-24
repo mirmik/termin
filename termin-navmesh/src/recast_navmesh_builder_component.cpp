@@ -1478,7 +1478,8 @@ TcMaterial RecastNavMeshBuilderComponent::get_debug_material() {
             "navmesh_debug_shader",
             NAVMESH_DEBUG_PHASE,
             0,  // priority
-            state
+            state,
+            navmesh_vertex_color_debug_shader_contract()
         );
 
         if (!phase) {

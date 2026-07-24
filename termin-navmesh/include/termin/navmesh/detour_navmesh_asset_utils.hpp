@@ -23,13 +23,18 @@ TERMIN_NAVMESH_COMPONENTS_API std::string stable_uuid(const std::string& seed);
 TERMIN_NAVMESH_COMPONENTS_API std::filesystem::path resolve_navmesh_output_path(const Entity& entity, const std::string& agent_type_name);
 TERMIN_NAVMESH_COMPONENTS_API std::filesystem::path find_navmesh_asset_by_uuid(const std::filesystem::path& scene_path, const std::string& uuid);
 TERMIN_NAVMESH_COMPONENTS_API TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material);
+TERMIN_NAVMESH_COMPONENTS_API const tc_shader_contract_desc&
+navmesh_vertex_color_debug_shader_contract();
+TERMIN_NAVMESH_COMPONENTS_API const tc_shader_contract_desc&
+position_only_debug_shader_contract();
 TERMIN_NAVMESH_COMPONENTS_API tc_material_phase* add_builtin_slang_debug_phase(
     TcMaterial& material,
     const char* shader_uuid,
     const char* shader_name,
     const char* phase_mark,
     int priority,
-    const tc_render_state& state);
+    const tc_render_state& state,
+    const tc_shader_contract_desc& shader_contract);
 TERMIN_NAVMESH_COMPONENTS_API TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path);
 TERMIN_NAVMESH_COMPONENTS_API TcMesh build_detour_debug_mesh(const std::vector<std::vector<unsigned char>>& blobs);
 TERMIN_NAVMESH_COMPONENTS_API TcMesh build_detour_debug_mesh(const TcNavMesh& navmesh);

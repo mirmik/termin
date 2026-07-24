@@ -7,8 +7,8 @@
 #include <tcbase/trent/json.h>
 #include <algorithm>
 #include <any>
+#include <array>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iterator>
@@ -24,46 +24,55 @@ namespace {
 
 constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
 
-char* duplicate_c_string(const char* value) {
-    if (!value) return nullptr;
-    const size_t size = std::strlen(value) + 1;
-    char* copy = static_cast<char*>(std::malloc(size));
-    if (!copy) return nullptr;
-    std::memcpy(copy, value, size);
-    return copy;
-}
-
-bool set_debug_shader_entries(tc_material_phase* phase, const char* shader_name) {
-    if (!phase || tc_shader_handle_is_invalid(phase->shader)) {
-        tc_log_error("[NavMesh] cannot set debug shader entries for '%s': phase shader is invalid", shader_name);
-        return false;
-    }
-
-    TcShader shader(phase->shader);
-    tc_shader* raw = shader.get();
-    if (!raw) {
-        tc_log_error("[NavMesh] cannot set debug shader entries for '%s': shader data is missing", shader_name);
-        return false;
-    }
-
-    free(raw->vertex_entry);
-    raw->vertex_entry = duplicate_c_string("vs_main");
-    if (!raw->vertex_entry) {
-        tc_log_error("[NavMesh] failed to set vertex entry for debug shader '%s'", shader_name);
-        return false;
-    }
-
-    free(raw->fragment_entry);
-    raw->fragment_entry = duplicate_c_string("fs_main");
-    if (!raw->fragment_entry) {
-        tc_log_error("[NavMesh] failed to set fragment entry for debug shader '%s'", shader_name);
-        return false;
-    }
-
-    return true;
+tc_shader_contract_vertex_input contract_vertex_input(
+    const char* semantic,
+    uint32_t type)
+{
+    tc_shader_contract_vertex_input input{};
+    std::snprintf(input.semantic, sizeof(input.semantic), "%s", semantic);
+    input.type = type;
+    input.required = 1;
+    return input;
 }
 
 } // namespace
+
+const tc_shader_contract_desc& navmesh_vertex_color_debug_shader_contract()
+{
+    static const std::array<tc_shader_contract_vertex_input, 2> inputs = {
+        contract_vertex_input("position", TC_SHADER_CONTRACT_VALUE_FLOAT3),
+        contract_vertex_input("color", TC_SHADER_CONTRACT_VALUE_FLOAT4),
+    };
+    static const tc_shader_contract_desc contract = [] {
+        tc_shader_contract_desc result{};
+        result.schema_version = TC_SHADER_CONTRACT_SCHEMA_VERSION;
+        result.source_kind = TC_SHADER_CONTRACT_SOURCE_DECLARED;
+        result.vertex_inputs = inputs.data();
+        result.vertex_input_count = static_cast<uint32_t>(inputs.size());
+        result.debug_name = "navmesh_vertex_color_debug";
+        result.source_debug_name = "termin-navmesh declared debug shader contract";
+        return result;
+    }();
+    return contract;
+}
+
+const tc_shader_contract_desc& position_only_debug_shader_contract()
+{
+    static const std::array<tc_shader_contract_vertex_input, 1> inputs = {
+        contract_vertex_input("position", TC_SHADER_CONTRACT_VALUE_FLOAT3),
+    };
+    static const tc_shader_contract_desc contract = [] {
+        tc_shader_contract_desc result{};
+        result.schema_version = TC_SHADER_CONTRACT_SCHEMA_VERSION;
+        result.source_kind = TC_SHADER_CONTRACT_SOURCE_DECLARED;
+        result.vertex_inputs = inputs.data();
+        result.vertex_input_count = static_cast<uint32_t>(inputs.size());
+        result.debug_name = "position_only_debug";
+        result.source_debug_name = "termin-navmesh declared debug shader contract";
+        return result;
+    }();
+    return contract;
+}
 
 tc_material_phase* add_builtin_slang_debug_phase(
     TcMaterial& material,
@@ -71,7 +80,8 @@ tc_material_phase* add_builtin_slang_debug_phase(
     const char* shader_name,
     const char* phase_mark,
     int priority,
-    const tc_render_state& state
+    const tc_render_state& state,
+    const tc_shader_contract_desc& shader_contract
 ) {
     if (!material.is_valid()) {
         tc_log_error("[NavMesh] cannot add debug shader '%s': material is invalid", shader_name);
@@ -91,8 +101,11 @@ tc_material_phase* add_builtin_slang_debug_phase(
     phase_info.shader.sources.vertex = vertex_source;
     phase_info.shader.sources.fragment = fragment_source;
     phase_info.shader.sources.name = shader_name;
+    phase_info.shader.sources.vertex_entry = "vs_main";
+    phase_info.shader.sources.fragment_entry = "fs_main";
     phase_info.shader.language = TC_SHADER_LANGUAGE_SLANG;
     phase_info.shader.artifact_policy = TC_SHADER_ARTIFACT_REQUIRED;
+    phase_info.shader.declared_contract = &shader_contract;
     phase_info.phase_mark = phase_mark;
     phase_info.priority = priority;
     phase_info.state = state;
@@ -101,15 +114,6 @@ tc_material_phase* add_builtin_slang_debug_phase(
 
     if (!phase) {
         tc_log_error("[NavMesh] Failed to add phase to debug material for shader '%s'", shader_name);
-        return nullptr;
-    }
-
-    if (!set_debug_shader_entries(phase, shader_name)) {
-        tc_shader_handle shader = phase->shader;
-        phase->shader = tc_shader_handle_invalid();
-        if (!tc_shader_handle_is_invalid(shader)) {
-            tc_shader_destroy(shader);
-        }
         return nullptr;
     }
 
@@ -336,7 +340,8 @@ TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material) {
         "navmesh_debug_shader",
         NAVMESH_DEBUG_PHASE,
         0,
-        state
+        state,
+        navmesh_vertex_color_debug_shader_contract()
     );
 
     if (!phase) {
