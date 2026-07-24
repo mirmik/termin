@@ -26,6 +26,9 @@ if(TARGET termin_display)
 endif()
 
 if(TARGET termin_modules_python AND _termin_player_has_sdl)
+    if(NOT TARGET termin_python_host::termin_python_host)
+        find_package(termin_python_host REQUIRED)
+    endif()
     add_executable(termin_player
         src/app/termin_player.cpp
         src/player_runtime_host.cpp
@@ -37,6 +40,7 @@ if(TARGET termin_modules_python AND _termin_player_has_sdl)
     )
     target_link_libraries(termin_player PRIVATE
         Python::Python
+        termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
         termin_runtime::termin_runtime
         tgfx::termin_graphics2

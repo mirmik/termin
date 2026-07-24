@@ -8,6 +8,7 @@
 
 #include "termin/bootstrap/bootstrap.hpp"
 #include "termin/engine/engine_core.hpp"
+#include "termin/python_host/python_host.hpp"
 
 #include <exception>
 #include <iostream>
@@ -120,18 +121,6 @@ static fs::path find_site_packages_termin(const fs::path& install_root) {
 #endif
 }
 
-static void set_python_argv(int argc, char* argv[]) {
-    wchar_t** wargv = new wchar_t*[argc];
-    for (int i = 0; i < argc; i++) {
-        wargv[i] = Py_DecodeLocale(argv[i], nullptr);
-    }
-    PySys_SetArgvEx(argc, wargv, 0);
-    for (int i = 0; i < argc; i++) {
-        PyMem_RawFree(wargv[i]);
-    }
-    delete[] wargv;
-}
-
 static bool is_python_layout_smoke_request(int argc, char* argv[]) {
     return argc == 2 && std::strcmp(argv[1], "--termin-python-layout-smoke") == 0;
 }
@@ -231,17 +220,6 @@ int main(int argc, char* argv[]) {
 #endif
         }
 
-        static std::string python_home_str =
-#ifdef _WIN32
-            python_stdlib.parent_path().string();
-#else
-            install_root.string();
-#endif
-        static std::wstring python_home_wstr(python_home_str.begin(), python_home_str.end());
-        Py_SetPythonHome(python_home_wstr.c_str());
-
-        Py_NoSiteFlag = 0;
-        Py_IgnoreEnvironmentFlag = 1;
     } else if (!installed_termin_path.empty()) {
         installed_site_packages = true;
         termin_path = installed_termin_path;
@@ -280,13 +258,24 @@ int main(int argc, char* argv[]) {
     // explicitly during frontend initialization.
     termin::EngineCore engine;
 
-    // Initialize Python
-    Py_Initialize();
-    if (!Py_IsInitialized()) {
-        std::cerr << "Failed to initialize Python" << std::endl;
+    termin::python_host::Config python_config;
+    python_config.host_name = "termin_editor";
+    python_config.argv.assign(argv, argv + argc);
+    python_config.isolated = bundled_python;
+    python_config.use_environment = !bundled_python;
+    if (bundled_python) {
+#ifdef _WIN32
+        python_config.home = python_stdlib.parent_path();
+#else
+        python_config.home = install_root;
+#endif
+    }
+    const termin::python_host::InitResult initialized =
+        termin::python_host::initialize(python_config);
+    if (!initialized.ok) {
+        std::cerr << initialized.error << std::endl;
         return 1;
     }
-    set_python_argv(argc, argv);
 
     // Set Python path
     std::string path_code;
@@ -330,7 +319,11 @@ print(json.dumps({
         if (result != 0) {
             PyErr_Print();
         }
-        Py_Finalize();
+        if (termin::python_host::finalize() != 0) {
+            std::cerr << "termin_editor: Python finalization failed after layout smoke"
+                      << std::endl;
+            return 1;
+        }
         return result == 0 ? 0 : 1;
     }
 
