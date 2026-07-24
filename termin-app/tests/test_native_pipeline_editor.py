@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from pathlib import Path
 
 from tcnodegraph.controller import GraphController
@@ -9,7 +10,7 @@ from termin.editor_native.pipeline_editor import (
     connect_pipeline_editor_command,
 )
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document, DrawCommandType, DrawList, PaintContext, Point, Rect
+from termin.gui_native import DrawCommandType, DrawList, PaintContext, Point, Rect
 
 
 def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Path):
@@ -31,7 +32,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
     controller = PipelineEditorController(graph)
     graph_events = []
     controller.graph_changed.connect(graph_events.append)
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     renders = []
     viewport = lambda: Rect(0.0, 0.0, 1280.0, 800.0)
@@ -78,3 +79,4 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
     editor.close()
     assert not document.is_alive(editor.dialog.handle)
     assert not document.is_alive(editor.context_menu.handle)
+    tc_ui_document_destroy(document)

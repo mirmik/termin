@@ -1,4 +1,6 @@
 from pathlib import Path
+import gc
+import weakref
 
 import pytest
 
@@ -25,6 +27,7 @@ from termin_assets import (
 )
 import termin_assets.plugin_discovery as plugin_discovery
 from termin_assets import asset as asset_module
+from tcbase import request_resource_load
 
 
 def test_asset_core_classes_are_exported() -> None:
@@ -315,6 +318,40 @@ def test_resource_manager_factory_is_publicly_readable() -> None:
         set_resource_manager_factory(None)
 
     assert get_resource_manager() is None
+
+
+def test_process_resource_loader_uses_current_canonical_manager() -> None:
+    first_asset = MemoryAsset(data="first", name="first", uuid="first-uuid")
+    second_asset = MemoryAsset(data="second", name="second", uuid="second-uuid")
+
+    class FakeResourceManager:
+        def __init__(self, asset: Asset):
+            self.asset = asset
+
+        def get_asset_by_uuid(self, uuid: str) -> Asset | None:
+            return self.asset if self.asset.uuid == uuid else None
+
+    from termin_assets import set_resource_manager_factory
+
+    first_manager = FakeResourceManager(first_asset)
+    first_ref = weakref.ref(first_manager)
+    set_resource_manager_factory(first_ref)
+    assert request_resource_load("first-uuid")
+    assert not request_resource_load("missing")
+
+    second_manager = FakeResourceManager(second_asset)
+    set_resource_manager_factory(lambda: second_manager)
+    del first_manager
+    gc.collect()
+
+    try:
+        assert first_ref() is None
+        assert request_resource_load("second-uuid")
+        assert not request_resource_load("first-uuid")
+    finally:
+        set_resource_manager_factory(None)
+
+    assert not request_resource_load("second-uuid")
 
 
 class DummyPlugin:

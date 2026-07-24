@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from dataclasses import dataclass
 
 import numpy as np
@@ -8,7 +9,6 @@ from termin.editor_core.inspector_resources import InspectorResourceCatalog
 from termin.editor_core.material_inspector_model import MaterialInspectorController
 from termin.editor_native import build_native_inspector_fields, build_native_material_inspector
 from termin.editor_native.material_inspector import NativeMaterialInspector
-from termin.gui_native import Document
 from termin.inspect import InspectField
 
 
@@ -106,7 +106,7 @@ class _Resources:
 
 
 def test_native_material_inspector_projects_and_edits_shared_snapshot():
-    document = Document()
+    document = tc_ui_document_create()
     material = _Material()
     resources = _Resources()
     catalog = InspectorResourceCatalog(resources)
@@ -136,10 +136,11 @@ def test_native_material_inspector_projects_and_edits_shared_snapshot():
     assert material.assigned_texture[0] == "albedo"
     inspector.controls.clear()
     assert document.destroy_widget_recursive(inspector.root.handle)
+    tc_ui_document_destroy(document)
 
 
 def test_native_material_inspector_registers_and_releases_texture_previews():
-    document = Document()
+    document = tc_ui_document_create()
     material = _Material()
     resources = _Resources()
     registered = []
@@ -166,6 +167,7 @@ def test_native_material_inspector_registers_and_releases_texture_previews():
     assert released == [registered[0][0], registered[1][0]]
     inspector.controls.clear()
     assert document.destroy_widget_recursive(inspector.root.handle)
+    tc_ui_document_destroy(document)
 
 
 def test_inline_material_metadata_uses_native_material_projection():
@@ -186,7 +188,7 @@ def test_inline_material_metadata_uses_native_material_projection():
         },
         metadata_collector=lambda _target: {"fields": {"material": {"widget": "inline_material"}}},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(
         document,
         controller,
@@ -203,3 +205,4 @@ def test_inline_material_metadata_uses_native_material_projection():
     inline.controls.clear()
     panel.field_widgets.clear()
     assert document.destroy_widget_recursive(panel.root.handle)
+    tc_ui_document_destroy(document)

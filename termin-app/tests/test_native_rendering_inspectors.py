@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 from types import SimpleNamespace
 
@@ -9,7 +10,6 @@ from termin.editor_core.rendering_inspector_models import (
     ViewportInspectorSnapshot,
 )
 from termin.editor_native.rendering_inspectors import build_native_rendering_inspectors
-from termin.gui_native import Document
 
 
 class _EntityInspector:
@@ -111,7 +111,7 @@ class _RenderTargetController:
 
 
 def test_native_inspector_host_switches_rendering_object_panels():
-    document = Document()
+    document = tc_ui_document_create()
     model = InspectorModel(SimpleNamespace())
     entity = _EntityInspector(document)
     material = _MaterialInspector(document)
@@ -205,5 +205,6 @@ def test_native_inspector_host_switches_rendering_object_panels():
     del pipeline
     del tool
     del model
+    tc_ui_document_destroy(document)
     del document
     gc.collect()

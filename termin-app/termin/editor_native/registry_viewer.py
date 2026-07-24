@@ -18,7 +18,7 @@ from termin.gui_native import (
     CommandData,
     CommandModel,
     DialogAction,
-    Document,
+    TcDocument,
     EdgeInsets,
     Point,
     Rect,
@@ -38,13 +38,13 @@ from termin.gui_native import (
 _logger = logging.getLogger(__name__)
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeRegistryViewer:
-    document: Document
+    document: TcDocument
     controller: RegistryCollectionController | RegistryCatalogController
     dialog: object
     root: WidgetRef
@@ -214,7 +214,7 @@ class NativeRegistryViewer:
 
 
 def build_native_registry_viewer(
-    document: Document,
+    document: TcDocument,
     controller: RegistryCollectionController,
     *,
     viewport: Callable[[], Rect],
@@ -237,7 +237,7 @@ def build_native_registry_viewer(
 
 
 def build_native_registry_catalog_viewer(
-    document: Document,
+    document: TcDocument,
     controller: RegistryCatalogController,
     *,
     title: str,
@@ -255,7 +255,7 @@ def build_native_registry_catalog_viewer(
 
 
 def _build_native_registry_viewer(
-    document: Document,
+    document: TcDocument,
     controller: RegistryCollectionController | RegistryCatalogController,
     *,
     title: str,

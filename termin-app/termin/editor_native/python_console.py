@@ -7,16 +7,16 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.python_console_model import PythonConsoleController, PythonConsoleSnapshot
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, RichTextModel, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, EdgeInsets, Rect, RichTextModel, Size, WidgetRef
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativePythonConsole:
-    document: Document
+    document: TcDocument
     controller: PythonConsoleController
     dialog: object | None
     root: WidgetRef
@@ -75,7 +75,7 @@ class NativePythonConsole:
 
 
 def build_native_python_console(
-    document: Document,
+    document: TcDocument,
     controller: PythonConsoleController,
     *,
     viewport: Callable[[], Rect],

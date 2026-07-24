@@ -460,20 +460,19 @@ def _editor_command(
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
         return [str(editor), str(project_file)]
 
-    xvfb = shutil.which("xvfb-run")
-    if xvfb is not None and allow_xvfb:
+    if allow_xvfb:
+        wrapper = _repo_root() / "scripts" / "termin-editor-virtual-display"
         return [
-            xvfb,
-            "-a",
-            "--server-args=-screen 0 1280x720x24",
+            str(wrapper),
+            "--editor",
             str(editor),
             str(project_file),
         ]
 
     if require_xvfb:
         raise SmokeError(
-            "No DISPLAY/WAYLAND_DISPLAY is available and xvfb-run was not found. "
-            "Install xvfb or run with a graphical display."
+            "No DISPLAY/WAYLAND_DISPLAY is available and virtual-display launch "
+            "was disabled. Run without --no-xvfb or use a graphical display."
         )
     return [str(editor), str(project_file)]
 
@@ -650,4 +649,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except SmokeError as exc:
         print(f"[smoke] FAIL: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc

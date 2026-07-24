@@ -24,7 +24,6 @@ extern "C" {
 TC_DEFINE_HANDLE(tc_navmesh_handle)
 
 typedef struct tc_navmesh tc_navmesh;
-typedef bool (*tc_navmesh_load_fn)(tc_navmesh* navmesh, void* user_data);
 
 typedef struct tc_navmesh_tile {
     int32_t x;
@@ -44,8 +43,6 @@ struct tc_navmesh {
     uint32_t pool_index;
     uint8_t is_loaded;
     uint8_t _pad[3];
-    tc_navmesh_load_fn load_callback;
-    void* load_user_data;
     tc_navmesh_tile* tiles;
     size_t tile_count;
 };

@@ -20,7 +20,7 @@ setup(
     description="Voxel grid, voxelization and mesh conversion for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=["termin.voxels"],
     package_dir={"termin.voxels": "python/termin/voxels"},
     install_requires=[

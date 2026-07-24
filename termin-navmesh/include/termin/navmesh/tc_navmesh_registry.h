@@ -21,7 +21,6 @@ TERMIN_NAVMESH_API bool tc_navmesh_destroy(tc_navmesh_handle h);
 TERMIN_NAVMESH_API bool tc_navmesh_contains(const char* uuid);
 TERMIN_NAVMESH_API size_t tc_navmesh_count(void);
 
-TERMIN_NAVMESH_API void tc_navmesh_set_load_callback(tc_navmesh_handle h, tc_navmesh_load_fn callback, void* user_data);
 TERMIN_NAVMESH_API bool tc_navmesh_is_loaded(tc_navmesh_handle h);
 TERMIN_NAVMESH_API bool tc_navmesh_ensure_loaded(tc_navmesh_handle h);
 
@@ -48,8 +47,7 @@ typedef struct tc_navmesh_info {
     size_t tile_count;
     size_t memory_bytes;
     uint8_t is_loaded;
-    uint8_t has_load_callback;
-    uint8_t _pad[6];
+    uint8_t _pad[7];
 } tc_navmesh_info;
 
 TERMIN_NAVMESH_API tc_navmesh_info* tc_navmesh_get_all_info(size_t* count);

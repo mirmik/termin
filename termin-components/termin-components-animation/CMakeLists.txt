@@ -94,7 +94,7 @@ if(TERMIN_BUILD_PYTHON)
         endif()
     endif()
 
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_components_animation_native NB_SHARED

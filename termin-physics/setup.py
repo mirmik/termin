@@ -19,7 +19,7 @@ setup(
     description="Rigid-body physics Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.physics"],
     package_dir={"termin.physics": "python/termin/physics"},
     install_requires=["termin-nanobind"],

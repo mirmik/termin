@@ -21,7 +21,7 @@ setup(
     description="Audio runtime and asset integration for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=[
         "termin.audio",
         "termin.audio.components",

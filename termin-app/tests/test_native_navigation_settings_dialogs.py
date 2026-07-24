@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -8,18 +9,19 @@ from termin.editor_native.navigation_settings_dialogs import (
     build_native_agent_types_dialog,
     build_native_navmesh_areas_dialog,
 )
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 from test_navigation_settings_model import _Manager
 
 
 def _host():
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     viewport = lambda: Rect(0.0, 0.0, 1000.0, 700.0)
     render = lambda: renders.append(True)
     service = NativeDialogService(document, viewport=viewport, request_render=render)
     return document, renders, viewport, render, service
+    tc_ui_document_destroy(document)
 
 
 def test_native_agent_types_dialog_stages_cancel_saves_and_releases():

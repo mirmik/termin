@@ -32,6 +32,17 @@ from .sdk_runtime_metadata import (
     _verify_distribution_records,
 )
 from .python_abi import PythonAbiError, PythonAbiIdentity
+from .wheelhouse import require_wheel_python_abi as _require_wheel_python_abi
+
+
+_PRODUCT_IMPORT_GRAPH_ROOTS = (
+    "termin.engine",
+    "termin.player",
+    "termin.player.headless",
+)
+_GIL_WARNING_FILTER = (
+    r"error:The global interpreter lock \(GIL\) has been enabled:RuntimeWarning"
+)
 
 
 def _is_windows() -> bool:
@@ -190,7 +201,13 @@ def verify_sdk(
     result = verify_application_python_payloads(sdk_prefix)
     if result != 0:
         return result
-    return verify_sdk_python_launcher(sdk_prefix)
+    result = verify_embedded_python_hosts(sdk_prefix)
+    if result != 0:
+        return result
+    result = verify_sdk_python_launcher(sdk_prefix)
+    if result != 0:
+        return result
+    return verify_nanobind_extensions(sdk_prefix)
 
 
 def _hostile_python_environment(sdk_prefix: Path) -> dict[str, str]:
@@ -310,6 +327,254 @@ def verify_sdk_python_launcher(sdk_prefix: Path) -> int:
     return 0
 
 
+def verify_nanobind_extensions(sdk_prefix: Path) -> int:
+    print("Verifying: canonical nanobind ABI and native extension import graph")
+    try:
+        artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
+        artifact_manifest.require_kind(SDK_MANIFEST_KIND)
+        artifact_manifest.validate_all(
+            expected_python_abi=artifact_manifest.python_abi,
+        )
+    except (ArtifactManifestError, PythonAbiError) as error:
+        print(f"FAILED: cannot inspect nanobind artifacts: {error}", file=sys.stderr)
+        return 1
+
+    free_threaded = artifact_manifest.python_abi.free_threaded
+    runtime_stem = "nanobind-ft" if free_threaded else "nanobind"
+    obsolete_stem = "nanobind" if free_threaded else "nanobind-ft"
+    if _is_windows():
+        runtime_name = f"{runtime_stem}.dll"
+        obsolete_names = {
+            f"{obsolete_stem}.dll",
+            f"{obsolete_stem}.lib",
+        }
+    elif sys.platform == "darwin":
+        runtime_name = f"lib{runtime_stem}.dylib"
+        obsolete_names = {f"lib{obsolete_stem}.dylib"}
+    else:
+        runtime_name = f"lib{runtime_stem}.so"
+        obsolete_names = {f"lib{obsolete_stem}.so"}
+
+    runtime_candidates = [
+        sdk_prefix / "lib" / runtime_name,
+        sdk_prefix / "bin" / runtime_name,
+    ]
+    if not any(path.is_file() for path in runtime_candidates):
+        print(
+            f"FAILED: canonical nanobind runtime is missing: {runtime_name}",
+            file=sys.stderr,
+        )
+        return 1
+    obsolete = [
+        path
+        for directory in (sdk_prefix / "lib", sdk_prefix / "bin")
+        for name in obsolete_names
+        if (path := directory / name).is_file()
+    ]
+    if obsolete:
+        print(
+            "FAILED: incompatible nanobind runtime remains in SDK: "
+            + ", ".join(str(path) for path in obsolete),
+            file=sys.stderr,
+        )
+        return 1
+
+    extensions = []
+    runtime_paths = []
+    dependency_errors = []
+    for artifact in artifact_manifest.data["artifacts"]:
+        if artifact.get("kind") != "python-extension":
+            continue
+        extension = artifact.get("extension")
+        if not isinstance(extension, str) or not extension:
+            dependency_errors.append("python-extension artifact has no import name")
+            continue
+        dependencies = artifact.get("runtime_dependencies")
+        if not isinstance(dependencies, list):
+            dependency_errors.append(f"{extension} has invalid runtime dependencies")
+            continue
+        names = {
+            dependency.get("name")
+            for dependency in dependencies
+            if isinstance(dependency, dict)
+        }
+        if runtime_name not in names:
+            dependency_errors.append(
+                f"{extension} does not link the canonical {runtime_name}"
+            )
+        if names & obsolete_names:
+            dependency_errors.append(
+                f"{extension} links an incompatible nanobind runtime"
+            )
+        runtime_paths.extend(
+            str((sdk_prefix / str(dependency["path"])).resolve())
+            for dependency in dependencies
+            if isinstance(dependency, dict)
+            and isinstance(dependency.get("path"), str)
+        )
+        extensions.append(extension)
+    if dependency_errors:
+        for error in dependency_errors:
+            print(f"  {error}", file=sys.stderr)
+        print(
+            f"FAILED: {len(dependency_errors)} nanobind dependency error(s)",
+            file=sys.stderr,
+        )
+        return 1
+    if not extensions:
+        print("FAILED: SDK artifact manifest has no Python extensions", file=sys.stderr)
+        return 1
+
+    try:
+        entry_modules = _installed_product_import_roots(sdk_prefix)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(
+            f"FAILED: cannot determine product import graph roots: {error}",
+            file=sys.stderr,
+        )
+        return 1
+
+    result = _run_python_import_graph_probe(
+        launcher=_sdk_python_launcher(sdk_prefix),
+        extensions=extensions,
+        entry_modules=entry_modules,
+        runtime_paths=list(dict.fromkeys(runtime_paths)),
+        free_threaded=free_threaded,
+        environment=_hostile_python_environment(sdk_prefix),
+    )
+    if result.returncode != 0:
+        details = result.stderr.strip() or result.stdout.strip()
+        print(
+            "FAILED: native extension import graph smoke failed: "
+            + details,
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"  OK: {len(extensions)} native extensions use {runtime_name}; "
+        f"{len(entry_modules)} product roots imported; free-threaded={free_threaded}"
+    )
+    return 0
+
+
+def _sdk_python_launcher(sdk_prefix: Path) -> Path:
+    launcher_name = "termin_python.exe" if _is_windows() else "termin_python"
+    return sdk_prefix / "bin" / launcher_name
+
+
+def _installed_product_import_roots(sdk_prefix: Path) -> list[str]:
+    manifest_path = sdk_prefix / APPLICATION_PAYLOAD_MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != APPLICATION_PAYLOAD_MANIFEST_SCHEMA:
+        raise ValueError("unsupported application payload manifest schema")
+
+    imports: list[str] = []
+    payloads = manifest.get("payloads")
+    if not isinstance(payloads, list):
+        raise ValueError("application payload manifest has no payload list")
+    for index, payload in enumerate(payloads):
+        if not isinstance(payload, dict):
+            raise ValueError(f"application payload {index} is not an object")
+        payload_imports = payload.get("imports", [])
+        if not isinstance(payload_imports, list) or not all(
+            isinstance(module, str) and module for module in payload_imports
+        ):
+            raise ValueError(f"application payload {index} has invalid imports")
+        imports.extend(payload_imports)
+    imports.extend(_PRODUCT_IMPORT_GRAPH_ROOTS)
+    return list(dict.fromkeys(imports))
+
+
+def _python_import_graph_probe_script(
+    *,
+    extensions: list[str],
+    entry_modules: list[str],
+    runtime_paths: list[str],
+    free_threaded: bool,
+    import_paths: list[str],
+) -> str:
+    return "\n".join(
+        (
+            "import ctypes, importlib, json, os, pathlib, sys, sysconfig",
+            f"extensions = {extensions!r}",
+            f"entry_modules = {entry_modules!r}",
+            f"runtime_paths = {runtime_paths!r}",
+            f"free_threaded = {free_threaded!r}",
+            f"import_paths = {import_paths!r}",
+            "sys.path[:0] = import_paths",
+            "runtime = {",
+            "    'version': f'{sys.version_info.major}.{sys.version_info.minor}',",
+            "    'soabi': sysconfig.get_config_var('SOABI') or '',",
+            "    'py_gil_disabled': bool(sysconfig.get_config_var('Py_GIL_DISABLED') or 0),",
+            "    'gil_enabled': sys._is_gil_enabled(),",
+            "}",
+            "if runtime['py_gil_disabled'] != free_threaded:",
+            "    raise RuntimeError(f'import gate ABI mismatch: {runtime}')",
+            "if free_threaded and runtime['gil_enabled']:",
+            "    raise RuntimeError(f'import gate started with the GIL enabled: {runtime}')",
+            "dll_handles = []",
+            "if sys.platform == 'win32':",
+            "    directories = {str(pathlib.Path(path).parent) for path in runtime_paths}",
+            "    dll_handles = [os.add_dll_directory(path) for path in directories]",
+            "else:",
+            "    pending = runtime_paths",
+            "    while pending:",
+            "        failed = []",
+            "        for path in pending:",
+            "            try:",
+            "                ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)",
+            "            except OSError as error:",
+            "                failed.append((path, str(error)))",
+            "        if len(failed) == len(pending):",
+            "            raise RuntimeError(f'cannot preload native dependencies: {failed}')",
+            "        pending = [path for path, _error in failed]",
+            "loaded = []",
+            "for kind, names in (('native extension', extensions), ('product root', entry_modules)):",
+            "    for name in names:",
+            "        try:",
+            "            importlib.import_module(name)",
+            "        except BaseException as error:",
+            "            raise RuntimeError(",
+            "                f'import graph failed at {kind} {name!r}; runtime={runtime}'",
+            "            ) from error",
+            "        loaded.append(name)",
+            "        if free_threaded and sys._is_gil_enabled():",
+            "            runtime['gil_enabled'] = True",
+            "            raise RuntimeError(",
+            "                f'GIL enabled after importing {kind} {name!r}; runtime={runtime}'",
+            "            )",
+            "print(json.dumps({'loaded': loaded, 'runtime': runtime}, sort_keys=True))",
+        )
+    )
+
+
+def _run_python_import_graph_probe(
+    *,
+    launcher: Path,
+    extensions: list[str],
+    entry_modules: list[str],
+    runtime_paths: list[str],
+    free_threaded: bool,
+    environment: dict[str, str],
+    import_paths: list[str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    script = _python_import_graph_probe_script(
+        extensions=extensions,
+        entry_modules=entry_modules,
+        runtime_paths=runtime_paths,
+        free_threaded=free_threaded,
+        import_paths=import_paths or [],
+    )
+    return subprocess.run(
+        [str(launcher), "-W", _GIL_WARNING_FILTER, "-c", script],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=environment,
+    )
+
+
 def verify_application_python_payloads(sdk_prefix: Path) -> int:
     print("Verifying: application-owned Python payloads")
     manifest_path = sdk_prefix / APPLICATION_PAYLOAD_MANIFEST_NAME
@@ -331,10 +596,6 @@ def verify_application_python_payloads(sdk_prefix: Path) -> int:
         artifact_manifest.python_abi.require_matches(
             payload_abi,
             context="artifact/application payload Python ABI",
-        )
-        artifact_manifest.python_abi.require_matches(
-            PythonAbiIdentity.current(),
-            context="application payload/runtime Python ABI",
         )
     except (ArtifactManifestError, PythonAbiError) as error:
         print(f"FAILED: {error}", file=sys.stderr)
@@ -458,6 +719,53 @@ def verify_application_python_payloads(sdk_prefix: Path) -> int:
     return 0
 
 
+def verify_embedded_python_hosts(sdk_prefix: Path) -> int:
+    print("Verifying: embedded Python product hosts")
+    executable_suffix = ".exe" if _is_windows() else ""
+    player = sdk_prefix / "bin" / f"termin_player{executable_suffix}"
+    if not player.is_file():
+        print(f"FAILED: embedded Python host is missing: {player}", file=sys.stderr)
+        return 1
+    result = subprocess.run(
+        [str(player), "--termin-python-layout-smoke"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=_hostile_python_environment(sdk_prefix),
+    )
+    if result.returncode != 0:
+        print(
+            "FAILED: termin_player embedded Python smoke failed: "
+            + result.stderr.strip(),
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError) as error:
+        print(
+            f"FAILED: termin_player embedded Python smoke returned invalid JSON: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    if payload.get("module") != "_termin_player_native":
+        print(
+            "FAILED: termin_player did not import its raw native module",
+            file=sys.stderr,
+        )
+        return 1
+    if payload.get("free_threaded") is not True or payload.get("gil_enabled") is not False:
+        print(
+            "FAILED: termin_player raw native module enabled the GIL: "
+            + json.dumps(payload, sort_keys=True),
+            file=sys.stderr,
+        )
+        return 1
+    print("  OK: termin_player raw module imports without enabling the GIL")
+    return 0
+
+
 def verify_python_runtime_manifest(sdk_prefix: Path) -> int:
     print("Verifying: SDK Python runtime manifest")
     manifest_path = sdk_prefix / RUNTIME_MANIFEST_NAME
@@ -473,27 +781,23 @@ def verify_python_runtime_manifest(sdk_prefix: Path) -> int:
         print("FAILED: unsupported Python runtime manifest schema", file=sys.stderr)
         return 1
     try:
+        runtime_abi = PythonAbiIdentity.from_mapping(
+            manifest.get("python_abi"),
+            context="Python runtime manifest ABI",
+        )
         artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
         artifact_manifest.require_kind(SDK_MANIFEST_KIND)
-        artifact_manifest.validate_all()
-    except ArtifactManifestError as error:
+        artifact_manifest.validate_all(expected_python_abi=runtime_abi)
+    except (ArtifactManifestError, PythonAbiError) as error:
         print(f"FAILED: invalid SDK artifact manifest: {error}", file=sys.stderr)
         return 1
     if manifest.get("native_build_id") != artifact_manifest.native_build_id:
         print("FAILED: Python runtime native_build_id mismatch", file=sys.stderr)
         return 1
     try:
-        runtime_abi = PythonAbiIdentity.from_mapping(
-            manifest.get("python_abi"),
-            context="Python runtime manifest ABI",
-        )
         artifact_manifest.python_abi.require_matches(
             runtime_abi,
             context="artifact/runtime manifest Python ABI",
-        )
-        artifact_manifest.python_abi.require_matches(
-            PythonAbiIdentity.current(),
-            context="SDK/runtime Python ABI",
         )
     except PythonAbiError as error:
         print(f"FAILED: {error}", file=sys.stderr)
@@ -639,22 +943,6 @@ def _wheel_abi_tags(archive: zipfile.ZipFile, *, wheel_name: str) -> set[str]:
     return abi_tags
 
 
-def _require_wheel_python_abi(
-    abi_tags: set[str],
-    python_abi: PythonAbiIdentity,
-    *,
-    wheel_name: str,
-) -> None:
-    native_abi_tags = abi_tags - {"none"}
-    expected_abi_tag = python_abi.wheel_abi_tag
-    if native_abi_tags and expected_abi_tag not in native_abi_tags:
-        rendered = ", ".join(sorted(native_abi_tags))
-        raise RuntimeError(
-            f"wheel {wheel_name} Python ABI mismatch: expected "
-            f"{expected_abi_tag}, got {rendered}"
-        )
-
-
 def verify_python_wheelhouse(sdk_prefix: Path) -> int:
     wheel_dir = sdk_prefix / "wheels"
     print("Verifying: SDK Python wheelhouse provenance")
@@ -662,9 +950,6 @@ def verify_python_wheelhouse(sdk_prefix: Path) -> int:
         print("  SKIP: public SDK wheelhouse is not present")
         return 0
     try:
-        artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
-        artifact_manifest.require_kind(SDK_MANIFEST_KIND)
-        artifact_manifest.validate_all()
         runtime_manifest = json.loads(
             (sdk_prefix / RUNTIME_MANIFEST_NAME).read_text(encoding="utf-8")
         )
@@ -674,6 +959,9 @@ def verify_python_wheelhouse(sdk_prefix: Path) -> int:
             runtime_manifest.get("python_abi"),
             context="Python runtime manifest ABI",
         )
+        artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
+        artifact_manifest.require_kind(SDK_MANIFEST_KIND)
+        artifact_manifest.validate_all(expected_python_abi=runtime_abi)
         artifact_manifest.python_abi.require_matches(
             runtime_abi,
             context="artifact/runtime manifest Python ABI",

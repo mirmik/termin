@@ -17,7 +17,7 @@ from termin.gui_native import (
     CollectionModel,
     CommandData,
     CommandModel,
-    Document,
+    TcDocument,
     Point,
     Rect,
     Size,
@@ -28,13 +28,13 @@ from termin.gui_native import (
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeProjectBrowser:
-    document: Document
+    document: TcDocument
     controller: ProjectBrowserController
     root: WidgetRef
     content_splitter: object
@@ -229,7 +229,7 @@ class NativeProjectBrowser:
 
 
 def build_native_project_browser(
-    document: Document,
+    document: TcDocument,
     controller: ProjectBrowserController,
     *,
     viewport: Callable[[], Rect],

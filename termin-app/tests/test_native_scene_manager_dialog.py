@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -6,14 +7,14 @@ from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.scene_manager_dialog import build_native_scene_manager_dialog
 from termin.engine import SceneManager
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 def test_native_scene_manager_selects_mutates_reopens_and_releases():
     manager = SceneManager()
     manager.create_scene("A", [])
     manager.create_scene("B", [])
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     viewport = lambda: Rect(0.0, 0.0, 1000.0, 700.0)
     render = lambda: renders.append(True)
@@ -46,3 +47,4 @@ def test_native_scene_manager_selects_mutates_reopens_and_releases():
         assert renders
     finally:
         manager.close_all_scenes()
+    tc_ui_document_destroy(document)

@@ -14,7 +14,7 @@ from termin.gui_native import (
     CommandKind,
     CommandModel,
     DialogAction,
-    Document,
+    TcDocument,
     EdgeInsets,
     Point,
     Rect,
@@ -30,7 +30,7 @@ _PIPELINE_FILTER = "Pipeline | *.pipeline"
 
 @dataclass
 class NativePipelineEditor:
-    document: Document
+    document: TcDocument
     controller: PipelineEditorController
     dialog_service: NativeDialogService
     dialog: object
@@ -224,7 +224,7 @@ class NativePipelineEditor:
 
 
 def build_native_pipeline_editor(
-    document: Document,
+    document: TcDocument,
     controller: PipelineEditorController,
     *,
     dialog_service: NativeDialogService,

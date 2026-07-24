@@ -169,7 +169,7 @@ if(TERMIN_HAS_RECAST)
     termin_set_rpath_lib(termin_navmesh_components)
 
     if(TERMIN_BUILD_PYTHON)
-        find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+        find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
         find_package(nanobind CONFIG REQUIRED)
         if(NOT TARGET termin_inspect::termin_inspect_python)
             message(FATAL_ERROR "termin-navmesh Python build requires termin_inspect::termin_inspect_python")

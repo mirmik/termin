@@ -34,7 +34,7 @@ if(TERMIN_BUILD_PYTHON)
             set(Python_EXECUTABLE "python3")
         endif()
     endif()
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
 endif()
 

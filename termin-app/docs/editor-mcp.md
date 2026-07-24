@@ -185,6 +185,8 @@ The Python namespace contains:
   common geometry and transform types for scene-control scripts.
 - `request_render_update()` / `refresh_editor()`: request an editor viewport
   redraw after scripts mutate scene state.
+- `request_editor_close()`: request a normal editor shutdown after an automated
+  session.
 - `termin`: the `termin` package.
 
 Scripts are queued from the MCP server thread and executed by the editor loop on
@@ -218,10 +220,52 @@ enabled, changes a Python module package file on disk, and verifies through MCP
 that the live editor scene degrades to `UnknownComponent` on a failed explicit
 reload and restores the Python component after a successful explicit reload.
 
-On headless Linux the script uses `xvfb-run` automatically when no
-`DISPLAY`/`WAYLAND_DISPLAY` is available. Install the `xvfb` package or run the
-script in a graphical session. Use `--keep-temp` to keep the generated project
-and editor log for debugging.
+On headless Linux the script uses the canonical
+`scripts/termin-editor-virtual-display` wrapper automatically when no
+`DISPLAY`/`WAYLAND_DISPLAY` is available. Install Xvfb, `xauth`, and
+`mesa-utils` (`glxinfo`), or run the script in a graphical session. Use
+`--keep-temp` to keep the generated project and editor log for debugging.
+
+## Virtual-display editor E2E
+
+Use the virtual-display wrapper when automation must exercise the real SDL
+window lifecycle and presentation path on a Linux machine without a physical
+display:
+
+```bash
+scripts/termin-editor-virtual-display /path/to/Project.terminproj
+```
+
+The wrapper always creates a unique Xvfb display, forces Mesa llvmpipe OpenGL,
+checks OpenGL 4.6 and GLSL 4.60, verifies the SDK shader compiler, enables the
+editor MCP endpoint on port `0`, and prints the unique session descriptor path.
+While the editor is running, another terminal can use that path:
+
+```bash
+scripts/termin-editor-mcp --session /tmp/termin-editor-virtual-display-XXXX/session.json initialize
+scripts/termin-editor-mcp --session /tmp/termin-editor-virtual-display-XXXX/session.json tools-list
+scripts/termin-editor-mcp --session /tmp/termin-editor-virtual-display-XXXX/session.json exec \
+  "print(project_path, scene)"
+scripts/termin-editor-mcp --session /tmp/termin-editor-virtual-display-XXXX/session.json exec \
+  "request_editor_close()"
+```
+
+Pass `--session-file /explicit/path/session.json` when another process needs a
+stable descriptor path. The wrapper removes its generated runtime directory
+after editor shutdown; `--keep-runtime` retains Xvfb diagnostics. Missing
+dependencies, a non-llvmpipe renderer, insufficient OpenGL/GLSL, a missing
+shader compiler, and Xvfb startup failures are reported explicitly.
+
+This is a window-system E2E path. It validates SDL, X11 event polling and
+physical presentation through a virtual display. It is separate from the
+isolated/offscreen headless GUI architecture, which creates no Xvfb server,
+SDL window, or swapchain.
+
+The repeatable acceptance smoke is:
+
+```bash
+scripts/smoke-editor-virtual-display
+```
 
 `capture_editor_screenshot` captures the editor viewport FBO as a PNG file. It
 accepts:

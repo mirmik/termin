@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+"""Launch Termin Editor through the supported Xvfb/Mesa OpenGL E2E path."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Mapping
+
+
+DEFAULT_SCREEN = "1920x1080x24"
+DEFAULT_GL_VERSION = "4.6"
+DEFAULT_GLSL_VERSION = "460"
+_INTERNAL_ENV = "TERMIN_VIRTUAL_DISPLAY_INTERNAL"
+
+
+class VirtualDisplayError(RuntimeError):
+    """Raised when the virtual-display editor path cannot be started safely."""
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _require_program(name: str, *, purpose: str) -> Path:
+    found = shutil.which(name)
+    if found is None:
+        raise VirtualDisplayError(
+            f"Required program '{name}' was not found in PATH ({purpose})."
+        )
+    return Path(found).resolve()
+
+
+def _resolve_project(value: str) -> Path:
+    project = Path(value).expanduser().resolve()
+    if project.is_file() and project.suffix == ".terminproj":
+        return project
+    if project.is_dir():
+        candidates = sorted(project.glob("*.terminproj"))
+        if len(candidates) == 1:
+            return candidates[0].resolve()
+        raise VirtualDisplayError(
+            f"Project directory must contain exactly one .terminproj file: {project} "
+            f"(found {len(candidates)})."
+        )
+    raise VirtualDisplayError(
+        f"Project must be a .terminproj file or project directory: {project}"
+    )
+
+
+def _parse_version(value: str, *, label: str) -> tuple[int, ...]:
+    match = re.search(r"\d+(?:\.\d+)+", value)
+    if match is None:
+        raise VirtualDisplayError(f"Cannot parse {label} version from: {value}")
+    return tuple(int(part) for part in match.group(0).split("."))
+
+
+def _glx_field(output: str, label: str) -> str:
+    prefix = f"{label}:"
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped[len(prefix) :].strip()
+    raise VirtualDisplayError(f"glxinfo did not report '{label}'.\n{output}")
+
+
+def _validate_glxinfo(
+    output: str,
+    *,
+    minimum_gl: tuple[int, ...] = (4, 6),
+    minimum_glsl: tuple[int, ...] = (4, 60),
+) -> dict[str, str]:
+    vendor = _glx_field(output, "OpenGL vendor string")
+    renderer = _glx_field(output, "OpenGL renderer string")
+    version = _glx_field(output, "OpenGL core profile version string")
+    glsl = _glx_field(
+        output,
+        "OpenGL core profile shading language version string",
+    )
+    if "mesa" not in vendor.lower():
+        raise VirtualDisplayError(
+            f"Virtual-display baseline requires Mesa, got vendor: {vendor}"
+        )
+    if "llvmpipe" not in renderer.lower():
+        raise VirtualDisplayError(
+            "Virtual-display baseline requires Mesa llvmpipe software rendering, "
+            f"got renderer: {renderer}"
+        )
+    if _parse_version(version, label="OpenGL") < minimum_gl:
+        raise VirtualDisplayError(
+            f"OpenGL {'.'.join(map(str, minimum_gl))}+ is required, got: {version}"
+        )
+    if _parse_version(glsl, label="GLSL") < minimum_glsl:
+        raise VirtualDisplayError(
+            f"GLSL {'.'.join(map(str, minimum_glsl))}+ is required, got: {glsl}"
+        )
+    return {
+        "vendor": vendor,
+        "renderer": renderer,
+        "version": version,
+        "glsl": glsl,
+    }
+
+
+def _editor_environment(
+    environ: Mapping[str, str],
+    *,
+    sdk_root: Path,
+    session_file: Path,
+    gl_version: str,
+    glsl_version: str,
+) -> dict[str, str]:
+    result = dict(environ)
+    result["TERMIN_SDK"] = str(sdk_root)
+    result["TERMIN_BACKEND"] = "opengl"
+    result["LIBGL_ALWAYS_SOFTWARE"] = "1"
+    result["MESA_GL_VERSION_OVERRIDE"] = gl_version
+    result["MESA_GLSL_VERSION_OVERRIDE"] = glsl_version
+    result["TERMIN_EDITOR_MCP"] = "1"
+    result["TERMIN_EDITOR_MCP_PORT"] = "0"
+    result["TERMIN_EDITOR_MCP_SESSION_FILE"] = str(session_file)
+    return result
+
+
+def _verify_shader_compiler(shader_compiler: Path, environ: Mapping[str, str]) -> None:
+    if not shader_compiler.is_file() or not os.access(shader_compiler, os.X_OK):
+        raise VirtualDisplayError(
+            "SDK shader compiler is missing or not executable: "
+            f"{shader_compiler}. Rebuild the SDK with ./build-sdk.sh --no-wheels."
+        )
+    result = subprocess.run(
+        [str(shader_compiler), "--help"],
+        env=dict(environ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=15.0,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise VirtualDisplayError(
+            f"SDK shader compiler preflight failed with code {result.returncode}: "
+            f"{shader_compiler}\n{result.stdout}"
+        )
+
+
+def _run_inside_xvfb(
+    *,
+    editor: Path,
+    project: Path,
+    editor_args: list[str],
+    environment: dict[str, str],
+    shader_compiler: Path,
+) -> int:
+    display = environment.get("DISPLAY")
+    if not display:
+        raise VirtualDisplayError(
+            "xvfb-run did not provide DISPLAY; inspect the Xvfb diagnostic log."
+        )
+    glxinfo = _require_program("glxinfo", purpose="Mesa OpenGL capability probe")
+    probe = subprocess.run(
+        [str(glxinfo), "-B"],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=15.0,
+        check=False,
+    )
+    if probe.returncode != 0:
+        raise VirtualDisplayError(
+            f"Mesa OpenGL probe failed on DISPLAY={display} with code "
+            f"{probe.returncode}:\n{probe.stdout}"
+        )
+    capabilities = _validate_glxinfo(probe.stdout)
+    _verify_shader_compiler(shader_compiler, environment)
+    print(
+        "[virtual-display] Mesa preflight:"
+        f" renderer={capabilities['renderer']};"
+        f" OpenGL={capabilities['version']}; GLSL={capabilities['glsl']}",
+        flush=True,
+    )
+    command = [str(editor), str(project), *editor_args]
+    print("[virtual-display] editor command:", " ".join(command), flush=True)
+    os.execve(editor, command, environment)
+    raise AssertionError("os.execve returned")
+
+
+def _forward_and_wait(process: subprocess.Popen[bytes], signum: int) -> int:
+    if process.poll() is None:
+        process.send_signal(signum)
+    try:
+        return process.wait(timeout=12.0)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+    try:
+        return process.wait(timeout=5.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        return process.wait(timeout=5.0)
+
+
+def _run_outer(
+    *,
+    args: argparse.Namespace,
+    editor: Path,
+    project: Path,
+    environment: dict[str, str],
+    runtime_dir: Path,
+    shader_compiler: Path,
+) -> int:
+    xvfb_run = _require_program("xvfb-run", purpose="virtual X11 display launcher")
+    _require_program("Xvfb", purpose="virtual X11 server")
+    _require_program("xauth", purpose="Xvfb authentication")
+    _require_program("glxinfo", purpose="Mesa OpenGL capability probe")
+
+    xvfb_log = runtime_dir / "xvfb.log"
+    command = [
+        str(xvfb_run),
+        "-a",
+        "-e",
+        str(xvfb_log),
+        "-s",
+        f"-screen 0 {args.screen} -nolisten tcp",
+        str(Path(__file__).resolve()),
+        "--editor",
+        str(editor),
+        "--session-file",
+        str(environment["TERMIN_EDITOR_MCP_SESSION_FILE"]),
+        "--screen",
+        args.screen,
+        "--mesa-gl-version",
+        args.mesa_gl_version,
+        "--mesa-glsl-version",
+        args.mesa_glsl_version,
+        str(project),
+        *args.editor_args,
+    ]
+    child_environment = dict(environment)
+    child_environment[_INTERNAL_ENV] = "1"
+    print("[virtual-display] runtime directory:", runtime_dir, flush=True)
+    print(
+        "[virtual-display] MCP session:",
+        environment["TERMIN_EDITOR_MCP_SESSION_FILE"],
+        flush=True,
+    )
+    print("[virtual-display] Xvfb command:", " ".join(command), flush=True)
+    process = subprocess.Popen(command, env=child_environment)
+    try:
+        return process.wait()
+    except KeyboardInterrupt:
+        return _forward_and_wait(process, signal.SIGINT)
+    finally:
+        if process.poll() is None:
+            _forward_and_wait(process, signal.SIGTERM)
+        if process.returncode and xvfb_log.is_file():
+            diagnostic = xvfb_log.read_text(encoding="utf-8", errors="replace").strip()
+            if diagnostic:
+                print("[virtual-display] Xvfb diagnostics:", file=sys.stderr)
+                print(diagnostic, file=sys.stderr)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("project", help=".terminproj file or directory containing one")
+    parser.add_argument(
+        "editor_args",
+        nargs=argparse.REMAINDER,
+        help="Additional arguments forwarded to termin_editor",
+    )
+    parser.add_argument(
+        "--editor",
+        type=Path,
+        default=_repo_root() / "sdk" / "bin" / "termin_editor",
+        help="Editor executable (default: repository SDK editor)",
+    )
+    parser.add_argument(
+        "--session-file",
+        type=Path,
+        help="Explicit MCP session descriptor path (default: unique runtime directory)",
+    )
+    parser.add_argument("--screen", default=DEFAULT_SCREEN)
+    parser.add_argument("--mesa-gl-version", default=DEFAULT_GL_VERSION)
+    parser.add_argument("--mesa-glsl-version", default=DEFAULT_GLSL_VERSION)
+    parser.add_argument(
+        "--keep-runtime",
+        action="store_true",
+        help="Keep the generated runtime directory after editor shutdown",
+    )
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    project = _resolve_project(args.project)
+    editor = args.editor.expanduser().resolve()
+    if not editor.is_file() or not os.access(editor, os.X_OK):
+        raise VirtualDisplayError(
+            f"Editor executable is missing or not executable: {editor}. "
+            "Build the SDK with ./build-sdk.sh --no-wheels."
+        )
+    sdk_root = editor.parent.parent
+    shader_compiler = editor.parent / "termin_shaderc"
+    if sys.platform == "win32":
+        shader_compiler = shader_compiler.with_suffix(".exe")
+
+    if os.environ.get(_INTERNAL_ENV) == "1":
+        session_file = (
+            args.session_file.expanduser().resolve()
+            if args.session_file is not None
+            else Path(os.environ["TERMIN_EDITOR_MCP_SESSION_FILE"]).resolve()
+        )
+        environment = _editor_environment(
+            os.environ,
+            sdk_root=sdk_root,
+            session_file=session_file,
+            gl_version=args.mesa_gl_version,
+            glsl_version=args.mesa_glsl_version,
+        )
+        return _run_inside_xvfb(
+            editor=editor,
+            project=project,
+            editor_args=args.editor_args,
+            environment=environment,
+            shader_compiler=shader_compiler,
+        )
+
+    runtime_dir = Path(tempfile.mkdtemp(prefix="termin-editor-virtual-display-"))
+    external_session = args.session_file
+    if external_session is None:
+        inherited_session = os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE")
+        external_session = Path(inherited_session) if inherited_session else None
+    session_file = (
+        external_session.expanduser().resolve()
+        if external_session is not None
+        else runtime_dir / "session.json"
+    )
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    environment = _editor_environment(
+        os.environ,
+        sdk_root=sdk_root,
+        session_file=session_file,
+        gl_version=args.mesa_gl_version,
+        glsl_version=args.mesa_glsl_version,
+    )
+    try:
+        return _run_outer(
+            args=args,
+            editor=editor,
+            project=project,
+            environment=environment,
+            runtime_dir=runtime_dir,
+            shader_compiler=shader_compiler,
+        )
+    finally:
+        if args.keep_runtime:
+            print("[virtual-display] kept runtime directory:", runtime_dir, flush=True)
+        else:
+            shutil.rmtree(runtime_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except VirtualDisplayError as exc:
+        print(f"[virtual-display] ERROR: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(1) from exc

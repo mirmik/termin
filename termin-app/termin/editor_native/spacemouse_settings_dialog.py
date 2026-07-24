@@ -10,16 +10,16 @@ from termin.editor_core.spacemouse_settings_model import (
     SpaceMouseSettingsController,
     SpaceMouseSettingsSnapshot,
 )
-from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
 from .metrics import EDITOR_UI_METRICS
 
 
-def _ref(document: Document, widget) -> WidgetRef:
+def _ref(document: TcDocument, widget) -> WidgetRef:
     return widget if isinstance(widget, WidgetRef) else document.ref(widget.handle)
 
 
-def _row(document: Document, label: str, control) -> WidgetRef:
+def _row(document: TcDocument, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"spacemouse-{label.lower().replace(' ', '-')}")
     row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
@@ -29,7 +29,7 @@ def _row(document: Document, label: str, control) -> WidgetRef:
 
 @dataclass
 class NativeSpaceMouseSettingsDialog:
-    document: Document
+    document: TcDocument
     controller: SpaceMouseSettingsController
     dialog: object
     mode: object

@@ -200,13 +200,6 @@ size_t tc_navmesh_count(void) {
     return g_initialized ? tc_pool_count(&g_navmesh_pool) : 0;
 }
 
-void tc_navmesh_set_load_callback(tc_navmesh_handle h, tc_navmesh_load_fn callback, void* user_data) {
-    tc_navmesh* navmesh = tc_navmesh_get(h);
-    if (!navmesh) return;
-    navmesh->load_callback = callback;
-    navmesh->load_user_data = user_data;
-}
-
 bool tc_navmesh_is_loaded(tc_navmesh_handle h) {
     tc_navmesh* navmesh = tc_navmesh_get(h);
     return navmesh && navmesh->is_loaded != 0;
@@ -216,10 +209,14 @@ bool tc_navmesh_ensure_loaded(tc_navmesh_handle h) {
     tc_navmesh* navmesh = tc_navmesh_get(h);
     if (!navmesh) return false;
     if (navmesh->is_loaded) return true;
-    if (!navmesh->load_callback) return false;
-    bool success = navmesh->load_callback(navmesh, navmesh->load_user_data);
+    bool success = tc_resource_request_load(navmesh->uuid);
     if (success) {
         navmesh->is_loaded = 1;
+    } else {
+        tc_log_error(
+            "tc_navmesh_ensure_loaded: resource loader failed for '%s'",
+            navmesh->uuid
+        );
     }
     return success;
 }
@@ -320,7 +317,6 @@ static bool collect_navmesh_info(tc_navmesh_handle h, tc_navmesh* navmesh, void*
         info->memory_bytes += navmesh->tiles[i].data_size;
     }
     info->is_loaded = navmesh->is_loaded;
-    info->has_load_callback = navmesh->load_callback != NULL;
     return true;
 }
 

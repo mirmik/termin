@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.registry_viewer_model import (
     RegistryCatalogController,
     RegistryCollectionController,
@@ -13,7 +14,7 @@ from termin.editor_native import (
     resolve_native_ui_font,
 )
 from termin.gui_native import (
-    Document,
+    TcDocument,
     DrawList,
     DrawListRenderer,
     PaintContext,
@@ -42,7 +43,7 @@ class HierarchySource:
         ]
 
 
-def _bind_font(document: Document) -> DrawListRenderer:
+def _bind_font(document: TcDocument) -> DrawListRenderer:
     renderer = DrawListRenderer()
     assert renderer.set_default_font_path(str(resolve_native_ui_font()), 15)
     renderer.bind_text_measurer(document)
@@ -50,7 +51,7 @@ def _bind_font(document: Document) -> DrawListRenderer:
 
 
 def test_native_registry_viewer_production_command_filter_selection_and_virtualization():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     shell = build_native_editor_shell(document)
     clipboard = []
@@ -88,10 +89,11 @@ def test_native_registry_viewer_production_command_filter_selection_and_virtuali
     assert draw_list.command_count > 20
     assert renders
     renderer.release_gpu()
+    tc_ui_document_destroy(document)
 
 
 def test_native_registry_viewer_context_menu_uses_table_row_index():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     controller = RegistryCollectionController(LargeRegistrySource(), copy_text=lambda _text: None)
     viewer = build_native_registry_viewer(
@@ -106,10 +108,11 @@ def test_native_registry_viewer_context_menu_uses_table_row_index():
     assert viewer.context_menu.open
     assert viewer.context_model.command_count == 3
     renderer.release_gpu()
+    tc_ui_document_destroy(document)
 
 
 def test_native_registry_catalog_switches_page_rows_columns_and_filter_state():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     columns = (RegistryColumn("name", "Name"), RegistryColumn("kind", "Kind", 90.0))
     controller = RegistryCatalogController(
@@ -146,10 +149,11 @@ def test_native_registry_catalog_switches_page_rows_columns_and_filter_state():
     assert viewer.table_model.row_count == 1
     assert viewer.filter_input.text == "type.09999"
     renderer.release_gpu()
+    tc_ui_document_destroy(document)
 
 
 def test_native_registry_catalog_projects_hierarchy_into_virtualized_tree():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     controller = RegistryCatalogController(
         (
@@ -183,10 +187,11 @@ def test_native_registry_catalog_projects_hierarchy_into_virtualized_tree():
     assert viewer.tree_widget.select(leaf_node)
     assert viewer.details_model.text == "needle"
     renderer.release_gpu()
+    tc_ui_document_destroy(document)
 
 
 def test_native_registry_catalog_is_opened_by_production_core_registry_command():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     shell = build_native_editor_shell(document)
     controller = RegistryCatalogController(
@@ -213,3 +218,4 @@ def test_native_registry_catalog_is_opened_by_production_core_registry_command()
     assert viewer.dialog.open
     assert viewer.tree_model.node_count == 3
     renderer.release_gpu()
+    tc_ui_document_destroy(document)

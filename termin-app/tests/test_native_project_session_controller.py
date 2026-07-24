@@ -1,8 +1,9 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from pathlib import Path
 import threading
 
 from termin.editor_native import project_session_controller as native_session
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 class _Widget:
@@ -140,7 +141,7 @@ def test_native_module_operation_runs_synchronously_and_refreshes_progress(monke
 
 
 def test_native_module_operation_updates_real_native_label_binding():
-    document = Document()
+    document = tc_ui_document_create()
     operation = native_session.NativeModuleOperationDialog(
         document,
         viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
@@ -158,6 +159,7 @@ def test_native_module_operation_updates_real_native_label_binding():
     assert operation.current_line.text == "[module] Preparing build"
     assert operation.log_model.text == "[module] Preparing build"
     operation.close()
+    tc_ui_document_destroy(document)
 
 
 def test_native_project_session_controller_configures_startup_operation(monkeypatch, tmp_path):

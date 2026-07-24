@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from dataclasses import dataclass
 
 import pytest
@@ -14,7 +15,6 @@ from termin.editor_native.inspector_fields import (
     NativeVec3ListFieldWidgets,
 )
 from termin.gui_native import (
-    Document,
     DrawList,
     DrawListRenderer,
     EventResult,
@@ -138,7 +138,7 @@ def _click(widget) -> None:
 
 
 def test_native_inspector_fields_typed_edits_color_action_and_rebuild_lifetime():
-    document = Document()
+    document = tc_ui_document_create()
     renderer = _bind_font(document)
     first = _Target()
     second = _Target(gain=0.75, mode="b")
@@ -223,6 +223,7 @@ def test_native_inspector_fields_typed_edits_color_action_and_rebuild_lifetime()
     assert draw_list.command_count > 10
     assert renders
     renderer.release_gpu()
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_uint32_preserves_values_above_signed_int_range():
@@ -249,7 +250,7 @@ def test_native_inspector_uint32_preserves_values_above_signed_int_range():
         },
         metadata_collector=lambda _target: {},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
     assert document.add_root(panel.root.handle)
     panel.set_targets([target])
@@ -263,6 +264,7 @@ def test_native_inspector_uint32_preserves_values_above_signed_int_range():
     key.key = KeyCode.Enter
     assert document.dispatch_key_event(key) == EventResult.Handled
     assert target.stable_id == 4_294_967_295
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_resource_selection_and_creation():
@@ -311,7 +313,7 @@ def test_native_inspector_resource_selection_and_creation():
         },
         metadata_collector=lambda _target: {},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(
         document,
         controller,
@@ -334,6 +336,7 @@ def test_native_inspector_resource_selection_and_creation():
     document.layout_roots(Rect(0.0, 0.0, 420.0, 200.0))
     _click(controls.create_button.widget)
     assert target.texture == {"uuid": "uuid-3", "name": "created"}
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_list_reorder_remove_and_undo():
@@ -378,7 +381,7 @@ def test_native_inspector_list_reorder_remove_and_undo():
         metadata_collector=lambda _target: {},
         change_handler=apply_change,
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
     assert document.add_root(panel.root.handle)
     panel.set_targets([target])
@@ -401,6 +404,7 @@ def test_native_inspector_list_reorder_remove_and_undo():
     assert target.items == ["a", "c"]
     stack.undo()
     assert target.items == ["a", "b", "c"]
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_specialized_choice_presenters():
@@ -458,7 +462,7 @@ def test_native_inspector_specialized_choice_presenters():
         field_collector=fields,
         metadata_collector=lambda _target: {},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(
         document,
         controller,
@@ -474,6 +478,7 @@ def test_native_inspector_specialized_choice_presenters():
     panel.field_widgets["area"].selected_index = 0
     panel.field_widgets["clip"].selected_index = 0
     assert target == Target(agent="Vehicle", area=0, clip="")
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_slider_and_interval_slider_edits():
@@ -514,7 +519,7 @@ def test_native_inspector_slider_and_interval_slider_edits():
         field_collector=fields,
         metadata_collector=lambda _target: {},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
     panel.set_targets([target])
 
@@ -536,6 +541,7 @@ def test_native_inspector_slider_and_interval_slider_edits():
     assert isinstance(interval, NativeIntervalSliderWidgets)
     interval.maximum.value = 6.0
     assert target.coordinate == pytest.approx([8.0, 8.0, 8.0])
+    tc_ui_document_destroy(document)
 
 
 def test_native_inspector_vec3_list_add_edit_reorder_and_remove():
@@ -560,7 +566,7 @@ def test_native_inspector_vec3_list_add_edit_reorder_and_remove():
         },
         metadata_collector=lambda _target: {},
     )
-    document = Document()
+    document = tc_ui_document_create()
     panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
     assert document.add_root(panel.root.handle)
     panel.set_targets([target])
@@ -591,3 +597,4 @@ def test_native_inspector_vec3_list_add_edit_reorder_and_remove():
     document.layout_roots(Rect(0.0, 0.0, 420.0, 280.0))
     _click(controls.remove_button.widget)
     assert target.points == [[1.0, 7.5, 3.0], [4.0, 5.0, 6.0]]
+    tc_ui_document_destroy(document)

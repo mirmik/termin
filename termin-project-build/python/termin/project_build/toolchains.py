@@ -117,10 +117,11 @@ def create_local_toolchain_context(
     invocation_overrides: ToolchainContext | None = None,
     installation_defaults: ToolchainContext | None = None,
     environ: Mapping[str, str] | None = None,
-    path_search: Callable[[str], str | None] = shutil.which,
+    path_search: Callable[[str], str | None] | None = None,
 ) -> ToolchainContext:
     """Build the canonical local context with documented provider precedence."""
 
+    effective_environ = os.environ if environ is None else environ
     installation_provider: ToolchainContextProvider
     if installation_defaults is None:
         installation_provider = SDKInstallationToolchainContextProvider()
@@ -129,13 +130,21 @@ def create_local_toolchain_context(
 
     providers: list[ToolchainContextProvider] = [
         installation_provider,
-        EnvironmentToolchainContextProvider(os.environ if environ is None else environ),
+        EnvironmentToolchainContextProvider(effective_environ),
     ]
     if editor_settings is not None:
         providers.append(StaticToolchainContextProvider(editor_settings))
     if invocation_overrides is not None:
         providers.append(StaticToolchainContextProvider(invocation_overrides))
-    return resolve_toolchain_context(providers, path_search=path_search)
+    executable_search = (
+        path_search
+        if path_search is not None
+        else _environment_path_search(effective_environ)
+    )
+    return resolve_toolchain_context(
+        providers,
+        path_search=executable_search,
+    )
 
 
 def _derive_tool_paths(
@@ -172,17 +181,6 @@ def _derive_tool_paths(
         ).resolve()
 
     gradle = context.gradle or _searched_path(path_search, "gradle")
-    if gradle is None:
-        gradle = _first_existing(
-            (
-                Path.home() / "soft" / "gradle-8" / "bin" / _platform_executable("gradle"),
-                Path.home()
-                / "soft"
-                / "gradle-8.10.2"
-                / "bin"
-                / _platform_executable("gradle"),
-            )
-        )
     adb = context.adb
     if adb is None and android_sdk_root is not None:
         adb = _first_existing(
@@ -274,6 +272,15 @@ def _searched_path(
 ) -> Path | None:
     found = path_search(name)
     return Path(found).expanduser().resolve() if found else None
+
+
+def _environment_path_search(
+    environ: Mapping[str, str],
+) -> Callable[[str], str | None]:
+    search_path = environ.get("PATH")
+    if not search_path:
+        return lambda _name: None
+    return lambda name: shutil.which(name, path=search_path)
 
 
 __all__ = [

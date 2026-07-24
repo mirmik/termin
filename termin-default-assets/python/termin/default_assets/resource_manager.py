@@ -187,14 +187,11 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             cls._instance = None
             from termin_assets import set_resource_manager_factory
 
-            set_resource_manager_factory(cls.instance)
+            set_resource_manager_factory(None)
 
     @classmethod
     def _reset_for_testing(cls) -> None:
         cls.shutdown_instance()
-        from termin_assets import set_resource_manager_factory
-
-        set_resource_manager_factory(cls.instance)
 
 
 class DefaultResourceManager(

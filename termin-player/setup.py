@@ -10,7 +10,7 @@ setup(
     description="Standalone/source/headless Termin player runtime",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=["termin.player"],
     package_dir={"termin.player": "termin/player"},
     install_requires=[

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,16 @@ def test_resolve_gradle_reads_environment_path(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setenv("GRADLE_BIN", str(env_gradle))
 
     assert resolve_gradle(None) == env_gradle.resolve()
+
+
+def test_resolve_gradle_falls_back_to_path(tmp_path: Path, monkeypatch) -> None:
+    path_gradle = tmp_path / ("gradle.exe" if os.name == "nt" else "gradle")
+    path_gradle.write_text("#!/bin/sh\n", encoding="utf-8")
+    path_gradle.chmod(0o755)
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    assert resolve_gradle(None) == path_gradle.resolve()
 
 
 def test_read_log_tail_limits_output(tmp_path: Path) -> None:

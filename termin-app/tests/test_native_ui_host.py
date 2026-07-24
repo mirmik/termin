@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +18,6 @@ from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandKind,
-    Document,
     DrawCommandType,
     DrawList,
     DrawListRenderer,
@@ -217,7 +217,7 @@ def test_native_ui_event_policy_intercepts_file_drop_without_owning_event_dispat
 def test_native_ui_event_policy_consumes_enabled_shortcut_and_ignores_repeats():
     from termin.editor_native.ui_host import NativeWidgetContent
 
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     shell.edit_menu_model.set_enabled(shell.undo_command, True)
     host = NativeWidgetContent.__new__(NativeWidgetContent)
@@ -236,6 +236,7 @@ def test_native_ui_event_policy_consumes_enabled_shortcut_and_ignores_repeats():
     assert not host._intercept_event(
         {"type": "key_down", "key": ord("Z"), "mods": 2, "repeat": True}
     )
+    tc_ui_document_destroy(document)
 
 
 def test_native_editor_continuously_composes_only_in_game_mode():
@@ -301,7 +302,7 @@ def test_native_ui_font_resolution_uses_runtime_sdk_root(monkeypatch, tmp_path: 
 
 
 def test_native_editor_shell_has_stable_headless_root_and_chrome():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     renderer = DrawListRenderer()
     assert renderer.set_default_font_path(str(resolve_native_ui_font()), 15)
@@ -367,10 +368,11 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     )
     assert draw_list.command_count > 20
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
+    tc_ui_document_destroy(document)
 
 
 def test_native_editor_shell_projects_prefab_editing_chrome() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
 
     assert not shell.prefab_tool_bar.widget.visible
@@ -389,10 +391,11 @@ def test_native_editor_shell_projects_prefab_editing_chrome() -> None:
 
     assert not shell.prefab_tool_bar.widget.visible
     assert shell.toolbar_model.command(shell.toolbar_play_command).data.enabled
+    tc_ui_document_destroy(document)
 
 
 def test_native_shell_projects_the_canonical_menu_inventory():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     specs = build_editor_menu_inventory()
     assert [entry.label for entry in shell.menu_bar.entries] == [spec.name for spec in specs]
@@ -406,6 +409,7 @@ def test_native_shell_projects_the_canonical_menu_inventory():
         assert actual[: len(expected)] == expected
 
     assert shell.game_menu_model.command(shell.run_standalone_command).data.shortcut == "F6"
+    tc_ui_document_destroy(document)
 
 
 def test_editor_cli_accepts_native_backend_selection(monkeypatch):
@@ -518,7 +522,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
         def set_texture(self, texture, size) -> None:
             self.textures.append((texture, size))
 
-    class Document:
+    class _ImagePreviewDocument:
         def is_alive(self, handle) -> bool:
             return handle.valid
 
@@ -535,7 +539,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
             self.destroyed.append(texture)
 
     host = NativeWidgetContent.__new__(NativeWidgetContent)
-    host.document = Document()
+    host.document = _ImagePreviewDocument()
     host.context = Context()
     host._image_previews = []
     host.adapter = SimpleNamespace(request_repaint=lambda: None)
@@ -569,7 +573,7 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
             self.texture = texture
             self.size = size
 
-    class Document:
+    class _ImagePreviewDocument:
         def is_alive(self, handle) -> bool:
             return handle.valid
 
@@ -582,7 +586,7 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
             return "artwork-texture"
 
     host = NativeWidgetContent.__new__(NativeWidgetContent)
-    host.document = Document()
+    host.document = _ImagePreviewDocument()
     host.context = Context()
     host._image_previews = []
     host.adapter = SimpleNamespace(request_repaint=lambda: None)
@@ -601,7 +605,7 @@ def test_native_ui_host_applies_font_size_to_all_theme_roles():
     from termin.editor_native.ui_host import NativeWidgetContent
 
     host = NativeWidgetContent.__new__(NativeWidgetContent)
-    host.document = Document()
+    host.document = tc_ui_document_create()
     gui_host = SimpleNamespace(repaint_requested=False)
 
     def request_repaint():
@@ -616,3 +620,4 @@ def test_native_ui_host_applies_font_size_to_all_theme_roles():
         role = host.document.theme.role(style_role)
         assert role.base.font_size == 18.0
     assert host.render_requested
+    tc_ui_document_destroy(host.document)

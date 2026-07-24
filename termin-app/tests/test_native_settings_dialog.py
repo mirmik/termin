@@ -1,8 +1,9 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.settings_dialog import build_native_settings_dialog
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 from test_editor_settings_model import _Settings
 
@@ -10,7 +11,7 @@ from test_editor_settings_model import _Settings
 def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     settings = _Settings()
     controller = EditorSettingsController(settings)
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     applied = []
     applied_display_policy = []
@@ -72,3 +73,4 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     dialog.close()
     assert not document.is_alive(dialog.dialog.handle)
     assert renders
+    tc_ui_document_destroy(document)

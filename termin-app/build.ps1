@@ -32,8 +32,46 @@ if ($Help) {
 }
 
 $ScriptDir = (Split-Path -Parent $MyInvocation.MyCommand.Path) -replace '\\', '/'
+$RepoRoot = (Split-Path -Parent $ScriptDir) -replace '\\', '/'
 $BuildDir = "$ScriptDir/build_win"
 $InstallDir = "$ScriptDir/install_win"
+$SdkDir = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { "$RepoRoot/sdk" }
+
+$pythonCommand = $null
+if ($env:PYTHON_BIN) {
+    $pythonCommand = Get-Command $env:PYTHON_BIN -ErrorAction SilentlyContinue
+}
+if (-not $pythonCommand -and $env:PYTHON_EXECUTABLE) {
+    $pythonCommand = Get-Command $env:PYTHON_EXECUTABLE -ErrorAction SilentlyContinue
+}
+if ($pythonCommand) {
+    $PythonExec = $pythonCommand.Source
+} else {
+    $bootstrapPython = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $bootstrapPython) {
+        $bootstrapPython = Get-Command python3 -ErrorAction SilentlyContinue
+    }
+    if (-not $bootstrapPython) {
+        throw "Python is required to prepare the canonical toolchain"
+    }
+    $oldPythonPath = $env:PYTHONPATH
+    $env:PYTHONPATH = "$RepoRoot/termin-build-tools"
+    if ($oldPythonPath) {
+        $env:PYTHONPATH += "$([IO.Path]::PathSeparator)$oldPythonPath"
+    }
+    $toolchainOutput = @(
+        & $bootstrapPython.Source -m termin_build.sdk `
+            --repo-root $RepoRoot prepare-python-toolchain
+    )
+    if ($LASTEXITCODE -ne 0 -or $toolchainOutput.Count -eq 0) {
+        throw "Failed to prepare canonical CPython 3.14t toolchain"
+    }
+    $toolchainOutput | ForEach-Object { Write-Host $_ }
+    $PythonExec = [string]$toolchainOutput[-1]
+}
+if (-not (Test-Path $PythonExec)) {
+    throw "Canonical Python build executable not found: $PythonExec"
+}
 
 $BuildType = if ($Debug) { "Debug" } else { "Release" }
 
@@ -46,6 +84,8 @@ Write-Host "Bundle Python: $BundlePython"
 Write-Host "Parallel build: $UseParallel"
 Write-Host "Build dir:  $BuildDir"
 Write-Host "Install dir: $InstallDir"
+Write-Host "SDK dir:     $SdkDir"
+Write-Host "Python:      $PythonExec"
 Write-Host ""
 
 # Clean if requested
@@ -88,7 +128,11 @@ if ($NeedsConfigure) {
         "-DBUNDLE_PYTHON=$BundlePythonValue",
         "-DUSE_SYSTEM_SDL2=ON",
         "-DCMAKE_BUILD_TYPE=$BuildType",
-        "-DCMAKE_INSTALL_PREFIX=$InstallDir"
+        "-DCMAKE_INSTALL_PREFIX=$InstallDir",
+        "-DCMAKE_PREFIX_PATH=$SdkDir",
+        "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF",
+        "-DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON",
+        "-DPython_EXECUTABLE=$PythonExec"
     )
     & cmake @cmakeArgs
 

@@ -19,7 +19,7 @@ setup(
     description="Collision and collider Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.colliders", "termin.collision", "termin_collision_component_specs"],
     package_dir={
         "termin.colliders": "python/termin/colliders",

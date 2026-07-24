@@ -109,7 +109,7 @@ set_target_properties(termin_audio PROPERTIES
 termin_set_rpath_lib(termin_audio)
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(_audio_native NB_SHARED
         cpp/bindings/audio_module.cpp

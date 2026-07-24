@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from tcbase import Key
 from tcbase.profiler import FrameProfile, SectionTiming
 from termin.editor_core.profiler_model import ProfilerController
@@ -6,7 +7,7 @@ from termin.editor_native import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
 )
-from termin.gui_native import Document, DrawList, PaintContext, Rect
+from termin.gui_native import DrawList, PaintContext, Rect
 
 
 class FakeProfiler:
@@ -22,7 +23,7 @@ class FakeProfiler:
 
 
 def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     profiler = FakeProfiler()
     include_ui = {"value": False}
@@ -109,10 +110,11 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     draw_list = DrawList()
     document.paint(PaintContext(draw_list))
     assert draw_list.command_count > 20
+    tc_ui_document_destroy(document)
 
 
 def test_native_profiler_panel_controls_and_clear_boundary():
-    document = Document()
+    document = tc_ui_document_create()
     profiler = FakeProfiler()
     include_ui = {"value": False}
     controller = ProfilerController(
@@ -132,3 +134,4 @@ def test_native_profiler_panel_controls_and_clear_boundary():
     assert panel.frame_time_model.samples == []
     assert panel.table_model.node_count == 0
     assert "waiting" in panel.status_bar.text
+    tc_ui_document_destroy(document)

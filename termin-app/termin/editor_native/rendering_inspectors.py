@@ -17,7 +17,7 @@ from termin.editor_core.rendering_inspector_models import (
     ViewportInspectorController,
     ViewportInspectorSnapshot,
 )
-from termin.gui_native import Document, Size, WidgetRef
+from termin.gui_native import TcDocument, Size, WidgetRef
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
@@ -30,7 +30,7 @@ from .inspector_fields import (
 _logger = logging.getLogger(__name__)
 
 
-def _panel(document: Document, stable_id: str) -> tuple[WidgetRef, WidgetRef]:
+def _panel(document: TcDocument, stable_id: str) -> tuple[WidgetRef, WidgetRef]:
     root = document.create_vstack(f"{stable_id}-root")
     root.stable_id = stable_id
     content = document.create_vstack(f"{stable_id}-content")
@@ -43,14 +43,14 @@ def _panel(document: Document, stable_id: str) -> tuple[WidgetRef, WidgetRef]:
     return root, content
 
 
-def _clear(document: Document, content: WidgetRef) -> None:
+def _clear(document: TcDocument, content: WidgetRef) -> None:
     for child in tuple(content.children):
         if not document.destroy_widget_recursive(child.handle):
             _logger.error("Failed to destroy rendering inspector row: %s", child.debug_name)
 
 
 def _row(
-    document: Document,
+    document: TcDocument,
     label: str,
     key: str,
     label_width: float = EDITOR_UI_METRICS.inspector_label,
@@ -62,7 +62,7 @@ def _row(
 
 
 def _append_label(
-    document: Document,
+    document: TcDocument,
     content: WidgetRef,
     label: str,
     value: str,
@@ -75,7 +75,7 @@ def _append_label(
     return control
 
 
-def _combo(document: Document, choices: tuple[InspectorChoice, ...], selected: int):
+def _combo(document: TcDocument, choices: tuple[InspectorChoice, ...], selected: int):
     control = document.create_combo_box()
     for choice in choices:
         control.add_item(choice.label)
@@ -85,7 +85,7 @@ def _combo(document: Document, choices: tuple[InspectorChoice, ...], selected: i
 
 @dataclass
 class NativeDisplayInspector:
-    document: Document
+    document: TcDocument
     controller: DisplayInspectorController
     root: WidgetRef
     content: WidgetRef
@@ -139,7 +139,7 @@ class NativeDisplayInspector:
 
 @dataclass
 class NativeViewportInspector:
-    document: Document
+    document: TcDocument
     controller: ViewportInspectorController
     root: WidgetRef
     content: WidgetRef
@@ -233,7 +233,7 @@ class NativeViewportInspector:
 
 @dataclass
 class NativeRenderTargetInspector:
-    document: Document
+    document: TcDocument
     controller: RenderTargetInspectorController
     root: WidgetRef
     content: WidgetRef
@@ -521,7 +521,7 @@ class NativeInspectorHost:
 
 
 def build_native_rendering_inspectors(
-    document: Document,
+    document: TcDocument,
     *,
     model: InspectorModel,
     entity_inspector,

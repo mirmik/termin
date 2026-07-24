@@ -183,15 +183,16 @@ def my_handler(model: RenderingModel) -> None:
 
 ## Sync sdk после правок Python
 
-Старый layout требовал синкать файлы термина в несколько точек, иначе `sdk/bin/termin_launcher` мог запустить устаревшее:
+Старый layout требовал вручную синхронизировать Python-файлы между SDK,
+standalone install и системным interpreter. Этот путь удалён.
 
-```
-termin-app/install/lib/python3.10/site-packages/termin/
-sdk/lib/python3.10/site-packages/termin/
-~/.pyenv/versions/3.10.19/lib/python3.10/site-packages/termin/
-```
-
-Актуальный SDK/standalone layout не должен содержать `sdk/lib/python/termin/` или `termin-app/install/lib/python/termin/`: bundled запуск берет пакеты из `lib/python3.x/site-packages/termin/` на Linux и `python/Lib/site-packages/termin/` на Windows, а editable/test окружение берет Python-код из исходников. Windows не использует `sdk/Lib/`, потому что этот путь конфликтует с native `sdk/lib/` на case-insensitive filesystem.
+Канонический SDK/standalone layout использует только bundled CPython 3.14t:
+`lib/python3.14t/site-packages/termin/` на Linux и
+`python/Lib/site-packages/termin/` на Windows. Editable/test окружение берёт
+Python-код из checkout overlay. `sdk/lib/python/termin/`,
+`termin-app/install/lib/python/termin/` и системный `site-packages` не являются
+runtime-источниками. Windows не использует `sdk/Lib/`, потому что этот путь
+конфликтует с native `sdk/lib/` на case-insensitive filesystem.
 
 (См. заметку в `memory/termin_lib_sync_locations.md`.)
 

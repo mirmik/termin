@@ -1,11 +1,11 @@
 from __future__ import annotations
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 import gc
 from types import SimpleNamespace
 import weakref
 
 from termin.editor_native.display_workspace import NativeDisplayWorkspace
-from termin.gui_native import Document
 
 
 class _Surface:
@@ -160,7 +160,7 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     import termin.display
     import termin.editor_native.display_workspace as workspace_module
 
-    document = Document()
+    document = tc_ui_document_create()
     parent = document.create_vstack("workspace-parent")
     editor_display = SimpleNamespace(name="Editor", handle=(1, 1))
     editor_runtime = SimpleNamespace(
@@ -254,3 +254,4 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     del workspace
     gc.collect()
     assert workspace_ref() is None
+    tc_ui_document_destroy(document)

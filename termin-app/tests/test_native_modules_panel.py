@@ -1,10 +1,11 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from types import SimpleNamespace
 
 from tcbase import Key
 from termin.editor_core.modules_panel_model import ModulesPanelController
 from termin.editor_native.modules_panel import build_native_modules_panel
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 from termin_modules import ModuleKind, ModuleState
 
 
@@ -32,7 +33,7 @@ class _Runtime:
 
 
 def test_native_modules_panel_projects_runtime_and_selection() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     runtime = _Runtime()
     controller = ModulesPanelController(runtime)
     panel = build_native_modules_panel(document, controller)
@@ -47,10 +48,11 @@ def test_native_modules_panel_projects_runtime_and_selection() -> None:
     assert controller.snapshot().selected_module == "game"
     assert panel.command_model.command(panel.commands["build"]).data.enabled
     panel.close()
+    tc_ui_document_destroy(document)
 
 
 def test_modules_shortcut_docks_native_debug_panel() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     runtime = _Runtime()
     controller = ModulesPanelController(runtime)
@@ -75,3 +77,4 @@ def test_modules_shortcut_docks_native_debug_panel() -> None:
     assert not shell.profiler_host.visible
     assert shell.workspace_host.bounds.width > 0
     panel.close()
+    tc_ui_document_destroy(document)
