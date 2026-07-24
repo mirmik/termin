@@ -24,7 +24,6 @@ extern "C" {
 TC_DEFINE_HANDLE(tc_voxel_grid_handle)
 
 typedef struct tc_voxel_grid tc_voxel_grid;
-typedef bool (*tc_voxel_grid_load_fn)(tc_voxel_grid* grid, void* user_data);
 
 struct tc_voxel_grid {
     char uuid[TC_UUID_SIZE];
@@ -35,8 +34,6 @@ struct tc_voxel_grid {
     uint32_t pool_index;
     uint8_t is_loaded;
     uint8_t _pad[3];
-    tc_voxel_grid_load_fn load_callback;
-    void* load_user_data;
     void* native_payload;
 };
 

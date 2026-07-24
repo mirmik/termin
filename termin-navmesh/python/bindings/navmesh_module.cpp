@@ -17,21 +17,11 @@
 #include <inspect/tc_inspect_python.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <nanobind/stl/string.h>
-#include <mutex>
-#include <unordered_map>
 #include <utility>
 
 namespace termin {
 
 namespace {
-static std::mutex g_navmesh_callback_mutex;
-static std::unordered_map<std::string, nb::callable> g_navmesh_load_callbacks;
-
-void cleanup_navmesh_callbacks() {
-    std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
-    g_navmesh_load_callbacks.clear();
-}
-
 void register_navmesh_kind_handlers() {
     static bool registered = false;
     if (registered) {
@@ -60,33 +50,6 @@ void register_navmesh_kind_handlers() {
         }));
 
     registered = true;
-}
-
-bool python_navmesh_load_callback(tc_navmesh* navmesh, void* user_data) {
-    (void)user_data;
-    if (!navmesh) {
-        return false;
-    }
-
-    std::string uuid(navmesh->uuid);
-    nb::callable callback;
-    {
-        std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
-        auto it = g_navmesh_load_callbacks.find(uuid);
-        if (it == g_navmesh_load_callbacks.end()) {
-            return false;
-        }
-        callback = it->second;
-    }
-
-    nb::gil_scoped_acquire gil;
-    try {
-        nb::object result = callback(nb::cast(TcNavMesh(navmesh)));
-        return nb::cast<bool>(result);
-    } catch (const std::exception& e) {
-        tc_log_error("Python navmesh load callback failed for '%s': %s", uuid.c_str(), e.what());
-        return false;
-    }
 }
 
 Vec3f py_vec3(nb::handle value) {
@@ -226,36 +189,6 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         TcNavMesh navmesh = TcNavMesh::declare(uuid, name);
         return navmesh.is_valid();
     }, nb::arg("uuid"), nb::arg("name") = "");
-
-    m.def("set_navmesh_load_callback", [](TcNavMesh& navmesh, nb::callable callback) {
-        tc_navmesh* raw = navmesh.get();
-        if (!raw) {
-            throw std::runtime_error("Invalid navmesh handle");
-        }
-
-        std::string uuid(raw->uuid);
-        {
-            std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
-            g_navmesh_load_callbacks[uuid] = callback;
-        }
-
-        tc_navmesh_set_load_callback(navmesh.handle, python_navmesh_load_callback, nullptr);
-    }, nb::arg("navmesh"), nb::arg("callback"));
-
-    m.def("clear_navmesh_load_callback", [](TcNavMesh& navmesh) {
-        tc_navmesh* raw = navmesh.get();
-        if (!raw) {
-            return;
-        }
-
-        std::string uuid(raw->uuid);
-        {
-            std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
-            g_navmesh_load_callbacks.erase(uuid);
-        }
-
-        tc_navmesh_set_load_callback(navmesh.handle, nullptr, nullptr);
-    }, nb::arg("navmesh"));
 
     m.def("set_navmesh_bake_visitor_registration_owner", [](const std::string& owner) {
         NavMeshBakeVisitorRegistry::instance().set_registration_owner(owner);
@@ -666,8 +599,6 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         // Free result
         .def_static("free_result", &RecastNavMeshBuilderComponent::free_result);
 
-    nb::module_ atexit = nb::module_::import_("atexit");
-    atexit.attr("register")(nb::cpp_function(&cleanup_navmesh_callbacks));
 }
 
 } // namespace termin

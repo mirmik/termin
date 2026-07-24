@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tcbase import log
-
 if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
 
@@ -39,7 +37,7 @@ class TextureRuntimePlugin:
 
     def register(self, context: "AssetContext", result: "PreLoadResult") -> None:
         from termin.default_assets.render.texture_asset import TextureAsset
-        from tgfx import tc_texture_declare, tc_texture_set_load_callback
+        from tgfx import tc_texture_declare
 
         rm = context.resource_manager
         name = context.name
@@ -59,15 +57,7 @@ class TextureRuntimePlugin:
         asset.parse_spec(result.spec_data)
         rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=context.uuid)
 
-        texture = tc_texture_declare(asset.uuid, name)
-
-        def load_texture(_texture) -> bool:
-            if asset.ensure_loaded():
-                return True
-            log.error(f"[TextureAssetPlugin] Failed to lazy-load texture: {name} ({asset.uuid})")
-            return False
-
-        tc_texture_set_load_callback(texture, load_texture)
+        tc_texture_declare(asset.uuid, name)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager

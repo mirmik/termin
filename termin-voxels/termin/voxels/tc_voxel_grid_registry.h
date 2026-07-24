@@ -33,11 +33,6 @@ typedef struct tc_voxel_grid_info {
 
 TERMIN_VOXELS_API tc_voxel_grid_info* tc_voxel_grid_get_all_info(size_t* count);
 
-TERMIN_VOXELS_API void tc_voxel_grid_set_load_callback(
-    tc_voxel_grid_handle h,
-    tc_voxel_grid_load_fn callback,
-    void* user_data
-);
 TERMIN_VOXELS_API bool tc_voxel_grid_is_loaded(tc_voxel_grid_handle h);
 TERMIN_VOXELS_API bool tc_voxel_grid_ensure_loaded(tc_voxel_grid_handle h);
 

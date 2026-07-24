@@ -69,7 +69,7 @@ class MeshAsset(DataAsset[TcMesh]):
         self._axis_z = spec_data.get("axis_z", DEFAULT_AXIS_Z)
         self._flip_uv_v = spec_data.get("flip_uv_v", False)
 
-        # Pre-register TcMesh in registry with load callback for lazy loading
+        # Pre-register TcMesh for process-wide UUID lazy loading.
         # Only for standalone meshes (not embedded in GLB)
         if self._source_path is not None and self._parent_asset is None:
             self._declare_tc_mesh()
@@ -105,19 +105,15 @@ class MeshAsset(DataAsset[TcMesh]):
     # --- Lazy loading with tc_mesh registry ---
 
     def _declare_tc_mesh(self) -> None:
-        """Declare TcMesh in registry with load callback for lazy loading."""
+        """Declare TcMesh in the registry for process-wide UUID lazy loading."""
         from tmesh import (
             tc_mesh_declare,
-            tc_mesh_set_load_callback,
             tc_mesh_is_loaded,
         )
 
         # Declare empty mesh entry in registry
         tc_mesh = tc_mesh_declare(self._uuid, self._name)
         if tc_mesh.is_valid and not tc_mesh_is_loaded(tc_mesh):
-            # Set load callback that triggers asset loading
-            tc_mesh_set_load_callback(tc_mesh, lambda m: self._load_from_file())
-            # Store handle in _data (but not loaded yet)
             self._data = tc_mesh
             self._loaded = False
 

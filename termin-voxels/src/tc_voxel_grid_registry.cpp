@@ -230,17 +230,6 @@ tc_voxel_grid_info* tc_voxel_grid_get_all_info(size_t* count) {
     return infos;
 }
 
-void tc_voxel_grid_set_load_callback(
-    tc_voxel_grid_handle h,
-    tc_voxel_grid_load_fn callback,
-    void* user_data
-) {
-    tc_voxel_grid* grid = tc_voxel_grid_get(h);
-    if (!grid) return;
-    grid->load_callback = callback;
-    grid->load_user_data = user_data;
-}
-
 bool tc_voxel_grid_is_loaded(tc_voxel_grid_handle h) {
     tc_voxel_grid* grid = tc_voxel_grid_get(h);
     return grid && grid->is_loaded != 0;
@@ -250,11 +239,15 @@ bool tc_voxel_grid_ensure_loaded(tc_voxel_grid_handle h) {
     tc_voxel_grid* grid = tc_voxel_grid_get(h);
     if (!grid) return false;
     if (grid->is_loaded) return true;
-    if (!grid->load_callback) return false;
-    bool success = grid->load_callback(grid, grid->load_user_data);
+    bool success = tc_resource_request_load(grid->uuid);
     if (success) {
         grid->is_loaded = 1;
         voxel_grid_bump_version(grid);
+    } else {
+        tc_log_error(
+            "tc_voxel_grid_ensure_loaded: resource loader failed for '%s'",
+            grid->uuid
+        );
     }
     return success;
 }
