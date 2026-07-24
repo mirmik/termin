@@ -142,7 +142,6 @@ if(BUNDLE_PYTHON)
         sipbuild
         glfw
         packaging
-        pyassimp
         yaml
         watchdog
     )

@@ -41,31 +41,29 @@ immutable/copy-on-write snapshots, транзакционными публика
 Runtime SDK формируется из
 `build-system/python-runtime-lock.txt`. В нём зафиксированы:
 
-- `numpy==2.2.6`;
+- `numpy==2.5.1`;
 - `PyYAML==6.0.3`;
 - `watchdog==6.0.0`;
 - `glfw==2.10.0`;
-- `pyassimp==5.2.5`;
 - pure-Python test/tooling dependencies.
 
 Build frontend отдельно использует `nanobind==2.13.0`, а тестовое окружение —
-`scipy==1.15.3`.
+`scipy==1.18.0`.
 
 Фактически установленный Linux SDK содержит Python C extensions только у
-NumPy, PyYAML и собственных модулей Termin. `glfw`, `pyassimp` и Linux backend
+NumPy, PyYAML, tomli и собственных модулей Termin. `glfw` и Linux backend
 watchdog обращаются к native-библиотекам через `ctypes`.
 
 ## Матрица внешних зависимостей
 
 | Компонент | Текущая версия | Состояние | Требуемое действие |
 | --- | ---: | --- | --- |
-| CPython | 3.10 | Free-threaded build отсутствует | Перейти на отдельный 3.14t runtime SDK |
-| NumPy | 2.2.6 | Есть поддержка и wheels для 3.13t, но не для 3.14t | Обновить до актуальной ветки с 3.14t wheels |
+| CPython | 3.14.6t | Pinned free-threaded toolchain | Сохранять exact source hash и ABI verification |
+| NumPy | 2.5.1 | Опубликованы `cp314t` wheels | Проверять supported tags и import smoke |
 | PyYAML | 6.0.3 | Опубликованы `cp314t` wheels | Оставить версию и добавить install/import smoke |
-| SciPy | 1.15.3, test-only | Экспериментальная поддержка 3.13t | Обновить тестовый lock до версии с 3.14t wheels |
+| SciPy | 1.18.0, test-only | Опубликованы `cp314t` wheels | Устанавливать test overlay целевым build Python |
 | watchdog | 6.0.0 | Linux/Windows paths — Python/`ctypes`; macOS имеет отдельный native-риск | Проверить все целевые платформы; обновить macOS package при необходимости |
 | glfw | 2.10.0 | Python wrapper использует `ctypes` и не является CPython extension | Оставить, добавить callback/concurrency smoke |
-| pyassimp | 5.2.5 | Python wrapper использует `ctypes`; Assimp C API допускает concurrent imports | Проверить независимые import contexts и lifetime возвращаемых сцен |
 | colorama, exceptiongroup, iniconfig, packaging, pluggy, Pygments, pytest, tomli, typing_extensions | exact lock | Pure Python | Проверить install/import/test на 3.14t |
 | nanobind | 2.13.0, build-only | Поддерживает free-threaded CPython | Перестроить общий SDK runtime и все модули с `FREE_THREADED` |
 
@@ -204,13 +202,6 @@ Free-threading не исправит медленный per-element Python algor
 Отсутствие CPython extension означает лишь отсутствие ABI-блокера.
 Потокобезопасность foreign library и разделяемых `ctypes` objects остаётся
 ответственностью вызывающего кода.
-
-### pyassimp
-
-Assimp C API заявлен потокобезопасным. Concurrent import допустим при
-независимых ресурсах; custom IO и logging обязаны быть thread-safe. Для Termin
-это означает отдельный import result/lifetime на job и запрет совместного
-изменения одной возвращённой scene.
 
 ### glfw
 
