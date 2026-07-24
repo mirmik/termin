@@ -85,13 +85,12 @@ class NavMeshAsset(DataAsset["NavMesh"]):
         from termin.navmesh._navmesh_native import (
             TcNavMesh,
             declare_navmesh_asset,
-            set_navmesh_load_callback,
         )
 
         declare_navmesh_asset(self.uuid, self.name)
         navmesh = TcNavMesh.from_uuid(self.uuid)
-        if navmesh.is_valid:
-            set_navmesh_load_callback(navmesh, lambda _navmesh: self._load_from_file())
+        if not navmesh.is_valid:
+            return
 
     def _sync_detour_runtime_resource(self, data: DetourNavMeshData) -> None:
         from termin.navmesh._navmesh_native import set_detour_navmesh_asset_data

@@ -215,6 +215,70 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
     assert animation_asset.embedded_parent_key == "Walk"
 
 
+def test_glb_child_resources_lazy_load_through_canonical_uuid_bridge() -> None:
+    from termin.animation._animation_native import (
+        tc_animation_ensure_loaded,
+        tc_animation_is_loaded,
+    )
+    from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
+    from tmesh import tc_mesh_ensure_loaded, tc_mesh_is_loaded
+
+    rm = DefaultResourceManager()
+    set_resource_manager_factory(lambda: rm)
+    try:
+        rm.register_file(
+            PreLoadResult(
+                resource_type="glb",
+                path="/tmp/lazy-robot.glb",
+                content=None,
+                uuid="glb-lazy-parent-uuid",
+                spec_data={
+                    "uuid": "glb-lazy-parent-uuid",
+                    "resources": {
+                        "meshes": {"Body": "glb-lazy-mesh-uuid"},
+                        "skeletons": {"skeleton": "glb-lazy-skeleton-uuid"},
+                        "animations": {"Walk": "glb-lazy-animation-uuid"},
+                    },
+                },
+            )
+        )
+
+        glb_asset = rm.get_glb_asset_by_uuid("glb-lazy-parent-uuid")
+        mesh_asset = rm.get_mesh_asset_by_uuid("glb-lazy-mesh-uuid")
+        skeleton_asset = rm.get_skeleton_asset_by_uuid("glb-lazy-skeleton-uuid")
+        animation_asset = rm.get_animation_clip_asset_by_uuid("glb-lazy-animation-uuid")
+        assert glb_asset is not None
+        assert mesh_asset is not None
+        assert skeleton_asset is not None
+        assert animation_asset is not None
+
+        mesh = mesh_asset.cached_data
+        skeleton = skeleton_asset.cached_data
+        animation = animation_asset.cached_data
+        assert mesh is not None
+        assert skeleton is not None
+        assert animation is not None
+
+        def load_parent() -> bool:
+            glb_asset._loaded = True
+            mesh_asset.set_runtime_data(mesh, loaded=True)
+            skeleton_asset.set_runtime_data(skeleton, loaded=True)
+            animation_asset.set_runtime_data(animation, loaded=True)
+            return True
+
+        glb_asset._load = load_parent
+
+        assert tc_mesh_ensure_loaded(mesh)
+        assert skeleton.ensure_loaded()
+        assert tc_animation_ensure_loaded(animation)
+        assert tc_mesh_is_loaded(mesh)
+        assert tc_skeleton_is_loaded(skeleton)
+        assert tc_animation_is_loaded(animation)
+    finally:
+        set_resource_manager_factory(None)
+        rm.clear_runtime_state()
+
+
 def test_glb_animation_child_asset_names_are_scoped_by_parent_glb() -> None:
     rm = DefaultResourceManager()
 
