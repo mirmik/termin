@@ -10,7 +10,7 @@ setup(
     description="Widget UI scene components for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=["termin.ui_components", "termin_ui_component_specs"],
     package_dir={
         "termin.ui_components": "python/termin/ui_components",

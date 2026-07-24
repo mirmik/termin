@@ -10,7 +10,7 @@ setup(
     description="Termin standard library resources and deployment helpers",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=find_namespace_packages(where="python", include=["termin.stdlib", "termin.stdlib.*"]),
     package_dir={"": "python"},
     package_data={

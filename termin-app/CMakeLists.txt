@@ -14,8 +14,8 @@
 #   install/
 #     bin/termin_editor
 #     lib/
-#       libpython3.10.so      (bundled Python, if BUNDLE_PYTHON=ON)
-#       python3.10/           (stdlib + site-packages with termin packages)
+#       libpython3.14t.so     (bundled Python, if BUNDLE_PYTHON=ON)
+#       python3.14t/          (stdlib + site-packages with termin packages)
 
 cmake_minimum_required(VERSION 3.16)
 project(termin VERSION 0.1.0 LANGUAGES C CXX)
@@ -38,19 +38,14 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install" CACHE PATH "Install prefix" FORCE)
 endif()
 
-# Find Python (needed for bundling info)
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-
-execute_process(
-    COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    OUTPUT_VARIABLE PYTHON_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+include(TerminPython)
+termin_require_canonical_python(Interpreter Development)
 
 if(WIN32)
     set(STDLIB_INSTALL_DIR "python/Lib")
 else()
-    set(STDLIB_INSTALL_DIR "lib/python${PYTHON_VERSION}")
+    set(STDLIB_INSTALL_DIR "lib/${TERMIN_PYTHON_STDLIB_DIR_NAME}")
 endif()
 set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
 
@@ -71,18 +66,21 @@ if(BUNDLE_PYTHON)
     file(TO_CMAKE_PATH "${PYTHON_PREFIX_RAW}" PYTHON_PREFIX)
 
     # Platform-specific host paths:
-    # Linux: {prefix}/lib/python3.12/, libpython3.12.so
-    # Windows: {prefix}/Lib/, python312.dll (DLL is in prefix, not lib)
+    # Linux: {prefix}/lib/python3.14t/, libpython3.14t.so
+    # Windows: {prefix}/Lib/, python314t.dll (DLL is in prefix, not lib)
     if(WIN32)
         set(PYTHON_STDLIB "${PYTHON_PREFIX}/Lib")
         set(PYTHON_SITEPACKAGES "${PYTHON_PREFIX}/Lib/site-packages")
     else()
         set(PYTHON_LIBDIR "${PYTHON_PREFIX}/lib")
-        set(PYTHON_STDLIB "${PYTHON_LIBDIR}/python${PYTHON_VERSION}")
+        set(PYTHON_STDLIB
+            "${PYTHON_LIBDIR}/${TERMIN_PYTHON_STDLIB_DIR_NAME}")
         set(PYTHON_SITEPACKAGES "${PYTHON_STDLIB}/site-packages")
     endif()
 
-    message(STATUS "Will bundle Python ${PYTHON_VERSION} from ${PYTHON_PREFIX}")
+    message(STATUS
+        "Will bundle Python ${TERMIN_PYTHON_ABI_DIR_SUFFIX} "
+        "from ${PYTHON_PREFIX}")
     message(STATUS "Python stdlib: ${PYTHON_STDLIB}")
 
     if(NOT WIN32)
@@ -90,8 +88,8 @@ if(BUNDLE_PYTHON)
         install(DIRECTORY ${PYTHON_LIBDIR}/
             DESTINATION lib
             FILES_MATCHING
-            PATTERN "libpython${PYTHON_VERSION}*.so*"
-            PATTERN "python${PYTHON_VERSION}" EXCLUDE
+            PATTERN "libpython${TERMIN_PYTHON_ABI_DIR_SUFFIX}*.so*"
+            PATTERN "${TERMIN_PYTHON_STDLIB_DIR_NAME}" EXCLUDE
         )
     else()
         # Windows: Install python3xx.dll to bin/

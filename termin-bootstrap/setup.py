@@ -20,7 +20,7 @@ setup(
     description="Explicit startup bootstrap helpers for Termin runtime/player/editor",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.bootstrap"],
     package_dir={"termin.bootstrap": "python/termin/bootstrap"},
     install_requires=[

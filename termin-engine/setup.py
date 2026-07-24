@@ -19,7 +19,7 @@ setup(
     description="Termin engine core Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.engine"],
     package_dir={"termin.engine": "python/termin/engine"},
     install_requires=[

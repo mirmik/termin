@@ -10,7 +10,7 @@ setup(
     description="Project module runtime policy for Termin editor and player hosts",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=find_namespace_packages(
         where="python",
         include=["termin.project_modules", "termin.project_modules.*"],

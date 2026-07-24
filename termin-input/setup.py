@@ -19,7 +19,7 @@ setup(
     description="Input handling Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.input"],
     package_dir={"termin.input": "python/termin/input"},
     install_requires=[

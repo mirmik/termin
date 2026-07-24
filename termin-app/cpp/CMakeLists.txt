@@ -11,6 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminSDL2)
 include(TerminTestMetadata)
+include(TerminPython)
 
 # Project root - either from parent CMakeLists.txt or compute from here
 if(NOT DEFINED TERMIN_ROOT)
@@ -44,13 +45,9 @@ else()
     set(OPTIMIZE_FLAGS -O3)
 endif()
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-
-execute_process(
-    COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    OUTPUT_VARIABLE PYTHON_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(TERMIN_BUILD_PYTHON OR BUILD_EDITOR_MINIMAL OR BUILD_LAUNCHER)
+    termin_require_canonical_python(Interpreter Development)
+endif()
 
 # Install prefix for Python modules only.
 # Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
@@ -58,7 +55,8 @@ if(BUILD_STANDALONE OR TERMIN_BUILD_MONOREPO)
     if(WIN32)
         set(TERMIN_PYTHON_INSTALL_DIR "python/Lib/site-packages/termin")
     else()
-        set(TERMIN_PYTHON_INSTALL_DIR "lib/python${PYTHON_VERSION}/site-packages/termin")
+        set(TERMIN_PYTHON_INSTALL_DIR
+            "lib/${TERMIN_PYTHON_STDLIB_DIR_NAME}/site-packages/termin")
     endif()
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/${TERMIN_PYTHON_INSTALL_DIR}")
 else()

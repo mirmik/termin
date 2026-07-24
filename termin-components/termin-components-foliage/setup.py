@@ -21,7 +21,7 @@ setup(
     description="Foliage component asset contracts for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=["termin.foliage"],
     package_dir={"termin.foliage": "python/termin/foliage"},
     install_requires=["termin-assets", "termin-nanobind", "termin-scene", "tmesh", "tgfx"],
