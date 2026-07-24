@@ -122,7 +122,7 @@ set(TERMIN_BOOTSTRAP_SOURCES
 )
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     if(COMMAND termin_require_package)
         termin_require_package(termin_input termin_input::termin_input)

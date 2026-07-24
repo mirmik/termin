@@ -10,7 +10,7 @@ setup(
     description="Archived projective-geometric algebra and geometry helpers for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.10",
+    python_requires=">=3.14",
     packages=find_namespace_packages(
         where="python",
         include=["termin.ga201", "termin.ga201.*", "termin.geomalgo", "termin.geomalgo.*"],

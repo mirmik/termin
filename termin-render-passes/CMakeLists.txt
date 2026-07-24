@@ -171,7 +171,7 @@ if(COMMAND termin_enable_pch_for)
 endif()
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_render_passes_native NB_SHARED

@@ -19,7 +19,7 @@ setup(
     description="Constructive solid geometry helpers for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.csg"],
     package_dir={"termin.csg": "python/termin/csg"},
     install_requires=[

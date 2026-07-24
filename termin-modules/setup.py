@@ -21,7 +21,7 @@ setup(
     description="Runtime module loader for termin projects",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin_modules"],
     package_dir={"termin_modules": "python/termin_modules"},
     install_requires=["tcbase", "termin-nanobind"],

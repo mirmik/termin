@@ -10,7 +10,7 @@ setup(
     description="Default Termin asset adapters and import plugins",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=find_namespace_packages(where="python", include=["termin.default_assets", "termin.default_assets.*"]),
     package_dir={"": "python"},
     install_requires=[

@@ -72,53 +72,30 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
     }
     return {};
 #else
-    fs::path lib_dir = install_root / "lib";
-    if (!fs::exists(lib_dir)) return {};
-
-    for (const auto& entry : fs::directory_iterator(lib_dir)) {
-        if (entry.is_directory()) {
-            std::string name = entry.path().filename().string();
-            if (name.find("python3.") == 0 && name.find("python3.10") != std::string::npos) {
-                return entry.path();
-            }
-        }
+    std::string directory_name =
+        "python" + std::to_string(PY_MAJOR_VERSION) + "." +
+        std::to_string(PY_MINOR_VERSION);
+#ifdef Py_GIL_DISABLED
+    directory_name += "t";
+#endif
+    fs::path stdlib_dir = install_root / "lib" / directory_name;
+    if (fs::exists(stdlib_dir) && fs::exists(stdlib_dir / "os.py")) {
+        return stdlib_dir;
     }
-
-    for (const auto& entry : fs::directory_iterator(lib_dir)) {
-        if (entry.is_directory()) {
-            std::string name = entry.path().filename().string();
-            if (name.find("python3.") == 0) {
-                return entry.path();
-            }
-        }
-    }
-
     return {};
 #endif
 }
 
 static fs::path find_site_packages_termin(const fs::path& install_root) {
-#ifdef _WIN32
-    fs::path termin_dir = install_root / "python" / "Lib" / "site-packages" / "termin";
+    fs::path stdlib_dir = find_python_stdlib(install_root);
+    if (stdlib_dir.empty()) {
+        return {};
+    }
+    fs::path termin_dir = stdlib_dir / "site-packages" / "termin";
     if (fs::exists(termin_dir)) {
         return termin_dir;
     }
     return {};
-#else
-    fs::path lib_dir = install_root / "lib";
-    if (!fs::exists(lib_dir)) return {};
-
-    for (const auto& entry : fs::directory_iterator(lib_dir)) {
-        if (!entry.is_directory()) continue;
-        std::string name = entry.path().filename().string();
-        if (name.find("python3.") != 0) continue;
-        fs::path termin_dir = entry.path() / "site-packages" / "termin";
-        if (fs::exists(termin_dir)) {
-            return termin_dir;
-        }
-    }
-    return {};
-#endif
 }
 
 static bool is_python_layout_smoke_request(int argc, char* argv[]) {

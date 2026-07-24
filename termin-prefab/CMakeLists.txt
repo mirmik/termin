@@ -16,6 +16,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
+include(TerminPython)
 
 add_library(termin_prefab SHARED
     src/prefab_document.cpp
@@ -36,7 +37,7 @@ target_link_libraries(termin_prefab PUBLIC termin_scene::termin_scene)
 termin_set_rpath_lib(termin_prefab)
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
+    termin_require_canonical_python(Interpreter Development)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(_prefab_native NB_SHARED
         cpp/bindings/prefab_module.cpp

@@ -23,7 +23,7 @@ setup(
     description="NavMesh Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.navmesh", "termin_navmesh_component_specs"],
     package_dir={
         "termin.navmesh": "python/termin/navmesh",

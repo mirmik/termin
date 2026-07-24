@@ -19,7 +19,7 @@ setup(
     description="Rendering components Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
-    python_requires=">=3.8",
+    python_requires=">=3.14",
     packages=["termin.render_components", "termin_render_component_specs"],
     package_dir={
         "termin.render_components": "python/termin/render_components",

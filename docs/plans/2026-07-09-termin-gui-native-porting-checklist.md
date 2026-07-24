@@ -250,7 +250,7 @@ Phase 2 notes:
 - Packaging note: standalone `cmake --install` for `termin-gui-native` can
   install the fresh Python module under `sdk/lib/python`, while the active SDK
   import path resolves `termin.gui_native` from
-  `sdk/lib/python3.10/site-packages`. The full `./build-sdk.sh --no-wheels`
+  `sdk/lib/python3.14t/site-packages`. The full `./build-sdk.sh --no-wheels`
   flow removes the legacy `sdk/lib/python` staging tree and the Python binding
   test passes through the normal `site-packages` import path.
 

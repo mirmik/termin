@@ -7,13 +7,41 @@
 #   ./build.sh --clean  # Clean and rebuild
 #   ./build.sh --install-only  # Only install (skip build)
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
-SDK_DIR="${SDK_PREFIX:-$(dirname "$SCRIPT_DIR")/sdk}"
-PYTHON_VERSION="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+SDK_DIR="${SDK_PREFIX:-$REPO_ROOT/sdk}"
+
+PY_EXEC="${PYTHON_BIN:-${PYTHON_EXECUTABLE:-}}"
+if [[ -z "$PY_EXEC" ]]; then
+    BOOTSTRAP_PYTHON="$(command -v python3 || command -v python || true)"
+    if [[ -z "$BOOTSTRAP_PYTHON" ]]; then
+        echo "ERROR: Python is required to prepare the canonical toolchain" >&2
+        exit 1
+    fi
+    TOOLCHAIN_OUTPUT="$(
+        PYTHONPATH="$REPO_ROOT/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+            "$BOOTSTRAP_PYTHON" -m termin_build.sdk \
+            --repo-root "$REPO_ROOT" prepare-python-toolchain
+    )"
+    printf '%s\n' "$TOOLCHAIN_OUTPUT"
+    PY_EXEC="$(printf '%s\n' "$TOOLCHAIN_OUTPUT" | tail -n 1)"
+fi
+if [[ ! -x "$PY_EXEC" ]]; then
+    echo "ERROR: canonical Python build executable not found: $PY_EXEC" >&2
+    exit 1
+fi
+PYTHON_ABI_DIR="$(
+    "$PY_EXEC" -I -c \
+        'import sys, sysconfig; suffix = "t" if sysconfig.get_config_var("Py_GIL_DISABLED") else ""; print(f"{sys.version_info.major}.{sys.version_info.minor}{suffix}")'
+)"
+if [[ "$PYTHON_ABI_DIR" != "3.14t" ]]; then
+    echo "ERROR: Termin standalone build requires CPython 3.14t, got $PYTHON_ABI_DIR" >&2
+    exit 1
+fi
 
 BUILD_TYPE="Release"
 CLEAN=0
@@ -65,7 +93,7 @@ if [[ $ASAN -eq 1 ]]; then
 fi
 echo "Build dir:  $BUILD_DIR"
 echo "Install dir: $INSTALL_DIR"
-echo "Python:     $PYTHON_VERSION"
+echo "Python:     $PYTHON_ABI_DIR ($PY_EXEC)"
 echo ""
 
 # Clean if requested
@@ -88,7 +116,7 @@ CMAKE_COMMON_ARGS=(
     -DCMAKE_PREFIX_PATH="$SDK_DIR"
     -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF
     -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON
-    -DPython_EXECUTABLE="$(which python3)"
+    -DPython_EXECUTABLE="$PY_EXEC"
 )
 
 if [[ $ASAN -eq 1 ]]; then
@@ -120,7 +148,7 @@ echo "Copying shared libraries from SDK..."
 if [[ -d "$SDK_DIR/lib" ]]; then
     rsync -aL \
         --include='libtermin_*.so*' \
-        --include='libnanobind.so*' \
+        --include='libnanobind-ft.so*' \
         --exclude='*' \
         "$SDK_DIR/lib/" "$INSTALL_DIR/lib/"
     echo "  Copied SDK libraries from $SDK_DIR/lib"
@@ -144,10 +172,10 @@ echo "  Synchronized verified SDK assets from $SDK_DIR/share"
 # binding itself is built by this standalone graph and must remain in place;
 # every other Python module and native binding comes from the verified SDK.
 echo "Synchronizing Python runtime from SDK..."
-PYTHON_DEST="$INSTALL_DIR/lib/python$PYTHON_VERSION/site-packages"
-SDK_SITE_PACKAGES="$SDK_DIR/lib/python$PYTHON_VERSION/site-packages"
+PYTHON_DEST="$INSTALL_DIR/lib/python$PYTHON_ABI_DIR/site-packages"
+SDK_SITE_PACKAGES="$SDK_DIR/lib/python$PYTHON_ABI_DIR/site-packages"
 if [[ ! -d "$SDK_SITE_PACKAGES" ]]; then
-    echo "ERROR: SDK Python $PYTHON_VERSION site-packages not found: $SDK_SITE_PACKAGES" >&2
+    echo "ERROR: SDK Python $PYTHON_ABI_DIR site-packages not found: $SDK_SITE_PACKAGES" >&2
     exit 1
 fi
 rsync -aL --delete \
