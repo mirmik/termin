@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 
-from termin.gui_native import Document, OverlayAnchor, Size, WidgetRef
+from termin.gui_native import TcDocument, OverlayAnchor, Size, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class NativeEditorViewport:
     def __init__(
         self,
         *,
-        document: Document,
+        document: TcDocument,
         widget,
         composition,
         root: WidgetRef,
@@ -82,7 +82,7 @@ class NativeEditorViewport:
     @classmethod
     def create(
         cls,
-        document: Document,
+        document: TcDocument,
         parent: WidgetRef,
         *,
         device,
@@ -204,8 +204,8 @@ class NativeEditorViewport:
             raise RuntimeError("native editor viewport is closed")
         if not name or name in self._ui_overlays:
             raise ValueError(f"viewport overlay name is empty or already installed: {name!r}")
-        if loaded_document.document is not self.document:
-            raise ValueError("viewport overlay belongs to another native Document")
+        if loaded_document.document != self.document:
+            raise ValueError("viewport overlay belongs to another native tc_ui_document")
         overlay_root = loaded_document.root.widget
         if not self.document.remove_root(overlay_root.handle):
             raise ValueError("viewport overlay must be a loaded document root")

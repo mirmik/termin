@@ -1,7 +1,7 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.signal import Signal
 from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document
 from tcbase import Key
 
 
@@ -26,7 +26,7 @@ class _SceneHierarchy:
 
 
 def test_native_game_mode_controller_projects_f5_play_and_stop() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     model = _GameModeModel()
     hierarchy = _SceneHierarchy()
@@ -58,10 +58,11 @@ def test_native_game_mode_controller_projects_f5_play_and_stop() -> None:
     assert renders
 
     controller.close()
+    tc_ui_document_destroy(document)
 
 
 def test_native_game_mode_controller_can_disable_all_play_entry_points() -> None:
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     model = _GameModeModel()
     controller = NativeGameModeController(
@@ -89,3 +90,4 @@ def test_native_game_mode_controller_can_disable_all_play_entry_points() -> None
     assert model.is_game_mode
 
     controller.close()
+    tc_ui_document_destroy(document)

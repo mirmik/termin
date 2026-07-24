@@ -17,7 +17,7 @@ from termin.editor_core.scene_settings_model import (
     ShadowSettingsController,
     ShadowSettingsSnapshot,
 )
-from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
 from .metrics import EDITOR_UI_METRICS
@@ -26,11 +26,11 @@ from .metrics import EDITOR_UI_METRICS
 _logger = logging.getLogger(__name__)
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-def _row(document: Document, label: str, control) -> WidgetRef:
+def _row(document: TcDocument, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"scene-settings-{label.lower().replace(' ', '-')}")
     row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
@@ -52,7 +52,7 @@ def _set_combo_items(combo, items) -> None:
 
 @dataclass
 class NativeSceneNamesDialog:
-    document: Document
+    document: TcDocument
     controller: SceneNamesController
     dialog: object
     layers: object
@@ -93,7 +93,7 @@ class NativeSceneNamesDialog:
 
 @dataclass
 class NativeShadowSettingsDialog:
-    document: Document
+    document: TcDocument
     controller: ShadowSettingsController
     dialog: object
     method: object
@@ -145,7 +145,7 @@ class NativeShadowSettingsDialog:
 
 @dataclass
 class NativeScenePropertiesDialog:
-    document: Document
+    document: TcDocument
     controller: ScenePropertiesController
     dialog_service: NativeDialogService
     dialog: object

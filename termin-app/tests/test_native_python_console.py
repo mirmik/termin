@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -8,11 +9,11 @@ from termin.editor_native.python_console import (
     connect_python_console_command,
 )
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 def test_native_python_console_command_executes_clears_reopens_and_releases():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     controller = PythonConsoleController(EditorPythonExecutor(lambda: {"answer": 42}))
     renders = []
@@ -45,10 +46,11 @@ def test_native_python_console_command_executes_clears_reopens_and_releases():
     gc.collect()
     assert console_ref() is None
     assert renders
+    tc_ui_document_destroy(document)
 
 
 def test_native_python_console_wraps_long_output_in_narrow_view():
-    document = Document()
+    document = tc_ui_document_create()
     controller = PythonConsoleController(EditorPythonExecutor(lambda: {}))
     console = build_native_python_console(
         document,
@@ -65,10 +67,11 @@ def test_native_python_console_wraps_long_output_in_narrow_view():
     assert console.output.word_wrap
     assert console.output.visual_line_count > len(console.output_model.lines)
     console.close()
+    tc_ui_document_destroy(document)
 
 
 def test_native_python_console_embeds_in_dedicated_bottom_tab():
-    document = Document()
+    document = tc_ui_document_create()
     shell = build_native_editor_shell(document)
     controller = PythonConsoleController(EditorPythonExecutor(lambda: {}))
     console = build_native_python_console(
@@ -88,6 +91,7 @@ def test_native_python_console_embeds_in_dedicated_bottom_tab():
     assert shell.bottom_tabs.selected_index == 2
     assert console.root.parent.handle == shell.python_console_host.handle
     console.close()
+    tc_ui_document_destroy(document)
 
 
 def _select_python_console_tab(shell) -> None:

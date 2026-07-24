@@ -9,7 +9,7 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.settings_model import EditorSettingsController, EditorSettingsSnapshot
-from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
 from .metrics import EDITOR_UI_METRICS
@@ -18,13 +18,13 @@ from .metrics import EDITOR_UI_METRICS
 _logger = logging.getLogger(__name__)
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeSettingsDialog:
-    document: Document
+    document: TcDocument
     controller: EditorSettingsController
     dialog_service: NativeDialogService
     dialog: object
@@ -122,7 +122,7 @@ class NativeSettingsDialog:
             self.request_render()
 
 
-def _path_row(document: Document, label_text: str):
+def _path_row(document: TcDocument, label_text: str):
     root = document.create_vstack(f"settings-{label_text.lower().replace(' ', '-')}")
     root.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
     root.add_fixed_child(document.create_label(label_text), EDITOR_UI_METRICS.compact_status_row)
@@ -136,7 +136,7 @@ def _path_row(document: Document, label_text: str):
     return root, value, browse
 
 
-def _spin_row(document: Document, label: str, minimum: float, maximum: float):
+def _spin_row(document: TcDocument, label: str, minimum: float, maximum: float):
     row = document.create_hstack(f"settings-{label.lower().replace(' ', '-')}")
     row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     row.add_stretch_child(document.create_label(label))
@@ -149,7 +149,7 @@ def _spin_row(document: Document, label: str, minimum: float, maximum: float):
 
 
 def build_native_settings_dialog(
-    document: Document,
+    document: TcDocument,
     controller: EditorSettingsController,
     *,
     dialog_service: NativeDialogService,

@@ -1,14 +1,15 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from types import SimpleNamespace
 
 from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
 from termin.editor_native.metrics import EDITOR_UI_METRICS
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 def test_native_quest_openxr_dialog_projects_entry_and_releases(tmp_path) -> None:
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     dialog = build_native_quest_openxr_build_dialog(
         document,
@@ -38,3 +39,4 @@ def test_native_quest_openxr_dialog_projects_entry_and_releases(tmp_path) -> Non
     handle = dialog.dialog.handle
     dialog.close()
     assert not document.is_alive(handle)
+    tc_ui_document_destroy(document)

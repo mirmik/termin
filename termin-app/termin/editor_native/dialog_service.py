@@ -10,7 +10,7 @@ from termin.editor_core.dialog_service import DialogService
 from termin.gui_native import (
     Color,
     DialogAction,
-    Document,
+    TcDocument,
     FileDialogMode,
     FileDialogModel,
     MessageBoxKind,
@@ -27,7 +27,7 @@ _logger = logging.getLogger(__name__)
 class NativeDialogService(DialogService):
     def __init__(
         self,
-        document: Document,
+        document: TcDocument,
         *,
         viewport: Callable[[], Rect],
         request_render: Callable[[], None],

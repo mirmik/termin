@@ -13,7 +13,7 @@ import weakref
 from termin.editor._editor_native import FrameProfilerController
 from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 from termin.gui_native import (
-    Document,
+    TcDocument,
     EdgeInsets,
     Size,
     TableColumn,
@@ -21,16 +21,18 @@ from termin.gui_native import (
     TableColumnPolicy,
     TreeExpansionModel,
     WidgetRef,
+    tc_ui_document_create,
+    tc_ui_document_destroy,
 )
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeFrameProfiler:
-    document: Document
+    document: TcDocument
     window_manager: EditorWindowRegistry
     controller: FrameProfilerController
     root: WidgetRef
@@ -101,7 +103,7 @@ class NativeFrameProfiler:
         self.controller.close()
         if self.document.is_alive(self.root.handle):
             self.document.destroy_widget_recursive(self.root.handle)
-        self.document.close()
+        tc_ui_document_destroy(self.document)
 
     def request_render(self) -> None:
         if self.window is not None and not self.window.closed:
@@ -116,7 +118,19 @@ def build_native_frame_profiler(
     window_manager: EditorWindowRegistry,
     controller: FrameProfilerController,
 ) -> NativeFrameProfiler:
-    document = Document()
+    document = tc_ui_document_create()
+    try:
+        return _build_native_frame_profiler(document, window_manager, controller)
+    except Exception:
+        tc_ui_document_destroy(document)
+        raise
+
+
+def _build_native_frame_profiler(
+    document: TcDocument,
+    window_manager: EditorWindowRegistry,
+    controller: FrameProfilerController,
+) -> NativeFrameProfiler:
     root = document.create_vstack("native-frame-profiler")
     root.stable_id = "editor.frame-profiler"
     root.preferred_size = Size(1180.0, 760.0)

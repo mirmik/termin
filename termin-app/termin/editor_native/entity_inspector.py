@@ -27,7 +27,7 @@ from termin.gui_native import (
     CommandKind,
     CommandData,
     CommandModel,
-    Document,
+    TcDocument,
     Point,
     Rect,
     Size,
@@ -38,7 +38,7 @@ from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 @dataclass
 class NativeEntityInspector:
-    document: Document
+    document: TcDocument
     controller: EntityInspectorController
     root: WidgetRef
     name_input: object
@@ -225,7 +225,7 @@ class NativeEntityInspector:
 
 
 def build_native_entity_inspector(
-    document: Document,
+    document: TcDocument,
     controller: EntityInspectorController,
     *,
     request_render: Callable[[], None],

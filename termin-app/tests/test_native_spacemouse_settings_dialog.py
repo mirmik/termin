@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -7,11 +8,11 @@ from termin.editor_native.spacemouse_settings_dialog import (
     build_native_spacemouse_settings_dialog,
 )
 from termin.editor_native.metrics import EDITOR_UI_METRICS
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 
 def test_native_spacemouse_settings_applies_reopens_and_releases():
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     spacemouse = SpaceMouseController()
     dialog = build_native_spacemouse_settings_dialog(
@@ -45,3 +46,4 @@ def test_native_spacemouse_settings_applies_reopens_and_releases():
     gc.collect()
     assert reference() is None
     assert renders
+    tc_ui_document_destroy(document)

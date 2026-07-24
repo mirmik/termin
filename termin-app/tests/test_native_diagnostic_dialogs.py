@@ -1,3 +1,4 @@
+from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 import gc
 import weakref
 
@@ -9,7 +10,7 @@ from termin.editor_native.diagnostic_dialogs import (
     build_native_undo_history_dialog,
 )
 from termin.editor_native.metrics import EDITOR_UI_METRICS
-from termin.gui_native import Document, Rect
+from termin.gui_native import Rect
 
 from test_editor_diagnostic_models import _AudioEngine
 
@@ -23,7 +24,7 @@ class _Command(UndoCommand):
 
 
 def test_native_undo_history_dialog_refreshes_reopens_and_releases():
-    document = Document()
+    document = tc_ui_document_create()
     stack = UndoStack()
     stack.push(_Command("rename entity"))
     renders = []
@@ -51,10 +52,11 @@ def test_native_undo_history_dialog_refreshes_reopens_and_releases():
     gc.collect()
     assert reference() is None
     assert renders
+    tc_ui_document_destroy(document)
 
 
 def test_native_audio_debugger_dialog_refreshes_reopens_and_releases():
-    document = Document()
+    document = tc_ui_document_create()
     renders = []
     dialog = build_native_audio_debugger_dialog(
         document,
@@ -79,3 +81,4 @@ def test_native_audio_debugger_dialog_refreshes_reopens_and_releases():
     gc.collect()
     assert reference() is None
     assert renders
+    tc_ui_document_destroy(document)

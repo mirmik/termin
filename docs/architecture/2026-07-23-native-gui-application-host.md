@@ -22,7 +22,7 @@ the platform adapter.
 
 `termin-gui-native` now provides a public C++ `ApplicationHost` that is useful
 for a small one-window program: it creates a native graphics session and
-window, routes input into a `Document`, paints the document into a resizable
+window, routes input into a `tc_ui_document`, paints the document into a resizable
 color target and presents it. The same object currently also owns an injected
 `WindowedGraphicsSession` and configures process-global shader runtime state.
 
@@ -71,34 +71,36 @@ application composition root
     │
     ├── BackendWindow
     │   └── GuiWindowHost
-    │       ├── borrowed Document
+    │       ├── borrowed TcDocument handle
     │       ├── UI draw list and renderer
     │       └── window color target
     │
     └── BackendWindow
         └── GuiWindowHost
-            ├── borrowed Document
+            ├── borrowed TcDocument handle
             ├── UI draw list and renderer
             └── window color target
 ```
 
 The application composition root owns `WindowedGraphicsSession`.
 `GuiWindowHost` borrows the session or its `GraphicsHost`, owns one
-`BackendWindow`, and borrows one `Document`. The session and document must both
-outlive the window host. Bindings enforce those relationships with typed
-references and keep-alive edges; raw device/context pointers are not part of
-the public contract.
+`BackendWindow`, and borrows one `tc_ui_document` through the copyable,
+non-owning `TcDocument` handle. The registry object must outlive the window
+host. `TcDocument` itself has no RAII lifetime behavior: composition roots use
+`tc_ui_document_create` and `tc_ui_document_destroy` explicitly. Raw
+device/context pointers are not part of the public contract.
 
-One `Document` may be bound to exactly one live `GuiWindowHost`: the host
-services stored by the document (text measurement, clipboard and cursor) are
-per-window. `Document::close()` and move operations reject a live binding, so
-an active host cannot retain a stale object address. Distinct
-windows use distinct documents even when they share one graphics domain.
+Host services stored by the document (text measurement, clipboard and cursor)
+are per-window and are rebound by the active renderer. Window rendering is
+therefore serialized by the current application contract. This is a service
+binding constraint, not ownership tracked by `TcDocument`; future concurrent
+hosting requires synchronization and a service-binding design rather than a
+GIL or wrapper-owned lifetime.
 
 `GuiWindowHost` owns:
 
 - one presentation window;
-- event routing between that window and its `Document`;
+- event routing between that window and its `tc_ui_document`;
 - text input, clipboard and cursor bridges for the document;
 - the UI draw list, paint context and renderer;
 - the resizable per-window color target;
@@ -110,7 +112,7 @@ windows use distinct documents even when they share one graphics domain.
 
 - `IRenderDevice`, `PipelineCache`, `RenderContext2` or `GraphicsHost`;
 - `WindowedGraphicsSession` or platform bootstrap state;
-- the supplied `Document` or application controller;
+- the supplied `tc_ui_document` or application controller;
 - editor policy, MCP, screenshots, project services or debug-tool semantics;
 - process-global shader configuration.
 
@@ -121,15 +123,19 @@ creates one compatible window:
 
 ```cpp
 auto session = termin::create_native_windowed_graphics();
-termin::gui_native::Document document;
+auto raw_document = tc_ui_document_create();
+termin::gui_native::TcDocument document{raw_document};
 
-termin::gui_native::GuiWindowHost host(
-    *session,
-    document,
-    termin::gui_native::GuiWindowConfig{
-        .window = {"Tool", 900, 700},
-        .font_path = font_path,
-    });
+{
+    termin::gui_native::GuiWindowHost host(
+        *session,
+        document,
+        termin::gui_native::GuiWindowConfig{
+            .window = {"Tool", 900, 700},
+            .font_path = font_path,
+        });
+}
+tc_ui_document_destroy(raw_document);
 ```
 
 A lower-level injected constructor may accept `GraphicsHost&` and an owned
@@ -142,7 +148,7 @@ The standalone convenience layer owns the objects in the required order:
 ```text
 StandaloneGuiApplication
 ├── WindowedGraphicsSession
-├── Document
+├── tc_ui_document
 └── GuiWindowHost
 ```
 
@@ -269,7 +275,7 @@ Python exposes the same hierarchy:
 
 ```python
 session = WindowedGraphicsSession.create_native()
-document = Document()
+document = tc_ui_document_create()
 try:
     with GuiWindowHost(
         session,
@@ -281,13 +287,14 @@ try:
         while window.tick():
             update_application_state()
 finally:
-    document.close()
+    tc_ui_document_destroy(document)
     session.close()
 ```
 
 The binding:
 
-- keeps the session and document alive while a window host exists;
+- keeps Python wrapper values reachable while a window host exists, without
+  making them owners of the underlying C registry object;
 - exposes deterministic `close()` and context-manager support;
 - never treats Python GC as the authority for device/session lifetime;
 - logs a lifetime violation if an object reaches finalization while still
@@ -313,15 +320,15 @@ EditorSession
 ├── WindowedGraphicsSession
 ├── EditorMainWindow
 │   ├── editor controller/view state
-│   ├── Document
+│   ├── tc_ui_document / TcDocument handle
 │   └── GuiWindowHost
 ├── FrameProfilerWindow
 │   ├── FrameProfilerController
-│   ├── Document
+│   ├── tc_ui_document / TcDocument handle
 │   └── GuiWindowHost
 └── FramegraphDebuggerWindow
     ├── FrameGraphDebugger controller/view
-    ├── Document
+    ├── tc_ui_document / TcDocument handle
     └── GuiWindowHost
 ```
 

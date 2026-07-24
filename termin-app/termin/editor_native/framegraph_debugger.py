@@ -10,23 +10,25 @@ import weakref
 from termin.engine import FrameGraphDebuggerMode
 from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 from termin.gui_native import (
-    Document,
+    TcDocument,
     EdgeInsets,
     Point,
     RichTextModel,
     Size,
     WidgetRef,
+    tc_ui_document_create,
+    tc_ui_document_destroy,
 )
 
 
 _logger = logging.getLogger(__name__)
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-def _labeled_row(document: Document, label: str, control, *, label_width: float = 82.0) -> WidgetRef:
+def _labeled_row(document: TcDocument, label: str, control, *, label_width: float = 82.0) -> WidgetRef:
     row = document.create_hstack(f"framegraph-{label.lower().replace(' ', '-')}-row")
     row.set_layout_spacing(4.0)
     caption = document.create_label(label)
@@ -141,7 +143,7 @@ class NativeFramegraphPreviewSurface:
 
 @dataclass
 class NativeFramegraphDebugger:
-    document: Document
+    document: TcDocument
     model: object
     window_manager: EditorWindowRegistry
     root: WidgetRef
@@ -289,7 +291,7 @@ class NativeFramegraphDebugger:
         self.depth_preview.close()
         if self.document.is_alive(self.root.handle):
             self.document.destroy_widget_recursive(self.root.handle)
-        self.document.close()
+        tc_ui_document_destroy(self.document)
 
     def dismiss(self) -> None:
         if self.window is not None and not self.window.closed:
@@ -424,7 +426,26 @@ def build_native_framegraph_debugger(
     *,
     request_render: Callable[[], None],
 ) -> NativeFramegraphDebugger:
-    document = Document()
+    document = tc_ui_document_create()
+    try:
+        return _build_native_framegraph_debugger(
+            document,
+            window_manager,
+            model,
+            request_render=request_render,
+        )
+    except Exception:
+        tc_ui_document_destroy(document)
+        raise
+
+
+def _build_native_framegraph_debugger(
+    document: TcDocument,
+    window_manager: EditorWindowRegistry,
+    model: object,
+    *,
+    request_render: Callable[[], None],
+) -> NativeFramegraphDebugger:
     root = document.create_vstack("native-framegraph-debugger")
     root.stable_id = "editor.framegraph-debugger"
     if not document.add_root(root.handle):

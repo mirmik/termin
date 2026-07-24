@@ -8,18 +8,18 @@ import weakref
 
 from termin.editor_core.audio_debugger_model import AudioDebuggerController, AudioDebuggerSnapshot
 from termin.editor_core.undo_history_model import UndoHistoryController, UndoHistorySnapshot
-from termin.gui_native import DialogAction, Document, Rect, RichTextModel, Size, WidgetRef
+from termin.gui_native import DialogAction, TcDocument, Rect, RichTextModel, Size, WidgetRef
 
 from .metrics import EDITOR_UI_METRICS
 
 
-def _ref(document: Document, reference) -> WidgetRef:
+def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
 @dataclass
 class NativeUndoHistoryDialog:
-    document: Document
+    document: TcDocument
     controller: UndoHistoryController
     dialog: object
     done_model: RichTextModel
@@ -65,7 +65,7 @@ class NativeUndoHistoryDialog:
 
 @dataclass
 class NativeAudioDebuggerDialog:
-    document: Document
+    document: TcDocument
     controller: AudioDebuggerController
     dialog: object
     status: object
@@ -117,7 +117,7 @@ class NativeAudioDebuggerDialog:
 
 
 def build_native_undo_history_dialog(
-    document: Document,
+    document: TcDocument,
     controller: UndoHistoryController,
     *,
     viewport: Callable[[], Rect],
@@ -163,7 +163,7 @@ def build_native_undo_history_dialog(
 
 
 def build_native_audio_debugger_dialog(
-    document: Document,
+    document: TcDocument,
     controller: AudioDebuggerController,
     *,
     viewport: Callable[[], Rect],

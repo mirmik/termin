@@ -9,7 +9,7 @@ from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandData,
     CommandModel,
-    Document,
+    TcDocument,
     TableColumn,
     TableColumnModel,
     TableColumnPolicy,
@@ -61,7 +61,7 @@ class NativeModulesPanel:
 
 
 def build_native_modules_panel(
-    document: Document,
+    document: TcDocument,
     controller: ModulesPanelController,
 ) -> NativeModulesPanel:
     root = document.create_vstack("native-modules-panel")

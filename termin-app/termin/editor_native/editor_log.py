@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from termin.editor_core.editor_log_model import EditorLogModel
-from termin.gui_native import Document, RichTextModel, WidgetRef
+from termin.gui_native import TcDocument, RichTextModel, WidgetRef
 
 
 @dataclass
@@ -20,7 +20,7 @@ class NativeEditorLog:
         self.controller.changed.disconnect(self.changed_callback)
 
 
-def build_native_editor_log(document: Document, controller: EditorLogModel, request_render) -> NativeEditorLog:
+def build_native_editor_log(document: TcDocument, controller: EditorLogModel, request_render) -> NativeEditorLog:
     root = document.create_vstack("native-editor-log")
     root.stable_id = "editor.log"
     output_model = RichTextModel()

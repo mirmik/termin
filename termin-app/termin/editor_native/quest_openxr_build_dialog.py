@@ -7,14 +7,14 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.quest_openxr_build_model import QuestOpenXRBuildController
-from termin.gui_native import DialogAction, Document, Rect, Size
+from termin.gui_native import DialogAction, TcDocument, Rect, Size
 
 from .metrics import EDITOR_UI_METRICS
 
 
 @dataclass
 class NativeQuestOpenXRBuildDialog:
-    document: Document
+    document: TcDocument
     dialog: object
     project_label: object
     scene_label: object
@@ -68,7 +68,7 @@ class NativeQuestOpenXRBuildDialog:
 
 
 def build_native_quest_openxr_build_dialog(
-    document: Document,
+    document: TcDocument,
     *,
     viewport: Callable[[], Rect],
     request_render: Callable[[], None],
