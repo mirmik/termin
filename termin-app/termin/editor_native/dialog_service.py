@@ -329,7 +329,7 @@ class NativeDialogService(DialogService):
         default_name: str = "",
     ) -> None:
         dialog = self._document.create_file_dialog(mode)
-        dialog.widget.debug_name = title
+        dialog.title = title
         dialog.set_initial_directory(directory)
         dialog.set_filters(FileDialogModel.parse_filter_string(filter_string))
         if default_name:

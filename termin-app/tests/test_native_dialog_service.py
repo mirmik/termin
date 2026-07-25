@@ -175,6 +175,8 @@ def test_native_dialog_service_save_file_delivers_path_and_releases_dialog(tmp_p
         default_name="main.pipeline",
     )
     assert service.active_count == 1
+    dialog = next(iter(service._active.values()))
+    assert dialog.title == "Save Pipeline"
     assert document.dispatch_key_event(_key(KeyCode.Enter))
     assert values == [str(tmp_path / "main.pipeline")]
     assert service.active_count == 0
