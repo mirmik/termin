@@ -2,6 +2,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from termin.editor_core.mcp_session import (
     canonical_sdk_root,
     default_editor_mcp_registry_dir,
@@ -44,7 +46,12 @@ def test_canonical_sdk_root_resolves_symlinks(tmp_path: Path):
     sdk_root = tmp_path / "checkout" / "sdk"
     sdk_root.mkdir(parents=True)
     link = tmp_path / "sdk-link"
-    link.symlink_to(sdk_root, target_is_directory=True)
+    try:
+        link.symlink_to(sdk_root, target_is_directory=True)
+    except OSError as error:
+        if sys.platform == "win32" and error.winerror == 1314:
+            pytest.skip("Windows symlink creation requires Developer Mode or privilege")
+        raise
 
     assert canonical_sdk_root(link) == canonical_sdk_root(sdk_root)
 

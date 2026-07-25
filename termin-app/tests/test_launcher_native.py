@@ -118,7 +118,7 @@ def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> 
     projection.widgets["name"].text = "Demo"
     projection._choose_location()
     projection._create_project()
-    assert launched == ["/workspace/Demo.terminproj"]
+    assert launched == [str(Path("/workspace") / "Demo.terminproj")]
 
     projection._show_main()
     assert projection.root.stable_id == "launcher.main"

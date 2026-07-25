@@ -43,12 +43,10 @@
 #include <termin_modules/module_cpp_backend.hpp>
 #include <termin_modules/module_python_backend.hpp>
 
-extern "C" {
 #include <core/tc_scene.h>
 #include <render/tc_render_target.h>
 #include <render/tc_viewport_input_manager.h>
 #include <render/tc_viewport.h>
-}
 
 #ifdef _WIN32
 #include <windows.h>

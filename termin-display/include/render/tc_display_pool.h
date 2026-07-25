@@ -37,12 +37,14 @@ TERMIN_DISPLAY_API size_t tc_display_pool_count(void);
 #ifdef __cplusplus
 }
 
+extern "C++" {
 static inline bool operator==(tc_display_handle a, tc_display_handle b) {
     return tc_display_handle_eq(a, b);
 }
 
 static inline bool operator!=(tc_display_handle a, tc_display_handle b) {
     return !tc_display_handle_eq(a, b);
+}
 }
 #endif
 

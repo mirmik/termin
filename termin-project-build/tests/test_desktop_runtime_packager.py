@@ -85,6 +85,28 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (share_dir / "termin_prelude.slang").write_text("// prelude\n", encoding="utf-8")
+    _write_json(
+        sdk / "termin-sdk-capabilities.json",
+        {
+            "version": 1,
+            "sdk_version": "test",
+            "platforms": {
+                "desktop": {
+                    "os": "linux",
+                    "arch": "x86_64",
+                    "player": True,
+                    "native_libraries": True,
+                    "python_runtime": True,
+                    "builtin_shaders": True,
+                },
+                "android": {"abis": []},
+                "quest_openxr": {"abis": []},
+            },
+            "tools": {
+                "termin_player": "bin/termin_player",
+            },
+        },
+    )
     return sdk
 
 
@@ -221,6 +243,8 @@ def test_build_desktop_project_writes_bundle_contract(
         output_dir=legacy_output,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
         sdk_root=sdk_root,
+        target_os="linux",
+        target_arch="x86_64",
         modules=("game",),
     )
 

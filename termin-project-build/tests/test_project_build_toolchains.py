@@ -250,16 +250,17 @@ def test_cli_json_is_the_same_canonical_report_as_editor_api(
     monkeypatch,
     capsys,
 ) -> None:
+    desktop_os = "windows" if os.name == "nt" else "linux"
     project, profiles_path = _write_project(
         tmp_path,
-        {"kind": "desktop", "os": "linux", "arch": "x86_64"},
+        {"kind": "desktop", "os": desktop_os, "arch": "x86_64"},
     )
-    local = _write_sdk(tmp_path / "sdk")
+    local = _write_sdk(tmp_path / "sdk", desktop_os=desktop_os)
     monkeypatch.setenv("TERMIN_SDK", str(local.sdk_root))
     monkeypatch.setenv("TERMIN_SHADERC", str(local.shader_compiler))
     profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
 
-    expected = inspect_profile_capabilities(profile, host_os="linux").to_dict()
+    expected = inspect_profile_capabilities(profile).to_dict()
     assert main(
         [
             "capabilities",
