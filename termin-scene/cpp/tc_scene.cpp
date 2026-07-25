@@ -124,10 +124,12 @@ tc_entity_pool* TcSceneRef::entity_pool() const {
     return tc_scene_entity_pool(_h);
 }
 
+tc_entity_pool_handle TcSceneRef::entity_pool_handle() const {
+    return tc_scene_entity_pool_handle(_h);
+}
+
 Entity TcSceneRef::create_entity(const std::string& name) {
-    tc_entity_pool* pool = entity_pool();
-    if (!pool) return Entity();
-    return Entity::create(pool, name);
+    return Entity::create(entity_pool_handle(), name);
 }
 
 Entity TcSceneRef::get_entity(const std::string& uuid) const {
@@ -137,7 +139,7 @@ Entity TcSceneRef::get_entity(const std::string& uuid) const {
     tc_entity_id id = tc_entity_pool_find_by_uuid(pool, uuid.c_str());
     if (!tc_entity_id_valid(id)) return Entity();
 
-    return Entity(pool, id);
+    return Entity(entity_pool_handle(), id);
 }
 
 Entity TcSceneRef::get_entity_by_pick_id(uint32_t pick_id) const {
@@ -147,7 +149,7 @@ Entity TcSceneRef::get_entity_by_pick_id(uint32_t pick_id) const {
     tc_entity_id id = tc_entity_pool_find_by_pick_id(pool, pick_id);
     if (!tc_entity_id_valid(id)) return Entity();
 
-    return Entity(pool, id);
+    return Entity(entity_pool_handle(), id);
 }
 
 Entity TcSceneRef::find_entity_by_name(const std::string& name) const {
@@ -156,7 +158,7 @@ Entity TcSceneRef::find_entity_by_name(const std::string& name) const {
     tc_entity_id id = tc_scene_find_entity_by_name(_h, name.c_str());
     if (!tc_entity_id_valid(id)) return Entity();
 
-    return Entity(entity_pool(), id);
+    return Entity(entity_pool_handle(), id);
 }
 
 std::string TcSceneRef::name() const {
