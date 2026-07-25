@@ -226,8 +226,15 @@ def _reset_project_modules_runtime() -> None:
     modules_runtime._instance = None
 
 
-def test_python_module_load_discovers_components_without_descriptor_list(tmp_path: Path) -> None:
+def _install_project_modules_runtime_without_venv() -> None:
     _reset_project_modules_runtime()
+    modules_runtime._instance = modules_runtime.ProjectModulesRuntime(
+        use_project_venv=False
+    )
+
+
+def test_python_module_load_discovers_components_without_descriptor_list(tmp_path: Path) -> None:
+    _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
 
     try:
@@ -244,7 +251,7 @@ def test_python_module_load_discovers_components_without_descriptor_list(tmp_pat
 def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path: Path) -> None:
     from termin.engine import SceneManager
 
-    _reset_project_modules_runtime()
+    _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
     scene_manager = SceneManager()
     runtime = HeadlessRuntime(
@@ -303,7 +310,7 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
 ) -> None:
     from termin.engine import SceneManager
 
-    _reset_project_modules_runtime()
+    _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
     scene_manager = SceneManager()
     runtime = HeadlessRuntime(
@@ -361,7 +368,7 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
 def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: Path) -> None:
     from termin.engine import SceneManager
 
-    _reset_project_modules_runtime()
+    _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
     scene_manager = SceneManager()
     runtime = HeadlessRuntime(
