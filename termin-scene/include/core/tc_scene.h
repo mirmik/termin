@@ -70,6 +70,9 @@ TC_API bool tc_scene_alive(tc_scene_handle h);
 // Get the entity pool owned by this scene
 TC_API tc_entity_pool* tc_scene_entity_pool(tc_scene_handle h);
 
+// Get the canonical generational handle of the entity pool owned by this scene.
+TC_API tc_entity_pool_handle tc_scene_entity_pool_handle(tc_scene_handle h);
+
 // ============================================================================
 // Component Registration
 // ============================================================================

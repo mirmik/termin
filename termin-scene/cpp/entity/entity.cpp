@@ -428,8 +428,7 @@ void Entity::deserialize_from(const tc_value* data, void* context) {
     // Get pool handle from scene or use standalone
     tc_entity_pool_handle pool_handle;
     if (tc_scene_handle_valid(scene)) {
-        tc_entity_pool* pool = tc_scene_entity_pool(scene);
-        pool_handle = tc_entity_pool_registry_find(pool);
+        pool_handle = tc_scene_entity_pool_handle(scene);
     } else {
         pool_handle = standalone_pool_handle();
     }
@@ -934,8 +933,7 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
     // Get pool from scene or use standalone
     tc_entity_pool_handle pool_handle;
     if (tc_scene_handle_valid(scene)) {
-        tc_entity_pool* pool = tc_scene_entity_pool(scene);
-        pool_handle = tc_entity_pool_registry_find(pool);
+        pool_handle = tc_scene_entity_pool_handle(scene);
     } else {
         pool_handle = standalone_pool_handle();
     }

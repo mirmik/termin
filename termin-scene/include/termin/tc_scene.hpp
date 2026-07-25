@@ -116,6 +116,7 @@ public:
 
     // Get entity pool owned by this scene
     tc_entity_pool* entity_pool() const;
+    tc_entity_pool_handle entity_pool_handle() const;
 
     // Create a new entity directly in scene's pool
     Entity create_entity(const std::string& name = "");
