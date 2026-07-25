@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
-from tcgui.widgets.loader import UILoader
 from termin.bootstrap import bootstrap_editor, shutdown_editor
 from termin.editor_core.editor_camera import EditorCameraManager
 from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
@@ -85,23 +83,6 @@ def test_editor_builtin_resources_register_camera_ui_controller() -> None:
         assert resource_manager.components["EditorCameraUIController"] is EditorCameraUIController
     finally:
         shutdown_editor()
-
-
-def test_editor_camera_ui_script_exposes_all_mode_buttons() -> None:
-    root = Path(__file__).resolve().parents[2]
-    script = root / "termin-stdlib/python/termin/stdlib/resources/uiscript/editor_camera_ui.uiscript"
-
-    text = script.read_text(encoding="utf-8")
-    widget = UILoader().load_string(text)
-
-    for name in (
-        "colliders_btn",
-        "navmesh_btn",
-        "gizmo_orientation_btn",
-        "wireframe_btn",
-        "ortho_btn",
-    ):
-        assert widget.find(name) is not None
 
 
 def test_controller_applies_and_toggles_all_five_modes() -> None:

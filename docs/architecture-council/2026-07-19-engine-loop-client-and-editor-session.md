@@ -30,9 +30,9 @@ Composition root задаёт порядок жизни обоих объект�
 
 ## Реализованный lifecycle
 
-`init_editor_native()` и `init_editor_tcgui()` возвращают явный
-`EditorSession`. Native host удерживает его рядом с `EngineCore` и после выхода
-из loop выполняет три отдельные фазы:
+`init_editor_native()` возвращает явный `EditorSession`. Native host удерживает
+его рядом с `EngineCore` и после выхода из loop выполняет три отдельные фазы.
+Legacy `init_editor_tcgui()` удалён вместе с comparison frontend 2026-07-25:
 
 1. `EditorSession.prepare_engine_shutdown()` отключает loop client и освобождает
    frontend-интеграции с engine;

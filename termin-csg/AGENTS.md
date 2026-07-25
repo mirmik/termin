@@ -10,9 +10,9 @@ evaluation и визуальные проекции должны жить в о�
 `termin.csg`, чтобы их можно было использовать как из standalone CAD, так и из
 редактора приложения.
 
-В `termin-app` этот мини-редактор встроен в tcgui extension
+В `termin-app` этот мини-редактор встроен в native extension
 `ProceduralMeshEditorExtension` из
-`termin/editor_tcgui/procedural_mesh_editor_extension.py`. Поэтому изменения в
+`termin/editor_native/procedural_mesh_extension.py`. Поэтому изменения в
 `csg_cad.py` не должны превращаться в отдельную несовместимую реализацию
 редактора: standalone приложение служит местом быстрой проверки поведения,
 но каноническая логика должна оставаться общей.

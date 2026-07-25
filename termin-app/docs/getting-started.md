@@ -32,11 +32,11 @@ bash run-tests-python.sh
 
 ## Редактор
 
-Основная версия редактора — tcgui. Архитектура слоев и правила добавления
+Единственная версия редактора использует native UI. Архитектура слоев и правила добавления
 операций описаны в [editor-architecture](editor-architecture.md).
 
 ## Следующие шаги
 
 - [Build System](https://github.com/mirmik/termin-monorepo/blob/master/docs/build-system.md) — текущий SDK workflow.
 - [Documentation System](https://github.com/mirmik/termin-monorepo/blob/master/docs/documentation-system.md) — где держать разные типы документов.
-- [Editor Architecture](editor-architecture.md) — структура editor-core, tcgui views и controllers.
+- [Editor Architecture](editor-architecture.md) — структура editor-core и native frontend.

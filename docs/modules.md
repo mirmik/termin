@@ -364,7 +364,9 @@ Editor-specific Python modules и `termin.editor._editor_native` являютс�
 Оставшийся host-derived bundle pipeline удаляется отдельно в #681; граница
 зафиксирована в [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
 
-tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
+Native UI является единственным поддерживаемым UI редактора; старые tcgui и
+Qt/PyQt frontend-проекции удалены. Сам `termin-gui` остаётся библиотекой для
+UIComponent, CSG, tcplot и nodegraph consumers.
 
 Application-level code не должен протекать вниз в graphics/render/scene. Старые app-level compatibility reexports для доменных API разбираются в пользу canonical imports из owning packages; новые re-export слои в `termin-app` добавлять не следует.
 

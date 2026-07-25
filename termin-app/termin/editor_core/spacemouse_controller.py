@@ -2,7 +2,7 @@
 SpaceMouseController — 3DConnexion SpaceMouse support via libspnav.
 
 Uses spacenavd daemon + libspnav (ctypes) for 6DOF input. The controller is
-UI-toolkit neutral: tcgui polls it from the render loop.
+UI-toolkit neutral: the editor polls it from the render loop.
 
 Install: sudo apt install spacenavd libspnav-dev
 """

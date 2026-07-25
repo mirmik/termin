@@ -1,7 +1,7 @@
 """DialogService — UI-agnostic dialog interface.
 
 Models and controllers in `editor_core` ask for user input through this
-interface. The tcgui frontend provides the concrete implementation.
+interface. The native frontend provides the concrete implementation.
 
 All methods are callback-based so the modal overlay can satisfy the contract
 uniformly. Callbacks receive ``None`` when the user cancels.

@@ -1,7 +1,7 @@
 """UI-agnostic editor core.
 
 This package holds editor business logic that is independent from any UI
-framework. The tcgui frontend delegates to these models and services.
+framework. The native frontend delegates to these models and services.
 
 No module in this package may import tcgui or any other UI framework.
 """

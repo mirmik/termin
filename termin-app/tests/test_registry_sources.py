@@ -1,5 +1,3 @@
-import importlib.util
-
 from termin.editor_core.registry_sources import (
     ResourceAssetSource,
     ResourceComponentSource,
@@ -10,17 +8,6 @@ from termin.editor_core.registry_sources import (
     build_resource_manager_pages,
 )
 from termin.editor_core.registry_viewer_model import RegistryCollectionController
-
-
-def test_migrated_tcgui_registry_viewer_modules_stay_removed():
-    for module_name in (
-        "termin.editor_tcgui.dialogs.core_registry_viewer",
-        "termin.editor_tcgui.dialogs.inspect_registry_viewer",
-        "termin.editor_tcgui.dialogs.navmesh_registry_viewer",
-        "termin.editor_tcgui.dialogs.registry_viewer_dialog",
-        "termin.editor_tcgui.dialogs.resource_manager_viewer",
-    ):
-        assert importlib.util.find_spec(module_name) is None
 
 
 class FakeAsset:

@@ -5,6 +5,8 @@ import importlib
 import sys
 from pathlib import Path
 
+import pytest
+
 from termin.gui_native import Rect
 from termin.launcher.controller import LaunchResult, LauncherController, LauncherServices
 from termin.launcher.native_app import NativeLauncherProjection
@@ -135,12 +137,21 @@ def test_default_launcher_module_import_does_not_load_tcgui_widgets() -> None:
     assert not any(name.startswith("tcgui.widgets") for name in sys.modules)
 
 
-def test_launcher_cli_accepts_native_default_and_explicit_legacy(monkeypatch) -> None:
+def test_launcher_cli_defaults_to_native_and_rejects_ui_selector(
+    monkeypatch, capsys
+) -> None:
     from termin.launcher import app
 
     monkeypatch.setattr(sys, "argv", ["termin_launcher"])
-    assert app._parse_launcher_args() == (None, None)
+    assert app._parse_launcher_args() is None
     monkeypatch.setattr(sys, "argv", ["termin_launcher", "--ui=native"])
-    assert app._parse_launcher_args() == (None, "native")
+    assert app._parse_launcher_args() == "__error__"
+    assert "only supported frontend" in capsys.readouterr().out
+
+
+def test_launcher_cli_error_exits_nonzero(monkeypatch) -> None:
+    from termin.launcher import app
+
     monkeypatch.setattr(sys, "argv", ["termin_launcher", "--ui=tcgui"])
-    assert app._parse_launcher_args() == (None, "tcgui")
+    with pytest.raises(SystemExit, match="1"):
+        app.run()
