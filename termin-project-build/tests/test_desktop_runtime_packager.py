@@ -88,15 +88,14 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     return sdk
 
 
-def test_legacy_app_runtime_lists_do_not_shadow_manifest_python_packages() -> None:
+def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    cmake_install = (repo_root / "termin-app" / "CMakeLists.txt").read_text(encoding="utf-8")
-    legacy_build = (repo_root / "termin-app" / "build.sh").read_text(encoding="utf-8")
+    app_root = repo_root / "termin-app"
     cpp_cmake = (repo_root / "termin-app" / "cpp" / "CMakeLists.txt").read_text(encoding="utf-8")
 
-    assert "\n        scipy\n" not in cmake_install
-    assert "foreach(pkg numpy scipy" not in cmake_install
-    assert "termin-physics-fem" not in legacy_build
+    assert not (app_root / "CMakeLists.txt").exists()
+    assert not (app_root / "build.sh").exists()
+    assert not (app_root / "build.ps1").exists()
     assert "termin-physics-fem" not in cpp_cmake
     assert "TERMIN_SDK_PYTHON_PACKAGE_DIRS" not in cpp_cmake
     assert "../termin-assets/termin_assets" not in cpp_cmake

@@ -16,7 +16,7 @@ from tcgui.widgets.ui import UI
 from tcgui.widgets.basic import Label, Button, TextInput
 from tcgui.widgets.containers import VStack, Panel
 from tcgui.widgets.units import px, pct
-from termin.display import WindowedGraphicsSession, quit_sdl
+from termin.display.window import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 

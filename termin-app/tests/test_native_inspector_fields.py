@@ -7,13 +7,14 @@ from termin.editor_core.inspector_fields_model import InspectorFieldsController
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
 from termin.editor_core.inspector_special_choices import InspectorSpecialChoiceProvider
 from termin.editor_core.undo_stack import UndoCommand, UndoStack
-from termin.editor_native import build_native_inspector_fields, resolve_native_ui_font
 from termin.editor_native.inspector_fields import (
     NativeIntervalSliderWidgets,
     NativeListFieldWidgets,
     NativeResourceFieldWidgets,
     NativeVec3ListFieldWidgets,
+    build_native_inspector_fields,
 )
+from termin.editor_native.ui_host import resolve_native_ui_font
 from termin.gui_native import (
     DrawList,
     DrawListRenderer,

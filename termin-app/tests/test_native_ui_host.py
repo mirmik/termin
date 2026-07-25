@@ -7,13 +7,12 @@ import numpy as np
 import pytest
 
 from tcbase import Key
-from termin.editor_native import (
+from termin.editor_native.ui_host import (
     EditorWindowRegistry,
     NativeUiEventPolicy,
-    build_native_editor_shell,
     resolve_native_ui_font,
 )
-from termin.editor_native.shell import NativeMenuActivationRoute
+from termin.editor_native.shell import NativeMenuActivationRoute, build_native_editor_shell
 from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
@@ -416,7 +415,7 @@ def test_editor_cli_rejects_retired_ui_selector(monkeypatch, capsys):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=native"])
-    assert _parse_editor_args() == ("__error__", None)
+    assert _parse_editor_args().exit_code == 1
     assert "only supported frontend" in capsys.readouterr().out
 
 
@@ -424,7 +423,51 @@ def test_editor_cli_defaults_to_native_backend(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor"])
-    assert _parse_editor_args() == (None, None)
+    options = _parse_editor_args()
+    assert options.exit_code is None
+    assert options.composition == "windowed"
+
+
+def test_editor_cli_selects_finite_offscreen_composition(monkeypatch):
+    from termin.editor.run_editor import _parse_editor_args
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "termin_editor",
+            "--headless",
+            "--offscreen-size",
+            "640x360",
+            "--offscreen-backend",
+            "vulkan",
+            "--frames",
+            "3",
+        ],
+    )
+    options = _parse_editor_args()
+    assert options.exit_code is None
+    assert options.composition == "offscreen"
+    assert (options.width, options.height) == (640, 360)
+    assert options.backend == "vulkan"
+    assert options.frames == 3
+
+
+def test_editor_cli_headless_defaults_to_one_frame(monkeypatch):
+    from termin.editor.run_editor import _parse_editor_args
+
+    monkeypatch.setattr("sys.argv", ["termin_editor", "--headless"])
+    assert _parse_editor_args().frames == 1
+
+
+def test_editor_cli_rejects_invalid_offscreen_extent(monkeypatch, capsys):
+    from termin.editor.run_editor import _parse_editor_args
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["termin_editor", "--offscreen-size", "640-by-360"],
+    )
+    assert _parse_editor_args().exit_code == 1
+    assert "WIDTHxHEIGHT" in capsys.readouterr().out
 
 
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):

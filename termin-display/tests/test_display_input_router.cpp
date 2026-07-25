@@ -2,8 +2,10 @@
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#ifdef TERMIN_DISPLAY_HAS_SDL
 #include "termin/input/window_input_bridge.hpp"
 #include "termin/window/event.hpp"
+#endif
 
 #include <cassert>
 #include <cstdio>
@@ -170,6 +172,7 @@ int main()
         return 1;
     }
 
+#ifdef TERMIN_DISPLAY_HAS_SDL
     termin::WindowEvent pointer_event;
     pointer_event.type = termin::WindowEventType::PointerMoved;
     pointer_event.pointer.logical_position = {12.5f, 25.0f};
@@ -189,6 +192,7 @@ int main()
         std::fprintf(stderr, "window bridge did not decode UTF-8 text input\n");
         return 1;
     }
+#endif
 
     tc_display_free(display);
     tc_display_pool_shutdown();

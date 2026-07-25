@@ -20,11 +20,6 @@ else()
     find_package(termin_graphics REQUIRED)
 endif()
 if(COMMAND termin_require_package)
-    termin_require_package(termin_window termin_window::termin_window)
-else()
-    find_package(termin_window REQUIRED)
-endif()
-if(COMMAND termin_require_package)
     termin_require_package(termin_scene termin_scene::termin_scene)
 else()
     find_package(termin_scene REQUIRED)
@@ -76,13 +71,6 @@ set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/platform/offscreen_render_surface.cpp
 )
 
-if(TERMIN_DISPLAY_HAS_SDL)
-    list(APPEND TERMIN_DISPLAY_SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_window_backend.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/platform/window_input_bridge.cpp
-    )
-endif()
-
 if(TERMIN_DISPLAY_BUILD_SHARED)
     add_library(termin_display SHARED ${TERMIN_DISPLAY_SOURCES})
     target_compile_definitions(termin_display PRIVATE TERMIN_DISPLAY_EXPORTS TC_EXPORTS)
@@ -108,25 +96,15 @@ target_include_directories(termin_display
         ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
-if(TERMIN_DISPLAY_HAS_SDL)
-    target_compile_definitions(termin_display PUBLIC TERMIN_DISPLAY_HAS_SDL)
-    target_include_directories(termin_display PUBLIC ${SDL2_INCLUDE_DIRS})
-endif()
-
 target_link_libraries(termin_display
     PUBLIC
         tcbase::termin_base
         tgfx::termin_graphics
         tgfx::termin_graphics2
-        termin_window::termin_window
         termin_scene::termin_scene
         termin_input::termin_input
         termin_render::termin_render
 )
-
-if(TERMIN_DISPLAY_HAS_SDL)
-    target_link_libraries(termin_display PUBLIC ${SDL2_LIBRARIES})
-endif()
 
 set_property(TARGET termin_display PROPERTY
     TERMIN_DISPLAY_HAS_SDL ${TERMIN_DISPLAY_HAS_SDL}
@@ -141,6 +119,52 @@ if(MSVC)
     target_compile_definitions(termin_display PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(termin_display PRIVATE -Wall -Wextra -Wno-stringop-truncation)
+endif()
+
+if(TERMIN_DISPLAY_HAS_SDL)
+    if(COMMAND termin_require_package)
+        termin_require_package(termin_window termin_window::termin_window)
+    else()
+        find_package(termin_window REQUIRED)
+    endif()
+
+    add_library(termin_display_window SHARED
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_window_backend.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/window_input_bridge.cpp
+    )
+    add_library(termin_display::window ALIAS termin_display_window)
+    set_target_properties(termin_display_window PROPERTIES
+        EXPORT_NAME window
+        POSITION_INDEPENDENT_CODE ON
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    target_compile_definitions(termin_display_window
+        PRIVATE TERMIN_DISPLAY_EXPORTS TC_EXPORTS
+        PUBLIC TERMIN_DISPLAY_HAS_SDL
+    )
+    target_include_directories(termin_display_window
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+            ${SDL2_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_display_window
+        PUBLIC
+            termin_display
+            termin_window::termin_window
+            ${SDL2_LIBRARIES}
+    )
+    termin_set_rpath_lib(termin_display_window)
+    if(MSVC)
+        target_compile_options(termin_display_window PRIVATE /W3 /wd4251 /wd4275)
+        target_compile_definitions(
+            termin_display_window PRIVATE _CRT_SECURE_NO_WARNINGS)
+    else()
+        target_compile_options(
+            termin_display_window PRIVATE -Wall -Wextra -Wno-stringop-truncation)
+    endif()
 endif()
 
 if(TERMIN_BUILD_PYTHON)
@@ -171,30 +195,21 @@ if(TERMIN_BUILD_PYTHON)
     termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
 
-    set(TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES
-        bindings/platform/platform_module.cpp
-    )
     if(TERMIN_DISPLAY_HAS_SDL)
-        list(APPEND TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES
+        nanobind_add_module(_platform_native NB_SHARED
+            bindings/platform/platform_module.cpp
             bindings/platform/sdl_bindings.cpp
         )
-    endif()
-
-    nanobind_add_module(_platform_native NB_SHARED
-        ${TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES}
-    )
-    target_link_libraries(_platform_native PRIVATE termin_display)
-    target_include_directories(_platform_native PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
-    )
-    if(TERMIN_DISPLAY_HAS_SDL)
         target_compile_definitions(_platform_native PRIVATE TERMIN_DISPLAY_HAS_SDL)
         target_include_directories(_platform_native PRIVATE ${SDL2_INCLUDE_DIRS})
-        target_link_libraries(_platform_native PRIVATE ${SDL2_LIBRARIES})
+        target_link_libraries(_platform_native PRIVATE termin_display_window)
+        target_include_directories(_platform_native PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/include
+            ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
+        )
+        termin_set_rpath_python(_platform_native)
+        install(TARGETS _platform_native DESTINATION lib/python/termin/display)
     endif()
-    termin_set_rpath_python(_platform_native)
-    install(TARGETS _platform_native DESTINATION lib/python/termin/display)
 
     install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/display/
             DESTINATION lib/python/termin/display
@@ -210,6 +225,15 @@ install(TARGETS termin_display
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
+if(TARGET termin_display_window)
+    install(TARGETS termin_display_window
+        EXPORT termin_displayWindowTargets
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()
 
 install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/tc_input_event.h
@@ -267,6 +291,9 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
 
     add_executable(display_input_router_test tests/test_display_input_router.cpp)
     target_link_libraries(display_input_router_test PRIVATE termin_display)
+    if(TARGET termin_display_window)
+        target_link_libraries(display_input_router_test PRIVATE termin_display_window)
+    endif()
     add_test(NAME display_input_router_test COMMAND display_input_router_test)
 
     add_executable(render_surface_abi_test tests/test_render_surface_abi.cpp)
@@ -288,6 +315,14 @@ install(EXPORT termin_displayTargets
     NAMESPACE termin_display::
     DESTINATION lib/cmake/termin_display
 )
+
+if(TARGET termin_display_window)
+    install(EXPORT termin_displayWindowTargets
+        FILE termin_displayWindowTargets.cmake
+        NAMESPACE termin_display::
+        DESTINATION lib/cmake/termin_display
+    )
+endif()
 
 include(CMakePackageConfigHelpers)
 

@@ -168,7 +168,7 @@ def test_player_runtime_old_project_window_settings_default_to_vsync(tmp_path: P
 
 
 def test_player_backend_window_receives_requested_presentation_mode():
-    from termin.display import PresentationMode
+    from termin.display.window import PresentationMode
     from termin.player.runtime import _create_player_backend_window
 
     calls = []

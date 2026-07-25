@@ -79,7 +79,7 @@ def _create_player_backend_window(
     height: int,
     vsync: bool,
 ):
-    from termin.display import PresentationMode
+    from termin.display.window import PresentationMode
 
     presentation_mode = PresentationMode.VSYNC if vsync else PresentationMode.IMMEDIATE
     try:
@@ -247,7 +247,7 @@ class PlayerRuntime:
         # Create one host-owned graphics runtime before its presentation
         # window. RenderEngine reuses this device instead of creating a second
         # device with incompatible texture handles.
-        from termin.display import WindowedGraphicsSession, quit_sdl
+        from termin.display.window import WindowedGraphicsSession, quit_sdl
 
         try:
             self._graphics_session = WindowedGraphicsSession.create_native()
@@ -838,7 +838,7 @@ class PlayerRuntime:
                 log.error(f"[PlayerRuntime] Failed to close graphics runtime: {e}")
             self._graphics_session = None
             try:
-                from termin.display import quit_sdl
+                from termin.display.window import quit_sdl
 
                 quit_sdl()
             except Exception as e:

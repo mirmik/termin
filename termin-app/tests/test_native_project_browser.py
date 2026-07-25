@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from termin.editor_core.project_browser_model import ProjectBrowserController
-from termin.editor_native import build_native_project_browser, resolve_native_ui_font
+from termin.editor_native.project_browser import build_native_project_browser
+from termin.editor_native.ui_host import resolve_native_ui_font
 from termin.gui_native import (
     TcDocument,
     DrawList,

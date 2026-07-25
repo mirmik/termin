@@ -7,8 +7,11 @@ import pytest
 from termin.editor_core.inspector_fields_model import InspectorFieldsController
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
 from termin.editor_core.material_inspector_model import MaterialInspectorController
-from termin.editor_native import build_native_inspector_fields, build_native_material_inspector
-from termin.editor_native.material_inspector import NativeMaterialInspector
+from termin.editor_native.inspector_fields import build_native_inspector_fields
+from termin.editor_native.material_inspector import (
+    NativeMaterialInspector,
+    build_native_material_inspector,
+)
 from termin.inspect import InspectField
 
 

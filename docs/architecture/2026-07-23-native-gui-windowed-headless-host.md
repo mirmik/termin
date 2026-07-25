@@ -11,10 +11,19 @@ windowed applications use the framework-neutral `termin-window` manager and an
 optional GUI adapter, while headless execution uses document/rendering
 primitives without `termin-window` or an application host.
 
-Implementation is split into #742, #743, #744, #745 and #746. The shared frame
-core (#742) and typed input/platform boundaries (#743) are implemented. The
-owning offscreen composition begins at #744. The virtual-display E2E path
-remains separate in #623.
+The migration completed in #745 and #760. The production editor now selects
+between:
+
+- `WindowedGraphicsSession` + `WindowManager` + `GuiWindowAdapter`;
+- `OffscreenGuiComposition`, configured as the application graphics domain.
+
+Both selections feed the same editor bootstrap, project/scene services,
+widget tree, render engine, Play/Stop controllers and ordered shutdown.
+`termin-display` core is separated from its optional `window` component, so a
+headless editor process does not load `_platform_native`, `termin-window` or
+SDL. The retired ownership hosts and their Python aliases no longer exist.
+The remainder of this note records the superseded migration model that led to
+the final contracts.
 
 ## Problem
 
@@ -236,16 +245,15 @@ at a card boundary.
 
 ## Completion gate
 
-The migration is complete when:
+Completed:
 
-- `GuiApplicationHost` contains the only native GUI layout/paint/frame loop;
-- `GuiWindowHost` is a thin BackendWindow-backed composition;
-- offscreen execution uses `GraphicsHost::create_isolated()` without a fake
-  `BackendWindow`;
-- windowed and offscreen modes use identical frame extension, repaint,
-  deferred-work, dynamic-texture and shutdown contracts;
+- `DocumentRenderer` contains the shared native GUI layout/paint frame path;
+- `GuiWindowAdapter` is a borrowed `BackendWindow` adapter;
+- `OffscreenGuiComposition` renders without a fake `BackendWindow`;
+- windowed and offscreen modes share repaint, dynamic-texture and shutdown
+  contracts;
 - the native editor selects only its environment composition, not a second
   bootstrap or engine;
-- an automated MCP smoke renders and captures a real editor frame without
-  `DISPLAY` or `WAYLAND_DISPLAY`;
+- the installed editor loads a real project and scene and exits after a finite
+  frame count with no display server;
 - virtual-display testing remains an independent window-system gate.

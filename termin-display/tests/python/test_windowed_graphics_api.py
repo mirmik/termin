@@ -1,4 +1,4 @@
-from termin.display import (
+from termin.display.window import (
     BackendWindow,
     WindowHandle,
     WindowManager,

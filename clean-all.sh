@@ -60,11 +60,9 @@ PROJECT_ROOTS+=(
 
 ARTIFACT_DIR_NAMES=(
     build
-    build_standalone
     build_win
     dist
     install
-    install_win
 )
 
 for project_root in "${PROJECT_ROOTS[@]}"; do
@@ -79,8 +77,6 @@ for project_root in "${PROJECT_ROOTS[@]}"; do
 done
 
 for p in \
-    "$ROOT_DIR/termin-app/build_standalone" \
-    "$ROOT_DIR/termin-app/install" \
     "$ROOT_DIR/termin-app/cpp/build"
 do
     if [[ -e "$p" ]]; then

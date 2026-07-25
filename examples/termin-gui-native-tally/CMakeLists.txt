@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(termin_gui_native_tally VERSION 0.1.0 LANGUAGES CXX)
 
-find_package(termin_gui_native CONFIG REQUIRED)
+find_package(termin_gui_native CONFIG REQUIRED COMPONENTS window_adapter)
 
 add_executable(termin_tally
     src/main.cpp
@@ -10,7 +10,7 @@ add_executable(termin_tally
 target_compile_features(termin_tally PRIVATE cxx_std_20)
 target_link_libraries(termin_tally
     PRIVATE
-        termin_gui_native::application_host
+        termin_gui_native::window_adapter
 )
 if(MSVC)
     target_compile_options(termin_tally PRIVATE /W4 /permissive-)

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from tcbase import Key, MouseButton, log
 from tcgui.widgets.ui import UI
-from termin.display import WindowedGraphicsSession, quit_sdl, start_text_input, wait_sdl_events_timeout
+from termin.display.window import (
+    WindowedGraphicsSession,
+    quit_sdl,
+    start_text_input,
+    wait_sdl_events_timeout,
+)
 from tgfx import Tgfx2Context
 
 from termin.csg.cad_app import CadApp

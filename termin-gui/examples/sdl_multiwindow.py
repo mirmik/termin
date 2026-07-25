@@ -22,7 +22,7 @@ from tcgui.widgets.basic import Label, Button, TextInput, SpinBox
 from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.units import px, pct
-from termin.display import WindowedGraphicsSession, quit_sdl
+from termin.display.window import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 

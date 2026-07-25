@@ -11,16 +11,16 @@ import sys
 import tempfile
 from typing import Callable, Protocol
 
-from termin.display import WindowHandle, WindowManager
+from termin.display.window import WindowHandle, WindowManager
 from tgfx import Tgfx2Context
 from termin.gui_native import (
     TcDocument,
-    GuiWindowAdapter,
     Size,
     StyleRole,
     tc_ui_document_create,
     tc_ui_document_destroy,
 )
+from termin.gui_native.window import GuiWindowAdapter
 
 
 _logger = logging.getLogger(__name__)
@@ -211,9 +211,15 @@ class NativeWidgetContent:
     def unregister_color_picker(self, picker: object) -> None:
         self.adapter.unregister_color_picker(picker)
 
+    def set_clipboard_text(self, text: str) -> None:
+        from termin.display.window import set_clipboard_text
+
+        if not set_clipboard_text(text):
+            raise RuntimeError("native window clipboard rejected text")
+
     def _sync_color_picker_surfaces(self) -> None:
-        # ColorPicker GPU surfaces are synchronized by GuiApplicationHost's
-        # renderer before document paint.
+        # The shared document renderer synchronizes ColorPicker GPU surfaces
+        # before document paint.
         return
 
     def register_image_preview(

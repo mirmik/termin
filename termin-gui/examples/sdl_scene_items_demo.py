@@ -19,7 +19,7 @@ from tcgui.scene import GraphicsScene, RectItem, SceneView
 from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct
 from tcgui.widgets.vstack import VStack
-from termin.display import WindowedGraphicsSession, quit_sdl
+from termin.display.window import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 

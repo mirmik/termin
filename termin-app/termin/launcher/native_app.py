@@ -402,7 +402,7 @@ def _smoke_frame_limit() -> int:
 
 def run_native_launcher(controller: LauncherController) -> None:
     """Own the native launcher window until an editor starts or it closes."""
-    from termin.display import WindowManager, WindowedGraphicsSession, quit_sdl
+    from termin.display.window import WindowManager, WindowedGraphicsSession, quit_sdl
     from termin.editor_core.application_icon import apply_editor_window_icon
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
     from termin.editor_native.ui_host import NativeWidgetContent

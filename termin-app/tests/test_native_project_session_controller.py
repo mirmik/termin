@@ -2,7 +2,7 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from pathlib import Path
 import threading
 
-from termin.editor_native import project_session_controller as native_session
+import termin.editor_native.project_session_controller as native_session
 from termin.gui_native import Rect
 
 

@@ -248,8 +248,7 @@ if [[ $NO_CONFIGURE -eq 0 ]]; then
         -DTERMIN_ENABLE_SDL="$TERMIN_ENABLE_SDL" \
         -DTERMIN_ENABLE_OPENGL="$TERMIN_ENABLE_OPENGL" \
         -DTERMIN_BUILD_EDITOR_MINIMAL=OFF \
-        -DTERMIN_BUILD_LAUNCHER=OFF \
-        -DTERMIN_BUNDLE_PYTHON=OFF; then
+        -DTERMIN_BUILD_LAUNCHER=OFF; then
         echo "ERROR: CMake configure failed" >&2
         exit 1
     fi

@@ -361,8 +361,10 @@ Editor-specific Python modules и `termin.editor._editor_native` являютс�
 `build-system/application-python-payloads.json`; Stage 3 устанавливает их в SDK
 после library wheels и проверяет отдельно от distribution metadata. У
 `termin-app` больше нет `setup.py`, wheel или записи в общем package manifest.
-Оставшийся host-derived bundle pipeline удаляется отдельно в #681; граница
-зафиксирована в [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
+Host-derived bundle pipeline также удалён в #681: проверенное SDK tree является
+единственным editor runtime artifact, а его переносимость проверяет общий
+Linux/Windows relocated-SDK smoke. Граница зафиксирована в
+[протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
 
 Native UI является единственным поддерживаемым UI редактора; старые tcgui и
 Qt/PyQt frontend-проекции удалены. Сам `termin-gui` остаётся библиотекой для

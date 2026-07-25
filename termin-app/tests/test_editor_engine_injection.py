@@ -15,11 +15,20 @@ def test_init_editor_passes_engine_to_native_frontend(monkeypatch):
         received.append((value, kwargs)) or session
     )
     monkeypatch.setitem(sys.modules, "termin.editor_native.run_editor", frontend)
-    monkeypatch.setattr(run_editor, "_parse_editor_args", lambda: (None, None))
+    monkeypatch.setattr(
+        run_editor,
+        "_parse_editor_args",
+        lambda: run_editor.EditorLaunchOptions(),
+    )
 
     result = run_editor.init_editor(engine, debug_resource="albedo", no_scene=True)
 
-    assert received == [(engine, {"debug_resource": "albedo", "no_scene": True})]
+    assert len(received) == 1
+    received_engine, kwargs = received[0]
+    assert received_engine is engine
+    assert kwargs["debug_resource"] == "albedo"
+    assert kwargs["no_scene"] is True
+    assert kwargs["composition_config"].mode == "windowed"
     assert result is session
 
 
