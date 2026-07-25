@@ -64,8 +64,21 @@ def _sdk_python_executable(prefix_root: Path) -> Path | None:
 
 
 class ProjectModulesRuntime:
-    def __init__(self, scene_manager=None) -> None:
+    """Coordinate project module discovery, loading, and live reload.
+
+    ``use_project_venv`` keeps the normal project-isolated environment behavior
+    by default. Hosts that provision Python dependencies externally may disable
+    it explicitly while retaining the same module lifecycle.
+    """
+
+    def __init__(
+        self,
+        scene_manager=None,
+        *,
+        use_project_venv: bool = True,
+    ) -> None:
         self._project_root: Path | None = None
+        self._use_project_venv = use_project_venv
         self._integration = TermModulesIntegration()
         self._scene_manager = scene_manager
         if scene_manager is not None:
@@ -600,7 +613,7 @@ class ProjectModulesRuntime:
         else:
             environment.project_root = str(self._project_root)
             environment.project_venv_path = str(self._project_root / ".venv")
-            environment.use_project_venv = True
+            environment.use_project_venv = self._use_project_venv
 
         self._integration.set_environment(environment)
         self._runtime.set_environment(environment)

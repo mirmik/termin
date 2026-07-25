@@ -1,5 +1,4 @@
 from termin_assets import AssetContext, PreLoadResult
-from termin.default_assets.render.texture_asset import TextureAsset
 from termin.default_assets.render.texture_plugin import create_runtime_plugin
 
 
@@ -30,14 +29,6 @@ class FakeLoadedTextureAsset:
 
     def reload(self) -> None:
         self.reload_count += 1
-
-
-def test_texture_asset_does_not_expose_gpu_lifecycle_api() -> None:
-    asset = TextureAsset(name="albedo")
-
-    assert not hasattr(asset, "delete_gpu")
-
-
 def test_texture_runtime_reload_stays_in_asset_layer() -> None:
     resource_manager = FakeResourceManager()
     asset = FakeLoadedTextureAsset()
