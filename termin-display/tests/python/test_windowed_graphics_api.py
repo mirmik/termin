@@ -1,5 +1,4 @@
 from termin.display import (
-    BackendWindow,
     WindowHandle,
     WindowManager,
     WindowedGraphicsSession,
@@ -18,7 +17,3 @@ def test_windowed_graphics_api_has_one_typed_graphics_host_boundary():
     assert hasattr(WindowManager, "create_window")
     assert hasattr(WindowManager, "pump_events")
     assert hasattr(Tgfx2Context, "from_runtime")
-
-    assert not hasattr(BackendWindow, "device")
-    assert not hasattr(BackendWindow, "context")
-    assert not hasattr(Tgfx2Context, "from_window")

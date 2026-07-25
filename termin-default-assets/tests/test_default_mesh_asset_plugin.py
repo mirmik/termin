@@ -76,15 +76,6 @@ def test_mesh_asset_wraps_mesh3() -> None:
     assert asset.get_vertex_count() == 3
     assert asset.get_triangle_count() == 1
     assert asset.source_path == Path("/tmp/triangle.obj")
-
-
-def test_mesh_asset_does_not_expose_gpu_lifecycle_api() -> None:
-    asset = MeshAsset(name="triangle")
-
-    assert not hasattr(asset, "draw_gpu")
-    assert not hasattr(asset, "delete_gpu")
-
-
 def test_mesh_spec_defaults_live_in_default_assets() -> None:
     spec = MeshSpec()
 

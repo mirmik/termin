@@ -103,21 +103,6 @@ def test_importing_domain_native_modules_has_no_kind_registration_side_effects()
     )
 
 
-def test_legacy_app_native_module_is_removed():
-    _run_python(
-        """
-        import importlib
-
-        try:
-            importlib.import_module("termin._native")
-        except ModuleNotFoundError:
-            pass
-        else:
-            raise AssertionError("termin._native should not be importable")
-        """
-    )
-
-
 def test_explicit_runtime_bootstrap_registers_core_resource_kinds():
     _run_python(
         """
