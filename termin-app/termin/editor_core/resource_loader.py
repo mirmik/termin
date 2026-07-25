@@ -23,11 +23,6 @@ def register_editor_builtin_resources(resource_manager: "ResourceManager") -> No
 
     publish_python_component(EditorCameraUIController, owner="termin-app-python")
 
-    loaded_components = resource_manager.register_builtin_components()
-    if loaded_components:
-        log.info(f"Loaded components: {loaded_components}")
-
-    resource_manager.register_builtin_frame_passes()
     resource_manager.register_builtin_shaders()
     resource_manager.register_builtin_textures()
     resource_manager.register_builtin_materials()
@@ -35,10 +30,6 @@ def register_editor_builtin_resources(resource_manager: "ResourceManager") -> No
     if loaded_meshes:
         log.info(f"Loaded builtin meshes: {loaded_meshes}")
     resource_manager.register_builtin_pipelines()
-    resource_manager.register_component(
-        "EditorCameraUIController",
-        EditorCameraUIController,
-    )
 
 
 class ResourceLoader:

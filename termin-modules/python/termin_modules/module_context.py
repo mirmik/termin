@@ -271,30 +271,6 @@ def _audit_python_kinds(module_id: str) -> list[str]:
     return KindRegistry.list_owned(module_id)
 
 
-def _unregister_app_resource_classes(module_id: str) -> list[str]:
-    from termin_assets import get_resource_manager
-
-    resources = get_resource_manager()
-    if resources is None:
-        return []
-    names = _audit_app_resource_classes(module_id)
-    resources.component_registry.unregister_owner(module_id)
-    resources.frame_pass_registry.unregister_owner(module_id)
-    return names
-
-
-def _audit_app_resource_classes(module_id: str) -> list[str]:
-    from termin_assets import get_resource_manager
-
-    resources = get_resource_manager()
-    if resources is None:
-        return []
-    return [
-        *(f"component:{name}" for name in resources.component_registry.list_owned(module_id)),
-        *(f"frame-pass:{name}" for name in resources.frame_pass_registry.list_owned(module_id)),
-    ]
-
-
 def _revoke_module_packages(module_id: str) -> list[str]:
     names = _audit_module_packages(module_id)
     unregister_module_packages(module_id)
@@ -308,11 +284,6 @@ def _audit_module_packages(module_id: str) -> list[str]:
 
 
 for _participant in (
-    OwnerContributionParticipant(
-        "app-resource-classes",
-        lambda owner: _unregister_app_resource_classes(owner),
-        lambda owner: _audit_app_resource_classes(owner),
-    ),
     OwnerContributionParticipant(
         "python-component-classes",
         lambda owner: _unregister_python_component_classes(owner),

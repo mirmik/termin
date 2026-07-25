@@ -20,7 +20,6 @@ from termin.player.project_settings import (
 def register_project_runtime_resources(*, include_render_resources: bool) -> None:
     """Register builtin resources needed before scene deserialization."""
     rm = DefaultResourceManager.instance()
-    rm.register_builtin_components()
     if not include_render_resources:
         return
 
@@ -29,7 +28,6 @@ def register_project_runtime_resources(*, include_render_resources: bool) -> Non
     rm.register_builtin_materials()
     rm.register_builtin_meshes()
     rm.register_builtin_pipelines()
-    rm.register_builtin_frame_passes()
 
 
 def load_project_modules(

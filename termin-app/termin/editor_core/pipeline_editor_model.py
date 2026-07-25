@@ -185,12 +185,10 @@ def _add_node_param(
 
 
 def _populate_pass_node_params(node: Node, pass_class_name: str) -> None:
-    from termin.editor_core.resource_manager import ResourceManager
     from termin.inspect import InspectRegistry
+    from termin.render_framework import tc_pass_registry_get_class
 
-    manager = ResourceManager.instance()
-    manager.register_builtin_frame_passes()
-    cls = manager.get_frame_pass(pass_class_name)
+    cls = tc_pass_registry_get_class(pass_class_name)
     if cls is None:
         _logger.warning("Pipeline editor pass class has no registered params: %s", pass_class_name)
         return
@@ -717,14 +715,19 @@ class PipelineEditorController:
         self.graph_changed.emit(self.graph)
 
     def available_passes(self) -> tuple[tuple[str, str, str], ...]:
-        from termin.editor_core.resource_manager import ResourceManager
+        from termin.default_assets.builtin_types import (
+            get_default_builtin_frame_pass_specs,
+        )
+        from termin.render_framework import tc_pass_registry_get_class
 
-        manager = ResourceManager.instance()
-        manager.register_builtin_frame_passes()
         effect_classes = {"BloomPass", "GrayscalePass", "HighlightPass", "MaterialPass", "TonemapPass"}
         result = []
-        for class_name in sorted(manager.frame_passes):
-            cls = manager.get_frame_pass(class_name)
+        class_names = {
+            class_name
+            for _module_name, class_name in get_default_builtin_frame_pass_specs()
+        }
+        for class_name in sorted(class_names):
+            cls = tc_pass_registry_get_class(class_name)
             category = "Other" if cls is None else str(cls.category)
             node_type = (
                 "effect"

@@ -33,6 +33,12 @@ public:
     // Get Python class for component
     static nb::object get_class(const std::string& name);
 
+    // Attach a Python projection to an already registered native descriptor.
+    static bool bind_class_projection(const std::string& name, nb::object cls);
+
+    // Release all Python class projections without touching native descriptors.
+    static void clear_class_projections();
+
     // List Python components
     static std::vector<std::string> list_python();
 };

@@ -518,7 +518,6 @@ def test_owner_contribution_cleanup_resumes_at_each_failed_participant() -> None
 def test_each_builtin_owner_participant_failure_is_retryable(monkeypatch) -> None:
     module_id = "builtin_owner_participant_retry_probe"
     revoke_functions = [
-        "_unregister_app_resource_classes",
         "_unregister_python_component_classes",
         "_unregister_python_frame_pass_classes",
         "_unregister_python_kinds",

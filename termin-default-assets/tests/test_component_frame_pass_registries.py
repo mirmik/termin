@@ -1,121 +1,54 @@
-import sys
-import types
 from pathlib import Path
 
 import pytest
 
 from termin.default_assets.resource_manager import DefaultResourceManager
-from termin.render_framework.frame_pass_registry import FramePassRegistry
-from termin.scene.component_registry import ComponentClassRegistry
 
 
-def test_component_class_registry_registers_builtin_specs() -> None:
-    module = types.ModuleType("_termin_component_registry_test_module")
-
-    class ProbeComponent:
-        pass
-
-    module.ProbeComponent = ProbeComponent
-    sys.modules[module.__name__] = module
-    try:
-        registry = ComponentClassRegistry()
-        registered = registry.register_builtins([(module.__name__, "ProbeComponent")])
-
-        assert registered == ["ProbeComponent"]
-        assert registry.get("ProbeComponent") is ProbeComponent
-        assert registry.list_names() == ["ProbeComponent"]
-    finally:
-        sys.modules.pop(module.__name__, None)
-
-
-def test_frame_pass_registry_registers_builtin_specs() -> None:
-    module = types.ModuleType("_termin_frame_pass_registry_test_module")
-
-    class ProbeFramePass:
-        pass
-
-    module.ProbeFramePass = ProbeFramePass
-    sys.modules[module.__name__] = module
-    try:
-        registry = FramePassRegistry()
-        registered = registry.register_builtins([(module.__name__, "ProbeFramePass")])
-
-        assert registered == ["ProbeFramePass"]
-        assert registry.get("ProbeFramePass") is ProbeFramePass
-        assert registry.list_names() == ["ProbeFramePass"]
-    finally:
-        sys.modules.pop(module.__name__, None)
-
-
-def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
+def test_resource_manager_does_not_own_component_or_frame_pass_catalogs() -> None:
     rm = DefaultResourceManager()
 
-    class ProbeComponent:
-        pass
+    for attribute in (
+        "component_registry",
+        "frame_pass_registry",
+        "components",
+        "frame_passes",
+        "register_component",
+        "register_frame_pass",
+        "register_builtin_components",
+        "register_builtin_frame_passes",
+        "get_component",
+        "get_frame_pass",
+    ):
+        assert attribute not in dir(rm)
 
-    class ProbeFramePass:
-        pass
-
-    rm.register_component("ProbeComponent", ProbeComponent)
-    rm.register_frame_pass("ProbeFramePass", ProbeFramePass)
-
-    assert rm.component_registry.get("ProbeComponent") is ProbeComponent
-    assert rm.components["ProbeComponent"] is ProbeComponent
-    assert rm.get_component("ProbeComponent") is ProbeComponent
-    assert rm.list_component_names() == ["ProbeComponent"]
-
-    assert rm.frame_pass_registry.get("ProbeFramePass") is ProbeFramePass
-    assert rm.frame_passes["ProbeFramePass"] is ProbeFramePass
-    assert rm.get_frame_pass("ProbeFramePass") is ProbeFramePass
-    assert rm.list_frame_pass_names() == ["ProbeFramePass"]
-    assert "scan_components" not in dir(rm)
-    assert "scan_frame_passes" not in dir(rm)
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.scene.component_registry")
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.render_framework.frame_pass_registry")
 
 
-def test_owner_cleanup_revokes_app_resources_and_python_kinds() -> None:
+def test_owner_cleanup_revokes_python_kinds_without_resource_manager_catalogs() -> None:
     from termin.inspect.kind import KindRegistry
-    from termin_assets import set_resource_manager_factory
     from termin_modules.module_context import (
-        module_registration_context,
         unregister_module_owner,
     )
 
     module_id = "resource_and_kind_owner_probe"
-    rm = DefaultResourceManager()
-    set_resource_manager_factory(lambda: rm)
     try:
-        with module_registration_context(module_id, [__name__]):
-            class OwnerResourceComponent:
-                pass
-
-            class OwnerResourceFramePass:
-                pass
-
-            rm.register_component("OwnerResourceComponent", OwnerResourceComponent)
-            rm.register_frame_pass("OwnerResourceFramePass", OwnerResourceFramePass)
-            KindRegistry.register_python(
-                "owner-resource-kind",
-                serialize=lambda value: value,
-                deserialize=lambda value: value,
-                owner=module_id,
-            )
-
-        assert rm.component_registry.list_owned(module_id) == [
-            "OwnerResourceComponent"
-        ]
-        assert rm.frame_pass_registry.list_owned(module_id) == [
-            "OwnerResourceFramePass"
-        ]
+        KindRegistry.register_python(
+            "owner-resource-kind",
+            serialize=lambda value: value,
+            deserialize=lambda value: value,
+            owner=module_id,
+        )
         assert KindRegistry.list_owned(module_id) == ["owner-resource-kind"]
 
         unregister_module_owner(module_id)
 
-        assert rm.component_registry.list_owned(module_id) == []
-        assert rm.frame_pass_registry.list_owned(module_id) == []
         assert KindRegistry.list_owned(module_id) == []
     finally:
         unregister_module_owner(module_id)
-        set_resource_manager_factory(None)
 
 
 def test_module_owner_context_unregisters_python_component_registrations() -> None:

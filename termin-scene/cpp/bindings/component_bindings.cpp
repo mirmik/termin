@@ -114,6 +114,16 @@ void bind_component_registry(nb::module_& m) {
         .def("get_class", [](ComponentRegistry&, const std::string& name) {
             return ComponentRegistryPython::get_class(name);
         }, nb::arg("name"))
+        .def("bind_class_projection", [](
+            ComponentRegistry&,
+            const std::string& name,
+            nb::object cls) {
+            return ComponentRegistryPython::bind_class_projection(
+                name, std::move(cls));
+        }, nb::arg("name"), nb::arg("cls"))
+        .def("clear_class_projections", [](ComponentRegistry&) {
+            ComponentRegistryPython::clear_class_projections();
+        })
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))

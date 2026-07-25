@@ -90,6 +90,8 @@ def shutdown_python_components() -> None:
                 )
     except Exception:
         log.error("[PythonComponent] failed to access registry during shutdown", exc_info=True)
+    else:
+        component_registry.clear_class_projections()
 
     _registered_python_component_types.clear()
 

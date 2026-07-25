@@ -19,18 +19,6 @@ static std::unordered_map<std::string, std::shared_ptr<nb::object>>& python_clas
     return classes;
 }
 
-static nb::object module_attr_or_none(nb::object module, const char* name) {
-    PyObject* value = PyObject_GetAttrString(module.ptr(), name);
-    if (value) {
-        return nb::steal<nb::object>(value);
-    }
-    if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
-        PyErr_Clear();
-        return nb::none();
-    }
-    throw nb::python_error();
-}
-
 // Python component factory trampoline
 static tc_component* python_component_factory(void* userdata) {
     const char* type_name = static_cast<const char*>(userdata);
@@ -141,35 +129,30 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
     if (py_it != py_classes.end()) {
         return *(py_it->second);
     }
-
-    if (tc_component_registry_get_kind(name.c_str()) != TC_CXX_COMPONENT) {
-        return nb::none();
-    }
-
-    try {
-        nb::object scene_mod = nb::module_::import_("termin.scene._scene_native");
-        nb::object cls = module_attr_or_none(scene_mod, name.c_str());
-        if (!cls.is_none()) return cls;
-
-        nb::object render_mod = nb::module_::import_("termin.render_components._components_render_native");
-        cls = module_attr_or_none(render_mod, name.c_str());
-        if (!cls.is_none()) return cls;
-
-        nb::object skeleton_native_mod = nb::module_::import_("termin.skeleton._skeleton_native");
-        cls = module_attr_or_none(skeleton_native_mod, name.c_str());
-        if (!cls.is_none()) return cls;
-
-        nb::object animation_native_mod = nb::module_::import_("termin.animation._animation_native");
-        cls = module_attr_or_none(animation_native_mod, name.c_str());
-        if (!cls.is_none()) return cls;
-
-        nb::object navmesh_native_mod = nb::module_::import_("termin.navmesh._navmesh_native");
-        cls = module_attr_or_none(navmesh_native_mod, name.c_str());
-        if (!cls.is_none()) return cls;
-    } catch (...) {
-        tc::Log::error("ComponentRegistry::get_class: error importing module for component %s", name.c_str());
-    }
     return nb::none();
+}
+
+bool ComponentRegistryPython::bind_class_projection(
+    const std::string& name,
+    nb::object cls) {
+    if (!tc_component_registry_has(name.c_str())) {
+        tc::Log::error(
+            "[ComponentRegistry] cannot bind Python projection for unknown component %s",
+            name.c_str());
+        return false;
+    }
+    if (!PyType_Check(cls.ptr())) {
+        tc::Log::error(
+            "[ComponentRegistry] Python projection for %s is not a class",
+            name.c_str());
+        return false;
+    }
+    python_classes()[name] = std::make_shared<nb::object>(std::move(cls));
+    return true;
+}
+
+void ComponentRegistryPython::clear_class_projections() {
+    python_classes().clear();
 }
 
 std::vector<std::string> ComponentRegistryPython::list_python() {
