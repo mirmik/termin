@@ -118,6 +118,7 @@ def attach_native_editor_event_loop(
     game_mode_controller,
     request_editor_render: Callable[[], None],
     window,
+    frame_limit: int | None = None,
 ) -> None:
     """Attach the native frontend loop and register its ordered teardown."""
     from termin.engine import EngineLoopClient
@@ -146,7 +147,7 @@ def attach_native_editor_event_loop(
             game_mode_controller=game_mode_controller,
             request_editor_render=request_editor_render,
             window=window,
-            frame_limit=_smoke_frame_limit(),
+            frame_limit=_smoke_frame_limit() if frame_limit is None else frame_limit,
         ),
     )
     loop_client = EngineLoopClient(

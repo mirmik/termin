@@ -47,7 +47,7 @@ from tcgui.widgets.units import px, pct
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
-from termin.display import WindowedGraphicsSession, quit_sdl
+from termin.display.window import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 

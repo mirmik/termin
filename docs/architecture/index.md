@@ -24,5 +24,5 @@
 
 ## Historical Notes
 
-- [Native GUI application host](2026-07-23-native-gui-application-host.md) - реализованный промежуточный `GuiWindowHost` ownership slice, заменяемый framework-neutral оконной моделью.
+- [Native GUI application host](2026-07-23-native-gui-application-host.md) - историческая промежуточная ownership-модель, удалённая после перехода на framework-neutral window adapter.
 - [Native GUI windowed and headless host](2026-07-23-native-gui-windowed-headless-host.md) - промежуточное выделение presentation/input/offscreen mechanics через общий host; механика сохраняется, ownership-модель заменена.

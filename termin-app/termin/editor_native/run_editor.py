@@ -6,8 +6,6 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from tgfx import Tgfx2Context
-from termin.display import PresentationMode, WindowManager, WindowedGraphicsSession, quit_sdl
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
@@ -167,12 +165,32 @@ from termin.editor_native.registry_viewer import (
 )
 from termin.editor_native.scene_tree import build_native_scene_tree
 from termin.editor_native.shell import build_native_editor_shell
-from termin.editor_native.ui_host import EditorWindowRegistry, NativeWidgetContent
+from termin.editor_native.editor_composition import (
+    EditorCompositionConfig,
+    create_editor_composition,
+)
 from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
+
+
+def _require_offscreen_process_isolation() -> None:
+    import sys
+
+    forbidden = (
+        "termin.display._platform_native",
+        "termin.display.window",
+        "termin.gui_native._gui_native_window",
+        "termin.gui_native.window",
+    )
+    loaded = [name for name in forbidden if name in sys.modules]
+    if loaded:
+        raise RuntimeError(
+            "offscreen editor loaded optional window integration: "
+            + ", ".join(loaded)
+        )
 
 
 def _complete_editor_scene_render(native_viewport, host) -> None:
@@ -197,6 +215,7 @@ def _compose_native_editor(
     engine,
     debug_resource: str | None = None,
     no_scene: bool = False,
+    composition_config: EditorCompositionConfig | None = None,
 ) -> None:
     """Build one native document as dependency-ordered owned stages."""
 
@@ -225,54 +244,34 @@ def _compose_native_editor(
     )
     settings_snapshot = settings_controller.load()
     engine.target_fps = settings_snapshot.fps_limit
-    presentation_mode = (
-        PresentationMode.VSYNC
-        if settings_snapshot.vsync_enabled
-        else PresentationMode.IMMEDIATE
-    )
+    composition_config = composition_config or EditorCompositionConfig()
+    if composition_config.mode == "windowed":
+        from termin.display.window import PresentationMode
+
+        presentation_mode = (
+            PresentationMode.VSYNC
+            if settings_snapshot.vsync_enabled
+            else PresentationMode.IMMEDIATE
+        )
+    else:
+        presentation_mode = None
     platform_stage = session.begin_stage(
         "native platform",
         after_engine_shutdown=True,
     )
-    platform_stage.add_cleanup("SDL runtime", quit_sdl)
-    graphics_session = platform_stage.own(
-        "windowed graphics session",
-        WindowedGraphicsSession.create_native(),
-        cleanup=lambda: graphics_session.close(),
+    composition = create_editor_composition(
+        platform_stage,
+        composition_config,
+        presentation_mode=presentation_mode,
     )
-    render_engine.set_graphics_host(graphics_session.graphics)
+    host = composition.host
+    window = composition.window
+    window_manager = composition.window_manager
+    render_engine.set_graphics_host(composition.graphics_host)
     render_engine.ensure_tgfx2()
-    graphics = platform_stage.own(
-        "graphics context",
-        Tgfx2Context.from_runtime(graphics_session.graphics),
-    )
-    native_windows = platform_stage.own(
-        "framework-neutral window manager",
-        WindowManager(graphics_session),
-        cleanup=lambda: native_windows.close(),
-    )
-    main_window_handle = native_windows.create_window(
-        "Termin Editor — Native UI",
-        1280,
-        720,
-        presentation_mode,
-    )
-    host = platform_stage.own(
-        "native widget content",
-        NativeWidgetContent(
-            native_windows,
-            main_window_handle,
-            graphics=graphics,
-        ),
-    )
-    window = host.window
-    apply_editor_window_icon(window)
-    window.maximize()
-    window_manager = platform_stage.own(
-        "editor window registry",
-        EditorWindowRegistry(native_windows, main_window_handle, host),
-        cleanup=lambda: window_manager.close(),
-    )
+    if composition.windowed:
+        apply_editor_window_icon(window)
+        window.maximize()
     shell = platform_stage.own(
         "native editor shell",
         build_native_editor_shell(host.document),
@@ -396,12 +395,11 @@ def _compose_native_editor(
     diagnostics_stage.own("modules controller", modules_controller)
 
     workspace_stage = session.begin_stage("scene workspace")
-    from termin.display import set_clipboard_text
     from termin.inspect import InspectRegistry
 
     registry_controller = RegistryCollectionController(
         InspectRegistrySource(InspectRegistry.instance()),
-        copy_text=set_clipboard_text,
+        copy_text=host.set_clipboard_text,
     )
 
     def editor_viewport() -> Rect:
@@ -1222,7 +1220,7 @@ def _compose_native_editor(
 
     core_registry_controller = RegistryCatalogController(
         build_core_registry_pages(),
-        copy_text=set_clipboard_text,
+        copy_text=host.set_clipboard_text,
     )
     core_registry_viewer = project_stage.own(
         "core registry viewer",
@@ -1264,7 +1262,7 @@ def _compose_native_editor(
     project_browser_controller = ProjectBrowserController(
         on_file_selected=on_project_file_selected,
         on_file_activated=on_project_file_activated,
-        copy_text=set_clipboard_text,
+        copy_text=host.set_clipboard_text,
         reveal_path=lambda path: reveal_in_file_manager(path),
         operations=ProjectOperations(dialog_service),
     )
@@ -1776,7 +1774,7 @@ def _compose_native_editor(
 
     resource_manager_controller = RegistryCatalogController(
         build_resource_manager_pages(resource_manager, project_file_watcher),
-        copy_text=set_clipboard_text,
+        copy_text=host.set_clipboard_text,
     )
     resource_manager_viewer = project_stage.own(
         "resource manager viewer",
@@ -1937,6 +1935,8 @@ def _compose_native_editor(
         engine.scene_manager.request_render()
         engine.tick_and_render(0.016)
     host.render()
+    if not composition.windowed:
+        _require_offscreen_process_isolation()
 
     attach_native_editor_event_loop(
         session,
@@ -1955,6 +1955,7 @@ def _compose_native_editor(
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
         window=window,
+        frame_limit=composition_config.frame_limit,
     )
 
 
@@ -1963,6 +1964,7 @@ def init_editor_native(
     debug_resource: str | None = None,
     no_scene: bool = False,
     *,
+    composition_config: EditorCompositionConfig | None = None,
     _failure_injector: Callable[[str], None] | None = None,
 ) -> EditorSession:
     """Initialize one native document and register it with the C++ engine loop."""
@@ -1973,6 +1975,7 @@ def init_editor_native(
             engine,
             debug_resource=debug_resource,
             no_scene=no_scene,
+            composition_config=composition_config,
         )
 
     return EditorSession.build(
@@ -1982,4 +1985,4 @@ def init_editor_native(
     )
 
 
-__all__ = ["EditorSession", "init_editor_native"]
+__all__ = ["EditorCompositionConfig", "EditorSession", "init_editor_native"]

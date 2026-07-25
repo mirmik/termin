@@ -5,8 +5,9 @@
 Статус: статический read-only аудит HEAD
 `98e5754569404af37ad8772f6630991ff4f69b18`. Исходный код во время анализа
 не изменялся. Обновление 2026-07-25: первый P0-хвост, editor/launcher tcgui
-frontend (#437), удалён после live gate; исторические размеры и ссылки ниже
-оставлены как исходная фиксация проблемы.
+frontend (#437), удалён после live gate; второй runtime assembler `termin-app`
+(#681) также удалён и заменён relocated SDK smoke. Исторические размеры и
+ссылки ниже оставлены как исходная фиксация проблемы.
 
 Связанные документы:
 
@@ -69,8 +70,8 @@ docs и examples, содержит приблизительно 1 955 файло
 | Приоритет | Параллельные системы | Целевой источник истины | Рекомендуемое действие | Трекинг |
 | --- | --- | --- | --- | --- |
 | P0 | `editor_tcgui` и native editor/launcher | native editor и native launcher | Выполнено 2026-07-25: legacy dispatch/frontend удалён; toolkit остаётся до миграции остальных consumers | #437 |
-| P0 | `application_host` и explicit window/document composition | `DocumentRenderer` + optional window adapter | мигрировать examples/bindings и удалить ownership host API | #593, #760 |
-| P0 | host-derived `termin-app` bundle и canonical SDK tree | проверенное SDK install tree | удалить второй runtime assembler | #633, #681 |
+| P0 | `application_host` и explicit window/document composition | `DocumentRenderer` + optional window adapter | Выполнено 2026-07-25: ownership hosts удалены, consumers переведены на explicit composition | #593, #760 |
+| P0 | host-derived `termin-app` bundle и canonical SDK tree | проверенное SDK install tree | Выполнено 2026-07-25: второй runtime assembler удалён, acceptance перенесён на relocated SDK | #633, #681 |
 | P1 | `DefaultResourceManager` registries и native runtime descriptors | runtime type descriptor facets | удалить Python component/pass registries и mixed manager ownership | #631, #644 |
 | P1 | `nos::trent`, `tc_value`, `tc::trent` | `tc_value` storage + `tc::trent` C++ facade | вытеснить и удалить `nos::trent` и duplicate converters | #86 |
 | P1 | cached framegraph и per-frame metadata rebuild | revisioned `PipelineExecutionPlan` | компилировать metadata только при invalidation | #554 |
@@ -134,48 +135,21 @@ payload/tests удалены. `termin-gui` намеренно остаётся �
 
 ## 2. Transitional application/window host внутри нового GUI
 
-### Наблюдение
+Обновление 2026-07-25: рекомендация выполнена в #745 и #760.
 
-`termin-gui-native` уже имеет framework-neutral document renderer и explicit
-window composition, но default build сохраняет старую owning abstraction:
+- Tally, showcase, launcher и editor используют явную композицию
+  `WindowManager`/`GuiWindowAdapter` либо `OffscreenGuiComposition`;
+- `GuiApplicationHost`, `GuiWindowHost`, `StandaloneGuiApplication`,
+  `OffscreenGuiApplication` и Python ownership proxies удалены;
+- старый target/export/install, bindings и compatibility tests удалены;
+- `DynamicTextureLease` привязан к `DocumentRenderer`;
+- Python core и offscreen CMake component не зависят от `termin-window`;
+- `termin-display` разделён на headless-safe core и явный `window` component,
+  поэтому headless editor не загружает SDL транзитивно.
 
-- `termin-gui-native/CMakeLists.txt:10-14` включает compatibility integration;
-- `termin-gui-native/CMakeLists.txt:224-258` собирает старый host target;
-- `termin-gui-native/CMakeLists.txt:263-294` отдельно собирает новый adapter;
-- `termin-gui-native/CMakeLists.txt:553-571` включает старый host в Python
-  extension;
-- `termin-gui-native/CMakeLists.txt:596-605` устанавливает его;
-- `termin-gui-native/include/termin/gui_native/application_host.hpp:200-380`
-  сохраняет owning host API.
-
-Старый и новый rendering/lifetime path видны непосредственно:
-
-- `termin-gui-native/src/application_host.cpp:381-578,641-706`;
-- `termin-gui-native/src/document_renderer.cpp:58-250,344-399`.
-
-Production call sites старых hosts уже не обнаружены. Остались compatibility
-bindings, tests и пример
-`examples/termin-gui-native-tally/src/main.cpp:110`.
-
-Основные старые implementation, header и Python binding занимают около
-2 909 production-строк. Они не только увеличивают объём, но и оставляют ложное
-впечатление, что widget toolkit должен владеть OS windows, application loop и
-graphics session.
-
-### Вердикт
-
-Новый toolkit должен владеть Document/widget/layout/paint primitives.
-`termin-window` adapter должен быть optional leaf, а application и window
-collection должны принадлежать product host.
-
-Порядок удаления:
-
-1. мигрировать Tally/showcase и оставшиеся compatibility tests;
-2. удалить Python host proxies;
-3. убрать `application_host` target/export/install;
-4. удалить старые lease overloads и host terminology.
-
-Трекинг: #593, #760.
+Итоговая ownership-модель соответствует вердикту аудита: toolkit владеет
+document/widget/layout/paint primitives, window adapter остаётся optional
+leaf, а application loop и window collection принадлежат product host.
 
 ## 3. Два runtime assembler для editor application
 
@@ -217,23 +191,23 @@ resolver, второй layout contract и второй набор relocation ass
 
 Трекинг: #633, #681.
 
+Обновление 2026-07-25: отдельные `termin-app/CMakeLists.txt`, `build.sh`,
+`build.ps1` и install/run wrappers удалены вместе с `BUNDLE_PYTHON` control
+plane. Старый host-Python smoke заменён одной реализацией SDK relocation
+verification и тонкими Linux/Windows entrypoints. Проверка копирует SDK,
+валидирует artifact/runtime/application manifests и запускает bundled hosts с
+hostile Python environment из relocated working directory. Desktop project
+bundle остаётся отдельным контрактом и в этот smoke не включён.
+
 ## 4. Повторная build/CI orchestration
 
 ### 4.1. Один SDK orchestrator владеет несвязанными стадиями
 
-`termin-build-tools/termin_build/sdk.py` содержит 2 328 строк при repository
-policy limit 1 999. Canonical check:
-
-```text
-ERROR: source-size policy violation:
-termin-build-tools/termin_build/sdk.py: 2328 lines (limit 1999)
-```
-
-Размер здесь является симптомом: один модуль одновременно координирует native
-build, bundled Python runtime, toolchain, wheelhouse, artifact provenance,
-application payload, install, verification и CLI.
-
-Трекинг: #841.
+Обновление 2026-07-25: выполнено в #841. Из `sdk.py` вынесены SDK doctor,
+bundled-Python preparation и relocated-SDK smoke orchestration. Модуль снова
+укладывается в repository policy limit, а canonical repository-control check
+проходит. Новые модули имеют собственные unit-тесты; command surface
+`termin_build.sdk` сохранён.
 
 ### 4.2. Все local wheels строятся дважды
 
@@ -890,7 +864,8 @@ HEAD.
 Результаты:
 
 - package manifest: `OK`;
-- repository-control check: падает на `sdk.py: 2328 lines (limit 1999)`;
+- repository-control check: исходный снимок падал на `sdk.py: 2328 lines`;
+  после #841 gate восстановлен;
 - worktree перед созданием этого документа был чист.
 
 Полная сборка SDK и полный test suite не запускались: аудит не менял runtime

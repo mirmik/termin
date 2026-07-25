@@ -281,7 +281,8 @@ runtime немедленно проводит его через тот же clea
 Module runtime не привязывает live mutation к creator/owner thread и не
 отклоняет `load`, `unload`, `reload`, `rebuild` или shutdown по identity
 вызывающего потока. Этот контракт следует engine-wide правилу
-[No Owner-Thread Restrictions](../../docs/architecture/2026-07-24-no-owner-thread-restrictions.md).
+Репозиторная архитектурная заметка
+`docs/architecture/2026-07-24-no-owner-thread-restrictions.md`.
 
 Editor progress dialog разделяет операцию на две части:
 

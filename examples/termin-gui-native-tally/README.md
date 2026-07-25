@@ -23,15 +23,14 @@ Run it from any working directory:
 ./build/examples/termin-gui-native-tally/termin_tally
 ```
 
-The application host resolves its font and shader tools relative to the loaded SDK.
-`TERMIN_SDK`, `TERMIN_SHADERC`, `TERMIN_SLANGC`, and `TERMIN_UI_FONT` provide explicit
-runtime overrides. Use `--frames N` for a bounded window/render smoke run; CTest uses this
-mode automatically.
+The application owns a `WindowedGraphicsSession`, `WindowManager`, document and
+`GuiWindowAdapter`; the adapter only translates events and renders the borrowed window.
+Set `TERMIN_UI_FONT` to the installed `DroidSans.ttf` path. Use `--frames N` for a
+bounded window/render smoke run; CTest uses this mode automatically.
 
 ## What the experiment exposes
 
-The actual UI is small, and the surrounding application is now small as well. The installed
-`termin_gui_native::application_host` owns the lightweight native window, portable input,
-resizable render target, draw-list rendering, presentation, font/shader runtime defaults and
-GPU teardown. Tally contains no SDL types, graphics-device setup, asset lookup or render-loop
-plumbing and still avoids the engine scene/render/input integration from `termin-display`.
+The actual UI is small, and the surrounding application is now small as well. Tally owns the
+lightweight native window, portable input pump, resizable render target, draw-list rendering,
+presentation and GPU teardown through framework-neutral window and native-widget adapter APIs.
+It contains no SDL types or engine scene/render/input integration from `termin-display`.

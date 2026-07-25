@@ -9,7 +9,10 @@ import time
 from tcbase import log
 
 MAX_RECENT = 10
-CONFIG_DIR = os.path.expanduser("~/.config/termin")
+CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "termin",
+)
 RECENT_FILE = os.path.join(CONFIG_DIR, "recent.json")
 LAUNCH_PROJECT_FILE = os.path.join(CONFIG_DIR, "launch_project.json")
 

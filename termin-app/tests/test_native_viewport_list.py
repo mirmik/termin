@@ -2,7 +2,7 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from dataclasses import dataclass, field
 
 from termin.editor_core.viewport_list_model import ViewportListController, ViewportNodeKind
-from termin.editor_native import NativeViewportList, build_native_viewport_list
+from termin.editor_native.viewport_list import NativeViewportList, build_native_viewport_list
 from termin.gui_native import Rect
 
 

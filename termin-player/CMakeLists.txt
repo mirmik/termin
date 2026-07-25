@@ -17,11 +17,8 @@ else()
 endif()
 
 set(_termin_player_has_sdl OFF)
-if(TARGET termin_display)
-    get_target_property(_termin_display_public_defs termin_display INTERFACE_COMPILE_DEFINITIONS)
-    if(_termin_display_public_defs AND "TERMIN_DISPLAY_HAS_SDL" IN_LIST _termin_display_public_defs)
-        set(_termin_player_has_sdl ON)
-    endif()
+if(TARGET termin_display_window)
+    set(_termin_player_has_sdl ON)
 endif()
 
 if(TARGET termin_modules_python AND _termin_player_has_sdl)
@@ -45,6 +42,7 @@ if(TARGET termin_modules_python AND _termin_player_has_sdl)
         termin_runtime::termin_runtime
         tgfx::termin_graphics2
         termin_display::termin_display
+        termin_display::window
         termin_engine::termin_engine
         termin_render::termin_render
         termin_render_passes::termin_render_passes

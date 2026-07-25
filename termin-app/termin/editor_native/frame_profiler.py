@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import weakref
+from typing import TYPE_CHECKING
 
 from termin.editor._editor_native import FrameProfilerController
-from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 from termin.gui_native import (
     TcDocument,
     EdgeInsets,
@@ -24,6 +24,9 @@ from termin.gui_native import (
     tc_ui_document_create,
     tc_ui_document_destroy,
 )
+
+if TYPE_CHECKING:
+    from termin.editor_native.ui_host import EditorWindowRegistry, EditorWindowSlot
 
 
 def _ref(document: TcDocument, reference) -> WidgetRef:

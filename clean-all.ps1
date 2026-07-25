@@ -49,10 +49,6 @@ $explicitDirs = @(
     "termin-gui\dist",
     "termin-nodegraph\build",
     "termin-nodegraph\dist",
-    "termin-app\build_win",
-    "termin-app\build_standalone",
-    "termin-app\install",
-    "termin-app\install_win",
     "termin-app\cpp\build"
 )
 

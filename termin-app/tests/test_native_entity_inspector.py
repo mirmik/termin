@@ -8,7 +8,8 @@ from termin.editor_core.entity_inspector_model import (
     EntityInspectorController,
 )
 from termin.editor_core.undo_stack import UndoStack
-from termin.editor_native import build_native_entity_inspector, resolve_native_ui_font
+from termin.editor_native.entity_inspector import build_native_entity_inspector
+from termin.editor_native.ui_host import resolve_native_ui_font
 from termin.gui_native import (
     DrawList,
     DrawListRenderer,

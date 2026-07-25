@@ -4,10 +4,10 @@
 
 Статус: Accepted
 
-Реализация: #680 завершает app-payload/distribution часть решения. Editor
-payload устанавливается по `build-system/application-python-payloads.json`, а
-`termin-app` удалён из wheel/package/runtime metadata. Удаление отдельного
-host-derived bundle pipeline остаётся в #681.
+Реализация: завершена в #680 и #681. Editor payload устанавливается по
+`build-system/application-python-payloads.json`, `termin-app` удалён из
+wheel/package/runtime metadata, а отдельный host-derived bundle pipeline
+заменён cross-platform relocated-SDK smoke.
 
 ## Контекст
 
@@ -138,8 +138,9 @@ application root `termin-app`.
 1. #680 — выделить app-internal editor Python payload из wheel pipeline,
    удалить distribution `termin-app` и доказать отсутствие editor dependencies
    у устанавливаемых library subsets.
-2. #681 — удалить host-derived standalone bundle pipeline и заменить его
-   downstream compile/link и relocated-SDK runtime smokes.
+2. #681 — выполнено: host-derived standalone bundle pipeline удалён, а
+   runtime acceptance заменён relocated-SDK smoke с единым Linux/Windows
+   verifier contract.
 3. Сохранить в #481 clean PEP 517 и subset-install contract для библиотечных
    distributions, включая внешний Diffusion Editor consumer.
 4. Обновить build/test manifests и документацию после реализации, не объявляя
@@ -151,8 +152,7 @@ application root `termin-app`.
 - [`docs/build-system.md`](../build-system.md);
 - [`docs/modules.md`](../modules.md);
 - `termin-app/setup.py`;
-- `termin-app/CMakeLists.txt`;
-- `termin-app/build.sh`;
-- `termin-app/build.ps1`;
+- удалённые в #681 `termin-app/CMakeLists.txt`, `build.sh` и `build.ps1`;
 - `build-system/packages.json`;
-- `scripts/smoke-termin-app-installed-bundle`.
+- `scripts/smoke-relocated-sdk`;
+- `scripts/smoke-relocated-sdk.ps1`.

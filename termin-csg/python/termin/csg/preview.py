@@ -14,7 +14,11 @@ import numpy as np
 from tcbase import Key, MouseButton
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.csg.viewer_camera import OrbitCamera
-from termin.display import WindowedGraphicsSession, quit_sdl, wait_sdl_events_timeout
+from termin.display.window import (
+    WindowedGraphicsSession,
+    quit_sdl,
+    wait_sdl_events_timeout,
+)
 from tgfx import (
     CULL_NONE,
     PIXEL_D32F,

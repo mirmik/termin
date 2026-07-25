@@ -24,7 +24,7 @@ from tcgui.widgets.file_dialog_overlay import (
     show_save_file_dialog,
     show_open_directory_dialog,
 )
-from termin.display import WindowedGraphicsSession, quit_sdl
+from termin.display.window import WindowedGraphicsSession, quit_sdl
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 

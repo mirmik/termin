@@ -2,11 +2,11 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from tcbase import Key
 from tcbase.profiler import FrameProfile, SectionTiming
 from termin.editor_core.profiler_model import ProfilerController
-from termin.editor_native import (
-    build_native_editor_shell,
+from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
 )
+from termin.editor_native.shell import build_native_editor_shell
 from termin.gui_native import DrawList, PaintContext, Rect
 
 

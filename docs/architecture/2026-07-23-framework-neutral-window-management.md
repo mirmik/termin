@@ -268,15 +268,15 @@ path, while isolated rendering validates no-display execution.
 | main/secondary and exit policy | application composition |
 | shader/runtime setup | graphics/application composition root |
 
-`GuiApplicationHost`, `GuiWindowHost` and `StandaloneGuiApplication` are
-transitional compatibility APIs. `WindowManager`, `OffscreenGuiComposition`,
-`DocumentRenderer` and `GuiWindowAdapter` are the implemented target
-contracts. Python binds these native types and their methods directly; it must
-not introduce binding-only proxy classes or framework facades over them.
+The transitional application/window host APIs have been removed.
+`WindowManager`, `OffscreenGuiComposition`, `DocumentRenderer` and
+`GuiWindowAdapter` are the implemented contracts. Python binds these native
+types and their methods directly; it does not introduce binding-only proxy
+classes or framework facades over them.
 The editor's `EditorWindowRegistry` is application policy: it maps native
 handles to application-selected content and does not replace `WindowManager`
-or `GuiWindowAdapter`. `OffscreenGuiApplication` remains only a compatibility
-alias until #760.
+or `GuiWindowAdapter`. The offscreen composition has no `termin-window`
+dependency.
 
 ## Lifetime and shutdown
 

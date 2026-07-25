@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from termin.editor_native import event_loop as event_loop_module
+import termin.editor_native.event_loop as event_loop_module
 from termin.editor_native.editor_session import EditorSession
 from termin.editor_native.event_loop import (
     NativeEditorEventLoop,

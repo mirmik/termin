@@ -24,7 +24,7 @@ import sdl2
 
 from tgfx._tgfx_native import Tgfx2Context, Tgfx2PixelFormat
 
-from termin.display import (
+from termin.display.window import (
     BackendWindowEntry,
     BackendWindowManager,
     WindowedGraphicsSession,

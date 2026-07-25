@@ -6,13 +6,13 @@ from termin.editor_core.registry_viewer_model import (
     RegistryPage,
     RegistryRow,
 )
-from termin.editor_native import (
-    build_native_editor_shell,
+from termin.editor_native.registry_viewer import (
     build_native_registry_catalog_viewer,
     build_native_registry_viewer,
     connect_registry_viewer_command,
-    resolve_native_ui_font,
 )
+from termin.editor_native.shell import build_native_editor_shell
+from termin.editor_native.ui_host import resolve_native_ui_font
 from termin.gui_native import (
     TcDocument,
     DrawList,
