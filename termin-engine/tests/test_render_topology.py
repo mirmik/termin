@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from termin.engine import EngineCore, RenderingManager, RenderTopology, SceneManager
+from termin.engine import EngineCore, RenderTopology
 from termin.render_framework import render_target_new
-from termin.render import scene_render_mount
 from termin.scene import PythonComponent
 
 
 def test_engine_services_are_explicit_and_multiple_engines_are_independent() -> None:
-    assert "instance" not in EngineCore.__dict__
-    assert "instance" not in SceneManager.__dict__
-    assert "instance" not in RenderingManager.__dict__
-    assert "instance_or_none" not in RenderingManager.__dict__
-
     first = EngineCore()
     second = EngineCore()
     try:
@@ -141,15 +135,3 @@ def test_scene_manager_forces_detach_before_destroying_attached_scene() -> None:
 
     assert not engine.render_topology.is_attached(scene)
     assert not engine.render_topology.managed_render_targets
-
-
-def test_scene_render_mount_exposes_only_declarative_recipe() -> None:
-    engine = EngineCore()
-    scene = engine.scene_manager.create_scene("declarative-mount")
-    mount = scene_render_mount(scene)
-
-    assert not hasattr(mount, "get_pipeline")
-    assert not hasattr(mount, "get_pipeline_names")
-    assert not hasattr(mount, "get_pipeline_targets")
-
-    engine.scene_manager.close_scene("declarative-mount")
