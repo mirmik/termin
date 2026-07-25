@@ -36,8 +36,13 @@ def _write_python_module(
     return source_root
 
 
+def _runtime_without_project_venv() -> ProjectModulesRuntime:
+    """Exercise module lifecycle independently from environment provisioning."""
+    return ProjectModulesRuntime(use_project_venv=False)
+
+
 def test_live_scene_sync_requires_explicit_scene_manager() -> None:
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     try:
         assert not runtime.sync_live_scenes
         with pytest.raises(RuntimeError, match="explicit SceneManager"):
@@ -59,7 +64,7 @@ def test_explicit_scene_manager_enables_live_scene_sync() -> None:
 
 def test_project_runtime_close_removes_python_modules_and_paths(tmp_path: Path) -> None:
     source_root = _write_python_module(tmp_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
 
     assert runtime.load_project(tmp_path)
@@ -70,6 +75,7 @@ def test_project_runtime_close_removes_python_modules_and_paths(tmp_path: Path) 
     assert runtime.closed
     assert "sample_module" not in sys.modules
     assert str(source_root.resolve()) not in sys.path
+    assert not (tmp_path / ".venv").exists()
 
 
 def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Path) -> None:
@@ -97,7 +103,7 @@ def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Pat
 
     registry = ComponentRegistry.instance()
     registry.unregister_python("OwnedLifecycleComponent")
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     try:
         write_component(1)
@@ -152,7 +158,7 @@ def test_pymodule_rejected_descriptor_commit_leaves_no_partial_facets(tmp_path: 
 
     components = ComponentRegistry.instance()
     inspect = InspectRegistry.instance()
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     try:
         assert not runtime.load_project(tmp_path)
@@ -171,7 +177,7 @@ def test_failed_python_load_does_not_orphan_imports_or_paths(tmp_path: Path) -> 
         tmp_path,
         packages=("sample_module", "missing_sample_module"),
     )
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
 
     assert not runtime.load_project(tmp_path)
@@ -192,7 +198,7 @@ def test_python_session_paths_survive_module_unload_and_reload(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
 
@@ -218,7 +224,7 @@ def test_python_session_does_not_claim_preexisting_equal_path(tmp_path: Path) ->
     source_root = _write_python_module(tmp_path)
     source_path = str(source_root.resolve())
     sys.path.insert(0, source_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     try:
         assert runtime.load_project(tmp_path)
@@ -284,7 +290,7 @@ def test_preimported_package_survives_failed_load_and_unload(tmp_path: Path) -> 
     __import__("sample_module")
     original = sys.modules["sample_module"]
     try:
-        failed_runtime = ProjectModulesRuntime()
+        failed_runtime = _runtime_without_project_venv()
         failed_runtime.set_sync_live_scenes(False)
         assert not failed_runtime.load_project(tmp_path)
         assert sys.modules["sample_module"] is original
@@ -295,7 +301,7 @@ def test_preimported_package_survives_failed_load_and_unload(tmp_path: Path) -> 
             "name: sample\nroot: Scripts\npackages: [sample_module]\n",
             encoding="utf-8",
         )
-        runtime = ProjectModulesRuntime()
+        runtime = _runtime_without_project_venv()
         runtime.set_sync_live_scenes(False)
         assert runtime.load_project(tmp_path)
         assert runtime.unload_module("sample")
@@ -323,7 +329,7 @@ def test_overlapping_python_package_claims_fail_before_import(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert not runtime.load_project(tmp_path)
     assert "Python package namespace overlap" in runtime.last_error
@@ -348,7 +354,7 @@ def test_partial_python_import_evicts_only_transaction_modules(tmp_path: Path) -
         encoding="utf-8",
     )
 
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert not runtime.load_project(tmp_path)
     assert "injected partial import failure" in runtime.last_error
@@ -359,7 +365,7 @@ def test_partial_python_import_evicts_only_transaction_modules(tmp_path: Path) -
 
 def test_unload_preserves_replaced_sys_modules_mapping(tmp_path: Path) -> None:
     _write_python_module(tmp_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
     original = sys.modules["sample_module"]
@@ -378,7 +384,7 @@ def test_python_reload_publishes_new_namespace_and_keeps_old_references(
     tmp_path: Path,
 ) -> None:
     source_root = _write_python_module(tmp_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
     old_module = sys.modules["sample_module"]
@@ -401,7 +407,7 @@ def test_loading_new_descriptor_rebuilds_runtime_without_orphaning_handles(
     tmp_path: Path,
 ) -> None:
     _write_python_module(tmp_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
 
@@ -428,7 +434,7 @@ def test_loading_new_descriptor_rebuilds_runtime_without_orphaning_handles(
 def test_invalid_descriptor_reload_keeps_module_loaded_and_dirty(tmp_path: Path) -> None:
     _write_python_module(tmp_path)
     descriptor = tmp_path / "sample.pymodule"
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
 
@@ -605,7 +611,7 @@ def test_python_backend_commit_failure_enters_retryable_cleanup_state(
     tmp_path: Path,
 ) -> None:
     _write_python_module(tmp_path)
-    runtime = ProjectModulesRuntime()
+    runtime = _runtime_without_project_venv()
     runtime.set_sync_live_scenes(False)
     assert runtime.load_project(tmp_path)
 

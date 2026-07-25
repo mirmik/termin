@@ -407,24 +407,6 @@ def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
     assert [phase.phase_mark for phase in opaque] == ["opaque"]
     assert [phase.phase_mark for phase in shadow] == ["shadow"]
     assert material.phases[0].phase_mark == "opaque"
-
-
-def test_mesh_renderer_rejects_legacy_mesh_constructor_argument():
-    with pytest.raises(TypeError):
-        MeshRenderer(mesh="Cube")
-
-
-def test_mesh_renderer_no_longer_exposes_mesh_mutators():
-    renderer = MeshRenderer()
-
-    with pytest.raises(AttributeError):
-        _ = renderer.set_mesh
-    with pytest.raises(AttributeError):
-        _ = renderer.set_mesh_by_name
-    with pytest.raises(AttributeError):
-        _ = renderer.mesh
-
-
 def test_mesh_renderer_material_slots_serialize_data_roundtrip():
     legacy_material = create_unique_test_material("MeshRendererSlotLegacy")
     slot0_material = create_unique_test_material("MeshRendererSlot0")

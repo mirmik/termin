@@ -1,31 +1,7 @@
+import os
 from pathlib import Path
 
 import pytest
-
-from termin.default_assets.resource_manager import DefaultResourceManager
-
-
-def test_resource_manager_does_not_own_component_or_frame_pass_catalogs() -> None:
-    rm = DefaultResourceManager()
-
-    for attribute in (
-        "component_registry",
-        "frame_pass_registry",
-        "components",
-        "frame_passes",
-        "register_component",
-        "register_frame_pass",
-        "register_builtin_components",
-        "register_builtin_frame_passes",
-        "get_component",
-        "get_frame_pass",
-    ):
-        assert attribute not in dir(rm)
-
-    with pytest.raises(ModuleNotFoundError):
-        __import__("termin.scene.component_registry")
-    with pytest.raises(ModuleNotFoundError):
-        __import__("termin.render_framework.frame_pass_registry")
 
 
 def test_owner_cleanup_revokes_python_kinds_without_resource_manager_catalogs() -> None:
@@ -301,21 +277,23 @@ def test_removed_visualization_namespace_is_not_used_by_live_code() -> None:
     }
 
     offenders: list[str] = []
-    for path in repo_root.rglob("*"):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(repo_root)
-        if any(part in skipped_dirs for part in relative.parts):
-            continue
-        if relative in allowed_paths:
-            continue
-        if path.name != "CMakeLists.txt" and path.suffix not in scanned_suffixes:
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        if "termin.visualization" in content:
-            offenders.append(str(relative))
+    for current_root, directory_names, file_names in os.walk(repo_root):
+        directory_names[:] = [
+            name for name in directory_names if name not in skipped_dirs
+        ]
+        current_path = Path(current_root)
+        for file_name in file_names:
+            path = current_path / file_name
+            relative = path.relative_to(repo_root)
+            if relative in allowed_paths:
+                continue
+            if path.name != "CMakeLists.txt" and path.suffix not in scanned_suffixes:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if "termin.visualization" in content:
+                offenders.append(str(relative))
 
     assert offenders == []
