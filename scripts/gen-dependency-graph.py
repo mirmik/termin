@@ -109,7 +109,6 @@ PYTHON_IMPORT_TO_DIR = {
     "tcplot": "tcplot",
     # termin.* submodules → actual library
     "termin.editor_core": "termin-app",
-    "termin.editor_tcgui": "termin-app",
     "termin.project_build": "termin-project-build",
     "termin.project_modules": "termin-project-modules",
     "termin.project": "termin-project",

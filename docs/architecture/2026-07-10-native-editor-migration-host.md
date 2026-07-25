@@ -5,6 +5,8 @@
 > editor frontend. The final cross-application ownership model supersedes that
 > host boundary with a borrowed C++ `GuiWindowHost`; see
 > [Native GUI Application Host](2026-07-23-native-gui-application-host.md).
+> The migration itself completed on 2026-07-25: `termin.editor_tcgui` and the
+> editor/launcher `--ui` comparison routes were removed.
 
 ## Decision
 
@@ -45,14 +47,10 @@ resources. Closing the last application window (or an explicit editor close
 request) terminates the editor according to session policy. Requested hosts are
 composed and presented sequentially so tgfx2 frame recording is never nested.
 
-`EditorPythonExecutor`, `EditorMcpServer` and editor shader-runtime setup now
-live in `termin.editor_core`; their old `termin.editor_tcgui` modules are
-temporary compatibility imports for legacy consumers. MCP screenshot capture
-is an injected callable in the executor namespace, not a hard-coded lookup of
-`EditorWindowTcgui._fbo_surface`. The native host injects its composed target;
-the legacy editor injects its viewport surface. Both frontends therefore share
-one transport, explicit editor executor and tool schema without sharing UI
-objects.
+`EditorPythonExecutor`, `EditorMcpServer` and editor shader-runtime setup live
+in `termin.editor_core`. MCP screenshot capture is an injected callable in the
+executor namespace; the native host injects its composed target. This leaves
+transport, executor and tool schema independent of concrete UI objects.
 
 The platform event key values and `tc_ui_key_code` now use the same
 `tcbase.Key`/GLFW-compatible integer contract. The host does not maintain a
@@ -87,11 +85,9 @@ menu connections for the editor session so project UI lifetime is explicit.
 `termin_editor` now exercises the host through the normal
 C++ embedded-Python `EngineCore` entrypoint. `TERMIN_EDITOR_NATIVE_SMOKE_FRAMES`
 is a deterministic test-only frame limit used to prove graceful startup,
-render/present and shutdown. Native is the default production editor
-entrypoint. During the migration the old frontend remains explicitly available
-via `termin_editor --ui=tcgui` for side-by-side functional comparison; it is
-not the default or a supported release path. Its reusable models and test
-fixtures are retired only after the comparison gate closes.
+render/present and shutdown. Native is the only production editor entrypoint.
+The comparison gate closed on 2026-07-25; the old frontend, its selector,
+payload and comparison-only fixtures are retired.
 
 The production MCP gate starts this entrypoint with an ephemeral loopback port,
 captures the composed native UI through `capture_editor_screenshot`, then uses
@@ -106,8 +102,9 @@ presentation policy live in `termin.editor_core.profiler_model`, independently
 of either widget toolkit. `ProfilerController` owns enable/detailed/include-UI
 boundaries, selects the last complete frame and suppresses duplicate frames;
 `ProfilerPresentationModel` owns smoothing, decay and flattened typed rows.
-The temporary `tcgui` profiler view now consumes this same controller instead
-of reading private C history and maintaining a second EMA implementation.
+During migration the temporary `tcgui` profiler view consumed this same
+controller instead of reading private C history and maintaining a second EMA
+implementation; that projection has since been removed.
 
 `termin.editor_native.profiler_panel` composes native `ToolBar`, `StatusBar`,
 `FrameTimeGraph` and `TableWidget` instances. The shell exposes a checkable

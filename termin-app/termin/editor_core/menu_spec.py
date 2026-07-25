@@ -1,7 +1,7 @@
 """Menu specification data types — UI-framework agnostic.
 
 These classes describe *what* menus and items exist, without depending on any
-widget toolkit. The tcgui controller renders a ``MenuSpec`` into native menu
+widget toolkit. The native shell renders a ``MenuSpec`` into native menu
 widgets.
 """
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 
-def _parse_editor_args() -> tuple[str | None, str | None, str]:
+def _parse_editor_args() -> tuple[str | None, str | None]:
     """Parse command-line arguments for the editor."""
     args = sys.argv[1:]
 
@@ -19,30 +19,23 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
         print()
         print("Options:")
         print("  --debug-resource RES Open framegraph debugger with this resource")
-        print("  --ui=BACKEND        Select native (default) or legacy tcgui for comparison")
         print("  -h, --help           Show this help message and exit")
-        return "__help__", None, "native"
+        return "__help__", None
 
     debug_resource = None
-    ui_backend = "native"
     positional: list[str] = []
     i = 0
     while i < len(args):
         if args[i] == "--debug-resource" and i + 1 < len(args):
             debug_resource = args[i + 1]
             i += 2
-        elif args[i].startswith("--ui="):
-            ui_backend = args[i].split("=", 1)[1]
-            if ui_backend not in ("tcgui", "native"):
-                print(f"Error: unsupported UI backend '{ui_backend}'.", flush=True)
-                return "__error__", None, ui_backend
-            if ui_backend == "tcgui":
-                print(
-                    "[WARN] Starting legacy tcgui frontend for migration comparison; "
-                    "termin-gui-native remains the production default.",
-                    flush=True,
-                )
-            i += 1
+        elif args[i].startswith("--ui"):
+            print(
+                "Error: the --ui option was removed; "
+                "the native editor is the only supported frontend.",
+                flush=True,
+            )
+            return "__error__", None
         elif not args[i].startswith("-"):
             positional.append(args[i])
             i += 1
@@ -56,14 +49,14 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
         project = resolve_project_path(positional[0])
         if project is None:
             print(f"Error: cannot find .terminproj at '{positional[0]}'", flush=True)
-            return "__error__", None, ui_backend
+            return "__error__", None
 
-    return project, debug_resource, ui_backend
+    return project, debug_resource
 
 
 def init_editor(engine, debug_resource: str | None = None, no_scene: bool = False):
-    """Initialize the selected editor frontend and return its session."""
-    cli_project, cli_debug, ui_backend = _parse_editor_args()
+    """Initialize the native editor frontend and return its session."""
+    cli_project, cli_debug = _parse_editor_args()
     if cli_project in ("__help__", "__error__"):
         sys.exit(0 if cli_project == "__help__" else 1)
     if cli_debug is not None:
@@ -72,15 +65,6 @@ def init_editor(engine, debug_resource: str | None = None, no_scene: bool = Fals
         from termin.launcher.recent import write_launch_project
 
         write_launch_project(cli_project)
-
-    if ui_backend == "tcgui":
-        from termin.editor_tcgui.run_editor import init_editor_tcgui
-
-        return init_editor_tcgui(
-            engine,
-            debug_resource=debug_resource,
-            no_scene=no_scene,
-        )
 
     from termin.editor_native.run_editor import init_editor_native
 

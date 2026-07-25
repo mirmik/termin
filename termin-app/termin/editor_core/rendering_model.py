@@ -5,7 +5,7 @@ Owns:
 - the editor display handle (a non-serialized display the editor uses
   for its main viewport)
 
-Provides UI-agnostic operations used by the tcgui rendering controller:
+Provides UI-agnostic operations used by the native rendering projection:
 - ``remove_viewports_for_scene`` — scoped cleanup on scene unload
 - ``sync_viewport_configs_to_scene`` / ``sync_render_target_configs_to_scene``
   — snapshot current state into Scene before save

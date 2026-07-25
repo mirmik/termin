@@ -1,25 +1,25 @@
 # Аудит миграции UI редактора на termin-gui-native
 
-Дата: 2026-07-12
+Дата: 2026-07-12. Миграция завершена 2026-07-25.
 
-Обновление после первого parity milestone: canonical menu/chrome, editor log и
-session status, external hierarchy observation, Profiler docking и все native
-resource/tool inspector projections восстановлены. Исторические находки ниже
-сохранены как основание миграции; актуальный остаток отмечен в матрице.
+Финальный статус: native editor и native launcher стали единственными
+production frontend. Comparison dispatch, пакет `termin.editor_tcgui`, его
+application payload и comparison-only tests удалены. Исторические находки ниже
+сохранены как основание миграции; они не описывают текущий production surface.
 
 ## Область аудита
 
-Аудит сравнивает именно пользовательский интерфейс редактора в
-`termin.editor_tcgui` и `termin.editor_native`: состав панелей, доступные
-действия, маршрутизацию выбора, компоновку и визуальную иерархию. Возможности
-самих `termin-gui` и `termin-gui-native` как библиотек здесь не сравниваются.
+Исходный аудит сравнивал пользовательский интерфейс удалённого
+`termin.editor_tcgui` и канонического `termin.editor_native`: состав панелей,
+доступные действия, маршрутизацию выбора, компоновку и визуальную иерархию.
+Возможности самих `termin-gui` и `termin-gui-native` как библиотек здесь не
+сравниваются.
 
 Источники:
 
-- production-композиции `editor_tcgui/editor_window.py` и
-  `editor_native/run_editor.py`;
-- старый layout `editor_tcgui/editor_window_layout.py` и новый shell
-  `editor_native/shell.py`;
+- исторические production-композиции удалённого `editor_tcgui` и текущего
+  `editor_native`;
+- старый layout удалённого frontend и новый `editor_native/shell.py`;
 - общие editor-core модели и обе их UI-проекции;
 - live smoke нового редактора на проекте ChronoSquad через editor MCP;
 - текущие карточки миграции #261 и #301–#306.
@@ -34,20 +34,20 @@ Display/Viewport/Render Target inspectors, Play/Stop, основные наст�
 Функциональные разрывы первого аудита закрыты: shell проецирует каноническое
 меню, Project Browser поддерживает routing/mutations/drag-and-drop, все виды
 Inspector имеют native projection, восстановлены editor log, side-docked
-Profiler, Modules и базовый prefab workflow. Оставшаяся работа теперь относится
-к завершению визуальной системы, production parity gates и формальному удалению
-legacy `termin-gui` frontend после финального smoke.
+Profiler, Modules и базовый prefab workflow. Финальный live gate пройден, а
+legacy editor frontend удалён. Дальнейшая визуальная полировка native UI не
+требует сохранения параллельной реализации редактора.
 
 ## Матрица паритета панелей
 
 | Область | Состояние | Что перенесено | Что отсутствует или разошлось |
 |---|---|---|---|
 | Scene hierarchy | Готово | Выбор, rename, duplicate, delete, visibility, reparent/reorder, collapse, GLB/prefab file drop и deferred observation внешних structure changes | Toolbar остаётся более явно командным, чем legacy; это визуальный, не функциональный остаток. |
-| Rendering tree | В основном готово | Displays, viewports, internal entities, render targets, add/remove/rename, selection sync | Это один из наиболее полных срезов после последних исправлений. Нужен только общий parity smoke вместе с layout/selection regression gate. |
-| Editor viewport | Готово | Рендер в native-resolution, resize, camera/input, picking, gizmo, display tabs, project drag-and-drop, overlays, fullscreen, Pause/Resume и prefab toolbar | Требуется финальный screenshot smoke после применения composition metrics. |
+| Rendering tree | В основном готово | Displays, viewports, internal entities, render targets, add/remove/rename, selection sync | Общий live smoke и repository regression gate пройдены. |
+| Editor viewport | Готово | Рендер в native-resolution, resize, camera/input, picking, gizmo, display tabs, project drag-and-drop, overlays, fullscreen, Pause/Resume и prefab toolbar | Финальный screenshot smoke пройден на тестовом проекте и ChronoSquad. |
 | Entity inspector | В основном готово | Name, UUID, layer, transform, component/SoA list, typed fields, undo-backed edits, material inline view, Foliage и Procedural Mesh projections | Add Component доступен только через context menu списка и хуже обнаруживается. Auxiliary/left panel extension contract не поддержан; native production код явно отвергает `left_panel`. |
 | Resource/tool inspectors | Готово | Native host поддерживает все `InspectorKind`: самостоятельные Material, Texture preview/import, Mesh statistics/import, GLB statistics/reimport, Pipeline summary/editor handoff и lifecycle Tool panels | Длинные asset paths требуют общей truncation/tooltip policy на визуальном этапе. |
-| Project Browser | Готово | Tree/grid/breadcrumb, routing, create/rename/delete/reveal/extract, scene/prefab activation и threshold drag payload в hierarchy/viewport | Финальный parity gate должен сохранить эти end-to-end сценарии. |
+| Project Browser | Готово | Tree/grid/breadcrumb, routing, create/rename/delete/reveal/extract, scene/prefab activation и threshold drag payload в hierarchy/viewport | Create/open и editor launch покрыты controller/projection tests и финальным тестовым проектом. |
 | Console | Готово | Отдельные накопительный editor/build log и Python Console | Разделение старых поверхностей восстановлено. |
 | Profiler | Готово | Sampling, graph, table, controls и отдельный resizable right-side debug dock | Делит tabbed debug dock с Modules. |
 | Modules | Готово | Состояния/dirty/stale, Rescan, Reload, Build, Clean, Rebuild, Unload, async build output и owner-thread commit | Live ChronoSquad показал пять загруженных модулей; операции покрыты controller/UI тестами. |
@@ -57,16 +57,31 @@ legacy `termin-gui` frontend после финального smoke.
 
 ## Актуальный остаток
 
-1. Распространить `EditorUiMetrics` на оставшиеся dialogs и специализированные
-   extension panels; основные shell/collection/inspector/debug поверхности уже
-   используют общий контракт.
-2. Добавить editor-level parity fixture, проверяющий canonical menu inventory,
-   ключевые stable IDs, panel bounds, активный inspector kind и debug docking.
-3. Выполнить финальный live smoke на ChronoSquad и тестовом проекте. До
-   завершения миграции `termin_editor --ui=tcgui` сохраняется как явно legacy
-   comparison-маршрут; `termin-gui-native` остаётся default production
-   frontend. Физическое удаление `editor_tcgui` допустимо только после этого
-   gate.
+Редакторская миграция завершена. `termin_editor` и `termin_launcher` больше не
+принимают `--ui`; старые значения завершаются с явной ошибкой. Пакет
+`termin.editor_tcgui` не входит ни в source tree, ни в installed application
+payload.
+
+`termin-gui` как библиотека пока не удаляется: под umbrella #244 остаются
+не-редакторские consumers — `UIComponent`, CSG UI, `tcplot` и nodegraph.
+Распространение `EditorUiMetrics` на специализированные dialogs и дальнейшие
+visual regression fixtures остаются улучшениями native frontend, а не
+блокерами удаления legacy editor.
+
+## Финальная проверка 2026-07-25
+
+- `./build-sdk.sh --no-wheels` — успешно; application payload и import graph
+  проверены без `termin.editor_tcgui`.
+- focused native editor/launcher tests — 71 passed; после последнего уточнения
+  exit status launcher повторно проверен отдельным focused test.
+- `./run-tests.sh` — успешно: 108 C/C++ tests и все 52 Python suites, включая
+  447 `termin-app` tests (1 platform skip).
+- На созданном через canonical `termin.project.create_project()` тестовом
+  проекте native editor загрузил стандартную сцену из 3 сущностей; MCP execution
+  и screenshot capture прошли, shell и основные docks отображались корректно.
+- На ChronoSquad native editor загрузил сцену из 512 сущностей; MCP execution,
+  project browser, hierarchy, viewport, inspector и screenshot capture прошли.
+  Оба процесса завершены штатным `request_editor_close()`.
 
 Разделы ниже описывают исходные находки аудита и сохранены как история причин;
 они не являются текущим списком открытых дефектов.
@@ -250,11 +265,5 @@ Legacy frontend хранил editor log во вкладке Console и пока�
 
 ## Документационные несоответствия
 
-- `docs/plans/2026-07-09-termin-gui-native-porting-checklist.md` помечает Project
-  Browser и inspector slices выполненными, хотя end-to-end workflows выше ещё
-  отсутствуют.
-- тот же документ утверждает, что Profiler является fixed right-side slice;
-  production layout показывает vertical workspace child.
-- карточка #261 формулирует завершение как отсутствие production tcgui imports,
-  но этого недостаточно: перед удалением legacy frontend нужен parity gate по
-  пользовательским сценариям, перечисленным в этом аудите.
+Этот раздел исторический: перечисленные расхождения были устранены в ходе
+миграции, а финальный parity/live gate выполнен до удаления legacy frontend.

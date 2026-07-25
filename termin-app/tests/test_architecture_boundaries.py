@@ -447,7 +447,6 @@ def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
     source_roots.extend(sorted(REPO_ROOT.glob("termin-components/*/tests")))
     forbidden_fragments = (
         "termin.editor_core",
-        "termin.editor_tcgui",
         "termin.launcher",
     )
 
@@ -463,12 +462,10 @@ def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
 
 
 def test_framegraph_automation_service_is_toolkit_neutral() -> None:
-    legacy = REPO_ROOT / "termin-app/termin/editor_tcgui/framegraph_debugger_service.py"
     canonical = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_service.py"
     python_model = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_model.py"
     native_debugger = REPO_ROOT / "termin-engine/include/termin/render/frame_graph_debugger.hpp"
 
-    assert not legacy.exists()
     assert not python_model.exists()
     assert canonical.is_file()
     assert native_debugger.is_file()
@@ -522,15 +519,6 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "termin-app/termin/editor_native/scene_settings_dialogs.py",
         "termin-app/termin/editor_native/scene_manager_dialog.py",
         "termin-app/termin/editor_native/spacemouse_settings_dialog.py",
-        "termin-app/termin/editor_tcgui/dialogs/about_dialog.py",
-        "termin-app/termin/editor_tcgui/python_console_panel.py",
-        "termin-app/termin/editor_tcgui/dialogs/project_settings_dialog.py",
-        "termin-app/termin/editor_tcgui/dialogs/settings_dialog.py",
-        "termin-app/termin/editor_tcgui/dialogs/audio_debugger.py",
-        "termin-app/termin/editor_tcgui/dialogs/undo_stack_viewer.py",
-        "termin-app/termin/editor_tcgui/dialogs/scene_inspector.py",
-        "termin-app/termin/editor_tcgui/dialogs/layers_dialog.py",
-        "termin-app/termin/editor_tcgui/dialogs/shadow_settings_dialog.py",
     )
     for path in frontend_sources:
         assert "termin.editor_core" in _read_text(REPO_ROOT / path)

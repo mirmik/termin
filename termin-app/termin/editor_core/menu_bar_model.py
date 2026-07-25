@@ -1,7 +1,7 @@
 """Canonical editor menu-bar definition.
 
 Returns a list of ``MenuSpec`` describing every menu the editor needs. The
-tcgui controller renders this specification into native widgets.
+The native shell renders this specification into native widgets.
 
 The returned specs contain ``handle_getter`` callbacks for items whose state
 changes at runtime (Undo/Redo enabled, Play/Stop label, checkable toggles).
@@ -320,8 +320,7 @@ def build_editor_menu_inventory() -> list[MenuSpec]:
 
     Frontends use this to construct their command models, then bind command
     activation at their composition root.  Keeping this path based on
-    ``build_editor_menu_spec`` prevents the native and tcgui shells from
-    growing independent menu definitions again.
+    ``build_editor_menu_spec`` keeps command inventory separate from widgets.
     """
     noop = lambda: None
     false = lambda: False

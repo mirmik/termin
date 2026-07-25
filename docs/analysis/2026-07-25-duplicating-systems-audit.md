@@ -4,7 +4,9 @@
 
 Статус: статический read-only аудит HEAD
 `98e5754569404af37ad8772f6630991ff4f69b18`. Исходный код во время анализа
-не изменялся.
+не изменялся. Обновление 2026-07-25: первый P0-хвост, editor/launcher tcgui
+frontend (#437), удалён после live gate; исторические размеры и ссылки ниже
+оставлены как исходная фиксация проблемы.
 
 Связанные документы:
 
@@ -66,7 +68,7 @@ docs и examples, содержит приблизительно 1 955 файло
 
 | Приоритет | Параллельные системы | Целевой источник истины | Рекомендуемое действие | Трекинг |
 | --- | --- | --- | --- | --- |
-| P0 | `editor_tcgui` и native editor/launcher | native editor и native launcher | удалить legacy dispatch и editor frontend; toolkit удалять после остальных consumers | #437 |
+| P0 | `editor_tcgui` и native editor/launcher | native editor и native launcher | Выполнено 2026-07-25: legacy dispatch/frontend удалён; toolkit остаётся до миграции остальных consumers | #437 |
 | P0 | `application_host` и explicit window/document composition | `DocumentRenderer` + optional window adapter | мигрировать examples/bindings и удалить ownership host API | #593, #760 |
 | P0 | host-derived `termin-app` bundle и canonical SDK tree | проверенное SDK install tree | удалить второй runtime assembler | #633, #681 |
 | P1 | `DefaultResourceManager` registries и native runtime descriptors | runtime type descriptor facets | удалить Python component/pass registries и mixed manager ownership | #631, #644 |
@@ -124,6 +126,11 @@ profiler, settings и другие панели. Это не exact clones, но 
 3. только затем удалить `termin-gui` как package.
 
 Трекинг: #437, umbrella #244.
+
+Обновление 2026-07-25: рекомендованный первый этап выполнен. Из production
+editor/launcher удалены selector и imports, пакет `termin.editor_tcgui` и его
+payload/tests удалены. `termin-gui` намеренно остаётся для `UIComponent`, CSG,
+`tcplot` и nodegraph; это отдельный остаток umbrella #244.
 
 ## 2. Transitional application/window host внутри нового GUI
 
