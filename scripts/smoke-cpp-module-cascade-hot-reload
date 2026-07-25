@@ -54,7 +54,7 @@ def _locate_core_artifact(root: Path) -> Path:
 
     raise SmokeError(
         "C++ hot-reload test module artifact was not found. "
-        "Build the SDK first with ./build-sdk.sh --no-wheels."
+        "Build the SDK first with ./build-sdk.sh."
     )
 
 

@@ -133,7 +133,7 @@ def _verify_shader_compiler(shader_compiler: Path, environ: Mapping[str, str]) -
     if not shader_compiler.is_file() or not os.access(shader_compiler, os.X_OK):
         raise VirtualDisplayError(
             "SDK shader compiler is missing or not executable: "
-            f"{shader_compiler}. Rebuild the SDK with ./build-sdk.sh --no-wheels."
+            f"{shader_compiler}. Rebuild the SDK with ./build-sdk.sh."
         )
     result = subprocess.run(
         [str(shader_compiler), "--help"],
@@ -304,7 +304,7 @@ def main() -> int:
     if not editor.is_file() or not os.access(editor, os.X_OK):
         raise VirtualDisplayError(
             f"Editor executable is missing or not executable: {editor}. "
-            "Build the SDK with ./build-sdk.sh --no-wheels."
+            "Build the SDK with ./build-sdk.sh."
         )
     sdk_root = editor.parent.parent
     shader_compiler = editor.parent / "termin_shaderc"
