@@ -271,8 +271,7 @@ def _collect_pipeline_shader_usages(
         from termin.render_framework import collect_shader_usages_for_pipeline
 
         bootstrap_player()
-        resource_manager = DefaultResourceManager.instance()
-        resource_manager.register_builtin_frame_passes()
+        DefaultResourceManager.instance()
     except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(

@@ -131,9 +131,11 @@ class EditorCameraManager:
     def _ensure_camera_controller(self, camera_entity: Entity):
         """Attach serialized mode state and optional frontend projection."""
 
-        from termin.editor_core.resource_manager import ResourceManager
+        from termin.scene import ComponentRegistry
 
-        controller_cls = ResourceManager.instance().get_component("EditorCameraUIController")
+        controller_cls = ComponentRegistry.instance().get_class(
+            "EditorCameraUIController"
+        )
         if controller_cls is None:
             return None
         controller = camera_entity.get_component(controller_cls)

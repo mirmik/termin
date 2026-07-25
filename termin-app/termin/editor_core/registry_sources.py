@@ -699,28 +699,6 @@ class ResourceAssetSource:
             asset.ensure_loaded()
 
 
-class ResourceComponentSource:
-    def __init__(self, resource_manager) -> None:
-        self._resource_manager = resource_manager
-
-    def load_rows(self) -> Iterable[RegistryRow]:
-        for name in sorted(self._resource_manager.list_component_names()):
-            component_class = self._resource_manager.get_component(name)
-            if component_class is None:
-                continue
-            module = component_class.__module__
-            details = "\n".join(
-                (
-                    f"Component: {name}",
-                    "",
-                    f"Module: {module}",
-                    f"Class: {component_class.__qualname__}",
-                    f"MRO: {' -> '.join(cls.__name__ for cls in component_class.__mro__)}",
-                )
-            )
-            yield RegistryRow(name, (name, module), details)
-
-
 class WatchedFileSource:
     def __init__(self, watcher) -> None:
         self._watcher = watcher
@@ -848,17 +826,6 @@ def build_resource_manager_pages(resource_manager, project_file_watcher=None) ->
                 activate=source.activate,
             )
         )
-    pages.append(
-        RegistryPage(
-            "components",
-            "Components",
-            (
-                RegistryColumn("name", "Name", stretch=2.0),
-                RegistryColumn("module", "Module", stretch=2.0),
-            ),
-            ResourceComponentSource(resource_manager),
-        )
-    )
     if project_file_watcher is not None:
         pages.append(
             RegistryPage(
@@ -879,7 +846,6 @@ __all__ = [
     "MappingRegistrySource",
     "NavMeshRegistrySource",
     "ResourceAssetSource",
-    "ResourceComponentSource",
     "SceneRegistrySource",
     "WatchedFileSource",
     "build_core_registry_pages",

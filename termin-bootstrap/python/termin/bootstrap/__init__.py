@@ -22,31 +22,67 @@ from termin.bootstrap._bootstrap_native import (
 )
 
 
-def _publish_builtin_python_components() -> None:
+def _publish_builtin_type_projections() -> None:
     import importlib
 
-    from termin.default_assets.builtin_types import get_default_builtin_component_specs
-    from termin.scene import PythonComponent, publish_python_components
+    from termin.default_assets.builtin_types import (
+        get_default_builtin_component_specs,
+        get_default_builtin_frame_pass_specs,
+    )
+    from termin.render_framework import (
+        tc_pass_registry_bind_class_projection,
+        tc_pass_registry_has,
+    )
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_components
 
-    classes: list[type[PythonComponent]] = []
+    component_classes: list[tuple[str, type]] = []
+    python_components: list[type[PythonComponent]] = []
     for module_name, class_name in get_default_builtin_component_specs():
         module = importlib.import_module(module_name)
         cls = module.__dict__.get(class_name)
-        if isinstance(cls, type) and issubclass(cls, PythonComponent):
-            classes.append(cls)
-    publish_python_components(classes, owner="termin-builtin-python")
+        if not isinstance(cls, type):
+            raise RuntimeError(
+                f"builtin component provider {module_name} does not expose class {class_name}"
+            )
+        component_classes.append((class_name, cls))
+        if issubclass(cls, PythonComponent):
+            python_components.append(cls)
+
+    publish_python_components(python_components, owner="termin-builtin-python")
+    component_registry = ComponentRegistry.instance()
+    for class_name, cls in component_classes:
+        if not component_registry.bind_class_projection(class_name, cls):
+            raise RuntimeError(
+                f"failed to bind builtin component projection {class_name}"
+            )
+
+    for module_name, class_name in get_default_builtin_frame_pass_specs():
+        module = importlib.import_module(module_name)
+        cls = module.__dict__.get(class_name)
+        if not isinstance(cls, type):
+            raise RuntimeError(
+                f"builtin frame-pass provider {module_name} does not expose class {class_name}"
+            )
+        if not tc_pass_registry_has(class_name):
+            raise RuntimeError(
+                f"builtin frame-pass descriptor {class_name} is not registered"
+            )
+        if not tc_pass_registry_bind_class_projection(class_name, cls):
+            raise RuntimeError(
+                f"failed to bind builtin frame-pass projection {class_name}"
+            )
 
 
 def bootstrap_player() -> None:
-    """Bootstrap native roots, then explicitly publish builtin Python components."""
+    """Bootstrap native roots, then publish builtin Python type projections."""
     _bootstrap_player_native()
-    _publish_builtin_python_components()
+    _publish_builtin_type_projections()
 
 
 def bootstrap_editor() -> None:
-    """Bootstrap editor registries and builtin Python component descriptors."""
+    """Bootstrap editor registries and builtin Python type projections."""
     _bootstrap_editor_native()
-    _publish_builtin_python_components()
+    _publish_builtin_type_projections()
 
 
 def configure_resource_manager_factory(factory: Callable[[], object] | None) -> None:

@@ -9,7 +9,6 @@ from termin_assets import AssetRuntimeManager
 
 from termin.default_assets.resource_api import DefaultAssetResourceMixin
 from termin.default_assets.resource_accessors import DefaultResourceAccessorsMixin
-from termin.default_assets.resource_components import DefaultComponentsMixin
 from termin.default_assets.resource_registries import DefaultAssetRegistryFactoryMixin
 from termin.default_assets.resource_serialization import DefaultSerializationMixin
 
@@ -34,14 +33,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
 
     def __init__(self):
         super().__init__()
-
-        from termin.render_framework.frame_pass_registry import FramePassRegistry
-        from termin.scene.component_registry import ComponentClassRegistry
-
-        self.component_registry = ComponentClassRegistry()
-        self.frame_pass_registry = FramePassRegistry()
-        self.components = self.component_registry.classes
-        self.frame_passes = self.frame_pass_registry.classes
 
         self._prefab_registry = self._create_prefab_registry()
         self._glb_registry = self._create_glb_registry()
@@ -165,9 +156,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self._asset_store.clear()
         self.external_assets.clear()
 
-        self.component_registry.classes.clear()
-        self.frame_pass_registry.classes.clear()
-
     def _destroy_cached_pipelines(self) -> None:
         for asset in list(self._pipeline_registry.iter_assets()):
             # Pipeline assets own strong canonical handles, not mutable
@@ -197,7 +185,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
 class DefaultResourceManager(
     DefaultResourceManagerBase,
     DefaultAssetResourceMixin,
-    DefaultComponentsMixin,
     DefaultResourceAccessorsMixin,
     DefaultSerializationMixin,
 ):

@@ -7,7 +7,9 @@
 не изменялся. Обновление 2026-07-25: первый P0-хвост, editor/launcher tcgui
 frontend (#437), удалён после live gate; второй runtime assembler `termin-app`
 (#681) также удалён и заменён relocated SDK smoke. Исторические размеры и
-ссылки ниже оставлены как исходная фиксация проблемы.
+ссылки ниже оставлены как исходная фиксация проблемы. Дублирующие Python
+component/pass registries (#644) удалены; bootstrap теперь явно привязывает
+Python-проекции к canonical runtime descriptors.
 
 Связанные документы:
 
@@ -72,7 +74,7 @@ docs и examples, содержит приблизительно 1 955 файло
 | P0 | `editor_tcgui` и native editor/launcher | native editor и native launcher | Выполнено 2026-07-25: legacy dispatch/frontend удалён; toolkit остаётся до миграции остальных consumers | #437 |
 | P0 | `application_host` и explicit window/document composition | `DocumentRenderer` + optional window adapter | Выполнено 2026-07-25: ownership hosts удалены, consumers переведены на explicit composition | #593, #760 |
 | P0 | host-derived `termin-app` bundle и canonical SDK tree | проверенное SDK install tree | Выполнено 2026-07-25: второй runtime assembler удалён, acceptance перенесён на relocated SDK | #633, #681 |
-| P1 | `DefaultResourceManager` registries и native runtime descriptors | runtime type descriptor facets | удалить Python component/pass registries и mixed manager ownership | #631, #644 |
+| P1 | `DefaultResourceManager` registries и native runtime descriptors | runtime type descriptor facets | Выполнено 2026-07-25: Python-каталоги удалены, bootstrap публикует class projections в canonical descriptors | #631, #644 |
 | P1 | `nos::trent`, `tc_value`, `tc::trent` | `tc_value` storage + `tc::trent` C++ facade | вытеснить и удалить `nos::trent` и duplicate converters | #86 |
 | P1 | cached framegraph и per-frame metadata rebuild | revisioned `PipelineExecutionPlan` | компилировать metadata только при invalidation | #554 |
 | P1 | planner logical frame и per-job backend frames | `RenderingManager` frame scope | один submit на logical frame, frame-local scene cache | #556 |
@@ -302,6 +304,23 @@ Python catalog не следует просто перенести в новый
 cross-module teardown.
 
 Трекинг: #631, #644.
+
+### Завершение 2026-07-25
+
+Карточка #644 выполнена:
+
+- `ComponentClassRegistry` и `FramePassRegistry` удалены вместе с manager
+  facade и вторым owner-cleanup participant;
+- `DefaultResourceManager` больше не хранит и не очищает type metadata;
+- player/editor bootstrap импортирует immutable provider specs и явно
+  привязывает Python classes к уже зарегистрированным native descriptors;
+- editor, player, runtime exporter и pass deserialization запрашивают классы
+  непосредственно у canonical component/pass registries;
+- shutdown освобождает Python class projections, а module revoke удаляет
+  единственный owner contribution.
+
+Оставшаяся декомпозиция asset-составляющих `DefaultResourceManager`
+продолжает отслеживаться umbrella-карточкой #631.
 
 ## 6. Три value representation
 

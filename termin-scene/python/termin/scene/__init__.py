@@ -22,7 +22,6 @@ from termin.scene.python_component import (
     publish_python_components,
     shutdown_python_components,
 )
-from termin.scene.component_registry import ComponentClassRegistry
 
 __all__ = [
     "Entity",
@@ -39,6 +38,5 @@ __all__ = [
     "publish_python_component",
     "publish_python_component_owner",
     "publish_python_components",
-    "ComponentClassRegistry",
     "shutdown_python_components",
 ]

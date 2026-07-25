@@ -122,7 +122,6 @@ def _pipeline_resource_manager(
 
         bootstrap_player()
         resource_manager = DefaultResourceManager.instance()
-        resource_manager.register_builtin_frame_passes()
         return resource_manager
     except Exception as exc:
         diagnostics.append(

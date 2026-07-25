@@ -1,6 +1,5 @@
 from termin.editor_core.registry_sources import (
     ResourceAssetSource,
-    ResourceComponentSource,
     NavMeshRegistrySource,
     SceneRegistrySource,
     WatchedFileSource,
@@ -24,10 +23,6 @@ class FakeAsset:
         self.load_count += 1
 
 
-class FakeComponent:
-    pass
-
-
 class FakeResourceManager:
     def __init__(self):
         self.assets = {"mesh": {"uuid-cube": FakeAsset("cube")}}
@@ -37,12 +32,6 @@ class FakeResourceManager:
 
     def get_runtime_asset_by_uuid(self, type_id, uuid):
         return self.assets.get(type_id, {}).get(uuid)
-
-    def list_component_names(self):
-        return ["FakeComponent"]
-
-    def get_component(self, name):
-        return FakeComponent if name == "FakeComponent" else None
 
 
 def test_resource_asset_source_uses_public_runtime_api_and_loads_on_activation():
@@ -81,7 +70,7 @@ def test_resource_asset_source_lists_filters_and_activates_duplicate_names_by_uu
     assert second.load_count == 1
 
 
-def test_resource_manager_pages_and_component_source_are_toolkit_neutral():
+def test_resource_manager_pages_contain_only_asset_owned_catalogs():
     manager = FakeResourceManager()
     pages = build_resource_manager_pages(manager)
     assert [page.stable_id for page in pages] == [
@@ -93,11 +82,7 @@ def test_resource_manager_pages_and_component_source_are_toolkit_neutral():
         "navmesh",
         "skeleton",
         "pipeline",
-        "components",
     ]
-    component_row = tuple(ResourceComponentSource(manager).load_rows())[0]
-    assert component_row.stable_id == "FakeComponent"
-    assert "FakeResourceManager" not in component_row.details
 
 
 def test_core_registry_exposes_all_canonical_resource_pools_by_uuid(monkeypatch):

@@ -31,18 +31,6 @@ class _Pass:
 
 
 class _ResourceManager:
-    def __init__(self) -> None:
-        self.components: dict[str, type] = {}
-
-    def register_builtin_components(self) -> list[str]:
-        return []
-
-    def register_component(self, name: str, component_type: type) -> None:
-        self.components[name] = component_type
-
-    def register_builtin_frame_passes(self) -> None:
-        pass
-
     def register_builtin_shaders(self) -> None:
         pass
 
@@ -75,12 +63,17 @@ def _runtime():
 
 
 def test_editor_builtin_resources_register_camera_ui_controller() -> None:
+    from termin.scene import ComponentRegistry
+
     bootstrap_editor()
     resource_manager = _ResourceManager()
 
     try:
         register_editor_builtin_resources(resource_manager)
-        assert resource_manager.components["EditorCameraUIController"] is EditorCameraUIController
+        assert (
+            ComponentRegistry.instance().get_class("EditorCameraUIController")
+            is EditorCameraUIController
+        )
     finally:
         shutdown_editor()
 

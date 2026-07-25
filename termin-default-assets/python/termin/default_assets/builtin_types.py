@@ -1,8 +1,8 @@
-"""Default builtin component and frame-pass specs.
+"""Immutable provider specs for builtin components and frame passes.
 
-The asset layer owns the default composition of type providers. Application
-packages may contribute their own specs without becoming the source of truth
-for engine/domain defaults.
+The bootstrap package owns publication into canonical runtime registries.
+This package only describes the engine/domain defaults below the application
+layer.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ _DEFAULT_FRAME_PASS_PROVIDER_MODULES = (
     "termin_render_pass_specs",
     "termin_render_framework_specs",
 )
+
 
 def get_default_builtin_component_specs() -> list[BuiltinTypeSpec]:
     """Return default component specs contributed below termin-app."""

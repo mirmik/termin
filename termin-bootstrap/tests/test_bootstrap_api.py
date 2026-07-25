@@ -548,23 +548,30 @@ def test_explicit_component_publication_is_repeatable_after_rebootstrap():
     )
 
 
-def test_player_bootstrap_publishes_builtin_component_catalog_once():
+def test_player_bootstrap_publishes_builtin_type_projections_once():
     result = _run_python_without_nanobind_leaks(
         """
         from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.render_framework import tc_pass_registry_get_class
         from termin.scene import ComponentRegistry
 
         for _ in range(3):
             bootstrap_player()
 
+            from termin.mesh import MeshComponent
             from termin.render import DrawableComponent
+            from termin.render_passes import UIWidgetPass
 
             registry = ComponentRegistry.instance()
             assert registry.get_class("DrawableComponent") is DrawableComponent
+            assert registry.get_class("MeshComponent") is MeshComponent
             assert registry.get_info("DrawableComponent")["category"] == "Rendering"
+            assert tc_pass_registry_get_class("UIWidgetPass") is UIWidgetPass
 
             shutdown_player()
             assert not registry.has("DrawableComponent")
+            assert registry.get_class("DrawableComponent") is None
+            assert tc_pass_registry_get_class("UIWidgetPass") is None
         """
     )
 
