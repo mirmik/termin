@@ -536,6 +536,7 @@ def test_profile_build_returns_nonzero_for_builder_error_diagnostic(
         )
 
     monkeypatch.setattr(profile_build, "build_desktop_project", fake_builder)
+    _allow_routing_without_local_preflight(monkeypatch)
 
     assert profile_build.main(
         [
