@@ -1,7 +1,5 @@
 #include "core/tc_component_capability.h"
 #include "core/tc_component.h"
-#include "core/tc_entity_pool.h"
-#include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
 #include <tcbase/tc_string.h>
 #include <tcbase/tc_log.h>
@@ -98,14 +96,8 @@ bool tc_component_set_capability_priority(tc_component* c, tc_component_cap_id i
 
     c->capability_priorities[slot] = priority;
 
-    if (tc_entity_handle_valid(c->owner)) {
-        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-        if (pool) {
-            tc_scene_handle scene = tc_entity_pool_get_scene(pool);
-            if (tc_scene_handle_valid(scene)) {
-                tc_scene_reindex_component_capability(scene, c, id);
-            }
-        }
+    if (tc_scene_handle_valid(c->lifecycle_scene)) {
+        tc_scene_reindex_component_capability(c->lifecycle_scene, c, id);
     }
 
     return true;
@@ -123,14 +115,8 @@ bool tc_component_attach_capability(tc_component* c, tc_component_cap_id id, voi
     c->capability_ptrs[slot] = cap_ptr;
     c->capability_mask |= (UINT64_C(1) << slot);
 
-    if (tc_entity_handle_valid(c->owner)) {
-        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-        if (pool) {
-            tc_scene_handle scene = tc_entity_pool_get_scene(pool);
-            if (tc_scene_handle_valid(scene)) {
-                tc_scene_reindex_component_capabilities(scene, c);
-            }
-        }
+    if (tc_scene_handle_valid(c->lifecycle_scene)) {
+        tc_scene_reindex_component_capability(c->lifecycle_scene, c, id);
     }
     return true;
 }
@@ -141,23 +127,15 @@ void tc_component_detach_capability(tc_component* c, tc_component_cap_id id) {
     if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) return;
 
     void* cap_ptr = c->capability_ptrs[slot];
+    if (tc_scene_handle_valid(c->lifecycle_scene)) {
+        tc_scene_unindex_component_capability(c->lifecycle_scene, c, id);
+    }
+
     c->capability_ptrs[slot] = NULL;
-    c->capability_prev[slot] = NULL;
-    c->capability_next[slot] = NULL;
     c->capability_mask &= ~(UINT64_C(1) << slot);
 
     if (cap_ptr && g_component_capability_registry.destroy_fns[slot]) {
         g_component_capability_registry.destroy_fns[slot](cap_ptr);
-    }
-
-    if (tc_entity_handle_valid(c->owner)) {
-        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-        if (pool) {
-            tc_scene_handle scene = tc_entity_pool_get_scene(pool);
-            if (tc_scene_handle_valid(scene)) {
-                tc_scene_reindex_component_capabilities(scene, c);
-            }
-        }
     }
 }
 
@@ -167,14 +145,7 @@ void tc_component_clear_capabilities(tc_component* c) {
         if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) {
             continue;
         }
-        void* cap_ptr = c->capability_ptrs[slot];
-        c->capability_ptrs[slot] = NULL;
-        c->capability_prev[slot] = NULL;
-        c->capability_next[slot] = NULL;
+        tc_component_detach_capability(c, (tc_component_cap_id)(slot + 1));
         c->capability_priorities[slot] = 0;
-        if (cap_ptr && g_component_capability_registry.destroy_fns[slot]) {
-            g_component_capability_registry.destroy_fns[slot](cap_ptr);
-        }
     }
-    c->capability_mask = 0;
 }

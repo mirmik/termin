@@ -205,6 +205,15 @@ TC_API void tc_scene_reindex_component_capability(
     tc_component_cap_id cap_id
 );
 
+// Remove one component capability from the scene index without changing the
+// component's capability payload or mask. Capability mutation uses this to
+// preserve intrusive links until the scene has repaired its index.
+TC_API void tc_scene_unindex_component_capability(
+    tc_scene_handle h,
+    tc_component* c,
+    tc_component_cap_id cap_id
+);
+
 // ============================================================================
 // Component Type Enumeration
 // ============================================================================

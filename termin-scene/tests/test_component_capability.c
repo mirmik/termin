@@ -27,6 +27,11 @@ static bool collect_component_order(tc_component* c, void* user_data) {
     return true;
 }
 
+static void count_capability_destroy(void* payload) {
+    int* count = (int*)payload;
+    (*count)++;
+}
+
 typedef struct {
     tc_component component;
     int removed_count;
@@ -231,6 +236,98 @@ GUARD_C_TEST(test_scene_capability_priority_iteration) {
 
     tc_scene_free(scene);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_scene_capability_detach_repairs_intrusive_index) {
+    tc_component_cap_id cap = tc_component_capability_register_with_destructor(
+        "test.scene_capability_detach",
+        count_capability_destroy
+    );
+    GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
+
+    uint32_t slot = 0;
+    GUARD_C_REQUIRE(tc_component_capability_slot(cap, &slot));
+
+    tc_scene_handle scene = tc_scene_new_named("capability-detach-scene");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
+
+    tc_component low;
+    tc_component high;
+    tc_component mid;
+    tc_component_init(&low, NULL);
+    tc_component_init(&high, NULL);
+    tc_component_init(&mid, NULL);
+
+    int low_destroy_count = 0;
+    int high_destroy_count = 0;
+    int mid_destroy_count = 0;
+    GUARD_C_REQUIRE(tc_component_attach_capability(&low, cap, &low_destroy_count));
+    GUARD_C_REQUIRE(tc_component_attach_capability(&high, cap, &high_destroy_count));
+    GUARD_C_REQUIRE(tc_component_attach_capability(&mid, cap, &mid_destroy_count));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&low, cap, 0));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&high, cap, 10));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&mid, cap, 5));
+    tc_entity_pool_add_component(pool, entity, &low);
+    tc_entity_pool_add_component(pool, entity, &high);
+    tc_entity_pool_add_component(pool, entity, &mid);
+
+    tc_component_detach_capability(&mid, cap);
+    GUARD_C_CHECK_EQ_INT(1, mid_destroy_count);
+    GUARD_C_CHECK_EQ_INT(2, tc_scene_capability_count(scene, cap));
+    GUARD_C_CHECK_PTR_EQ(&low, high.capability_next[slot]);
+    GUARD_C_CHECK_PTR_EQ(&high, low.capability_prev[slot]);
+    GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_prev[slot]);
+    GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_next[slot]);
+    component_order order = {0};
+    tc_scene_foreach_with_capability(
+        scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    GUARD_C_CHECK_EQ_INT(2, order.count);
+    GUARD_C_CHECK_PTR_EQ(&high, order.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&low, order.items[1]);
+
+    tc_component_detach_capability(&mid, cap);
+    GUARD_C_CHECK_EQ_INT(1, mid_destroy_count);
+    GUARD_C_REQUIRE(tc_component_attach_capability(&mid, cap, &mid_destroy_count));
+    GUARD_C_CHECK_EQ_INT(3, tc_scene_capability_count(scene, cap));
+
+    tc_component_detach_capability(&high, cap);
+    GUARD_C_CHECK_EQ_INT(1, high_destroy_count);
+    GUARD_C_CHECK_EQ_INT(2, tc_scene_capability_count(scene, cap));
+    GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_prev[slot]);
+    GUARD_C_CHECK_PTR_EQ(&low, mid.capability_next[slot]);
+    GUARD_C_REQUIRE(tc_component_attach_capability(&high, cap, &high_destroy_count));
+
+    tc_component_detach_capability(&low, cap);
+    GUARD_C_CHECK_EQ_INT(1, low_destroy_count);
+    GUARD_C_CHECK_EQ_INT(2, tc_scene_capability_count(scene, cap));
+    GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_next[slot]);
+    GUARD_C_REQUIRE(tc_component_attach_capability(&low, cap, &low_destroy_count));
+
+    order = (component_order){0};
+    tc_scene_foreach_with_capability(
+        scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    GUARD_C_CHECK_EQ_INT(3, order.count);
+    GUARD_C_CHECK_PTR_EQ(&high, order.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&mid, order.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&low, order.items[2]);
+
+    tc_component_detach_capability(&high, cap);
+    tc_component_clear_capabilities(&mid);
+    tc_component_detach_capability(&low, cap);
+    GUARD_C_CHECK_EQ_INT(2, high_destroy_count);
+    GUARD_C_CHECK_EQ_INT(2, mid_destroy_count);
+    GUARD_C_CHECK_EQ_INT(2, low_destroy_count);
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_capability_count(scene, cap));
+
+    tc_entity_pool_remove_component(pool, entity, &low);
+    tc_entity_pool_remove_component(pool, entity, &high);
+    tc_entity_pool_remove_component(pool, entity, &mid);
+    tc_scene_free(scene);
     return 0;
 }
 
