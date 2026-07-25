@@ -281,6 +281,7 @@ class ProjectFileWatcher:
         self._on_resource_reloaded = on_resource_reloaded
         self._external_asset_catalog = None
         self._ignored_roots_provider = ignored_roots_provider
+        self._ignored_roots_cache: tuple[Path, ...] = ()
 
         # All project files by extension (for statistics)
         self._all_files_by_ext: Dict[str, Set[str]] = {}
@@ -288,7 +289,7 @@ class ProjectFileWatcher:
         # Thread-safe pending changes from watchdog
         self._lock = threading.Lock()
         self._pending_changes: Dict[str, str] = {}  # path -> "created"/"modified"/"deleted"
-        self._debounce_timer: threading.Timer | None = None
+        self._debounce_deadline: float | None = None
 
     def register_processor(self, processor: FilePreLoader) -> None:
         for ext in processor.extensions:
@@ -309,10 +310,6 @@ class ProjectFileWatcher:
 
     def disable(self) -> None:
         """Stop watchdog observer and clear all state."""
-        if self._debounce_timer is not None:
-            self._debounce_timer.cancel()
-            self._debounce_timer = None
-
         if self._observer is not None:
             self._observer.stop()
             self._observer.join(timeout=2.0)
@@ -324,8 +321,10 @@ class ProjectFileWatcher:
         self._watched_dirs.clear()
         self._watched_files.clear()
         self._all_files_by_ext.clear()
+        self._ignored_roots_cache = ()
         with self._lock:
             self._pending_changes.clear()
+            self._debounce_deadline = None
 
     def rescan(self) -> None:
         project_path = self._project_path
@@ -371,6 +370,7 @@ class ProjectFileWatcher:
         previously_watched_files: Set[str] | None = None,
     ) -> None:
         """Recursively scan directory and process resource files."""
+        self._refresh_ignored_roots(path)
         scan_started_at = time.perf_counter()
         scan_thread_id = threading.get_ident()
         log.info(
@@ -404,11 +404,6 @@ class ProjectFileWatcher:
                 if ext in self._processors:
                     priority = self._processors[ext].priority
                     pending_files.append((priority, file_path, ext))
-                elif ext == ".meta":
-                    base_ext = self._get_spec_base_ext(file_path)
-                    if base_ext and base_ext in self._processors:
-                        priority = self._processors[base_ext].priority
-                        pending_files.append((priority, file_path, ext))
 
         pending_files.sort(key=lambda x: (x[0], x[1]))
         log.info(
@@ -421,13 +416,17 @@ class ProjectFileWatcher:
         for index, (_priority, file_path, _ext) in enumerate(pending_files, start=1):
             if previously_watched_files is not None and file_path in previously_watched_files:
                 self._watched_files.add(file_path)
-                continue
-            self._add_file(
-                file_path,
-                initial_scan=True,
-                progress=(index, len(pending_files)),
-            )
-            processed_count += 1
+            else:
+                self._add_file(
+                    file_path,
+                    initial_scan=True,
+                    progress=(index, len(pending_files)),
+                )
+                processed_count += 1
+
+            sidecar_path = file_path + ".meta"
+            if os.path.isfile(sidecar_path):
+                self._watched_files.add(sidecar_path)
 
         log.info(
             f"[AssetScan] complete candidates={len(pending_files)} "
@@ -460,23 +459,21 @@ class ProjectFileWatcher:
             return
         with self._lock:
             self._pending_changes[path] = kind
-        # Restart debounce
-        if self._debounce_timer is not None:
-            self._debounce_timer.cancel()
-        self._debounce_timer = threading.Timer(DEBOUNCE_DELAY_S, lambda: None)
-        self._debounce_timer.daemon = True
-        self._debounce_timer.start()
+            self._debounce_deadline = time.monotonic() + DEBOUNCE_DELAY_S
 
     def poll(self) -> None:
         """Process pending file changes. Call from main loop each frame."""
-        if self._debounce_timer is not None and self._debounce_timer.is_alive():
-            return  # Still debouncing
-
         with self._lock:
             if not self._pending_changes:
                 return
+            if (
+                self._debounce_deadline is not None
+                and time.monotonic() < self._debounce_deadline
+            ):
+                return
             pending = dict(self._pending_changes)
             self._pending_changes.clear()
+            self._debounce_deadline = None
 
         for path, kind in pending.items():
             if kind == "deleted":
@@ -507,6 +504,8 @@ class ProjectFileWatcher:
         ext = os.path.splitext(path)[1].lower()
 
         if ext == ".meta":
+            if initial_scan:
+                return
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
@@ -643,23 +642,22 @@ class ProjectFileWatcher:
             f"path='{path}' thread={thread_id}"
         )
 
-    def _ignored_roots(self) -> tuple[Path, ...]:
-        if self._project_path is None:
-            return ()
+    def _refresh_ignored_roots(self, project_path: str) -> None:
         if self._ignored_roots_provider is None:
-            return ()
+            self._ignored_roots_cache = ()
+            return
 
-        project_root = Path(self._project_path).resolve()
+        project_root = Path(project_path).resolve()
         roots: list[Path] = []
         for ignored_path in self._ignored_roots_provider(project_root):
             ignored = Path(ignored_path)
             if not ignored.is_absolute():
                 ignored = project_root / ignored
             roots.append(ignored.resolve())
-        return tuple(roots)
+        self._ignored_roots_cache = tuple(roots)
 
     def _is_ignored_path(self, path: str) -> bool:
-        ignored_roots = self._ignored_roots()
+        ignored_roots = self._ignored_roots_cache
         if not ignored_roots:
             return False
 

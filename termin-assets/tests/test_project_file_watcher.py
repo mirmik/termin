@@ -38,6 +38,7 @@ class RecordingLifecyclePreLoader(RecordingRemovalPreLoader):
         super().__init__()
         self.initial_added: list[str] = []
         self.added: list[str] = []
+        self.spec_changed: list[tuple[str, str]] = []
 
     def on_file_added(self, path: str) -> None:
         self.added.append(path)
@@ -45,6 +46,9 @@ class RecordingLifecyclePreLoader(RecordingRemovalPreLoader):
     def on_initial_file_added(self, path: str) -> None:
         self.initial_added.append(path)
         super().on_initial_file_added(path)
+
+    def on_spec_changed(self, spec_path: str, resource_path: str) -> None:
+        self.spec_changed.append((spec_path, resource_path))
 
 
 def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
@@ -275,6 +279,92 @@ def test_rescan_adds_new_files_discovered_since_previous_scan(tmp_path: Path) ->
     assert processor.initial_added == [str(first_path), str(second_path)]
     assert processor.added == [str(first_path), str(second_path)]
     assert processor.removed == []
+
+
+def test_initial_scan_treats_sidecar_as_resource_companion(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asset_path = tmp_path / "stable.asset"
+    meta_path = tmp_path / "stable.asset.meta"
+    asset_path.write_text("stable", encoding="utf-8")
+    meta_path.write_text('{"uuid": "stable"}', encoding="utf-8")
+    messages: list[str] = []
+    monkeypatch.setattr(watcher_module.log, "info", messages.append)
+
+    processor = RecordingLifecyclePreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._scan_directory(str(tmp_path))
+
+    assert processor.initial_added == [str(asset_path)]
+    assert processor.spec_changed == []
+    assert watcher.watched_files == {str(asset_path), str(meta_path)}
+    assert any("[AssetScan] discovered candidates=1 " in message for message in messages)
+
+
+def test_burst_events_use_monotonic_deadline_without_timer_threads(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asset_path = tmp_path / "burst.asset"
+    asset_path.write_text("burst", encoding="utf-8")
+    now = [100.0]
+
+    def reject_timer(*_args, **_kwargs):
+        raise AssertionError("debounce must not create timer threads")
+
+    monkeypatch.setattr(watcher_module.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(watcher_module.threading, "Timer", reject_timer)
+
+    processor = RecordingLifecyclePreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    watcher._enqueue_change(str(asset_path), "created")
+    now[0] = 100.2
+    watcher._enqueue_change(str(asset_path), "created")
+    now[0] = 100.49
+    watcher.poll()
+    assert processor.added == []
+
+    now[0] = 100.5
+    watcher.poll()
+    assert processor.added == [str(asset_path)]
+    with watcher._lock:
+        assert watcher._pending_changes == {}
+        assert watcher._debounce_deadline is None
+
+
+def test_ignored_roots_are_normalized_once_per_scan_and_refreshed_on_rescan(
+    tmp_path: Path,
+) -> None:
+    first_path = tmp_path / "first.asset"
+    second_path = tmp_path / "second.asset"
+    first_path.write_text("first", encoding="utf-8")
+    second_path.write_text("second", encoding="utf-8")
+    ignored = ["first.asset"]
+    provider_calls: list[Path] = []
+
+    def ignored_roots_provider(project_root: Path):
+        provider_calls.append(project_root)
+        return tuple(ignored)
+
+    watcher = ProjectFileWatcher(ignored_roots_provider=ignored_roots_provider)
+    watcher.register_processor(RecordingLifecyclePreLoader())
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert provider_calls == [tmp_path.resolve()]
+    assert watcher.watched_files == {str(second_path)}
+    assert watcher._should_watch_file(str(first_path)) is False
+    assert watcher._should_watch_file(str(second_path)) is True
+    assert provider_calls == [tmp_path.resolve()]
+
+    ignored[:] = ["second.asset"]
+    watcher.rescan()
+    assert provider_calls == [tmp_path.resolve(), tmp_path.resolve()]
+    assert watcher.watched_files == {str(first_path)}
 
 
 def test_initial_scan_logs_progress_and_per_asset_duration(

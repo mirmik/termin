@@ -6,6 +6,7 @@ from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor, ModuleInputFileProcessor
 from termin.project_modules.runtime import ProjectModulesRuntime
+from termin_assets import project_file_watcher as watcher_module
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
@@ -542,7 +543,12 @@ def test_project_file_watcher_initial_scan_registers_plugin_assets(tmp_path: Pat
     assert [result.resource_type for result in rm.registered] == ["texture"]
     assert rm.registered[0].path == str(texture_path)
     assert rm.registered[0].uuid == "texture-scan-uuid"
+    assert rm.reloaded == []
     assert preloader.get_tracked_files() == {str(texture_path): {"texture-scan-uuid"}}
+    assert watcher.watched_files == {
+        str(texture_path),
+        str(texture_path.with_name(texture_path.name + ".meta")),
+    }
 
 
 def test_project_file_watcher_initial_scan_persists_missing_asset_identity(
@@ -564,7 +570,12 @@ def test_project_file_watcher_initial_scan_persists_missing_asset_identity(
     generated_uuid = rm.registered[0].uuid
     assert generated_uuid
     assert read_spec_file(str(texture_path)) == {"uuid": generated_uuid}
+    assert rm.reloaded == []
     assert preloader.get_tracked_files() == {str(texture_path): {generated_uuid}}
+    assert watcher.watched_files == {
+        str(texture_path),
+        str(texture_path.with_name(texture_path.name + ".meta")),
+    }
 
 
 def test_project_file_watcher_initial_scan_ignores_project_setting_paths(tmp_path: Path, monkeypatch) -> None:
@@ -739,7 +750,10 @@ def test_project_file_watcher_modified_file_reloads_plugin_asset(tmp_path: Path)
     assert rm.reloaded[0].path == str(texture_path)
 
 
-def test_project_file_watcher_meta_change_reloads_resource_file(tmp_path: Path) -> None:
+def test_project_file_watcher_meta_change_reloads_resource_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     texture_path = tmp_path / "Albedo.png"
     meta_path = tmp_path / "Albedo.png.meta"
     texture_path.write_bytes(b"png")
@@ -751,6 +765,8 @@ def test_project_file_watcher_meta_change_reloads_resource_file(tmp_path: Path) 
     watcher.register_processor(preloader)
     preloader.on_file_added(str(texture_path))
     rm.registered.clear()
+    messages: list[str] = []
+    monkeypatch.setattr(watcher_module.log, "info", messages.append)
     _queue_change(watcher, meta_path, "modified")
 
     watcher.poll()
@@ -758,6 +774,13 @@ def test_project_file_watcher_meta_change_reloads_resource_file(tmp_path: Path) 
     assert rm.registered == []
     assert [result.uuid for result in rm.reloaded] == ["texture-meta-uuid"]
     assert rm.reloaded[0].path == str(texture_path)
+    meta_messages = [
+        message for message in messages if "operation=meta-reload" in message
+    ]
+    assert len(meta_messages) == 2
+    assert meta_messages[0].startswith("[AssetLoad] begin")
+    assert meta_messages[1].startswith("[AssetLoad] end")
+    assert "status=ok" in meta_messages[1]
 
 
 def test_project_file_watcher_deleted_file_clears_plugin_tracking(tmp_path: Path) -> None:
