@@ -63,6 +63,42 @@ def test_default_scene_uses_canonical_builtin_texture_uuids():
 
 
 @pytest.mark.parametrize(
+    ("entity_name", "mesh_uuid", "mesh_name"),
+    [
+        ("Cube", "00000000-0000-0000-0003-000000000001", "Cube"),
+        ("Ground", "00000000-0000-0000-0003-000000000003", "Plane"),
+    ],
+)
+def test_default_mesh_entities_use_canonical_typed_resource_components(
+    entity_name,
+    mesh_uuid,
+    mesh_name,
+):
+    entities = make_default_scene()["scene"]["entities"]
+    entity = next(item for item in entities if item["name"] == entity_name)
+
+    assert [component["type"] for component in entity["components"]] == [
+        "MeshComponent",
+        "MeshRenderer",
+    ]
+    mesh_data = entity["components"][0]["data"]
+    renderer_data = entity["components"][1]["data"]
+    assert mesh_data["mesh"] == {
+        "uuid": mesh_uuid,
+        "name": mesh_name,
+        "type": "uuid",
+        "kind": "tc_mesh",
+    }
+    assert "mesh" not in renderer_data
+    assert renderer_data["material"] == {
+        "uuid": "00000000-0001-0000-0001-000000000003",
+        "name": "NormalizedPBR",
+        "type": "uuid",
+        "kind": "tc_material",
+    }
+
+
+@pytest.mark.parametrize(
     "name",
     ["", ".", "..", "nested/project", r"nested\\project", "/absolute", "C:drive", "NUL"],
 )
