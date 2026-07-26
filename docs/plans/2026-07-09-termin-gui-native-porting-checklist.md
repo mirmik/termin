@@ -374,16 +374,21 @@ Phase 4 notes:
 - `tc_ui_document` owns an ordered overlay presentation stack without creating
   a second widget tree or ownership relationship. Overlay entries reference
   unparented, non-root widgets by generation handle and carry modal,
-  dismiss-on-outside, pointer-transparent and tooltip policy flags.
+  dismiss-on-outside, pointer-transparent and tooltip policy flags. Placed
+  entries additionally retain a document-owned center, point, anchor-below or
+  anchor-right policy. Every root layout pass remeasures and repositions those
+  entries against the current viewport and live anchor, including deterministic
+  flip and margin clamping.
 - `tc_ui_document_paint` paints ordinary roots followed by overlays in stack
   order. Hit testing walks overlays top-down before roots; tooltip and other
   pointer-transparent entries paint but do not intercept input.
 - Modal overlays form an input barrier. Pointer events outside the barrier are
   consumed, keyboard/text routing cannot escape the active modal scope, and
   focus traversal includes the modal plus any overlays stacked above it.
-- Tooltip timing remains host-owned. The C core exposes only the pure
-  `tc_ui_tooltip_rect` placement/clamping helper, so clocks and presentation
-  scheduling stay deterministic in tests and appropriate to each host.
+- Tooltip timing remains host-owned. The C core exposes both the pure
+  `tc_ui_tooltip_rect` helper and point-placed document overlays; clocks and
+  presentation scheduling therefore stay deterministic and host-appropriate,
+  while an open tooltip can participate in subsequent document relayout.
 
 ## Phase 5 - Input, Focus And Interaction
 
@@ -512,11 +517,11 @@ Phase 8 chrome notes:
 - `StatusBar` has persistent and temporary message state with explicit
   `clear_message`. Timeout scheduling belongs to the host event loop instead of
   a nondeterministic widget-local monotonic clock.
-- `Menu` is a document overlay backed by `CommandModel`: it clamps root and
-  fallback-left submenu placement to an explicit viewport, bounds tall content
-  with wheel/keyboard scrolling, skips disabled/separator entries, toggles
-  checkable commands before activation and owns teardown of its entire submenu
-  overlay chain. Ancestor-model tracking rejects cyclic submenu expansion.
+- `Menu` is a document overlay backed by `CommandModel`: root and submenu
+  placement use the document's point/anchor policies, bounds tall content with
+  wheel/keyboard scrolling, skips disabled/separator entries, toggles checkable
+  commands before activation and owns teardown of its entire submenu overlay
+  chain. Ancestor-model tracking rejects cyclic submenu expansion.
 - `MenuBar` owns exactly one root popup, keeps its title strip inside the popup
   hit scope for adjacent hover switching, and exposes cycle-safe shortcut
   dispatch over the same command graph. Outside/Escape dismissal, nested
