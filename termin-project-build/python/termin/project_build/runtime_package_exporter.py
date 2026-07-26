@@ -65,6 +65,9 @@ from termin.project_build.runtime_package.shaders import (
     write_shader_programs as _write_shader_programs,
     write_shaders as _write_shaders,
 )
+from termin.project_build.runtime_package.standard_resources import (
+    prepare_standard_resources as _prepare_standard_resources,
+)
 from termin.project_build.runtime_package.textures import write_textures as _write_textures
 
 
@@ -131,6 +134,16 @@ def export_runtime_package(
     if refs is None:
         raise ValueError("Runtime package must contain at least one scene root")
     _collect_project_material_refs(project_root_path, refs, diagnostics)
+    try:
+        _prepare_standard_resources(refs.meshes, refs.materials)
+    except Exception as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="error",
+                path="stdlib",
+                message=f"Runtime exporter failed to prepare standard resources: {exc}",
+            )
+        )
 
     _write_clean_package_dir(output_dir_path)
     packaged_scene_paths: dict[str, Path] = {}

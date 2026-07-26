@@ -167,7 +167,8 @@ def _default_mesh_components(mesh_uuid: str, mesh_name: str, color: list[float])
 
 
 def make_default_scene() -> dict:
-    """Create a default scene with a Cube, Light, and Ground plane."""
+    """Create a renderable default scene with geometry, lighting, and a camera."""
+    camera_uuid = str(uuid.uuid4())
     return {
         "version": "1.0",
         "scene": {
@@ -247,12 +248,68 @@ def make_default_scene() -> dict:
                         [0.416, 0.232, 0.030, 1.0],
                     ),
                 },
+                {
+                    "uuid": camera_uuid,
+                    "name": "Camera",
+                    "priority": 0,
+                    "visible": True,
+                    "enabled": True,
+                    "pickable": True,
+                    "selectable": True,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                        "position": [-3.46, 6.50, 5.13],
+                        "rotation": [0.0735, -0.2864, 0.9253, -0.2376],
+                    },
+                    "scale": [1.0, 1.0, 1.0],
+                    "components": [
+                        {
+                            "type": "CameraComponent",
+                            "data": {
+                                "enabled": True,
+                                "near_clip": 0.1,
+                                "far_clip": 100.0,
+                                "fov_x_degrees": 64.0,
+                                "fov_y_degrees": 45.0,
+                                "fov_mode": "FixHorizontal",
+                                "layer_mask": "0xffffffffffffffff",
+                                "render_category_mask": "0xffffffffffffffff",
+                            },
+                        }
+                    ],
+                },
             ],
             "layer_names": {},
             "flag_names": {},
             "extensions": {
                 "render_mount": {
-                    "viewport_configs": [],
+                    "viewport_configs": [
+                        {
+                            "name": "MainViewport",
+                            "display_name": "Main",
+                            "region": [0.0, 0.0, 1.0, 1.0],
+                            "depth": 0,
+                            "input_mode": "simple",
+                            "block_input_in_editor": False,
+                            "render_target": {"name": "MainTarget"},
+                            "enabled": True,
+                        }
+                    ],
+                    "render_target_configs": [
+                        {
+                            "name": "MainTarget",
+                            "kind": "texture_2d",
+                            "camera_uuid": camera_uuid,
+                            "dynamic_resolution": True,
+                            "color_format": "rgba16f",
+                            "depth_format": "depth32f",
+                            "clear_color": [0.05, 0.05, 0.08, 1.0],
+                            "clear_depth": 1.0,
+                            "pipeline_name": "Default",
+                            "enabled": True,
+                        }
+                    ],
                     "pipeline_templates": [],
                 },
                 "render_state": {
