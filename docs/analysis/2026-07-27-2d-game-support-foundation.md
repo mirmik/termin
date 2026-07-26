@@ -36,23 +36,31 @@ therefore be XZ rather than XY:
 - world X is the horizontal 2D axis;
 - world Z is the vertical 2D axis;
 - world Y is depth;
-- a canonical 2D camera looks along the Y axis;
-- 2D rotation is rotation around the Y axis;
+- a canonical 2D camera is on the negative-Y side and looks along positive Y;
+- the camera sees positive X to the right and positive Z upward;
+- a sprite's canonical front normal is negative Y;
+- positive 2D rotation is counter-clockwise as seen by that camera, and maps
+  to a right-handed world rotation around negative Y;
 - downward 2D gravity maps to negative world Z.
 
 The mapping is:
 
 ```text
 2D position (x, y) -> world position (x, depth, y)
-2D angle           -> world rotation around Y
+2D angle           -> world rotation around -Y
 2D gravity (0, -g) -> world gravity (0, 0, -g)
 ```
 
-The position, vector and depth portion of this contract is implemented by the
-header-only `termin::world2d` helpers in
-`termin-base/include/termin/geom/world2d.hpp`. Rotation and camera-facing
-helpers are intentionally excluded until the canonical viewing direction,
-front face and positive-angle sign are decided.
+This contract is implemented by the header-only `termin::world2d` helpers in
+`termin-base/include/termin/geom/world2d.hpp`.
+
+A canonical quad is authored counter-clockwise when viewed from the canonical
+camera, so its front normal is negative Y. Sprite `flip_x` and `flip_y` should
+flip UVs instead of applying a negative transform scale; this preserves
+geometry winding. An explicitly mirrored entity or parent transform retains
+the ordinary 3D mesh semantics and may reverse winding when face culling is
+enabled. The sprite renderer's default culling policy belongs to the separate
+render-state and batching decision.
 
 Public 2D APIs should still use `Vec2(x, y)`, where `y` means the vertical 2D
 coordinate. The mapping to XZ must live in a small explicit adapter layer.
@@ -169,7 +177,7 @@ duplicating camera math.
 
 Expected capabilities:
 
-- canonical orientation along the Y axis;
+- canonical orientation from negative Y toward positive Y;
 - world/screen coordinate conversion on the XZ plane;
 - pixels-per-unit configuration;
 - pixel-perfect snapping;
