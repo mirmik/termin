@@ -1264,6 +1264,7 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
 {
     RenderTopology topology;
     RenderingManager manager(topology);
+    const size_t baseline_displays = tc_display_pool_count();
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -1306,6 +1307,9 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     CHECK(std::string(tc_render_target_get_name(rt)) == "SceneRT");
 
     manager.detach_scene_full(scene);
+    manager.remove_display(display);
+    tc_display_free(display);
+    CHECK_EQ(tc_display_pool_count(), baseline_displays);
     tc_scene_free(scene);
 }
 
@@ -1313,6 +1317,7 @@ TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty withou
 {
     RenderTopology topology;
     RenderingManager manager(topology);
+    const size_t baseline_displays = tc_display_pool_count();
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -1351,6 +1356,9 @@ TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty withou
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
 
     manager.detach_scene_full(scene);
+    manager.remove_display(display);
+    tc_display_free(display);
+    CHECK_EQ(tc_display_pool_count(), baseline_displays);
     tc_scene_free(scene);
 }
 
@@ -1423,6 +1431,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
 
     tc_display_handle editor_display = tc_display_new("Editor", nullptr);
     REQUIRE(tc_display_handle_valid(editor_display));
+    const size_t baseline_displays = tc_display_pool_count();
     tc_render_target_handle editor_rt = tc_render_target_new("(Editor)");
     REQUIRE(tc_render_target_handle_valid(editor_rt));
     tc_render_target_set_scene(editor_rt, editor_scene);
@@ -1476,6 +1485,8 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
 
     auto viewports = manager.attach_scene_full(scene);
     REQUIRE_EQ(viewports.size(), 1u);
+    tc_display_handle game_display = manager.get_display_by_name("GameDisplay");
+    REQUIRE(tc_display_handle_valid(game_display));
     CHECK_EQ(topology.viewport_attachments().size(), 2u);
     CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports + 1);
@@ -1498,6 +1509,9 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
     CHECK_EQ(topology.viewport_attachments().size(), 1u);
 
+    manager.remove_display(game_display);
+    tc_display_free(game_display);
+    CHECK_EQ(tc_display_pool_count(), baseline_displays);
     manager.remove_editor_display(editor_display);
     CHECK(topology.viewport_attachments().empty());
     tc_display_remove_viewport(editor_display, editor_viewport);
