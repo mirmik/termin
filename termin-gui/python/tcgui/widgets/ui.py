@@ -57,6 +57,7 @@ class UI:
             Default font atlas. None → process default.
         """
         self._renderer = UIRenderer(graphics, font=font)
+        self._closed = False
         self._loader = UILoader()
 
         self._root: Widget | None = None
@@ -107,6 +108,18 @@ class UI:
         self.on_empty: Callable[[], None] | None = None
         self.on_destroy: Callable[[], None] | None = None
         self.on_present_requested: Callable[[], None] | None = None
+
+    def close(self) -> None:
+        """Release renderer resources while the graphics context is valid.
+
+        Closing a UI is idempotent. A closed UI must not be rendered again;
+        hosts that need to resume rendering should create a new UI instance.
+        """
+        if self._closed:
+            return
+
+        self._renderer.close()
+        self._closed = True
 
     def _request_present(self) -> None:
         if self.on_present_requested is not None:
