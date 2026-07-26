@@ -254,8 +254,15 @@ void FrameGraphDebuggerView::build() {
         fit.set_stable_id(std::string("editor.framegraph.") + prefix + "-fit");
         auto& actual = builder.make<Button>("1:1");
         actual.set_stable_id(std::string("editor.framegraph.") + prefix + "-actual");
+        auto& sampling = builder.make<ComboBox>();
+        sampling.set_stable_id(
+            std::string("editor.framegraph.") + prefix + "-sampling");
+        sampling.add_item("Linear");
+        sampling.add_item("Nearest");
+        sampling.set_selected_index(0);
         view_controls.add_fixed_child(fit, 64.0f);
         view_controls.add_fixed_child(actual, 64.0f);
+        view_controls.add_fixed_child(sampling, 92.0f);
         Button* refresh = nullptr;
         if (depth) {
             refresh = &builder.make<Button>("Refresh Depth");
@@ -275,6 +282,7 @@ void FrameGraphDebuggerView::build() {
 
         Preview preview;
         preview.canvas = &canvas;
+        preview.sampling_combo = &sampling;
         preview.status = &status;
         preview.force_depth = depth;
         Preview* destination = depth ? &depth_preview_ : &main_preview_;
@@ -294,6 +302,15 @@ void FrameGraphDebuggerView::build() {
             refresh_preview_status(*destination);
             request_render();
         });
+        sampling.changed().connect(
+            [this, destination](ComboBox&, int index, const std::string&) {
+                if (index < 0) return;
+                destination->canvas->set_texture_sampling(
+                    index == 1
+                        ? TC_UI_TEXTURE_SAMPLING_NEAREST
+                        : TC_UI_TEXTURE_SAMPLING_LINEAR);
+                request_render();
+            });
         canvas.zoom_changed().connect([this, destination](Canvas&, float) {
             refresh_preview_status(*destination);
             request_render();
