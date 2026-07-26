@@ -548,6 +548,7 @@ struct AppManifest {
     fs::path module_manifest_path;
     std::vector<std::string> runtime_backends;
     std::string project_name = "Termin Player";
+    std::string mcp_options_json = "{}";
     PlayerWindowSettings window;
     bool modules_enabled = false;
 };
@@ -587,6 +588,17 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
         "backends",
         "app manifest runtime.backends"
     );
+    const nos::trent* mcp = dict_get(*runtime, "mcp");
+    if (mcp != nullptr) {
+        if (!mcp->is_dict()) {
+            tc_log_warn(
+                "termin_player: app manifest runtime.mcp must be an object; "
+                "using environment/CLI MCP configuration only"
+            );
+        } else {
+            manifest.mcp_options_json = nos::json::dump(*mcp);
+        }
+    }
     const std::vector<std::string> package_backends = package_runtime_backends(
         manifest.package_manifest_path
     );
@@ -615,11 +627,29 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
 PyObject* native_request_quit(PyObject*, PyObject* args);
 PyObject* native_should_quit(PyObject*, PyObject*);
 PyObject* native_exit_code(PyObject*, PyObject*);
+PyObject* native_engine_capsule(PyObject*, PyObject*);
+PyObject* native_scene_handle(PyObject*, PyObject*);
+PyObject* native_display_handle(PyObject*, PyObject*);
+PyObject* native_viewport_handle(PyObject*, PyObject*);
+PyObject* native_window_framebuffer_size(PyObject*, PyObject*);
+PyObject* native_window_should_close(PyObject*, PyObject*);
+PyObject* native_set_window_should_close(PyObject*, PyObject* args);
+PyObject* native_project_path(PyObject*, PyObject*);
+PyObject* native_scene_name(PyObject*, PyObject*);
 
 PyMethodDef native_methods[] = {
     {"request_quit", native_request_quit, METH_VARARGS, "Request player shutdown."},
     {"should_quit", native_should_quit, METH_NOARGS, "Return whether shutdown was requested."},
     {"exit_code", native_exit_code, METH_NOARGS, "Return requested player exit code."},
+    {"engine_capsule", native_engine_capsule, METH_NOARGS, "Return the borrowed EngineCore capsule."},
+    {"scene_handle", native_scene_handle, METH_NOARGS, "Return the live scene generation handle."},
+    {"display_handle", native_display_handle, METH_NOARGS, "Return the live display generation handle."},
+    {"viewport_handle", native_viewport_handle, METH_NOARGS, "Return the primary viewport generation handle."},
+    {"window_framebuffer_size", native_window_framebuffer_size, METH_NOARGS, "Return the live window framebuffer size."},
+    {"window_should_close", native_window_should_close, METH_NOARGS, "Return the live window close flag."},
+    {"set_window_should_close", native_set_window_should_close, METH_VARARGS, "Set the live window close flag."},
+    {"project_path", native_project_path, METH_NOARGS, "Return the packaged player bundle path."},
+    {"scene_name", native_scene_name, METH_NOARGS, "Return the active packaged scene identity."},
     {nullptr, nullptr, 0, nullptr},
 };
 
@@ -715,6 +745,7 @@ struct PlayerRuntimeHost::Impl {
     bool module_live_scene_sync_enabled = false;
     bool modules_loaded = false;
     bool runtime_bootstrapped = false;
+    PyObject* automation_session = nullptr;
 
     int run(int argc, char** argv) {
         try {
@@ -751,7 +782,8 @@ struct PlayerRuntimeHost::Impl {
             register_scenes();
             enable_module_live_scene_sync();
             initialize_window_and_rendering();
-            install_runtime_facade();
+            activate_native_bridge();
+            start_automation_session();
             run_loop();
             shutdown();
             return exit_code.load();
@@ -905,50 +937,83 @@ print(json.dumps({
         }
     }
 
-    void install_runtime_facade() {
+    void activate_native_bridge() {
+        std::lock_guard<std::mutex> lock(g_active_host_mutex);
+        if (g_active_host != nullptr && g_active_host != this) {
+            throw std::runtime_error("another native player host is already active");
+        }
+        g_active_host = this;
+    }
+
+    void start_automation_session() {
         if (!python_initialized) {
             return;
         }
 
-        std::string code =
-            "import _termin_player_native\n"
-            "try:\n"
-            "    import termin.player.runtime as _termin_player_runtime\n"
-            "    class _NativePlayerRuntime:\n"
-            "        display = None\n"
-            "        viewport = None\n"
-            "        scene = None\n"
-            "        @property\n"
-            "        def exit_code(self):\n"
-            "            return _termin_player_native.exit_code()\n"
-            "        def request_quit(self, exit_code=0):\n"
-            "            _termin_player_native.request_quit(int(exit_code))\n"
-            "    _termin_player_runtime._active_runtime = _NativePlayerRuntime()\n"
-            "except Exception:\n"
-            "    import traceback\n"
-            "    traceback.print_exc()\n";
         PyGILState_STATE gil = PyGILState_Ensure();
-        if (PyRun_SimpleString(code.c_str()) != 0) {
+        PyObject* module = PyImport_ImportModule("termin.player.native_runtime");
+        PyObject* bridge = PyImport_ImportModule("_termin_player_native");
+        PyObject* factory = module == nullptr
+            ? nullptr
+            : PyObject_GetAttrString(module, "create_native_player_session");
+        PyObject* explicit_mcp = PyBool_FromLong(cli.mcp_enabled ? 1 : 0);
+        PyObject* options_json = PyUnicode_FromString(manifest.mcp_options_json.c_str());
+        if (module != nullptr && bridge != nullptr && factory != nullptr
+            && explicit_mcp != nullptr && options_json != nullptr) {
+            automation_session = PyObject_CallFunctionObjArgs(
+                factory,
+                bridge,
+                explicit_mcp,
+                options_json,
+                nullptr
+            );
+        }
+        Py_XDECREF(options_json);
+        Py_XDECREF(explicit_mcp);
+        Py_XDECREF(factory);
+        Py_XDECREF(bridge);
+        Py_XDECREF(module);
+        if (automation_session == nullptr) {
             PyErr_Print();
-            tc_log_error("termin_player: failed to install Python runtime facade");
+            PyGILState_Release(gil);
+            throw std::runtime_error("failed to create native player automation session");
         }
         PyGILState_Release(gil);
     }
 
-    void clear_runtime_facade() {
-        if (!python_initialized) {
+    void process_automation_pending() {
+        if (!python_initialized || automation_session == nullptr) {
             return;
         }
         PyGILState_STATE gil = PyGILState_Ensure();
-        if (PyRun_SimpleString(
-                "try:\n"
-                "    import termin.player.runtime as _termin_player_runtime\n"
-                "    _termin_player_runtime._active_runtime = None\n"
-                "except Exception:\n"
-                "    pass\n"
-            ) != 0) {
-            PyErr_Clear();
+        PyObject* result = PyObject_CallMethod(
+            automation_session,
+            "process_pending",
+            nullptr
+        );
+        if (result == nullptr) {
+            PyErr_Print();
+            tc_log_error("termin_player: failed to process pending MCP work");
+        } else {
+            Py_DECREF(result);
         }
+        PyGILState_Release(gil);
+    }
+
+    void stop_automation_session() {
+        if (!python_initialized || automation_session == nullptr) {
+            return;
+        }
+        PyGILState_STATE gil = PyGILState_Ensure();
+        PyObject* result = PyObject_CallMethod(automation_session, "close", nullptr);
+        if (result == nullptr) {
+            PyErr_Print();
+            tc_log_error("termin_player: failed to stop native player automation session");
+        } else {
+            Py_DECREF(result);
+        }
+        Py_DECREF(automation_session);
+        automation_session = nullptr;
         PyGILState_Release(gil);
     }
 
@@ -1303,10 +1368,6 @@ print(json.dumps({
     }
 
     void run_loop() {
-        {
-            std::lock_guard<std::mutex> lock(g_active_host_mutex);
-            g_active_host = this;
-        }
         auto loop_connection = engine->attach_loop_client(EngineLoopClient{
             .poll_events = [this]() {
                 consume_shutdown_signal();
@@ -1314,6 +1375,7 @@ print(json.dumps({
                     window->poll_events();
                 }
                 sync_surface_size();
+                process_automation_pending();
             },
             .should_continue = [this]() {
                 consume_shutdown_signal();
@@ -1340,10 +1402,6 @@ print(json.dumps({
         engine->run();
         render_present();
         loop_connection.detach();
-        {
-            std::lock_guard<std::mutex> lock(g_active_host_mutex);
-            g_active_host = nullptr;
-        }
     }
 
     void render_present() {
@@ -1354,11 +1412,13 @@ print(json.dumps({
     }
 
     void shutdown() {
+        stop_automation_session();
         {
             std::lock_guard<std::mutex> lock(g_active_host_mutex);
-            g_active_host = nullptr;
+            if (g_active_host == this) {
+                g_active_host = nullptr;
+            }
         }
-        clear_runtime_facade();
         unload_project_modules();
 
         RenderingManager* manager = engine ? &engine->rendering_manager : nullptr;
@@ -1448,6 +1508,102 @@ PyObject* native_exit_code(PyObject*, PyObject*) {
     std::lock_guard<std::mutex> lock(g_active_host_mutex);
     int exit_code = g_active_host == nullptr ? 0 : g_active_host->exit_code.load();
     return PyLong_FromLong(exit_code);
+}
+
+PyObject* native_engine_capsule(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->engine) {
+        PyErr_SetString(PyExc_RuntimeError, "native player EngineCore is not available");
+        return nullptr;
+    }
+    return PyCapsule_New(
+        g_active_host->engine.get(),
+        "termin.EngineCore.borrowed",
+        nullptr
+    );
+}
+
+PyObject* native_scene_handle(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->scene.valid()) {
+        PyErr_SetString(PyExc_RuntimeError, "native player scene is not available");
+        return nullptr;
+    }
+    const tc_scene_handle handle = g_active_host->scene.handle();
+    return Py_BuildValue("(II)", handle.index, handle.generation);
+}
+
+PyObject* native_display_handle(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->display
+        || !g_active_host->display->is_valid()) {
+        PyErr_SetString(PyExc_RuntimeError, "native player display is not available");
+        return nullptr;
+    }
+    const tc_display_handle handle = g_active_host->display->handle();
+    return Py_BuildValue("(II)", handle.index, handle.generation);
+}
+
+PyObject* native_viewport_handle(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || g_active_host->viewports.empty()
+        || !tc_viewport_handle_valid(g_active_host->viewports.front())) {
+        PyErr_SetString(PyExc_RuntimeError, "native player viewport is not available");
+        return nullptr;
+    }
+    const tc_viewport_handle handle = g_active_host->viewports.front();
+    return Py_BuildValue("(II)", handle.index, handle.generation);
+}
+
+PyObject* native_window_framebuffer_size(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->window) {
+        PyErr_SetString(PyExc_RuntimeError, "native player window is not available");
+        return nullptr;
+    }
+    const auto [width, height] = g_active_host->window->framebuffer_size();
+    return Py_BuildValue("(ii)", width, height);
+}
+
+PyObject* native_window_should_close(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->window) {
+        PyErr_SetString(PyExc_RuntimeError, "native player window is not available");
+        return nullptr;
+    }
+    return PyBool_FromLong(g_active_host->window->should_close() ? 1 : 0);
+}
+
+PyObject* native_set_window_should_close(PyObject*, PyObject* args) {
+    int value = 0;
+    if (!PyArg_ParseTuple(args, "p", &value)) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr || !g_active_host->window) {
+        PyErr_SetString(PyExc_RuntimeError, "native player window is not available");
+        return nullptr;
+    }
+    g_active_host->window->set_should_close(value != 0);
+    Py_RETURN_NONE;
+}
+
+PyObject* native_project_path(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr) {
+        PyErr_SetString(PyExc_RuntimeError, "native player host is not available");
+        return nullptr;
+    }
+    return PyUnicode_FromString(g_active_host->bundle_root.string().c_str());
+}
+
+PyObject* native_scene_name(PyObject*, PyObject*) {
+    std::lock_guard<std::mutex> lock(g_active_host_mutex);
+    if (g_active_host == nullptr) {
+        PyErr_SetString(PyExc_RuntimeError, "native player host is not available");
+        return nullptr;
+    }
+    return PyUnicode_FromString(g_active_host->scene_name.c_str());
 }
 
 } // namespace

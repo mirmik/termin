@@ -101,13 +101,19 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
     executor = PlayerPythonExecutor(runtime)
     result = executor.execute_script(
         "print(scene)\n"
+        "print(surface)\n"
         "print(project_path.name)\n"
         "print(delta_time)\n"
         "request_quit(3)\n"
     )
 
     assert result.ok
-    assert result.output.splitlines() == ["scene-object", tmp_path.name, "0.25"]
+    assert result.output.splitlines() == [
+        "scene-object",
+        "display-object",
+        tmp_path.name,
+        "0.25",
+    ]
     assert quit_codes == [3]
 
 
