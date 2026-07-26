@@ -224,6 +224,19 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
         if (config->artifact_path.is_relative()) {
             config->artifact_path = path.parent_path() / config->artifact_path;
         }
+        const std::vector<std::string> rebuild_inputs =
+            get_optional_string_list(build, "inputs", error);
+        if (!error.empty()) {
+            error += " in " + path.string();
+            return std::nullopt;
+        }
+        for (const std::string& input : rebuild_inputs) {
+            std::filesystem::path input_path = resolve_template_vars(input, spec.id);
+            if (input_path.is_relative()) {
+                input_path = path.parent_path() / input_path;
+            }
+            config->rebuild_inputs.push_back(std::move(input_path));
+        }
         config->ignored = get_optional_bool(root, "ignore", false);
         spec.config = config;
         return spec;
