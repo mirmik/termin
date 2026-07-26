@@ -10,7 +10,8 @@
   "type": "cpp",
   "build": {
     "command": "cmake -S . -B build && cmake --build build",
-    "output": "build/libcpp_demo.so"
+    "output": "build/libcpp_demo.so",
+    "inputs": ["schema/component.idl"]
   }
 }
 ```
@@ -22,7 +23,15 @@
 - `build.command` и `build.output` могут быть либо строкой, либо объектом с ключами `linux` / `windows`
 - внутри `build.command` и `build.output` поддерживается подстановка `${name}`
 - `build.output`: обязательный путь к артефакту; если путь относительный, он считается от директории дескриптора
+- `build.inputs`: необязательный список дополнительных файлов или директорий,
+  влияющих на rebuild; относительные пути считаются от директории дескриптора
 - `ignore`: необязательный флаг, позволяющий пропустить модуль
+
+Без `build.inputs` stale-проверка учитывает сам дескриптор, C/C++/CUDA/Objective-C
+исходники и заголовки, а также стандартные CMake/Make/Meson/Bazel build-файлы.
+Обычные runtime/deployed файлы внутри директории модуля, включая собранные
+Python native extensions, входами не считаются. Нестандартные генераторы,
+схемы и другие build-зависимости следует перечислять в `build.inputs`.
 
 Пример с разными артефактами для Linux и Windows:
 

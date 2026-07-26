@@ -301,6 +301,65 @@ void test_rebuild_distinguishes_no_clean_step_from_clean_failure() {
     expect(backend->build_calls == 2, "build should run after successful clean");
 }
 
+void test_cpp_rebuild_ignores_generated_native_outputs() {
+    TempDir tmp;
+    const std::filesystem::path descriptor = tmp.path / "native.module";
+    const std::filesystem::path artifact = tmp.path / "build" / "libnative.so";
+    const std::filesystem::path source = tmp.path / "src" / "native.cpp";
+    const std::filesystem::path header = tmp.path / "include" / "native.hpp";
+    const std::filesystem::path declared_input = tmp.path / "schema" / "native.idl";
+    const std::filesystem::path generated_extension =
+        tmp.path / "python" / "native" / "_native.cpython-314t-x86_64-linux-gnu.so";
+
+    write_text_file(
+        descriptor,
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+        "  inputs: [schema/native.idl]\n"
+    );
+    write_text_file(source, "int native_value() { return 1; }\n");
+    write_text_file(header, "#pragma once\nint native_value();\n");
+    write_text_file(declared_input, "native schema\n");
+    write_text_file(artifact, "native artifact");
+    write_text_file(generated_extension, "generated Python extension");
+
+    const auto baseline = std::filesystem::file_time_type::clock::now() - std::chrono::hours(2);
+    std::filesystem::last_write_time(descriptor, baseline);
+    std::filesystem::last_write_time(source, baseline);
+    std::filesystem::last_write_time(header, baseline);
+    std::filesystem::last_write_time(declared_input, baseline);
+    std::filesystem::last_write_time(artifact, baseline + std::chrono::hours(1));
+    std::filesystem::last_write_time(
+        generated_extension,
+        baseline + std::chrono::minutes(90)
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), runtime.last_error());
+    expect(
+        !runtime.needs_rebuild("native"),
+        "generated native Python extension must not make a fresh C++ artifact stale"
+    );
+
+    std::filesystem::last_write_time(source, baseline + std::chrono::hours(2));
+    expect(runtime.needs_rebuild("native"), "newer C++ source must make the module stale");
+    std::filesystem::last_write_time(source, baseline);
+
+    std::filesystem::last_write_time(header, baseline + std::chrono::hours(2));
+    expect(runtime.needs_rebuild("native"), "newer C++ header must make the module stale");
+    std::filesystem::last_write_time(header, baseline);
+
+    std::filesystem::last_write_time(descriptor, baseline + std::chrono::hours(2));
+    expect(runtime.needs_rebuild("native"), "newer module descriptor must make the module stale");
+    std::filesystem::last_write_time(descriptor, baseline);
+
+    std::filesystem::last_write_time(declared_input, baseline + std::chrono::hours(2));
+    expect(runtime.needs_rebuild("native"), "newer declared build input must make the module stale");
+}
+
 void test_descriptor_parsing_and_discovery() {
     TempDir tmp;
 
@@ -1705,6 +1764,10 @@ TEST_CASE("module runtime cascade reload uses updated dependency snapshot") {
 
 TEST_CASE("module runtime rebuild distinguishes clean outcomes") {
     test_rebuild_distinguishes_no_clean_step_from_clean_failure();
+}
+
+TEST_CASE("cpp rebuild ignores generated native outputs") {
+    test_cpp_rebuild_ignores_generated_native_outputs();
 }
 
 TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomically") {
