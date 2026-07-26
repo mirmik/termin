@@ -57,6 +57,11 @@ from termin.editor_core.scene_settings_model import (
     ShadowSettingsController,
 )
 from termin.editor_core.project_settings_model import ProjectSettingsController
+from termin.editor_core.build_profiles_model import (
+    BuildProfileAction,
+    BuildProfileStorePersistence,
+    BuildProfilesController,
+)
 from termin.editor_core.project_build_controller import ProjectBuildController
 from termin.editor_native.project_session_controller import NativeProjectSessionController
 from termin.editor_core.scene_file_controller import SceneFileController
@@ -93,8 +98,9 @@ from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.editor_log import build_native_editor_log
 from termin.editor_native.editor_session import EditorSession
 from termin.editor_native.event_loop import attach_native_editor_event_loop
-from termin.editor_native.quest_openxr_build_dialog import (
-    build_native_quest_openxr_build_dialog,
+from termin.editor_native.build_profiles_window import (
+    build_native_build_profiles_window,
+    default_build_profile_templates,
 )
 from termin.editor_native.entity_inspector import build_native_entity_inspector
 from termin.editor_native.material_inspector import build_native_material_inspector
@@ -1442,37 +1448,83 @@ def _compose_native_editor(
 
     file_menu.connect_activated(on_scene_file_command)
 
-    quest_openxr_build_dialog = project_stage.own(
-        "Quest OpenXR build dialog",
-        build_native_quest_openxr_build_dialog(
-            host.document,
-            viewport=editor_viewport,
-            request_render=request_editor_render,
-        ),
-        cleanup=lambda: quest_openxr_build_dialog.close(),
-    )
-
-    def show_quest_openxr_build(entry) -> None:
-        quest_openxr_build_dialog.show_entry(entry, on_log=log_build_message)
-
-    project_build_controller = ProjectBuildController(
-        scene_manager=engine.scene_manager,
-        get_current_project_path=lambda: (
-            None if project_browser_controller.root_path is None else str(project_browser_controller.root_path)
-        ),
-        get_editor_scene_name=active_scene_name,
-        save_scene=scene_file_controller.save_scene,
-        log_to_console=log_build_message,
-        show_quest_openxr=show_quest_openxr_build,
-    )
-
-    project_build_commands = {
-        shell.build_project_command: project_build_controller.build_project,
-        shell.build_android_command: project_build_controller.build_android,
-        shell.build_quest_openxr_command: project_build_controller.show_quest_openxr_build_dialog,
-        shell.run_build_command: project_build_controller.run_build,
-        shell.run_standalone_command: project_build_controller.run_standalone,
+    project_build_controller = None
+    build_profiles_window = None
+    project_build_commands: dict[int, Callable[[], None]] = {}
+    profile_command_actions = {
+        shell.build_selected_profile_command: BuildProfileAction.BUILD,
+        shell.run_selected_profile_command: BuildProfileAction.RUN,
+        shell.install_selected_profile_command: BuildProfileAction.INSTALL,
+        shell.launch_selected_profile_command: BuildProfileAction.LAUNCH,
     }
+    profile_action_commands = {
+        BuildProfileAction.BUILD: shell.build_selected_profile_command,
+        BuildProfileAction.RUN: shell.run_selected_profile_command,
+        BuildProfileAction.INSTALL: shell.install_selected_profile_command,
+        BuildProfileAction.LAUNCH: shell.launch_selected_profile_command,
+    }
+    if project_file is not None:
+        build_project_root = Path(project_file).resolve().parent
+        build_profiles_window_ref = [None]
+
+        def log_profile_output(message: str) -> None:
+            log_build_message(message)
+            window = build_profiles_window_ref[0]
+            if window is not None:
+                window.append_output(message)
+
+        project_build_controller = ProjectBuildController(
+            save_scene=scene_file_controller.save_scene,
+            log_to_console=log_profile_output,
+        )
+        profiles_controller = BuildProfilesController(
+            BuildProfileStorePersistence(
+                build_project_root,
+                build_project_root / "project_settings" / "build_profiles.json",
+            ),
+            default_build_profile_templates(
+                build_project_root,
+                Path("scene.scene"),
+            ),
+            action_service=project_build_controller,
+        )
+
+        def update_profile_commands(snapshot) -> None:
+            for action, command_id in profile_action_commands.items():
+                shell.game_menu_model.set_enabled(
+                    command_id,
+                    snapshot.capabilities.for_action(action).enabled,
+                )
+
+        build_profiles_window = project_stage.own(
+            "Build Profiles window",
+            build_native_build_profiles_window(
+                host.document,
+                profiles_controller,
+                viewport=editor_viewport,
+                request_render=request_editor_render,
+                on_snapshot=update_profile_commands,
+            ),
+            cleanup=lambda: build_profiles_window.close(),
+        )
+        build_profiles_window_ref[0] = build_profiles_window
+        project_build_commands[shell.build_profiles_command] = (
+            build_profiles_window.show
+        )
+        project_build_commands.update(
+            {
+                command_id: (
+                    lambda action=action: build_profiles_window.execute(action)
+                )
+                for command_id, action in profile_command_actions.items()
+            }
+        )
+    else:
+        for command_id in (
+            shell.build_profiles_command,
+            *profile_command_actions,
+        ):
+            shell.game_menu_model.set_enabled(command_id, False)
 
     def on_project_build_command(_menu_index: int, command_id: int, _command) -> None:
         callback = project_build_commands.get(command_id)
@@ -1867,7 +1919,7 @@ def _compose_native_editor(
                 "open_prefab": open_prefab,
                 "save_prefab": save_prefab,
                 "exit_prefab": exit_prefab,
-                "quest_openxr_build_dialog": quest_openxr_build_dialog,
+                "build_profiles_window": build_profiles_window,
                 "pipeline_editor_controller": pipeline_editor_controller,
                 "pipeline_editor": pipeline_editor,
                 "framegraph_debugger": framegraph_debugger_service,
@@ -1945,7 +1997,6 @@ def _compose_native_editor(
         window_manager=window_manager,
         executor=executor,
         host=host,
-        quest_openxr_build_dialog=quest_openxr_build_dialog,
         project_file_watcher=project_file_watcher,
         scene_structure_observer=scene_structure_observer,
         spacemouse=spacemouse,

@@ -65,10 +65,11 @@ dist/<app>/
 `app.json` is the desktop bundle entry manifest. Paths are relative to the
 bundle root and point at `package/manifest.json` and `package/scene.json`.
 
-The editor `Build` action writes this desktop bundle. The editor `Run Build`
-action requires and launches the bundle-local native executable. A missing
-launcher is a build/preflight error; Python source playback is not a packaged
-runtime fallback.
+The editor `Build Selected Profile` action writes this desktop bundle.
+`Run Selected Profile` first executes that same selected profile and then
+launches the bundle-local native executable. A missing launcher is a
+build/preflight error; Python source playback is not a packaged runtime
+fallback.
 
 ## Source Playback
 

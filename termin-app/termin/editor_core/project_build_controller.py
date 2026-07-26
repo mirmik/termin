@@ -1,240 +1,180 @@
-"""Toolkit-neutral project build and run orchestration for the editor."""
+"""Toolkit-neutral execution service for selected project build profiles."""
 
 from __future__ import annotations
 
+import logging
 import subprocess
-import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.editor_core.build_profiles_model import BuildProfileAction
+from termin.project_build import (
+    BuildProfile,
+    ProfileDiagnostic,
+    compile_profile_build_request,
+    inspect_profile_capabilities,
+)
 
 
-@dataclass(frozen=True)
-class ProjectSceneEntry:
-    project_root: Path
-    scene_name: str
-    scene_rel_path: Path
-
-
-@dataclass(frozen=True)
-class ProjectBuildEntry(ProjectSceneEntry):
-    output_dir: Path
+_logger = logging.getLogger(__name__)
 
 
 class ProjectBuildController:
+    """Execute editor actions through the canonical normalized-profile backend."""
+
     def __init__(
         self,
         *,
-        scene_manager,
-        get_current_project_path: Callable[[], str | None],
-        get_editor_scene_name: Callable[[], str | None],
         save_scene: Callable[[], None],
         log_to_console: Callable[[str], None],
-        show_quest_openxr: Callable[[ProjectBuildEntry], None] | None = None,
     ) -> None:
-        self._scene_manager = scene_manager
-        self._get_current_project_path = get_current_project_path
-        self._get_editor_scene_name = get_editor_scene_name
         self._save_scene = save_scene
         self._log_to_console = log_to_console
-        self._show_quest_openxr = show_quest_openxr
 
-    def run_standalone(self) -> None:
-        entry = self._prepare_scene_entry(
-            action_name="run standalone",
-            relative_error="Standalone entry scene must be inside the current project.",
-        )
-        if entry is None:
-            return
-
-        cmd = [
-            sys.executable,
-            "-m",
-            "termin.player",
-            str(entry.project_root),
-            "--scene",
-            entry.scene_rel_path.as_posix(),
-        ]
-        self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
-        try:
-            subprocess.Popen(cmd)
-        except Exception as e:
-            log.error(f"Failed to launch standalone: {e}")
-            self._log_to_console(f"Error: {e}")
-
-    def build_project(self) -> None:
-        self.build_desktop_bundle_to_default_dist()
-
-    def build_android(self) -> None:
-        entry = self._prepare_entry(
-            action_name="build Android APK",
-            relative_error="Android build entry scene must be inside the current project.",
-            output_subdir="android",
-        )
-        if entry is None:
-            return
-
-        self._log_to_console(f"Android build started: {entry.scene_rel_path}")
-        try:
-            from termin.project_build import build_android_project
-
-            result = build_android_project(
-                project_root=entry.project_root,
-                entry_scene=entry.scene_rel_path,
-                output_dir=entry.output_dir,
-            )
-        except Exception as e:
-            log.error(f"Android build failed: {e}", exc_info=True)
-            self._log_to_console(f"Android build failed: {e}")
-            return
-
-        self._log_to_console(f"Android APK: {result.apk_path}")
-        self._log_to_console(f"Android applicationId: {result.application_id}")
-        self._log_to_console(
-            f"Android identity: {result.application_label}, "
-            f"version {result.version_name} ({result.version_code})"
-        )
-        self._log_to_console(f"Android launch: {result.application_id}/{result.launch_activity}")
-        self._log_to_console(f"Android package: {result.package_result.package_dir}")
-        self._log_to_console(f"Android build log: {result.log_path}")
-        for diagnostic in result.diagnostics:
-            self._log_to_console(
-                f"Android build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}"
-            )
-
-    def show_quest_openxr_build_dialog(self) -> None:
-        entry = self._prepare_entry(
-            action_name="build Quest/OpenXR APK",
-            relative_error="Quest/OpenXR build entry scene must be inside the current project.",
-            output_subdir="quest_openxr",
-        )
-        if entry is None:
-            return
-
-        if self._show_quest_openxr is None:
-            message = "Quest/OpenXR build UI is unavailable in this editor frontend."
-            log.error(f"[ProjectBuildController] {message}")
-            self._log_to_console(message)
-            return
-        self._show_quest_openxr(entry)
-
-    def build_desktop_bundle_to_default_dist(self):
-        entry = self._prepare_entry(
-            action_name="build desktop bundle",
-            relative_error="Desktop build entry scene must be inside the current project.",
-            output_subdir="desktop",
-        )
-        if entry is None:
-            return None
-
-        try:
-            from termin.project_build import build_desktop_project
-
-            result = build_desktop_project(
-                project_root=entry.project_root,
-                entry_scene=entry.scene_rel_path,
-                output_dir=entry.output_dir,
-            )
-        except Exception as e:
-            log.error(f"Desktop build failed: {e}", exc_info=True)
-            self._log_to_console(f"Desktop build failed: {e}")
-            return None
-
-        diagnostic_count = len(result.diagnostics)
-        self._log_to_console(f"Desktop bundle complete: {result.app_manifest_path}")
-        self._log_to_console(f"Desktop package: {result.package_result.package_dir}")
-        self._log_to_console(f"Desktop runtime: {result.runtime_result.lib_dir.parent}")
-        self._log_to_console(f"Desktop diagnostics: {diagnostic_count} diagnostic(s)")
-        for diagnostic in result.diagnostics:
-            self._log_to_console(
-                f"Desktop build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}"
-            )
-        return result
-
-    def run_build(self) -> None:
-        result = self.build_desktop_bundle_to_default_dist()
-        if result is None:
-            return
-
-        launcher_path = result.runtime_result.launcher_path
-        if launcher_path is not None and launcher_path.exists():
-            cmd = [str(launcher_path)]
-            cwd = str(launcher_path.parent)
-        else:
-            message = (
-                "Desktop bundle launcher is missing after build: "
-                f"{launcher_path or result.dist_dir}. Rebuild the desktop runtime bundle."
-            )
-            log.error(f"[ProjectBuildController] {message}")
-            self._log_to_console(f"Run build failed: {message}")
-            return
-        self._log_to_console(f"Launching build: {' '.join(cmd)}")
-        try:
-            subprocess.Popen(cmd, cwd=cwd)
-        except Exception as e:
-            log.error(f"Failed to launch build: {e}")
-            self._log_to_console(f"Run build failed: {e}")
-
-    def _prepare_entry(
+    def capability_diagnostics(
         self,
-        *,
-        action_name: str,
-        relative_error: str,
-        output_subdir: str | None = None,
-    ) -> ProjectBuildEntry | None:
-        scene_entry = self._prepare_scene_entry(
-            action_name=action_name,
-            relative_error=relative_error,
-        )
-        if scene_entry is None:
-            return None
+        action: BuildProfileAction,
+        profile: BuildProfile,
+    ) -> tuple[ProfileDiagnostic, ...]:
+        report = inspect_profile_capabilities(profile)
+        if action == BuildProfileAction.DRY_RUN:
+            return ()
+        if action in (BuildProfileAction.BUILD, BuildProfileAction.RUN):
+            return report.diagnostics
+        adb = report.context.adb
+        diagnostics: list[ProfileDiagnostic] = []
+        if adb is None or not adb.is_file():
+            diagnostics.append(
+                ProfileDiagnostic(
+                    "capability.adb",
+                    "toolchain.adb",
+                    "adb executable was not found",
+                )
+            )
+        if action == BuildProfileAction.INSTALL:
+            request = compile_profile_build_request(profile, report.context)
+            apk_path = self._apk_path(request)
+            if not apk_path.is_file():
+                diagnostics.append(
+                    ProfileDiagnostic(
+                        "capability.apk",
+                        "deploy.apk",
+                        f"built APK does not exist: {apk_path}",
+                    )
+                )
+        return tuple(diagnostics)
 
-        from termin.project.settings import ProjectSettingsManager
+    def execute(self, action: BuildProfileAction, profile: BuildProfile) -> None:
+        self._emit(f"{action.value.replace('_', ' ').title()} profile: {profile.name}")
+        try:
+            if action == BuildProfileAction.DRY_RUN:
+                self._dry_run(profile)
+            elif action == BuildProfileAction.BUILD:
+                self._build(profile)
+            elif action == BuildProfileAction.RUN:
+                self._run(profile)
+            elif action == BuildProfileAction.INSTALL:
+                self._install(profile)
+            elif action == BuildProfileAction.LAUNCH:
+                self._launch(profile)
+            else:
+                raise AssertionError(f"Unhandled build profile action: {action}")
+        except Exception:
+            _logger.exception(
+                "Build profile action '%s' failed for '%s'",
+                action.value,
+                profile.name,
+            )
+            raise
 
-        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
-        output_dir = scene_entry.project_root / build_output_dir
-        if output_subdir is not None:
-            output_dir = output_dir / output_subdir
-        output_dir = output_dir / scene_entry.project_root.name
+    def _dry_run(self, profile: BuildProfile) -> None:
+        report = inspect_profile_capabilities(profile)
+        request = compile_profile_build_request(profile, report.context)
+        self._emit(f"Target: {request.target}")
+        self._emit(f"Entry scene: {request.context.entry_scene}")
+        self._emit(f"Output: {request.context.dist_dir}")
+        self._emit(f"Runtime backends: {', '.join(request.runtime_backends)}")
+        for diagnostic in report.diagnostics:
+            self._emit(f"Capability: {diagnostic.format()}")
+        self._emit("Dry run complete; build execution skipped.")
 
-        return ProjectBuildEntry(
-            project_root=scene_entry.project_root,
-            scene_name=scene_entry.scene_name,
-            scene_rel_path=scene_entry.scene_rel_path,
-            output_dir=output_dir,
-        )
-
-    def _prepare_scene_entry(
-        self,
-        *,
-        action_name: str,
-        relative_error: str,
-    ) -> ProjectSceneEntry | None:
-        project_path = self._get_current_project_path()
-        if project_path is None:
-            self._log_to_console(f"No project open - cannot {action_name}.")
-            return None
+    def _build(self, profile: BuildProfile):
+        from termin.project_build import build_profile_result
 
         self._save_scene()
+        result = build_profile_result(profile, log_callback=self._emit)
+        self._report_build(profile, result)
+        return result
 
-        scene_name = self._get_editor_scene_name()
-        scene_path = self._scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is None:
-            self._log_to_console(f"No saved scene - cannot {action_name}.")
-            return None
+    def _run(self, profile: BuildProfile) -> None:
+        result = self._build(profile)
+        launcher_path = result.runtime_result.launcher_path
+        if launcher_path is None or not launcher_path.is_file():
+            raise FileNotFoundError(
+                f"desktop launcher is missing after build: "
+                f"{launcher_path or result.dist_dir}"
+            )
+        self._emit(f"Launching: {launcher_path}")
+        subprocess.Popen([str(launcher_path)], cwd=str(launcher_path.parent))
 
-        project_root = Path(project_path).resolve()
-        scene_path_obj = Path(scene_path).resolve()
-        try:
-            scene_rel_path = scene_path_obj.relative_to(project_root)
-        except ValueError:
-            self._log_to_console(relative_error)
-            return None
+    def _install(self, profile: BuildProfile) -> None:
+        from termin.project_build import install_android_apk
 
-        return ProjectSceneEntry(
-            project_root=project_root,
-            scene_name=scene_name,
-            scene_rel_path=scene_rel_path,
+        report = inspect_profile_capabilities(profile)
+        request = compile_profile_build_request(profile, report.context)
+        apk_path = self._apk_path(request)
+        log_path = request.context.logs_dir / f"{request.target}-deploy.log"
+        install_android_apk(
+            apk_path,
+            adb=request.toolchain.adb,
+            log_path=log_path,
+            log_callback=self._emit,
         )
+        self._emit(f"Install complete: {apk_path}")
+
+    def _launch(self, profile: BuildProfile) -> None:
+        from termin.project.settings import load_project_settings
+        from termin.project_build import launch_android_app
+
+        report = inspect_profile_capabilities(profile)
+        request = compile_profile_build_request(profile, report.context)
+        application_id = load_project_settings(
+            request.context.project_root
+        ).application.application_id
+        log_path = request.context.logs_dir / f"{request.target}-deploy.log"
+        launch_android_app(
+            application_id,
+            adb=request.toolchain.adb,
+            log_path=log_path,
+            log_callback=self._emit,
+            wake_device=request.target == "quest_openxr",
+        )
+        self._emit(f"Launch command sent: {application_id}")
+
+    def _report_build(self, profile: BuildProfile, result) -> None:
+        self._emit(f"Build complete: {result.dist_dir}")
+        if profile.target_kind == "desktop":
+            self._emit(f"Launcher: {result.runtime_result.launcher_path}")
+        else:
+            self._emit(f"APK: {result.apk_path}")
+            self._emit(f"Application ID: {result.application_id}")
+            self._emit(f"Build log: {result.log_path}")
+        for diagnostic in result.diagnostics:
+            self._emit(
+                f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}"
+            )
+
+    @staticmethod
+    def _apk_path(request) -> Path:
+        qualifier = "-quest-openxr" if request.target == "quest_openxr" else ""
+        return (
+            request.context.dist_dir
+            / "apk"
+            / f"{request.context.project_name}{qualifier}-debug.apk"
+        )
+
+    def _emit(self, message: str) -> None:
+        self._log_to_console(str(message))
+
+
+__all__ = ["ProjectBuildController"]

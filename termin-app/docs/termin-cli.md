@@ -142,6 +142,13 @@ are `TERMIN_SDK`, `TERMIN_ROOT`, `TERMIN_ANDROID_SDK_ROOT` (with
 and `ADB`. The `build` and `capabilities` subcommands also accept corresponding
 explicit path options; these have highest precedence.
 
+The native editor consumes the same file through **Game > Build Profiles...**.
+The adjacent Build/Run/Install/Launch commands always act on the selected
+profile. Build and Run use the same normalized request and target dispatch as
+the CLI; Install and Launch are enabled only for Android-family profiles when
+their exact APK/ADB prerequisites are available. Action output is mirrored to
+the Build Profiles Output tab and the editor console.
+
 The v2 model already reserves explicit scene, module, Python-requirement and
 resource roots. Builds currently reject non-trivial roots with a structured
 `profile.feature_pending` diagnostic until their dependency-closure stages are

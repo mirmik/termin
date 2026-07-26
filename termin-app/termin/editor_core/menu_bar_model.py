@@ -65,11 +65,11 @@ class NavigationMenuActions:
 @dataclass(frozen=True, slots=True)
 class GameMenuActions:
     toggle_game_mode: VoidCallback
-    build_project: VoidCallback
-    build_android: VoidCallback
-    build_quest_openxr: VoidCallback
-    run_build: VoidCallback
-    run_standalone: VoidCallback
+    show_build_profiles: VoidCallback
+    build_selected_profile: VoidCallback
+    run_selected_profile: VoidCallback
+    install_selected_profile: VoidCallback
+    launch_selected_profile: VoidCallback
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,11 +293,12 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
                     shortcut="F5",
                     handle_getter=handles.play,
                 ),
-                MenuItemSpec("Build Project...", actions.game.build_project),
-                MenuItemSpec("Build Android APK...", actions.game.build_android),
-                MenuItemSpec("Quest/OpenXR Build...", actions.game.build_quest_openxr),
-                MenuItemSpec("Run Build...", actions.game.run_build),
-                MenuItemSpec("Run Standalone...", actions.game.run_standalone, shortcut="F6"),
+                None,
+                MenuItemSpec("Build Profiles...", actions.game.show_build_profiles),
+                MenuItemSpec("Build Selected Profile", actions.game.build_selected_profile),
+                MenuItemSpec("Run Selected Profile", actions.game.run_selected_profile),
+                MenuItemSpec("Install Selected Profile", actions.game.install_selected_profile),
+                MenuItemSpec("Launch Selected Profile", actions.game.launch_selected_profile),
             ],
         ),
         # ── Debug ──────────────────────────────────────────────────────

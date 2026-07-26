@@ -159,91 +159,126 @@ def build_profile(
     if shader_compiler is not None and toolchain is not None:
         raise ValueError("pass either shader_compiler or toolchain, not both")
     invocation = toolchain or ToolchainContext(shader_compiler=shader_compiler)
-    local = create_local_toolchain_context(invocation_overrides=invocation)
-    request = compile_profile_build_request(
-        profile,
-        local,
+    request = resolve_profile_build_request(profile, toolchain=invocation)
+    return execute_profile_build_request(request)
+
+
+def resolve_profile_build_request(
+    profile: BuildProfile,
+    *,
+    toolchain: ToolchainContext | None = None,
+) -> ProfileBuildRequest:
+    """Resolve and validate the exact request used by every profile frontend."""
+
+    local = create_local_toolchain_context(
+        invocation_overrides=toolchain or ToolchainContext()
     )
+    request = compile_profile_build_request(profile, local)
     validate_resolved_profile_request(request)
     _raise_for_capability_errors(inspect_request_capabilities(request))
-    return execute_profile_build_request(request)
+    return request
+
+
+def build_profile_result(
+    profile: BuildProfile,
+    *,
+    toolchain: ToolchainContext | None = None,
+    log_callback=None,
+) -> Any:
+    """Build one profile and return its target result to interactive frontends."""
+
+    request = resolve_profile_build_request(profile, toolchain=toolchain)
+    return execute_profile_build_request_result(request, log_callback=log_callback)
 
 
 def execute_profile_build_request(request: ProfileBuildRequest) -> int:
     try:
+        result = execute_profile_build_request_result(request)
         if request.target == "desktop":
-            result = build_desktop_project(
-                project_root=request.context.project_root,
-                entry_scene=request.context.entry_scene,
-                scenes=request.scenes,
-                output_dir=request.context.dist_dir,
-                shader_compiler=request.shader_compiler,
-                fxc=request.fxc,
-                default_shader_language=request.default_shader_language,
-                shader_targets=request.runtime_backends,
-                sdk_root=request.sdk_root,
-                target_os=request.target_os,
-                target_arch=request.target_arch,
-                configuration=request.context.configuration,
-                resource_policy=request.context.resource_policy,
-                python_package_policy=request.python_package_policy,
-                python_requirements=request.python_requirements,
-                modules=request.modules,
-            )
             _print_desktop_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)
-
         if request.target == "android":
-            if request.abi is None or request.platform is None:
-                raise AssertionError("typed Android request must contain ABI and NDK platform")
-            result = build_android_project(
-                project_root=request.context.project_root,
-                entry_scene=request.context.entry_scene,
-                scenes=request.scenes,
-                output_dir=request.context.dist_dir,
-                sdk_root=request.toolchain.sdk_root,
-                termin_root=request.termin_root,
-                android_sdk_root=request.toolchain.android_sdk_root,
-                build_script=request.build_script,
-                gradle=request.gradle,
-                shader_compiler=request.shader_compiler,
-                default_shader_language=request.default_shader_language,
-                shader_targets=request.runtime_backends,
-                abi=request.abi,
-                platform=request.platform,
-                configuration=request.context.configuration,
-                resource_policy=request.context.resource_policy,
-            )
             _print_android_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)
-
         if request.target == "quest_openxr":
-            if request.abi is None or request.platform is None:
-                raise AssertionError("typed Quest request must contain ABI and NDK platform")
-            result = build_quest_openxr_project(
-                project_root=request.context.project_root,
-                entry_scene=request.context.entry_scene,
-                scenes=request.scenes,
-                output_dir=request.context.dist_dir,
-                sdk_root=request.toolchain.sdk_root,
-                termin_root=request.termin_root,
-                android_sdk_root=request.toolchain.android_sdk_root,
-                build_script=request.build_script,
-                gradle=request.gradle,
-                shader_compiler=request.shader_compiler,
-                default_shader_language=request.default_shader_language,
-                shader_targets=request.runtime_backends,
-                abi=request.abi,
-                platform=request.platform,
-                configuration=request.context.configuration,
-                resource_policy=request.context.resource_policy,
-            )
             _print_quest_openxr_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)
     except ProjectBuildPipelineError as exc:
         _print_diagnostics(exc.diagnostics)
         return 1
 
+    raise AssertionError(f"Unhandled typed build request target: {request.target}")
+
+
+def execute_profile_build_request_result(
+    request: ProfileBuildRequest,
+    *,
+    log_callback=None,
+) -> Any:
+    """Execute a validated request and preserve the target-specific result."""
+
+    if request.target == "desktop":
+        return build_desktop_project(
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            scenes=request.scenes,
+            output_dir=request.context.dist_dir,
+            shader_compiler=request.shader_compiler,
+            fxc=request.fxc,
+            default_shader_language=request.default_shader_language,
+            shader_targets=request.runtime_backends,
+            sdk_root=request.sdk_root,
+            target_os=request.target_os,
+            target_arch=request.target_arch,
+            configuration=request.context.configuration,
+            resource_policy=request.context.resource_policy,
+            python_package_policy=request.python_package_policy,
+            python_requirements=request.python_requirements,
+            modules=request.modules,
+        )
+    if request.target == "android":
+        if request.abi is None or request.platform is None:
+            raise AssertionError("typed Android request must contain ABI and NDK platform")
+        return build_android_project(
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            scenes=request.scenes,
+            output_dir=request.context.dist_dir,
+            sdk_root=request.toolchain.sdk_root,
+            termin_root=request.termin_root,
+            android_sdk_root=request.toolchain.android_sdk_root,
+            build_script=request.build_script,
+            gradle=request.gradle,
+            shader_compiler=request.shader_compiler,
+            default_shader_language=request.default_shader_language,
+            shader_targets=request.runtime_backends,
+            abi=request.abi,
+            platform=request.platform,
+            configuration=request.context.configuration,
+            resource_policy=request.context.resource_policy,
+        )
+    if request.target == "quest_openxr":
+        if request.abi is None or request.platform is None:
+            raise AssertionError("typed Quest request must contain ABI and NDK platform")
+        return build_quest_openxr_project(
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            scenes=request.scenes,
+            output_dir=request.context.dist_dir,
+            sdk_root=request.toolchain.sdk_root,
+            termin_root=request.termin_root,
+            android_sdk_root=request.toolchain.android_sdk_root,
+            build_script=request.build_script,
+            gradle=request.gradle,
+            shader_compiler=request.shader_compiler,
+            default_shader_language=request.default_shader_language,
+            shader_targets=request.runtime_backends,
+            abi=request.abi,
+            platform=request.platform,
+            configuration=request.context.configuration,
+            resource_policy=request.context.resource_policy,
+            log_callback=log_callback,
+        )
     raise AssertionError(f"Unhandled typed build request target: {request.target}")
 
 

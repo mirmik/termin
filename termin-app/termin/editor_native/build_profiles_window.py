@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import logging
 import os
 from pathlib import Path
@@ -220,6 +220,8 @@ class NativeBuildProfilesWindow:
     revert_button: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
+    on_snapshot: Callable[[BuildProfilesSnapshot], None]
+    _output_lines: list[str] = field(default_factory=list)
     _updating: bool = False
     _closed: bool = False
 
@@ -288,6 +290,21 @@ class NativeBuildProfilesWindow:
             self.status.text = f"{len(snapshot.entries)} profile(s) | {dirty}"
         finally:
             self._updating = False
+        self.on_snapshot(snapshot)
+        self.request_render()
+
+    def append_output(self, message: str) -> None:
+        self._output_lines.append(str(message))
+        del self._output_lines[:-200]
+        selected = self.controller.snapshot.selected
+        summary = (
+            "Select a profile."
+            if selected is None
+            else self._profile_summary(selected.profile)
+        )
+        self.output_summary.text = summary + "\n\nAction output:\n" + "\n".join(
+            self._output_lines
+        )
         self.request_render()
 
     def select_index(self, index: int) -> None:
@@ -456,6 +473,10 @@ class NativeBuildProfilesWindow:
                 "Android-family profiles use the canonical Vulkan artifact path."
             )
         self.output_summary.text = self._profile_summary(profile)
+        if self._output_lines:
+            self.output_summary.text += "\n\nAction output:\n" + "\n".join(
+                self._output_lines
+            )
 
     def _clear_editor(self) -> None:
         self.name.text = ""
@@ -525,6 +546,7 @@ def build_native_build_profiles_window(
     *,
     viewport: Callable[[], Rect],
     request_render: Callable[[], None],
+    on_snapshot: Callable[[BuildProfilesSnapshot], None] | None = None,
 ) -> NativeBuildProfilesWindow:
     root = document.create_vstack("native-build-profiles")
     root.stable_id = "editor.build-profiles"
@@ -799,6 +821,7 @@ def build_native_build_profiles_window(
         revert_button=revert_button,
         viewport=viewport,
         request_render=request_render,
+        on_snapshot=on_snapshot or (lambda _snapshot: None),
     )
     weak_window = weakref.ref(window)
 
