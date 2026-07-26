@@ -54,11 +54,11 @@ def _menu_config() -> EditorMenuSpecConfig:
             ),
             game=GameMenuActions(
                 toggle_game_mode=_noop,
-                build_project=_noop,
-                build_android=_noop,
-                build_quest_openxr=_noop,
-                run_build=_noop,
-                run_standalone=_noop,
+                show_build_profiles=_noop,
+                build_selected_profile=_noop,
+                run_selected_profile=_noop,
+                install_selected_profile=_noop,
+                launch_selected_profile=_noop,
             ),
             debug=DebugMenuActions(
                 toggle_profiler=_noop,

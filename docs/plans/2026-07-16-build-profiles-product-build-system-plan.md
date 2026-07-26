@@ -282,7 +282,7 @@ Exit criteria:
 
 ## Stage 7: build-profile editor and canonical actions
 
-Implement #447/#448/#449 on top of the completed typed model and request
+Status: implemented by #447/#448/#449 on top of the typed model and request
 compiler:
 
 - collection controller for create/duplicate/delete/select/edit/revert/save;
@@ -297,13 +297,15 @@ compiler:
 The UI must not implement another schema projection with independent defaults.
 It edits the same typed objects used by CLI tests.
 
-The #448 native projection is implemented as
+The native projection is implemented as
 `termin.editor_native.build_profiles_window`. It exposes the typed collection
 controller through stable widget IDs and the General, Runtime, Shaders,
 Toolchain, Deploy and Output sections. Build, Run, Install, Launch and Dry Run
-buttons reflect controller capabilities and invoke its injected action service;
-#449 owns production command routing and removal of the legacy one-off menu
-paths.
+buttons reflect controller capabilities and invoke `ProjectBuildController` as
+its injected selected-profile action service. Production Game-menu commands
+use the same controller, update enabled state from the current snapshot, and
+stream output into both the window and editor console. The one-off Android and
+Quest routes/dialog have been removed.
 
 Exit criteria:
 

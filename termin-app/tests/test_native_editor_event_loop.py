@@ -26,8 +26,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
     executor = Mock()
     executor.process_pending.return_value = 0
     host = Mock()
-    quest_openxr_build_dialog = Mock()
-    quest_openxr_build_dialog.poll.return_value = 0
     project_file_watcher = Mock()
     scene_structure_observer = Mock()
     spacemouse = Mock()
@@ -47,7 +45,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         window_manager=window_manager,
         executor=executor,
         host=host,
-        quest_openxr_build_dialog=quest_openxr_build_dialog,
         project_file_watcher=project_file_watcher,
         scene_structure_observer=scene_structure_observer,
         spacemouse=spacemouse,
@@ -64,7 +61,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         window_manager=window_manager,
         executor=executor,
         host=host,
-        quest_openxr_build_dialog=quest_openxr_build_dialog,
         project_file_watcher=project_file_watcher,
         scene_structure_observer=scene_structure_observer,
         spacemouse=spacemouse,
@@ -142,7 +138,6 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
         window_manager=services.window_manager,
         executor=services.executor,
         host=services.host,
-        quest_openxr_build_dialog=services.quest_openxr_build_dialog,
         project_file_watcher=services.project_file_watcher,
         scene_structure_observer=services.scene_structure_observer,
         spacemouse=services.spacemouse,

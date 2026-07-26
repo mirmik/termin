@@ -1,267 +1,222 @@
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import termin.project_build as project_build
-from termin.editor_core import project_build_controller as project_build_module
+from termin.editor_core import project_build_controller as controller_module
+from termin.editor_core.build_profiles_model import BuildProfileAction
 from termin.editor_core.project_build_controller import ProjectBuildController
+from termin.project_build import (
+    AndroidTarget,
+    BuildProfile,
+    DesktopTarget,
+    ProfileContent,
+    ProfileDiagnostic,
+    ToolchainContext,
+)
 
 
-class _SceneManager:
-    def __init__(self, scene_paths: dict[str, Path]) -> None:
-        self._scene_paths = scene_paths
-
-    def get_scene_path(self, scene_name: str) -> str | None:
-        scene_path = self._scene_paths.get(scene_name)
-        if scene_path is None:
-            return None
-        return str(scene_path)
-
-
-def _make_controller(
-    *,
-    project_root: Path,
-    scene_name: str | None,
-    scene_manager: _SceneManager,
-    logs: list[str],
-    save_calls: list[bool],
-    show_quest_openxr=None,
-) -> ProjectBuildController:
-    return ProjectBuildController(
-        scene_manager=scene_manager,
-        get_current_project_path=lambda: str(project_root),
-        get_editor_scene_name=lambda: scene_name,
-        save_scene=lambda: save_calls.append(True),
-        log_to_console=logs.append,
-        show_quest_openxr=show_quest_openxr,
+def _profile(tmp_path: Path, target="desktop") -> BuildProfile:
+    root = tmp_path / "Project"
+    scene = root / "Scenes" / "Main.scene"
+    scene.parent.mkdir(parents=True)
+    scene.write_text("{}", encoding="utf-8")
+    (root / "Project.terminproj").write_text(
+        '{"name": "Project"}\n',
+        encoding="utf-8",
     )
-
-
-def test_run_standalone_launches_canonical_player_entrypoint(monkeypatch, tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = project_root / "Scenes" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
-    logs: list[str] = []
-    save_calls: list[bool] = []
-    popen_calls: list[list[str]] = []
-
-    def fake_popen(cmd: list[str]) -> None:
-        popen_calls.append(cmd)
-
-    monkeypatch.setattr(project_build_module.subprocess, "Popen", fake_popen)
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=save_calls,
+    typed_target = (
+        DesktopTarget("linux", "x86_64", ("vulkan",))
+        if target == "desktop"
+        else AndroidTarget("arm64-v8a", 29)
     )
-
-    controller.run_standalone()
-
-    assert save_calls == [True]
-    assert popen_calls == [
-        [
-            sys.executable,
-            "-m",
-            "termin.player",
-            str(project_root.resolve()),
-            "--scene",
-            "Scenes/Main.scene",
-        ]
-    ]
-    assert logs == [
-        "Launching standalone: "
-        f"{sys.executable} -m termin.player {project_root.resolve()} --scene Scenes/Main.scene"
-    ]
-
-
-def test_run_standalone_rejects_scene_outside_project(monkeypatch, tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = tmp_path / "Other" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
-    logs: list[str] = []
-    save_calls: list[bool] = []
-    popen_calls: list[list[str]] = []
-
-    def fake_popen(cmd: list[str]) -> None:
-        popen_calls.append(cmd)
-
-    monkeypatch.setattr(project_build_module.subprocess, "Popen", fake_popen)
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=save_calls,
-    )
-
-    controller.run_standalone()
-
-    assert save_calls == [True]
-    assert popen_calls == []
-    assert logs == ["Standalone entry scene must be inside the current project."]
-
-
-def test_build_project_writes_desktop_bundle(monkeypatch, tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = project_root / "Scenes" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
-    logs: list[str] = []
-    save_calls: list[bool] = []
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        dist_dir = kwargs["output_dir"]
-        return SimpleNamespace(
-            dist_dir=dist_dir,
-            app_manifest_path=dist_dir / "app.json",
-            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
-            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=dist_dir / "Project"),
-            diagnostics=[
-                SimpleNamespace(level="warning", path="package/mesh", message="test diagnostic"),
-            ],
-        )
-
-    monkeypatch.setattr(project_build, "build_desktop_project", fake_build_desktop_project)
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=save_calls,
-    )
-
-    result = controller.build_desktop_bundle_to_default_dist()
-
-    assert result is not None
-    assert save_calls == [True]
-    assert calls == [
-        {
-            "project_root": project_root.resolve(),
-            "entry_scene": Path("Scenes") / "Main.scene",
-            "output_dir": project_root / "dist" / "desktop" / "Project",
-        }
-    ]
-    assert logs == [
-        f"Desktop bundle complete: {project_root / 'dist' / 'desktop' / 'Project' / 'app.json'}",
-        f"Desktop package: {project_root / 'dist' / 'desktop' / 'Project' / 'package'}",
-        f"Desktop runtime: {project_root / 'dist' / 'desktop' / 'Project'}",
-        "Desktop diagnostics: 1 diagnostic(s)",
-        "Desktop build warning: package/mesh: test diagnostic",
-    ]
-
-
-def test_run_build_launches_desktop_bundle_launcher(monkeypatch, tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = project_root / "Scenes" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
-    launcher = project_root / "dist" / "desktop" / "Project" / "Project"
-    launcher.parent.mkdir(parents=True)
-    launcher.write_text("#!/bin/sh\n", encoding="utf-8")
-    logs: list[str] = []
-    save_calls: list[bool] = []
-    popen_calls: list[tuple[list[str], str | None]] = []
-
-    def fake_build_desktop_project(**kwargs):
-        dist_dir = kwargs["output_dir"]
-        return SimpleNamespace(
-            dist_dir=dist_dir,
-            app_manifest_path=dist_dir / "app.json",
-            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
-            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=launcher),
-            diagnostics=[],
-        )
-
-    def fake_popen(cmd: list[str], cwd: str | None = None) -> None:
-        popen_calls.append((cmd, cwd))
-
-    monkeypatch.setattr(project_build, "build_desktop_project", fake_build_desktop_project)
-    monkeypatch.setattr(project_build_module.subprocess, "Popen", fake_popen)
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=save_calls,
-    )
-
-    controller.run_build()
-
-    assert save_calls == [True]
-    assert popen_calls == [([str(launcher)], str(launcher.parent))]
-    assert logs[-1] == f"Launching build: {launcher}"
-
-
-def test_run_build_rejects_missing_desktop_bundle_launcher(monkeypatch, tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = project_root / "Scenes" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
-    dist_dir = project_root / "dist" / "desktop" / "Project"
-    missing_launcher = dist_dir / "Project"
-    logs: list[str] = []
-    popen_calls: list[list[str]] = []
-
-    monkeypatch.setattr(
-        project_build,
-        "build_desktop_project",
-        lambda **kwargs: SimpleNamespace(
-            dist_dir=dist_dir,
-            app_manifest_path=dist_dir / "app.json",
-            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
-            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=missing_launcher),
-            diagnostics=[],
+    return BuildProfile(
+        target,
+        root,
+        typed_target,
+        "dev" if target == "desktop" else "debug",
+        ProfileContent(
+            entry_scene=Path("Scenes/Main.scene"),
+            scenes=(Path("Scenes/Main.scene"),),
+            modules=(),
+            python_requirements=(),
+            resource_policy="strict",
+            resource_includes=(),
         ),
     )
-    monkeypatch.setattr(
-        project_build_module.subprocess,
-        "Popen",
-        lambda cmd, cwd=None: popen_calls.append(cmd),
-    )
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=[],
-    )
 
-    controller.run_build()
 
-    assert popen_calls == []
-    assert logs[-1] == (
-        "Run build failed: Desktop bundle launcher is missing after build: "
-        f"{missing_launcher}. Rebuild the desktop runtime bundle."
+def _controller(logs: list[str], saves: list[bool]) -> ProjectBuildController:
+    return ProjectBuildController(
+        save_scene=lambda: saves.append(True),
+        log_to_console=logs.append,
     )
 
 
-def test_quest_openxr_action_projects_prepared_entry_to_frontend(tmp_path) -> None:
-    project_root = tmp_path / "Project"
-    scene_path = project_root / "Scenes" / "Main.scene"
-    scene_path.parent.mkdir(parents=True)
-    scene_path.write_text("{}", encoding="utf-8")
+def _report(context: ToolchainContext, diagnostics=()):
+    return SimpleNamespace(context=context, diagnostics=tuple(diagnostics))
+
+
+def test_dry_run_uses_normalized_profile_request_without_building(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path)
     logs: list[str] = []
-    save_calls: list[bool] = []
-    entries = []
-    controller = _make_controller(
-        project_root=project_root,
-        scene_name="Main",
-        scene_manager=_SceneManager({"Main": scene_path}),
-        logs=logs,
-        save_calls=save_calls,
-        show_quest_openxr=entries.append,
+    saves: list[bool] = []
+    monkeypatch.setattr(
+        controller_module,
+        "inspect_profile_capabilities",
+        lambda _profile: _report(ToolchainContext()),
+    )
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda *_args, **_kwargs: pytest.fail("dry run executed a build"),
     )
 
-    controller.show_quest_openxr_build_dialog()
+    _controller(logs, saves).execute(BuildProfileAction.DRY_RUN, profile)
 
-    assert save_calls == [True]
-    assert len(entries) == 1
-    assert entries[0].project_root == project_root.resolve()
-    assert entries[0].scene_rel_path == Path("Scenes/Main.scene")
-    assert entries[0].output_dir == project_root / "dist" / "quest_openxr" / "Project"
+    assert saves == []
+    assert any(line == "Target: desktop" for line in logs)
+    assert any("Scenes/Main.scene" in line for line in logs)
+    assert logs[-1] == "Dry run complete; build execution skipped."
+
+
+def test_build_selected_profile_uses_canonical_result_api(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path)
+    logs: list[str] = []
+    saves: list[bool] = []
+    result = SimpleNamespace(
+        dist_dir=profile.project_root / "dist",
+        runtime_result=SimpleNamespace(launcher_path=profile.project_root / "game"),
+        diagnostics=[],
+    )
+    calls = []
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda selected, **kwargs: calls.append((selected, kwargs)) or result,
+    )
+
+    _controller(logs, saves).execute(BuildProfileAction.BUILD, profile)
+
+    assert saves == [True]
+    assert calls[0][0] == profile
+    calls[0][1]["log_callback"]("streamed output")
+    assert "streamed output" in logs
+    assert f"Build complete: {result.dist_dir}" in logs
+
+
+def test_run_selected_desktop_profile_builds_then_launches(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path)
+    launcher = profile.project_root / "dist" / "game"
+    launcher.parent.mkdir()
+    launcher.write_text("#!/bin/sh\n", encoding="utf-8")
+    result = SimpleNamespace(
+        dist_dir=launcher.parent,
+        runtime_result=SimpleNamespace(launcher_path=launcher),
+        diagnostics=[],
+    )
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda *_args, **_kwargs: result,
+    )
+    popen_calls = []
+    monkeypatch.setattr(
+        controller_module.subprocess,
+        "Popen",
+        lambda command, cwd: popen_calls.append((command, cwd)),
+    )
+
+    _controller([], []).execute(BuildProfileAction.RUN, profile)
+
+    assert popen_calls == [([str(launcher)], str(launcher.parent))]
+
+
+def test_mobile_install_and_launch_use_selected_profile_request(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path, "android")
+    adb = tmp_path / "adb"
+    adb.write_text("", encoding="utf-8")
+    context = ToolchainContext(adb=adb)
+    monkeypatch.setattr(
+        controller_module,
+        "inspect_profile_capabilities",
+        lambda _profile: _report(context),
+    )
+    request = project_build.compile_profile_build_request(profile, context)
+    apk = (
+        request.context.dist_dir
+        / "apk"
+        / f"{request.context.project_name}-debug.apk"
+    )
+    apk.parent.mkdir(parents=True)
+    apk.write_text("apk", encoding="utf-8")
+    install_calls = []
+    launch_calls = []
+    monkeypatch.setattr(
+        project_build,
+        "install_android_apk",
+        lambda *args, **kwargs: install_calls.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        project_build,
+        "launch_android_app",
+        lambda *args, **kwargs: launch_calls.append((args, kwargs)),
+    )
+    controller = _controller([], [])
+
+    controller.execute(BuildProfileAction.INSTALL, profile)
+    controller.execute(BuildProfileAction.LAUNCH, profile)
+
+    assert install_calls[0][0] == (apk,)
+    assert install_calls[0][1]["adb"] == adb
+    assert launch_calls[0][0][0] == "org.termin.builds.project"
+    assert launch_calls[0][1]["adb"] == adb
+
+
+def test_install_capability_requires_adb_and_exact_profile_apk(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path, "android")
+    monkeypatch.setattr(
+        controller_module,
+        "inspect_profile_capabilities",
+        lambda _profile: _report(ToolchainContext()),
+    )
+
+    diagnostics = _controller([], []).capability_diagnostics(
+        BuildProfileAction.INSTALL,
+        profile,
+    )
+
+    assert {diagnostic.code for diagnostic in diagnostics} == {
+        "capability.adb",
+        "capability.apk",
+    }
+
+
+def test_build_capability_forwards_structured_toolchain_diagnostics(
+    monkeypatch, tmp_path
+) -> None:
+    profile = _profile(tmp_path)
+    expected = ProfileDiagnostic("capability.sdk", "toolchain.sdk", "missing")
+    monkeypatch.setattr(
+        controller_module,
+        "inspect_profile_capabilities",
+        lambda _profile: _report(ToolchainContext(), (expected,)),
+    )
+
+    diagnostics = _controller([], []).capability_diagnostics(
+        BuildProfileAction.BUILD,
+        profile,
+    )
+
+    assert diagnostics == (expected,)

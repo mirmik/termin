@@ -98,11 +98,11 @@ class NativeEditorShell:
     navmesh_areas_command: int
     settings_command: int
     project_settings_command: int
-    build_project_command: int
-    build_android_command: int
-    build_quest_openxr_command: int
-    run_build_command: int
-    run_standalone_command: int
+    build_profiles_command: int
+    build_selected_profile_command: int
+    run_selected_profile_command: int
+    install_selected_profile_command: int
+    launch_selected_profile_command: int
     about_command: int
     command_models: tuple[CommandModel, ...]
 
@@ -226,11 +226,11 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
     agent_types_command = commands[("Navigation", "Agent Types...")]
     navmesh_areas_command = commands[("Navigation", "NavMesh Areas...")]
     game_play_command = commands[("Game", "Play")]
-    build_project_command = commands[("Game", "Build Project...")]
-    build_android_command = commands[("Game", "Build Android APK...")]
-    build_quest_openxr_command = commands[("Game", "Quest/OpenXR Build...")]
-    run_build_command = commands[("Game", "Run Build...")]
-    run_standalone_command = commands[("Game", "Run Standalone...")]
+    build_profiles_command = commands[("Game", "Build Profiles...")]
+    build_selected_profile_command = commands[("Game", "Build Selected Profile")]
+    run_selected_profile_command = commands[("Game", "Run Selected Profile")]
+    install_selected_profile_command = commands[("Game", "Install Selected Profile")]
+    launch_selected_profile_command = commands[("Game", "Launch Selected Profile")]
     profiler_command = commands[("Debug", "Profiler")]
     frame_profiler_command = commands[("Debug", "Frame Profiler...")]
     modules_command = commands[("Debug", "Modules")]
@@ -430,11 +430,11 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
         navmesh_areas_command=navmesh_areas_command,
         settings_command=settings_command,
         project_settings_command=project_settings_command,
-        build_project_command=build_project_command,
-        build_android_command=build_android_command,
-        build_quest_openxr_command=build_quest_openxr_command,
-        run_build_command=run_build_command,
-        run_standalone_command=run_standalone_command,
+        build_profiles_command=build_profiles_command,
+        build_selected_profile_command=build_selected_profile_command,
+        run_selected_profile_command=run_selected_profile_command,
+        install_selected_profile_command=install_selected_profile_command,
+        launch_selected_profile_command=launch_selected_profile_command,
         about_command=about_command,
         command_models=(
             file_menu,

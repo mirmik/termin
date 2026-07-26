@@ -33,7 +33,6 @@ class NativeEditorEventLoop:
         window_manager,
         executor,
         host,
-        quest_openxr_build_dialog,
         project_file_watcher,
         scene_structure_observer,
         spacemouse,
@@ -50,7 +49,6 @@ class NativeEditorEventLoop:
         self._window_manager = window_manager
         self._executor = executor
         self._host = host
-        self._quest_openxr_build_dialog = quest_openxr_build_dialog
         self._project_file_watcher = project_file_watcher
         self._scene_structure_observer = scene_structure_observer
         self._spacemouse = spacemouse
@@ -108,7 +106,6 @@ def attach_native_editor_event_loop(
     window_manager,
     executor,
     host,
-    quest_openxr_build_dialog,
     project_file_watcher,
     scene_structure_observer,
     spacemouse,
@@ -137,7 +134,6 @@ def attach_native_editor_event_loop(
             window_manager=window_manager,
             executor=executor,
             host=host,
-            quest_openxr_build_dialog=quest_openxr_build_dialog,
             project_file_watcher=project_file_watcher,
             scene_structure_observer=scene_structure_observer,
             spacemouse=spacemouse,

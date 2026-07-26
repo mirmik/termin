@@ -190,19 +190,19 @@ def test_quest_launch_uses_exact_application_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from termin.project_build import quest_openxr_build
+    from termin.project_build import android_deploy, quest_openxr_build
 
     adb = tmp_path / "adb"
     commands: list[list[str]] = []
-    monkeypatch.setattr(quest_openxr_build, "_resolve_adb", lambda _adb: adb)
+    monkeypatch.setattr(android_deploy, "resolve_adb", lambda _adb: adb)
 
     def fake_run_deploy_command(cmd, _log_path, _log_callback):
         commands.append(cmd)
-        return quest_openxr_build.QuestOpenXRDeployResult(cmd, None, "")
+        return android_deploy.AndroidDeployResult(cmd, None, "")
 
     monkeypatch.setattr(
-        quest_openxr_build,
-        "_run_deploy_command",
+        android_deploy,
+        "run_deploy_command",
         fake_run_deploy_command,
     )
 

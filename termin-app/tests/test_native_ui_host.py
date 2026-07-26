@@ -407,7 +407,14 @@ def test_native_shell_projects_the_canonical_menu_inventory():
         ]
         assert actual[: len(expected)] == expected
 
-    assert shell.game_menu_model.command(shell.run_standalone_command).data.shortcut == "F6"
+    assert (
+        shell.game_menu_model.command(shell.build_profiles_command).data.label
+        == "Build Profiles..."
+    )
+    assert (
+        shell.game_menu_model.command(shell.install_selected_profile_command).data.label
+        == "Install Selected Profile"
+    )
     tc_ui_document_destroy(document)
 
 
