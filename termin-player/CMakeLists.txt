@@ -68,13 +68,8 @@ if(TARGET termin_modules_python AND _termin_player_has_sdl)
         set_target_properties(termin_player PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
     install(TARGETS termin_player RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-    set_target_properties(termin_player PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/lib;$ORIGIN"
-        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
-        BUILD_WITH_INSTALL_RPATH FALSE
-    )
-    if(COMMAND termin_set_rpath_tool)
-        termin_set_rpath_tool(termin_player)
+    if(COMMAND termin_set_rpath_relocatable_tool)
+        termin_set_rpath_relocatable_tool(termin_player)
     endif()
 elseif(NOT TARGET termin_modules_python)
     message(STATUS "termin_player disabled because termin_modules_python target is unavailable")
