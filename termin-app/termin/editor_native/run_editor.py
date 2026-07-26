@@ -97,6 +97,7 @@ from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.editor_log import build_native_editor_log
 from termin.editor_native.editor_session import EditorSession
+from termin.editor_native import native_bootstrap
 from termin.editor_native.event_loop import attach_native_editor_event_loop
 from termin.editor_native.build_profiles_window import (
     build_native_build_profiles_window,
@@ -180,40 +181,7 @@ from termin.gui_native import Rect, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
-
-
-def _require_offscreen_process_isolation() -> None:
-    import sys
-
-    forbidden = (
-        "termin.display._platform_native",
-        "termin.display.window",
-        "termin.gui_native._gui_native_window",
-        "termin.gui_native.window",
-    )
-    loaded = [name for name in forbidden if name in sys.modules]
-    if loaded:
-        raise RuntimeError(
-            "offscreen editor loaded optional window integration: "
-            + ", ".join(loaded)
-        )
-
-
-def _complete_editor_scene_render(native_viewport, host) -> None:
-    """Finish viewport work and schedule presentation of the produced image."""
-    native_viewport.after_render()
-    host.request_render_update()
-
-
-def _clear_component_extension_viewport(extension_context) -> None:
-    extension_context.on_viewport_tool_state_changed = None
-    extension_context.viewport_geometry = None
-
-
-def _close_game_mode_controller(game_mode_controller) -> None:
-    if game_mode_controller.model.is_game_mode:
-        game_mode_controller.model.toggle_game_mode()
-    game_mode_controller.close()
+_complete_editor_scene_render = native_bootstrap.complete_editor_scene_render
 
 
 def _compose_native_editor(
@@ -940,17 +908,13 @@ def _compose_native_editor(
             on_transform_end=on_viewport_transform_end,
             draw_overlays=extension_context.draw_viewport_overlays,
         )
-        extension_context.on_viewport_tool_state_changed = native_viewport.sync_gizmo_target
-        extension_context.viewport_geometry = native_viewport.geometry
-        workspace_stage.add_cleanup(
-            "component extension viewport binding",
-            lambda: _clear_component_extension_viewport(extension_context),
+        native_bootstrap.bind_editor_viewport_lifecycle(
+            workspace_stage,
+            engine.scene_manager,
+            extension_context,
+            native_viewport,
+            host,
         )
-        workspace_stage.add_cleanup(
-            "scene after-render callback",
-            lambda: engine.scene_manager.set_on_after_render(None),
-        )
-        engine.scene_manager.set_on_after_render(lambda: _complete_editor_scene_render(native_viewport, host))
         sync_viewport_list()
 
     def inspector_scenes() -> tuple[object, ...]:
@@ -1769,7 +1733,9 @@ def _compose_native_editor(
         project_stage.own(
             "game mode controller",
             game_mode_controller,
-            cleanup=lambda: _close_game_mode_controller(game_mode_controller),
+            cleanup=lambda: native_bootstrap.close_game_mode_controller(
+                game_mode_controller
+            ),
         )
 
     def on_project_resource_settings_changed() -> None:
@@ -1988,7 +1954,7 @@ def _compose_native_editor(
         engine.tick_and_render(0.016)
     host.render()
     if not composition.windowed:
-        _require_offscreen_process_isolation()
+        native_bootstrap.require_offscreen_process_isolation()
 
     attach_native_editor_event_loop(
         session,
@@ -2018,21 +1984,13 @@ def init_editor_native(
     composition_config: EditorCompositionConfig | None = None,
     _failure_injector: Callable[[str], None] | None = None,
 ) -> EditorSession:
-    """Initialize one native document and register it with the C++ engine loop."""
-
-    def compose(session: EditorSession) -> None:
-        _compose_native_editor(
-            session,
-            engine,
-            debug_resource=debug_resource,
-            no_scene=no_scene,
-            composition_config=composition_config,
-        )
-
-    return EditorSession.build(
-        compose,
+    return native_bootstrap.init_editor_native(
+        engine,
+        _compose_native_editor,
+        debug_resource=debug_resource,
+        no_scene=no_scene,
+        composition_config=composition_config,
         failure_injector=_failure_injector,
-        shutdown_engine=engine.shutdown,
     )
 
 
