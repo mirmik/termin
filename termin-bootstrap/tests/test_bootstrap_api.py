@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 _OVERLAY = Path(__file__).resolve().parents[2] / "build/python-envs/test/overlay.json"
+_LIFECYCLE_SCENARIOS = Path(__file__).with_name("bootstrap_lifecycle_scenarios.py")
 
 
 def _python_command() -> list[str]:
@@ -32,6 +33,17 @@ def _run_python_without_nanobind_leaks(
     return result
 
 
+def test_compatible_bootstrap_lifecycle_scenarios_share_one_process():
+    # Every scenario in this harness restores process-global bootstrap state.
+    # Keeping them together avoids repeated interpreter and native import cost.
+    subprocess.run(
+        [*_python_command(), str(_LIFECYCLE_SCENARIOS)],
+        check=True,
+    )
+
+
+# Import-side-effect contracts need their own pristine module graph and registry
+# baseline, so these intentionally remain one child process per test.
 def test_importing_bootstrap_has_no_kind_registration_side_effects():
     _run_python(
         """
@@ -103,319 +115,8 @@ def test_importing_domain_native_modules_has_no_kind_registration_side_effects()
     )
 
 
-def test_explicit_runtime_bootstrap_registers_core_resource_kinds():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin.inspect import KindRegistry
-
-        termin.bootstrap.register_runtime_kinds(
-            mesh=True,
-            material=True,
-            skeleton=False,
-            animation=False,
-            voxel_grid=False,
-            navmesh=False,
-            entity=False,
-        )
-
-        kinds = set(KindRegistry.instance().kinds())
-        assert "tc_mesh" in kinds
-        assert "tc_material" in kinds
-        """
-    )
-
-
-def test_explicit_bootstrap_configures_resource_manager_factory():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin_assets import get_resource_manager
-
-        marker = object()
-        assert get_resource_manager() is None
-
-        termin.bootstrap.configure_resource_manager_factory(lambda: marker)
-        assert get_resource_manager() is marker
-
-        termin.bootstrap.configure_resource_manager_factory(None)
-        assert get_resource_manager() is None
-        """
-    )
-
-
-def test_explicit_runtime_bootstrap_registers_component_base_fields():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin.inspect import InspectRegistry
-
-        registry = InspectRegistry.instance()
-        before = {field.path for field in registry.fields("Component")}
-        assert "display_name" not in before
-        assert "enabled" not in before
-
-        termin.bootstrap.bootstrap_runtime()
-
-        after = {field.path for field in registry.fields("Component")}
-        assert "display_name" in after
-        assert "enabled" in after
-        """
-    )
-
-
-def test_explicit_domain_native_kind_registration_functions_remain_available():
-    _run_python(
-        """
-        from termin.inspect import KindRegistry
-        import termin.animation._animation_native as animation_native
-        import termin.navmesh._navmesh_native as navmesh_native
-        import termin.skeleton._skeleton_native as skeleton_native
-        import termin.voxels._voxels_native as voxels_native
-
-        animation_native.register_animation_kind_handlers()
-        navmesh_native.register_navmesh_kind_handlers()
-        skeleton_native.register_tc_skeleton_kind()
-        voxels_native.register_voxel_grid_kind_handlers()
-
-        registry = KindRegistry.instance()
-        kinds = set(registry.kinds())
-        assert "tc_animation_clip" in kinds
-        assert "navmesh_handle" in kinds
-        assert "tc_skeleton" in kinds
-        assert "voxel_grid_handle" in kinds
-        assert registry.kind_for_object(animation_native.TcAnimationClip()) == "tc_animation_clip"
-        assert registry.kind_for_object(navmesh_native.TcNavMesh()) == "navmesh_handle"
-        assert registry.kind_for_object(skeleton_native.TcSkeleton()) == "tc_skeleton"
-        assert registry.kind_for_object(voxels_native.TcVoxelGrid()) == "voxel_grid_handle"
-        """
-    )
-
-
-def test_explicit_player_bootstrap_registers_python_type_mappings():
-    _run_python(
-        """
-        import termin.bootstrap
-        import tmesh
-        from termin.inspect import KindRegistry
-        from termin.materials import TcMaterial
-
-        termin.bootstrap.init_python_kind_handlers(
-            mesh=True,
-            material=True,
-            skeleton=False,
-            animation=False,
-            voxel_grid=False,
-            navmesh=False,
-            entity=False,
-        )
-
-        registry = KindRegistry.instance()
-        assert registry.kind_for_object(tmesh.TcMesh()) == "tc_mesh"
-        assert registry.kind_for_object(TcMaterial()) == "tc_material"
-        """
-    )
-
-
-def test_partial_python_kind_init_does_not_block_later_full_player_bootstrap():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin.inspect import KindRegistry
-
-        termin.bootstrap.init_python_kind_handlers(
-            mesh=True,
-            material=True,
-            skeleton=False,
-            animation=False,
-            voxel_grid=False,
-            navmesh=False,
-            entity=False,
-        )
-
-        termin.bootstrap.bootstrap_player()
-
-        from termin.skeleton import TcSkeleton
-
-        registry = KindRegistry.instance()
-        assert registry.kind_for_object(TcSkeleton()) == "tc_skeleton"
-        """
-    )
-
-
-def test_player_bootstrap_restores_loaded_python_passes_after_repeated_shutdown():
-    _run_python(
-        """
-        from termin.bootstrap import bootstrap_player, shutdown_player
-        from termin.inspect import InspectRegistry
-        from termin.render_framework import tc_pass_registry_has
-        from termin.render_passes import UIWidgetPass  # noqa: F401
-
-        for _ in range(3):
-            bootstrap_player()
-            assert tc_pass_registry_has("UIWidgetPass")
-            fields = {field.path for field in InspectRegistry.instance().fields("UIWidgetPass")}
-            assert "include_internal_entities" in fields
-            shutdown_player()
-            assert not tc_pass_registry_has("UIWidgetPass")
-        """
-    )
-
-
-def test_player_bootstrap_imports_default_python_render_passes():
-    _run_python(
-        """
-        import sys
-        import termin.bootstrap
-
-        assert "termin.render_passes" not in sys.modules
-
-        termin.bootstrap.bootstrap_player()
-
-        assert "termin.render_passes" in sys.modules
-        """
-    )
-
-
-def test_player_bootstrap_registers_builtin_component_types():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin.inspect import InspectRegistry, KindRegistry
-        from termin.scene import ComponentRegistry
-
-        components = ComponentRegistry.instance()
-        assert not components.has("MeshComponent")
-        assert not components.has("CameraComponent")
-
-        termin.bootstrap.bootstrap_player()
-
-        required = {
-            "UnknownComponent",
-            "MeshComponent",
-            "ColliderComponent",
-            "KinematicUnitComponent",
-            "CameraComponent",
-            "MeshRenderer",
-            "FoliageLayerComponent",
-            "SkeletonController",
-        }
-        missing = {name for name in required if not components.has(name)}
-        assert not missing
-
-        inspect = InspectRegistry.instance()
-        assert "mesh" in {field.path for field in inspect.fields("MeshComponent")}
-        assert "fov_x_degrees" in {field.path for field in inspect.fields("CameraComponent")}
-        assert "material" in {field.path for field in inspect.fields("MeshRenderer")}
-        assert "foliage" in {field.path for field in inspect.fields("FoliageLayerComponent")}
-        assert "foliage_data_handle" in set(KindRegistry.instance().kinds())
-        """
-    )
-
-
-def test_player_shutdown_cleans_python_and_render_globals():
-    _run_python(
-        """
-        import termin.bootstrap
-
-        termin.bootstrap.bootstrap_player()
-
-        from termin.render_framework import (
-            PythonFramePass,
-            tc_pass_registry_has,
-            tc_pipeline_create,
-            tc_pipeline_registry_count,
-        )
-        from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
-
-        class BootstrapShutdownPass(PythonFramePass):
-            def execute(self, ctx):
-                pass
-
-        class BootstrapShutdownComponent(PythonComponent):
-            pass
-
-        assert not ComponentRegistry.instance().has("BootstrapShutdownComponent")
-        publish_python_component(BootstrapShutdownComponent)
-
-        tc_pipeline_create("bootstrap-shutdown-test")
-
-        assert tc_pass_registry_has("BootstrapShutdownPass")
-        assert ComponentRegistry.instance().has("BootstrapShutdownComponent")
-        assert tc_pipeline_registry_count() == 1
-
-        termin.bootstrap.shutdown_player()
-
-        assert not tc_pass_registry_has("BootstrapShutdownPass")
-        assert not ComponentRegistry.instance().has("BootstrapShutdownComponent")
-        assert tc_pipeline_registry_count() == 0
-
-        termin.bootstrap.shutdown_player()
-        """
-    )
-
-
-def test_runtime_shutdown_allows_later_rebootstrap():
-    _run_python(
-        """
-        import termin.bootstrap
-        from termin.inspect import KindRegistry
-
-        termin.bootstrap.bootstrap_player()
-        assert "tc_mesh" in set(KindRegistry.instance().kinds())
-
-        termin.bootstrap.shutdown_player()
-        assert "tc_mesh" not in set(KindRegistry.instance().kinds())
-
-        termin.bootstrap.bootstrap_player()
-        assert "tc_mesh" in set(KindRegistry.instance().kinds())
-
-        termin.bootstrap.shutdown_player()
-        """
-    )
-
-
-def test_default_textures_follow_native_registry_lifecycle_across_rebootstrap():
-    _run_python(
-        """
-        from termin.bootstrap import bootstrap_player, shutdown_player
-        from termin.render.texture import get_normal_texture, get_white_texture
-        from termin.render.texture_handle import (
-            get_normal_texture_handle,
-            get_white_texture_handle,
-        )
-        from tgfx import TcTexture
-
-        bootstrap_player()
-        old_white = get_white_texture_handle()
-        old_normal = get_normal_texture_handle()
-        assert old_white.is_valid
-        assert old_normal.is_valid
-
-        first_wrapper = get_white_texture()
-        second_wrapper = get_white_texture()
-        assert first_wrapper is not second_wrapper
-        assert first_wrapper.texture_data is not second_wrapper.texture_data
-
-        shutdown_player()
-        assert not old_white.is_valid
-        assert not old_normal.is_valid
-
-        bootstrap_player()
-        new_white = get_white_texture_handle()
-        new_normal = get_normal_texture_handle()
-        assert new_white.is_valid
-        assert new_normal.is_valid
-        assert not old_white.is_valid
-        assert not old_normal.is_valid
-        assert TcTexture.from_uuid("__white_1x1__").is_valid
-        assert TcTexture.from_uuid("__normal_1x1__").is_valid
-
-        shutdown_player()
-        """
-    )
-
-
+# These contracts intentionally keep separate processes: the interpreter's
+# nanobind shutdown diagnostics are part of each individual assertion.
 def test_component_registry_names_survive_repeated_player_rebootstrap():
     _run_python_without_nanobind_leaks(
         """
