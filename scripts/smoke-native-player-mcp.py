@@ -11,7 +11,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import uuid
 from urllib.request import Request, urlopen
 
 
@@ -69,7 +68,7 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
                     "scenes": ["scene.scene"],
                     "modules": [],
                     "python": {"requirements": []},
-                    "resources": {"policy": "dev_smoke", "include": []},
+                    "resources": {"policy": "strict", "include": []},
                 },
                 "runtime": {
                     "backends": ["opengl"],
@@ -82,71 +81,6 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
         json.dumps(profiles, indent=2),
         encoding="utf-8",
     )
-    scene_path = project_root / "scene.scene"
-    scene_document = json.loads(scene_path.read_text(encoding="utf-8"))
-    scene_data = scene_document["scene"]
-    camera_uuid = str(uuid.uuid4())
-    scene_data["entities"].append(
-        {
-            "uuid": camera_uuid,
-            "name": "Camera",
-            "priority": 0,
-            "visible": True,
-            "enabled": True,
-            "pickable": True,
-            "selectable": True,
-            "layer": 0,
-            "flags": 0,
-            "pose": {
-                "position": [4.0, -6.0, 4.0],
-                "rotation": [-0.25, 0.0, 0.0, 0.9682458],
-            },
-            "scale": [1.0, 1.0, 1.0],
-            "components": [
-                {
-                    "type": "CameraComponent",
-                    "data": {
-                        "enabled": True,
-                        "near_clip": 0.1,
-                        "far_clip": 100.0,
-                        "fov_x_degrees": 64.0,
-                        "fov_y_degrees": 45.0,
-                        "fov_mode": "FixHorizontal",
-                        "layer_mask": "0xffffffffffffffff",
-                        "render_category_mask": "0xffffffffffffffff",
-                    },
-                }
-            ],
-        }
-    )
-    render_mount = scene_data["extensions"]["render_mount"]
-    render_mount["viewport_configs"] = [
-        {
-            "name": "MainViewport",
-            "display_name": "Main",
-            "region": [0.0, 0.0, 1.0, 1.0],
-            "depth": 0,
-            "input_mode": "simple",
-            "block_input_in_editor": False,
-            "render_target": {"name": "MainTarget"},
-            "enabled": True,
-        }
-    ]
-    render_mount["render_target_configs"] = [
-        {
-            "name": "MainTarget",
-            "kind": "texture_2d",
-            "camera_uuid": camera_uuid,
-            "dynamic_resolution": True,
-            "color_format": "rgba16f",
-            "depth_format": "depth32f",
-            "clear_color": [0.08, 0.1, 0.16, 1.0],
-            "clear_depth": 1.0,
-            "pipeline_name": "Default",
-            "enabled": True,
-        }
-    ]
-    scene_path.write_text(json.dumps(scene_document, indent=2), encoding="utf-8")
     return project_file
 
 
@@ -160,6 +94,22 @@ def _find_bundle(project_root: Path) -> tuple[Path, Path]:
     launcher = manifest_path.parent / launcher_name
     if not launcher.is_file():
         raise SmokeError(f"packaged native player launcher is missing: {launcher}")
+    package_manifest_path = manifest_path.parent / manifest["package"]["manifest"]
+    package_manifest = json.loads(package_manifest_path.read_text(encoding="utf-8"))
+    packaged_resources = {
+        (item["type"], item["uuid"])
+        for item in package_manifest["resources"]
+    }
+    required_resources = {
+        ("mesh", "00000000-0000-0000-0003-000000000001"),
+        ("mesh", "00000000-0000-0000-0003-000000000003"),
+        ("material", "00000000-0001-0000-0001-000000000003"),
+    }
+    missing_resources = required_resources - packaged_resources
+    if missing_resources:
+        raise SmokeError(
+            f"strict starter package is missing builtin resources: {sorted(missing_resources)!r}"
+        )
     return launcher, manifest_path
 
 

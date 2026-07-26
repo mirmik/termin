@@ -341,34 +341,6 @@ def test_collect_runtime_refs_accepts_default_scene_contract() -> None:
 
 @full_runtime_package_exporter
 def test_strict_runtime_export_accepts_default_scene_resources(tmp_path: Path) -> None:
-    from termin.bootstrap import bootstrap_player
-    from termin.default_assets.render.material_asset import MaterialAsset
-    from termin.default_assets.render.shader_asset import ShaderAsset
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.stdlib import stdlib_root
-
-    bootstrap_player()
-    resource_manager = DefaultResourceManager.instance()
-    resource_manager.register_builtin_meshes()
-
-    shader_path = stdlib_root() / "shaders" / "CookTorrancePBR.shader"
-    if resource_manager.get_shader_asset("CookTorrancePBR") is None:
-        shader_asset = ShaderAsset.from_file(shader_path, name="CookTorrancePBR")
-        resource_manager.register_shader_asset(
-            "CookTorrancePBR",
-            shader_asset,
-            source_path=str(shader_path),
-        )
-
-    material_path = stdlib_root() / "materials" / "NormalizedPBR.material"
-    if resource_manager.get_material_asset("NormalizedPBR") is None:
-        material_asset = MaterialAsset.from_file(material_path, name="NormalizedPBR")
-        resource_manager.register_material_asset(
-            "NormalizedPBR",
-            material_asset,
-            source_path=str(material_path),
-        )
-
     project = tmp_path / "DefaultSceneGame"
     project.mkdir()
     _write_json(project / "scene.scene", make_default_scene())

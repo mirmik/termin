@@ -43,7 +43,7 @@ def test_default_scene_mesh_and_material_refs_survive_editor_roundtrip() -> None
                 source = TcScene.create("default-scene-source")
                 restored = TcScene.create("default-scene-restored")
                 try:
-                    assert source.load_from_data(make_default_scene()["scene"]) == 3
+                    assert source.load_from_data(make_default_scene()["scene"]) == 4
                     serialized = source.serialize()
 
                     for entity_name, mesh_uuid in expected_meshes.items():
@@ -77,7 +77,7 @@ def test_default_scene_mesh_and_material_refs_survive_editor_roundtrip() -> None
                             "kind": "tc_material",
                         }
 
-                    assert restored.load_from_data(serialized) == 3
+                    assert restored.load_from_data(serialized) == 4
                     reserialized = restored.serialize()
                     for entity_name, mesh_uuid in expected_meshes.items():
                         entity_data = next(
