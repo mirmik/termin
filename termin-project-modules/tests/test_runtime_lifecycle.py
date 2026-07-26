@@ -41,12 +41,12 @@ def _runtime_without_project_venv() -> ProjectModulesRuntime:
     return ProjectModulesRuntime(use_project_venv=False)
 
 
-def test_live_scene_sync_requires_explicit_scene_manager() -> None:
+def test_live_scene_sync_uses_runtime_instance_registry_without_scene_manager() -> None:
     runtime = _runtime_without_project_venv()
     try:
         assert not runtime.sync_live_scenes
-        with pytest.raises(RuntimeError, match="explicit SceneManager"):
-            runtime.set_sync_live_scenes(True)
+        runtime.set_sync_live_scenes(True)
+        assert runtime.sync_live_scenes
     finally:
         runtime.close()
 

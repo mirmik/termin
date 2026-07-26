@@ -746,7 +746,6 @@ struct PlayerRuntimeHost::Impl {
             runtime_bootstrapped = true;
 
             engine = std::make_unique<EngineCore>();
-            modules_integration.set_scene_manager(engine->scene_manager);
             load_project_modules();
             load_package();
             register_scenes();
