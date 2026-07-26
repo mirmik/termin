@@ -3,6 +3,7 @@ import json
 import pytest
 
 from termin.project.application_identity import ProjectApplicationIdentity
+from termin.project.ignored_paths import project_ignored_roots
 from termin.project.settings import ProjectPlayerWindowSettings, ProjectSettings, RenderSyncMode
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
@@ -64,6 +65,21 @@ def test_project_settings_serializes_ignored_resource_paths() -> None:
     settings = ProjectSettings(ignored_resource_paths=["Generated", "Cache"])
 
     assert settings.to_dict()["ignored_resource_paths"] == ["Generated", "Cache"]
+
+
+def test_project_ignored_roots_include_private_service_and_generated_paths(tmp_path) -> None:
+    project_root = tmp_path / "Game"
+    settings = ProjectSettings(
+        build_output_dir="out",
+        ignored_resource_paths=["Generated"],
+    )
+
+    assert project_ignored_roots(project_root, settings) == (
+        (project_root / ".termin").resolve(),
+        (project_root / ".venv").resolve(),
+        (project_root / "out").resolve(),
+        (project_root / "Generated").resolve(),
+    )
 
 
 def test_ignored_resource_path_contract_is_shared_by_editor_build_and_player(tmp_path) -> None:
