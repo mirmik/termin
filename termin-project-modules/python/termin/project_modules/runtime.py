@@ -81,8 +81,6 @@ class ProjectModulesRuntime:
         self._use_project_venv = use_project_venv
         self._integration = TermModulesIntegration()
         self._scene_manager = scene_manager
-        if scene_manager is not None:
-            self._integration.set_scene_manager(scene_manager)
         self._runtime = ModuleRuntime()
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
@@ -109,8 +107,6 @@ class ProjectModulesRuntime:
         return bool(self._integration.environment.sync_live_scenes)
 
     def set_sync_live_scenes(self, enabled: bool) -> None:
-        if enabled and self._scene_manager is None:
-            raise RuntimeError("live scene synchronization requires an explicit SceneManager")
         environment = self._integration.environment
         environment.sync_live_scenes = bool(enabled)
         self._integration.set_environment(environment)
@@ -122,7 +118,6 @@ class ProjectModulesRuntime:
         if scene_manager is None:
             raise ValueError("scene_manager must not be None")
         self._scene_manager = scene_manager
-        self._integration.set_scene_manager(scene_manager)
         environment = self._integration.environment
         environment.sync_live_scenes = True
         self._integration.set_environment(environment)
@@ -468,7 +463,6 @@ class ProjectModulesRuntime:
         if not self._shutdown_runtime():
             return False
         self._detach_runtime_callbacks()
-        self._integration.clear_scene_provider()
         self._scene_manager = None
         self._listeners.clear()
         self._build_output_listeners.clear()

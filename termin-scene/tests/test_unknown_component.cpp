@@ -309,6 +309,25 @@ int test_registered_component_degradation_uses_runtime_instance_lists() {
     TEST_ASSERT(second_entity.get_component_by_type_name("UnknownComponent") != nullptr,
                 "second scene component degraded");
 
+    const termin::UnknownComponentStats upgraded =
+        termin::upgrade_registered_unknown_components({"ReloadableComponent"});
+    TEST_ASSERT(upgraded.upgraded == 2 && upgraded.failed == 0,
+                "registered-list upgrade restores both scenes");
+    auto* restored_first = static_cast<ReloadableComponent*>(
+        termin::CxxComponent::from_tc(
+            first_entity.get_component_by_type_name("ReloadableComponent")));
+    auto* restored_second = static_cast<ReloadableComponent*>(
+        termin::CxxComponent::from_tc(
+            second_entity.get_component_by_type_name("ReloadableComponent")));
+    TEST_ASSERT(restored_first != nullptr && restored_first->value == 17,
+                "first registered-list component payload restored");
+    TEST_ASSERT(restored_second != nullptr && restored_second->value == 29,
+                "second registered-list component payload restored");
+    TEST_ASSERT(first_entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "first registered-list placeholder removed");
+    TEST_ASSERT(second_entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "second registered-list placeholder removed");
+
     first.destroy();
     second.destroy();
     std::cout << "  Registered-instance degradation: PASS\n";

@@ -4,25 +4,15 @@
 
 #include <termin/entity/unknown_component_ops.hpp>
 #include <termin/entity/component_registry.hpp>
-#include <termin/tc_scene.hpp>
 #include <termin/render/unknown_pass_ops.hpp>
-#include <termin/scene/scene_manager.hpp>
 
 #include <core/tc_component.h>
 #include <render/tc_pass.h>
 #include <tc_inspect_cpp.hpp>
 #include <inspect/tc_runtime_type_registry.h>
 
-#include <stdexcept>
-
 namespace termin {
 namespace {
-
-std::vector<TcSceneRef> collect_scenes(
-    const TermModulesIntegration::SceneProvider& provider
-) {
-    return provider ? provider() : std::vector<TcSceneRef>{};
-}
 
 std::vector<std::string> module_component_types(const termin_modules::ModuleRecord& record) {
     return ComponentRegistry::instance().list_owned(record.spec.id);
@@ -62,7 +52,6 @@ std::vector<std::string> module_runtime_types(const termin_modules::ModuleRecord
 
 struct RuntimeUnloadContext {
     bool sync_live_scenes = false;
-    const std::vector<TcSceneRef>* scenes = nullptr;
     const char* module_id = nullptr;
     bool component_batch_attempted = false;
     bool component_batch_ok = false;
@@ -170,22 +159,19 @@ bool prepare_pass_unload_for_runtime_type(
 }
 
 void rollback_module_placeholders(
-    const termin_modules::ModuleRecord& record,
-    const TermModulesIntegration::SceneProvider& scene_provider
+    const termin_modules::ModuleRecord& record
 ) {
     const std::vector<std::string> component_types = module_component_types(record);
     if (!component_types.empty()) {
-        for (const TcSceneRef& scene : collect_scenes(scene_provider)) {
-            const UnknownComponentStats stats =
-                upgrade_unknown_components(scene, component_types);
-            if (stats.failed > 0) {
-                tc::Log::error(
-                    "TermModulesIntegration: rollback failed for %zu component placeholder(s) "
-                    "after refused unload of module '%s'",
-                    stats.failed,
-                    record.spec.id.c_str()
-                );
-            }
+        const UnknownComponentStats stats =
+            upgrade_registered_unknown_components(component_types);
+        if (stats.failed > 0) {
+            tc::Log::error(
+                "TermModulesIntegration: rollback failed for %zu component placeholder(s) "
+                "after refused unload of module '%s'",
+                stats.failed,
+                record.spec.id.c_str()
+            );
         }
     }
     const UnknownPassStats pass_stats = upgrade_unknown_passes(module_pass_types(record));
@@ -202,19 +188,13 @@ void rollback_module_placeholders(
 bool cleanup_module_registrations(
     const termin_modules::ModuleRecord& record,
     std::string& error,
-    bool sync_live_scenes,
-    const TermModulesIntegration::SceneProvider& scene_provider
+    bool sync_live_scenes
 ) {
     error.clear();
 
     try {
-        std::vector<TcSceneRef> scenes;
-        if (sync_live_scenes) {
-            scenes = collect_scenes(scene_provider);
-        }
         RuntimeUnloadContext context{
             sync_live_scenes,
-            &scenes,
             record.spec.id.c_str()
         };
         const size_t type_count =
@@ -224,7 +204,7 @@ bool cleanup_module_registrations(
             );
         const std::vector<std::string> remaining_types = module_runtime_types(record);
         if (!remaining_types.empty()) {
-            if (sync_live_scenes) rollback_module_placeholders(record, scene_provider);
+            if (sync_live_scenes) rollback_module_placeholders(record);
             error = "Owner contribution audit failed: owner='" + record.spec.id +
                 "' participant='runtime-types' phase='audit' remaining=[";
             for (size_t i = 0; i < remaining_types.size(); ++i) {
@@ -258,22 +238,16 @@ bool cleanup_module_registrations(
 bool prepare_module_registration_unload(
     const termin_modules::ModuleRecord& record,
     std::string& error,
-    bool sync_live_scenes,
-    const TermModulesIntegration::SceneProvider& scene_provider
+    bool sync_live_scenes
 ) {
     error.clear();
     try {
-        std::vector<TcSceneRef> scenes;
-        if (sync_live_scenes) {
-            scenes = collect_scenes(scene_provider);
-        }
         RuntimeUnloadContext context{
             sync_live_scenes,
-            &scenes,
             record.spec.id.c_str()
         };
         if (!tc_runtime_type_registry_prepare_owner_unload(record.spec.id.c_str(), &context)) {
-            if (sync_live_scenes) rollback_module_placeholders(record, scene_provider);
+            if (sync_live_scenes) rollback_module_placeholders(record);
             error = "Failed to prepare module registrations for unload: '" + record.spec.id + "'";
             tc::Log::error("TermModulesIntegration: %s", error.c_str());
             return false;
@@ -291,33 +265,21 @@ bool prepare_module_registration_unload(
 }
 
 void upgrade_module_components(
-    const termin_modules::ModuleRecord& record,
-    const TermModulesIntegration::SceneProvider& scene_provider
+    const termin_modules::ModuleRecord& record
 ) {
     const std::vector<std::string> type_names = module_component_types(record);
     if (type_names.empty()) {
         return;
     }
 
-    const std::vector<TcSceneRef> scenes = collect_scenes(scene_provider);
-    if (scenes.empty()) {
-        tc::Log::warn(
-            "TermModulesIntegration: no scenes available to upgrade components for module '%s'",
+    const UnknownComponentStats stats =
+        upgrade_registered_unknown_components(type_names);
+    if (stats.failed > 0) {
+        tc::Log::error(
+            "TermModulesIntegration: failed to upgrade %zu unknown component instances for module '%s'",
+            stats.failed,
             record.spec.id.c_str()
         );
-        return;
-    }
-
-    for (const TcSceneRef& scene : scenes) {
-        const UnknownComponentStats stats = upgrade_unknown_components(scene, type_names);
-        if (stats.failed > 0) {
-            tc::Log::error(
-                "TermModulesIntegration: failed to upgrade %zu unknown component instances for module '%s' in scene '%s'",
-                stats.failed,
-                record.spec.id.c_str(),
-                scene.name().c_str()
-            );
-        }
     }
 }
 
@@ -350,36 +312,9 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
     return _environment;
 }
 
-void TermModulesIntegration::set_scene_provider(SceneProvider provider) {
-    _scene_provider = std::move(provider);
-}
-
-void TermModulesIntegration::set_scene_manager(SceneManager& scene_manager) {
-    set_scene_provider([manager = &scene_manager]() {
-        std::vector<TcSceneRef> scenes;
-        for (const std::string& name : manager->scene_names()) {
-            tc_scene_handle scene = manager->get_scene(name);
-            if (tc_scene_alive(scene)) {
-                scenes.emplace_back(scene);
-            }
-        }
-        return scenes;
-    });
-}
-
-void TermModulesIntegration::clear_scene_provider() {
-    _scene_provider = nullptr;
-}
-
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
     const bool sync_live_scenes = _environment.sync_live_scenes;
-    const SceneProvider scene_provider = _scene_provider;
-    if (sync_live_scenes && !scene_provider) {
-        throw std::invalid_argument(
-            "TermModulesIntegration requires a scene provider when sync_live_scenes is enabled"
-        );
-    }
     tc_component_registry_set_prepare_unload_callback(
         prepare_component_unload_for_runtime_type,
         nullptr
@@ -389,24 +324,23 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         nullptr
     );
 
-    auto cpp_before_unload = [sync_live_scenes, scene_provider](
+    auto cpp_before_unload = [sync_live_scenes](
                                  const termin_modules::ModuleRecord& record,
                                  std::string& error) {
         return prepare_module_registration_unload(
             record,
             error,
-            sync_live_scenes,
-            scene_provider
+            sync_live_scenes
         );
     };
-    auto after_load = [sync_live_scenes, scene_provider](
+    auto after_load = [sync_live_scenes](
                           const termin_modules::ModuleRecord& record) {
         if (sync_live_scenes) {
-            upgrade_module_components(record, scene_provider);
+            upgrade_module_components(record);
             upgrade_module_passes(record);
         }
     };
-    auto restore_reload_state = [sync_live_scenes, scene_provider](
+    auto restore_reload_state = [sync_live_scenes](
                                     const termin_modules::ModuleRecord& record,
                                     const std::shared_ptr<termin_modules::IModuleReloadState>&,
                                     std::string& error) {
@@ -415,14 +349,11 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         }
 
         const std::vector<std::string> type_names = module_component_types(record);
-
-        const std::vector<TcSceneRef> scenes = collect_scenes(scene_provider);
-        for (const TcSceneRef& scene : scenes) {
-            const UnknownComponentStats stats = upgrade_unknown_components(scene, type_names);
-            if (stats.failed > 0) {
-                error = "Failed to restore module component state for '" + record.spec.id + "'";
-                return false;
-            }
+        const UnknownComponentStats stats =
+            upgrade_registered_unknown_components(type_names);
+        if (stats.failed > 0) {
+            error = "Failed to restore module component state for '" + record.spec.id + "'";
+            return false;
         }
         return upgrade_module_passes(record, &error);
     };
@@ -431,17 +362,16 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                          const std::string&,
                                          std::string& error) {
-        return cleanup_module_registrations(record, error, false, {});
+        return cleanup_module_registrations(record, error, false);
     };
     cpp_callbacks.before_unload = cpp_before_unload;
-    cpp_callbacks.before_native_close = [sync_live_scenes, scene_provider](
+    cpp_callbacks.before_native_close = [sync_live_scenes](
                                             const termin_modules::ModuleRecord& record,
                                             std::string& error) {
         return cleanup_module_registrations(
             record,
             error,
-            sync_live_scenes,
-            scene_provider
+            sync_live_scenes
         );
     };
     cpp_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
@@ -453,16 +383,15 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     python_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                             const std::string&,
                                             std::string& error) {
-        return cleanup_module_registrations(record, error, false, {});
+        return cleanup_module_registrations(record, error, false);
     };
-    python_callbacks.before_module_remove = [sync_live_scenes, scene_provider](
+    python_callbacks.before_module_remove = [sync_live_scenes](
                                                   const termin_modules::ModuleRecord& record,
                                                   std::string& error) {
         return prepare_module_registration_unload(
             record,
             error,
-            sync_live_scenes,
-            scene_provider
+            sync_live_scenes
         );
     };
     python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {

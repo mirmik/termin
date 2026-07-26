@@ -364,10 +364,117 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
 
     tc_value_free(&empty_data);
 
+    const size_t index = entity.component_index(component);
     Entity mutable_entity = entity;
-    mutable_entity.add_component_ptr(upgraded_tc);
-    mutable_entity.remove_component_ptr(component);
+    if (index == SIZE_MAX || !mutable_entity.replace_component_at_checked(
+            index, component, upgraded_tc)) {
+        discard_unattached_component(upgraded_tc);
+        if (error) {
+            *error = "UnknownComponent source identity changed before replacement";
+        }
+        return false;
+    }
     return true;
+}
+
+UnknownComponentStats upgrade_unknown_component_snapshot(
+    const std::vector<tc_component*>& components,
+    const UnknownUpgradeStrategy& strategy,
+    const std::vector<std::string>& type_names
+) {
+    UnknownComponentStats stats;
+    const auto type_filter = make_type_filter(type_names);
+
+    for (tc_component* component : components) {
+        if (!is_unknown_component(component)) {
+            ++stats.failed;
+            tc::Log::error(
+                "[UnknownComponent] Runtime snapshot contains a non-UnknownComponent instance"
+            );
+            continue;
+        }
+
+        const Entity entity(component->owner);
+        if (!entity.valid()) {
+            ++stats.failed;
+            tc::Log::error(
+                "[UnknownComponent] Runtime snapshot contains an unattached UnknownComponent"
+            );
+            continue;
+        }
+
+        auto* unknown_obj =
+            dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
+        if (unknown_obj == nullptr) {
+            ++stats.failed;
+            tc::Log::error(
+                "[UnknownComponent] Runtime snapshot instance is not an UnknownComponent object"
+            );
+            continue;
+        }
+
+        if (!type_filter.empty() && type_filter.count(unknown_obj->original_type) == 0) {
+            ++stats.skipped;
+            continue;
+        }
+
+        if (!strategy &&
+            !ComponentRegistry::instance().has(unknown_obj->original_type)) {
+            ++stats.skipped;
+            continue;
+        }
+
+        std::string error;
+        if (!strategy) {
+            if (upgrade_unknown_component_ref(entity, component, &error)) {
+                ++stats.upgraded;
+            } else {
+                ++stats.failed;
+                tc::Log::error(
+                    "[UnknownComponent] Failed to upgrade component: %s",
+                    error.c_str()
+                );
+            }
+            continue;
+        }
+
+        const TcSceneRef scene = entity.scene();
+        UnknownUpgradeDecision decision = strategy(*unknown_obj, entity, scene);
+        switch (decision.mode) {
+        case UnknownUpgradeMode::Skip:
+            ++stats.skipped;
+            break;
+        case UnknownUpgradeMode::DefaultUpgrade:
+            if (upgrade_unknown_component_ref(entity, component, &error)) {
+                ++stats.upgraded;
+            } else {
+                ++stats.failed;
+                tc::Log::error(
+                    "[UnknownComponent] Failed to upgrade component: %s",
+                    error.c_str()
+                );
+            }
+            break;
+        case UnknownUpgradeMode::CustomUpgrade:
+            if (upgrade_unknown_component_ref_impl(
+                    entity,
+                    component,
+                    decision.target_type,
+                    &decision.target_data,
+                    &error)) {
+                ++stats.upgraded;
+            } else {
+                ++stats.failed;
+                tc::Log::error(
+                    "[UnknownComponent] Failed custom upgrade component: %s",
+                    error.c_str()
+                );
+            }
+            break;
+        }
+    }
+
+    return stats;
 }
 
 } // namespace
@@ -847,93 +954,51 @@ UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene, const 
 UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene,
                                                  const UnknownUpgradeStrategy& strategy,
                                                  const std::vector<std::string>& type_names) {
-    UnknownComponentStats stats;
     if (!scene.valid()) {
-        return stats;
+        return {};
     }
 
-    const auto type_filter = make_type_filter(type_names);
-
+    std::vector<tc_component*> pending;
     for (const Entity& entity : scene.get_all_entities()) {
-        std::vector<tc_component*> pending;
         const size_t component_count = entity.component_count();
-        pending.reserve(component_count);
+        pending.reserve(pending.size() + component_count);
 
         for (size_t i = 0; i < component_count; ++i) {
             tc_component* component = entity.component_at(i);
-            if (!is_unknown_component(component)) {
-                continue;
-            }
-
-            auto* unknown_obj = static_cast<UnknownComponent*>(CxxComponent::from_tc(component));
-            if (unknown_obj == nullptr) {
-                ++stats.failed;
-                continue;
-            }
-
-            if (!type_filter.empty() && type_filter.count(unknown_obj->original_type) == 0) {
-                ++stats.skipped;
-                continue;
-            }
-
-            if (!strategy &&
-                !ComponentRegistry::instance().has(unknown_obj->original_type)) {
-                ++stats.skipped;
-                continue;
-            }
-
-            pending.push_back(component);
-        }
-
-        for (tc_component* component : pending) {
-            std::string error;
-            auto* unknown_obj = static_cast<UnknownComponent*>(CxxComponent::from_tc(component));
-            if (unknown_obj == nullptr) {
-                ++stats.failed;
-                continue;
-            }
-
-            if (!strategy) {
-                if (upgrade_unknown_component_ref(entity, component, &error)) {
-                    ++stats.upgraded;
-                } else {
-                    ++stats.failed;
-                    tc::Log::error("[UnknownComponent] Failed to upgrade component: %s", error.c_str());
-                }
-                continue;
-            }
-
-            UnknownUpgradeDecision decision = strategy(*unknown_obj, entity, scene);
-            switch (decision.mode) {
-            case UnknownUpgradeMode::Skip:
-                ++stats.skipped;
-                break;
-            case UnknownUpgradeMode::DefaultUpgrade:
-                if (upgrade_unknown_component_ref(entity, component, &error)) {
-                    ++stats.upgraded;
-                } else {
-                    ++stats.failed;
-                    tc::Log::error("[UnknownComponent] Failed to upgrade component: %s", error.c_str());
-                }
-                break;
-            case UnknownUpgradeMode::CustomUpgrade:
-                if (upgrade_unknown_component_ref_impl(entity,
-                                                       component,
-                                                       decision.target_type,
-                                                       &decision.target_data,
-                                                       &error)) {
-                    ++stats.upgraded;
-                } else {
-                    ++stats.failed;
-                    tc::Log::error("[UnknownComponent] Failed custom upgrade component: %s",
-                                   error.c_str());
-                }
-                break;
+            if (is_unknown_component(component)) {
+                pending.push_back(component);
             }
         }
     }
 
-    return stats;
+    return upgrade_unknown_component_snapshot(pending, strategy, type_names);
+}
+
+UnknownComponentStats upgrade_registered_unknown_components(
+    const std::vector<std::string>& type_names
+) {
+    return upgrade_registered_unknown_components(UnknownUpgradeStrategy(), type_names);
+}
+
+UnknownComponentStats upgrade_registered_unknown_components(
+    const UnknownUpgradeStrategy& strategy,
+    const std::vector<std::string>& type_names
+) {
+    RegisteredComponentSnapshot snapshot;
+    tc_runtime_type_registry_foreach_instance(
+        "UnknownComponent",
+        collect_registered_component,
+        &snapshot
+    );
+    if (snapshot.allocation_failed) {
+        tc::Log::error(
+            "[UnknownComponent] Failed to allocate registered UnknownComponent snapshot"
+        );
+        UnknownComponentStats stats;
+        stats.failed = 1;
+        return stats;
+    }
+    return upgrade_unknown_component_snapshot(snapshot.components, strategy, type_names);
 }
 
 } // namespace termin

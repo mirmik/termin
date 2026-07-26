@@ -152,4 +152,16 @@ ENTITY_API UnknownComponentStats upgrade_unknown_components(
     const std::vector<std::string>& type_names = {}
 );
 
+// Upgrade every matching UnknownComponent linked to the runtime registry.
+// This is the canonical module reload/rollback path and is independent of any
+// separately maintained scene inventory.
+ENTITY_API UnknownComponentStats upgrade_registered_unknown_components(
+    const std::vector<std::string>& type_names = {}
+);
+
+ENTITY_API UnknownComponentStats upgrade_registered_unknown_components(
+    const UnknownUpgradeStrategy& strategy,
+    const std::vector<std::string>& type_names = {}
+);
+
 } // namespace termin

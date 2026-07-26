@@ -268,7 +268,6 @@ int run_cpp_module_hot_reload_smoke() {
 
     termin::SceneManager scene_manager;
     termin::TermModulesIntegration integration;
-    integration.set_scene_manager(scene_manager);
 
     termin_modules::ModuleRuntime runtime;
     runtime.register_backend(std::make_shared<termin_modules::CppModuleBackend>());
@@ -417,7 +416,6 @@ int run_cpp_module_hot_reload_smoke() {
                 engine_probe_error.c_str());
     TEST_ASSERT(engine_owned_component_probe_intact("failed module load", engine_component_error),
                 engine_component_error.c_str());
-    unmanaged_scene.destroy();
     std::filesystem::rename(broken_artifact, artifact);
 
     TEST_ASSERT(runtime.load_module(kModuleId), runtime.last_error());
@@ -425,6 +423,14 @@ int run_cpp_module_hot_reload_smoke() {
                 "UnknownComponent upgraded after artifact restore");
     TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
                 "UnknownComponent removed after artifact restore");
+    tc_component* restored_unmanaged =
+        unmanaged_entity.get_component_by_type_name(kComponentType);
+    TEST_ASSERT(restored_unmanaged != nullptr,
+                "runtime-list load restores component outside SceneManager");
+    TEST_ASSERT(unmanaged_entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "component outside SceneManager no longer remains UnknownComponent");
+    TEST_ASSERT(component_int_field(restored_unmanaged, "value") == 91,
+                "component outside SceneManager preserves inspect data");
     tc_pass* restored_pass = tc_pipeline_get_pass_at(pipeline, 0);
     TEST_ASSERT(restored_pass != nullptr && std::string(tc_pass_type_name(restored_pass)) == kPassType,
                 "UnknownPass upgraded after artifact restore");
@@ -435,6 +441,7 @@ int run_cpp_module_hot_reload_smoke() {
     TEST_ASSERT(engine_owned_component_probe_intact("artifact restore", engine_component_error),
                 engine_component_error.c_str());
 
+    unmanaged_scene.destroy();
     scene_manager.close_scene("cpp-hot-reload");
     tc_pipeline_destroy(pipeline);
     runtime.unload_module(kModuleId);
