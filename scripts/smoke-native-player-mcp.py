@@ -113,6 +113,38 @@ def _find_bundle(project_root: Path) -> tuple[Path, Path]:
     return launcher, manifest_path
 
 
+def _verify_linux_launcher_linkage(launcher: Path, bundle_root: Path) -> None:
+    readelf = shutil.which("readelf")
+    ldd = shutil.which("ldd")
+    if readelf is None or ldd is None:
+        raise SmokeError("readelf and ldd are required for Linux bundle linkage verification")
+
+    dynamic = _run([readelf, "-d", str(launcher)], cwd=bundle_root).stdout
+    runpath_lines = [
+        line for line in dynamic.splitlines() if "RPATH" in line or "RUNPATH" in line
+    ]
+    if len(runpath_lines) != 1:
+        raise SmokeError(f"expected one launcher RUNPATH entry, found: {runpath_lines!r}")
+    runpath = runpath_lines[0]
+    if "$ORIGIN/lib" not in runpath:
+        raise SmokeError(f"launcher RUNPATH does not resolve bundled lib/: {runpath}")
+    if str(_repo_root() / "sdk" / "lib") in runpath:
+        raise SmokeError(f"launcher RUNPATH leaks the build SDK path: {runpath}")
+
+    linkage = _run([ldd, str(launcher)], cwd=bundle_root).stdout
+    bundle_lib = (bundle_root / "lib").resolve()
+    for line in linkage.splitlines():
+        if "libtermin_" not in line and "libnanobind" not in line:
+            continue
+        if "=>" not in line:
+            raise SmokeError(f"bundled Termin library is unresolved: {line}")
+        resolved = Path(line.split("=>", 1)[1].strip().split(" ", 1)[0]).resolve()
+        if not resolved.is_relative_to(bundle_lib):
+            raise SmokeError(
+                f"launcher resolved a Termin library outside bundle/lib: {line}"
+            )
+
+
 def _player_command(launcher: Path) -> list[str]:
     command = [str(launcher), "--backend", "opengl", "--windowed", "--mcp"]
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
@@ -205,10 +237,12 @@ def main() -> int:
             cwd=root,
         )
         launcher, manifest_path = _find_bundle(project_file.parent)
+        _verify_linux_launcher_linkage(launcher, manifest_path.parent)
         session_file = temp_root / "player-mcp-session.json"
         screenshot = temp_root / "player.png"
         log_path = temp_root / "player.log"
         environment = os.environ.copy()
+        environment.pop("LD_LIBRARY_PATH", None)
         environment["TERMIN_PLAYER_MCP_SESSION_FILE"] = str(session_file)
         environment["TERMIN_PLAYER_MCP_PORT"] = "0"
 
