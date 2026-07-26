@@ -194,6 +194,10 @@ class BuildProfilesController:
             capabilities=self._capabilities(diagnostics),
         )
 
+    @property
+    def templates(self) -> tuple[BuildProfileTemplate, ...]:
+        return tuple(self._templates.values())
+
     def select(self, entry_id: str) -> BuildProfilesSnapshot:
         self._entry_index(entry_id)
         self._selected_id = entry_id
