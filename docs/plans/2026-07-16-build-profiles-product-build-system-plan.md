@@ -297,6 +297,14 @@ compiler:
 The UI must not implement another schema projection with independent defaults.
 It edits the same typed objects used by CLI tests.
 
+The #448 native projection is implemented as
+`termin.editor_native.build_profiles_window`. It exposes the typed collection
+controller through stable widget IDs and the General, Runtime, Shaders,
+Toolchain, Deploy and Output sections. Build, Run, Install, Launch and Dry Run
+buttons reflect controller capabilities and invoke its injected action service;
+#449 owns production command routing and removal of the legacy one-off menu
+paths.
+
 Exit criteria:
 
 - CLI and editor produce equal normalized requests for the same profile;
