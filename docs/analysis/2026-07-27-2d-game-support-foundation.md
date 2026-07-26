@@ -126,16 +126,39 @@ without copying UV coordinates and pivots.
 The primary ordering contract should be:
 
 ```text
-render phase -> sorting layer -> order in layer -> material/batch key
+render phase
+-> sorting layer
+-> order in layer
+-> optional spatial-depth policy
+-> stable tie-breaker
+-> submission index fallback
 ```
 
-World Y remains genuine spatial depth and may participate in ordering within a
-well-defined mode, but it should not be overloaded as an implicit integer
-draw-order field. Explicit `sorting_layer` and `order_in_layer` make authoring,
-serialization and debugging deterministic.
+The render phase selects an ordering domain before this comparison; items from
+different phases are not interleaved by the 2D comparator. World Y remains
+genuine spatial depth and may participate through an explicit back-to-front or
+front-to-back policy, but it is ignored by the default policy and must not be
+overloaded as an implicit integer draw-order field. Explicit `sorting_layer`
+and `order_in_layer` make authoring, serialization and debugging deterministic.
+The collector supplies a stable entity/geometry-derived tie-breaker, with the
+snapshot submission index as the final collision fallback.
 
-Opaque and transparent behavior, equal-order stability and batching boundaries
-must be specified before dependent components are built.
+The allocation-free ordering primitive is owned by `termin-render` and lives
+in `termin/render/world2d_ordering.hpp`. It deliberately does not extend the
+general `ColorPass` sort key: that path currently groups ordinary 3D items by
+shader and distance, while transparent 2D compositing must not be reordered by
+texture, material or shader.
+
+Batch construction happens only after sorting. The world-quad renderer may
+merge a maximal adjacent run of submissions with compatible pipeline, render
+state, material, texture/atlas and sampler state. It may never move a later
+compatible item across an incompatible item to make a larger batch.
+
+The default world-sprite state is alpha blending enabled, depth test enabled,
+depth writes disabled and face culling disabled. This allows opaque 3D depth
+already present in the target to occlude sprites while explicit 2D order
+controls sprite-to-sprite compositing. Alternative materials may opt into
+different states, forming separate adjacent batch runs.
 
 ## Core components and assets
 
