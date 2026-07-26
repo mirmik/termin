@@ -1,5 +1,6 @@
 // tc_component.c - Component registry implementation
 #include "core/tc_component.h"
+#include "core/tc_scene.h"
 #include <tcbase/tc_uuid.h>
 #include "inspect/tc_runtime_type_registry.h"
 #include <tcbase/tc_log.h>
@@ -619,7 +620,9 @@ bool tc_component_get_enabled(const tc_component* c) {
 }
 
 void tc_component_set_enabled(tc_component* c, bool enabled) {
-    if (c) c->enabled = enabled;
+    if (!c || c->enabled == enabled) return;
+    c->enabled = enabled;
+    tc_scene_mark_component_startability_changed(c->lifecycle_scene);
 }
 
 bool tc_component_get_active_in_editor(const tc_component* c) {
@@ -627,7 +630,9 @@ bool tc_component_get_active_in_editor(const tc_component* c) {
 }
 
 void tc_component_set_active_in_editor(tc_component* c, bool active) {
-    if (c) c->active_in_editor = active;
+    if (!c || c->active_in_editor == active) return;
+    c->active_in_editor = active;
+    tc_scene_mark_component_startability_changed(c->lifecycle_scene);
 }
 
 tc_component_kind tc_component_get_kind(const tc_component* c) {

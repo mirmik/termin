@@ -91,6 +91,39 @@ static void scheduler_probe_init(scheduler_probe_component* probe) {
     tc_component_set_lifecycle_capabilities(&probe->component, false, false, false);
 }
 
+typedef struct {
+    tc_component component;
+    tc_scene_handle scene;
+    tc_component* component_to_register;
+    int start_count;
+} registering_start_component;
+
+static void registering_start(tc_component* component) {
+    registering_start_component* probe =
+        (registering_start_component*)component;
+    probe->start_count++;
+    tc_scene_register_component(probe->scene, probe->component_to_register);
+}
+
+static const tc_component_vtable registering_start_vtable = {
+    .start = registering_start,
+};
+
+static void registering_start_init(
+    registering_start_component* probe,
+    tc_scene_handle scene,
+    tc_component* component_to_register
+) {
+    memset(probe, 0, sizeof(*probe));
+    tc_component_init(&probe->component, &registering_start_vtable);
+    tc_component_set_declared_type_name(
+        &probe->component,
+        "RegisteringStartProbe"
+    );
+    probe->scene = scene;
+    probe->component_to_register = component_to_register;
+}
+
 static const tc_section_timing* find_profile_section(
     const tc_frame_profile* frame,
     int parent_index,
@@ -414,6 +447,85 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     GUARD_C_CHECK_EQ_INT(0, tc_scene_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(0, tc_scene_before_render_list_count(scene));
 
+    tc_scene_free(scene);
+    return 0;
+}
+
+GUARD_C_TEST(test_pending_start_scans_only_after_startability_changes) {
+    tc_scene_handle scene = tc_scene_new_named("pending-start-revision");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+
+    scheduler_probe_component editor_probe;
+    scheduler_probe_init(&editor_probe);
+    tc_component_set_enabled(&editor_probe.component, false);
+    tc_scene_register_component(scene, &editor_probe.component);
+
+    tc_scene_editor_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_pending_start_scan_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_pending_start_visit_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, editor_probe.start_count);
+
+    for (int i = 0; i < 8; ++i) {
+        tc_scene_editor_update(scene, 0.0);
+    }
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_pending_start_scan_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_pending_start_visit_count(scene));
+
+    tc_component_set_enabled(&editor_probe.component, true);
+    tc_scene_editor_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(2, tc_scene_pending_start_scan_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, editor_probe.start_count);
+
+    tc_component_set_active_in_editor(&editor_probe.component, true);
+    tc_scene_editor_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(3, tc_scene_pending_start_scan_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, editor_probe.start_count);
+    tc_scene_editor_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(3, tc_scene_pending_start_scan_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, editor_probe.start_count);
+
+    scheduler_probe_component runtime_probe;
+    scheduler_probe_init(&runtime_probe);
+    tc_scene_register_component(scene, &runtime_probe.component);
+    tc_scene_editor_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(0, runtime_probe.start_count);
+    tc_scene_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(1, runtime_probe.start_count);
+    tc_scene_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(1, runtime_probe.start_count);
+
+    tc_scene_unregister_component(scene, &editor_probe.component);
+    tc_scene_unregister_component(scene, &runtime_probe.component);
+    tc_scene_free(scene);
+    return 0;
+}
+
+GUARD_C_TEST(test_pending_start_snapshot_handles_registration_during_start) {
+    tc_scene_handle scene = tc_scene_new_named("pending-start-mutation");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+
+    scheduler_probe_component added_probe;
+    scheduler_probe_init(&added_probe);
+    registering_start_component registering_probe;
+    registering_start_init(
+        &registering_probe,
+        scene,
+        &added_probe.component
+    );
+    tc_scene_register_component(scene, &registering_probe.component);
+
+    tc_scene_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(1, registering_probe.start_count);
+    GUARD_C_CHECK_EQ_INT(0, added_probe.start_count);
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_pending_start_count(scene));
+
+    tc_scene_update(scene, 0.0);
+    GUARD_C_CHECK_EQ_INT(1, registering_probe.start_count);
+    GUARD_C_CHECK_EQ_INT(1, added_probe.start_count);
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_pending_start_count(scene));
+
+    tc_scene_unregister_component(scene, &registering_probe.component);
+    tc_scene_unregister_component(scene, &added_probe.component);
     tc_scene_free(scene);
     return 0;
 }
