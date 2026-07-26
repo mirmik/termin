@@ -4,6 +4,7 @@
 #include "render/tc_render_target.h"
 #include "core/tc_component.h"
 #include <tcbase/tc_log.h>
+#include <tcbase/tc_pool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,8 +12,6 @@
 #define INITIAL_POOL_CAPACITY 16
 
 struct tc_viewport {
-    uint32_t generation;
-    bool alive;
     char* name;
     tc_render_target_handle render_target;
     float rect[4];
@@ -31,15 +30,8 @@ struct tc_viewport {
     tc_scene_handle scene;
 };
 
-typedef struct {
-    tc_viewport* items;
-    uint32_t* free_stack;
-    size_t free_count;
-    size_t capacity;
-    size_t count;
-} ViewportPool;
-
-static ViewportPool* g_pool = NULL;
+static tc_pool g_pool;
+static bool g_pool_initialized = false;
 
 static char* tc_strdup_local(const char* s) {
     if (s == NULL) return NULL;
@@ -54,10 +46,9 @@ static void tc_viewport_strset(char** dest, const char* src) {
     *dest = tc_strdup_local(src);
 }
 
-static void viewport_init_empty(tc_viewport* vp, uint32_t generation) {
+static void viewport_init_empty(tc_viewport* vp) {
     if (!vp) return;
     memset(vp, 0, sizeof(*vp));
-    vp->generation = generation;
     vp->render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     vp->scene = TC_SCENE_HANDLE_INVALID;
     vp->internal_entities = TC_ENTITY_HANDLE_INVALID;
@@ -76,99 +67,54 @@ static void viewport_free_strings(tc_viewport* vp) {
 }
 
 static tc_viewport* viewport_get_alive(tc_viewport_handle h) {
-    if (!g_pool) return NULL;
-    if (h.index >= g_pool->capacity) return NULL;
-    tc_viewport* vp = &g_pool->items[h.index];
-    if (!vp->alive || vp->generation != h.generation) return NULL;
-    return vp;
+    if (!g_pool_initialized) return NULL;
+    const tc_handle pool_handle = {h.index, h.generation};
+    return (tc_viewport*)tc_pool_get(&g_pool, pool_handle);
 }
 
 void tc_viewport_pool_init(void) {
-    if (g_pool) {
+    if (g_pool_initialized) {
         tc_log_warn("[tc_viewport_pool] already initialized");
         return;
     }
-
-    g_pool = (ViewportPool*)calloc(1, sizeof(ViewportPool));
-    if (!g_pool) {
-        tc_log_error("[tc_viewport_pool] allocation failed");
-        return;
-    }
-
-    size_t cap = INITIAL_POOL_CAPACITY;
-
-    g_pool->items = (tc_viewport*)calloc(cap, sizeof(tc_viewport));
-    g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
-
-    if (!g_pool->items || !g_pool->free_stack) {
+    const tc_pool_config config = {
+        .max_capacity = MAX_VIEWPORTS,
+        .initial_generation = 0u,
+        .allocate_low_indices_first = true,
+        .name = "tc_viewport_pool",
+    };
+    if (!tc_pool_init_ex(
+            &g_pool,
+            sizeof(tc_viewport),
+            INITIAL_POOL_CAPACITY,
+            &config)) {
         tc_log_error("[tc_viewport_pool] storage allocation failed");
-        free(g_pool->items);
-        free(g_pool->free_stack);
-        free(g_pool);
-        g_pool = NULL;
         return;
     }
-
-    for (size_t i = 0; i < cap; i++) {
-        g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
-        viewport_init_empty(&g_pool->items[i], 0);
+    for (uint32_t i = 0; i < g_pool.capacity; ++i) {
+        viewport_init_empty(
+            (tc_viewport*)tc_pool_get_unchecked(&g_pool, i)
+        );
     }
-    g_pool->free_count = cap;
-    g_pool->capacity = cap;
-    g_pool->count = 0;
+    g_pool_initialized = true;
 }
 
 void tc_viewport_pool_shutdown(void) {
-    if (!g_pool) {
+    if (!g_pool_initialized) {
         tc_log_warn("[tc_viewport_pool] not initialized");
         return;
     }
 
-    for (size_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->items[i].alive) {
-            viewport_free_strings(&g_pool->items[i]);
+    for (uint32_t i = 0; i < g_pool.capacity; ++i) {
+        if (g_pool.states[i] == TC_SLOT_OCCUPIED) {
+            viewport_free_strings(
+                (tc_viewport*)tc_pool_get_unchecked(&g_pool, i)
+            );
         }
     }
 
-    free(g_pool->items);
-    free(g_pool->free_stack);
-    free(g_pool);
-    g_pool = NULL;
-}
-
-static void pool_grow(void) {
-    size_t old_cap = g_pool->capacity;
-    size_t new_cap = old_cap * 2;
-    if (new_cap > MAX_VIEWPORTS) new_cap = MAX_VIEWPORTS;
-    if (new_cap <= old_cap) {
-        tc_log_error("[tc_viewport_pool] max capacity reached");
-        return;
-    }
-
-    tc_viewport* new_items = (tc_viewport*)malloc(new_cap * sizeof(tc_viewport));
-    uint32_t* new_free_stack = (uint32_t*)malloc(new_cap * sizeof(uint32_t));
-    if (!new_items || !new_free_stack) {
-        tc_log_error("[tc_viewport_pool] grow allocation failed");
-        free(new_items);
-        free(new_free_stack);
-        return;
-    }
-
-    memcpy(new_items, g_pool->items, old_cap * sizeof(tc_viewport));
-    memcpy(new_free_stack, g_pool->free_stack, g_pool->free_count * sizeof(uint32_t));
-    free(g_pool->items);
-    free(g_pool->free_stack);
-    g_pool->items = new_items;
-    g_pool->free_stack = new_free_stack;
-    for (size_t i = old_cap; i < new_cap; i++) {
-        viewport_init_empty(&g_pool->items[i], 0);
-    }
-
-    for (size_t i = old_cap; i < new_cap; i++) {
-        g_pool->free_stack[g_pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
-    }
-
-    g_pool->capacity = new_cap;
+    tc_pool_free(&g_pool);
+    g_pool_initialized = false;
 }
 
 static inline bool handle_alive(tc_viewport_handle h) {
@@ -184,28 +130,22 @@ bool tc_viewport_alive(tc_viewport_handle h) {
 }
 
 tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
-    if (!g_pool) {
+    if (!g_pool_initialized) {
         tc_viewport_pool_init();
-        if (!g_pool) {
+        if (!g_pool_initialized) {
             return TC_VIEWPORT_HANDLE_INVALID;
         }
     }
 
-    if (g_pool->free_count == 0) {
-        pool_grow();
-        if (g_pool->free_count == 0) {
-            tc_log_error("[tc_viewport_pool] no free slots");
-            return TC_VIEWPORT_HANDLE_INVALID;
-        }
+    tc_handle pool_handle = tc_pool_alloc(&g_pool);
+    if (tc_handle_is_invalid(pool_handle)) {
+        tc_log_error("[tc_viewport_pool] no free slots");
+        return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    uint32_t idx = g_pool->free_stack[--g_pool->free_count];
-    tc_viewport* vp = &g_pool->items[idx];
-    uint32_t gen = vp->generation;
-
-    viewport_free_strings(vp);
-    viewport_init_empty(vp, gen);
-    vp->alive = true;
+    tc_viewport* vp =
+        (tc_viewport*)tc_pool_get_unchecked(&g_pool, pool_handle.index);
+    viewport_init_empty(vp);
     vp->name = tc_strdup_local(name);
     vp->render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     vp->scene = TC_SCENE_HANDLE_INVALID;
@@ -226,31 +166,26 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     vp->internal_entities = TC_ENTITY_HANDLE_INVALID;
     vp->display_prev = TC_VIEWPORT_HANDLE_INVALID;
     vp->display_next = TC_VIEWPORT_HANDLE_INVALID;
-    g_pool->count++;
-
-    tc_viewport_handle h = { idx, gen };
+    tc_viewport_handle h = {pool_handle.index, pool_handle.generation};
     return h;
 }
 
 void tc_viewport_pool_free(tc_viewport_handle h) {
     if (!handle_alive(h)) return;
-    uint32_t idx = h.index;
-    tc_viewport* vp = &g_pool->items[idx];
+    tc_viewport* vp =
+        (tc_viewport*)tc_pool_get_unchecked(&g_pool, h.index);
 
     viewport_free_strings(vp);
-
-    uint32_t next_generation = vp->generation + 1;
-    viewport_init_empty(vp, next_generation);
-    g_pool->free_stack[g_pool->free_count++] = idx;
-    g_pool->count--;
+    viewport_init_empty(vp);
+    const tc_handle pool_handle = {h.index, h.generation};
+    tc_pool_free_slot(&g_pool, pool_handle);
 }
 
 void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data) {
-    if (!g_pool || !callback) return;
-    for (uint32_t i = 0; i < g_pool->capacity; i++) {
-        tc_viewport* vp = &g_pool->items[i];
-        if (vp->alive) {
-            tc_viewport_handle h = { i, vp->generation };
+    if (!g_pool_initialized || !callback) return;
+    for (uint32_t i = 0; i < g_pool.capacity; ++i) {
+        if (g_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_viewport_handle h = {i, g_pool.generations[i]};
             if (!callback(h, user_data)) {
                 break;
             }
@@ -259,7 +194,7 @@ void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data
 }
 
 size_t tc_viewport_pool_count(void) {
-    return g_pool ? g_pool->count : 0;
+    return g_pool_initialized ? tc_pool_count(&g_pool) : 0u;
 }
 
 tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene) {

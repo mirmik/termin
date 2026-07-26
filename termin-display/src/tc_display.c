@@ -2,6 +2,7 @@
 #include "render/tc_display.h"
 #include "tc_display_input_router_internal.h"
 #include <tcbase/tc_log.h>
+#include <tcbase/tc_pool.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,8 +12,6 @@
 #define INITIAL_POOL_CAPACITY 16u
 
 typedef struct tc_display {
-    uint32_t generation;
-    bool alive;
     char* name;
     char* uuid;
     bool editor_only;
@@ -25,15 +24,8 @@ typedef struct tc_display {
     size_t viewport_count;
 } tc_display;
 
-typedef struct {
-    tc_display* items;
-    uint32_t* free_stack;
-    size_t free_count;
-    size_t capacity;
-    size_t count;
-} tc_display_pool;
-
-static tc_display_pool* g_display_pool = NULL;
+static tc_pool g_display_pool;
+static bool g_display_pool_initialized = false;
 
 // ============================================================================
 // Helper Functions
@@ -52,9 +44,8 @@ static void tc_display_strset(char** dest, const char* src) {
     *dest = tc_strdup(src);
 }
 
-static void tc_display_init_empty(tc_display* display, uint32_t generation) {
+static void tc_display_init_empty(tc_display* display) {
     memset(display, 0, sizeof(*display));
-    display->generation = generation;
     display->first_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
 }
@@ -93,56 +84,23 @@ static bool tc_display_destroy_owned_surface(
 }
 
 static tc_display* tc_display_get_alive(tc_display_handle handle, const char* operation) {
-    if (!g_display_pool) {
+    if (!g_display_pool_initialized) {
         tc_log(TC_LOG_ERROR, "[%s] display pool is not initialized", operation);
         return NULL;
     }
-    if (!tc_display_handle_valid(handle) || handle.index >= g_display_pool->capacity) {
+    if (!tc_display_handle_valid(handle) ||
+        handle.index >= g_display_pool.capacity) {
         tc_log(TC_LOG_ERROR, "[%s] invalid display handle (%u, %u)", operation,
                handle.index, handle.generation);
         return NULL;
     }
-    tc_display* display = &g_display_pool->items[handle.index];
-    if (!display->alive || display->generation != handle.generation) {
+    tc_handle pool_handle = {handle.index, handle.generation};
+    if (!tc_pool_is_valid(&g_display_pool, pool_handle)) {
         tc_log(TC_LOG_ERROR, "[%s] stale display handle (%u, %u)", operation,
                handle.index, handle.generation);
         return NULL;
     }
-    return display;
-}
-
-static bool tc_display_pool_grow(void) {
-    size_t old_capacity = g_display_pool->capacity;
-    size_t new_capacity = old_capacity * 2u;
-    if (new_capacity > MAX_DISPLAYS) new_capacity = MAX_DISPLAYS;
-    if (new_capacity <= old_capacity) {
-        tc_log(TC_LOG_ERROR, "[tc_display_pool] max capacity reached");
-        return false;
-    }
-
-    tc_display* items = (tc_display*)malloc(new_capacity * sizeof(tc_display));
-    uint32_t* free_stack = (uint32_t*)malloc(new_capacity * sizeof(uint32_t));
-    if (!items || !free_stack) {
-        tc_log(TC_LOG_ERROR, "[tc_display_pool] grow allocation failed");
-        free(items);
-        free(free_stack);
-        return false;
-    }
-
-    memcpy(items, g_display_pool->items, old_capacity * sizeof(tc_display));
-    memcpy(free_stack, g_display_pool->free_stack,
-           g_display_pool->free_count * sizeof(uint32_t));
-    free(g_display_pool->items);
-    free(g_display_pool->free_stack);
-    g_display_pool->items = items;
-    g_display_pool->free_stack = free_stack;
-    for (size_t i = old_capacity; i < new_capacity; ++i) {
-        tc_display_init_empty(&g_display_pool->items[i], 0u);
-        g_display_pool->free_stack[g_display_pool->free_count++] =
-            (uint32_t)(new_capacity - 1u - (i - old_capacity));
-    }
-    g_display_pool->capacity = new_capacity;
-    return true;
+    return (tc_display*)tc_pool_get_unchecked(&g_display_pool, handle.index);
 }
 
 // ============================================================================
@@ -150,34 +108,30 @@ static bool tc_display_pool_grow(void) {
 // ============================================================================
 
 void tc_display_pool_init(void) {
-    if (g_display_pool) {
+    if (g_display_pool_initialized) {
         tc_log(TC_LOG_WARN, "[tc_display_pool] already initialized");
         return;
     }
-    g_display_pool = (tc_display_pool*)calloc(1, sizeof(tc_display_pool));
-    if (!g_display_pool) {
-        tc_log(TC_LOG_ERROR, "[tc_display_pool] allocation failed");
-        return;
-    }
-    g_display_pool->capacity = INITIAL_POOL_CAPACITY;
-    g_display_pool->items = (tc_display*)calloc(
-        g_display_pool->capacity, sizeof(tc_display));
-    g_display_pool->free_stack = (uint32_t*)malloc(
-        g_display_pool->capacity * sizeof(uint32_t));
-    if (!g_display_pool->items || !g_display_pool->free_stack) {
+    const tc_pool_config config = {
+        .max_capacity = MAX_DISPLAYS,
+        .initial_generation = 0u,
+        .allocate_low_indices_first = true,
+        .name = "tc_display_pool",
+    };
+    if (!tc_pool_init_ex(
+            &g_display_pool,
+            sizeof(tc_display),
+            INITIAL_POOL_CAPACITY,
+            &config)) {
         tc_log(TC_LOG_ERROR, "[tc_display_pool] storage allocation failed");
-        free(g_display_pool->items);
-        free(g_display_pool->free_stack);
-        free(g_display_pool);
-        g_display_pool = NULL;
         return;
     }
-    for (size_t i = 0; i < g_display_pool->capacity; ++i) {
-        tc_display_init_empty(&g_display_pool->items[i], 0u);
-        g_display_pool->free_stack[i] =
-            (uint32_t)(g_display_pool->capacity - 1u - i);
+    for (uint32_t i = 0; i < g_display_pool.capacity; ++i) {
+        tc_display_init_empty(
+            (tc_display*)tc_pool_get_unchecked(&g_display_pool, i)
+        );
     }
-    g_display_pool->free_count = g_display_pool->capacity;
+    g_display_pool_initialized = true;
 }
 
 static void tc_display_cleanup(tc_display_handle handle, tc_display* display) {
@@ -205,52 +159,50 @@ static void tc_display_cleanup(tc_display_handle handle, tc_display* display) {
 }
 
 void tc_display_pool_shutdown(void) {
-    if (!g_display_pool) return;
-    if (g_display_pool->count != 0u) {
+    if (!g_display_pool_initialized) return;
+    if (tc_pool_count(&g_display_pool) != 0u) {
         tc_log(TC_LOG_ERROR, "[tc_display_pool] shutdown with %zu live display(s)",
-               g_display_pool->count);
+               (size_t)tc_pool_count(&g_display_pool));
     }
-    for (uint32_t i = 0; i < g_display_pool->capacity; ++i) {
-        tc_display* display = &g_display_pool->items[i];
-        if (display->alive) {
-            tc_display_handle handle = {i, display->generation};
+    for (uint32_t i = 0; i < g_display_pool.capacity; ++i) {
+        if (g_display_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_display* display =
+                (tc_display*)tc_pool_get_unchecked(&g_display_pool, i);
+            tc_display_handle handle = {i, g_display_pool.generations[i]};
             tc_display_cleanup(handle, display);
         }
     }
-    free(g_display_pool->items);
-    free(g_display_pool->free_stack);
-    free(g_display_pool);
-    g_display_pool = NULL;
+    tc_pool_free(&g_display_pool);
+    g_display_pool_initialized = false;
 }
 
 bool tc_display_alive(tc_display_handle handle) {
-    if (!g_display_pool || !tc_display_handle_valid(handle) ||
-        handle.index >= g_display_pool->capacity) return false;
-    tc_display* display = &g_display_pool->items[handle.index];
-    return display->alive && display->generation == handle.generation;
+    const tc_handle pool_handle = {handle.index, handle.generation};
+    return g_display_pool_initialized &&
+        tc_display_handle_valid(handle) &&
+        tc_pool_is_valid(&g_display_pool, pool_handle);
 }
 
 size_t tc_display_pool_count(void) {
-    return g_display_pool ? g_display_pool->count : 0u;
+    return g_display_pool_initialized ? tc_pool_count(&g_display_pool) : 0u;
 }
 
 tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
-    if (!g_display_pool) {
+    if (!g_display_pool_initialized) {
         tc_log(TC_LOG_ERROR, "[tc_display_new] display pool is not initialized");
         return TC_DISPLAY_HANDLE_INVALID;
     }
     if (!tc_display_surface_can_be_adopted(surface, "tc_display_new")) {
         return TC_DISPLAY_HANDLE_INVALID;
     }
-    if (g_display_pool->free_count == 0u && !tc_display_pool_grow()) {
+    tc_handle pool_handle = tc_pool_alloc(&g_display_pool);
+    if (tc_handle_is_invalid(pool_handle)) {
         return TC_DISPLAY_HANDLE_INVALID;
     }
-    uint32_t index = g_display_pool->free_stack[--g_display_pool->free_count];
-    tc_display* display = &g_display_pool->items[index];
-    uint32_t generation = display->generation;
-    tc_display_init_empty(display, generation);
-    display->alive = true;
-    tc_display_handle handle = {index, generation};
+    tc_display* display =
+        (tc_display*)tc_pool_get_unchecked(&g_display_pool, pool_handle.index);
+    tc_display_init_empty(display);
+    tc_display_handle handle = {pool_handle.index, pool_handle.generation};
 
     display->name = tc_strdup(name ? name : "Display");
     display->uuid = NULL;
@@ -262,8 +214,8 @@ tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
     if (!display->input_endpoint) {
         tc_log(TC_LOG_ERROR, "[tc_display_new] input endpoint allocation failed");
         free(display->name);
-        tc_display_init_empty(display, generation + 1u);
-        g_display_pool->free_stack[g_display_pool->free_count++] = index;
+        tc_display_init_empty(display);
+        tc_pool_free_slot(&g_display_pool, pool_handle);
         return TC_DISPLAY_HANDLE_INVALID;
     }
     display->first_viewport = TC_VIEWPORT_HANDLE_INVALID;
@@ -274,8 +226,8 @@ tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
         tc_log(TC_LOG_ERROR, "[tc_display_new] surface attachment failed");
         tc_display_input_router_destroy(display->input_endpoint);
         free(display->name);
-        tc_display_init_empty(display, generation + 1u);
-        g_display_pool->free_stack[g_display_pool->free_count++] = index;
+        tc_display_init_empty(display);
+        tc_pool_free_slot(&g_display_pool, pool_handle);
         return TC_DISPLAY_HANDLE_INVALID;
     }
     if (surface) {
@@ -284,19 +236,16 @@ tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
         surface->on_resize_userdata = surface;
     }
 
-    g_display_pool->count++;
     return handle;
 }
 
 bool tc_display_free(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_free");
     if (!display) return false;
-    uint32_t generation = display->generation;
     tc_display_cleanup(handle, display);
-    tc_display_init_empty(display, generation + 1u);
-    g_display_pool->free_stack[g_display_pool->free_count++] = handle.index;
-    g_display_pool->count--;
-    return true;
+    tc_display_init_empty(display);
+    const tc_handle pool_handle = {handle.index, handle.generation};
+    return tc_pool_free_slot(&g_display_pool, pool_handle);
 }
 
 // ============================================================================

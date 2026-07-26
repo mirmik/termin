@@ -1,7 +1,9 @@
 #include "termin/render/tc_display_handle.hpp"
 
-#include <cassert>
+#include <cstdlib>
 #include <vector>
+
+#define CHECK(condition) do { if (!(condition)) std::abort(); } while (0)
 
 namespace {
 
@@ -45,22 +47,22 @@ int main() {
     tc_display_pool_init();
 
     tc_display_handle first = tc_display_new("first", nullptr);
-    assert(tc_display_alive(first));
+    CHECK(tc_display_alive(first));
     {
         termin::TcDisplay original(first);
         termin::TcDisplay copy = original;
-        assert(original.is_valid());
-        assert(copy.is_valid());
+        CHECK(original.is_valid());
+        CHECK(copy.is_valid());
     }
-    assert(tc_display_alive(first));
-    assert(tc_display_free(first));
-    assert(!tc_display_alive(first));
-    assert(!tc_display_free(first));
+    CHECK(tc_display_alive(first));
+    CHECK(tc_display_free(first));
+    CHECK(!tc_display_alive(first));
+    CHECK(!tc_display_free(first));
 
     tc_display_handle reused = tc_display_new("reused", nullptr);
-    assert(reused.index == first.index);
-    assert(reused.generation != first.generation);
-    assert(tc_display_get_name(first) == nullptr);
+    CHECK(reused.index == first.index);
+    CHECK(reused.generation != first.generation);
+    CHECK(tc_display_get_name(first) == nullptr);
 
     auto* fixed = new FixedSurface;
     tc_render_surface_init(&fixed->surface, &surface_vtable, delete_surface);
@@ -70,9 +72,14 @@ int main() {
     tc_display_add_viewport(resized, viewport);
 
     std::vector<tc_display_handle> growth;
-    for (int i = 0; i < 20; ++i) {
-        growth.push_back(tc_display_new("growth", nullptr));
+    for (int i = 0; i < 254; ++i) {
+        tc_display_handle handle = tc_display_new("growth", nullptr);
+        CHECK(tc_display_handle_valid(handle));
+        growth.push_back(handle);
     }
+    CHECK(tc_display_pool_count() == 256u);
+    CHECK(!tc_display_handle_valid(tc_display_new("over-capacity", nullptr)));
+    CHECK(tc_display_pool_count() == 256u);
     fixed->width = 640;
     fixed->height = 360;
     tc_render_surface_notify_resize(&fixed->surface, fixed->width, fixed->height);
@@ -81,13 +88,19 @@ int main() {
     int width = 0;
     int height = 0;
     tc_viewport_get_pixel_rect(viewport, &x, &y, &width, &height);
-    assert(width == 640);
-    assert(height == 360);
+    CHECK(width == 640);
+    CHECK(height == 360);
 
-    assert(tc_display_free(resized));
-    for (tc_display_handle handle : growth) assert(tc_display_free(handle));
-    assert(tc_display_free(reused));
-    assert(tc_display_pool_count() == 0u);
+    CHECK(tc_display_free(resized));
+    CHECK(!tc_viewport_alive(viewport));
+    tc_viewport_handle reused_viewport =
+        tc_viewport_new("reused-viewport", TC_SCENE_HANDLE_INVALID);
+    CHECK(reused_viewport.index == viewport.index);
+    CHECK(reused_viewport.generation != viewport.generation);
+    tc_viewport_free(reused_viewport);
+    for (tc_display_handle handle : growth) CHECK(tc_display_free(handle));
+    CHECK(tc_display_free(reused));
+    CHECK(tc_display_pool_count() == 0u);
     tc_display_pool_shutdown();
     return 0;
 }
