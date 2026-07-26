@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 
+#include <inspect/tc_runtime_type_registry.h>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
@@ -98,6 +99,30 @@ void* component_object_ptr(tc_component* component) {
 
 std::unordered_set<std::string> make_type_filter(const std::vector<std::string>& type_names) {
     return std::unordered_set<std::string>(type_names.begin(), type_names.end());
+}
+
+struct RegisteredComponentSnapshot {
+    std::vector<tc_component*> components;
+    std::unordered_set<tc_component*> seen;
+    bool allocation_failed = false;
+};
+
+bool collect_registered_component(void* instance, void* user_data) {
+    auto* snapshot = static_cast<RegisteredComponentSnapshot*>(user_data);
+    auto* component = static_cast<tc_component*>(instance);
+    if (snapshot == nullptr || component == nullptr) {
+        return false;
+    }
+
+    try {
+        if (snapshot->seen.insert(component).second) {
+            snapshot->components.push_back(component);
+        }
+    } catch (...) {
+        snapshot->allocation_failed = true;
+        return false;
+    }
+    return true;
 }
 
 bool prepare_component_replacement(
@@ -531,6 +556,119 @@ bool prepare_components_to_unknown(
     if (!prepared.validate(error)) {
         tc::Log::error(
             "[UnknownComponent] Prepared plan is stale before publication: %s",
+            error ? error->c_str() : "unknown validation error"
+        );
+        return false;
+    }
+    plan = std::move(prepared);
+    return true;
+}
+
+bool prepare_registered_components_to_unknown(
+    const std::vector<std::string>& type_names,
+    UnknownComponentDegradationPlan& plan,
+    std::string* error,
+    const UnknownComponentPreparationHooks& hooks
+) {
+    if (error) error->clear();
+
+    RegisteredComponentSnapshot snapshot;
+    std::unordered_set<std::string> visited_types;
+    try {
+        for (const std::string& type_name : type_names) {
+            if (type_name.empty() || !visited_types.insert(type_name).second) {
+                continue;
+            }
+            tc_runtime_type_registry_foreach_instance(
+                type_name.c_str(),
+                collect_registered_component,
+                &snapshot
+            );
+            if (snapshot.allocation_failed) {
+                if (error) {
+                    *error = "Failed to allocate registered component snapshot";
+                }
+                return false;
+            }
+        }
+    } catch (const std::exception& exception) {
+        if (error) {
+            *error = "Exception while collecting registered components: " +
+                std::string(exception.what());
+        }
+        tc::Log::error(
+            "[UnknownComponent] Exception while collecting registered components: %s",
+            exception.what()
+        );
+        return false;
+    } catch (...) {
+        if (error) {
+            *error = "Unknown exception while collecting registered components";
+        }
+        tc::Log::error(
+            "[UnknownComponent] Unknown exception while collecting registered components"
+        );
+        return false;
+    }
+
+    UnknownComponentDegradationPlan prepared;
+    try {
+        for (tc_component* component : snapshot.components) {
+            if (component == nullptr || is_unknown_component(component)) {
+                continue;
+            }
+
+            const char* type_name = tc_component_type_name(component);
+            const Entity entity(component->owner);
+            tc_component* replacement = nullptr;
+            std::string entry_error;
+            if (!prepare_component_replacement(
+                    entity,
+                    component,
+                    hooks,
+                    &replacement,
+                    &entry_error)) {
+                if (error) {
+                    *error = "Failed to prepare registered component '" +
+                        std::string(type_name ? type_name : "<unknown>") +
+                        "': " + entry_error;
+                }
+                tc::Log::error(
+                    "[UnknownComponent] %s",
+                    error ? error->c_str() : entry_error.c_str()
+                );
+                return false;
+            }
+            prepared._impl->entries.push_back({
+                entity,
+                entity.component_index(component),
+                component,
+                replacement
+            });
+        }
+    } catch (const std::exception& exception) {
+        if (error) {
+            *error = "Exception while preparing registered component degradation: " +
+                std::string(exception.what());
+        }
+        tc::Log::error(
+            "[UnknownComponent] Exception while preparing registered degradation: %s",
+            exception.what()
+        );
+        return false;
+    } catch (...) {
+        if (error) {
+            *error = "Unknown exception while preparing registered component degradation";
+        }
+        tc::Log::error(
+            "[UnknownComponent] Unknown exception while preparing registered degradation"
+        );
+        return false;
+    }
+
+    if (!prepared.validate(error)) {
+        tc::Log::error(
+            "[UnknownComponent] Registered degradation plan is stale before publication: %s",
             error ? error->c_str() : "unknown validation error"
         );
         return false;

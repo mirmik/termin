@@ -95,6 +95,12 @@ private:
         std::string*,
         const UnknownComponentPreparationHooks&
     );
+    friend ENTITY_API bool prepare_registered_components_to_unknown(
+        const std::vector<std::string>&,
+        UnknownComponentDegradationPlan&,
+        std::string*,
+        const UnknownComponentPreparationHooks&
+    );
 };
 
 // Serialize and construct every replacement across all supplied scenes without
@@ -102,6 +108,16 @@ private:
 // identity again before publishing its in-place replacements.
 ENTITY_API bool prepare_components_to_unknown(
     const std::vector<TcSceneRef>& scenes,
+    const std::vector<std::string>& type_names,
+    UnknownComponentDegradationPlan& plan,
+    std::string* error = nullptr,
+    const UnknownComponentPreparationHooks& hooks = {}
+);
+
+// Serialize and construct replacements for every live instance linked to the
+// requested runtime component types. This is the canonical module-unload path:
+// it does not depend on a separately maintained scene inventory.
+ENTITY_API bool prepare_registered_components_to_unknown(
     const std::vector<std::string>& type_names,
     UnknownComponentDegradationPlan& plan,
     std::string* error = nullptr,

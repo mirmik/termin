@@ -80,21 +80,6 @@ bool prepare_component_unload_for_runtime_type(
         return true;
     }
 
-    if (!unload_context->scenes || unload_context->scenes->empty()) {
-        const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
-        if (remaining == 0) {
-            return true;
-        }
-        tc::Log::error(
-            "TermModulesIntegration: cannot prepare component type '%s' for module '%s': "
-            "no managed scenes are available while %zu live instance(s) remain",
-            type_name,
-            unload_context->module_id ? unload_context->module_id : "<unknown>",
-            remaining
-        );
-        return false;
-    }
-
     if (!unload_context->component_batch_attempted) {
         unload_context->component_batch_attempted = true;
         const std::vector<std::string> type_names =
@@ -102,8 +87,7 @@ bool prepare_component_unload_for_runtime_type(
                 unload_context->module_id ? unload_context->module_id : "");
         UnknownComponentDegradationPlan plan;
         std::string error;
-        unload_context->component_batch_ok = prepare_components_to_unknown(
-            *unload_context->scenes,
+        unload_context->component_batch_ok = prepare_registered_components_to_unknown(
             type_names,
             plan,
             &error

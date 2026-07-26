@@ -356,6 +356,15 @@ int run_cpp_module_hot_reload_smoke() {
     TEST_ASSERT(std::string(upgraded_pass->pass_name) == "module-pass",
                 "pass slot identity survives reload roundtrip");
 
+    termin::TcSceneRef unmanaged_scene =
+        termin::TcSceneRef::create("cpp-hot-reload-unmanaged");
+    termin::Entity unmanaged_entity = unmanaged_scene.create_entity("unmanaged-entity");
+    tc_component* unmanaged_component = tc_component_registry_create(kComponentType);
+    TEST_ASSERT(unmanaged_component != nullptr,
+                "native component instance created outside SceneManager");
+    set_component_int_field(unmanaged_component, "value", 91);
+    unmanaged_entity.add_component_ptr(unmanaged_component);
+
     TEST_ASSERT(runtime.unload_module(kModuleId), runtime.last_error());
     TEST_ASSERT(!termin::ComponentRegistry::instance().has(kComponentType),
                 "native component unregistered before native close");
@@ -371,6 +380,10 @@ int run_cpp_module_hot_reload_smoke() {
                 "live component degraded during unload");
     TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") != nullptr,
                 "UnknownComponent remains after unloaded module");
+    TEST_ASSERT(unmanaged_entity.get_component_by_type_name(kComponentType) == nullptr,
+                "runtime-list unload finds component outside SceneManager");
+    TEST_ASSERT(unmanaged_entity.get_component_by_type_name("UnknownComponent") != nullptr,
+                "component outside SceneManager degrades to UnknownComponent");
     TEST_ASSERT(!tc_pass_registry_has(kPassType), "native pass unregistered before native close");
     TEST_ASSERT(!tc_runtime_type_registry_has_type(kPassType),
                 "pass runtime type record removed on module unload");
@@ -404,6 +417,7 @@ int run_cpp_module_hot_reload_smoke() {
                 engine_probe_error.c_str());
     TEST_ASSERT(engine_owned_component_probe_intact("failed module load", engine_component_error),
                 engine_component_error.c_str());
+    unmanaged_scene.destroy();
     std::filesystem::rename(broken_artifact, artifact);
 
     TEST_ASSERT(runtime.load_module(kModuleId), runtime.last_error());

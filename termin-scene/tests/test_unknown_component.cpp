@@ -150,29 +150,23 @@ bool register_owner_scoped_component(const char* owner) {
     return descriptor.commit();
 }
 
-struct PrepareUnloadTestContext {
-    std::vector<termin::TcSceneRef> scenes;
-};
-
 bool prepare_component_unload_for_test(
     const char* type_name,
-    void* context,
+    void*,
     void*
 ) {
-    auto* unload_context = static_cast<PrepareUnloadTestContext*>(context);
-    if (!type_name || !unload_context) {
+    if (!type_name) {
         return false;
     }
 
-    for (const termin::TcSceneRef& scene : unload_context->scenes) {
-        termin::UnknownComponentStats stats =
-            termin::degrade_components_to_unknown(scene, {type_name});
-        if (stats.failed > 0) {
-            return false;
-        }
+    termin::UnknownComponentDegradationPlan plan;
+    std::string error;
+    if (!termin::prepare_registered_components_to_unknown(
+            {type_name}, plan, &error)) {
+        return false;
     }
-
-    return tc_component_registry_instance_count(type_name) == 0;
+    return plan.commit(&error) &&
+        tc_component_registry_instance_count(type_name) == 0;
 }
 
 int test_module_owner_registration_cleanup() {
@@ -244,13 +238,12 @@ int test_module_owner_cleanup_prepares_live_components() {
     TEST_ASSERT(tc_component_registry_instance_count("OwnerScopedComponent") == 1,
                 "owned component live instance linked");
 
-    PrepareUnloadTestContext context{{scene}};
     tc_component_registry_set_prepare_unload_callback(
         prepare_component_unload_for_test,
         nullptr
     );
     const size_t removed =
-        tc_runtime_type_registry_unregister_owner_with_context(module_id, &context);
+        tc_runtime_type_registry_unregister_owner_with_context(module_id, nullptr);
     tc_component_registry_set_prepare_unload_callback(nullptr, nullptr);
 
     TEST_ASSERT(removed == 1, "runtime owner cleanup removed prepared type");
@@ -277,6 +270,48 @@ int test_module_owner_cleanup_prepares_live_components() {
 
     scene.destroy();
     std::cout << "  Module owner cleanup prepare: PASS\n";
+    return 0;
+}
+
+int test_registered_component_degradation_uses_runtime_instance_lists() {
+    std::cout << "Testing registered-instance UnknownComponent degradation...\n";
+
+    termin::TcSceneRef first = termin::TcSceneRef::create("registered_first");
+    termin::TcSceneRef second = termin::TcSceneRef::create("registered_second");
+    termin::Entity first_entity = first.create_entity("first");
+    termin::Entity second_entity = second.create_entity("second");
+
+    auto* first_component =
+        create_registered_component<ReloadableComponent>("ReloadableComponent");
+    auto* second_component =
+        create_registered_component<ReloadableComponent>("ReloadableComponent");
+    TEST_ASSERT(first_component && second_component,
+                "registered-list components created");
+    first_component->value = 17;
+    second_component->value = 29;
+    first_entity.add_component(first_component);
+    second_entity.add_component(second_component);
+    TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == 2,
+                "both runtime instances linked");
+
+    termin::UnknownComponentDegradationPlan plan;
+    std::string error;
+    TEST_ASSERT(termin::prepare_registered_components_to_unknown(
+                    {"ReloadableComponent"}, plan, &error),
+                "registered-list component batch prepared");
+    TEST_ASSERT(plan.size() == 2,
+                "plan includes instances from both scenes without scene inventory");
+    TEST_ASSERT(plan.commit(&error), "registered-list component batch committed");
+    TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == 0,
+                "runtime component list is empty after commit");
+    TEST_ASSERT(first_entity.get_component_by_type_name("UnknownComponent") != nullptr,
+                "first scene component degraded");
+    TEST_ASSERT(second_entity.get_component_by_type_name("UnknownComponent") != nullptr,
+                "second scene component degraded");
+
+    first.destroy();
+    second.destroy();
+    std::cout << "  Registered-instance degradation: PASS\n";
     return 0;
 }
 
@@ -1004,6 +1039,7 @@ int main() {
     result |= test_custom_upgrade_from_unregistered_source_type();
     result |= test_module_owner_registration_cleanup();
     result |= test_module_owner_cleanup_prepares_live_components();
+    result |= test_registered_component_degradation_uses_runtime_instance_lists();
     result |= test_component_degradation_prepare_is_all_or_zero();
     result |= test_component_degradation_rejects_stale_plan();
     result |= test_component_is_a_after_rejected_parent_cycle();
