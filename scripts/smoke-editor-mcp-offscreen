@@ -1,0 +1,552 @@
+#!/usr/bin/env python3
+"""Exercise two isolated no-display editor MCP sessions and PNG readback."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import zlib
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+@dataclass
+class EditorInstance:
+    name: str
+    root: Path
+    project_file: Path
+    session_file: Path
+    screenshot_file: Path
+    log_file: Path
+    process: subprocess.Popen[str]
+    log_stream: object
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _write_project(project_root: Path, name: str) -> Path:
+    project_root.mkdir(parents=True)
+    project_file = project_root / f"{name}.terminproj"
+    project_file.write_text(
+        json.dumps({"version": 1, "name": name}, indent=2),
+        encoding="utf-8",
+    )
+    (project_root / "Main.scene").write_text(
+        json.dumps({"scene": {"entities": []}}, indent=2),
+        encoding="utf-8",
+    )
+    settings = project_root / "project_settings"
+    settings.mkdir()
+    (settings / "project.json").write_text(
+        json.dumps(
+            {
+                "render_sync_mode": "none",
+                "build_output_dir": "dist",
+                "ignored_resource_paths": [],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (settings / ".editor_state.json").write_text(
+        json.dumps({"last_scene": str(project_root / "Main.scene")}, indent=2),
+        encoding="utf-8",
+    )
+    return project_file
+
+
+def _launch_instance(
+    *,
+    name: str,
+    root: Path,
+    editor: Path,
+    sdk_root: Path,
+    width: int,
+    height: int,
+) -> EditorInstance:
+    instance_root = root / name
+    instance_root.mkdir()
+    project_file = _write_project(instance_root / "project", name)
+    session_file = instance_root / "session.json"
+    screenshot_file = instance_root / "capture.png"
+    log_file = instance_root / "editor.log"
+    home = instance_root / "home"
+    home.mkdir()
+
+    environment = os.environ.copy()
+    for key in ("DISPLAY", "WAYLAND_DISPLAY", "SDL_VIDEODRIVER"):
+        environment.pop(key, None)
+    environment.update(
+        {
+            "HOME": str(home),
+            "TERMIN_SDK": str(sdk_root),
+            "TERMIN_EDITOR_MCP": "1",
+            "TERMIN_EDITOR_MCP_PORT": "0",
+            "TERMIN_EDITOR_MCP_SESSION_FILE": str(session_file),
+        }
+    )
+    command = [
+        str(editor),
+        str(project_file),
+        "--headless",
+        "--offscreen-size",
+        f"{width}x{height}",
+        "--offscreen-backend",
+        "vulkan",
+        "--frames",
+        "1000000",
+    ]
+    log_stream = log_file.open("w", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=_repo_root(),
+            env=environment,
+            stdout=log_stream,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+    except Exception:
+        log_stream.close()
+        raise
+    print(f"[offscreen-mcp-smoke] {name} pid: {process.pid}", flush=True)
+    print(f"[offscreen-mcp-smoke] {name} log: {log_file}", flush=True)
+    return EditorInstance(
+        name=name,
+        root=instance_root,
+        project_file=project_file,
+        session_file=session_file,
+        screenshot_file=screenshot_file,
+        log_file=log_file,
+        process=process,
+        log_stream=log_stream,
+    )
+
+
+def _run_helper(
+    helper: Path,
+    instance: EditorInstance,
+    command: list[str],
+    *,
+    timeout: float = 35.0,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(helper), "--session", str(instance.session_file), *command],
+        cwd=_repo_root(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _wait_for_mcp(
+    helper: Path,
+    instance: EditorInstance,
+    timeout: float,
+) -> None:
+    deadline = time.monotonic() + timeout
+    last_output = ""
+    while time.monotonic() < deadline:
+        if instance.process.poll() is not None:
+            raise SmokeError(
+                f"{instance.name} exited before MCP became ready, "
+                f"code={instance.process.returncode}"
+            )
+        result = _run_helper(helper, instance, ["tools-list"])
+        last_output = result.stdout
+        if result.returncode == 0:
+            return
+        time.sleep(0.25)
+    raise SmokeError(
+        f"{instance.name} MCP did not become ready within {timeout:.1f}s:\n"
+        f"{last_output}"
+    )
+
+
+def _require_success(
+    result: subprocess.CompletedProcess[str],
+    description: str,
+) -> str:
+    if result.returncode != 0:
+        raise SmokeError(
+            f"{description} failed with code {result.returncode}:\n{result.stdout}"
+        )
+    return result.stdout
+
+
+def _load_safe_session(instance: EditorInstance) -> dict[str, object]:
+    try:
+        descriptor = json.loads(instance.session_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SmokeError(
+            f"{instance.name} has an invalid MCP descriptor: {error}"
+        ) from error
+    required = ("instance_id", "pid", "project_path", "url", "token")
+    missing = [key for key in required if not descriptor.get(key)]
+    if missing:
+        raise SmokeError(
+            f"{instance.name} MCP descriptor is missing fields: {missing}"
+        )
+    if int(descriptor["pid"]) != instance.process.pid:
+        raise SmokeError(
+            f"{instance.name} descriptor pid does not match its editor process"
+        )
+    project_path = Path(str(descriptor["project_path"])).resolve()
+    if project_path != instance.project_file.parent.resolve():
+        raise SmokeError(
+            f"{instance.name} descriptor selected the wrong project: {project_path}"
+        )
+    return descriptor
+
+
+def _parse_probe(output: str, instance: EditorInstance) -> None:
+    marker = "__TERMIN_OFFSCREEN_MCP_PROBE__"
+    line = next(
+        (candidate for candidate in output.splitlines() if candidate.startswith(marker)),
+        None,
+    )
+    if line is None:
+        raise SmokeError(f"{instance.name} probe marker is absent:\n{output}")
+    try:
+        payload = json.loads(line[len(marker) :])
+    except json.JSONDecodeError as error:
+        raise SmokeError(f"{instance.name} probe returned invalid JSON") from error
+    if Path(payload.get("project_path", "")).resolve() != instance.project_file.parent.resolve():
+        raise SmokeError(f"{instance.name} MCP probe reached the wrong project")
+    if not payload.get("has_scene"):
+        raise SmokeError(f"{instance.name} MCP probe found no loaded scene")
+    if payload.get("editor_type") != "OffscreenEditorContent":
+        raise SmokeError(
+            f"{instance.name} is not using production offscreen editor content: "
+            f"{payload.get('editor_type')}"
+        )
+    if payload.get("composition_type") != "OffscreenGuiComposition":
+        raise SmokeError(
+            f"{instance.name} is not using OffscreenGuiComposition: "
+            f"{payload.get('composition_type')}"
+        )
+    if payload.get("forbidden_window_modules"):
+        raise SmokeError(
+            f"{instance.name} loaded window integration in headless mode: "
+            f"{payload['forbidden_window_modules']}"
+        )
+
+
+def _paeth(left: int, up: int, upper_left: int) -> int:
+    prediction = left + up - upper_left
+    left_distance = abs(prediction - left)
+    up_distance = abs(prediction - up)
+    upper_left_distance = abs(prediction - upper_left)
+    if left_distance <= up_distance and left_distance <= upper_left_distance:
+        return left
+    if up_distance <= upper_left_distance:
+        return up
+    return upper_left
+
+
+def _require_non_empty_rgba8_png(
+    path: Path,
+    *,
+    expected_width: int,
+    expected_height: int,
+) -> None:
+    data = path.read_bytes()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise SmokeError(f"capture is not a PNG file: {path}")
+    offset = 8
+    idat = bytearray()
+    width = height = bit_depth = color_type = interlace = -1
+    while offset < len(data):
+        if offset + 12 > len(data):
+            raise SmokeError(f"capture has a truncated PNG chunk: {path}")
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        kind = data[offset + 4 : offset + 8]
+        payload_start = offset + 8
+        payload_end = payload_start + length
+        if payload_end + 4 > len(data):
+            raise SmokeError(f"capture has a truncated PNG payload: {path}")
+        payload = data[payload_start:payload_end]
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type, _compression, _filter, interlace = (
+                struct.unpack(">IIBBBBB", payload)
+            )
+        elif kind == b"IDAT":
+            idat.extend(payload)
+        elif kind == b"IEND":
+            break
+        offset = payload_end + 4
+    if (width, height) != (expected_width, expected_height):
+        raise SmokeError(
+            f"capture extent is {width}x{height}, expected "
+            f"{expected_width}x{expected_height}: {path}"
+        )
+    if (bit_depth, color_type, interlace) != (8, 6, 0):
+        raise SmokeError(
+            f"capture PNG must be non-interlaced RGBA8, got "
+            f"depth={bit_depth}, type={color_type}, interlace={interlace}"
+        )
+    try:
+        raw = zlib.decompress(bytes(idat))
+    except zlib.error as error:
+        raise SmokeError(f"capture has invalid compressed pixels: {path}") from error
+    stride = width * 4
+    if len(raw) != height * (stride + 1):
+        raise SmokeError(f"capture has an unexpected decoded size: {path}")
+
+    previous = bytearray(stride)
+    colors: set[bytes] = set()
+    has_visible_pixel = False
+    for row_index in range(height):
+        start = row_index * (stride + 1)
+        filter_type = raw[start]
+        encoded = raw[start + 1 : start + 1 + stride]
+        reconstructed = bytearray(stride)
+        for index, value in enumerate(encoded):
+            left = reconstructed[index - 4] if index >= 4 else 0
+            up = previous[index]
+            upper_left = previous[index - 4] if index >= 4 else 0
+            if filter_type == 0:
+                filtered = value
+            elif filter_type == 1:
+                filtered = value + left
+            elif filter_type == 2:
+                filtered = value + up
+            elif filter_type == 3:
+                filtered = value + ((left + up) // 2)
+            elif filter_type == 4:
+                filtered = value + _paeth(left, up, upper_left)
+            else:
+                raise SmokeError(f"capture uses unsupported PNG filter {filter_type}")
+            reconstructed[index] = filtered & 0xFF
+        for index in range(0, stride, 4):
+            pixel = bytes(reconstructed[index : index + 4])
+            colors.add(pixel)
+            has_visible_pixel = has_visible_pixel or pixel[3] != 0
+            if len(colors) > 1 and has_visible_pixel:
+                return
+        previous = reconstructed
+    raise SmokeError(f"capture contains no non-empty UI signal: {path}")
+
+
+def _probe_instance(
+    helper: Path,
+    instance: EditorInstance,
+    *,
+    width: int,
+    height: int,
+) -> None:
+    _require_success(
+        _run_helper(helper, instance, ["initialize"]),
+        f"{instance.name} MCP initialize",
+    )
+    tools = _require_success(
+        _run_helper(helper, instance, ["tools-list"]),
+        f"{instance.name} MCP tools/list",
+    )
+    for tool_name in ("execute_python_script", "capture_editor_screenshot"):
+        if tool_name not in tools:
+            raise SmokeError(
+                f"{instance.name} tools/list did not advertise {tool_name}:\n{tools}"
+            )
+    script = "\n".join(
+        [
+            "import json, sys",
+            "editor.composition.push_pointer_move(17.0, 23.0)",
+            "request_render_update()",
+            "_forbidden = (",
+            "    'termin.display._platform_native',",
+            "    'termin.display.window',",
+            "    'termin.gui_native._gui_native_window',",
+            "    'termin.gui_native.window',",
+            ")",
+            "_payload = {",
+            "    'project_path': project_path,",
+            "    'has_scene': scene is not None,",
+            "    'editor_type': type(editor).__name__,",
+            "    'composition_type': type(editor.composition).__name__,",
+            "    'forbidden_window_modules': [name for name in _forbidden if name in sys.modules],",
+            "}",
+            "print('__TERMIN_OFFSCREEN_MCP_PROBE__' + json.dumps(_payload))",
+        ]
+    )
+    probe = _require_success(
+        _run_helper(helper, instance, ["exec", script]),
+        f"{instance.name} MCP editor command",
+    )
+    _parse_probe(probe, instance)
+    capture = _require_success(
+        _run_helper(
+            helper,
+            instance,
+            ["screenshot", "--path", str(instance.screenshot_file)],
+        ),
+        f"{instance.name} MCP screenshot",
+    )
+    expected_extent = f"({width}x{height})"
+    if expected_extent not in capture:
+        raise SmokeError(
+            f"{instance.name} screenshot response lacks {expected_extent}:\n{capture}"
+        )
+    _require_non_empty_rgba8_png(
+        instance.screenshot_file,
+        expected_width=width,
+        expected_height=height,
+    )
+
+
+def _request_shutdown(helper: Path, instance: EditorInstance) -> None:
+    _require_success(
+        _run_helper(
+            helper,
+            instance,
+            ["exec", "request_editor_close(); print('close requested')"],
+        ),
+        f"{instance.name} MCP clean shutdown request",
+    )
+
+
+def _wait_for_clean_shutdown(instance: EditorInstance) -> None:
+    try:
+        return_code = instance.process.wait(timeout=25.0)
+    except subprocess.TimeoutExpired as error:
+        raise SmokeError(
+            f"{instance.name} did not exit after request_editor_close()"
+        ) from error
+    if return_code != 0:
+        raise SmokeError(f"{instance.name} exited with code {return_code}")
+    deadline = time.monotonic() + 5.0
+    while instance.session_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if instance.session_file.exists():
+        raise SmokeError(
+            f"{instance.name} left its agent-owned MCP descriptor behind"
+        )
+    log_text = instance.log_file.read_text(encoding="utf-8", errors="replace")
+    if "[EngineCore] Shutdown complete" not in log_text:
+        raise SmokeError(
+            f"{instance.name} log lacks deterministic engine shutdown evidence"
+        )
+
+
+def _print_log_tails(instances: list[EditorInstance]) -> None:
+    for instance in instances:
+        if not instance.log_file.is_file():
+            continue
+        print(
+            f"[offscreen-mcp-smoke] {instance.name} log tail "
+            f"({instance.log_file}):",
+            file=sys.stderr,
+        )
+        for line in instance.log_file.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).splitlines()[-120:]:
+            print(line, file=sys.stderr)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--keep-temp", action="store_true")
+    parser.add_argument("--width", type=int, default=640)
+    parser.add_argument("--height", type=int, default=360)
+    args = parser.parse_args()
+    if args.timeout <= 0:
+        raise SmokeError("--timeout must be positive")
+    if args.width <= 0 or args.height <= 0:
+        raise SmokeError("capture dimensions must be positive")
+
+    root = _repo_root()
+    editor = root / "sdk" / "bin" / "termin_editor"
+    helper = root / "scripts" / "termin-editor-mcp"
+    for path, label in ((editor, "SDK editor"), (helper, "editor MCP helper")):
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise SmokeError(f"{label} is missing or not executable: {path}")
+
+    temp_root = Path(tempfile.mkdtemp(prefix="termin-editor-mcp-offscreen-smoke-"))
+    instances: list[EditorInstance] = []
+    success = False
+    try:
+        for name in ("offscreen-a", "offscreen-b"):
+            instances.append(
+                _launch_instance(
+                    name=name,
+                    root=temp_root,
+                    editor=editor,
+                    sdk_root=editor.parent.parent,
+                    width=args.width,
+                    height=args.height,
+                )
+            )
+        for instance in instances:
+            _wait_for_mcp(helper, instance, args.timeout)
+
+        descriptors = [_load_safe_session(instance) for instance in instances]
+        instance_ids = {str(descriptor["instance_id"]) for descriptor in descriptors}
+        endpoints = {str(descriptor["url"]) for descriptor in descriptors}
+        if len(instance_ids) != len(instances):
+            raise SmokeError("parallel editors published colliding MCP instance ids")
+        if len(endpoints) != len(instances):
+            raise SmokeError("parallel editors published colliding MCP endpoints")
+        print(
+            "[offscreen-mcp-smoke] parallel identities:",
+            ", ".join(sorted(instance_ids)),
+            flush=True,
+        )
+
+        for instance in instances:
+            _probe_instance(
+                helper,
+                instance,
+                width=args.width,
+                height=args.height,
+            )
+        for instance in instances:
+            _request_shutdown(helper, instance)
+        for instance in instances:
+            _wait_for_clean_shutdown(instance)
+        success = True
+        print("[offscreen-mcp-smoke] PASS", flush=True)
+        return 0
+    except Exception:
+        _print_log_tails(instances)
+        raise
+    finally:
+        for instance in instances:
+            if instance.process.poll() is None:
+                instance.process.terminate()
+                try:
+                    instance.process.wait(timeout=8.0)
+                except subprocess.TimeoutExpired:
+                    instance.process.kill()
+                    instance.process.wait(timeout=5.0)
+            instance.log_stream.close()
+        if args.keep_temp or not success:
+            print("[offscreen-mcp-smoke] kept temp:", temp_root, flush=True)
+        else:
+            import shutil
+
+            shutil.rmtree(temp_root)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeError as error:
+        print(f"[offscreen-mcp-smoke] FAIL: {error}", file=sys.stderr, flush=True)
+        raise SystemExit(1) from error

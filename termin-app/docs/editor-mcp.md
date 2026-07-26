@@ -267,6 +267,29 @@ The repeatable acceptance smoke is:
 scripts/smoke-editor-virtual-display
 ```
 
+## No-display offscreen editor E2E
+
+Use the offscreen MCP smoke when automation needs the production editor
+bootstrap, GUI composition and readback without SDL, Xvfb, `DISPLAY` or
+`WAYLAND_DISPLAY`:
+
+```bash
+scripts/smoke-editor-mcp-offscreen
+```
+
+The smoke starts two installed `termin_editor` processes concurrently with
+`--headless --offscreen-backend vulkan`, port `0` and separate agent-owned
+session files. For each process it performs MCP initialize/tools-list, sends an
+editor command and synthetic pointer input, captures a non-empty RGBA8 PNG,
+checks that optional window modules were not loaded, requests normal shutdown
+and verifies that the owned descriptor was removed. Instance ids and loopback
+endpoints must be distinct.
+
+Failures retain the temporary projects, screenshots, descriptors when present,
+and editor logs, and print the retained directory. Use `--keep-temp` to retain
+a successful run as well. This is the no-window counterpart to the independent
+virtual-display E2E above; it does not test SDL presentation.
+
 `capture_editor_screenshot` captures the editor viewport FBO as a PNG file. It
 accepts:
 

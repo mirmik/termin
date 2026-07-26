@@ -448,6 +448,12 @@ bindings, но текущий RenderEngine уже умеет работать в
 
 ## 9. Четыре локальных generational pool рядом с `tc_pool`
 
+Статус 2026-07-26: устранено в #847. Display, viewport, render target и
+pipeline используют `tc_pool`; локальные generation/state/free-stack/grow
+алгоритмы удалены. `tc_pool_init_ex()` предоставляет bounded capacity,
+initial-generation/index-order policy и allocator hooks с транзакционным
+init/grow.
+
 ### Наблюдение
 
 Общий generation/state/free-list primitive существует:
@@ -466,13 +472,13 @@ bindings, но текущий RenderEngine уже умеет работать в
 дублируется: typed API, slot cleanup, pipeline-specific state и tests нужны.
 Дублируются allocation, growth, free stack, generation checks и reuse lifecycle.
 
-### Вердикт
+### Вердикт (выполнен)
 
 Следует расширить `tc_pool` только необходимыми bounded-capacity,
 allocator-hook и fault-injection возможностями, а затем мигрировать четыре
 registry. Typed public handles и owner-specific cleanup остаются.
 
-Трекинг: #847.
+Трекинг: #847 (выполнено).
 
 ## 10. Generic framegraph resource map после перехода на typed resources
 
@@ -796,7 +802,7 @@ consumer не должна бесконечно блокировать акти�
 
 ### Этап 4. Консолидировать primitives
 
-1. Мигрировать четыре generational registries на `tc_pool` по #847.
+1. Мигрировать четыре generational registries на `tc_pool` по #847. Выполнено.
 2. Удалить generic `FrameGraphResource`/`FBOMap` внутри #554.
 3. Вынести общий embedded Python bootstrap.
 

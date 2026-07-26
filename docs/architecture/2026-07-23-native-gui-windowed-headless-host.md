@@ -256,4 +256,7 @@ Completed:
   bootstrap or engine;
 - the installed editor loads a real project and scene and exits after a finite
   frame count with no display server;
+- the manifest-driven no-display MCP smoke runs two installed editors in
+  parallel, verifies unique agent-owned sessions, editor commands, non-empty
+  Vulkan PNG readback and deterministic descriptor cleanup;
 - virtual-display testing remains an independent window-system gate.
