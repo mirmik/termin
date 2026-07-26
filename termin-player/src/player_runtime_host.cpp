@@ -36,6 +36,7 @@
 #include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/scene/scene_manager.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx2/device_factory.hpp>
 #include <tgfx2/graphics_host.hpp>
@@ -1019,7 +1020,9 @@ print(json.dumps({
 
     void load_package() {
         termin::runtime::RuntimePackageLoader loader;
-        package = loader.load(manifest.package_root.string());
+        termin::runtime::RuntimePackageLoadOptions options;
+        options.scene_extensions = termin::default_scene_extension_ids();
+        package = loader.load(manifest.package_root.string(), options);
         if (!package.ok) {
             throw std::runtime_error("failed to load runtime package: " + package.message);
         }

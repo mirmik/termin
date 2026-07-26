@@ -264,15 +264,30 @@ def main() -> int:
                     "termin/execute_python",
                     {
                         "script": (
+                            "from termin.collision import CollisionWorld\n"
+                            "from termin.colliders.collider_component import ColliderComponent\n"
                             "print(type(scene).__name__)\n"
                             "print(type(window).__name__)\n"
                             "print(type(display).__name__)\n"
-                            "print(scene.is_alive())"
+                            "print(scene.is_alive())\n"
+                            "collision_world = CollisionWorld.from_scene(scene)\n"
+                            "print(collision_world is not None)\n"
+                            "collider_count = collision_world.size()\n"
+                            "collider_entity = scene.create_entity('NativePlayerSmokeCollider')\n"
+                            "collider_entity.add_component(ColliderComponent())\n"
+                            "print(collision_world.size() == collider_count + 1)"
                         )
                     },
                 )
                 context_lines = context["output"].splitlines()
-                if context_lines != ["TcScene", "NativePlayerWindow", "Display", "True"]:
+                if context_lines != [
+                    "TcScene",
+                    "NativePlayerWindow",
+                    "Display",
+                    "True",
+                    "True",
+                    "True",
+                ]:
                     raise SmokeError(f"unexpected live runtime context: {context_lines!r}")
 
                 captured = _rpc(
@@ -319,7 +334,7 @@ def main() -> int:
 
         print(
             "[native-player-mcp-smoke] PASS "
-            f"scene/window/display live; PNG={screenshot.stat().st_size} bytes; "
+            f"scene/window/display/collision live; PNG={screenshot.stat().st_size} bytes; "
             "request_quit/session cleanup clean"
         )
     return 0

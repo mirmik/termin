@@ -7,9 +7,19 @@
 #include <termin/runtime/termin_runtime_api.h>
 #include <termin/tc_scene.hpp>
 
+extern "C" {
+#include <core/tc_scene_extension.h>
+}
+
 namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive;
+
+struct RuntimePackageLoadOptions {
+    // Extensions required by the runtime host. They are attached to every
+    // packaged scene before components are deserialized.
+    std::vector<tc_scene_ext_type_id> scene_extensions;
+};
 
 struct ShaderRuntimeConfiguration {
     std::string artifact_root;
@@ -39,11 +49,15 @@ struct RuntimePackageLoadResult {
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {
 public:
-    RuntimePackageLoadResult load(const std::string& root_path);
+    RuntimePackageLoadResult load(
+        const std::string& root_path,
+        const RuntimePackageLoadOptions& options = {}
+    );
 };
 
 TERMIN_RUNTIME_API RuntimePackageLoadResult load_runtime_package(
-    const std::string& root_path
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options = {}
 );
 
 } // namespace termin::runtime
