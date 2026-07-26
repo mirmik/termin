@@ -36,11 +36,13 @@ public:
         return _c ? tc_component_type_name(_c) : "";
     }
 
-    bool enabled() const { return _c ? _c->enabled : false; }
-    void set_enabled(bool v) { if (_c) _c->enabled = v; }
+    bool enabled() const { return tc_component_get_enabled(_c); }
+    void set_enabled(bool v) { tc_component_set_enabled(_c, v); }
 
-    bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
-    void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
+    bool active_in_editor() const { return tc_component_get_active_in_editor(_c); }
+    void set_active_in_editor(bool v) {
+        tc_component_set_active_in_editor(_c, v);
+    }
 
     std::string display_name() const {
         return _c ? tc_component_get_display_name(_c) : "";

@@ -316,11 +316,15 @@ public:
     TcComponent& operator=(const TcComponent&) = delete;
 
     // Properties
-    bool get_enabled() const { return _c ? _c->enabled : true; }
-    void set_enabled(bool v) { if (_c) _c->enabled = v; }
+    bool get_enabled() const { return _c ? tc_component_get_enabled(_c) : true; }
+    void set_enabled(bool v) { tc_component_set_enabled(_c, v); }
 
-    bool get_active_in_editor() const { return _c ? _c->active_in_editor : false; }
-    void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
+    bool get_active_in_editor() const {
+        return tc_component_get_active_in_editor(_c);
+    }
+    void set_active_in_editor(bool v) {
+        tc_component_set_active_in_editor(_c, v);
+    }
 
     std::string get_display_name() const { return _c ? tc_component_get_display_name(_c) : ""; }
     void set_display_name(const std::string& v) {

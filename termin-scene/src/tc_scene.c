@@ -85,6 +85,10 @@ typedef struct tc_scene_slot {
     tc_entity_pool_handle pool_handle;
     tc_scene_mode mode;
     ComponentList pending_starts;
+    uint64_t pending_start_revision;
+    uint64_t pending_start_processed_revision[2];
+    uint64_t pending_start_scan_count;
+    uint64_t pending_start_visit_count;
     ComponentList update_list;
     ComponentList fixed_update_list;
     ComponentList before_render_list;
@@ -585,6 +589,7 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     // Add to pending_start if not started
     if (!c->_started && !list_contains(&g_pool->slots[idx].pending_starts, c)) {
         list_push(&g_pool->slots[idx].pending_starts, c);
+        tc_scene_mark_component_startability_changed(h);
     }
 
     // Add to update lists based on flags
@@ -730,15 +735,34 @@ static void profile_component_begin(const tc_component* component) {
 }
 
 static void process_pending_start(uint32_t idx, bool editor_mode, bool profile) {
-    ComponentList* pending = &g_pool->slots[idx].pending_starts;
+    tc_scene_slot* slot = &g_pool->slots[idx];
+    ComponentList* pending = &slot->pending_starts;
+    const size_t mode_index = editor_mode ? 1 : 0;
+    const uint64_t revision = slot->pending_start_revision;
+    if (slot->pending_start_processed_revision[mode_index] == revision) return;
+
     size_t count = pending->count;
-    if (count == 0) return;
+    if (count == 0) {
+        slot->pending_start_processed_revision[mode_index] = revision;
+        return;
+    }
 
     tc_component** copy = malloc(count * sizeof(tc_component*));
+    if (!copy) {
+        tc_log_error(
+            "[tc_scene] failed to allocate pending-start snapshot for scene slot %u",
+            idx
+        );
+        return;
+    }
     memcpy(copy, pending->items, count * sizeof(tc_component*));
+    slot->pending_start_processed_revision[mode_index] = revision;
+    slot->pending_start_scan_count++;
 
     for (size_t i = 0; i < count; i++) {
         tc_component* c = copy[i];
+        slot->pending_start_visit_count++;
+        if (!list_contains(pending, c)) continue;
         if (!c->enabled) continue;
         if (editor_mode && !c->active_in_editor) continue;
 
@@ -1136,6 +1160,16 @@ size_t tc_scene_pending_start_count(tc_scene_handle h) {
     return g_pool->slots[h.index].pending_starts.count;
 }
 
+uint64_t tc_scene_pending_start_scan_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->slots[h.index].pending_start_scan_count;
+}
+
+uint64_t tc_scene_pending_start_visit_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->slots[h.index].pending_start_visit_count;
+}
+
 size_t tc_scene_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
     return g_pool->slots[h.index].update_list.count;
@@ -1301,6 +1335,17 @@ void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
         tc_scene_notify_scene_inactive(h);
     } else if (mode != TC_SCENE_MODE_INACTIVE && old_mode == TC_SCENE_MODE_INACTIVE) {
         tc_scene_notify_scene_active(h);
+    }
+}
+
+void tc_scene_mark_component_startability_changed(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    tc_scene_slot* slot = &g_pool->slots[h.index];
+    slot->pending_start_revision++;
+    if (slot->pending_start_revision == 0) {
+        slot->pending_start_revision = 1;
+        slot->pending_start_processed_revision[0] = 0;
+        slot->pending_start_processed_revision[1] = 0;
     }
 }
 

@@ -96,11 +96,13 @@ public:
     std::string source_id() const { return tc_component_get_source_id(&_c); }
     void set_source_id(const std::string& v) { tc_component_set_source_id(&_c, v.c_str()); }
 
-    bool enabled() const { return _c.enabled; }
-    void set_enabled(bool v) { _c.enabled = v; }
+    bool enabled() const { return tc_component_get_enabled(&_c); }
+    void set_enabled(bool v) { tc_component_set_enabled(&_c, v); }
 
-    bool active_in_editor() const { return _c.active_in_editor; }
-    void set_active_in_editor(bool v) { _c.active_in_editor = v; }
+    bool active_in_editor() const { return tc_component_get_active_in_editor(&_c); }
+    void set_active_in_editor(bool v) {
+        tc_component_set_active_in_editor(&_c, v);
+    }
 
     bool started() const { return _c._started; }
     void set_started(bool v) { _c._started = v; }

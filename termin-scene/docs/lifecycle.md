@@ -46,6 +46,16 @@ profiling scheduler не строит имена секций и не выдел
 
 `tc_scene_editor_update(scene, dt)` работает как обычный update, но добавляет фильтр `active_in_editor == true` для `start`, `fixed_update`, `update`.
 
+Очередь `pending_start` не сканируется повторно в steady state. Регистрация
+компонента и переходы через `tc_component_set_enabled` /
+`tc_component_set_active_in_editor` увеличивают scheduler revision; editor и
+runtime проходы независимо обрабатывают только новые revision. Поэтому
+изменение этих полей напрямую после регистрации не поддерживается: runtime
+переходы должны идти через setter API.
+
+`start` исполняется по снимку очереди. Регистрация или удаление компонентов из
+callback безопасны и будят следующий проход, не расширяя текущую итерацию.
+
 ## Before render
 
 `tc_scene_before_render(scene)`:

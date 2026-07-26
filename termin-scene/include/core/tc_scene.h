@@ -132,6 +132,8 @@ TC_API void tc_scene_reset_accumulated_time(tc_scene_handle h);
 
 TC_API size_t tc_scene_entity_count(tc_scene_handle h);
 TC_API size_t tc_scene_pending_start_count(tc_scene_handle h);
+TC_API uint64_t tc_scene_pending_start_scan_count(tc_scene_handle h);
+TC_API uint64_t tc_scene_pending_start_visit_count(tc_scene_handle h);
 TC_API size_t tc_scene_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_fixed_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_before_render_list_count(tc_scene_handle h);
@@ -242,6 +244,11 @@ TC_API tc_scene_component_type* tc_scene_get_all_component_types(
 // Get/set scene mode (INACTIVE, STOP, PLAY)
 TC_API tc_scene_mode tc_scene_get_mode(tc_scene_handle h);
 TC_API void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode);
+
+// Scheduler integration for component state setters. Runtime state changes
+// must use the component setter APIs so dormant pending-start queues are
+// revisited only when startability can have changed.
+TC_API void tc_scene_mark_component_startability_changed(tc_scene_handle h);
 
 // ============================================================================
 // Scene Name and UUID
