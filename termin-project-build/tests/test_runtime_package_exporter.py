@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from termin.project import make_default_scene
 from termin.project_build import export_runtime_package
 from termin.project_build.runtime_package_exporter import (
     ENGINE_TEXT3D_SHADER_UUID,
@@ -321,6 +322,80 @@ def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
     assert refs.meshes == {"typed-mesh": "Typed Mesh"}
     assert refs.materials == {"typed-material": "Typed Material"}
     assert diagnostics == []
+
+
+def test_collect_runtime_refs_accepts_default_scene_contract() -> None:
+    diagnostics = []
+
+    refs = collect_runtime_refs(make_default_scene()["scene"], diagnostics)
+
+    assert refs.meshes == {
+        "00000000-0000-0000-0003-000000000001": "Cube",
+        "00000000-0000-0000-0003-000000000003": "Plane",
+    }
+    assert refs.materials == {
+        "00000000-0001-0000-0001-000000000003": "NormalizedPBR",
+    }
+    assert diagnostics == []
+
+
+@full_runtime_package_exporter
+def test_strict_runtime_export_accepts_default_scene_resources(tmp_path: Path) -> None:
+    from termin.bootstrap import bootstrap_player
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.default_assets.render.shader_asset import ShaderAsset
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.stdlib import stdlib_root
+
+    bootstrap_player()
+    resource_manager = DefaultResourceManager.instance()
+    resource_manager.register_builtin_meshes()
+
+    shader_path = stdlib_root() / "shaders" / "CookTorrancePBR.shader"
+    if resource_manager.get_shader_asset("CookTorrancePBR") is None:
+        shader_asset = ShaderAsset.from_file(shader_path, name="CookTorrancePBR")
+        resource_manager.register_shader_asset(
+            "CookTorrancePBR",
+            shader_asset,
+            source_path=str(shader_path),
+        )
+
+    material_path = stdlib_root() / "materials" / "NormalizedPBR.material"
+    if resource_manager.get_material_asset("NormalizedPBR") is None:
+        material_asset = MaterialAsset.from_file(material_path, name="NormalizedPBR")
+        resource_manager.register_material_asset(
+            "NormalizedPBR",
+            material_asset,
+            source_path=str(material_path),
+        )
+
+    project = tmp_path / "DefaultSceneGame"
+    project.mkdir()
+    _write_json(project / "scene.scene", make_default_scene())
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="scene.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"] == []
+    assert (
+        result.package_dir
+        / "meshes"
+        / "00000000-0000-0000-0003-000000000001.tmesh.json"
+    ).exists()
+    assert (
+        result.package_dir
+        / "meshes"
+        / "00000000-0000-0000-0003-000000000003.tmesh.json"
+    ).exists()
+    assert (
+        result.package_dir
+        / "materials"
+        / "00000000-0001-0000-0001-000000000003.tmat.json"
+    ).exists()
 
 
 def test_collect_runtime_refs_accepts_canonical_pipeline_template_mount() -> None:
