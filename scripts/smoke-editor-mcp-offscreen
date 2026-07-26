@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import signal
 import struct
 import subprocess
 import sys
@@ -420,12 +421,20 @@ def _request_shutdown(helper: Path, instance: EditorInstance) -> None:
     )
 
 
-def _wait_for_clean_shutdown(instance: EditorInstance) -> None:
+def _request_sigint(instance: EditorInstance) -> None:
+    instance.process.send_signal(signal.SIGINT)
+
+
+def _wait_for_clean_shutdown(
+    instance: EditorInstance,
+    *,
+    required_marker: str | None = None,
+) -> None:
     try:
         return_code = instance.process.wait(timeout=25.0)
     except subprocess.TimeoutExpired as error:
         raise SmokeError(
-            f"{instance.name} did not exit after request_editor_close()"
+            f"{instance.name} did not exit after its shutdown request"
         ) from error
     if return_code != 0:
         raise SmokeError(f"{instance.name} exited with code {return_code}")
@@ -440,6 +449,21 @@ def _wait_for_clean_shutdown(instance: EditorInstance) -> None:
     if "[EngineCore] Shutdown complete" not in log_text:
         raise SmokeError(
             f"{instance.name} log lacks deterministic engine shutdown evidence"
+        )
+    if required_marker is not None and required_marker not in log_text:
+        raise SmokeError(
+            f"{instance.name} log lacks shutdown marker: {required_marker}"
+        )
+    forbidden_markers = (
+        "nanobind::python_error",
+        "pure virtual method called",
+        "terminate called",
+        "SIGSEGV",
+    )
+    present = [marker for marker in forbidden_markers if marker in log_text]
+    if present:
+        raise SmokeError(
+            f"{instance.name} log contains shutdown failure markers: {present}"
         )
 
 
@@ -516,10 +540,13 @@ def main() -> int:
                 width=args.width,
                 height=args.height,
             )
-        for instance in instances:
-            _request_shutdown(helper, instance)
-        for instance in instances:
-            _wait_for_clean_shutdown(instance)
+        _request_shutdown(helper, instances[0])
+        _request_sigint(instances[1])
+        _wait_for_clean_shutdown(instances[0])
+        _wait_for_clean_shutdown(
+            instances[1],
+            required_marker="[Editor] SIGINT received; requesting native editor shutdown",
+        )
         success = True
         print("[offscreen-mcp-smoke] PASS", flush=True)
         return 0
