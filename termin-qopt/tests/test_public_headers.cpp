@@ -1,12 +1,12 @@
 #include <termin/qopt/qopt.hpp>
 
-#include <cassert>
+#include "test_check.hpp"
 
 #if defined(EIGEN_WORLD_VERSION)
-#  error "termin-qopt public headers must not expose Eigen headers"
+#error "termin-qopt public headers must not expose Eigen headers"
 #endif
 
 int main() {
-    assert(termin::qopt::termin_qopt_version() == "0.1.0");
-    return 0;
+  TERMIN_QOPT_CHECK(termin::qopt::termin_qopt_version() == "0.1.0");
+  return 0;
 }

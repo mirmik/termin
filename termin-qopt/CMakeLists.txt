@@ -24,6 +24,8 @@ target_include_directories(termin_qopt_eigen SYSTEM INTERFACE
 )
 
 add_library(termin_qopt SHARED
+    src/equality_qp.cpp
+    src/qp_types.cpp
     src/termin_qopt.cpp
 )
 add_library(termin_qopt::termin_qopt ALIAS termin_qopt)
@@ -51,6 +53,27 @@ endif()
 
 if(TERMIN_QOPT_BUILD_TESTS)
     enable_testing()
+    find_package(Python COMPONENTS Interpreter REQUIRED)
+
+    set(TERMIN_QOPT_GENERATED_TEST_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/generated-tests"
+    )
+    set(TERMIN_QOPT_ORACLE_HEADER
+        "${TERMIN_QOPT_GENERATED_TEST_DIR}/qp_oracle_cases.hpp"
+    )
+    add_custom_command(
+        OUTPUT "${TERMIN_QOPT_ORACLE_HEADER}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${TERMIN_QOPT_GENERATED_TEST_DIR}"
+        COMMAND ${Python_EXECUTABLE}
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_qp_oracle_header.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/oracle/solver_oracle.json"
+            "${TERMIN_QOPT_ORACLE_HEADER}"
+        DEPENDS
+            tests/generate_qp_oracle_header.py
+            tests/oracle/solver_oracle.json
+        VERBATIM
+    )
 
     add_executable(termin_qopt_dense_views_test
         tests/test_dense_views.cpp
@@ -63,6 +86,16 @@ if(TERMIN_QOPT_BUILD_TESTS)
     )
     target_link_libraries(termin_qopt_public_headers_test PRIVATE termin_qopt)
     add_test(NAME termin_qopt_public_headers_test COMMAND termin_qopt_public_headers_test)
+
+    add_executable(termin_qopt_equality_qp_test
+        tests/test_equality_qp.cpp
+        "${TERMIN_QOPT_ORACLE_HEADER}"
+    )
+    target_include_directories(termin_qopt_equality_qp_test PRIVATE
+        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
+    )
+    target_link_libraries(termin_qopt_equality_qp_test PRIVATE termin_qopt)
+    add_test(NAME termin_qopt_equality_qp_test COMMAND termin_qopt_equality_qp_test)
 endif()
 
 include(GNUInstallDirs)

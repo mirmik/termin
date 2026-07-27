@@ -9,8 +9,10 @@ experimental runtime/editor components.
 
 The native migration foundation provides the shared C++ target
 `termin_qopt::termin_qopt`, private Eigen integration, and preliminary
-caller-owned dense vector/matrix views. Solver APIs and Python bindings have
-not migrated yet; see [CPP_MIGRATION.md](CPP_MIGRATION.md).
+caller-owned dense vector/matrix views. A provisional native equality-QP API
+now covers convex dense problems, semantic statuses, rank diagnostics, and KKT
+residuals. Active-set QP and Python bindings have not migrated yet; see
+[CPP_MIGRATION.md](CPP_MIGRATION.md).
 
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
