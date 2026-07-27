@@ -15,7 +15,8 @@
 - публичные headers, install/export и CMake package contract не требуют Eigen;
 - добавлен language-neutral JSON oracle с analytic/KKT contracts для QP,
   nullspace и HQP;
-- solver problem/result contracts ещё не зафиксированы;
+- добавлен provisional native equality-QP contract с caller-owned buffers,
+  semantic statuses, diagnostics и residuals;
 - Python реализация пока остаётся reference implementation.
 
 Инициатива ведётся в Kanboard swimlane `Native QOpt, FEM & Robotics`,
@@ -69,7 +70,7 @@ Eigen не должен становиться публичным SDK API.
 1. [x] Добавить C++ target `termin_qopt`.
 2. [x] Ввести минимальные public data contracts для dense vector/matrix views.
 3. [x] Зафиксировать независимый solver oracle и semantic statuses.
-4. Перенести `solve_qp_equalities`.
+4. [x] Перенести `solve_qp_equalities`.
 5. Перенести `solve_qp_active_set`.
 6. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
 7. Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
@@ -83,6 +84,27 @@ Oracle не объявляет текущее Python-поведение прав
 `infeasible`, `unbounded` и `invalid_input` имеют независимые certificates или
 структурную диагностику; текущий Python API не считается совместимым с ними,
 пока не начнёт возвращать semantic status.
+
+## Provisional equality-QP contract
+
+`solve_equality_qp` решает convex dense задачу
+`min 0.5 xᵀHx + gᵀx` при `Ax = b`. Контракт пока не объявлен стабильным SDK
+API, но уже соблюдает будущую ABI-границу:
+
+- Eigen-типы не выходят из `.cpp`;
+- входы и выходы передаются через strided views;
+- input buffers snapshot-ятся до записи результата, поэтому input/output
+  aliasing имеет определённую семантику;
+- primal и equality-dual output buffers не должны пересекаться;
+- outputs меняются только при `QpStatus::Optimal`;
+- result содержит semantic status, diagnostic code, rank и KKT residuals.
+
+Первый backend сознательно использует SVD равенств и spectral decomposition
+reduced Hessian. Для текущих малых dense задач это даёт простой
+rank-revealing путь и позволяет различать inconsistent equalities, линейное
+unbounded направление, negative curvature и numerical failure. Быстрый
+SPD-path через Cholesky/LDLT можно добавить позже как внутреннюю оптимизацию,
+не меняя контракт.
 
 Предварительные views намеренно не задают ownership, allocation, QP problem
 layout или result/error model. Они нужны как нейтральная граница между
