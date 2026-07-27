@@ -48,6 +48,7 @@
 2. **fixed_update** — в цикле по accumulator и `fixed_timestep`.
 3. **update** — обычный кадровый update.
 4. **extensions** — `on_scene_update` для scene extensions.
+5. **late_update** — dependent simulation work после всех обычных updates.
 
 `tc_scene_before_render(scene)`:
 

@@ -91,6 +91,7 @@ typedef struct tc_scene_slot {
     uint64_t pending_start_visit_count;
     ComponentList update_list;
     ComponentList fixed_update_list;
+    ComponentList late_update_list;
     ComponentList before_render_list;
     double fixed_timestep;
     double accumulated_time;
@@ -326,6 +327,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     list_init(&slot->pending_starts);
     list_init(&slot->update_list);
     list_init(&slot->fixed_update_list);
+    list_init(&slot->late_update_list);
     list_init(&slot->before_render_list);
     slot->metadata = tc_value_dict_new();
     slot->name = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
@@ -387,6 +389,7 @@ void tc_scene_free(tc_scene_handle h) {
     list_free(&slot->pending_starts);
     list_free(&slot->update_list);
     list_free(&slot->fixed_update_list);
+    list_free(&slot->late_update_list);
     list_free(&slot->before_render_list);
     tc_resource_map_free(slot->type_heads);
 
@@ -599,6 +602,9 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     if (c->has_fixed_update && !list_contains(&g_pool->slots[idx].fixed_update_list, c)) {
         list_push(&g_pool->slots[idx].fixed_update_list, c);
     }
+    if (c->has_late_update && !list_contains(&g_pool->slots[idx].late_update_list, c)) {
+        list_push(&g_pool->slots[idx].late_update_list, c);
+    }
     if (c->has_before_render && !list_contains(&g_pool->slots[idx].before_render_list, c)) {
         list_push(&g_pool->slots[idx].before_render_list, c);
     }
@@ -643,6 +649,7 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     list_remove(&g_pool->slots[idx].pending_starts, c);
     list_remove(&g_pool->slots[idx].update_list, c);
     list_remove(&g_pool->slots[idx].fixed_update_list, c);
+    list_remove(&g_pool->slots[idx].late_update_list, c);
     list_remove(&g_pool->slots[idx].before_render_list, c);
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
@@ -674,12 +681,14 @@ void tc_component_set_lifecycle_capabilities(
     tc_component* c,
     bool has_update,
     bool has_fixed_update,
+    bool has_late_update,
     bool has_before_render
 ) {
     if (!c) return;
 
     c->has_update = has_update;
     c->has_fixed_update = has_fixed_update;
+    c->has_late_update = has_late_update;
     c->has_before_render = has_before_render;
 
     tc_scene_handle scene = c->lifecycle_scene;
@@ -688,6 +697,7 @@ void tc_component_set_lifecycle_capabilities(
     uint32_t idx = scene.index;
     list_set_membership(&g_pool->slots[idx].update_list, c, has_update);
     list_set_membership(&g_pool->slots[idx].fixed_update_list, c, has_fixed_update);
+    list_set_membership(&g_pool->slots[idx].late_update_list, c, has_late_update);
     list_set_membership(&g_pool->slots[idx].before_render_list, c, has_before_render);
 }
 
@@ -907,6 +917,19 @@ void tc_scene_update(tc_scene_handle h, double dt) {
     if (profile) tc_profiler_begin_section("Extensions");
     tc_scene_ext_on_scene_update(h, dt);
     if (profile) tc_profiler_end_section();
+
+    // 4. Late update runs after all regular component and extension updates.
+    if (profile) tc_profiler_begin_section("Late Update");
+    ComponentList* late_update_list = &g_pool->slots[idx].late_update_list;
+    for (size_t i = 0; i < late_update_list->count; i++) {
+        tc_component* c = late_update_list->items[i];
+        if (c->enabled && component_entity_enabled(c)) {
+            if (profile) profile_component_begin(c);
+            tc_component_late_update(c, (float)dt);
+            if (profile) tc_profiler_end_section();
+        }
+    }
+    if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_editor_update(tc_scene_handle h, double dt) {
@@ -954,6 +977,19 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
     // Extension update hooks (editor mode uses same dt callback contract)
     if (profile) tc_profiler_begin_section("Extensions");
     tc_scene_ext_on_scene_update(h, dt);
+    if (profile) tc_profiler_end_section();
+
+    // Late update - only active_in_editor
+    if (profile) tc_profiler_begin_section("Late Update");
+    ComponentList* late_update_list = &g_pool->slots[idx].late_update_list;
+    for (size_t i = 0; i < late_update_list->count; i++) {
+        tc_component* c = late_update_list->items[i];
+        if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
+            if (profile) profile_component_begin(c);
+            tc_component_late_update(c, (float)dt);
+            if (profile) tc_profiler_end_section();
+        }
+    }
     if (profile) tc_profiler_end_section();
 }
 
@@ -1178,6 +1214,11 @@ size_t tc_scene_update_list_count(tc_scene_handle h) {
 size_t tc_scene_fixed_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
     return g_pool->slots[h.index].fixed_update_list.count;
+}
+
+size_t tc_scene_late_update_list_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->slots[h.index].late_update_list.count;
 }
 
 size_t tc_scene_before_render_list_count(tc_scene_handle h) {

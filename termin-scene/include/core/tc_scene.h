@@ -79,7 +79,7 @@ TC_API tc_entity_pool_handle tc_scene_entity_pool_handle(tc_scene_handle h);
 
 // Register component for lifecycle management
 // Adds to pending_start if not started
-// Adds to update_list/fixed_update_list based on flags
+// Adds to update/fixed_update/late_update/before_render lists based on flags
 TC_API void tc_scene_register_component(tc_scene_handle h, tc_component* c);
 
 // Unregister component from lifecycle management
@@ -93,6 +93,8 @@ TC_API void tc_scene_unregister_component(tc_scene_handle h, tc_component* c);
 // 1. Process pending_start (call start() on enabled components)
 // 2. Fixed update loop (accumulator-based)
 // 3. Regular update
+// 4. Scene extension update hooks
+// 5. Late update
 TC_API void tc_scene_update(tc_scene_handle h, double dt);
 
 // Editor update - only updates components with active_in_editor=true
@@ -136,6 +138,7 @@ TC_API uint64_t tc_scene_pending_start_scan_count(tc_scene_handle h);
 TC_API uint64_t tc_scene_pending_start_visit_count(tc_scene_handle h);
 TC_API size_t tc_scene_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_fixed_update_list_count(tc_scene_handle h);
+TC_API size_t tc_scene_late_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_before_render_list_count(tc_scene_handle h);
 
 // ============================================================================

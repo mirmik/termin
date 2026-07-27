@@ -26,6 +26,7 @@ TC_API void tc_component_free_python(tc_component* c);
 typedef void (*tc_py_start_fn)(void* py_self);
 typedef void (*tc_py_update_fn)(void* py_self, float dt);
 typedef void (*tc_py_fixed_update_fn)(void* py_self, float dt);
+typedef void (*tc_py_late_update_fn)(void* py_self, float dt);
 typedef void (*tc_py_before_render_fn)(void* py_self);
 typedef void (*tc_py_on_destroy_fn)(void* py_self);
 typedef void (*tc_py_on_added_to_entity_fn)(void* py_self);
@@ -48,6 +49,7 @@ typedef struct {
     tc_py_start_fn start;
     tc_py_update_fn update;
     tc_py_fixed_update_fn fixed_update;
+    tc_py_late_update_fn late_update;
     tc_py_before_render_fn before_render;
     tc_py_on_destroy_fn on_destroy;
     tc_py_on_added_to_entity_fn on_added_to_entity;

@@ -19,7 +19,7 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
         from termin.scene import PythonComponent, TcScene
 
         termin.bootstrap.bootstrap_player()
-        calls = {"update": 0, "fixed": 0, "before": 0}
+        calls = {"update": 0, "fixed": 0, "late": 0, "before": 0}
 
         class EmptyLifecycleProbe(PythonComponent):
             pass
@@ -30,6 +30,9 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
 
             def fixed_update(self, dt):
                 calls["fixed"] += 1
+
+            def late_update(self, dt):
+                calls["late"] += 1
 
             def before_render(self):
                 calls["before"] += 1
@@ -44,29 +47,36 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
 
         assert scene.update_list_count == 0
         assert scene.fixed_update_list_count == 0
+        assert scene.late_update_list_count == 0
         assert scene.before_render_list_count == 0
 
         full_entity.add_component(full)
         assert scene.update_list_count == 1
         assert scene.fixed_update_list_count == 1
+        assert scene.late_update_list_count == 1
         assert scene.before_render_list_count == 1
 
         scene.update(1.0)
         scene.before_render()
-        assert calls == {"update": 1, "fixed": 1, "before": 1}
+        assert calls == {"update": 1, "fixed": 1, "late": 1, "before": 1}
 
         full.has_update = False
         full.has_fixed_update = False
+        full.has_late_update = False
         full.has_before_render = False
         assert scene.update_list_count == 0
         assert scene.fixed_update_list_count == 0
+        assert scene.late_update_list_count == 0
         assert scene.before_render_list_count == 0
 
         scene.update(1.0)
         scene.before_render()
-        assert calls == {"update": 1, "fixed": 1, "before": 1}
+        assert calls == {"update": 1, "fixed": 1, "late": 1, "before": 1}
 
         class ReloadedLifecycleProbe(PythonComponent):
+            def late_update(self, dt):
+                calls["late"] += 1
+
             def before_render(self):
                 calls["before"] += 1
 
@@ -74,10 +84,12 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
         full.refresh_lifecycle_capabilities()
         assert scene.update_list_count == 0
         assert scene.fixed_update_list_count == 0
+        assert scene.late_update_list_count == 1
         assert scene.before_render_list_count == 1
 
+        scene.update(0.25)
         scene.before_render()
-        assert calls == {"update": 1, "fixed": 1, "before": 2}
+        assert calls == {"update": 1, "fixed": 1, "late": 2, "before": 2}
 
         scene.destroy()
         termin.bootstrap.shutdown_player()
@@ -109,3 +121,29 @@ def test_python_before_render_exception_is_logged() -> None:
     output = completed.stdout + completed.stderr
     assert "PythonComponent::before_render" in output
     assert "before-render-probe-error" in output
+
+
+def test_python_late_update_exception_is_logged() -> None:
+    completed = _run_python(
+        """
+        import termin.bootstrap
+        from termin.scene import PythonComponent, TcScene
+
+        termin.bootstrap.bootstrap_player()
+
+        class FailingLateUpdateProbe(PythonComponent):
+            def late_update(self, dt):
+                raise RuntimeError("late-update-probe-error")
+
+        scene = TcScene.create("python-late-update-error")
+        entity = scene.create_entity("entity")
+        entity.add_component(FailingLateUpdateProbe())
+        scene.update(0.25)
+        scene.destroy()
+        termin.bootstrap.shutdown_player()
+        """
+    )
+
+    output = completed.stdout + completed.stderr
+    assert "PythonComponent::late_update" in output
+    assert "late-update-probe-error" in output

@@ -73,6 +73,7 @@ public static class CSharpComponentRuntime
             Start              = Pin<VoidCb>(OnStart),
             Update             = Pin<FloatCb>(OnUpdate),
             FixedUpdate        = Pin<FloatCb>(OnFixedUpdate),
+            LateUpdate         = Pin<FloatCb>(OnLateUpdate),
             BeforeRender       = Pin<VoidCb>(OnBeforeRender),
             OnDestroy          = Pin<VoidCb>(OnDestroyCallback),
             OnAddedToEntity    = Pin<VoidCb>(OnAddedToEntity),
@@ -244,6 +245,7 @@ public static class CSharpComponentRuntime
     private static void OnStart(IntPtr s)              => Get(s)?.DispatchStart();
     private static void OnUpdate(IntPtr s, float dt)   => Get(s)?.DispatchUpdate(dt);
     private static void OnFixedUpdate(IntPtr s, float dt) => Get(s)?.DispatchFixedUpdate(dt);
+    private static void OnLateUpdate(IntPtr s, float dt) => Get(s)?.DispatchLateUpdate(dt);
     private static void OnBeforeRender(IntPtr s)       => Get(s)?.DispatchBeforeRender();
     private static void OnDestroyCallback(IntPtr s)    => Get(s)?.DispatchOnDestroy();
     private static void OnAddedToEntity(IntPtr s)      => Get(s)?.DispatchOnAddedToEntity();

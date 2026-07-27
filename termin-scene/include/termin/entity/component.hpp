@@ -109,27 +109,43 @@ public:
 
     bool has_update() const { return _c.has_update; }
     void set_has_update(bool v) {
-        set_lifecycle_capabilities(v, _c.has_fixed_update, _c.has_before_render);
+        set_lifecycle_capabilities(
+            v, _c.has_fixed_update, _c.has_late_update, _c.has_before_render);
     }
 
     bool has_fixed_update() const { return _c.has_fixed_update; }
     void set_has_fixed_update(bool v) {
-        set_lifecycle_capabilities(_c.has_update, v, _c.has_before_render);
+        set_lifecycle_capabilities(
+            _c.has_update, v, _c.has_late_update, _c.has_before_render);
+    }
+
+    bool has_late_update() const { return _c.has_late_update; }
+    void set_has_late_update(bool v) {
+        set_lifecycle_capabilities(
+            _c.has_update, _c.has_fixed_update, v, _c.has_before_render);
     }
 
     bool has_before_render() const { return _c.has_before_render; }
     void set_has_before_render(bool v) {
-        set_lifecycle_capabilities(_c.has_update, _c.has_fixed_update, v);
+        set_lifecycle_capabilities(
+            _c.has_update, _c.has_fixed_update, _c.has_late_update, v);
     }
 
-    void set_lifecycle_capabilities(bool update, bool fixed_update, bool before_render) {
-        tc_component_set_lifecycle_capabilities(&_c, update, fixed_update, before_render);
+    void set_lifecycle_capabilities(
+        bool update,
+        bool fixed_update,
+        bool late_update,
+        bool before_render
+    ) {
+        tc_component_set_lifecycle_capabilities(
+            &_c, update, fixed_update, late_update, before_render);
     }
 
     // Lifecycle hooks (virtual - subclasses override these)
     virtual void start() {}
     virtual void update(float dt) { (void)dt; }
     virtual void fixed_update(float dt) { (void)dt; }
+    virtual void late_update(float dt) { (void)dt; }
     virtual void before_render() {}
     virtual void on_destroy() {}
     virtual void on_editor_start() {}
@@ -206,6 +222,7 @@ private:
     static void _cb_start(tc_component* c);
     static void _cb_update(tc_component* c, float dt);
     static void _cb_fixed_update(tc_component* c, float dt);
+    static void _cb_late_update(tc_component* c, float dt);
     static void _cb_before_render(tc_component* c);
     static void _cb_on_destroy(tc_component* c);
     static void _cb_on_added_to_entity(tc_component* c);

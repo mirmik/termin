@@ -21,6 +21,7 @@ class HeadlessCounterComponent(PythonComponent):
         super().__init__()
         self.start_count = 0
         self.update_count = 0
+        self.late_update_count = 0
         self.before_render_count = 0
         self.last_dt = 0.0
 
@@ -29,6 +30,10 @@ class HeadlessCounterComponent(PythonComponent):
 
     def update(self, dt: float) -> None:
         self.update_count += 1
+        self.last_dt = dt
+
+    def late_update(self, dt: float) -> None:
+        self.late_update_count += 1
         self.last_dt = dt
 
     def before_render(self) -> None:
@@ -447,6 +452,7 @@ def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) 
         component = components[0]
         assert component.start_count == 1
         assert component.update_count == 3
+        assert component.late_update_count == 3
         assert component.before_render_count == 0
         assert component.last_dt == pytest.approx(0.125)
         assert stats.frames == 3

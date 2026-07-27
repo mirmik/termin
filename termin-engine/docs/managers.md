@@ -58,7 +58,9 @@ if render needed:
   SceneManager.after_render callback
 ```
 
-Scene update идет до render. `before_render` вызывается после update, но до `RenderingManager`, чтобы компоненты могли подготовить render-facing state.
+Scene update идет до render и заканчивается стадией `late_update`.
+`before_render` вызывается только при подготовке реального кадра, до
+`RenderingManager`, чтобы компоненты могли опубликовать render-facing state.
 
 ## Типовые сценарии
 
