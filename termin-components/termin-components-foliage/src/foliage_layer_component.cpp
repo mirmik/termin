@@ -250,10 +250,15 @@ RenderItemTaskRejection foliage_render_item_task_shader_planner(
         out_detail = "pass shader contract does not define a foliage transform";
         return RenderItemTaskRejection::PassVertexTransformUnsupported;
     }
-    const tc_mesh* prototype_mesh =
-        request.item->payload.foliage_batch.prototype_mesh;
+    const tc_mesh_handle prototype_mesh_handle =
+        request.item->payload.foliage_batch.prototype_mesh_handle;
+    if (tc_mesh_handle_is_invalid(prototype_mesh_handle)) {
+        out_detail = "foliage item has no stable prototype mesh handle";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
+    const tc_mesh* prototype_mesh = tc_mesh_get(prototype_mesh_handle);
     if (!prototype_mesh) {
-        out_detail = "foliage item has no prototype mesh";
+        out_detail = "foliage prototype mesh handle is stale or invalid";
         return RenderItemTaskRejection::ShaderPlanningRejected;
     }
     for (const MaterialPipelineSemantic& attribute :
@@ -537,7 +542,6 @@ bool FoliageLayerComponent::collect_render_items(
         Mat44f model = get_model_matrix(entity());
         std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
 
-        item.payload.foliage_batch.prototype_mesh = mesh;
         item.payload.foliage_batch.prototype_mesh_handle = mesh_handle;
         item.payload.foliage_batch.foliage_uuid = foliage_uuid.c_str();
 
@@ -574,9 +578,17 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
         return false;
     }
 
-    tc_mesh* mesh = item.payload.foliage_batch.prototype_mesh;
+    const tc_mesh_handle mesh_handle =
+        item.payload.foliage_batch.prototype_mesh_handle;
+    if (tc_mesh_handle_is_invalid(mesh_handle)) {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot draw foliage: prototype mesh payload has no stable handle");
+        return false;
+    }
+    tc_mesh* mesh = tc_mesh_get(mesh_handle);
     if (!mesh) {
-        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: prototype mesh is missing");
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot draw foliage: prototype mesh handle is stale or invalid");
         return false;
     }
 

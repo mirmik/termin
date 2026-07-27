@@ -612,7 +612,6 @@ bool RecastNavMeshBuilderComponent::collect_render_items(
             item.material = mat.handle;
             item.material_phase_index = static_cast<size_t>(phase - material->phases);
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-            item.payload.mesh.mesh = mesh;
             item.payload.mesh.mesh_handle = layer.mesh->handle;
             item.payload.mesh.submesh_index = 0;
             if (!sink.emit(&item, sink.user_data)) {
