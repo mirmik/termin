@@ -13,11 +13,13 @@
 - добавлены предварительные `DenseVectorView`/`DenseMatrixView` контракты с
   явными element strides;
 - публичные headers, install/export и CMake package contract не требуют Eigen;
+- добавлен language-neutral JSON oracle с analytic/KKT contracts для QP,
+  nullspace и HQP;
 - solver problem/result contracts ещё не зафиксированы;
 - Python реализация пока остаётся reference implementation.
 
 Инициатива ведётся в Kanboard swimlane `Native QOpt, FEM & Robotics`,
-umbrella #980. Foundation закрыт в #981; следующий executable шаг — oracle #984.
+umbrella #980. Foundation закрыт в #981, solver oracle — в #984.
 
 ## Мотивация
 
@@ -66,13 +68,21 @@ Eigen не должен становиться публичным SDK API.
 
 1. [x] Добавить C++ target `termin_qopt`.
 2. [x] Ввести минимальные public data contracts для dense vector/matrix views.
-3. Перенести `solve_qp_equalities`.
-4. Перенести `solve_qp_active_set`.
-5. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
-6. Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
-7. Перенести multibody/FEM assembler поверх того же solver API.
-8. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
-9. Отдельно оценить sparse backend для больших FEM-систем.
+3. [x] Зафиксировать независимый solver oracle и semantic statuses.
+4. Перенести `solve_qp_equalities`.
+5. Перенести `solve_qp_active_set`.
+6. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
+7. Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
+8. Перенести multibody/FEM assembler поверх того же solver API.
+9. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
+10. Отдельно оценить sparse backend для больших FEM-систем.
+
+Oracle не объявляет текущее Python-поведение правильным по умолчанию.
+Оптимальные случаи проверяются через primal/KKT bounds, nullspace — через
+инварианты подпространства, HQP — через сохранение старших приоритетов.
+`infeasible`, `unbounded` и `invalid_input` имеют независимые certificates или
+структурную диагностику; текущий Python API не считается совместимым с ними,
+пока не начнёт возвращать semantic status.
 
 Предварительные views намеренно не задают ownership, allocation, QP problem
 layout или result/error model. Они нужны как нейтральная граница между
