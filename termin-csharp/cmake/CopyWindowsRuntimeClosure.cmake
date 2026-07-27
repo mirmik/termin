@@ -32,7 +32,13 @@ set(_allowed_unresolved_windows_components
 set(_unexpected_unresolved_dependencies)
 foreach(_dependency IN LISTS _unresolved_dependencies)
     string(TOLOWER "${_dependency}" _dependency_lower)
-    if(NOT _dependency_lower IN_LIST _allowed_unresolved_windows_components)
+    list(
+        FIND
+        _allowed_unresolved_windows_components
+        "${_dependency_lower}"
+        _allowed_unresolved_index
+    )
+    if(_allowed_unresolved_index EQUAL -1)
         list(APPEND _unexpected_unresolved_dependencies "${_dependency}")
     endif()
 endforeach()
