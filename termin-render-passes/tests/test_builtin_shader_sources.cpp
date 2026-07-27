@@ -838,20 +838,8 @@ TEST_CASE("modular foliage material transform owns instance placement resources"
     CHECK(source.find("per_frame") == std::string::npos);
 }
 
-TEST_CASE("built-in shader catalog resolves transitional foliage shadow template") {
+TEST_CASE("built-in shader catalog resolves world tube line template") {
     clear_builtin_root();
-
-    std::string foliage_shadow_vertex =
-        tgfx::load_builtin_shader_stage_source_from_catalog(
-            "termin-engine-foliage-shadow", "vertex");
-    REQUIRE(!foliage_shadow_vertex.empty());
-    CHECK(foliage_shadow_vertex.find("import termin_prelude") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("[[TerminScope(\"frame\")]]") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("[[TerminScope(\"draw\")]]") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("ConstantBuffer<FoliagePushData> foliage_draw") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("StructuredBuffer<FoliageInstance> foliage_instances") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("SV_InstanceID") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("layout(") == std::string::npos);
 
     std::string tube_vertex =
         tgfx::load_builtin_shader_stage_source_from_catalog(
