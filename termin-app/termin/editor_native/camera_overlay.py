@@ -89,7 +89,7 @@ class NativeEditorCameraOverlayProjection:
         self._controller.bind_runtime(
             camera=camera,
             gizmo=self._viewport.interaction.transform_gizmo,
-            request_render=self._viewport._request_render,
+            request_render=self._viewport._request_scene_render,
         )
         self._runtime_bound = True
         self.sync_buttons()
