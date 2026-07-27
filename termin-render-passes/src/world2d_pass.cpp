@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <vector>
 
@@ -23,11 +24,16 @@ namespace {
 
 constexpr const char* WORLD2D_SHADER_UUID = "termin-engine-world2d";
 
+// Raw vertex-buffer payload consumed by the World2D shader layout.
 struct World2DVertex {
     float position[3];
     float uv[2];
     float tint[4];
 };
+static_assert(sizeof(World2DVertex) == sizeof(float) * 9);
+static_assert(offsetof(World2DVertex, position) == 0);
+static_assert(offsetof(World2DVertex, uv) == sizeof(float) * 3);
+static_assert(offsetof(World2DVertex, tint) == sizeof(float) * 5);
 
 struct ClipPoint {
     float x;

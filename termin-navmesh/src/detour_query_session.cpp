@@ -14,6 +14,10 @@ namespace termin {
 
 namespace {
 
+Vec3f recast_point_from_detour(const float point[3]) {
+    return recast_to_termin(Vec3f{point[0], point[1], point[2]});
+}
+
 const char* detour_poly_type_name(unsigned char type) {
     switch (type) {
         case DT_POLYTYPE_GROUND:
@@ -101,6 +105,10 @@ float point_distance(const Vec3f& a, const Vec3f& b) {
 }
 
 const float* vec3_ptr(const Vec3f& value) {
+    return &value.x;
+}
+
+float* vec3_ptr(Vec3f& value) {
     return &value.x;
 }
 
@@ -248,7 +256,7 @@ bool DetourQuerySession::load_single_tile_data(const std::vector<unsigned char>&
 
 bool DetourQuerySession::find_nearest_poly(const Vec3f& point,
                                            unsigned long long& poly_ref,
-                                           float nearest[3],
+                                           Vec3f& nearest,
                                            bool* over_poly) {
     poly_ref = 0;
     if (!is_ready()) {
@@ -263,8 +271,10 @@ bool DetourQuerySession::find_nearest_poly(const Vec3f& point,
 
     dtPolyRef ref = 0;
     dtStatus status = over_poly
-        ? _query->findNearestPoly(vec3_ptr(rc_point), extents, &filter, &ref, nearest, over_poly)
-        : _query->findNearestPoly(vec3_ptr(rc_point), extents, &filter, &ref, nearest);
+        ? _query->findNearestPoly(
+              vec3_ptr(rc_point), extents, &filter, &ref, vec3_ptr(nearest), over_poly)
+        : _query->findNearestPoly(
+              vec3_ptr(rc_point), extents, &filter, &ref, vec3_ptr(nearest));
     if (!dtStatusSucceed(status) || ref == 0) {
         return false;
     }
@@ -275,7 +285,7 @@ bool DetourQuerySession::find_nearest_poly(const Vec3f& point,
 
 DetourClosestPointResult DetourQuerySession::closest_point(const Vec3f& point) {
     DetourClosestPointResult result;
-    float nearest[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f nearest{0.0f, 0.0f, 0.0f};
     bool over_poly = false;
     unsigned long long ref = 0;
     if (!find_nearest_poly(point, ref, nearest, &over_poly)) {
@@ -353,8 +363,8 @@ DetourPathResult DetourQuerySession::find_detailed_path(
                 max_polys,
                 max_straight_path);
 
-    float nearest_start[3] = {0.0f, 0.0f, 0.0f};
-    float nearest_end[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f nearest_start{0.0f, 0.0f, 0.0f};
+    Vec3f nearest_end{0.0f, 0.0f, 0.0f};
     unsigned long long start_ref_raw = 0;
     unsigned long long end_ref_raw = 0;
     bool start_over_poly = false;
@@ -401,8 +411,8 @@ DetourPathResult DetourQuerySession::find_detailed_path(
     const dtStatus find_path_status = _query->findPath(
             static_cast<dtPolyRef>(start_ref_raw),
             static_cast<dtPolyRef>(end_ref_raw),
-            nearest_start,
-            nearest_end,
+            vec3_ptr(nearest_start),
+            vec3_ptr(nearest_end),
             &filter,
             path.data(),
             &path_count,
@@ -428,8 +438,8 @@ DetourPathResult DetourQuerySession::find_detailed_path(
     int straight_count = 0;
 
     const dtStatus straight_status = _query->findStraightPath(
-            nearest_start,
-            nearest_end,
+            vec3_ptr(nearest_start),
+            vec3_ptr(nearest_end),
             path.data(),
             path_count,
             straight.data(),
@@ -455,7 +465,7 @@ DetourPathResult DetourQuerySession::find_detailed_path(
         const dtPolyRef ref = refs[static_cast<size_t>(i)];
 
         DetourPathPoint point;
-        point.point = recast_to_termin(&straight[static_cast<size_t>(i) * 3]);
+        point.point = recast_point_from_detour(&straight[static_cast<size_t>(i) * 3]);
         point.flags = flags[static_cast<size_t>(i)];
         point.poly_ref = static_cast<unsigned long long>(ref);
         point.off_mesh_connection = (point.flags & DT_STRAIGHTPATH_OFFMESH_CONNECTION) != 0;
@@ -542,7 +552,7 @@ DetourRaycastResult DetourQuerySession::raycast(
         return result;
     }
 
-    float nearest_start[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f nearest_start{0.0f, 0.0f, 0.0f};
     unsigned long long start_ref_raw = 0;
     if (!find_nearest_poly(start, start_ref_raw, nearest_start)) {
         return result;
@@ -553,18 +563,18 @@ DetourRaycastResult DetourQuerySession::raycast(
     std::vector<dtPolyRef> visited(static_cast<size_t>(max_path));
     int visited_count = 0;
     float t = 0.0f;
-    float hit_normal[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f hit_normal{0.0f, 0.0f, 0.0f};
     dtQueryFilter filter;
     filter.setIncludeFlags(0xffff);
     filter.setExcludeFlags(0);
 
     if (!dtStatusSucceed(_query->raycast(
             static_cast<dtPolyRef>(start_ref_raw),
-            nearest_start,
+            vec3_ptr(nearest_start),
             vec3_ptr(rc_end),
             &filter,
             &t,
-            hit_normal,
+            vec3_ptr(hit_normal),
             visited.data(),
             &visited_count,
             max_path))) {
@@ -575,7 +585,7 @@ DetourRaycastResult DetourQuerySession::raycast(
     result.hit = t < 1.0f;
     result.t = result.hit ? t : 1.0f;
 
-    float hit_rc[3] = {
+    const Vec3f hit_rc{
         nearest_start[0] + (rc_end[0] - nearest_start[0]) * result.t,
         nearest_start[1] + (rc_end[1] - nearest_start[1]) * result.t,
         nearest_start[2] + (rc_end[2] - nearest_start[2]) * result.t,

@@ -42,6 +42,6 @@ TERMIN_NAVMESH_COMPONENTS_API bool load_detour_tile_blobs(const std::filesystem:
 TERMIN_NAVMESH_COMPONENTS_API bool load_detour_tile_blobs_from_navmesh(const TcNavMesh& navmesh,
                                                                        std::vector<std::vector<unsigned char>>& blobs);
 TERMIN_NAVMESH_COMPONENTS_API Vec3f termin_to_recast(const Vec3f& p);
-TERMIN_NAVMESH_COMPONENTS_API Vec3f recast_to_termin(const float p[3]);
+TERMIN_NAVMESH_COMPONENTS_API Vec3f recast_to_termin(const Vec3f& p);
 
 } // namespace termin
