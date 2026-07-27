@@ -35,11 +35,18 @@ namespace {
 constexpr int FOLIAGE_GEOMETRY_ID = 0;
 
 struct FoliageGpuInstance {
+    // Shader storage-buffer ABI: two packed float3+scalar lanes.
     float position[3];
     float yaw;
     float normal[3];
     float seed;
 };
+
+static_assert(sizeof(FoliageGpuInstance) == sizeof(float) * 8);
+static_assert(offsetof(FoliageGpuInstance, position) == 0);
+static_assert(offsetof(FoliageGpuInstance, yaw) == sizeof(float) * 3);
+static_assert(offsetof(FoliageGpuInstance, normal) == sizeof(float) * 4);
+static_assert(offsetof(FoliageGpuInstance, seed) == sizeof(float) * 7);
 
 struct UploadedBuffer {
     tgfx::BufferHandle buffer;

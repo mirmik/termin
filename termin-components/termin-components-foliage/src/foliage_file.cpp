@@ -1,6 +1,7 @@
 #include <termin/foliage/foliage_file.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -26,6 +27,7 @@ public:
     uint32_t coordinate_space = FOLIAGE_COORDINATE_SPACE_LOCAL;
     uint32_t reserved0 = 0;
     uint64_t instance_count = 0;
+    // Stable .tfoliage v1 byte layout; keep these as raw packed file fields.
     float bounds_min[3] = {0.0f, 0.0f, 0.0f};
     float bounds_max[3] = {0.0f, 0.0f, 0.0f};
     uint8_t reserved[32] = {};
@@ -33,6 +35,8 @@ public:
 
 static_assert(sizeof(FoliageInstance) == FOLIAGE_INSTANCE_STRIDE);
 static_assert(sizeof(FoliageFileHeader) == FOLIAGE_HEADER_SIZE);
+static_assert(offsetof(FoliageFileHeader, bounds_min) == 40);
+static_assert(offsetof(FoliageFileHeader, bounds_max) == 52);
 
 bool host_is_little_endian() {
     const uint16_t value = 1;

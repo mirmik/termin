@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <cstring>
 #include <set>
@@ -45,11 +46,17 @@ public:
     bool bidirectional = false;
 
 private:
+    // Raw vertex-buffer payload consumed by the debug mesh layout.
     struct Vertex {
         float position[3];
         float normal[3];
         float uv[2];
     };
+    static_assert(sizeof(Vertex) == sizeof(float) * 8);
+    static_assert(offsetof(Vertex, position) == 0);
+    static_assert(offsetof(Vertex, normal) == sizeof(float) * 3);
+    static_assert(offsetof(Vertex, uv) == sizeof(float) * 6);
+
     mutable TcMesh _debug_mesh;
     mutable TcMaterial _debug_material;
     mutable tc_vec3 _mesh_start = {0.0, 0.0, 0.0};

@@ -106,7 +106,7 @@ public:
 private:
     bool find_nearest_poly(const Vec3f& point,
                            unsigned long long& poly_ref,
-                           float nearest[3],
+                           Vec3f& nearest,
                            bool* over_poly = nullptr);
 };
 

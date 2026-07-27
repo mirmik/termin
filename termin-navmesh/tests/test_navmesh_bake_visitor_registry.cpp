@@ -43,14 +43,14 @@ int main() {
             linear_visitor_called = true;
 
             termin::NavMeshLinearPathSegmentRecord first;
-            first.end[0] = 1.0f;
+            first.end.x = 1.0f;
             first.user_id = termin::stable_navmesh_source_user_id(entity, "linear:first");
             first.debug_name = "first";
             const int first_index = input.add_linear_segment(first);
 
             termin::NavMeshLinearPathSegmentRecord second;
-            second.start[0] = 1.0f;
-            second.end[0] = 2.0f;
+            second.start.x = 1.0f;
+            second.end.x = 2.0f;
             second.user_id = termin::stable_navmesh_source_user_id(entity, "linear:second");
             second.debug_name = "second";
             const int second_index = input.add_linear_segment(second);

@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <optional>
 
+#include <termin/geom/vec3.hpp>
+
 namespace termin {
 
 // Span in a heightfield column (voxel range)
@@ -24,8 +26,8 @@ struct RecastDebugData {
         int height = 0;
         float cs = 0.0f;  // cell size XZ
         float ch = 0.0f;  // cell height Y
-        float bmin[3] = {0, 0, 0};
-        float bmax[3] = {0, 0, 0};
+        Vec3f bmin{0, 0, 0};
+        Vec3f bmax{0, 0, 0};
 
         // Spans per cell: spans[z * width + x] = list of spans in that column
         std::vector<std::vector<RecastSpan>> spans;
@@ -43,8 +45,8 @@ struct RecastDebugData {
         int span_count = 0;
         float cs = 0.0f;
         float ch = 0.0f;
-        float bmin[3] = {0, 0, 0};
-        float bmax[3] = {0, 0, 0};
+        Vec3f bmin{0, 0, 0};
+        Vec3f bmax{0, 0, 0};
 
         // Per-span data (indexed by span index, not by cell)
         std::vector<uint16_t> y;          // span height
@@ -84,8 +86,8 @@ struct RecastDebugData {
         std::vector<Contour> contours;
         float cs = 0.0f;
         float ch = 0.0f;
-        float bmin[3] = {0, 0, 0};
-        float bmax[3] = {0, 0, 0};
+        Vec3f bmin{0, 0, 0};
+        Vec3f bmax{0, 0, 0};
 
         void clear() {
             contours.clear();
@@ -111,8 +113,8 @@ struct RecastDebugData {
 
         float cs = 0.0f;
         float ch = 0.0f;
-        float bmin[3] = {0, 0, 0};
-        float bmax[3] = {0, 0, 0};
+        Vec3f bmin{0, 0, 0};
+        Vec3f bmax{0, 0, 0};
 
         void clear() {
             verts.clear();
