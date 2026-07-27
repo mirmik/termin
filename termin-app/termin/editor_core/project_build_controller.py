@@ -91,7 +91,7 @@ class ProjectBuildController:
         report = inspect_profile_capabilities(profile)
         request = compile_profile_build_request(profile, report.context)
         self._emit(f"Target: {request.target}")
-        self._emit(f"Entry scene: {request.context.entry_scene}")
+        self._emit(f"Entry scene: {request.context.entry_scene.as_posix()}")
         self._emit(f"Output: {request.context.dist_dir}")
         self._emit(f"Runtime backends: {', '.join(request.runtime_backends)}")
         for diagnostic in report.diagnostics:

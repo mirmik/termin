@@ -154,7 +154,6 @@ public:
             }
             Mat44f model = get_model_matrix(entity());
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-            item.payload.mesh.mesh = mesh;
             item.payload.mesh.mesh_handle = _debug_mesh.handle;
             item.payload.mesh.submesh_index = 0;
             return sink.emit(&item, sink.user_data);

@@ -1264,7 +1264,6 @@ bool LineRenderer::collect_render_items(
             }
             Mat44f model = get_model_matrix(entity());
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-            item.payload.mesh.mesh = mesh;
             item.payload.mesh.mesh_handle = mesh_.handle;
             if (tc_mesh_handle_is_invalid(item.payload.mesh.mesh_handle)) {
                 item.payload.mesh.mesh_handle = tc_mesh_find(mesh->header.uuid);

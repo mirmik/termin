@@ -79,7 +79,8 @@ def test_dry_run_uses_normalized_profile_request_without_building(
 
     assert saves == []
     assert any(line == "Target: desktop" for line in logs)
-    assert any("Scenes/Main.scene" in line for line in logs)
+    expected_scene = (profile.project_root / "Scenes" / "Main.scene").as_posix()
+    assert f"Entry scene: {expected_scene}" in logs
     assert logs[-1] == "Dry run complete; build execution skipped."
 
 

@@ -136,7 +136,7 @@ VertexOutputAdapter shadow_vertex_output_adapter()
 
 void configure_shadow_foliage_provider(VertexTransformProvider& provider)
 {
-    provider.template_uuid.reset();
+    provider.kind = VertexTransformKind::FoliageShadow;
     std::erase_if(
         provider.resources,
         [](const MaterialPipelineResourceDecl& resource) {
@@ -180,13 +180,9 @@ MaterialPipelinePassContract shadow_material_pass_contract()
         material_pipeline_draw_resource_decl(
             "shadow_draw", TC_SHADER_STAGE_VERTEX, 64u));
     contract.foliage_vertex_transform =
-        material_pipeline_make_foliage_vertex_transform_contract(
-            VertexTransformKind::FoliageShadow,
+        material_pipeline_make_foliage_vertex_transform_provider(
             "foliage_shadow",
-            "termin-engine-foliage-shadow",
-            material_pipeline_position_mesh_input(),
-            material_pipeline_standard_material_fragment_interface(),
-            material_pipeline_foliage_vertex_resources());
+            MeshVertexTransformProfile::Position);
     configure_shadow_foliage_provider(*contract.foliage_vertex_transform);
     return contract;
 }

@@ -425,7 +425,7 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     CHECK(items[0].component == renderer->tc_component_ptr());
     CHECK(items[0].geometry_id == 0);
     CHECK(items[0].material_phase == phase);
-    CHECK(items[0].payload.mesh.mesh == mesh.get());
+    CHECK(tc_mesh_handle_eq(items[0].payload.mesh.mesh_handle, mesh.handle));
     CHECK(items[0].payload.mesh.submesh_index == 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
@@ -433,7 +433,7 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     CHECK(items[1].kind == TC_RENDER_ITEM_KIND_MESH);
     CHECK(items[1].geometry_id == 1);
     CHECK(items[1].material_phase == phase);
-    CHECK(items[1].payload.mesh.mesh == mesh.get());
+    CHECK(tc_mesh_handle_eq(items[1].payload.mesh.mesh_handle, mesh.handle));
     CHECK(items[1].payload.mesh.submesh_index == 1u);
 
     tc_mesh_shutdown();
@@ -642,7 +642,7 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     REQUIRE(items.size() == 1u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
     CHECK(items[0].component == renderer->tc_component_ptr());
-    CHECK(items[0].payload.mesh.mesh != nullptr);
+    CHECK(!tc_mesh_handle_is_invalid(items[0].payload.mesh.mesh_handle));
 
     tc_mesh_shutdown();
     tc_shader_shutdown();
