@@ -27,6 +27,7 @@ extern "C" {
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
+#include <termin/render/world2d_pass.hpp>
 
 namespace nb = nanobind;
 
@@ -492,6 +493,31 @@ void bind_render_passes(nb::module_& m) {
         visibility["camera_name"] = camera_cond;
         color_pass.attr("node_param_visibility") = visibility;
     }
+
+    auto world2d_pass = nb::class_<World2DPass, CxxFramePass>(m, "World2DPass")
+        .def("__init__", [](World2DPass* self,
+                            std::string input_res,
+                            std::string output_res,
+                            std::string pass_name) {
+            new (self) World2DPass(input_res, output_res);
+            self->pass_name_set(pass_name);
+            init_pass_from_python(self, "World2DPass");
+        },
+            nb::arg("input_res") = "color",
+            nb::arg("output_res") = "color_world2d",
+            nb::arg("pass_name") = "World2D")
+        .def_rw("input_res", &World2DPass::input_res)
+        .def_rw("output_res", &World2DPass::output_res)
+        .def_prop_ro("reads", &World2DPass::compute_reads)
+        .def_prop_ro("writes", &World2DPass::compute_writes)
+        .def("destroy", &World2DPass::destroy);
+    world2d_pass.attr("category") = "Render";
+    world2d_pass.attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"));
+    world2d_pass.attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo"));
+    world2d_pass.attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("input_res", "output_res"));
 
     nb::class_<ShadowMapResult>(m, "ShadowMapResult")
         .def(nb::init<>())

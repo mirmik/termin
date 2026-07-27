@@ -53,6 +53,9 @@ The mapping is:
 
 This contract is implemented by the header-only `termin::world2d` helpers in
 `termin-base/include/termin/geom/world2d.hpp`.
+The shared `Mat44[f]::look_at` implementation now also follows its documented
+Y-forward/Z-up camera-space convention, so the canonical negative-Y camera
+maps world X to view X, world Y to view depth, and world Z to view up.
 
 A canonical quad is authored counter-clockwise when viewed from the canonical
 camera, so its front normal is negative Y. Sprite `flip_x` and `flip_y` should
@@ -121,6 +124,30 @@ Components should reference sprite assets by stable asset identity. Sprite
 animation, tile sets and editor tooling can then reference the same regions
 without copying UV coordinates and pivots.
 
+The initial on-disk contract is a versioned `.sprite` JSON payload plus the
+ordinary UUID sidecar. The payload contains `format: "termin.sprite"`,
+`version: 1`, a typed texture UUID, integer pixel `region`, texture
+`source_size`, normalized `pivot`, positive `pixels_per_unit`, and the selected
+`sampling` mode. A component serializes the sprite as a typed
+`kind: "sprite_asset"` UUID reference. The native registry keeps the handle
+stable while a reload replaces its fields and increments its version.
+Unregistering marks that same handle unloaded rather than invalidating
+references; a later reload revives it and advances the version again.
+
+Texture interpretation remains a texture-import concern. The texture sidecar
+owns transform flags, nearest/linear default filtering, mip generation,
+clamp/repeat wrapping, sRGB/linear interpretation, and straight/opaque alpha
+mode. The renderer uses straight alpha (`SrcAlpha`, `OneMinusSrcAlpha`);
+premultiplied content is not silently guessed. Atlas authors must provide
+padding/extrusion appropriate for linear filtering. The first SpriteAsset
+schema can select nearest or linear explicitly; atlas grouping and an
+`inherit` shorthand can be added without changing component identity.
+
+Missing or invalid assets fail visibly in the log and do not emit a quad.
+Runtime packages contain both the SpriteAsset descriptor and its referenced
+texture, and load textures before sprites and sprites before scene
+deserialization.
+
 ### Use explicit render ordering
 
 The primary ordering contract should be:
@@ -157,8 +184,33 @@ compatible item across an incompatible item to make a larger batch.
 The default world-sprite state is alpha blending enabled, depth test enabled,
 depth writes disabled and face culling disabled. This allows opaque 3D depth
 already present in the target to occlude sprites while explicit 2D order
-controls sprite-to-sprite compositing. Alternative materials may opt into
-different states, forming separate adjacent batch runs.
+controls sprite-to-sprite compositing. The first vertical slice intentionally
+has one fixed world-sprite shader/state ABI; material overrides are deferred
+until their compatibility and batch-boundary contract is specified instead of
+exposing a field that the pass cannot honor.
+
+The implementation uses a dedicated `World2DPass` after ordinary transparent
+3D rendering. It filters typed world-quad render items, rejects quads wholly
+outside the camera frustum, applies the world-2D comparator, and only merges
+maximal adjacent runs with identical texture and sampling state. Vertex data
+is accumulated per run, so a batch never crosses an intervening compositing
+item. The default pipelines keep the MSAA target live through this pass and
+resolve it afterwards.
+
+### Flat bounds and picking
+
+A sprite owns an exact rectangle on local XZ. Its world AABB is computed from
+all four transformed corners and is intentionally allowed to have zero extent
+on one axis. No arbitrary world-space epsilon is baked into the asset or
+component contract. If a future broad-phase implementation cannot represent
+degenerate boxes, expansion belongs only in that adapter and must be derived
+from its numeric requirements.
+
+Picking intersects the ray with the two triangles of the transformed quad,
+rather than relying on AABB thickness. This remains correct for negative and
+non-uniform scale. GPU entity picking uses the same local quad through the
+normal ID pass and keeps the entity pick ID as the canonical identity; the
+quad's geometry ID is zero.
 
 ## Core components and assets
 

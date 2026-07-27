@@ -1757,7 +1757,16 @@ def test_export_runtime_package_includes_project_texture_referenced_by_material(
         "uuid": texture_uuid,
         "name": "Albedo",
         "source_path": f"textures/{texture_uuid}.png",
-        "import_settings": {"flip_x": True, "flip_y": False, "transpose": True},
+        "import_settings": {
+            "flip_x": True,
+            "flip_y": False,
+            "transpose": True,
+            "filter": "linear",
+            "mipmaps": False,
+            "wrap": "clamp",
+            "color_space": "srgb",
+            "alpha_mode": "straight",
+        },
     }
     assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == texture_path.read_bytes()
     assert {
