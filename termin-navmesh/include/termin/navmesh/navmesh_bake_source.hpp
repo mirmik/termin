@@ -8,6 +8,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/mat44.hpp>
+#include <termin/geom/vec3.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 namespace termin {
@@ -32,8 +33,8 @@ struct TERMIN_NAVMESH_COMPONENTS_API NavMeshGeometryBatch {
 };
 
 struct TERMIN_NAVMESH_COMPONENTS_API NavMeshOffMeshLinkRecord {
-    float start[3] = {0.0f, 0.0f, 0.0f};
-    float end[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f start{0.0f, 0.0f, 0.0f};
+    Vec3f end{0.0f, 0.0f, 0.0f};
     float radius = 0.0f;
     unsigned char direction = 0;
     unsigned char area_id = 0;
@@ -44,8 +45,8 @@ struct TERMIN_NAVMESH_COMPONENTS_API NavMeshOffMeshLinkRecord {
 };
 
 struct TERMIN_NAVMESH_COMPONENTS_API NavMeshLinearPathSegmentRecord {
-    float start[3] = {0.0f, 0.0f, 0.0f};
-    float end[3] = {0.0f, 0.0f, 0.0f};
+    Vec3f start{0.0f, 0.0f, 0.0f};
+    Vec3f end{0.0f, 0.0f, 0.0f};
     unsigned char area_id = 0;
     unsigned short flags = 1;
     unsigned int user_id = 0;

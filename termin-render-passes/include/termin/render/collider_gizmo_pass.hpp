@@ -5,6 +5,7 @@
 #include "termin/render_passes/export.h"
 #include <tgfx2/immediate_renderer.hpp>
 #include <termin/geom/mat44.hpp>
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 namespace colliders { class ConvexHullCollider; }
@@ -55,7 +56,7 @@ public:
 
     // Internal draw methods (called from callback) — emit primitives
     // into the pass-owned ImmediateRenderer.
-    void _draw_box_internal(const Mat44f& entity_world, const float* box_size);
+    void _draw_box_internal(const Mat44f& entity_world, const Vec3f& box_size);
     void _draw_sphere_internal(const Mat44f& entity_world, float radius);
     void _draw_capsule_internal(const Mat44f& entity_world, float height, float radius);
     void _draw_convex_hull_internal(const Mat44f& entity_world, const colliders::ConvexHullCollider* hull);

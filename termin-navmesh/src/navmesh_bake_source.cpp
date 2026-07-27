@@ -164,12 +164,14 @@ void collect_off_mesh_link_component(
     Vec3 end_recast = termin_bake_to_recast(end_bake);
 
     NavMeshOffMeshLinkRecord record;
-    record.start[0] = static_cast<float>(start_recast.x);
-    record.start[1] = static_cast<float>(start_recast.y);
-    record.start[2] = static_cast<float>(start_recast.z);
-    record.end[0] = static_cast<float>(end_recast.x);
-    record.end[1] = static_cast<float>(end_recast.y);
-    record.end[2] = static_cast<float>(end_recast.z);
+    record.start = Vec3f{
+        static_cast<float>(start_recast.x),
+        static_cast<float>(start_recast.y),
+        static_cast<float>(start_recast.z)};
+    record.end = Vec3f{
+        static_cast<float>(end_recast.x),
+        static_cast<float>(end_recast.y),
+        static_cast<float>(end_recast.z)};
     record.radius = static_cast<float>(link->radius);
     record.direction = link->bidirectional ? DT_OFFMESH_CON_BIDIR : 0;
     const int area_id = std::clamp(link->area_id, 0, 63);
@@ -188,8 +190,10 @@ void collect_off_mesh_link_component(
     input.add_off_mesh_link(record);
 }
 
-bool is_finite_point(const float point[3]) {
-    return std::isfinite(point[0]) && std::isfinite(point[1]) && std::isfinite(point[2]);
+bool is_finite_point(const Vec3f& point) {
+    return std::isfinite(point.x) &&
+           std::isfinite(point.y) &&
+           std::isfinite(point.z);
 }
 
 } // namespace

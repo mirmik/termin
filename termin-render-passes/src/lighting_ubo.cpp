@@ -1,11 +1,11 @@
 #include "termin/lighting/lighting_ubo.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace termin {
 
-LightingUBO::LightingUBO() { std::memset(&data, 0, sizeof(data)); }
+LightingUBO::LightingUBO()
+    : data{} {}
 
 LightingUBO::~LightingUBO() { destroy(); }
 
@@ -34,23 +34,27 @@ void LightingUBO::update_from_lights(std::span<const Light> lights, const Vec3 &
     for (int i = 0; i < count; ++i) {
         const Light &light = lights[i];
         LightDataStd140 &ld = data.lights[i];
-        ld.color[0] = float(light.color.x);
-        ld.color[1] = float(light.color.y);
-        ld.color[2] = float(light.color.z);
+        ld.color = Vec3f{
+            float(light.color.x),
+            float(light.color.y),
+            float(light.color.z)};
         ld.intensity = float(light.intensity);
-        ld.direction[0] = float(light.direction.x);
-        ld.direction[1] = float(light.direction.y);
-        ld.direction[2] = float(light.direction.z);
+        ld.direction = Vec3f{
+            float(light.direction.x),
+            float(light.direction.y),
+            float(light.direction.z)};
         ld.range = light.range ? float(*light.range) : 1e9f;
-        ld.position[0] = float(light.position.x);
-        ld.position[1] = float(light.position.y);
-        ld.position[2] = float(light.position.z);
+        ld.position = Vec3f{
+            float(light.position.x),
+            float(light.position.y),
+            float(light.position.z)};
         ld.type = light.type == LightType::Directional ? 0.0f
                   : light.type == LightType::Point     ? 1.0f
                                                        : 2.0f;
-        ld.attenuation[0] = float(light.attenuation.constant);
-        ld.attenuation[1] = float(light.attenuation.linear);
-        ld.attenuation[2] = float(light.attenuation.quadratic);
+        ld.attenuation = Vec3f{
+            float(light.attenuation.constant),
+            float(light.attenuation.linear),
+            float(light.attenuation.quadratic)};
         ld.inner_angle = float(light.inner_angle);
         ld.outer_angle = float(light.outer_angle);
         ld.cascade_count = float(light.shadows.cascade_count);
@@ -58,14 +62,16 @@ void LightingUBO::update_from_lights(std::span<const Light> lights, const Vec3 &
         ld.blend_distance = light.shadows.blend_distance;
     }
     for (int i = count; i < UBO_MAX_LIGHTS; ++i)
-        std::memset(&data.lights[i], 0, sizeof(LightDataStd140));
-    data.ambient_color[0] = float(ambient_color.x);
-    data.ambient_color[1] = float(ambient_color.y);
-    data.ambient_color[2] = float(ambient_color.z);
+        data.lights[i] = {};
+    data.ambient_color = Vec3f{
+        float(ambient_color.x),
+        float(ambient_color.y),
+        float(ambient_color.z)};
     data.ambient_intensity = ambient_intensity;
-    data.camera_position[0] = float(camera_position.x);
-    data.camera_position[1] = float(camera_position.y);
-    data.camera_position[2] = float(camera_position.z);
+    data.camera_position = Vec3f{
+        float(camera_position.x),
+        float(camera_position.y),
+        float(camera_position.z)};
     data.light_count = float(count);
     data.shadow_method = float(shadow_settings.method);
     data.shadow_softness = float(shadow_settings.softness);

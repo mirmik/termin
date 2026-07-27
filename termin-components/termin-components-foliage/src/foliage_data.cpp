@@ -67,7 +67,7 @@ void FoliageData::remove_instance_at(size_t index) {
     ++version;
 }
 
-size_t FoliageData::remove_instances_in_radius(const FoliageVec3f& center, float radius) {
+size_t FoliageData::remove_instances_in_radius(const Vec3f& center, float radius) {
     if (radius < 0.0f || instances.empty()) {
         return 0;
     }

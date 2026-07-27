@@ -229,12 +229,12 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     // uses GLSL int semantics.
     int variant_int = (skybox_type == TC_SKYBOX_SOLID) ? 1 : 0;
 
-    float solid_rgb[3] = {0, 0, 0};
-    float top_rgb[3]   = {0, 0, 0};
-    float bot_rgb[3]   = {0, 0, 0};
-    tc_scene_get_skybox_color(scene,        &solid_rgb[0], &solid_rgb[1], &solid_rgb[2]);
-    tc_scene_get_skybox_top_color(scene,    &top_rgb[0],   &top_rgb[1],   &top_rgb[2]);
-    tc_scene_get_skybox_bottom_color(scene, &bot_rgb[0],   &bot_rgb[1],   &bot_rgb[2]);
+    Vec3f solid_rgb{0, 0, 0};
+    Vec3f top_rgb{0, 0, 0};
+    Vec3f bot_rgb{0, 0, 0};
+    tc_scene_get_skybox_color(scene, &solid_rgb.x, &solid_rgb.y, &solid_rgb.z);
+    tc_scene_get_skybox_top_color(scene, &top_rgb.x, &top_rgb.y, &top_rgb.z);
+    tc_scene_get_skybox_bottom_color(scene, &bot_rgb.x, &bot_rgb.y, &bot_rgb.z);
 
     Mat44 view64 = ctx.camera->get_view_matrix();
     Mat44 proj64 = ctx.camera->get_projection_matrix();
@@ -248,13 +248,13 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     values.emplace_back("u_skybox_type", "Int", variant_int);
     values.emplace_back(
         "u_skybox_color", "Color",
-        std::vector<double>{solid_rgb[0], solid_rgb[1], solid_rgb[2], 1.0});
+        std::vector<double>{solid_rgb.x, solid_rgb.y, solid_rgb.z, 1.0});
     values.emplace_back(
         "u_skybox_top_color", "Color",
-        std::vector<double>{top_rgb[0], top_rgb[1], top_rgb[2], 1.0});
+        std::vector<double>{top_rgb.x, top_rgb.y, top_rgb.z, 1.0});
     values.emplace_back(
         "u_skybox_bottom_color", "Color",
-        std::vector<double>{bot_rgb[0], bot_rgb[1], bot_rgb[2], 1.0});
+        std::vector<double>{bot_rgb.x, bot_rgb.y, bot_rgb.z, 1.0});
 
     // Begin pass with LoadOp::Load — inplace alias means input_res already
     // holds whatever the framegraph allocator cleared it to.
