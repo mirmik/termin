@@ -27,6 +27,7 @@ def test_builtin_default_pipeline_color_fbos_follow_output_render_target(renderi
     assert formats["skybox"] == "render_target"
     assert formats["color_opaque"] == "render_target"
     assert formats["color"] == "render_target"
+    assert formats["color_world2d"] == "render_target"
     assert formats["color_resolved"] == "render_target"
     assert formats["color_bloom"] == "render_target"
     assert formats["color+widgets"] == "render_target"
@@ -35,6 +36,7 @@ def test_builtin_default_pipeline_color_fbos_follow_output_render_target(renderi
     assert samples["skybox"] == 4
     assert samples["color_opaque"] == 4
     assert samples["color"] == 4
+    assert samples["color_world2d"] == 4
     assert samples["color_resolved"] == 1
 
 
@@ -45,6 +47,8 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager)
     pass_names = [frame_pass.pass_name for frame_pass in pipeline.passes]
 
     assert "ResolvePass" in pass_types
+    assert "World2DPass" in pass_types
+    assert pass_names.index("World2D") < pass_names.index("Resolve")
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
 
 

@@ -19,6 +19,7 @@ FRAME_PASS_SPECS: list[tuple[str, str]] = [
     ("termin.render_passes", "ImmediateDepthPass"),
     ("termin.render_passes", "UnifiedGizmoPass"),
     ("termin.render_passes", "UIWidgetPass"),
+    ("termin.render_passes", "World2DPass"),
 ]
 
 __all__ = ["FRAME_PASS_SPECS"]

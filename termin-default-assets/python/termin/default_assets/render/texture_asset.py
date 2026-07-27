@@ -37,6 +37,11 @@ class TextureAsset(DataAsset[TcTexture]):
         self._flip_x: bool = False
         self._flip_y: bool = True  # Default import convention: texture origin at bottom-left.
         self._transpose: bool = False
+        self._filter: str = "linear"
+        self._mipmaps: bool = False
+        self._wrap: str = "clamp"
+        self._color_space: str = "srgb"
+        self._alpha_mode: str = "straight"
 
     # --- Convenience property ---
 
@@ -83,6 +88,26 @@ class TextureAsset(DataAsset[TcTexture]):
         """Texture transpose import flag."""
         return self._transpose
 
+    @property
+    def filter(self) -> str:
+        return self._filter
+
+    @property
+    def mipmaps(self) -> bool:
+        return self._mipmaps
+
+    @property
+    def wrap(self) -> str:
+        return self._wrap
+
+    @property
+    def color_space(self) -> str:
+        return self._color_space
+
+    @property
+    def alpha_mode(self) -> str:
+        return self._alpha_mode
+
     # --- Spec parsing ---
 
     def _parse_spec_fields(self, spec_data: dict) -> None:
@@ -90,6 +115,19 @@ class TextureAsset(DataAsset[TcTexture]):
         self._flip_x = spec_data.get("flip_x", False)
         self._flip_y = spec_data.get("flip_y", True)
         self._transpose = spec_data.get("transpose", False)
+        self._filter = spec_data.get("filter", "linear")
+        self._mipmaps = spec_data.get("mipmaps", False)
+        self._wrap = spec_data.get("wrap", "clamp")
+        self._color_space = spec_data.get("color_space", "srgb")
+        self._alpha_mode = spec_data.get("alpha_mode", "straight")
+        if self._filter not in {"linear", "nearest"}:
+            raise ValueError(f"Unsupported texture filter: {self._filter}")
+        if self._wrap not in {"clamp", "repeat"}:
+            raise ValueError(f"Unsupported texture wrap: {self._wrap}")
+        if self._color_space not in {"srgb", "linear"}:
+            raise ValueError(f"Unsupported texture color space: {self._color_space}")
+        if self._alpha_mode not in {"straight", "opaque"}:
+            raise ValueError(f"Unsupported texture alpha mode: {self._alpha_mode}")
 
     def _build_spec_data(self) -> dict:
         """Build spec data with texture settings."""
@@ -101,13 +139,18 @@ class TextureAsset(DataAsset[TcTexture]):
             spec["flip_y"] = False
         if self._transpose:
             spec["transpose"] = True
+        spec["filter"] = self._filter
+        spec["mipmaps"] = self._mipmaps
+        spec["wrap"] = self._wrap
+        spec["color_space"] = self._color_space
+        spec["alpha_mode"] = self._alpha_mode
         return spec
 
     # --- Content parsing ---
 
     def _texture_from_decoded(self, decoded, source_path: str = "") -> TcTexture:
         data = decoded.to_numpy(copy=True)
-        return TcTexture.from_data(
+        texture = TcTexture.from_data(
             data=data,
             width=decoded.width,
             height=decoded.height,
@@ -119,6 +162,9 @@ class TextureAsset(DataAsset[TcTexture]):
             source_path=source_path,
             uuid=self.uuid,
         )
+        texture.set_mipmap(self._mipmaps)
+        texture.set_clamp(self._wrap == "clamp")
+        return texture
 
     def _parse_content(self, content: bytes) -> TcTexture | None:
         """Parse image bytes into TcTexture."""
@@ -149,6 +195,11 @@ class TextureAsset(DataAsset[TcTexture]):
         asset._flip_x = spec.flip_x
         asset._flip_y = spec.flip_y
         asset._transpose = spec.transpose
+        asset._filter = spec.filter
+        asset._mipmaps = spec.mipmaps
+        asset._wrap = spec.wrap
+        asset._color_space = spec.color_space
+        asset._alpha_mode = spec.alpha_mode
         asset.texture_data = asset._texture_from_decoded(decoded, str(path))
         return asset
 
