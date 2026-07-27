@@ -487,10 +487,18 @@ Migration proceeds as follows:
 
 1. add the independent `termin-visual-scene` module and its handle-based
    `VisualScene2D` core, depending on `termin-graphics`;
-2. implement GUI-native `SceneView` as an adapter over it;
-3. port node-graph consumers and embedded widget positioning;
-4. migrate language bindings to scene-plus-handle wrappers;
-5. remove the old `shared_ptr<GraphicsItem>` storage and callback API after all
+2. finish primitive payloads, render snapshots, hit testing and pointer
+   controllers, then validate the public core with a standalone
+   `termin-visual-scene/examples` scene containing draggable primitive items;
+3. implement GUI-native `SceneView` as an adapter over the shared scene and
+   port node-graph consumers and embedded widget positioning;
+4. validate widget/scene composition with a focused
+   `termin-gui-native/examples` application which renders and interacts with
+   ordinary widgets and `GraphicItem` values in one document;
+5. only after both examples pass, expose `PlotFrame2D`, add retained tcplot
+   annotations and implement the interactive marker/callout vertical slice;
+6. migrate language bindings to scene-plus-handle wrappers;
+7. remove the old `shared_ptr<GraphicsItem>` storage and callback API after all
    repository consumers move.
 
 Active development does not require a long-lived compatibility fallback. A
@@ -515,6 +523,11 @@ The direction is implemented when:
 
 - one generation-handle `termin-visual-scene` module is shared by GUI tools and
   plot annotations;
+- a standalone primitive-scene example demonstrates public item creation,
+  rendering, hit testing and captured dragging without GUI or tcplot
+  dependencies;
+- a GUI-native example demonstrates widgets and graphic items rendering and
+  receiving input together before tcplot integration begins;
 - the old GUI-native `shared_ptr<GraphicsItem>` storage is removed;
 - `tcplot` exposes plot-frame snapshots and retained semantic annotations
   without depending on `termin-gui-native`;
