@@ -29,6 +29,12 @@ static void py_vtable_fixed_update(tc_component* c, float dt) {
     }
 }
 
+static void py_vtable_late_update(tc_component* c, float dt) {
+    if (g_py_callbacks.late_update && c->body) {
+        g_py_callbacks.late_update(c->body, dt);
+    }
+}
+
 static void py_vtable_before_render(tc_component* c) {
     if (g_py_callbacks.before_render && c->body) {
         g_py_callbacks.before_render(c->body);
@@ -131,6 +137,7 @@ static const tc_component_vtable g_python_vtable = {
     .start = py_vtable_start,
     .update = py_vtable_update,
     .fixed_update = py_vtable_fixed_update,
+    .late_update = py_vtable_late_update,
     .before_render = py_vtable_before_render,
     .on_destroy = py_vtable_on_destroy,
     .on_added_to_entity = py_vtable_on_added_to_entity,

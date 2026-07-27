@@ -384,6 +384,8 @@ void bind_scene_manager(nb::module_ &m) {
                     component ? component->has_update : false;
                 component_info["has_fixed_update"] =
                     component ? component->has_fixed_update : false;
+                component_info["has_late_update"] =
+                    component ? component->has_late_update : false;
                 component_info["has_before_render"] =
                     component ? component->has_before_render : false;
                 component_info["ptr"] = reinterpret_cast<uintptr_t>(component);

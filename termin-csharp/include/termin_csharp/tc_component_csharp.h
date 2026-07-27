@@ -18,6 +18,7 @@ extern "C" {
 typedef void (*tc_cs_start_fn)(void* cs_self);
 typedef void (*tc_cs_update_fn)(void* cs_self, float dt);
 typedef void (*tc_cs_fixed_update_fn)(void* cs_self, float dt);
+typedef void (*tc_cs_late_update_fn)(void* cs_self, float dt);
 typedef void (*tc_cs_before_render_fn)(void* cs_self);
 typedef void (*tc_cs_on_destroy_fn)(void* cs_self);
 typedef void (*tc_cs_on_added_to_entity_fn)(void* cs_self);
@@ -39,6 +40,7 @@ typedef struct {
     tc_cs_start_fn start;
     tc_cs_update_fn update;
     tc_cs_fixed_update_fn fixed_update;
+    tc_cs_late_update_fn late_update;
     tc_cs_before_render_fn before_render;
     tc_cs_on_destroy_fn on_destroy;
     tc_cs_on_added_to_entity_fn on_added_to_entity;

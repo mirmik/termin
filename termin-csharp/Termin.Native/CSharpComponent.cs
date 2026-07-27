@@ -29,6 +29,7 @@ public abstract class CSharpComponent
     protected virtual void OnStart() { }
     protected virtual void OnUpdate(float dt) { }
     protected virtual void OnFixedUpdate(float dt) { }
+    protected virtual void OnLateUpdate(float dt) { }
     protected virtual void OnBeforeRender() { }
     protected virtual void OnDestroy() { }
     protected virtual void OnAddedToEntity() { }
@@ -42,6 +43,7 @@ public abstract class CSharpComponent
     internal void DispatchStart()              => OnStart();
     internal void DispatchUpdate(float dt)     => OnUpdate(dt);
     internal void DispatchFixedUpdate(float dt) => OnFixedUpdate(dt);
+    internal void DispatchLateUpdate(float dt) => OnLateUpdate(dt);
     internal void DispatchBeforeRender()       => OnBeforeRender();
     internal void DispatchOnDestroy()          => OnDestroy();
     internal void DispatchOnAddedToEntity()    => OnAddedToEntity();

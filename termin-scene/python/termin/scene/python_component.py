@@ -444,6 +444,14 @@ class PythonComponent:
         self._tc.has_fixed_update = value
 
     @property
+    def has_late_update(self) -> bool:
+        return self._tc.has_late_update
+
+    @has_late_update.setter
+    def has_late_update(self, value: bool) -> None:
+        self._tc.has_late_update = value
+
+    @property
     def has_before_render(self) -> bool:
         return self._tc.has_before_render
 
@@ -457,6 +465,7 @@ class PythonComponent:
         self._tc.set_lifecycle_capabilities(
             cls.update is not PythonComponent.update,
             cls.fixed_update is not PythonComponent.fixed_update,
+            cls.late_update is not PythonComponent.late_update,
             cls.before_render is not PythonComponent.before_render,
         )
 
@@ -518,6 +527,9 @@ class PythonComponent:
         pass
 
     def fixed_update(self, dt: float) -> None:
+        pass
+
+    def late_update(self, dt: float) -> None:
         pass
 
     def before_render(self) -> None:

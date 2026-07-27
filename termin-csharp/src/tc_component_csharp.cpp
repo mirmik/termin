@@ -26,6 +26,11 @@ static void cs_vtable_fixed_update(tc_component* c, float dt) {
         g_cs_callbacks.fixed_update(c->body, dt);
 }
 
+static void cs_vtable_late_update(tc_component* c, float dt) {
+    if (g_cs_callbacks.late_update && c->body)
+        g_cs_callbacks.late_update(c->body, dt);
+}
+
 static void cs_vtable_before_render(tc_component* c) {
     if (g_cs_callbacks.before_render && c->body)
         g_cs_callbacks.before_render(c->body);
@@ -94,6 +99,7 @@ static const tc_component_vtable g_csharp_vtable = {
     .start = cs_vtable_start,
     .update = cs_vtable_update,
     .fixed_update = cs_vtable_fixed_update,
+    .late_update = cs_vtable_late_update,
     .before_render = cs_vtable_before_render,
     .on_destroy = cs_vtable_on_destroy,
     .on_added_to_entity = cs_vtable_on_added_to_entity,

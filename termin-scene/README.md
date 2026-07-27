@@ -8,7 +8,7 @@ Scene-core библиотека для движка **Termin**.
 ## Возможности
 
 - **Сцена и entity pool** — создание сцен, аллокация сущностей, иерархия parent/child.
-- **Object-компоненты** — lifecycle-хуки (`start`, `update`, `fixed_update`, `before_render`), retain/release владение.
+- **Object-компоненты** — lifecycle-хуки (`start`, `fixed_update`, `update`, `late_update`, `before_render`), retain/release владение.
 - **SoA-архетипы** — плотное хранение data-only компонентов, chunk-итерация по маскам типов.
 - **Generational handles** — безопасные ссылки с защитой от use-after-free.
 - **Scene extensions** — stateful-модули с attach/detach/update/serialize без изменения core.

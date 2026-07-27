@@ -1135,6 +1135,7 @@ public static class TerminCore
         public IntPtr Start;
         public IntPtr Update;
         public IntPtr FixedUpdate;
+        public IntPtr LateUpdate;
         public IntPtr BeforeRender;
         public IntPtr OnDestroy;
         public IntPtr OnAddedToEntity;

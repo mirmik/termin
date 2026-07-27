@@ -79,6 +79,18 @@ static void py_cb_fixed_update(void* py_self, float dt) {
     PyGILState_Release(gstate);
 }
 
+static void py_cb_late_update(void* py_self, float dt) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    try {
+        nb::handle self((PyObject*)py_self);
+        self.attr("late_update")(dt);
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::late_update");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+}
+
 static void py_cb_before_render(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
@@ -270,6 +282,7 @@ static void ensure_core_callbacks_initialized() {
         .start = py_cb_start,
         .update = py_cb_update,
         .fixed_update = py_cb_fixed_update,
+        .late_update = py_cb_late_update,
         .before_render = py_cb_before_render,
         .on_destroy = py_cb_on_destroy,
         .on_added_to_entity = py_cb_on_added_to_entity,
@@ -346,7 +359,7 @@ public:
     void set_has_update(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, v, _c->has_fixed_update, _c->has_before_render
+                _c, v, _c->has_fixed_update, _c->has_late_update, _c->has_before_render
             );
         }
     }
@@ -355,7 +368,16 @@ public:
     void set_has_fixed_update(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, v, _c->has_before_render
+                _c, _c->has_update, v, _c->has_late_update, _c->has_before_render
+            );
+        }
+    }
+
+    bool get_has_late_update() const { return _c ? _c->has_late_update : false; }
+    void set_has_late_update(bool v) {
+        if (_c) {
+            tc_component_set_lifecycle_capabilities(
+                _c, _c->has_update, _c->has_fixed_update, v, _c->has_before_render
             );
         }
     }
@@ -364,15 +386,20 @@ public:
     void set_has_before_render(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, _c->has_fixed_update, v
+                _c, _c->has_update, _c->has_fixed_update, _c->has_late_update, v
             );
         }
     }
 
-    void set_lifecycle_capabilities(bool update, bool fixed_update, bool before_render) {
+    void set_lifecycle_capabilities(
+        bool update,
+        bool fixed_update,
+        bool late_update,
+        bool before_render
+    ) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, update, fixed_update, before_render
+                _c, update, fixed_update, late_update, before_render
             );
         }
     }
@@ -421,9 +448,11 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_rw("_started", &TcComponent::get_started, &TcComponent::set_started)
         .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
+        .def_prop_rw("has_late_update", &TcComponent::get_has_late_update, &TcComponent::set_has_late_update)
         .def_prop_rw("has_before_render", &TcComponent::get_has_before_render, &TcComponent::set_has_before_render)
         .def("set_lifecycle_capabilities", &TcComponent::set_lifecycle_capabilities,
-             nb::arg("update"), nb::arg("fixed_update"), nb::arg("before_render"))
+             nb::arg("update"), nb::arg("fixed_update"), nb::arg("late_update"),
+             nb::arg("before_render"))
         .def("c_ptr_int", &TcComponent::c_ptr_int)
         // install_drawable_vtable / is_drawable moved to termin-render bindings
         // install_input_vtable / is_input_handler moved to termin-input bindings

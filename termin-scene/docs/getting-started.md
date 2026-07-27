@@ -34,7 +34,7 @@ tc_entity_pool_add_component(pool, e, c);
 ## 4. Выполнить update кадра
 
 ```c
-tc_scene_update(scene, dt);          // start -> fixed_update -> update
+tc_scene_update(scene, dt);          // start -> fixed_update -> update -> late_update
 tc_scene_before_render(scene);       // before_render для компонентов и extensions
 ```
 
@@ -49,7 +49,8 @@ tc_scene_free(scene);
 ## Что важно помнить
 
 - Все `handle/id` в ядре generational: после `free` старые значения становятся невалидными.
-- `tc_scene_update` выполняет `start` (для новых компонентов), затем `fixed_update`, затем `update`.
+- `tc_scene_update` выполняет `start` (для новых компонентов), затем
+  `fixed_update`, `update`, extension updates и `late_update`.
 - При удалении сцены освобождаются компоненты по ref-count контракту (`retain/release`).
 
 ## Что дальше

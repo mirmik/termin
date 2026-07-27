@@ -34,8 +34,9 @@
 Важный контракт здесь - порядок:
 
 1. сначала обрабатываются host/UI events;
-2. обновление сцен происходит до рендера;
-3. `before_render` дает scene components последний шанс опубликовать состояние, нужное рендеру;
+2. обновление сцен (`fixed_update -> update -> late_update`) происходит до рендера;
+3. `before_render` дает scene components последний шанс опубликовать только
+   render-facing состояние;
 4. rendering видит стабильное состояние сцены на текущий кадр;
 5. after-render callbacks вызываются после presentation.
 

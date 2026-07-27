@@ -48,6 +48,7 @@ struct tc_component_vtable {
     void (*start)(tc_component* self);
     void (*update)(tc_component* self, float dt);
     void (*fixed_update)(tc_component* self, float dt);
+    void (*late_update)(tc_component* self, float dt);
     void (*before_render)(tc_component* self);
     void (*on_destroy)(tc_component* self);
 
@@ -120,6 +121,7 @@ struct tc_component {
     bool _started;
     bool has_update;
     bool has_fixed_update;
+    bool has_late_update;
     bool has_before_render;
     tc_scene_handle lifecycle_scene;
 
@@ -164,6 +166,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->_started = false;
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
+    c->has_late_update = (vtable && vtable->late_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
     c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
     c->factory_retained = false;
@@ -184,6 +187,7 @@ TC_API void tc_component_set_lifecycle_capabilities(
     tc_component* c,
     bool has_update,
     bool has_fixed_update,
+    bool has_late_update,
     bool has_before_render
 );
 
@@ -207,6 +211,12 @@ static inline void tc_component_update(tc_component* c, float dt) {
 static inline void tc_component_fixed_update(tc_component* c, float dt) {
     if (c && c->enabled && c->vtable && c->vtable->fixed_update) {
         c->vtable->fixed_update(c, dt);
+    }
+}
+
+static inline void tc_component_late_update(tc_component* c, float dt) {
+    if (c && c->enabled && c->vtable && c->vtable->late_update) {
+        c->vtable->late_update(c, dt);
     }
 }
 

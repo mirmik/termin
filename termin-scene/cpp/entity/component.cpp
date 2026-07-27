@@ -68,6 +68,7 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     CxxComponent::_cb_start,
     CxxComponent::_cb_update,
     CxxComponent::_cb_fixed_update,
+    CxxComponent::_cb_late_update,
     CxxComponent::_cb_before_render,
     CxxComponent::_cb_on_destroy,
     // Entity relationship
@@ -100,6 +101,7 @@ CxxComponent::CxxComponent(const char* type_name) {
     _c._started = false;
     _c.has_update = false;
     _c.has_fixed_update = false;
+    _c.has_late_update = false;
     _c.has_before_render = false;
     tc_component_set_declared_type_name(&_c, type_name);
 }
@@ -165,6 +167,11 @@ void CxxComponent::_cb_update(tc_component* c, float dt) {
 void CxxComponent::_cb_fixed_update(tc_component* c, float dt) {
     auto* self = from_tc(c);
     if (self) self->fixed_update(dt);
+}
+
+void CxxComponent::_cb_late_update(tc_component* c, float dt) {
+    auto* self = from_tc(c);
+    if (self) self->late_update(dt);
 }
 
 void CxxComponent::_cb_before_render(tc_component* c) {
