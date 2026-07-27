@@ -304,7 +304,7 @@ def _compose_native_editor(
         build_native_editor_log(
             host.document,
             editor_log_model,
-            request_editor_render,
+            host.request_render_update,
         ),
         cleanup=lambda: editor_log.close(),
     )
