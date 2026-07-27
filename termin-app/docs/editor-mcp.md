@@ -192,6 +192,54 @@ The Python namespace contains:
 Scripts are queued from the MCP server thread and executed by the editor loop on
 the main editor thread.
 
+### Safe scene and component traversal
+
+Use the public scene/entity API and `Entity.tc_components` for generic
+automation:
+
+```python
+for entity in scene.get_all_entities():
+    for component in entity.tc_components:
+        print(
+            entity.name,
+            component.type_name,
+            component.enabled,
+            component.serialize_data(),
+        )
+```
+
+`tc_components` returns non-owning `TcComponentRef` values for both Python and
+native components. It therefore keeps working when a project module contributes
+a native component with no concrete Python wrapper class. Do not retain these
+references after their entity is removed, the scene is destroyed, or a module
+reload replaces the component.
+
+`Entity.components` is a typed-wrapper convenience API, not a generic traversal
+API. It may raise when any attached native component has no Python binding.
+Use `TcComponentRef.to_python()` only when a typed wrapper is optional; it
+returns `None` when one is unavailable.
+
+For inspected fields, `get_field(name)` is the optional lookup and returns
+`None` when the field cannot be read. Automation that requires a field should
+use `require_field(name)` so a missing or unreadable field is logged and fails
+the MCP script explicitly:
+
+```python
+mesh_components = []
+for entity in scene.get_all_entities():
+    for component in entity.tc_components:
+        if component.type_name == "MeshRenderer":
+            mesh_components.append(
+                (entity.uuid, component.require_field("mesh"))
+            )
+print(mesh_components)
+```
+
+Use `scene.get_root_entities()` when only hierarchy roots are needed, then walk
+each entity's public `children()` result. Scene mutations made directly
+through these objects are immediate; use `scene_edit` for undo-aware transform
+changes and call `request_render_update()` after other visual mutations.
+
 ## Tools
 
 - `execute_python_script` executes Python inside the editor namespace for

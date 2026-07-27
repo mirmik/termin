@@ -1,7 +1,18 @@
 import threading
 import time
 
+import pytest
+
+from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.editor_core.python_executor import EditorPythonExecutor
+from termin.scene import PythonComponent, TcScene
+
+
+@pytest.fixture(scope="module", autouse=True)
+def player_runtime():
+    bootstrap_player()
+    yield
+    shutdown_player()
 
 
 def test_editor_python_executor_captures_output_and_context():
@@ -73,6 +84,51 @@ def test_editor_python_executor_reports_refresh_helper_without_editor_context():
 
     assert not result.ok
     assert result.error == "RuntimeError: request_render_update requires an editor context"
+
+
+def test_editor_python_executor_uses_language_neutral_component_traversal():
+    scene = TcScene.create("editor-mcp-traversal")
+    try:
+        entity = scene.create_entity("mixed")
+        native = entity.add_component_by_name("UnknownComponent")
+        native.display_name = "Native without wrapper"
+        python = entity.add_component(PythonComponent())
+        python.display_name = "Python component"
+        executor = EditorPythonExecutor(lambda: {"scene": scene})
+
+        result = executor.execute_script(
+            "rows = []\n"
+            "for entity in scene.get_all_entities():\n"
+            "    for component in entity.tc_components:\n"
+            "        rows.append((\n"
+            "            entity.name,\n"
+            "            component.type_name,\n"
+            "            component.require_field('display_name'),\n"
+            "            component.to_python() is not None,\n"
+            "        ))\n"
+            "print(rows)\n"
+        )
+
+        assert result.ok
+        assert result.output == (
+            "[('mixed', 'UnknownComponent', 'Native without wrapper', False), "
+            "('mixed', 'PythonComponent', 'Python component', True)]\n"
+        )
+
+        wrapper_only = executor.execute_script(
+            "print(scene.get_all_entities()[0].components)"
+        )
+        assert not wrapper_only.ok
+        assert "UnknownComponent" in wrapper_only.error
+        assert "has no Python bindings" in wrapper_only.error
+
+        missing_field = executor.execute_script(
+            "scene.get_all_entities()[0].tc_components[0].require_field('missing')"
+        )
+        assert not missing_field.ok
+        assert "missing" in missing_field.error
+    finally:
+        scene.destroy()
 
 
 def test_editor_python_executor_reports_system_exit_as_script_error():
