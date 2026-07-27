@@ -87,7 +87,7 @@ layout flattening are backend metadata. Pass/component code must not infer them.
 
 Owns fragment-stage material behavior.
 
-Initial fields:
+Current provider fields:
 
 ```cpp
 struct MaterialContract {
@@ -131,12 +131,15 @@ enum class VertexTransformKind {
 
 struct VertexTransformContract {
     VertexTransformKind kind;
-    std::string template_uuid;
     std::string vertex_entry;
     VertexInputContract vertex_inputs;
     MaterialFragmentInterface produced_fragment_input;
+    MaterialFragmentInterface produced_world_semantics;
     std::vector<PipelineResourceDecl> resources;
     std::vector<InstanceStreamDecl> instance_streams;
+    ShaderSourceModuleIdentity source_module;
+    std::string entry_input_declaration;
+    std::string adapter_input_expression;
 };
 ```
 
@@ -255,23 +258,13 @@ MaterialPipelineVariantRequest request {
 MaterialPipelineVariant variant = material_pipeline_get_variant(request);
 ```
 
-Short-term assembly:
-
-```text
-vertex source  = VertexTransformContract template source
-fragment source =
-  PassContract fragment override if present
-  else MaterialContract fragment source
-geometry source = rejected until a real contract exists
-```
-
-Long-term assembly:
+Assembly:
 
 ```text
 Slang modules + selected entry points + generated adapter module
 ```
 
-The long-term form allows the pipeline to generate small adapter functions
+This form allows the pipeline to generate small adapter functions
 instead of relying on all templates to manually match every material fragment
 input shape.
 
@@ -301,10 +294,11 @@ adapter modules, and their `per_frame` and draw resources remain pass-owned in
 the contract. Compact depth/id inputs and the position+normal normal-pass input
 remain explicit profiles rather than separate whole-stage shaders.
 
-The five `termin-engine-skinned-*` whole-stage templates and the shadow-only
-static/skinned provider wrappers were removed. Mesh assembly no longer falls
-back to a pass-specific `template_uuid`; foliage remains the only transitional
-whole-stage transform family and is tracked separately by #345/#346.
+The five `termin-engine-skinned-*` whole-stage templates, the transitional
+foliage-shadow template, and the shadow-only static/skinned provider wrappers
+were removed. Static, skinned, and foliage assembly no longer falls back to a
+pass-specific `template_uuid`: every transform family uses a modular provider
+plus a pass-owned output adapter.
 
 ## Interface Contracts
 
