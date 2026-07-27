@@ -29,9 +29,10 @@ from termin.render import (
     configure_project_render_phases,
     set_render_sync_mode as c_set_render_sync_mode,
 )
-from termin.project.resource_paths import normalize_project_resource_paths
-
-SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
+from termin.project.resource_paths import (
+    SERVICE_RESOURCE_IGNORE_PATHS as SERVICE_RESOURCE_IGNORE_PATHS,
+    normalize_project_resource_paths,
+)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True

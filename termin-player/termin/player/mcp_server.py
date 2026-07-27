@@ -35,6 +35,7 @@ class PlayerPythonExecutor(PythonScriptExecutor):
             "player": runtime,
             "scene": runtime.scene,
             "window": runtime.window,
+            "surface": runtime.display,
             "display": runtime.display,
             "viewport": runtime.viewport,
             "camera": runtime.camera,
