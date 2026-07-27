@@ -1,9 +1,23 @@
 # termin-qopt C++ migration intent
 
 Дата: 2026-05-27
+Обновлено: 2026-07-28
 
-Статус: декларация намерений. Это не финальная спецификация API, а рабочая
-рамка для будущего переноса `termin-qopt` из Python/NumPy/SciPy в C++.
+Статус: native foundation добавлен. Это не финальная спецификация solver API, а
+рабочая рамка для переноса `termin-qopt` из Python/NumPy/SciPy в C++.
+
+Текущее состояние:
+
+- добавлен native shared target `termin_qopt`;
+- Eigen подключён только как private dependency target;
+- добавлены предварительные `DenseVectorView`/`DenseMatrixView` контракты с
+  явными element strides;
+- публичные headers, install/export и CMake package contract не требуют Eigen;
+- solver problem/result contracts ещё не зафиксированы;
+- Python реализация пока остаётся reference implementation.
+
+Инициатива ведётся в Kanboard swimlane `Native QOpt, FEM & Robotics`,
+umbrella #980. Foundation закрыт в #981; следующий executable шаг — oracle #984.
 
 ## Мотивация
 
@@ -50,8 +64,8 @@ Eigen не должен становиться публичным SDK API.
 
 ## Предлагаемый порядок переноса
 
-1. Добавить C++ target `termin-qopt`.
-2. Ввести минимальные public data contracts для dense vector/matrix views.
+1. [x] Добавить C++ target `termin_qopt`.
+2. [x] Ввести минимальные public data contracts для dense vector/matrix views.
 3. Перенести `solve_qp_equalities`.
 4. Перенести `solve_qp_active_set`.
 5. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
@@ -59,6 +73,11 @@ Eigen не должен становиться публичным SDK API.
 7. Перенести multibody/FEM assembler поверх того же solver API.
 8. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
 9. Отдельно оценить sparse backend для больших FEM-систем.
+
+Предварительные views намеренно не задают ownership, allocation, QP problem
+layout или result/error model. Они нужны как нейтральная граница между
+caller-owned buffers и private backend. Конкретные solver entry points должны
+добавлять shape, finite-value и aliasing validation.
 
 ## Что не делаем на первом этапе
 
