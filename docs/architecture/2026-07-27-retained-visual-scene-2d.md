@@ -6,6 +6,12 @@ Accepted direction; implementation is pending. This note is the architecture
 sketch for the reusable retained 2D visual and interaction layer. The direction
 is intentionally separate from world-space 2D game support.
 
+The shared-foundation refinement is also accepted: no new generic "2D base"
+module is introduced. Exact 2D value math belongs to `termin-base`;
+backend-neutral path, paint and draw-command values belong to
+`termin-graphics`; retained identity and interaction belong to
+`termin-visual-scene`.
+
 The working public names in this note are `VisualScene2D`, `GraphicItem` and
 `GraphicItemHandle`. They belong to a separate top-level
 `termin-visual-scene` module and SDK package, with the canonical CMake target
@@ -65,7 +71,12 @@ termin-visual-scene
                          |
                          v
 termin-graphics
-    Canvas2DRenderer, text renderers, specialized GPU batches and resources
+    Path2f, paint values, DrawList2D, Canvas2DRenderer,
+    text renderers, specialized GPU batches and resources
+                         |
+                         v
+termin-base
+    Affine2f and canonical float 2D geometry values
 ```
 
 `termin-gui-native` consumes the same scene through a `SceneView` adapter:
@@ -95,12 +106,17 @@ owns only their projected visual representation and interaction targets.
 engine. The intended dependency stack is:
 
 ```text
-termin-graphics
-    Canvas2DRenderer, text, images, paths, GPU batches
-            ↑
-            |
 termin-visual-scene
     VisualScene2D, GraphicItemHandle, retained topology, hit preparation
+            |
+            v
+termin-graphics
+    Path2f, paint values, DrawList2D, Canvas2DRenderer,
+    text, images and specialized GPU batches
+            |
+            v
+termin-base
+    Affine2f, Vec2f, Size2f, Rect2f and Bounds2f
 
 termin-gui-native
     widget semantics and a SceneView adapter
@@ -118,10 +134,12 @@ time, domain systems and `termin-visual-scene` must not grow private copies of
 the shared rendering infrastructure. In particular there is one canonical
 implementation of:
 
-- `Transform2D` and visual bounds math;
-- path verbs, fill/stroke representation and tessellation;
-- backend-neutral 2D draw-command vocabulary;
-- text/image visual payloads and clipping execution;
+- exact `Affine2f` composition and visual bounds math in `termin-base`;
+- `Path2f`, fill/stroke representation and tessellation in `termin-graphics`;
+- backend-neutral `DrawList2D` / `DrawCommand2D` vocabulary in
+  `termin-graphics`;
+- runtime text/image draw commands and clipping execution in
+  `termin-graphics`;
 - retained visual nodes in `termin-visual-scene`, used by GUI tool scenes and
   plot annotations.
 
@@ -129,13 +147,86 @@ The widget tree, plot annotation pool and world-space entity/component model
 remain separate because they express different domain state. They consume the
 same graphics stack rather than becoming additional graphics engines.
 
+## Shared 2D Foundation
+
+The common foundation is a set of contracts in existing lower-level modules,
+not another retained scene or product package.
+
+### Exact affine math in `termin-base`
+
+`Affine2f` is the canonical screen/tool-space composition value. Its public C
+layout contains six floats and uses one documented column-vector convention:
+
+```text
+x' = m00 * x + m01 * y + tx
+y' = m10 * x + m11 * y + ty
+```
+
+The contract includes identity, translation, rotation, scale, shear and TRS
+constructors; exact composition; point/vector transforms; determinant; finite
+validation; and an explicitly fallible inverse. A singular transform is never
+silently replaced by identity.
+
+`Vec2f`, `Size2f`, `Rect2f` and `Bounds2f` are the canonical float geometry
+values used by the C and C++ public surfaces. Existing definitions should be
+reused or migrated rather than copied into GUI, Canvas or visual-scene APIs.
+`Rect2f` remains local origin/size geometry. Transforming it with an arbitrary
+affine value may produce a parallelogram; `Bounds2f` is the axis-aligned box
+computed from all transformed corners.
+
+`Pose2` remains the rigid angle-plus-translation value. It can construct an
+`Affine2f`, but it is not the scale/shear hierarchy composition type. A general
+`Mat33f` is likewise not the public affine contract: it stores redundant
+projective coefficients and cannot substitute a fallible affine inverse with
+an identity fallback.
+
+The visual scene initially uses float affine values because its geometry,
+Canvas execution and GUI coordinates are float. Plot-domain values and ranges
+may remain double, and nonlinear plot projection remains a `PlotFrame2D`
+responsibility rather than being forced into `Affine2f`.
+
+The separate `GeneralPose3` versus `Affine3d` decision follows the same
+honesty principle but is not a prerequisite for this 2D contract.
+
+### Paths, paint and draw commands in `termin-graphics`
+
+`Path2f` is an owned, backend-neutral verb/point value. Canonical paint values
+include color, fill rule and stroke width/join/cap/dash policy. Bounds,
+flattening/tolerance and fill/stroke geometric preparation are shared by
+rendering and hit preparation so those consumers cannot disagree about path
+semantics.
+
+`DrawList2D` is a build-then-freeze backend-neutral command value. It uses the
+canonical geometry, `Affine2f`, path and paint contracts and covers transforms,
+opacity, clips, standard primitives, text, images and custom batches.
+`Canvas2DRenderer` executes this vocabulary. Immediate convenience calls may
+remain only as thin adapters over the same commands.
+
+A canonical clip is transformed geometry, not a device scissor rectangle.
+Execution may use a scissor for an axis-aligned effective clip, but a rotated or
+sheared clip must retain its geometry.
+
+Persistent scene text/image payloads and runtime draw commands have different
+lifetime contracts. The scene stores serializable stable resource references.
+Render preparation resolves them through an explicit host-supplied resolver;
+the resulting draw commands carry runtime font/texture handles. Persistent
+items never retain a raw `FontAtlas*`, render context or owning GPU resource.
+This lowering boundary is not a second visual vocabulary.
+
 ## Layer Responsibilities
+
+### `termin-base`
+
+- ABI-safe float 2D geometry values and exact `Affine2f` algebra;
+- no drawing, resource, retained-scene, GUI or plot dependencies;
+- explicit failure for singular affine inverse.
 
 ### `termin-graphics`
 
-- backend-neutral drawing and resource handles;
-- path tessellation and stroke/fill execution;
+- backend-neutral `Path2f`, paint, `DrawList2D` and resource-handle values;
+- path geometry preparation, tessellation and stroke/fill execution;
 - text and image rendering;
+- `Canvas2DRenderer` execution of the canonical draw-command vocabulary;
 - specialized batches for large polylines and plot series;
 - no graphic-item pools, retained visual topology, hit state, plot annotation,
   widget or world/entity semantics.
@@ -145,11 +236,12 @@ same graphics stack rather than becoming additional graphics engines.
 - one lifetime domain per scene;
 - generation-checked item handles;
 - explicit item creation, destruction and reparenting;
-- visual topology, affine transforms, ordering and clipping;
+- visual topology, exact local/world `Affine2f`, ordering and geometric
+  clipping;
 - primitive payloads and custom batch references;
 - local/world bounds and geometric hit testing;
 - hover, press and pointer capture expressed as handles;
-- immutable render/hit snapshots or internally synchronized traversal;
+- immutable render/hit snapshots lowered to canonical `DrawList2D` values;
 - inspection and handle-free serialization records.
 
 The scene does not own a render device, window, frame pass, plot data or UI
@@ -255,7 +347,7 @@ A standard item record contains only state shared by all visual nodes:
 ```text
 identity        runtime handle, optional stable id, registered type id
 topology        parent, ordered children, local z/order
-presentation    visible, opacity, local affine transform
+presentation    visible, opacity, local Affine2f
 clipping        none, local clip geometry or inherited clip
 interaction     pointer policy, enabled state, semantic action id
 diagnostics     name, revision, dirty flags
@@ -284,7 +376,7 @@ portal payload or maintain a side table from `GraphicItemHandle` to
 
 ### Paths
 
-The canonical path contract is owned by `termin-graphics`.
+The canonical `Path2f` contract is owned by `termin-graphics`.
 `termin-visual-scene` stores or copies that public path value in a `Path`
 payload and uses the same type for bounds, hit preparation and rendering. If
 the contract lacks a required verb or stroke property, extend it in
@@ -302,10 +394,22 @@ The shared path contract should define, rather than infer from a backend:
 Large plot series remain specialized batches. They are not represented as one
 path item per series sample.
 
+Text and image payloads store serializable stable resource references. They do
+not retain a `FontAtlas*`, texture owner or render context. Snapshot preparation
+resolves these references to the runtime handles carried by `DrawList2D`.
+
 ## Coordinates and Transforms
 
-The scene owns ordinary local-to-parent affine 2D transforms. A view supplies
-the scene-to-viewport transform and clip rectangle.
+The scene owns local-to-parent `Affine2f` values and composes exact world
+`Affine2f` values. It does not decompose hierarchy results into position,
+angle and component scale, so rotated non-uniform scale and shear remain
+representable. A view supplies the scene-to-viewport `Affine2f` and clip
+geometry.
+
+Inverse-dependent operations are explicit about singular transforms. A node
+whose effective transform cannot be inverted is not hittable; the invalid
+state is diagnosed at mutation or preparation boundaries instead of replacing
+the inverse with identity or emitting one error per pointer event.
 
 Plot coordinate systems do not become generic scene coordinate systems.
 `PlotAnnotationLayer` resolves a domain anchor through an immutable
@@ -333,8 +437,16 @@ snapshot, not a back-reference to a mutable `PlotEngine2D`.
 
 ## Rendering
 
-Scene traversal prepares backend-neutral drawing commands or a render snapshot.
-It does not call a backend directly and does not retain a render context.
+Scene traversal prepares an immutable revisioned snapshot and lowers its
+standard payloads to a frozen `DrawList2D`. It does not call a backend directly
+and does not retain a render context. A host-supplied resolver converts stable
+text/image resource references to runtime handles before the snapshot is
+published; a resolution or tessellation failure is logged and cannot publish a
+partial list.
+
+Effective clips remain transformed geometry in the snapshot and draw list.
+`Canvas2DRenderer` may execute an axis-aligned case with a device scissor, but
+rotation or shear must not be discarded to obtain one.
 
 The plot render pipeline exposes explicit phases:
 
@@ -451,6 +563,11 @@ core. C++ provides typed RAII facades for scene access without changing scene
 ownership. Python and C# wrappers carry scene invalidation state plus
 generation handles.
 
+The C surface consumes the canonical ABI-safe float geometry and
+`tc_affine2f` values from `termin-base`; it does not substitute
+`tc_ui_point`/`tc_ui_rect` or introduce module-private layout-compatible
+copies.
+
 Bindings must not expose:
 
 - owning raw pointers to items;
@@ -485,20 +602,26 @@ permanent scene API.
 
 Migration proceeds as follows:
 
-1. add the independent `termin-visual-scene` module and its handle-based
-   `VisualScene2D` core, depending on `termin-graphics`;
-2. finish primitive payloads, render snapshots, hit testing and pointer
-   controllers, then validate the public core with a standalone
+1. add exact ABI-safe `Affine2f` and canonical float 2D geometry values to
+   `termin-base`;
+2. add canonical `Path2f` and paint values to `termin-graphics`;
+3. add canonical `DrawList2D` and make `Canvas2DRenderer` its executor;
+4. in parallel with the foundation branch, add the independent
+   `termin-visual-scene` module and its handle-based `VisualScene2D` storage
+   core, depending on `termin-graphics`;
+5. join those branches in retained item payloads, exact affine hierarchy
+   composition, render snapshots, hit testing and pointer controllers, then
+   validate the public core with a standalone
    `termin-visual-scene/examples` scene containing draggable primitive items;
-3. implement GUI-native `SceneView` as an adapter over the shared scene and
+6. implement GUI-native `SceneView` as an adapter over the shared scene and
    port node-graph consumers and embedded widget positioning;
-4. validate widget/scene composition with a focused
+7. validate widget/scene composition with a focused
    `termin-gui-native/examples` application which renders and interacts with
    ordinary widgets and `GraphicItem` values in one document;
-5. only after both examples pass, expose `PlotFrame2D`, add retained tcplot
+8. only after both examples pass, expose `PlotFrame2D`, add retained tcplot
    annotations and implement the interactive marker/callout vertical slice;
-6. migrate language bindings to scene-plus-handle wrappers;
-7. remove the old `shared_ptr<GraphicsItem>` storage and callback API after all
+9. migrate language bindings to scene-plus-handle wrappers and remove the old
+   `shared_ptr<GraphicsItem>` storage and callback API after all
    repository consumers move.
 
 Active development does not require a long-lived compatibility fallback. A
@@ -507,6 +630,10 @@ scene trees.
 
 ## Non-goals
 
+- introducing a new generic "2D base" product/module instead of extending
+  `termin-base` and `termin-graphics`;
+- using position/angle/component-scale decomposition as the world transform
+  algebra;
 - replacing `tc_ui_document` or implementing widgets as graphic items;
 - implementing another renderer, tessellator, path vocabulary or GPU resource
   layer inside `termin-visual-scene`;
@@ -521,6 +648,10 @@ scene trees.
 
 The direction is implemented when:
 
+- one ABI-safe exact `Affine2f` contract is shared across the float 2D stack,
+  including explicit singular-inverse behavior;
+- one canonical `Path2f`/paint and `DrawList2D` vocabulary is consumed by
+  `Canvas2DRenderer` and `termin-visual-scene`;
 - one generation-handle `termin-visual-scene` module is shared by GUI tools and
   plot annotations;
 - a standalone primitive-scene example demonstrates public item creation,
@@ -532,6 +663,7 @@ The direction is implemented when:
 - `tcplot` exposes plot-frame snapshots and retained semantic annotations
   without depending on `termin-gui-native`;
 - an interactive data-anchored marker works through the shared scene;
-- headless tests cover handle invalidation, topology, transforms, rendering,
-  hit testing, capture and annotation projection;
+- headless tests cover handle invalidation, topology, affine composition,
+  singular transforms, transformed clips, rendering, hit testing, capture and
+  annotation projection;
 - documentation and bindings expose one canonical lifetime model.
