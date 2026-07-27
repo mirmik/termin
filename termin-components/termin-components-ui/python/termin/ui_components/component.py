@@ -147,6 +147,29 @@ class UIComponent(InputComponent):
         self.root = widget
         return widget
 
+    def close(self) -> None:
+        """Release renderer resources owned by this component.
+
+        The widget tree remains attached to the component and will be reused
+        if the component is later rendered with a new graphics context.
+        Repeated calls are safe.
+        """
+        ui = self._ui
+        if ui is None:
+            self._graphics = None
+            return
+
+        self._pending_root = ui.root
+        ui.close()
+        self._ui = None
+        self._graphics = None
+
+    def on_destroy(self) -> None:
+        self.close()
+
+    def on_removed_from_entity(self) -> None:
+        self.close()
+
     def _walk_tree(self, root: Widget):
         if root is None:
             return

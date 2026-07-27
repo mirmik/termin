@@ -43,6 +43,7 @@ struct CppModuleConfig : IModuleConfig {
     std::string build_command;
     std::string clean_command;
     std::filesystem::path artifact_path;
+    std::vector<std::filesystem::path> rebuild_inputs;
     bool ignored = false;
 };
 

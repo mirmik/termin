@@ -9,6 +9,7 @@
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
+#include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
@@ -23,6 +24,7 @@ void register_builtin_render_component_types() {
     SkinnedMeshRenderer::register_type();
     LineRenderer::register_type();
     WorldTextComponent::register_type();
+    SpriteRenderer2D::register_type();
     XrOriginComponent::register_type();
     XrThumbstickLocomotionComponent::register_type();
 }

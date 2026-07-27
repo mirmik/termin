@@ -117,6 +117,85 @@ bool is_dynamic_library_file(const std::filesystem::path& path) {
 #endif
 }
 
+bool is_default_cpp_rebuild_input(const std::filesystem::path& path) {
+    const std::string filename = path.filename().string();
+    if (filename == "CMakeLists.txt" ||
+        filename == "CMakePresets.json" ||
+        filename == "meson.build" ||
+        filename == "meson_options.txt" ||
+        filename == "Makefile" ||
+        filename == "makefile" ||
+        filename == "GNUmakefile" ||
+        filename == "BUILD" ||
+        filename == "BUILD.bazel" ||
+        filename == "WORKSPACE" ||
+        filename == "WORKSPACE.bazel") {
+        return true;
+    }
+
+    std::string extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return extension == ".c" ||
+        extension == ".cc" ||
+        extension == ".cpp" ||
+        extension == ".cxx" ||
+        extension == ".m" ||
+        extension == ".mm" ||
+        extension == ".h" ||
+        extension == ".hh" ||
+        extension == ".hpp" ||
+        extension == ".hxx" ||
+        extension == ".inl" ||
+        extension == ".ipp" ||
+        extension == ".ixx" ||
+        extension == ".cppm" ||
+        extension == ".cu" ||
+        extension == ".cuh" ||
+        extension == ".cmake";
+}
+
+bool path_is_newer_than(
+    const std::filesystem::path& input,
+    const std::filesystem::file_time_type artifact_time
+) {
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(input, ec);
+    if (ec || !exists) {
+        tc::Log::warn(
+            "CppModuleBackend: declared rebuild input '%s' is unavailable; assuming rebuild needed",
+            input.string().c_str()
+        );
+        return true;
+    }
+
+    if (std::filesystem::is_regular_file(input, ec)) {
+        if (ec) {
+            tc::Log::warn(
+                "CppModuleBackend: cannot inspect rebuild input '%s'; assuming rebuild needed",
+                input.string().c_str()
+            );
+            return true;
+        }
+        return std::filesystem::last_write_time(input) > artifact_time;
+    }
+    if (!std::filesystem::is_directory(input, ec) || ec) {
+        tc::Log::warn(
+            "CppModuleBackend: rebuild input '%s' is neither a file nor a directory; assuming rebuild needed",
+            input.string().c_str()
+        );
+        return true;
+    }
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(input)) {
+        if (entry.is_regular_file() && entry.last_write_time() > artifact_time) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void prune_abandoned_shadow_sessions(const std::filesystem::path& base_dir) {
     std::error_code ec;
     std::filesystem::directory_iterator it(base_dir, ec);
@@ -647,16 +726,23 @@ bool CppModuleBackend::needs_rebuild(
 
     auto artifact_time = std::filesystem::last_write_time(config->artifact_path);
 
-    // Scan module directory for source files newer than artifact
     std::filesystem::path module_dir = record.spec.descriptor_path.parent_path();
     if (!std::filesystem::exists(module_dir)) return true;
 
     try {
+        if (std::filesystem::last_write_time(record.spec.descriptor_path) > artifact_time) {
+            return true;
+        }
+        for (const std::filesystem::path& input : config->rebuild_inputs) {
+            if (path_is_newer_than(input, artifact_time)) {
+                return true;
+            }
+        }
+
         for (auto it = std::filesystem::recursive_directory_iterator(module_dir);
              it != std::filesystem::recursive_directory_iterator(); ++it) {
             const auto& entry = *it;
 
-            // Skip build directories
             if (entry.is_directory()) {
                 std::string dirname = entry.path().filename().string();
                 if (dirname == "build" || dirname == "__pycache__" ||
@@ -669,7 +755,8 @@ bool CppModuleBackend::needs_rebuild(
 
             if (!entry.is_regular_file()) continue;
 
-            if (entry.last_write_time() > artifact_time) {
+            if (is_default_cpp_rebuild_input(entry.path()) &&
+                entry.last_write_time() > artifact_time) {
                 return true;
             }
         }

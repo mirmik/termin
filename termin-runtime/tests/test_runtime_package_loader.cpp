@@ -13,8 +13,11 @@ GUARD_TEST_MAIN();
 
 #include <termin/entity/entity.hpp>
 #include <termin/image/image_decode.hpp>
+#include <termin/collision/collision_world.hpp>
+#include <components/collider_component.hpp>
 #include <termin/scene/scene_manager.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/sprite_asset.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -25,6 +28,7 @@ GUARD_TEST_MAIN();
 extern "C" {
 #include <core/tc_light_capability.h>
 #include <core/tc_scene.h>
+#include <core/tc_scene_extension_ids.h>
 #include <core/tc_scene_render_mount.h>
 #include <render/tc_pipeline_template_registry.h>
 #include <tgfx/resources/tc_material_registry.h>
@@ -306,6 +310,38 @@ std::string scene_json() {
 )";
 }
 
+std::string collision_scene_json() {
+    return R"({
+  "uuid": "runtime-loader-collision-scene",
+  "entities": [
+    {
+      "uuid": "runtime-loader-collider-entity",
+      "name": "PackagedCollider",
+      "visible": true,
+      "enabled": true,
+      "pose": {
+        "position": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "scale": [1.0, 1.0, 1.0],
+      "components": [
+        {
+          "type": "ColliderComponent",
+          "data": {
+            "collider_type": "Box",
+            "box_size": [1.0, 2.0, 3.0],
+            "collider_offset_enabled": false,
+            "collider_offset_position": [0.0, 0.0, 0.0],
+            "collider_offset_euler": [0.0, 0.0, 0.0]
+          }
+        }
+      ]
+    }
+  ]
+}
+)";
+}
+
 void write_test_package(const std::filesystem::path& root) {
     write_text(root / "manifest.json", manifest());
     write_text(root / "scene.json", scene_json());
@@ -379,6 +415,39 @@ bool collect_test_light(tc_component* c, void* user_data) {
 }
 
 } // namespace
+
+TEST_CASE("RuntimePackageLoader attaches host scene extensions before component deserialization") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+    write_text(root / "scene.json", collision_scene_json());
+
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.scene_extensions = {TC_SCENE_EXT_TYPE_COLLISION_WORLD};
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string(), options);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.scene.valid());
+    termin::collision::CollisionWorld* world =
+        termin::collision::CollisionWorld::from_scene(result.scene.handle());
+    REQUIRE(world != nullptr);
+
+    termin::Entity packaged_entity = result.scene.find_entity_by_name("PackagedCollider");
+    REQUIRE(packaged_entity.valid());
+    termin::ColliderComponent* packaged_collider =
+        packaged_entity.get_component<termin::ColliderComponent>();
+    REQUIRE(packaged_collider != nullptr);
+    REQUIRE(packaged_collider->attached_collider() != nullptr);
+    CHECK(world->contains(packaged_collider->attached_collider()));
+    CHECK_EQ(world->size(), 1u);
+
+    termin::Entity dynamic_entity = result.scene.create_entity("DynamicCollider");
+    auto* dynamic_collider = new termin::ColliderComponent();
+    dynamic_entity.add_component(dynamic_collider);
+    REQUIRE(dynamic_collider->attached_collider() != nullptr);
+    CHECK(world->contains(dynamic_collider->attached_collider()));
+    CHECK_EQ(world->size(), 2u);
+}
 
 TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures") {
     const std::filesystem::path root = make_package_root();
@@ -739,6 +808,45 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
         "runtime-loader-failure-sentinel"
     );
     termin::tgfx2_set_shader_artifact_root("");
+}
+
+TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package_with_texture(root);
+    std::filesystem::create_directories(root / "sprites");
+    write_text(root / "sprites" / "hero.sprite.json", R"({
+  "format": "termin.sprite",
+  "version": 1,
+  "uuid": "runtime-loader-test-sprite",
+  "name": "Hero",
+  "texture": {"uuid": "runtime-loader-test-texture"},
+  "region": [0, 0, 1, 1],
+  "source_size": [1, 1],
+  "pivot": [0.5, 0.5],
+  "pixels_per_unit": 16.0,
+  "sampling": "nearest"
+}
+)");
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest_with_packaged_texture(),
+            "    {\"type\": \"material\"",
+            "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
+            "\"path\": \"sprites/hero.sprite.json\"},\n"
+            "    {\"type\": \"material\""));
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    termin::TcSpriteAsset sprite =
+        termin::TcSpriteAsset::from_uuid("runtime-loader-test-sprite");
+    REQUIRE(sprite.is_loaded());
+    REQUIRE(sprite.get() != nullptr);
+    CHECK_EQ(sprite.get()->texture_uuid, std::string(kTextureUuid));
+    CHECK_EQ(sprite.get()->region.width, 1);
+    CHECK_EQ(sprite.get()->pixels_per_unit, 16.0f);
+    CHECK(sprite.get()->sampling == termin::SpriteSampling::Nearest);
 }
 
 TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {

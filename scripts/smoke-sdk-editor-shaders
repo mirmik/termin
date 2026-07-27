@@ -10,7 +10,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 
@@ -36,6 +35,8 @@ SHADER_FAILURE_MARKERS = (
     "tgfx2 engine shader dev compile:",
     "[builtinshadersource] failed to load",
     "missing required shader artifact",
+    "shader compile error:",
+    "shader link error:",
 )
 
 
@@ -64,7 +65,7 @@ def _write_project(project_root: Path) -> Path:
 
 def _editor_command(editor: Path, project_file: Path, *, allow_xvfb: bool) -> list[str]:
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-        return [str(editor), str(project_file)]
+        return [str(editor), str(project_file), "--frames", "2"]
 
     if allow_xvfb:
         wrapper = _repo_root() / "scripts" / "termin-editor-virtual-display"
@@ -72,7 +73,13 @@ def _editor_command(editor: Path, project_file: Path, *, allow_xvfb: bool) -> li
             str(wrapper),
             "--editor",
             str(editor),
+            "--mesa-gl-version",
+            "4.5",
+            "--mesa-glsl-version",
+            "450",
             str(project_file),
+            "--frames",
+            "2",
         ]
 
     raise SmokeError(
@@ -110,28 +117,14 @@ def _expected_paths(project_root: Path) -> tuple[Path, ...]:
     return tuple(paths)
 
 
-def _wait_for_shader_outputs(
-    process: subprocess.Popen[str],
-    project_root: Path,
-    log_path: Path,
-    timeout: float,
-) -> None:
+def _assert_shader_outputs(project_root: Path) -> None:
     expected_paths = _expected_paths(project_root)
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise SmokeError(f"Editor exited before shader compilation, code={process.returncode}")
-        if all(path.is_file() for path in expected_paths):
-            return
-        time.sleep(0.25)
-
     missing = [str(path.relative_to(project_root)) for path in expected_paths if not path.is_file()]
-    log_text = log_path.read_text(encoding="utf-8", errors="replace")
-    raise SmokeError(
-        "Timed out waiting for SDK editor shader outputs. Missing:\n"
-        + "\n".join(missing)
-        + f"\nEditor log:\n{log_text}"
-    )
+    if missing:
+        raise SmokeError(
+            "SDK editor did not produce expected shader outputs. Missing:\n"
+            + "\n".join(missing)
+        )
 
 
 def _assert_no_shader_failures(log_path: Path) -> None:
@@ -166,10 +159,12 @@ def main() -> int:
 
     environment = os.environ.copy()
     environment["HOME"] = str(home)
+    environment["XDG_CACHE_HOME"] = str(temp_dir / "cache")
     environment["TERMIN_BACKEND"] = "opengl"
     environment["TERMIN_SDK"] = str(root / "sdk")
 
     process: subprocess.Popen[str] | None = None
+    succeeded = False
     try:
         command = _editor_command(editor, project_file, allow_xvfb=not args.no_xvfb)
         print("[smoke] project:", project_root, flush=True)
@@ -185,15 +180,27 @@ def main() -> int:
                 text=True,
                 start_new_session=True,
             )
-            _wait_for_shader_outputs(process, project_root, log_path, args.timeout)
-
+            try:
+                returncode = process.wait(timeout=args.timeout)
+            except subprocess.TimeoutExpired as exc:
+                _terminate_process(process)
+                raise SmokeError(
+                    f"Editor smoke did not exit within {args.timeout:.1f} seconds"
+                ) from exc
+        if returncode != 0:
+            raise SmokeError(f"Editor smoke exited with code={returncode}")
+        _assert_shader_outputs(project_root)
         _assert_no_shader_failures(log_path)
         print("[smoke] PASS", flush=True)
+        succeeded = True
         return 0
+    except SmokeError as exc:
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        raise SmokeError(f"{exc}\nEditor log:\n{log_text}") from exc
     finally:
         if process is not None:
             _terminate_process(process)
-        if args.keep_temp:
+        if args.keep_temp or not succeeded:
             print("[smoke] kept temp:", temp_dir, flush=True)
         else:
             shutil.rmtree(temp_dir, ignore_errors=True)

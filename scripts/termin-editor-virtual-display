@@ -62,6 +62,12 @@ def _parse_version(value: str, *, label: str) -> tuple[int, ...]:
     return tuple(int(part) for part in match.group(0).split("."))
 
 
+def _parse_glsl_override(value: str) -> tuple[int, ...]:
+    if value.isdigit() and len(value) == 3:
+        return int(value[0]), int(value[1:])
+    return _parse_version(value, label="GLSL override")
+
+
 def _glx_field(output: str, label: str) -> str:
     prefix = f"{label}:"
     for line in output.splitlines():
@@ -158,6 +164,8 @@ def _run_inside_xvfb(
     editor_args: list[str],
     environment: dict[str, str],
     shader_compiler: Path,
+    minimum_gl: tuple[int, ...],
+    minimum_glsl: tuple[int, ...],
 ) -> int:
     display = environment.get("DISPLAY")
     if not display:
@@ -179,7 +187,11 @@ def _run_inside_xvfb(
             f"Mesa OpenGL probe failed on DISPLAY={display} with code "
             f"{probe.returncode}:\n{probe.stdout}"
         )
-    capabilities = _validate_glxinfo(probe.stdout)
+    capabilities = _validate_glxinfo(
+        probe.stdout,
+        minimum_gl=minimum_gl,
+        minimum_glsl=minimum_glsl,
+    )
     _verify_shader_compiler(shader_compiler, environment)
     print(
         "[virtual-display] Mesa preflight:"
@@ -330,6 +342,11 @@ def main() -> int:
             editor_args=args.editor_args,
             environment=environment,
             shader_compiler=shader_compiler,
+            minimum_gl=_parse_version(
+                args.mesa_gl_version,
+                label="OpenGL override",
+            ),
+            minimum_glsl=_parse_glsl_override(args.mesa_glsl_version),
         )
 
     runtime_dir = Path(tempfile.mkdtemp(prefix="termin-editor-virtual-display-"))

@@ -43,7 +43,12 @@ def test_create_project_writes_manifest_settings_and_default_scene(tmp_path):
 
     scene = json.loads((project_dir / "scene.scene").read_text(encoding="utf-8"))
     assert scene["version"] == "1.0"
-    assert [entity["name"] for entity in scene["scene"]["entities"]] == ["Cube", "Light", "Ground"]
+    assert [entity["name"] for entity in scene["scene"]["entities"]] == [
+        "Cube",
+        "Light",
+        "Ground",
+        "Camera",
+    ]
 
 
 def test_make_default_scene_returns_independent_scene_ids():
@@ -60,6 +65,64 @@ def test_default_scene_uses_canonical_builtin_texture_uuids():
     assert "07151644d3bb92c7" not in serialized
     assert "__white_1x1__" in serialized
     assert "__normal_1x1__" in serialized
+
+
+def test_default_scene_has_attachable_runtime_viewport():
+    scene = make_default_scene()["scene"]
+    camera = next(entity for entity in scene["entities"] if entity["name"] == "Camera")
+    assert camera["components"][0]["type"] == "CameraComponent"
+
+    render_mount = scene["extensions"]["render_mount"]
+    assert render_mount["viewport_configs"] == [
+        {
+            "name": "MainViewport",
+            "display_name": "Main",
+            "region": [0.0, 0.0, 1.0, 1.0],
+            "depth": 0,
+            "input_mode": "simple",
+            "block_input_in_editor": False,
+            "render_target": {"name": "MainTarget"},
+            "enabled": True,
+        }
+    ]
+    assert render_mount["render_target_configs"][0]["camera_uuid"] == camera["uuid"]
+    assert render_mount["render_target_configs"][0]["pipeline_name"] == "Default"
+
+
+@pytest.mark.parametrize(
+    ("entity_name", "mesh_uuid", "mesh_name"),
+    [
+        ("Cube", "00000000-0000-0000-0003-000000000001", "Cube"),
+        ("Ground", "00000000-0000-0000-0003-000000000003", "Plane"),
+    ],
+)
+def test_default_mesh_entities_use_canonical_typed_resource_components(
+    entity_name,
+    mesh_uuid,
+    mesh_name,
+):
+    entities = make_default_scene()["scene"]["entities"]
+    entity = next(item for item in entities if item["name"] == entity_name)
+
+    assert [component["type"] for component in entity["components"]] == [
+        "MeshComponent",
+        "MeshRenderer",
+    ]
+    mesh_data = entity["components"][0]["data"]
+    renderer_data = entity["components"][1]["data"]
+    assert mesh_data["mesh"] == {
+        "uuid": mesh_uuid,
+        "name": mesh_name,
+        "type": "uuid",
+        "kind": "tc_mesh",
+    }
+    assert "mesh" not in renderer_data
+    assert renderer_data["material"] == {
+        "uuid": "00000000-0001-0000-0001-000000000003",
+        "name": "NormalizedPBR",
+        "type": "uuid",
+        "kind": "tc_material",
+    }
 
 
 @pytest.mark.parametrize(

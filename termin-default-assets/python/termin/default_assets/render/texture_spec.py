@@ -24,6 +24,13 @@ class TextureSpec:
     flip_y: bool = True
     # Transpose texture (swap X and Y axes)
     transpose: bool = False
+    # Default sampler used by scene-level textured renderers.
+    filter: str = "linear"
+    mipmaps: bool = False
+    wrap: str = "clamp"
+    # Pixel interpretation. Textures remain straight-alpha in CPU storage.
+    color_space: str = "srgb"
+    alpha_mode: str = "straight"
 
     @classmethod
     def load(cls, spec_path: str | Path) -> "TextureSpec":
@@ -39,6 +46,11 @@ class TextureSpec:
                 flip_x=data.get("flip_x", False),
                 flip_y=data.get("flip_y", True),
                 transpose=data.get("transpose", False),
+                filter=data.get("filter", "linear"),
+                mipmaps=data.get("mipmaps", False),
+                wrap=data.get("wrap", "clamp"),
+                color_space=data.get("color_space", "srgb"),
+                alpha_mode=data.get("alpha_mode", "straight"),
             )
         except Exception:
             log.warning(f"[TextureSpec] Failed to load spec from {spec_path}", exc_info=True)
@@ -74,6 +86,11 @@ class TextureSpec:
             "flip_x": self.flip_x,
             "flip_y": self.flip_y,
             "transpose": self.transpose,
+            "filter": self.filter,
+            "mipmaps": self.mipmaps,
+            "wrap": self.wrap,
+            "color_space": self.color_space,
+            "alpha_mode": self.alpha_mode,
         })
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)

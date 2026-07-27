@@ -6,6 +6,9 @@ from collections.abc import Callable
 from pathlib import PurePosixPath
 
 
+SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin", ".venv")
+
+
 def normalize_project_resource_paths(
     value: object,
     *,

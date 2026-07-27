@@ -24,6 +24,8 @@
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
+#include <termin/render/sprite_asset.hpp>
+#include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
@@ -186,6 +188,40 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("tcbase._tcbase_native");
 
     tc::init_cpp_inspect_vtable();
+
+    nb::enum_<SpriteSampling>(m, "SpriteSampling")
+        .value("Linear", SpriteSampling::Linear)
+        .value("Nearest", SpriteSampling::Nearest);
+
+    nb::class_<SpriteRegion>(m, "SpriteRegion")
+        .def(nb::init<>())
+        .def(nb::init<int32_t, int32_t, int32_t, int32_t>())
+        .def_rw("x", &SpriteRegion::x)
+        .def_rw("y", &SpriteRegion::y)
+        .def_rw("width", &SpriteRegion::width)
+        .def_rw("height", &SpriteRegion::height);
+
+    nb::class_<TcSpriteAsset>(m, "TcSpriteAsset")
+        .def(nb::init<>())
+        .def_static("declare", &TcSpriteAsset::declare,
+            nb::arg("uuid"), nb::arg("name"), nb::arg("source_path") = "")
+        .def_static("from_uuid", &TcSpriteAsset::from_uuid)
+        .def("update", &TcSpriteAsset::update,
+            nb::arg("texture_uuid"),
+            nb::arg("region"),
+            nb::arg("source_width"),
+            nb::arg("source_height"),
+            nb::arg("pivot_x") = 0.5f,
+            nb::arg("pivot_y") = 0.5f,
+            nb::arg("pixels_per_unit") = 100.0f,
+            nb::arg("sampling") = SpriteSampling::Linear)
+        .def("unload", &TcSpriteAsset::unload)
+        .def_static("clear_registry_for_tests", &TcSpriteAsset::clear_registry_for_tests)
+        .def_prop_ro("is_valid", &TcSpriteAsset::is_valid)
+        .def_prop_ro("is_loaded", &TcSpriteAsset::is_loaded)
+        .def_prop_ro("uuid", [](const TcSpriteAsset& self) { return std::string(self.uuid()); })
+        .def_prop_ro("name", [](const TcSpriteAsset& self) { return std::string(self.name()); })
+        .def_prop_ro("version", &TcSpriteAsset::version);
 
     nb::enum_<CameraProjection>(m, "CameraProjection")
         .value("Perspective", CameraProjection::Perspective)
@@ -771,6 +807,36 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("cull", [](WorldTextComponent& self) { return self.cull; }, &WorldTextComponent::set_cull)
         .def_prop_ro("is_drawable", [](WorldTextComponent&) { return true; })
         .def_prop_ro("phase_mask", &WorldTextComponent::get_phase_mask);
+
+    nb::class_<SpriteRenderer2D, Component>(m, "SpriteRenderer2D")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<SpriteRenderer2D>(self);
+        })
+        .def_prop_rw(
+            "sprite_uuid",
+            [](const SpriteRenderer2D& self) { return self.sprite_uuid; },
+            &SpriteRenderer2D::set_sprite_uuid)
+        .def_prop_rw(
+            "tint",
+            [](const SpriteRenderer2D& self) { return self.tint; },
+            &SpriteRenderer2D::set_tint)
+        .def_prop_rw("flip_x", [](const SpriteRenderer2D& self) { return self.flip_x; },
+                     &SpriteRenderer2D::set_flip_x)
+        .def_prop_rw("flip_y", [](const SpriteRenderer2D& self) { return self.flip_y; },
+                     &SpriteRenderer2D::set_flip_y)
+        .def_prop_rw(
+            "sorting_layer",
+            [](const SpriteRenderer2D& self) { return self.sorting_layer; },
+            &SpriteRenderer2D::set_sorting_layer)
+        .def_prop_rw(
+            "order_in_layer",
+            [](const SpriteRenderer2D& self) { return self.order_in_layer; },
+            &SpriteRenderer2D::set_order_in_layer)
+        .def_prop_rw("visible", [](const SpriteRenderer2D& self) { return self.visible; },
+                     &SpriteRenderer2D::set_visible)
+        .def_prop_ro("world_bounds", &SpriteRenderer2D::world_bounds)
+        .def_prop_ro("is_drawable", [](SpriteRenderer2D&) { return true; })
+        .def_prop_ro("phase_mask", &SpriteRenderer2D::get_phase_mask);
 
     nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
         .def("__init__", [](nb::handle self) {

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from termin.project import make_default_scene
 from termin.project_build import export_runtime_package
 from termin.project_build.runtime_package_exporter import (
     ENGINE_TEXT3D_SHADER_UUID,
@@ -11,6 +12,7 @@ from termin.project_build.runtime_package_exporter import (
     _material_textures_to_json,
 )
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
+from termin.project_build.runtime_package.sprites import write_sprites
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -45,6 +47,74 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     )
     compiler.chmod(0o755)
     return compiler
+
+
+def test_sprite_asset_ref_and_texture_are_exported_together(tmp_path: Path) -> None:
+    project = tmp_path / "SpriteGame"
+    package = tmp_path / "package"
+    sprite_uuid = "sprite-uuid"
+    texture_uuid = "texture-uuid"
+    sprite_path = project / "Assets" / "hero.sprite"
+    _write_json(
+        sprite_path,
+        {
+            "format": "termin.sprite",
+            "version": 1,
+            "texture": {"uuid": texture_uuid, "name": "atlas"},
+            "region": [4, 8, 16, 24],
+            "source_size": [64, 64],
+            "pivot": [0.5, 0.0],
+            "pixels_per_unit": 16.0,
+            "sampling": "nearest",
+        },
+    )
+    _write_json(Path(f"{sprite_path}.meta"), {"uuid": sprite_uuid})
+    refs = collect_runtime_refs(
+        {
+            "components": [
+                {
+                    "type": "SpriteRenderer2D",
+                    "data": {
+                        "sprite": {
+                            "type": "uuid",
+                            "kind": "sprite_asset",
+                            "role": "sprite",
+                            "uuid": sprite_uuid,
+                        }
+                    },
+                }
+            ]
+        }
+    )
+    assert refs.sprites == {sprite_uuid: sprite_uuid}
+
+    resources: list[dict[str, str]] = []
+    diagnostics = []
+    write_sprites(
+        project,
+        package,
+        refs.sprites,
+        refs.textures,
+        resources,
+        diagnostics,
+    )
+
+    assert diagnostics == []
+    assert refs.textures == {texture_uuid: "atlas"}
+    assert resources == [
+        {
+            "type": "sprite_asset",
+            "uuid": sprite_uuid,
+            "name": sprite_uuid,
+            "path": f"sprites/{sprite_uuid}.sprite.json",
+        }
+    ]
+    packaged = json.loads(
+        (package / "sprites" / f"{sprite_uuid}.sprite.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert packaged["texture"]["uuid"] == texture_uuid
 
 
 
@@ -321,6 +391,52 @@ def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
     assert refs.meshes == {"typed-mesh": "Typed Mesh"}
     assert refs.materials == {"typed-material": "Typed Material"}
     assert diagnostics == []
+
+
+def test_collect_runtime_refs_accepts_default_scene_contract() -> None:
+    diagnostics = []
+
+    refs = collect_runtime_refs(make_default_scene()["scene"], diagnostics)
+
+    assert refs.meshes == {
+        "00000000-0000-0000-0003-000000000001": "Cube",
+        "00000000-0000-0000-0003-000000000003": "Plane",
+    }
+    assert refs.materials == {
+        "00000000-0001-0000-0001-000000000003": "NormalizedPBR",
+    }
+    assert diagnostics == []
+
+
+@full_runtime_package_exporter
+def test_strict_runtime_export_accepts_default_scene_resources(tmp_path: Path) -> None:
+    project = tmp_path / "DefaultSceneGame"
+    project.mkdir()
+    _write_json(project / "scene.scene", make_default_scene())
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="scene.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"] == []
+    assert (
+        result.package_dir
+        / "meshes"
+        / "00000000-0000-0000-0003-000000000001.tmesh.json"
+    ).exists()
+    assert (
+        result.package_dir
+        / "meshes"
+        / "00000000-0000-0000-0003-000000000003.tmesh.json"
+    ).exists()
+    assert (
+        result.package_dir
+        / "materials"
+        / "00000000-0001-0000-0001-000000000003.tmat.json"
+    ).exists()
 
 
 def test_collect_runtime_refs_accepts_canonical_pipeline_template_mount() -> None:
