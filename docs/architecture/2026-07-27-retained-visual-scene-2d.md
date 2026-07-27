@@ -39,9 +39,9 @@ plot render/input path harder to extend. Treating every annotation as a widget
 would force plot-space objects into widget layout and would make standalone
 `tcplot` depend on `termin-gui-native`.
 
-`termin-gui-native` already contains `GraphicsScene`, `GraphicsItem` and
-`SceneView`. They prove the usefulness of a retained tool scene, but the current
-scene is GUI-bound:
+Before the shared-scene migration, `termin-gui-native` contained
+`GraphicsScene`, `GraphicsItem` and `SceneView`. They proved the usefulness of
+a retained tool scene, but that prototype was GUI-bound:
 
 - paint callbacks consume `tc_ui_paint_context`;
 - embedded widgets are part of the core item type;
@@ -597,8 +597,13 @@ they must not report a wrong-thread condition.
 
 ## Migration from `termin-gui-native::GraphicsScene`
 
-The current GUI-native scene is a prototype and migration source, not a second
+That GUI-native scene was a prototype and migration source, not a second
 permanent scene API.
+
+As of the `SceneView` migration, the GUI-facing `GraphicsScene` name denotes
+only a metadata/invalidation adapter which owns one `VisualScene2D`.
+`GraphicItemRef` is a non-owning scene-plus-generation-handle value; the old
+`shared_ptr<GraphicsItem>` tree and paint/hit callback API no longer exist.
 
 Migration proceeds as follows:
 
