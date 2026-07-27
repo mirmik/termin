@@ -67,10 +67,19 @@ public:
     gui_native::BoxLayout* inside_panel() const { return inside_panel_; }
     gui_native::BoxLayout* between_panel() const { return between_panel_; }
     gui_native::StatusBar* state_status() const { return state_status_; }
+    gui_native::Canvas* main_preview_canvas() const { return main_preview_.canvas; }
+    gui_native::Canvas* depth_preview_canvas() const { return depth_preview_.canvas; }
+    gui_native::ComboBox* main_sampling_combo() const {
+        return main_preview_.sampling_combo;
+    }
+    gui_native::ComboBox* depth_sampling_combo() const {
+        return depth_preview_.sampling_combo;
+    }
 
 private:
     struct Preview {
         gui_native::Canvas* canvas = nullptr;
+        gui_native::ComboBox* sampling_combo = nullptr;
         gui_native::StatusBar* status = nullptr;
         tgfx::TextureHandle target{};
         uint32_t width = 0;

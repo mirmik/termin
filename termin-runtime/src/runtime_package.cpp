@@ -1407,7 +1407,11 @@ std::string resource_label(const nos::trent& entry) {
     return type + ":" + path;
 }
 
-TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::string& rel_path) {
+TcSceneRef load_runtime_scene(
+    const std::filesystem::path& root,
+    const std::string& rel_path,
+    const RuntimePackageLoadOptions& options
+) {
     termin::bootstrap::bootstrap_runtime();
 
     const std::filesystem::path scene_path = package_path(root, rel_path);
@@ -1425,6 +1429,20 @@ TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::stri
         throw std::runtime_error("failed to create runtime scene");
     }
     try {
+        for (tc_scene_ext_type_id type_id : options.scene_extensions) {
+            if (tc_scene_ext_has(scene.handle(), type_id)) {
+                continue;
+            }
+            if (!tc_scene_ext_attach(scene.handle(), type_id)) {
+                const char* debug_name = tc_scene_ext_type_debug_name(type_id);
+                throw std::runtime_error(
+                    "failed to attach required scene extension '" +
+                    std::string(debug_name ? debug_name : "<unregistered>") +
+                    "' (" + std::to_string(type_id) + ") to packaged scene '" +
+                    rel_path + "'"
+                );
+            }
+        }
         scene.set_source_path(scene_path.string());
         scene.load_from_data(scene_data);
     } catch (...) {
@@ -1445,7 +1463,10 @@ TcSceneRef RuntimePackageLoadResult::find_scene(const std::string& identity) con
     return TcSceneRef();
 }
 
-RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path) {
+RuntimePackageLoadResult RuntimePackageLoader::load(
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options
+) {
     RuntimePackageLoadResult result;
     try {
         std::error_code root_error;
@@ -1560,7 +1581,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
             result.scenes.push_back(RuntimePackageScene{
                 identity,
                 scene_path,
-                load_runtime_scene(root, scene_path),
+                load_runtime_scene(root, scene_path, options),
             });
         }
         result.scene = result.find_scene(result.entry_scene_identity);
@@ -1595,10 +1616,11 @@ RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path
 }
 
 RuntimePackageLoadResult load_runtime_package(
-    const std::string& root_path
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options
 ) {
     RuntimePackageLoader loader;
-    return loader.load(root_path);
+    return loader.load(root_path, options);
 }
 
 } // namespace termin::runtime

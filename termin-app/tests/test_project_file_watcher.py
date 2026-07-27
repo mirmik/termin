@@ -478,6 +478,37 @@ def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: 
         assert watcher._pending_changes == {}
 
 
+def test_project_file_watcher_ignores_project_venv_for_scan_and_live_events(
+    tmp_path: Path,
+) -> None:
+    venv_script = tmp_path / ".venv" / "site-packages" / "dependency.py"
+    venv_script.parent.mkdir(parents=True)
+    venv_script.write_text("DEPENDENCY = True\n", encoding="utf-8")
+    authored_script = tmp_path / "Scripts" / "gameplay.py"
+    authored_script.parent.mkdir()
+    authored_script.write_text("GAMEPLAY = 1\n", encoding="utf-8")
+
+    processor = RecordingPythonPreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+
+    assert watcher.watched_files == {str(authored_script)}
+    watcher._enqueue_change(str(venv_script), "created")
+    watcher._enqueue_change(str(venv_script), "modified")
+    with watcher._lock:
+        assert watcher._pending_changes == {}
+
+    watcher._enqueue_change(str(authored_script), "modified")
+    with watcher._lock:
+        watcher._debounce_deadline = 0
+    watcher.poll()
+
+    assert processor.changed == [str(authored_script)]
+
+
 class RecordingAssetCatalog:
     def __init__(self) -> None:
         self.removed_paths: list[str] = []

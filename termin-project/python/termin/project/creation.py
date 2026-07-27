@@ -97,8 +97,78 @@ def _write_json(path: Path, contents: dict) -> None:
     path.write_text(json.dumps(contents, indent=2), encoding="utf-8")
 
 
+def _uuid_resource_ref(uuid_value: str, name: str, kind: str) -> dict:
+    return {
+        "uuid": uuid_value,
+        "name": name,
+        "type": "uuid",
+        "kind": kind,
+    }
+
+
+def _default_mesh_components(mesh_uuid: str, mesh_name: str, color: list[float]) -> list[dict]:
+    """Build the canonical geometry and renderer pair for a starter entity."""
+    return [
+        {
+            "type": "MeshComponent",
+            "data": {
+                "mesh": _uuid_resource_ref(mesh_uuid, mesh_name, "tc_mesh"),
+            },
+        },
+        {
+            "type": "MeshRenderer",
+            "data": {
+                "enabled": True,
+                "material": _uuid_resource_ref(
+                    "00000000-0001-0000-0001-000000000003",
+                    "NormalizedPBR",
+                    "tc_material",
+                ),
+                "cast_shadow": True,
+                "_override_material": True,
+                "_overridden_material_data": {
+                    "phases_uniforms": [
+                        {
+                            "u_diffuse_mul": 3.14,
+                            "u_color": list(color),
+                        },
+                        {
+                            "u_color": list(color),
+                            "u_metallic": 0.0,
+                            "u_roughness": 0.5,
+                            "u_subsurface": 0.0,
+                            "u_diffuse_mul": 3.14,
+                            "u_emission_color": [0.0, 0.0, 0.0, 1.0],
+                            "u_emission_intensity": 0.0,
+                            "u_normal_strength": 1.0,
+                        },
+                    ],
+                    "phases_textures": [
+                        {},
+                        {
+                            "u_albedo_texture": {
+                                "uuid": "__white_1x1__",
+                                "name": "__white_1x1__",
+                                "type": "path",
+                                "path": "__white_1x1__",
+                            },
+                            "u_normal_texture": {
+                                "uuid": "__normal_1x1__",
+                                "name": "__normal_1x1__",
+                                "type": "path",
+                                "path": "__normal_1x1__",
+                            },
+                        },
+                    ],
+                },
+            },
+        },
+    ]
+
+
 def make_default_scene() -> dict:
-    """Create a default scene with a Cube, Light, and Ground plane."""
+    """Create a renderable default scene with geometry, lighting, and a camera."""
+    camera_uuid = str(uuid.uuid4())
     return {
         "version": "1.0",
         "scene": {
@@ -119,60 +189,11 @@ def make_default_scene() -> dict:
                         "rotation": [0.0, 0.0, 0.0, 1.0],
                     },
                     "scale": [1.0, 1.0, 1.0],
-                    "components": [
-                        {
-                            "type": "MeshRenderer",
-                            "data": {
-                                "enabled": True,
-                                "mesh": {
-                                    "uuid": "00000000-0000-0000-0003-000000000001",
-                                    "name": "Cube",
-                                },
-                                "material": {
-                                    "uuid": "00000000-0001-0000-0001-000000000003",
-                                    "name": "NormalizedPBR",
-                                    "type": "uuid",
-                                },
-                                "cast_shadow": True,
-                                "_override_material": True,
-                                "_overridden_material_data": {
-                                    "phases_uniforms": [
-                                        {
-                                            "u_diffuse_mul": 3.14,
-                                            "u_color": [0.084, 0.671, 0.636, 1.0],
-                                        },
-                                        {
-                                            "u_color": [0.084, 0.671, 0.636, 1.0],
-                                            "u_metallic": 0.0,
-                                            "u_roughness": 0.5,
-                                            "u_subsurface": 0.0,
-                                            "u_diffuse_mul": 3.14,
-                                            "u_emission_color": [0.0, 0.0, 0.0, 1.0],
-                                            "u_emission_intensity": 0.0,
-                                            "u_normal_strength": 1.0,
-                                        },
-                                    ],
-                                    "phases_textures": [
-                                        {},
-                                        {
-                                            "u_albedo_texture": {
-                                                "uuid": "__white_1x1__",
-                                                "name": "__white_1x1__",
-                                                "type": "path",
-                                                "path": "__white_1x1__",
-                                            },
-                                            "u_normal_texture": {
-                                                "uuid": "__normal_1x1__",
-                                                "name": "__normal_1x1__",
-                                                "type": "path",
-                                                "path": "__normal_1x1__",
-                                            },
-                                        },
-                                    ],
-                                },
-                            },
-                        }
-                    ],
+                    "components": _default_mesh_components(
+                        "00000000-0000-0000-0003-000000000001",
+                        "Cube",
+                        [0.084, 0.671, 0.636, 1.0],
+                    ),
                 },
                 {
                     "uuid": str(uuid.uuid4()),
@@ -221,57 +242,39 @@ def make_default_scene() -> dict:
                         "rotation": [0.0, 0.0, 0.0, 1.0],
                     },
                     "scale": [5.0, 5.0, 1.0],
+                    "components": _default_mesh_components(
+                        "00000000-0000-0000-0003-000000000003",
+                        "Plane",
+                        [0.416, 0.232, 0.030, 1.0],
+                    ),
+                },
+                {
+                    "uuid": camera_uuid,
+                    "name": "Camera",
+                    "priority": 0,
+                    "visible": True,
+                    "enabled": True,
+                    "pickable": True,
+                    "selectable": True,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                        "position": [-3.46, 6.50, 5.13],
+                        "rotation": [0.0735, -0.2864, 0.9253, -0.2376],
+                    },
+                    "scale": [1.0, 1.0, 1.0],
                     "components": [
                         {
-                            "type": "MeshRenderer",
+                            "type": "CameraComponent",
                             "data": {
                                 "enabled": True,
-                                "mesh": {
-                                    "uuid": "00000000-0000-0000-0003-000000000003",
-                                    "name": "Plane",
-                                },
-                                "material": {
-                                    "uuid": "00000000-0001-0000-0001-000000000003",
-                                    "name": "NormalizedPBR",
-                                    "type": "uuid",
-                                },
-                                "cast_shadow": True,
-                                "_override_material": True,
-                                "_overridden_material_data": {
-                                    "phases_uniforms": [
-                                        {
-                                            "u_diffuse_mul": 3.14,
-                                            "u_color": [0.416, 0.232, 0.030, 1.0],
-                                        },
-                                        {
-                                            "u_color": [0.416, 0.232, 0.030, 1.0],
-                                            "u_metallic": 0.0,
-                                            "u_roughness": 0.5,
-                                            "u_subsurface": 0.0,
-                                            "u_diffuse_mul": 3.14,
-                                            "u_emission_color": [0.0, 0.0, 0.0, 1.0],
-                                            "u_emission_intensity": 0.0,
-                                            "u_normal_strength": 1.0,
-                                        },
-                                    ],
-                                    "phases_textures": [
-                                        {},
-                                        {
-                                            "u_albedo_texture": {
-                                                "uuid": "__white_1x1__",
-                                                "name": "__white_1x1__",
-                                                "type": "path",
-                                                "path": "__white_1x1__",
-                                            },
-                                            "u_normal_texture": {
-                                                "uuid": "__normal_1x1__",
-                                                "name": "__normal_1x1__",
-                                                "type": "path",
-                                                "path": "__normal_1x1__",
-                                            },
-                                        },
-                                    ],
-                                },
+                                "near_clip": 0.1,
+                                "far_clip": 100.0,
+                                "fov_x_degrees": 64.0,
+                                "fov_y_degrees": 45.0,
+                                "fov_mode": "FixHorizontal",
+                                "layer_mask": "0xffffffffffffffff",
+                                "render_category_mask": "0xffffffffffffffff",
                             },
                         }
                     ],
@@ -281,7 +284,32 @@ def make_default_scene() -> dict:
             "flag_names": {},
             "extensions": {
                 "render_mount": {
-                    "viewport_configs": [],
+                    "viewport_configs": [
+                        {
+                            "name": "MainViewport",
+                            "display_name": "Main",
+                            "region": [0.0, 0.0, 1.0, 1.0],
+                            "depth": 0,
+                            "input_mode": "simple",
+                            "block_input_in_editor": False,
+                            "render_target": {"name": "MainTarget"},
+                            "enabled": True,
+                        }
+                    ],
+                    "render_target_configs": [
+                        {
+                            "name": "MainTarget",
+                            "kind": "texture_2d",
+                            "camera_uuid": camera_uuid,
+                            "dynamic_resolution": True,
+                            "color_format": "rgba16f",
+                            "depth_format": "depth32f",
+                            "clear_color": [0.05, 0.05, 0.08, 1.0],
+                            "clear_depth": 1.0,
+                            "pipeline_name": "Default",
+                            "enabled": True,
+                        }
+                    ],
                     "pipeline_templates": [],
                 },
                 "render_state": {

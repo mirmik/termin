@@ -125,6 +125,23 @@ def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
     assert "../termin-nodegraph/python/tcnodegraph" not in cpp_cmake
 
 
+def test_linux_player_launcher_declares_relocatable_sdk_and_bundle_runpath() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    player_cmake = (repo_root / "termin-player" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+    rpath_cmake = (repo_root / "cmake" / "TerminRpath.cmake").read_text(
+        encoding="utf-8"
+    )
+
+    assert "termin_set_rpath_relocatable_tool(termin_player)" in player_cmake
+    helper = rpath_cmake.split(
+        "function(termin_set_rpath_relocatable_tool target)", 1
+    )[1].split("endfunction()", 1)[0]
+    assert 'INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/../lib"' in helper
+    assert "CMAKE_INSTALL_PREFIX" not in helper
+
+
 def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
     sdk = tmp_path / "fake-windows-sdk"
     bin_dir = sdk / "bin"
