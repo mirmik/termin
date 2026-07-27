@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
+from tcbase import log
+
 from termin.editor_core.build_profiles_model import BuildProfileAction
 from termin.project_build import (
     BuildProfile,
@@ -26,10 +28,10 @@ class ProjectBuildController:
         self,
         *,
         save_scene: Callable[[], None],
-        log_to_console: Callable[[str], None],
+        on_output: Callable[[str], None] | None = None,
     ) -> None:
         self._save_scene = save_scene
-        self._log_to_console = log_to_console
+        self._on_output = on_output
 
     def capability_diagnostics(
         self,
@@ -174,7 +176,10 @@ class ProjectBuildController:
         )
 
     def _emit(self, message: str) -> None:
-        self._log_to_console(str(message))
+        normalized = str(message)
+        log.info(normalized)
+        if self._on_output is not None:
+            self._on_output(normalized)
 
 
 __all__ = ["ProjectBuildController"]

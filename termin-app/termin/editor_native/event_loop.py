@@ -39,6 +39,7 @@ class NativeEditorEventLoop:
         framegraph_debugger,
         frame_profiler,
         profiler_panel,
+        editor_log_capture,
         game_mode_controller,
         request_editor_render: Callable[[], None],
         window,
@@ -55,6 +56,7 @@ class NativeEditorEventLoop:
         self._framegraph_debugger = framegraph_debugger
         self._frame_profiler = frame_profiler
         self._profiler_panel = profiler_panel
+        self._editor_log_capture = editor_log_capture
         self._game_mode_controller = game_mode_controller
         self._request_editor_render = request_editor_render
         self._window = window
@@ -82,6 +84,9 @@ class NativeEditorEventLoop:
             self._framegraph_debugger.update()
             self._frame_profiler.update()
             if self._profiler_panel.root.visible and self._profiler_panel.update():
+                self._host.request_render_update()
+        with self._capture_profiler.section("Editor Log"):
+            if self._editor_log_capture.drain():
                 self._host.request_render_update()
         with self._capture_profiler.section("UI Schedule"):
             if _game_mode_requires_continuous_render(self._game_mode_controller):
@@ -112,6 +117,7 @@ def attach_native_editor_event_loop(
     framegraph_debugger,
     frame_profiler,
     profiler_panel,
+    editor_log_capture,
     game_mode_controller,
     request_editor_render: Callable[[], None],
     window,
@@ -140,6 +146,7 @@ def attach_native_editor_event_loop(
             framegraph_debugger=framegraph_debugger,
             frame_profiler=frame_profiler,
             profiler_panel=profiler_panel,
+            editor_log_capture=editor_log_capture,
             game_mode_controller=game_mode_controller,
             request_editor_render=request_editor_render,
             window=window,

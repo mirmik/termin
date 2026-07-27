@@ -46,14 +46,12 @@ class ResourceLoader:
         get_scene: Callable[[], "Scene"],
         get_project_path: Callable[[], str | None],
         on_resource_reloaded: Callable[[str, str], None],
-        log_message: Callable[[str], None] | None = None,
         show_open_file_dialog: Callable[[str, str], str | None] | None = None,
     ):
         self._resource_manager = resource_manager
         self._get_scene = get_scene
         self._get_project_path = get_project_path
         self._on_resource_reloaded = on_resource_reloaded
-        self._log = log_message or (lambda msg: None)
         self._show_open_file_dialog = show_open_file_dialog
 
     def scan_builtin_components(self) -> None:

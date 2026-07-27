@@ -19,7 +19,6 @@ class ProjectSessionController:
         self,
         *,
         set_project_state: Callable[[str, str], None],
-        log_to_console: Callable[[str], None],
         rescan_file_resources: Callable[[], None],
         set_project_browser_root: Callable[[str], None],
         get_init_script_editor: Callable[[], object],
@@ -31,7 +30,6 @@ class ProjectSessionController:
         | None = None,
     ) -> None:
         self._set_project_state = set_project_state
-        self._log_to_console = log_to_console
         self._rescan_file_resources = rescan_file_resources
         self._set_project_browser_root = set_project_browser_root
         self._get_init_script_editor = get_init_script_editor
@@ -144,7 +142,7 @@ class ProjectSessionController:
             self._set_project_state(project_dir, project_name)
             self._set_project_browser_root(project_dir)
             self._rescan_file_resources()
-            self._log_to_console(f"Project: {project_dir}")
+            log.info(f"Project: {project_dir}")
         except Exception as e:
             self._initializing = False
             self._report_error(
@@ -216,7 +214,6 @@ class ProjectSessionController:
 
     def _report_error(self, title: str, message: str) -> None:
         log.error(f"[ProjectSessionController] {title}: {message}")
-        self._log_to_console(f"{title}: {message}")
         if self._show_error is not None:
             self._show_error(title, message)
 
@@ -278,7 +275,7 @@ class ProjectSessionController:
 
         def finish(success: bool) -> None:
             if not success and runtime.last_error:
-                self._log_to_console(f"Module load error: {runtime.last_error}")
+                log.error(f"Module load error: {runtime.last_error}")
             self._log_project_module_summary(runtime, ModuleKind, ModuleState)
             if on_complete is not None:
                 on_complete(success)
@@ -301,30 +298,30 @@ class ProjectSessionController:
             if record.kind == ModuleKind.Cpp:
                 if record.state == ModuleState.Loaded:
                     cpp_loaded += 1
-                    self._log_to_console(f"Loaded C++ module: {record.id}")
+                    log.info(f"Loaded C++ module: {record.id}")
                 elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                     cpp_failed += 1
-                    self._log_to_console(
+                    log.error(
                         f"C++ module {record.id} is not active: {record.error_message}"
                     )
             else:
                 if record.state == ModuleState.Loaded:
                     py_loaded += 1
-                    self._log_to_console(f"Loaded Python module: {record.id}")
+                    log.info(f"Loaded Python module: {record.id}")
                 elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                     py_failed += 1
-                    self._log_to_console(
+                    log.error(
                         f"Python module {record.id} is not active: {record.error_message}"
                     )
 
         if cpp_loaded > 0:
-            self._log_to_console(f"Loaded {cpp_loaded} C++ module(s)")
+            log.info(f"Loaded {cpp_loaded} C++ module(s)")
         if cpp_failed > 0:
-            self._log_to_console(f"Failed to load {cpp_failed} C++ module(s)")
+            log.error(f"Failed to load {cpp_failed} C++ module(s)")
         if py_loaded > 0:
-            self._log_to_console(f"Loaded {py_loaded} Python module(s)")
+            log.info(f"Loaded {py_loaded} Python module(s)")
         if py_failed > 0:
-            self._log_to_console(f"Failed to load {py_failed} Python module(s)")
+            log.error(f"Failed to load {py_failed} Python module(s)")
 
     def run_project_init_script(self, project_root: Path) -> None:
         init_script = project_root / "InitScript.py"
@@ -347,7 +344,6 @@ class ProjectSessionController:
             )
         except Exception as e:
             log.error(f"Project init script failed: {init_script}: {e}")
-            self._log_to_console(f"Project init script failed: {e}")
         finally:
             if inserted_project_path:
                 sys.path.remove(project_path)

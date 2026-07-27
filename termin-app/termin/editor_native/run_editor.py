@@ -6,6 +6,8 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from tcbase import log
+
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
@@ -79,6 +81,7 @@ from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsContr
 from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
 from termin.editor_core.editor_log_model import EditorLogModel
+from termin.editor_core.editor_log_capture import EditorLogCapture
 from termin.editor_core.editor_session_presentation import EditorSessionPresentationModel
 from termin.editor_core.render_scene_session import RenderSceneSession
 from termin.editor_core.rendering_factories import (
@@ -293,6 +296,11 @@ def _compose_native_editor(
         cleanup=lambda: editor_log.close(),
     )
     shell.console_host.add_stretch_child(editor_log.root)
+    editor_log_capture = diagnostics_stage.own(
+        "editor log capture",
+        EditorLogCapture(editor_log_model),
+        cleanup=lambda: editor_log_capture.close(),
+    )
 
     def set_profile_ui(enabled: bool) -> None:
         engine.profile_ui = enabled
@@ -1276,9 +1284,7 @@ def _compose_native_editor(
         _logger.error("Native editor active scene is not registered in SceneManager")
         return None
 
-    def log_build_message(message: str) -> None:
-        _logger.info("Project build: %s", message)
-        editor_log_model.append(message)
+    def present_build_output(message: str) -> None:
         session_presentation.update(message=message)
 
     def update_window_title() -> None:
@@ -1317,7 +1323,6 @@ def _compose_native_editor(
         resource_manager,
         on_mode_changed=on_prefab_mode_changed,
         on_request_update=request_editor_render,
-        log_message=log_build_message,
         get_editor_scene_name=active_scene_name,
     )
 
@@ -1395,7 +1400,6 @@ def _compose_native_editor(
         on_rendering_changed=sync_viewport_list,
         request_viewport_update=request_editor_render,
         update_window_title=update_window_title,
-        log_to_console=log_build_message,
     )
 
     scene_file_commands = {
@@ -1431,15 +1435,15 @@ def _compose_native_editor(
         build_project_root = Path(project_file).resolve().parent
         build_profiles_window_ref = [None]
 
-        def log_profile_output(message: str) -> None:
-            log_build_message(message)
+        def present_profile_output(message: str) -> None:
+            present_build_output(message)
             window = build_profiles_window_ref[0]
             if window is not None:
                 window.append_output(message)
 
         project_build_controller = ProjectBuildController(
             save_scene=scene_file_controller.save_scene,
-            log_to_console=log_profile_output,
+            on_output=present_profile_output,
         )
         profiles_controller = BuildProfilesController(
             BuildProfileStorePersistence(
@@ -1580,7 +1584,6 @@ def _compose_native_editor(
         viewport=editor_viewport,
         refresh_ui=refresh_editor_ui,
         set_project_state=lambda _project_dir, project_name: session_presentation.update(project_name=project_name),
-        log_to_console=log_build_message,
         rescan_file_resources=rescan_file_resources,
         set_project_browser_root=lambda project_dir: project_browser.set_root(Path(project_dir)),
         get_init_script_editor=lambda: project_editor_context,
@@ -1600,7 +1603,6 @@ def _compose_native_editor(
             None if project_browser_controller.root_path is None else str(project_browser_controller.root_path)
         ),
         on_resource_reloaded=on_resource_reloaded,
-        log_message=log_build_message,
     )
 
     def project_dialog_directory() -> str:
@@ -1622,7 +1624,9 @@ def _compose_native_editor(
             return
         try:
             sync_stdlib(root_path)
-            log_build_message(f"Standard library deployed to {root_path}")
+            message = f"Standard library deployed to {root_path}"
+            log.info(message)
+            present_build_output(message)
         except Exception as error:
             _logger.exception("Native standard library deployment failed")
             dialog_service.show_error("Deploy Standard Library", str(error))
@@ -1952,6 +1956,7 @@ def _compose_native_editor(
     if initial_scene is not None:
         engine.scene_manager.request_render()
         engine.tick_and_render(0.016)
+    editor_log_capture.drain()
     host.render()
     if not composition.windowed:
         native_bootstrap.require_offscreen_process_isolation()
@@ -1969,6 +1974,7 @@ def _compose_native_editor(
         framegraph_debugger=framegraph_debugger,
         frame_profiler=frame_profiler,
         profiler_panel=profiler_panel,
+        editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
         window=window,
