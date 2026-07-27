@@ -73,6 +73,7 @@ class NativeDisplayWorkspace:
         rendering_manager,
         scene,
         request_render: Callable[[], None],
+        request_highlight_render: Callable[[], None],
         render_only_active_display: bool = True,
     ) -> "NativeDisplayWorkspace":
         tabs = document.create_tab_view("native-display-workspace")
@@ -90,7 +91,8 @@ class NativeDisplayWorkspace:
                 device=device,
                 rendering_manager=rendering_manager,
                 scene=scene,
-                request_render=request_render,
+                request_scene_render=request_render,
+                request_highlight_render=request_highlight_render,
             )
         except Exception:
             _logger.exception("Native display workspace failed to create its editor page")

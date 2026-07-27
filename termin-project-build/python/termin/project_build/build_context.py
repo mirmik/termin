@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
+from termin.project.settings import load_project_settings
 from termin.project_build.common import read_project_name
 
 
@@ -19,6 +20,7 @@ class BuildContext:
     resource_policy: str
     entry_scene: Path
     scenes: tuple[Path, ...]
+    generated_output_root: Path
     dist_dir: Path
     package_dir: Path
     logs_dir: Path
@@ -41,11 +43,14 @@ def create_build_context(
     if resolved_project_name is None:
         resolved_project_name = read_project_name(project_root_path)
 
+    settings = load_project_settings(project_root_path)
+    generated_output_root = (project_root_path / settings.build_output_dir).resolve()
     dist_dir = resolve_build_dist_dir(
         project_root=project_root_path,
         project_name=resolved_project_name,
         target=target,
         output_dir=output_dir,
+        generated_output_root=generated_output_root,
     )
     entry_scene_path = _resolve_entry_scene(project_root_path, entry_scene)
     scene_paths = tuple(
@@ -61,6 +66,7 @@ def create_build_context(
         resource_policy=resource_policy,
         entry_scene=entry_scene_path,
         scenes=scene_paths,
+        generated_output_root=generated_output_root,
         dist_dir=dist_dir,
         package_dir=dist_dir / "package",
         logs_dir=dist_dir / "logs",
@@ -80,15 +86,17 @@ def resolve_build_dist_dir(
     project_name: str,
     target: str,
     output_dir: str | Path | None,
+    generated_output_root: Path | None = None,
 ) -> Path:
     if output_dir is not None:
         return Path(output_dir).resolve()
 
+    output_root = generated_output_root or (project_root / "dist").resolve()
     if target == "desktop":
-        return (project_root / "dist" / "desktop" / project_name).resolve()
+        return (output_root / "desktop" / project_name).resolve()
     if target == "android":
-        return (project_root / "dist" / "android" / project_name).resolve()
+        return (output_root / "android" / project_name).resolve()
     if target == "quest_openxr":
-        return (project_root / "dist" / "quest_openxr" / project_name).resolve()
+        return (output_root / "quest_openxr" / project_name).resolve()
 
     raise ValueError(f"Unsupported build target: {target}")

@@ -39,6 +39,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         model=SimpleNamespace(is_game_mode=game_mode)
     )
     request_editor_render = Mock()
+    poll_editor_picking = Mock()
     window = Mock()
     window.should_close.return_value = False
     event_loop = NativeEditorEventLoop(
@@ -55,6 +56,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
+        poll_editor_picking=poll_editor_picking,
         request_editor_render=request_editor_render,
         window=window,
         frame_limit=frame_limit,
@@ -72,6 +74,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
+        poll_editor_picking=poll_editor_picking,
         request_editor_render=request_editor_render,
         window=window,
     )
@@ -88,6 +91,7 @@ def test_native_editor_event_loop_polls_services_and_honors_frame_limit() -> Non
     services.framegraph_debugger.update.assert_called_once_with()
     services.frame_profiler.update.assert_called_once_with()
     services.editor_log_capture.drain.assert_called_once_with()
+    services.poll_editor_picking.assert_called_once_with()
     services.request_editor_render.assert_called_once_with()
     services.window_manager.render_requested.assert_called_once_with()
     services.window.set_should_close.assert_called_once_with(True)
@@ -101,6 +105,15 @@ def test_native_editor_event_loop_interrupt_requests_shutdown_before_polling() -
 
     services.window.set_should_close.assert_called_once_with(True)
     services.window_manager.poll_events.assert_not_called()
+
+
+def test_native_editor_event_loop_polls_picking_in_stop_mode_without_scene_render() -> None:
+    event_loop, services = _build_event_loop(game_mode=False)
+
+    event_loop.poll_events()
+
+    services.poll_editor_picking.assert_called_once_with()
+    services.request_editor_render.assert_not_called()
 
 
 def test_native_editor_event_loop_should_continue_tracks_window() -> None:
@@ -151,6 +164,7 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
         profiler_panel=services.profiler_panel,
         editor_log_capture=services.editor_log_capture,
         game_mode_controller=services.game_mode_controller,
+        poll_editor_picking=services.poll_editor_picking,
         request_editor_render=services.request_editor_render,
         window=services.window,
     )

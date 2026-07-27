@@ -97,7 +97,13 @@ def preflight_project_build_context(
         if scene == context.entry_scene:
             continue
         _validate_scene_root(context.project_root, scene, diagnostics)
-    _validate_output_dir(context.project_root, context.dist_dir, target_name, diagnostics)
+    _validate_output_dir(
+        context.project_root,
+        context.generated_output_root,
+        context.dist_dir,
+        target_name,
+        diagnostics,
+    )
     _raise_if_errors(target_name, diagnostics)
 
     return ProjectBuildContextPreflightResult(
@@ -350,6 +356,7 @@ def _validate_scene_root(
 
 def _validate_output_dir(
     project_root: Path,
+    generated_output_root: Path,
     output_dir: Path,
     target_name: str,
     diagnostics: list[BuildDiagnostic],
@@ -364,13 +371,14 @@ def _validate_output_dir(
         return
 
     if _path_is_relative_to(output_dir, project_root):
-        rel = output_dir.relative_to(project_root)
-        if rel.parts and rel.parts[0] == "dist":
+        if _path_is_relative_to(output_dir, generated_output_root):
             return
         diagnostics.append(
             build_error(
                 str(output_dir),
-                f"Refusing to use project-internal {target_name} build output outside dist/: {output_dir}",
+                "Refusing to use project-internal "
+                f"{target_name} build output outside configured generated-output root "
+                f"{generated_output_root}: {output_dir}",
             )
         )
         return
@@ -392,7 +400,8 @@ def _validate_output_dir(
             build_error(
                 str(output_dir),
                 "Refusing to use non-empty external build output directory: "
-                f"{output_dir}. Use a project dist/... path or an empty directory.",
+                f"{output_dir}. Use the configured project output root "
+                f"{generated_output_root} or an empty directory.",
             )
         )
 

@@ -86,6 +86,7 @@ private:
         PendingEvent event;
         Vec2i fbo{0, 0};
         uint64_t color_request = 0;
+        uint64_t id_buffer_version = 0;
         bool valid = false;
     };
     struct PendingSurfacePick {
@@ -93,6 +94,7 @@ private:
         Vec2i fbo{0, 0};
         uint64_t color_request = 0;
         uint64_t depth_request = 0;
+        uint64_t id_buffer_version = 0;
         bool color_ready = false;
         bool depth_ready = false;
         float color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -101,6 +103,11 @@ private:
     };
     PendingEntityPick _async_hover_pick;
     PendingSurfacePick _async_release_pick;
+    uint64_t _id_buffer_version = 0;
+    uint64_t _picking_poll_count = 0;
+    uint64_t _picking_scene_request_count = 0;
+    bool _id_buffer_fresh = false;
+    bool _scene_render_requested_for_picking = false;
 
     bool _camera_frustums_visible = false;
     tc_scene_handle _camera_frustum_scene = TC_SCENE_HANDLE_INVALID;
@@ -109,7 +116,8 @@ private:
 
 public:
     // Callbacks to Python
-    std::function<void()> on_request_update;
+    std::function<void()> on_request_scene_render;
+    std::function<void()> on_request_highlight_render;
   std::function<void(const GeneralPose3 &, const GeneralPose3 &)>
       on_transform_end;
     std::function<void(const KeyEvent&)> on_key;
@@ -142,8 +150,18 @@ public:
   SurfacePickResult pick_surface_at(Vec2f screen, tc_viewport_handle viewport,
                                     tc_display_handle display);
 
-    // Post-render processing - call once per frame after rendering
+    // Mark the ID attachment current after a scene render, then advance picks.
     void after_render();
+    // Advance async GPU readbacks without rendering. Called from the editor loop.
+    void poll_picking();
+    // Mark the current ID attachment stale before a scene-changing request.
+    void invalidate_id_buffer();
+    bool id_buffer_fresh() const { return _id_buffer_fresh; }
+    uint64_t id_buffer_version() const { return _id_buffer_version; }
+    uint64_t picking_poll_count() const { return _picking_poll_count; }
+    uint64_t picking_scene_request_count() const {
+        return _picking_scene_request_count;
+    }
   bool handle_key_event(const KeyEvent &event, Vec2f cursor,
                         tc_viewport_handle viewport, tc_display_handle display);
 
@@ -185,7 +203,9 @@ private:
     bool _screen_to_ray(Vec2f screen, tc_viewport_handle vp, tc_display_handle display,
                         Vec3f& origin, Vec3f& direction);
 
-    void _request_update();
+    void _request_scene_render();
+    void _request_highlight_render();
+    void _request_pick_buffer();
 };
 
 } // namespace termin
