@@ -14,6 +14,8 @@ from termin.player.project_runtime_support import (
     scan_project_assets,
 )
 
+_RENDER_SCENE_EXTENSION_KEYS = frozenset({"render_mount", "render_state"})
+
 
 class HeadlessRuntimeError(RuntimeError):
     """Raised when a headless runtime cannot initialize a project scene."""
@@ -70,6 +72,7 @@ class HeadlessRuntime:
             raise HeadlessRuntimeError(f"Project path does not exist: {self.project_path}")
 
         bootstrap_player()
+        _validate_headless_scene_extensions(self.scene_extensions)
         log.info(f"[HeadlessRuntime] Initializing project: {self.project_path}")
         if self.register_builtin_resources:
             register_project_runtime_resources(
@@ -176,7 +179,14 @@ class HeadlessRuntime:
         except Exception as e:
             raise HeadlessRuntimeError(f"Failed to read scene {scene_path}: {e}") from e
 
-        scene_data = _extract_scene_data(data)
+        scene_data, ignored_extensions = _prepare_headless_scene_data(data)
+        if ignored_extensions:
+            from tcbase import log
+
+            log.info(
+                "[HeadlessRuntime] Ignoring render-only scene extensions: "
+                + ", ".join(ignored_extensions)
+            )
 
         from termin.engine import create_scene
 
@@ -184,16 +194,41 @@ class HeadlessRuntime:
             name=self.scene_name,
             extensions=list(self.scene_extensions),
         )
-        scene.source_path = str(scene_path.resolve())
-        if scene_data:
-            from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
+        try:
+            scene.source_path = str(scene_path.resolve())
+            if scene_data:
+                from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
 
-            repair_glb_animation_player_clip_refs(scene_data)
-            scene.load_from_data(scene_data, context=None, update_settings=True)
-            from termin.project_modules.runtime import upgrade_scene_unknown_components
+                repair_glb_animation_player_clip_refs(scene_data)
+                scene.load_from_data(scene_data, context=None, update_settings=True)
+                from termin.project_modules.runtime import upgrade_scene_unknown_components
 
-            upgrade_scene_unknown_components(scene)
+                upgrade_scene_unknown_components(scene)
+        except BaseException:
+            if scene.is_alive():
+                scene.destroy()
+            raise
         return scene
+
+
+def _prepare_headless_scene_data(data: object) -> tuple[dict, tuple[str, ...]]:
+    scene_data = dict(_extract_scene_data(data))
+    extensions = scene_data.get("extensions")
+    if not isinstance(extensions, dict):
+        return scene_data, ()
+
+    headless_extensions = dict(extensions)
+    ignored_extensions = tuple(
+        sorted(_RENDER_SCENE_EXTENSION_KEYS.intersection(headless_extensions))
+    )
+    for key in ignored_extensions:
+        del headless_extensions[key]
+
+    if headless_extensions:
+        scene_data["extensions"] = headless_extensions
+    else:
+        scene_data.pop("extensions", None)
+    return scene_data, ignored_extensions
 
 
 def _extract_scene_data(data: object) -> dict:
@@ -210,6 +245,29 @@ def _extract_scene_data(data: object) -> dict:
     if not isinstance(scene_data, dict):
         raise HeadlessRuntimeError("Scene file has no scene object")
     return scene_data
+
+
+def _validate_headless_scene_extensions(scene_extensions: Sequence[int]) -> None:
+    from termin.render import SCENE_EXT_TYPE_RENDER_MOUNT, SCENE_EXT_TYPE_RENDER_STATE
+
+    incompatible_names = {
+        SCENE_EXT_TYPE_RENDER_MOUNT: "render_mount",
+        SCENE_EXT_TYPE_RENDER_STATE: "render_state",
+    }
+    requested = sorted(
+        incompatible_names[extension]
+        for extension in set(scene_extensions)
+        if extension in incompatible_names
+    )
+    if requested:
+        message = (
+            "Headless runtime cannot attach render-only scene extensions "
+            f"without a RenderingManager or graphics host: {', '.join(requested)}"
+        )
+        from tcbase import log
+
+        log.error(f"[HeadlessRuntime] {message}")
+        raise HeadlessRuntimeError(message)
 
 
 def _default_headless_scene_extensions() -> tuple[int, ...]:
