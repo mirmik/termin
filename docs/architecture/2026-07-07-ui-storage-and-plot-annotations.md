@@ -250,6 +250,14 @@ ScreenPixel
 Rendering can use `tgfx::Canvas2DRenderer`, `Text2DRenderer`, `Text3DRenderer`
 and specialized plot shaders, but the retained model belongs to `tcplot`.
 
+The ownership decision does not require `tcplot` to implement another private
+visual tree. [Retained Visual Scene 2D](2026-07-27-retained-visual-scene-2d.md)
+refines this boundary: `tcplot` owns semantic annotations and plot-domain
+anchors, while a reusable generation-handle `VisualScene2D` owns their
+projected visual nodes, hit regions and pointer interaction state. The same
+scene core may back GUI-native tool scenes without making `tcplot` depend on
+`termin-gui-native`.
+
 `termin-gui` may provide a `PlotWidget` adapter that embeds a plot view in a UI
 tree and forwards input, but `tcplot` must remain usable without Python and
 without `termin-gui`.
@@ -262,8 +270,12 @@ without `termin-gui`.
 3. Port basic widgets as C++ implementations embedding `tc_widget`.
 4. Add Python-defined widgets that embed the same `tc_widget`, plus thin handle
    wrappers for already-native widgets.
-5. Build plot annotation storage and APIs in `tcplot`.
-6. Add optional `termin-gui` plot embedding after `tcplot` annotations are
+5. Build the separate handle-based `termin-visual-scene` module on top of
+   `termin-graphics` and migrate GUI-native tool scenes to it. Keep all
+   rendering primitives, tessellation and GPU resources in `termin-graphics`.
+6. Build plot annotation storage and projection APIs in `tcplot` on top of the
+   shared visual scene.
+7. Add optional `termin-gui` plot embedding after `tcplot` annotations are
    independent.
 
 The older `termin-gui/docs/c-core-migration-analysis.md` remains useful as an
