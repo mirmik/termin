@@ -629,7 +629,6 @@ bool MeshRenderer::collect_render_items(
                 item.material_phase_index = static_cast<size_t>(phase - mat->phases);
             }
             std::copy(model.data, model.data + 16, item.model_matrix);
-            item.payload.mesh.mesh = mesh;
             item.payload.mesh.mesh_handle = current_mesh_handle();
             item.payload.mesh.submesh_index = submesh_index;
 
