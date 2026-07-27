@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "render/tc_display.h"
+#include "tgfx/tgfx2_interop.h"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -14,7 +15,7 @@ namespace {
 
 class TestRenderDevice final : public tgfx::IRenderDevice {
 public:
-    tgfx::BackendType backend_type() const override { return tgfx::BackendType::Null; }
+    tgfx::BackendType backend_type() const override { return tgfx::BackendType::D3D11; }
     tgfx::BackendCapabilities capabilities() const override { return {}; }
     void wait_idle() override {}
 
@@ -78,6 +79,19 @@ int main() {
     assert(device.destroyed.size() == 4u);
     assert(!tc_display_free(display));
     assert(device.destroyed.size() == 4u);
+
+    // The public host-facing constructor resolves the application-owned
+    // interop device without exposing a raw device pointer across the ABI.
+    int owner = 0;
+    assert(tgfx2_interop_claim_device(&device, &owner) == 1);
+    tc_display_handle current_display =
+        tc_display_new_d3d11_offscreen_current(128, 96, "current-device");
+    assert(tc_display_handle_valid(current_display));
+    assert(tc_display_get_graphics_domain_key(current_display) ==
+           reinterpret_cast<uintptr_t>(&device));
+    assert(tc_display_free(current_display));
+    assert(tgfx2_interop_release_device(&device, &owner) == 1);
+
     tc_display_pool_shutdown();
     return 0;
 }

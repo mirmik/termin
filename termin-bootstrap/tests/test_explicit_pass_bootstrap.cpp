@@ -1,4 +1,5 @@
 #include <termin/bootstrap/bootstrap.hpp>
+#include <termin/bootstrap/bootstrap_c.h>
 
 #include <render/tc_pass.h>
 #include <tc_inspect_cpp.hpp>
@@ -27,7 +28,7 @@ int main() {
     ok &= require(inspect.find_field("ColorPass", "output_res") == nullptr,
                   "including/loading ColorPass must not register inspect fields");
 
-    termin::bootstrap::bootstrap_runtime();
+    tc_bootstrap_runtime();
     const size_t first_count = tc_pass_registry_type_count();
     ok &= require(tc_pass_registry_has("ColorPass"),
                   "bootstrap must register ColorPass factory");
@@ -38,7 +39,7 @@ int main() {
     ok &= require(inspect.find_field("MaterialPass", "texture_resources") != nullptr,
                   "MaterialPass::register_type must register serializable fields");
 
-    termin::bootstrap::bootstrap_runtime();
+    tc_bootstrap_runtime();
     ok &= require(tc_pass_registry_type_count() == first_count,
                   "repeated bootstrap must be idempotent");
 

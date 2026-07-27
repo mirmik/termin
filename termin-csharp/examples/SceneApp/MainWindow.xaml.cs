@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Windows;
+using System.Windows.Threading;
 using Termin.Native;
 
 namespace SceneApp;
@@ -14,23 +15,66 @@ public partial class MainWindow : Window
     private TcShaderHandle _defaultShader;
     private TcMaterialHandle _defaultMaterial;
     private bool _resourcesCreated;
+    private readonly bool _smokeMode =
+        Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--smoke");
+    private DispatcherTimer? _smokeTimeout;
+    private int _smokeFrames;
 
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += OnLoaded;
+        SceneViewer.NativeReady += OnNativeReady;
         Closed += OnClosed;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnNativeReady(object? sender, EventArgs e)
     {
         CreateNewScene();
+        if (_smokeMode)
+        {
+            Left = -20000;
+            Top = -20000;
+            ShowInTaskbar = false;
+            SceneViewer.RenderFrame += OnSmokeRenderFrame;
+            AddCube_Click(this, new RoutedEventArgs());
+            _smokeTimeout = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(15),
+            };
+            _smokeTimeout.Tick += OnSmokeTimeout;
+            _smokeTimeout.Start();
+        }
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        SceneViewer.NativeReady -= OnNativeReady;
+        SceneViewer.RenderFrame -= OnSmokeRenderFrame;
+        _smokeTimeout?.Stop();
+        SceneViewer.Scene = null;
         _scene?.Dispose();
         _scene = null;
+        SceneViewer.Dispose();
+    }
+
+    private void OnSmokeRenderFrame(object? sender, EventArgs e)
+    {
+        if (++_smokeFrames < 30)
+        {
+            return;
+        }
+        Console.WriteLine(
+            $"SCENEAPP_D3D11_SMOKE_OK frames={_smokeFrames} " +
+            $"control_dips={SceneViewer.ActualWidth}x{SceneViewer.ActualHeight}");
+        Close();
+    }
+
+    private void OnSmokeTimeout(object? sender, EventArgs e)
+    {
+        Console.Error.WriteLine(
+            $"SCENEAPP_D3D11_SMOKE_FAILED timeout frames={_smokeFrames}");
+        Environment.ExitCode = 1;
+        Close();
     }
 
     private void CreateNewScene()
@@ -53,45 +97,8 @@ public partial class MainWindow : Window
     {
         if (_resourcesCreated) return;
 
-        // Simple shader
-        string vertexShader = @"#version 330 core
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_uv;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec3 v_normal;
-out vec3 v_world_pos;
-
-void main() {
-    vec4 world_pos = u_model * vec4(a_position, 1.0);
-    v_world_pos = world_pos.xyz;
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
-    gl_Position = u_projection * u_view * world_pos;
-}";
-
-        string fragmentShader = @"#version 330 core
-in vec3 v_normal;
-in vec3 v_world_pos;
-
-uniform vec4 u_color;
-
-out vec4 FragColor;
-
-void main() {
-    vec3 n = normalize(v_normal);
-    vec3 light_dir = normalize(vec3(0.5, 0.8, 1.0));
-    float ndotl = max(dot(n, light_dir), 0.0);
-    float ambient = 0.3;
-    float diffuse = 0.7 * ndotl;
-    vec3 color = u_color.rgb * (ambient + diffuse);
-    FragColor = vec4(color, u_color.a);
-}";
-
-        _defaultShader = TerminCore.ShaderFromSources(vertexShader, fragmentShader, null, "DefaultShader", null, null);
+        _defaultShader = TerminCore.Tgfx2RegisterBuiltinShader(
+            "termin-runtime-default-color");
         if (_defaultShader.Index != 0xFFFFFFFF)
         {
             Console.WriteLine($"[SceneApp] Shader registered: {_defaultShader.Index}:{_defaultShader.Generation}");

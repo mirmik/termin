@@ -13,6 +13,7 @@
 #include "termin/render/render_engine.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/engine/engine_core.hpp"
+#include "tcplot/gpu_host.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
@@ -146,8 +147,7 @@ SWIGEXPORT void SWIGSTDCALL CSharp_csharp_pass_setup_owner_ref(void* tc_pass_ptr
     }
 %}
 
-%typemap(csconstruct) CTYPE %{: this($imcall, true) {
-    if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
+%typemap(csconstruct, excode=SWIGEXCODE) CTYPE %{: this($imcall, true) {$excode
     InitOwnerRef();
   }%}
 
@@ -170,8 +170,7 @@ SWIGEXPORT void SWIGSTDCALL CSharp_csharp_pass_setup_owner_ref(void* tc_pass_ptr
     }
 %}
 
-%typemap(csconstruct) CTYPE %{: this($imcall, true) {
-    if (terminPINVOKE.SWIGPendingException.Pending) throw terminPINVOKE.SWIGPendingException.Retrieve();
+%typemap(csconstruct, excode=SWIGEXCODE) CTYPE %{: this($imcall, true) {$excode
     InitOwnerRef();
   }%}
 
@@ -1479,3 +1478,9 @@ public:
 };
 
 } // namespace tcplot
+
+%extend termin::RenderEngine {
+    void set_gpu_host(tcplot::GpuHost& host) {
+        $self->set_graphics_host(host.graphics());
+    }
+}

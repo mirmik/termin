@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 TERMIN_BOOTSTRAP_C_API void tc_init(void);
+TERMIN_BOOTSTRAP_C_API void tc_bootstrap_runtime(void);
 TERMIN_BOOTSTRAP_C_API void tc_shutdown(void);
 
 #ifdef __cplusplus

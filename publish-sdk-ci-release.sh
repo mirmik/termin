@@ -11,7 +11,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 RELEASE_TAG="${RELEASE_TAG:-sdk-latest-ci}"
 REPO="${REPO:-mirmik/termin}"
-ASSET_BASENAME="${ASSET_BASENAME:-termin-sdk-linux-x86_64-py310}"
 BUILD_WHEELS=0
 PUBLISH_DIR=""
 TRIGGER_DIFFUSION_EDITOR=0
@@ -103,16 +102,6 @@ if ! command -v git >/dev/null 2>&1; then
     echo "ERROR: git is required." >&2
     exit 1
 fi
-if ! command -v sha256sum >/dev/null 2>&1; then
-    echo "ERROR: sha256sum is required." >&2
-    exit 1
-fi
-
-if ! tar --help 2>/dev/null | grep -q -- '--zstd'; then
-    echo "ERROR: tar with --zstd support is required." >&2
-    exit 1
-fi
-
 SDK_PREFIX="$(cd "$SDK_PREFIX" 2>/dev/null && pwd || true)"
 if [[ -z "$SDK_PREFIX" || ! -d "$SDK_PREFIX" ]]; then
     echo "ERROR: SDK directory not found. Build Termin SDK first or pass --sdk DIR." >&2
@@ -124,36 +113,8 @@ if [[ $BUILD_WHEELS -eq 1 ]]; then
     TERMIN_SDK="$SDK_PREFIX" "$SCRIPT_DIR/build-sdk-wheels.sh" --force
 fi
 
-if [[ ! -d "$SDK_PREFIX/lib" ]]; then
-    echo "ERROR: SDK is missing lib/: $SDK_PREFIX" >&2
-    exit 1
-fi
-if [[ ! -d "$SDK_PREFIX/wheels" ]]; then
-    echo "ERROR: SDK is missing wheels/: $SDK_PREFIX" >&2
-    echo "Run '$0 --build-wheels' or './build-sdk-wheels.sh --force' first." >&2
-    exit 1
-fi
-if ! find "$SDK_PREFIX/wheels" -maxdepth 1 -type f -name '*.whl' | grep -q .; then
-    echo "ERROR: SDK wheelhouse is empty: $SDK_PREFIX/wheels" >&2
-    exit 1
-fi
-
 sha="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
 branch="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
-dirty=0
-if ! git -C "$SCRIPT_DIR" diff --quiet || ! git -C "$SCRIPT_DIR" diff --cached --quiet; then
-    dirty=1
-fi
-
-python_version="$(
-    python3 - <<'PY' 2>/dev/null || true
-import sys
-print(f"{sys.version_info.major}.{sys.version_info.minor}")
-PY
-)"
-if [[ -z "$python_version" ]]; then
-    python_version="unknown"
-fi
 
 if [[ -z "$PUBLISH_DIR" ]]; then
     PUBLISH_DIR="$(mktemp -d)"
@@ -162,30 +123,18 @@ else
     PUBLISH_DIR="$(cd "$PUBLISH_DIR" && pwd)"
 fi
 
-sdk_asset="${ASSET_BASENAME}-latest-ci.tar.zst"
-checksum_asset="${ASSET_BASENAME}-latest-ci.sha256"
-manifest="$SDK_PREFIX/manifest.json"
+sdk_asset="termin-sdk-linux-x86_64-py314t-latest-ci.tar.zst"
+checksum_asset="termin-sdk-linux-x86_64-py314t-latest-ci.sha256"
 
-cat > "$manifest" <<EOF
-{
-  "name": "termin-sdk",
-  "channel": "latest-ci",
-  "repository": "$REPO",
-  "sha": "$sha",
-  "ref": "$branch",
-  "dirty": $dirty,
-  "platform": "linux-x86_64",
-  "python": "$python_version",
-  "published_by": "publish-sdk-ci-release.sh"
-}
-EOF
-
-echo "Packing SDK: $SDK_PREFIX"
-tar --zstd -cf "$PUBLISH_DIR/$sdk_asset" -C "$SDK_PREFIX" .
-(
-    cd "$PUBLISH_DIR"
-    sha256sum "$sdk_asset" > "$checksum_asset"
-)
+echo "Validating, packing and re-verifying SDK: $SDK_PREFIX"
+PYTHONPATH="$SCRIPT_DIR/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+    "$SDK_PREFIX/bin/termin_python" -m termin_build.sdk_release package \
+    --sdk-prefix "$SDK_PREFIX" \
+    --platform linux-x86_64 \
+    --output-dir "$PUBLISH_DIR" \
+    --repository "$REPO" \
+    --source-sha "$sha" \
+    --source-ref "$branch"
 
 echo "Publishing release $RELEASE_TAG in $REPO"
 git -C "$SCRIPT_DIR" tag -f "$RELEASE_TAG" "$sha"

@@ -25,6 +25,10 @@ extern "C" {
 // ============================================================================
 
 TERMIN_DISPLAY_API tc_display_handle tc_display_new(const char* name, tc_render_surface* surface);
+// Creates a display-owned offscreen render surface on the process-wide tgfx2
+// device. The device must have been claimed by GraphicsHost before this call.
+TERMIN_DISPLAY_API tc_display_handle tc_display_new_d3d11_offscreen_current(
+    int width, int height, const char* name);
 TERMIN_DISPLAY_API bool tc_display_free(tc_display_handle display);
 
 // ============================================================================

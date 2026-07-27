@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup Condition="'$(TerminCsharpProfile)' == '' and Exists('Generated\PlotView3D.cs') and !Exists('Generated\Camera.cs')">
-    <TerminCsharpProfile>plot-d3d11</TerminCsharpProfile>
+  <Import Project="Generated\TerminCsharpGeneratedProfile.props"
+          Condition="Exists('Generated\TerminCsharpGeneratedProfile.props')" />
+  <PropertyGroup Condition="'$(TerminCsharpProfile)' == ''">
+    <TerminCsharpProfile>$(TerminCsharpGeneratedProfile)</TerminCsharpProfile>
   </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -21,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TerminCsharpProfile)' == 'plot-d3d11'">
+    <Compile Remove="D3D11OffscreenDisplay.cs" />
     <Compile Remove="ComponentRef.cs" />
     <Compile Remove="CSharpComponent.cs" />
     <Compile Remove="CSharpComponentRuntime.cs" />
@@ -40,5 +43,12 @@
     <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" />
     <None Include="share\**\*" Pack="true" PackagePath="share" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="ValidateTerminCsharpGeneratedProfile" BeforeTargets="CoreCompile">
+    <Error Condition="'$(TerminCsharpGeneratedProfile)' == ''"
+           Text="C# bindings have not been generated. Configure and build termin-csharp before building Termin.Native." />
+    <Error Condition="'$(TerminCsharpProfile)' != '$(TerminCsharpGeneratedProfile)'"
+           Text="Requested C# profile '$(TerminCsharpProfile)' does not match generated bindings profile '$(TerminCsharpGeneratedProfile)'. Reconfigure termin-csharp with -DTERMIN_CSHARP_PROFILE=$(TerminCsharpProfile) and build the native target first." />
+  </Target>
 
 </Project>

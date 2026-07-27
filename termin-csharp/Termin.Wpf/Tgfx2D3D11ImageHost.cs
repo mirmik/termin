@@ -17,6 +17,9 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     private bool _backBufferSet;
     private bool _disposed;
     private ulong _presentCount;
+#if !TERMIN_CSHARP_PLOT_ONLY
+    private TcDisplayHandle _display = TcDisplayHandle.Invalid;
+#endif
 
     public Tgfx2D3D11ImageHost()
     {
@@ -30,6 +33,9 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         MouseMove += OnMouseMove;
         MouseUp += OnMouseUp;
         MouseWheel += OnMouseWheel;
+        KeyDown += OnKeyDown;
+        KeyUp += OnKeyUp;
+        TextInput += OnTextInput;
         Trace("constructed");
     }
 
@@ -49,8 +55,81 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
 
     public void ReleaseNativeResources()
     {
+#if !TERMIN_CSHARP_PLOT_ONLY
+        UnbindDisplay();
+#endif
         ReleaseBridge();
     }
+
+#if !TERMIN_CSHARP_PLOT_ONLY
+    /// <summary>
+    /// Binds a non-owning display handle. The display owner must unbind or
+    /// dispose this host before destroying the display.
+    /// </summary>
+    public void BindDisplay(TcDisplayHandle display)
+    {
+        ThrowIfDisposed();
+        if (!display.IsValid || !TerminCore.DisplayAlive(display))
+        {
+            throw new ArgumentException("Display handle is not alive.", nameof(display));
+        }
+        nuint domain = TerminCore.Tgfx2GetGraphicsDomainKey();
+        if (domain == 0
+            || !TerminCore.DisplayValidateOutput(display, domain, out uint texture)
+            || texture == 0)
+        {
+            throw new InvalidOperationException(
+                "The display output does not belong to the active graphics domain. " +
+                "See the native log.");
+        }
+
+        _display = display;
+        PrepareDisplay();
+        Trace($"bound display={display}");
+    }
+
+    public void UnbindDisplay()
+    {
+        if (_display.IsValid)
+        {
+            Trace($"unbound display={_display}");
+            _display = TcDisplayHandle.Invalid;
+        }
+    }
+
+    /// <summary>Resizes the bound display to the WPF framebuffer in pixels.</summary>
+    public void PrepareDisplay()
+    {
+        ThrowIfDisposed();
+        if (!_display.IsValid || !TerminCore.DisplayAlive(_display))
+        {
+            throw new InvalidOperationException("No live display is bound.");
+        }
+
+        SizeInPixels size = GetFramebufferSize();
+        TerminCore.DisplayGetSize(_display, out int width, out int height);
+        if ((width != size.Width || height != size.Height)
+            && !TerminCore.DisplayResize(_display, size.Width, size.Height))
+        {
+            throw new InvalidOperationException(
+                $"Failed to resize display to {size.Width}x{size.Height}. See the native log.");
+        }
+    }
+
+    /// <summary>Presents the color texture of the bound display.</summary>
+    public bool PresentDisplay(uint syncInterval = 1)
+    {
+        PrepareDisplay();
+        TerminCore.DisplayGetSize(_display, out int width, out int height);
+        uint texture = TerminCore.DisplayGetColorTextureId(_display);
+        if (texture == 0)
+        {
+            Trace($"bound display returned a null color texture display={_display}");
+            return false;
+        }
+        return Present(texture, width, height, syncInterval);
+    }
+#endif
 
     public bool Present(uint sourceTextureHandle, int width, int height, uint syncInterval = 1)
     {
@@ -98,6 +177,12 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
+#if !TERMIN_CSHARP_PLOT_ONLY
+        if (_display.IsValid && TerminCore.DisplayAlive(_display))
+        {
+            PrepareDisplay();
+        }
+#endif
         if (_bridge == IntPtr.Zero)
         {
             return;
@@ -245,16 +330,25 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         System.Windows.Input.MouseButton.Left => 0,
         System.Windows.Input.MouseButton.Right => 1,
         System.Windows.Input.MouseButton.Middle => 2,
-        _ => 0,
+        System.Windows.Input.MouseButton.XButton1 => 3,
+        System.Windows.Input.MouseButton.XButton2 => 4,
+        _ => -1,
     };
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
         FocusNativeWindow();
         PointInPixels point = GetMousePoint(e);
-        var args = new Tgfx2D3D11MouseButtonEventArgs(point.X, point.Y, ToTcbaseButton(e.ChangedButton));
+        int button = ToTcbaseButton(e.ChangedButton);
+        var args = new Tgfx2D3D11MouseButtonEventArgs(point.X, point.Y, button);
+        bool dispatched = false;
+#if !TERMIN_CSHARP_PLOT_ONLY
+        dispatched = button >= 0 && _display.IsValid
+            && TerminCore.DisplayDispatchPointerButton(
+                _display, point.X, point.Y, button, 1, GetModifiers(), (uint)e.ClickCount);
+#endif
         FramebufferMouseDown?.Invoke(this, args);
-        if (args.Handled)
+        if (dispatched || args.Handled)
         {
             CaptureMouse();
             e.Handled = true;
@@ -265,8 +359,13 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     {
         PointInPixels point = GetMousePoint(e);
         var args = new Tgfx2D3D11MouseMoveEventArgs(point.X, point.Y);
+        bool dispatched = false;
+#if !TERMIN_CSHARP_PLOT_ONLY
+        dispatched = _display.IsValid
+            && TerminCore.DisplayDispatchPointerMove(_display, point.X, point.Y);
+#endif
         FramebufferMouseMove?.Invoke(this, args);
-        if (args.Handled)
+        if (dispatched || args.Handled)
         {
             e.Handled = true;
         }
@@ -275,9 +374,16 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
         PointInPixels point = GetMousePoint(e);
-        var args = new Tgfx2D3D11MouseButtonEventArgs(point.X, point.Y, ToTcbaseButton(e.ChangedButton));
+        int button = ToTcbaseButton(e.ChangedButton);
+        var args = new Tgfx2D3D11MouseButtonEventArgs(point.X, point.Y, button);
+        bool dispatched = false;
+#if !TERMIN_CSHARP_PLOT_ONLY
+        dispatched = button >= 0 && _display.IsValid
+            && TerminCore.DisplayDispatchPointerButton(
+                _display, point.X, point.Y, button, 0, GetModifiers(), (uint)e.ClickCount);
+#endif
         FramebufferMouseUp?.Invoke(this, args);
-        if (args.Handled)
+        if (dispatched || args.Handled)
         {
             ReleaseMouseCapture();
             e.Handled = true;
@@ -288,11 +394,141 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     {
         PointInPixels point = GetMousePoint(e);
         var args = new Tgfx2D3D11MouseWheelEventArgs(point.X, point.Y, e.Delta);
+        bool dispatched = false;
+#if !TERMIN_CSHARP_PLOT_ONLY
+        dispatched = _display.IsValid
+            && TerminCore.DisplayDispatchWheel(
+                _display, point.X, point.Y, 0.0, e.Delta / 120.0, GetModifiers());
+#endif
         FramebufferMouseWheel?.Invoke(this, args);
-        if (args.Handled)
+        if (dispatched || args.Handled)
         {
             e.Handled = true;
         }
+    }
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+#if !TERMIN_CSHARP_PLOT_ONLY
+        if (!_display.IsValid)
+        {
+            return;
+        }
+        int key = ToTcbaseKey(e.Key);
+        e.Handled = TerminCore.DisplayDispatchKey(
+            _display,
+            key,
+            KeyInterop.VirtualKeyFromKey(e.Key),
+            e.IsRepeat ? 2 : 1,
+            GetModifiers());
+#endif
+    }
+
+    private void OnKeyUp(object sender, KeyEventArgs e)
+    {
+#if !TERMIN_CSHARP_PLOT_ONLY
+        if (!_display.IsValid)
+        {
+            return;
+        }
+        e.Handled = TerminCore.DisplayDispatchKey(
+            _display,
+            ToTcbaseKey(e.Key),
+            KeyInterop.VirtualKeyFromKey(e.Key),
+            0,
+            GetModifiers());
+#endif
+    }
+
+    private void OnTextInput(object sender, TextCompositionEventArgs e)
+    {
+#if !TERMIN_CSHARP_PLOT_ONLY
+        if (!_display.IsValid || string.IsNullOrEmpty(e.Text))
+        {
+            return;
+        }
+
+        bool dispatched = false;
+        for (int i = 0; i < e.Text.Length; ++i)
+        {
+            uint codepoint;
+            if (char.IsHighSurrogate(e.Text[i])
+                && i + 1 < e.Text.Length
+                && char.IsLowSurrogate(e.Text[i + 1]))
+            {
+                codepoint = (uint)char.ConvertToUtf32(e.Text[i], e.Text[++i]);
+            }
+            else if (!char.IsSurrogate(e.Text[i]))
+            {
+                codepoint = e.Text[i];
+            }
+            else
+            {
+                continue;
+            }
+            dispatched |= TerminCore.DisplayDispatchText(_display, codepoint);
+        }
+        e.Handled = dispatched;
+#endif
+    }
+
+    private static int GetModifiers()
+    {
+        int mods = 0;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) mods |= 0x0001;
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) mods |= 0x0002;
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) mods |= 0x0004;
+        if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin)) mods |= 0x0008;
+        if (Keyboard.IsKeyToggled(Key.CapsLock)) mods |= 0x0010;
+        if (Keyboard.IsKeyToggled(Key.NumLock)) mods |= 0x0020;
+        return mods;
+    }
+
+    private static int ToTcbaseKey(Key key)
+    {
+        if (key >= Key.A && key <= Key.Z) return 65 + key - Key.A;
+        if (key >= Key.D0 && key <= Key.D9) return 48 + key - Key.D0;
+        if (key >= Key.NumPad0 && key <= Key.NumPad9) return 320 + key - Key.NumPad0;
+        if (key >= Key.F1 && key <= Key.F12) return 290 + key - Key.F1;
+
+        return key switch
+        {
+            Key.Space => 32,
+            Key.Escape => 256,
+            Key.Enter => 257,
+            Key.Tab => 258,
+            Key.Back => 259,
+            Key.Insert => 260,
+            Key.Delete => 261,
+            Key.Right => 262,
+            Key.Left => 263,
+            Key.Down => 264,
+            Key.Up => 265,
+            Key.PageUp => 266,
+            Key.PageDown => 267,
+            Key.Home => 268,
+            Key.End => 269,
+            Key.CapsLock => 280,
+            Key.Scroll => 281,
+            Key.NumLock => 282,
+            Key.PrintScreen => 283,
+            Key.Pause => 284,
+            Key.Multiply => 332,
+            Key.Subtract => 333,
+            Key.Add => 334,
+            Key.Decimal => 330,
+            Key.Divide => 331,
+            Key.LeftShift => 340,
+            Key.LeftCtrl => 341,
+            Key.LeftAlt => 342,
+            Key.LWin => 343,
+            Key.RightShift => 344,
+            Key.RightCtrl => 345,
+            Key.RightAlt => 346,
+            Key.RWin => 347,
+            Key.Apps => 348,
+            _ => -1,
+        };
     }
 
     public void Dispose()
@@ -304,7 +540,18 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
 
         _disposed = true;
         Trace("dispose");
+#if !TERMIN_CSHARP_PLOT_ONLY
+        UnbindDisplay();
+#endif
         ReleaseBridge();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(Tgfx2D3D11ImageHost));
+        }
     }
 
     private static bool TraceEnabled =>

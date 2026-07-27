@@ -93,7 +93,7 @@ def build_android_apk(
 
     log_path = logs_dir / product.log_filename
     cmd = [
-        str(build_script),
+        *_build_script_command(build_script),
         "--assets-dir",
         str(package_dir),
         "--sdk-root",
@@ -132,6 +132,18 @@ def build_android_apk(
         log_path=log_path,
         variant=variant,
     )
+
+
+def _build_script_command(build_script: Path) -> list[str]:
+    if build_script.suffix.lower() != ".ps1":
+        return [str(build_script)]
+
+    powershell = shutil.which("pwsh") or shutil.which("powershell")
+    if powershell is None:
+        raise FileNotFoundError(
+            f"PowerShell is required to execute the Windows APK build wrapper: {build_script}"
+        )
+    return [powershell, "-NoProfile", "-File", str(build_script)]
 
 
 def discover_gradle_apk(

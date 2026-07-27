@@ -33,17 +33,16 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "android-game.apk"
     apk_metadata = apk_source.parent / "output-metadata.json"
     (termin_root / "sdk" / "android" / "arm64-v8a" / "lib").mkdir(parents=True)
-    build_script = termin_root / ("build-android-apk.cmd" if os.name == "nt" else "build-android-apk.sh")
-    marker_script = termin_root / "build-android-apk.sh"
+    build_script = termin_root / ("build-android-apk.ps1" if os.name == "nt" else "build-android-apk.sh")
     build_script.parent.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
-        marker_script.write_text("# marker for termin root discovery\n", encoding="utf-8")
         build_script.write_text(
-            "@echo off\n"
-            f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
-            f"<NUL set /p dummy=APK>\"{apk_source}\"\n"
-            f">\"{apk_metadata}\" echo {{\"applicationId\":\"com.example.androidgame\",\"elements\":[{{\"outputFile\":\"android-game.apk\"}}]}}\n"
-            "echo %*\n",
+            "$ErrorActionPreference = 'Stop'\n"
+            f"New-Item -ItemType Directory -Force -Path '{apk_source.parent}' | Out-Null\n"
+            f"[IO.File]::WriteAllBytes('{apk_source}', [Text.Encoding]::ASCII.GetBytes('APK'))\n"
+            f"@{{applicationId='com.example.androidgame';elements=@(@{{outputFile='android-game.apk'}})}} "
+            f"| ConvertTo-Json -Depth 4 | Set-Content -LiteralPath '{apk_metadata}' -Encoding utf8\n"
+            "Write-Output ($args -join ' ')\n",
             encoding="utf-8",
         )
     else:
@@ -164,14 +163,17 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
         },
     )
 
-    build_script = termin_root / ("build-quest-openxr-apk.cmd" if os.name == "nt" else "build-quest-openxr-apk.sh")
+    build_script = termin_root / (
+        "build-quest-openxr-apk.ps1" if os.name == "nt" else "build-quest-openxr-apk.sh"
+    )
     if os.name == "nt":
         build_script.write_text(
-            "@echo off\n"
-            f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
-            f"<NUL set /p dummy=QUESTAPK>\"{apk_source}\"\n"
-            f">\"{apk_metadata}\" echo {{\"applicationId\":\"com.example.questgame\",\"elements\":[{{\"outputFile\":\"quest-game.apk\"}}]}}\n"
-            "echo %*\n",
+            "$ErrorActionPreference = 'Stop'\n"
+            f"New-Item -ItemType Directory -Force -Path '{apk_source.parent}' | Out-Null\n"
+            f"[IO.File]::WriteAllBytes('{apk_source}', [Text.Encoding]::ASCII.GetBytes('QUESTAPK'))\n"
+            f"@{{applicationId='com.example.questgame';elements=@(@{{outputFile='quest-game.apk'}})}} "
+            f"| ConvertTo-Json -Depth 4 | Set-Content -LiteralPath '{apk_metadata}' -Encoding utf8\n"
+            "Write-Output ($args -join ' ')\n",
             encoding="utf-8",
         )
     else:

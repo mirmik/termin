@@ -33,7 +33,41 @@ else()
 endif()
 
 file(MAKE_DIRECTORY "${TERMIN_CSHARP_RUNTIME_DIR}")
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
+set(_termin_csharp_generated_dir "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
+set(_termin_csharp_generated_profile_file
+    "${_termin_csharp_generated_dir}/TerminCsharpGeneratedProfile.props")
+file(MAKE_DIRECTORY "${_termin_csharp_generated_dir}")
+
+# Generated bindings are a profile-specific artifact.  A normal build script
+# starts from an empty directory, but direct CMake reconfiguration must be just
+# as safe: remove stale SWIG output when switching between full and plot-d3d11.
+if(EXISTS "${_termin_csharp_generated_profile_file}")
+    file(READ "${_termin_csharp_generated_profile_file}" _termin_csharp_generated_profile_contents)
+    string(REGEX MATCH
+        "<TerminCsharpGeneratedProfile>([^<]+)</TerminCsharpGeneratedProfile>"
+        _termin_csharp_generated_profile_match
+        "${_termin_csharp_generated_profile_contents}")
+    set(_termin_csharp_previous_profile "${CMAKE_MATCH_1}")
+    if(_termin_csharp_previous_profile
+       AND NOT _termin_csharp_previous_profile STREQUAL TERMIN_CSHARP_PROFILE)
+        file(GLOB _termin_csharp_stale_generated_files
+            "${_termin_csharp_generated_dir}/*.cs"
+            "${_termin_csharp_generated_dir}/*CSHARP_wrap.cxx"
+            "${_termin_csharp_generated_dir}/*CSHARP_wrap.h")
+        if(_termin_csharp_stale_generated_files)
+            message(STATUS
+                "termin-csharp: generated profile changed "
+                "${_termin_csharp_previous_profile} -> ${TERMIN_CSHARP_PROFILE}; "
+                "removing stale SWIG output")
+            file(REMOVE ${_termin_csharp_stale_generated_files})
+        endif()
+    endif()
+endif()
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TerminCsharpGeneratedProfile.props.in"
+    "${_termin_csharp_generated_profile_file}"
+    @ONLY
+)
 
 if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(SWIG REQUIRED COMPONENTS csharp)
@@ -90,7 +124,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         message(STATUS "termin-csharp: OpenGL APIs disabled")
     endif()
 
-    set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
+    set(CMAKE_SWIG_OUTDIR "${_termin_csharp_generated_dir}")
 
     set(_termin_csharp_swig_flags "-namespace;Termin.Native")
     if(TERMIN_CSHARP_ENABLE_OPENGL)
@@ -154,6 +188,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tcbase::termin_base
             tmesh::termin_mesh
             tgfx::termin_graphics
+            tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
             tcplot::tcplot
         )
@@ -172,12 +207,10 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tcplot::tcplot
         )
     endif()
-    # This list MUST cover every transitive DLL that ends up in
-    # termin.dll's PE import table. Missing entries silently go to
-    # Windows loader's default search path (PATH, System32, …) and
-    # pick up whatever stale copy happens to be around — classic
-    # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
-    # after a build and diff against the files in runtimes/win-x64/native/.
+    # Keep the profile roots explicit, then let CMake copy their complete
+    # Windows runtime closure below. The closure is important: imported DLLs
+    # added behind an existing target must not silently disappear from the
+    # managed runtime payload.
     if(TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
         set(_termin_csharp_runtime_targets
             tcbase::termin_base
@@ -207,6 +240,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             termin_render::termin_render
             termin_render_passes::termin_render_passes
             tgfx::termin_graphics
+            tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
             termin_materials::termin_materials
             termin_modules::termin_modules
@@ -222,6 +256,20 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             VERBATIM
         )
     endforeach()
+    if(WIN32)
+        add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:${SWIG_MODULE_termin_csharp_native_REAL_NAME}>
+                "${TERMIN_CSHARP_RUNTIME_DIR}/"
+            COMMAND ${CMAKE_COMMAND}
+                "-DROOT_BINARY=$<TARGET_FILE:${SWIG_MODULE_termin_csharp_native_REAL_NAME}>"
+                "-DRUNTIME_DIR=${TERMIN_CSHARP_RUNTIME_DIR}"
+                "-DSDK_BIN_DIR=$<TARGET_FILE_DIR:tgfx::termin_graphics>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyWindowsRuntimeClosure.cmake"
+            COMMAND_EXPAND_LISTS
+            VERBATIM
+        )
+    endif()
 
     set(_termin_csharp_share_dir "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/share/termin")
     set(TERMIN_CSHARP_SDK_SHARE_DIR "" CACHE PATH

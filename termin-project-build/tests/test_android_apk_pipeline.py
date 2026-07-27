@@ -161,6 +161,25 @@ def test_release_build_fails_before_launch_when_signing_is_missing(
     assert not launched
 
 
+def test_powershell_build_script_uses_explicit_host(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wrapper = tmp_path / "build-android-apk.ps1"
+    monkeypatch.setattr(
+        android_apk_pipeline.shutil,
+        "which",
+        lambda name: "C:/Program Files/PowerShell/7/pwsh.exe" if name == "pwsh" else None,
+    )
+
+    assert android_apk_pipeline._build_script_command(wrapper) == [
+        "C:/Program Files/PowerShell/7/pwsh.exe",
+        "-NoProfile",
+        "-File",
+        str(wrapper),
+    ]
+
+
 def test_gradle_metadata_rejects_wrong_application_id(
     tmp_path: Path,
 ) -> None:

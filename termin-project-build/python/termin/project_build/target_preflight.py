@@ -13,8 +13,10 @@ from termin.project_build.diagnostics import BuildDiagnostic, build_error, forma
 from termin.project_build.target_build_common import resolve_gradle, resolve_termin_root
 
 
-ANDROID_BUILD_SCRIPT = "build-android-apk.sh"
-QUEST_OPENXR_BUILD_SCRIPT = "build-quest-openxr-apk.sh"
+ANDROID_BUILD_SCRIPT = "build-android-apk.ps1" if os.name == "nt" else "build-android-apk.sh"
+QUEST_OPENXR_BUILD_SCRIPT = (
+    "build-quest-openxr-apk.ps1" if os.name == "nt" else "build-quest-openxr-apk.sh"
+)
 
 
 class TargetPreflightError(RuntimeError):

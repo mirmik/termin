@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,6 +91,25 @@ def _record(module_id: str, state: str = "Loaded") -> _Record:
         kind=_Kind("Python"),
         descriptor_path=f"{module_id}.pymodule",
     )
+
+
+def test_windows_cli_reconfigures_redirected_output_to_utf8(monkeypatch) -> None:
+    stdout_bytes = io.BytesIO()
+    stderr_bytes = io.BytesIO()
+    stdout = io.TextIOWrapper(stdout_bytes, encoding="cp1251")
+    stderr = io.TextIOWrapper(stderr_bytes, encoding="cp1251")
+    monkeypatch.setattr(warmup.sys, "platform", "win32")
+
+    warmup._configure_windows_utf8_stdio(stdout, stderr)
+    stdout.write("Версия MSBuild\n")
+    stderr.write("ошибка\n")
+    stdout.flush()
+    stderr.flush()
+
+    assert stdout.encoding == "utf-8"
+    assert stderr.encoding == "utf-8"
+    assert stdout_bytes.getvalue().decode("utf-8").splitlines() == ["Версия MSBuild"]
+    assert stderr_bytes.getvalue().decode("utf-8").splitlines() == ["ошибка"]
 
 
 def test_resolve_project_root_accepts_nested_path(tmp_path: Path) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,20 @@ class WarmupResult:
     requested_modules: tuple[str, ...]
     success: bool
     failed_modules: tuple[str, ...]
+
+
+def _configure_windows_utf8_stdio(
+    stdout: io.TextIOWrapper | None = None,
+    stderr: io.TextIOWrapper | None = None,
+) -> None:
+    """Keep redirected CLI output on the UTF-8 contract used by its parent."""
+    if sys.platform != "win32":
+        return
+
+    output_stream = sys.stdout if stdout is None else stdout
+    error_stream = sys.stderr if stderr is None else stderr
+    for stream in (output_stream, error_stream):
+        stream.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 
 def warmup_project_modules(
@@ -267,4 +282,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    _configure_windows_utf8_stdio()
     raise SystemExit(main())
