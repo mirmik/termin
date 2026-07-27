@@ -1,0 +1,150 @@
+name: Publish canonical SDK assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: sdk-latest-ci
+  LINUX_ASSET: termin-sdk-linux-x86_64-py314t-latest-ci.tar.zst
+  LINUX_CHECKSUM: termin-sdk-linux-x86_64-py314t-latest-ci.sha256
+  WINDOWS_ASSET: termin-sdk-windows-x86_64-py314t-latest-ci.zip
+  WINDOWS_CHECKSUM: termin-sdk-windows-x86_64-py314t-latest-ci.sha256
+
+jobs:
+  package-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Linux build dependencies
+        uses: ./.github/actions/setup-linux-build
+
+      - name: Build canonical Linux SDK
+        run: ./build-sdk.sh
+
+      - name: Package and re-verify Linux SDK
+        env:
+          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+        run: |
+          sdk/bin/termin_python -m termin_build.sdk_release package \
+            --sdk-prefix sdk \
+            --platform linux-x86_64 \
+            --output-dir dist/sdk-release \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-sha "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF_NAME"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: termin-sdk-linux-release
+          path: |
+            dist/sdk-release/${{ env.LINUX_ASSET }}
+            dist/sdk-release/${{ env.LINUX_CHECKSUM }}
+          if-no-files-found: error
+          retention-days: 1
+
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Build canonical Windows D3D11 SDK
+        shell: pwsh
+        run: .\build-sdk.ps1 --no-vulkan --no-opengl
+
+      - name: Package and re-verify Windows SDK
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}\termin-build-tools
+        run: |
+          .\sdk\bin\termin_python.exe -m termin_build.sdk_release package `
+            --sdk-prefix sdk `
+            --platform windows-x86_64 `
+            --output-dir dist\sdk-release `
+            --repository $env:GITHUB_REPOSITORY `
+            --source-sha $env:GITHUB_SHA `
+            --source-ref $env:GITHUB_REF_NAME
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: termin-sdk-windows-release
+          path: |
+            dist/sdk-release/${{ env.WINDOWS_ASSET }}
+            dist/sdk-release/${{ env.WINDOWS_CHECKSUM }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [package-linux, package-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: termin-sdk-*-release
+          path: dist/sdk-release
+          merge-multiple: true
+
+      - name: Verify the complete release set
+        working-directory: dist/sdk-release
+        run: |
+          test -f "$LINUX_ASSET"
+          test -f "$LINUX_CHECKSUM"
+          test -f "$WINDOWS_ASSET"
+          test -f "$WINDOWS_CHECKSUM"
+          sha256sum --check "$LINUX_CHECKSUM"
+          sha256sum --check "$WINDOWS_CHECKSUM"
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 4
+
+      - name: Move mutable release tag
+        run: |
+          git tag --force "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG" --force
+
+      - name: Create or update mutable CI release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Termin SDK latest CI" \
+              --notes "Canonical Linux and Windows CPython 3.14t SDKs built from $GITHUB_SHA." \
+              --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Termin SDK latest CI" \
+              --notes "Canonical Linux and Windows CPython 3.14t SDKs built from $GITHUB_SHA." \
+              --prerelease
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "dist/sdk-release/$LINUX_ASSET" \
+            "dist/sdk-release/$LINUX_CHECKSUM" \
+            "dist/sdk-release/$WINDOWS_ASSET" \
+            "dist/sdk-release/$WINDOWS_CHECKSUM" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+      - name: Trigger Diffusion Editor platform CI
+        env:
+          GH_TOKEN: ${{ secrets.DIFFUSION_EDITOR_TOKEN }}
+        run: |
+          test -n "$GH_TOKEN"
+          gh api repos/mirmik/diffusion-editor/dispatches \
+            --method POST \
+            --field event_type=termin-sdk-published \
+            --field "client_payload[termin_sha]=$GITHUB_SHA" \
+            --field "client_payload[release_tag]=$RELEASE_TAG" \
+            --field "client_payload[asset]=$LINUX_ASSET" \
+            --field "client_payload[asset_checksum]=$LINUX_CHECKSUM" \
+            --field "client_payload[windows_asset]=$WINDOWS_ASSET" \
+            --field "client_payload[windows_asset_checksum]=$WINDOWS_CHECKSUM"

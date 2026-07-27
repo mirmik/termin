@@ -103,13 +103,18 @@ public class Scene : IDisposable
     {
         if (!_disposed && _handle.IsValid)
         {
-            // Clear collision world from scene first
-            TerminCore.CollisionWorldSetScene(_handle, IntPtr.Zero);
-
-            // Destroy collision world
             if (_collisionWorld != IntPtr.Zero)
             {
-                TerminCore.CollisionWorldDestroy(_collisionWorld);
+                // The scene extension owns its attached world. Replacing it
+                // with null frees that world; destroying it again here would
+                // double-free the native allocation.
+                if (!TerminCore.CollisionWorldSetScene(_handle, IntPtr.Zero))
+                {
+                    Console.Error.WriteLine(
+                        "[Termin.Native.Scene] Failed to detach collision world; " +
+                        "destroying the unowned allocation directly.");
+                    TerminCore.CollisionWorldDestroy(_collisionWorld);
+                }
                 _collisionWorld = IntPtr.Zero;
             }
 

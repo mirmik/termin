@@ -7,6 +7,8 @@ import pytest
 from termin.project_build.build_context import create_build_context
 from termin.project_build.diagnostics import BuildDiagnostic
 from termin.project_build.target_preflight import (
+    ANDROID_BUILD_SCRIPT,
+    QUEST_OPENXR_BUILD_SCRIPT,
     TargetPreflightError,
     preflight_desktop_build,
     preflight_project_build_context,
@@ -18,7 +20,7 @@ from termin.project_build.target_preflight import (
 def _write_android_root(tmp_path: Path) -> Path:
     termin_root = tmp_path / "termin-root"
     termin_root.mkdir()
-    build_script = termin_root / "build-android-apk.sh"
+    build_script = termin_root / ANDROID_BUILD_SCRIPT
     build_script.write_text("#!/bin/sh\n", encoding="utf-8")
     build_script.chmod(0o755)
     _write_android_sdk(termin_root)
@@ -28,7 +30,7 @@ def _write_android_root(tmp_path: Path) -> Path:
 def _write_quest_root(tmp_path: Path) -> Path:
     termin_root = tmp_path / "termin-root"
     termin_root.mkdir()
-    build_script = termin_root / "build-quest-openxr-apk.sh"
+    build_script = termin_root / QUEST_OPENXR_BUILD_SCRIPT
     build_script.write_text("#!/bin/sh\n", encoding="utf-8")
     build_script.chmod(0o755)
     return termin_root
@@ -353,7 +355,7 @@ def test_preflight_android_accepts_valid_environment(tmp_path: Path, monkeypatch
     )
 
     assert result.termin_root == termin_root.resolve()
-    assert result.build_script == termin_root.resolve() / "build-android-apk.sh"
+    assert result.build_script == termin_root.resolve() / ANDROID_BUILD_SCRIPT
     assert result.android_sdk_root == termin_root.resolve() / "sdk" / "android"
     assert result.gradle == gradle.resolve()
     assert result.capabilities.android.has_abi("arm64-v8a")
@@ -372,7 +374,7 @@ def test_preflight_android_reports_missing_root_marker(tmp_path: Path, monkeypat
             gradle=None,
         )
 
-    _assert_single_error(exc_info.value, "termin_root", "build-android-apk.sh")
+    _assert_single_error(exc_info.value, "termin_root", ANDROID_BUILD_SCRIPT)
 
 
 def test_preflight_android_reports_missing_explicit_build_script(tmp_path: Path, monkeypatch) -> None:
@@ -454,7 +456,7 @@ def test_preflight_quest_openxr_accepts_valid_environment(tmp_path: Path, monkey
     )
 
     assert result.termin_root == termin_root.resolve()
-    assert result.build_script == termin_root.resolve() / "build-quest-openxr-apk.sh"
+    assert result.build_script == termin_root.resolve() / QUEST_OPENXR_BUILD_SCRIPT
     assert result.android_sdk_root == sdk_root.resolve()
     assert result.gradle == gradle.resolve()
     assert result.diagnostics == []
@@ -474,7 +476,7 @@ def test_preflight_quest_openxr_reports_missing_root_marker(tmp_path: Path, monk
             platform="android-26",
         )
 
-    _assert_single_error(exc_info.value, "termin_root", "build-quest-openxr-apk.sh")
+    _assert_single_error(exc_info.value, "termin_root", QUEST_OPENXR_BUILD_SCRIPT)
 
 
 def test_preflight_quest_openxr_reports_missing_sdk_root(tmp_path: Path, monkeypatch) -> None:

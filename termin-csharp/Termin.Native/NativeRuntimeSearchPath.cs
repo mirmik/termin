@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Termin.Native;
@@ -10,6 +11,12 @@ internal static class NativeRuntimeSearchPath
 {
     private static readonly object Lock = new();
     private static bool s_configured;
+
+    [ModuleInitializer]
+    internal static void Initialize()
+    {
+        Configure();
+    }
 
     public static void Configure()
     {

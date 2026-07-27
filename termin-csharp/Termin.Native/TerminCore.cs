@@ -34,11 +34,11 @@ public static class TerminCore
     }
 
     /// <summary>
-    /// Full initialization: core registries + inspect system + kind handlers.
-    /// Call this instead of Init() to enable serialization/deserialization and SetField.
-    /// Exported from termin_inspect.dll.
+    /// Full native runtime bootstrap: core registries, inspect adapters,
+    /// built-in components and passes, and scene extensions. Call this instead
+    /// of Init() for scene/rendering clients.
     /// </summary>
-    [DllImport("termin_inspect", EntryPoint = "tc_init_full")]
+    [DllImport(DLL, EntryPoint = "tc_bootstrap_runtime")]
     private static extern void InitFullNative();
 
     public static void InitFull()
@@ -65,6 +65,15 @@ public static class TerminCore
 
     [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_destroy_texture_handle")]
     public static extern void Tgfx2DestroyTextureHandle(uint handleId);
+
+    [DllImport(
+        TGFX2_DLL,
+        EntryPoint = "tgfx2_interop_register_builtin_shader",
+        CharSet = CharSet.Ansi)]
+    public static extern TcShaderHandle Tgfx2RegisterBuiltinShader(string shaderUuid);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_get_graphics_domain_key")]
+    public static extern nuint Tgfx2GetGraphicsDomainKey();
 
     [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_blit_texture")]
     public static extern void Tgfx2BlitTexture(
@@ -822,6 +831,12 @@ public static class TerminCore
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
     public static extern TcDisplayHandle DisplayNew(string name, IntPtr surface);
 
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new_d3d11_offscreen_current", CharSet = CharSet.Ansi)]
+    public static extern TcDisplayHandle DisplayNewD3D11OffscreenCurrent(
+        int width,
+        int height,
+        string name);
+
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_free")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool DisplayFree(TcDisplayHandle display);
@@ -849,6 +864,13 @@ public static class TerminCore
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_graphics_domain_key")]
     public static extern nuint DisplayGetGraphicsDomainKey(TcDisplayHandle display);
 
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_validate_output")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayValidateOutput(
+        TcDisplayHandle display,
+        nuint expectedGraphicsDomainKey,
+        out uint colorTextureId);
+
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_add_viewport")]
     public static extern void DisplayAddViewport(TcDisplayHandle display, TcViewportHandle viewport);
 
@@ -864,27 +886,40 @@ public static class TerminCore
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_viewport_at_screen")]
     public static extern TcViewportHandle DisplayViewportAtScreen(TcDisplayHandle display, float px, float py);
 
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_input_manager")]
-    public static extern IntPtr DisplayGetInputManager(TcDisplayHandle display);
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_dispatch_pointer_move")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayDispatchPointerMove(
+        TcDisplayHandle display, double x, double y);
 
-    // ========================================================================
-    // Input Manager (tc_input_manager)
-    // ========================================================================
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_dispatch_pointer_button")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayDispatchPointerButton(
+        TcDisplayHandle display,
+        double x,
+        double y,
+        int button,
+        int action,
+        int mods,
+        uint clickCount);
 
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_mouse_button")]
-    public static extern void InputManagerDispatchMouseButton(IntPtr manager, int button, int action, int mods);
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_dispatch_wheel")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayDispatchWheel(
+        TcDisplayHandle display,
+        double x,
+        double y,
+        double wheelX,
+        double wheelY,
+        int mods);
 
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_mouse_move")]
-    public static extern void InputManagerDispatchMouseMove(IntPtr manager, double x, double y);
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_dispatch_key")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayDispatchKey(
+        TcDisplayHandle display, int key, int scancode, int action, int mods);
 
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_scroll")]
-    public static extern void InputManagerDispatchScroll(IntPtr manager, double x, double y, int mods);
-
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_key")]
-    public static extern void InputManagerDispatchKey(IntPtr manager, int key, int scancode, int action, int mods);
-
-    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_char")]
-    public static extern void InputManagerDispatchChar(IntPtr manager, uint codepoint);
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_dispatch_text")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayDispatchText(TcDisplayHandle display, uint codepoint);
 
     // ========================================================================
     // Viewport Input Manager (tc_viewport_input_manager)

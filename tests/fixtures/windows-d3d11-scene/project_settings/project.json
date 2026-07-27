@@ -1,0 +1,14 @@
+{
+  "render_sync_mode": "none",
+  "application": {
+    "identifier": "org.termin.windows-d3d11-smoke",
+    "display_name": "Windows D3D11 Smoke",
+    "version": "1.0.0"
+  },
+  "player_window": {
+    "width": 640,
+    "height": 360,
+    "fullscreen": false,
+    "vsync": false
+  }
+}

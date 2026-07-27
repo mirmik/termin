@@ -35,6 +35,18 @@ Console.WriteLine($"Camera far = {camera.far}");
 var projMatrix = camera.projection_matrix();
 Console.WriteLine("Projection matrix created successfully");
 
+// Custom owner-ref constructors must preserve SWIG's pending-exception check.
+// A null string is rejected by the native-input typemap before owner setup.
+try
+{
+    using var invalidPass = new DepthPass(null!, "depth", "invalid");
+    throw new InvalidOperationException("DepthPass accepted a null input resource");
+}
+catch (ArgumentNullException)
+{
+    // Expected: the generated constructor observed SWIGPendingException.
+}
+
 // Test view matrix
 var eye = new Vec3(0, -5, 2);
 var target = new Vec3(0, 0, 0);

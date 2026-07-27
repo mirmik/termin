@@ -168,6 +168,10 @@ void tc_shutdown(void) {
     termin::bootstrap::reset_python_bootstrap_state();
 }
 
+void tc_bootstrap_runtime(void) {
+    termin::bootstrap::bootstrap_runtime();
+}
+
 } // extern "C"
 
 namespace termin::bootstrap {

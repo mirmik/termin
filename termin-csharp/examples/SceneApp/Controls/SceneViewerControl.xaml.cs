@@ -1,21 +1,22 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using OpenTK.Graphics.OpenGL4;
-using OpenTK.Wpf;
+using System.Windows.Media;
 using Termin.Native;
-using SceneApp.Infrastructure;
+using Termin.Wpf;
 
 namespace SceneApp.Controls;
 
 public partial class SceneViewerControl : UserControl, IDisposable
 {
     // Infrastructure
-    private GlWpfBackend? _backend;
-    private WpfRenderSurface? _renderSurface;
-    private NativeDisplayManager? _displayManager;
+    private D3D11OffscreenDisplay? _display;
+    private EngineCore? _engineCore;
     private RenderingManager? _renderingManager;
     private RenderEngine? _renderEngine;
+    private bool _hostLeaseHeld;
+    private bool _renderingSubscribed;
 
     // Viewport
     private TcViewportHandle _viewportHandle;
@@ -37,22 +38,17 @@ public partial class SceneViewerControl : UserControl, IDisposable
     private bool _initialized;
     private bool _disposed;
 
+    public event EventHandler? NativeReady;
+    public event EventHandler? RenderFrame;
+
     public SceneViewerControl()
     {
         InitializeComponent();
 
-        // Start GL control in constructor (like WpfTest)
-        var settings = new GLWpfControlSettings
-        {
-            MajorVersion = 4,
-            MinorVersion = 5
-        };
-        GlControl.Start(settings);
-        GlControl.Render += GlControl_Render;
-        _backend = new GlWpfBackend(GlControl);
-
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        CompositionTarget.Rendering += OnRender;
+        _renderingSubscribed = true;
     }
 
     public Scene? Scene
@@ -76,11 +72,13 @@ public partial class SceneViewerControl : UserControl, IDisposable
     {
         if (_initialized) return;
 
-        Console.WriteLine($"[SceneViewer] OnLoaded, size={GlControl.ActualWidth}x{GlControl.ActualHeight}");
+        Console.WriteLine(
+            $"[SceneViewer] OnLoaded, framebuffer={RenderHost.FramebufferWidth}x{RenderHost.FramebufferHeight}");
 
         InitializeTermin();
 
         _initialized = true;
+        NativeReady?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -96,33 +94,29 @@ public partial class SceneViewerControl : UserControl, IDisposable
         TerminCore.InitFull();
         Console.WriteLine("[SceneViewer] tc_init OK");
 
-        // Initialize termin OpenGL backend
-        if (!termin.tc_opengl_init())
-        {
-            throw new InvalidOperationException("Failed to initialize Termin OpenGL backend");
-        }
-        Console.WriteLine("[SceneViewer] tc_opengl_init OK");
-
-        // Initialize registries
-        TerminCore.MeshInit();
-        TerminCore.ShaderInit();
-        TerminCore.MaterialInit();
-        Console.WriteLine("[SceneViewer] Registries initialized");
-
-        GL.Enable(EnableCap.DepthTest);
+        string fontPath = FindSystemFont()
+            ?? throw new InvalidOperationException("No Windows system TTF font was found.");
+        var gpuHost = Tgfx2Host.Acquire(fontPath, BackendType.D3D11);
+        _hostLeaseHeld = true;
 
         // Setup rendering manager
-        _renderingManager = new RenderingManager();
+        _engineCore = new EngineCore();
+        _renderingManager = _engineCore.rendering_manager();
 
         _renderEngine = new RenderEngine();
+        _renderEngine.set_gpu_host(gpuHost);
         _renderingManager.set_render_engine(_renderEngine);
 
-        // Create render surface and display manager
-        _renderSurface = new WpfRenderSurface(GlControl);
-        _displayManager = new NativeDisplayManager(_renderSurface, _backend!, "SceneViewer");
+        // The display owns its offscreen surface and D3D11 textures. RenderHost
+        // only borrows the generation handle while presenting and routing input.
+        _display = new D3D11OffscreenDisplay(
+            RenderHost.FramebufferWidth,
+            RenderHost.FramebufferHeight,
+            "SceneViewer");
+        RenderHost.BindDisplay(_display.Handle);
 
         // Add display to rendering manager
-        var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
+        var displayWrapper = SwigHelpers.ToSwigDisplayHandle(_display.Handle);
         _renderingManager.add_display(displayWrapper);
 
         // Create internal entities (camera)
@@ -191,7 +185,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
     private void CreateViewport()
     {
-        if (_camera == null || _pipeline == null || _internalPool == null || _displayManager == null)
+        if (_camera == null || _pipeline == null || _internalPool == null || _display == null)
         {
             Console.WriteLine("[SceneViewer] CreateViewport aborted: missing components");
             return;
@@ -214,7 +208,6 @@ public partial class SceneViewerControl : UserControl, IDisposable
             throw new InvalidOperationException("Failed to create render target");
         }
         TerminCore.RenderTargetSetScene(_renderTargetHandle, _scene?.Handle ?? TcSceneHandle.Invalid);
-        TerminCore.RenderTargetSetCamera(_renderTargetHandle, _camera.tc_component_ptr());
         TerminCore.RenderTargetSetPipeline(_renderTargetHandle, _pipeline.handle());
         TerminCore.RenderTargetSetDynamicResolution(_renderTargetHandle, true);
         TerminCore.RenderTargetSetEnabled(_renderTargetHandle, true);
@@ -230,7 +223,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
             });
 
         // Add viewport to display
-        _displayManager.AddViewport(_viewportHandle);
+        _display.AddViewport(_viewportHandle);
         Console.WriteLine($"[SceneViewer] Viewport created: {_viewportHandle}");
 
         // Now that viewport exists, update scene if it was already set
@@ -251,6 +244,12 @@ public partial class SceneViewerControl : UserControl, IDisposable
             if (_renderTargetHandle.IsValid)
             {
                 TerminCore.RenderTargetSetScene(_renderTargetHandle, _scene.Handle);
+                if (_camera != null)
+                {
+                    TerminCore.RenderTargetSetCamera(
+                        _renderTargetHandle,
+                        _camera.tc_component_ptr());
+                }
             }
             Console.WriteLine($"[SceneViewer] Scene set: {_scene.Handle}");
         }
@@ -267,19 +266,26 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
     private static int _frameCount = 0;
 
-    private void GlControl_Render(TimeSpan delta)
-    {
-        Console.WriteLine("[SceneViewer] GlControl_Render called");
+    private TimeSpan _previousRenderTime;
 
-        if (!_initialized || _renderingManager == null || _renderSurface == null || _displayManager == null) 
+    private void OnRender(object? sender, EventArgs e)
+    {
+        if (!_initialized || _renderingManager == null || _display == null)
         {
-            Console.WriteLine("[SceneViewer] GlControl_Render skipped: not initialized");
             return;
         }
 
+        TimeSpan now = ((RenderingEventArgs)e).RenderingTime;
+        double deltaSeconds = _previousRenderTime == TimeSpan.Zero
+            ? 0.0
+            : Math.Max(0.0, (now - _previousRenderTime).TotalSeconds);
+        _previousRenderTime = now;
+
+        RenderHost.PrepareDisplay();
+
         // Update camera aspect ratio
-        int width = Math.Max(1, (int)GlControl.ActualWidth);
-        int height = Math.Max(1, (int)GlControl.ActualHeight);
+        int width = RenderHost.FramebufferWidth;
+        int height = RenderHost.FramebufferHeight;
         if (_camera != null)
         {
             _camera.aspect = (double)width / height;
@@ -289,18 +295,20 @@ public partial class SceneViewerControl : UserControl, IDisposable
         _internalPool?.UpdateTransforms();
 
         // Update scene
-        _scene?.Update(delta.TotalSeconds);
+        _scene?.Update(deltaSeconds);
         _scene?.BeforeRender();
 
-        // Cache WPF's FBO before rendering
-
-        // Clear the screen
-        GL.ClearColor(0.2f, 0.2f, 0.25f, 1.0f);
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
         // Render this display
-        var display = SwigHelpers.ToSwigDisplayHandle(_displayManager.DisplayHandle);
+        var display = SwigHelpers.ToSwigDisplayHandle(_display.Handle);
         _renderingManager.render_display(display);
+        if (RenderHost.PresentDisplay())
+        {
+            RenderFrame?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            Console.Error.WriteLine("[SceneViewer] D3D11 display presentation failed.");
+        }
 
         // Debug output once per second
         _frameCount++;
@@ -340,9 +348,9 @@ public partial class SceneViewerControl : UserControl, IDisposable
         _disposed = true;
 
         // Remove viewport from display
-        if (_displayManager != null && _viewportHandle.IsValid)
+        if (_display != null && _viewportHandle.IsValid)
         {
-            _displayManager.RemoveViewport(_viewportHandle);
+            _display.RemoveViewport(_viewportHandle);
         }
 
         // Free viewport
@@ -358,16 +366,30 @@ public partial class SceneViewerControl : UserControl, IDisposable
             _renderTargetHandle = TcRenderTargetHandle.Invalid;
         }
 
-        // Dispose managers
-        _displayManager?.Dispose();
-        _displayManager = null;
-
-        _renderSurface?.Dispose();
-        _renderSurface = null;
+        // The borrowed handle must be released before the owning display, and
+        // the display must release its textures before GraphicsHost's device.
+        RenderHost.ReleaseNativeResources();
+        _display?.Dispose();
+        _display = null;
 
         _internalPool?.Dispose();
         _internalPool = null;
+        _renderingManager = null;
+        _renderEngine?.Dispose();
+        _renderEngine = null;
+        _engineCore?.Dispose();
+        _engineCore = null;
 
+        if (_hostLeaseHeld)
+        {
+            Tgfx2Host.Release();
+            _hostLeaseHeld = false;
+        }
+        if (_renderingSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRender;
+            _renderingSubscribed = false;
+        }
         _initialized = false;
 
         GC.SuppressFinalize(this);
@@ -375,6 +397,23 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
     ~SceneViewerControl()
     {
-        Dispose();
+        Console.Error.WriteLine(
+            "[SceneViewer] Finalized without deterministic disposal; native resources may still be live.");
+    }
+
+    private static string? FindSystemFont()
+    {
+        string fonts = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "Fonts");
+        foreach (string name in new[] { "segoeui.ttf", "arial.ttf", "tahoma.ttf" })
+        {
+            string path = Path.Combine(fonts, name);
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+        return null;
     }
 }

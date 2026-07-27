@@ -28,7 +28,7 @@ std::optional<float> CylinderGeometry::ray_intersect(const Vec3f &o, const Vec3f
     Vec3f dp = d - axis * rd, ep = delta - axis * dd;
     float a = dp.dot(dp), b = 2 * dp.dot(ep), c = ep.dot(ep) - radius * radius;
     if (a < 1e-10f)
-        return c <= 0 ? std::optional<float>(0) : std::nullopt;
+        return c <= 0 ? std::optional<float>(0.0f) : std::nullopt;
     float disc = b * b - 4 * a * c;
     if (disc < 0)
         return std::nullopt;

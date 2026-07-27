@@ -6,6 +6,7 @@
 #include <tcbase/tc_log.hpp>
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
+#include "tgfx/tgfx2_interop.h"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/handles.hpp"
@@ -176,3 +177,22 @@ tc_display_handle create_offscreen_display(
 }
 
 } // namespace termin
+
+extern "C" tc_display_handle tc_display_new_d3d11_offscreen_current(
+    int width,
+    int height,
+    const char* name
+) {
+    auto* device = static_cast<tgfx::IRenderDevice*>(tgfx2_interop_get_device());
+    if (!device) {
+        tc::Log::error(
+            "tc_display_new_d3d11_offscreen_current: GraphicsHost has not claimed a tgfx2 device");
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
+    if (device->backend_type() != tgfx::BackendType::D3D11) {
+        tc::Log::error(
+            "tc_display_new_d3d11_offscreen_current: the current tgfx2 device is not D3D11");
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
+    return termin::create_offscreen_display(device, width, height, name);
+}

@@ -606,7 +606,7 @@ tgfx::FontAtlas* WorldTextComponent::ensure_font(const char* captured_font_path)
     }
 
     try {
-        font_ = std::make_unique<tgfx::FontAtlas>(path, 16.0f);
+        font_ = std::make_unique<tgfx::FontAtlas>(path, 16);
         loaded_font_path_ = path;
     } catch (const std::exception& exc) {
         tc::Log::error("[WorldTextComponent] failed to load font '%s': %s",
