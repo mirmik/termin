@@ -223,20 +223,55 @@ def test_preflight_project_context_reports_project_root_output(tmp_path: Path) -
     _assert_single_error(exc_info.value, str(project), "Refusing to use project root")
 
 
-def test_preflight_project_context_reports_project_internal_output_outside_dist(tmp_path: Path) -> None:
+def test_preflight_project_context_accepts_configured_project_output_root(tmp_path: Path) -> None:
     project = tmp_path / "Game"
     project.mkdir()
     (project / "Main.scene").write_text("{}", encoding="utf-8")
+    settings_path = project / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps({"build_output_dir": "generated/builds"}),
+        encoding="utf-8",
+    )
+
+    result = _preflight_project_context(
+        project,
+        "Main.scene",
+        project / "generated" / "builds" / "android" / "Game",
+        "Android",
+    )
+
+    assert result.output_dir == (
+        project / "generated" / "builds" / "android" / "Game"
+    ).resolve()
+
+
+def test_preflight_project_context_reports_project_internal_output_outside_configured_root(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+    settings_path = project / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps({"build_output_dir": "generated"}),
+        encoding="utf-8",
+    )
 
     with pytest.raises(TargetPreflightError) as exc_info:
         _preflight_project_context(
             project,
             "Main.scene",
-            project / "BuildOutput",
+            project / "dist" / "android" / "Game",
             "Android",
         )
 
-    _assert_single_error(exc_info.value, "BuildOutput", "outside dist/")
+    _assert_single_error(
+        exc_info.value,
+        "dist",
+        "outside configured generated-output root",
+    )
 
 
 def test_preflight_project_context_reports_non_empty_external_output(tmp_path: Path) -> None:

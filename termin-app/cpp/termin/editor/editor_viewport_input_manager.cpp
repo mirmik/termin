@@ -170,8 +170,9 @@ void EditorViewportInputManager::on_scroll(double xoffset, double yoffset, int m
 
     // Request render update (zoom changes camera, needs redraw)
     auto* sys = EditorInteractionSystem::instance();
-    if (sys && sys->on_request_update) {
-        sys->on_request_update();
+    if (sys && sys->on_request_scene_render) {
+        sys->invalidate_id_buffer();
+        sys->on_request_scene_render();
     }
 }
 

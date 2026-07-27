@@ -41,6 +41,7 @@ class NativeEditorEventLoop:
         profiler_panel,
         editor_log_capture,
         game_mode_controller,
+        poll_editor_picking: Callable[[], None],
         request_editor_render: Callable[[], None],
         window,
         frame_limit: int,
@@ -58,6 +59,7 @@ class NativeEditorEventLoop:
         self._profiler_panel = profiler_panel
         self._editor_log_capture = editor_log_capture
         self._game_mode_controller = game_mode_controller
+        self._poll_editor_picking = poll_editor_picking
         self._request_editor_render = request_editor_render
         self._window = window
         self._frame_limit = frame_limit
@@ -80,6 +82,8 @@ class NativeEditorEventLoop:
         with self._capture_profiler.section("Observers & Input"):
             self._scene_structure_observer.poll()
             self._spacemouse.poll()
+        with self._capture_profiler.section("Picking Readback"):
+            self._poll_editor_picking()
         with self._capture_profiler.section("Debug Tools"):
             self._framegraph_debugger.update()
             self._frame_profiler.update()
@@ -119,6 +123,7 @@ def attach_native_editor_event_loop(
     profiler_panel,
     editor_log_capture,
     game_mode_controller,
+    poll_editor_picking: Callable[[], None],
     request_editor_render: Callable[[], None],
     window,
     frame_limit: int | None = None,
@@ -148,6 +153,7 @@ def attach_native_editor_event_loop(
             profiler_panel=profiler_panel,
             editor_log_capture=editor_log_capture,
             game_mode_controller=game_mode_controller,
+            poll_editor_picking=poll_editor_picking,
             request_editor_render=request_editor_render,
             window=window,
             frame_limit=_smoke_frame_limit() if frame_limit is None else frame_limit,
