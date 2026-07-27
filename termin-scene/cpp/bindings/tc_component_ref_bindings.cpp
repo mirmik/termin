@@ -7,6 +7,7 @@
 #include <nanobind/stl/string.h>
 
 #include <cstring>
+#include <stdexcept>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
@@ -74,7 +75,13 @@ public:
     // Try to get typed Python object (may return None if no bindings available)
     nb::object to_python() const {
         if (!_c) return nb::none();
-        return tc_component_to_python(_c);
+        try {
+            return tc_component_to_python(_c);
+        } catch (const std::runtime_error& e) {
+            tc::Log::debug("[TcComponentRef] no typed Python projection for %s: %s",
+                type_name(), e.what());
+            return nb::none();
+        }
     }
 
     // Get owner entity
@@ -189,10 +196,11 @@ public:
         }
     }
 
-    // Get field value by name
-    nb::object get_field(const std::string& field_name) const {
-        if (!_c) return nb::none();
-
+    nb::object field_value_or_throw(const std::string& field_name) const {
+        if (!_c) {
+            throw std::runtime_error(
+                "Cannot read field '" + field_name + "' from an invalid component reference");
+        }
         if (field_name == "display_name") {
             return nb::str(tc_component_get_display_name(_c));
         }
@@ -209,11 +217,25 @@ public:
         } else {
             obj_ptr = _c->body;
         }
-        if (!obj_ptr) return nb::none();
+        if (!obj_ptr) {
+            throw std::runtime_error(
+                "Component '" + std::string(type_name()) +
+                "' has no inspectable object");
+        }
+
+        return tc::InspectRegistry_get(
+            tc::InspectRegistry::instance(),
+            obj_ptr,
+            tc_component_type_name(_c),
+            field_name);
+    }
+
+    // Get field value by name, preserving the historical optional lookup contract.
+    nb::object get_field(const std::string& field_name) const {
+        if (!_c) return nb::none();
 
         try {
-            return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
-                obj_ptr, tc_component_type_name(_c), field_name);
+            return field_value_or_throw(field_name);
         } catch (const std::exception& e) {
             tc::Log::debug("[TcComponentRef] get_field(%s) on %s failed: %s",
                 field_name.c_str(), tc_component_type_name(_c), e.what());
@@ -222,6 +244,23 @@ public:
             tc::Log::debug("[TcComponentRef] get_field(%s) on %s failed with unknown exception",
                 field_name.c_str(), tc_component_type_name(_c));
             return nb::none();
+        }
+    }
+
+    // Strict field lookup for scripts where a missing field is an automation error.
+    nb::object require_field(const std::string& field_name) const {
+        try {
+            return field_value_or_throw(field_name);
+        } catch (const std::exception& e) {
+            tc::Log::error("[TcComponentRef] require_field(%s) on %s failed: %s",
+                field_name.c_str(), type_name(), e.what());
+            throw;
+        } catch (...) {
+            tc::Log::error("[TcComponentRef] require_field(%s) on %s failed with unknown exception",
+                field_name.c_str(), type_name());
+            throw std::runtime_error(
+                "Failed to read required field '" + field_name +
+                "' from component '" + std::string(type_name()) + "'");
         }
     }
 
@@ -331,6 +370,9 @@ void bind_tc_component_ref(nb::module_& m) {
         .def("get_field", &TcComponentRef::get_field,
             nb::arg("field_name"),
             "Get field value by name. Returns None if field not found.")
+        .def("require_field", &TcComponentRef::require_field,
+            nb::arg("field_name"),
+            "Get field value by name. Raises and logs when the field cannot be read.")
         .def("set_field", [](TcComponentRef& self, const std::string& field_name,
                               nb::object value, std::optional<TcSceneRef> scene) {
             self.set_field(field_name, value, scene.value_or(TcSceneRef{}));

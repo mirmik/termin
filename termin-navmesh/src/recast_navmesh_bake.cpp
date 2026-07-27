@@ -47,6 +47,7 @@ RecastBuildResult build_recast_navmesh(
 
     BuildContext ctx;
 
+    // Recast C API output buffers; copied into semantic Vec3f debug records below.
     float bmin[3], bmax[3];
     rcCalcBounds(verts, nverts, bmin, bmax);
     tc_log_info("[NavMesh] Bounds: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)",

@@ -6,20 +6,14 @@
 #include <vector>
 
 #include <termin/export.hpp>
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 
-struct FoliageVec3f {
-public:
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-};
-
 struct FoliageBounds3f {
 public:
-    FoliageVec3f min;
-    FoliageVec3f max;
+    Vec3f min{};
+    Vec3f max{};
     bool valid = false;
 };
 
@@ -56,7 +50,7 @@ public:
     void set_instances(std::vector<FoliageInstance> value);
     void add_instance(const FoliageInstance& instance);
     void remove_instance_at(size_t index);
-    size_t remove_instances_in_radius(const FoliageVec3f& center, float radius);
+    size_t remove_instances_in_radius(const Vec3f& center, float radius);
     void recompute_bounds();
     size_t instance_count() const;
     bool empty() const;

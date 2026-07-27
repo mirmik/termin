@@ -9,6 +9,7 @@
 #include <any>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <iomanip>
 #include <iterator>
@@ -375,10 +376,14 @@ std::array<float, 4> navmesh_poly_color(int poly_index) {
     return {r, g, b, 0.9f};
 }
 
+// Raw vertex-buffer payload consumed by the navmesh debug mesh layout.
 struct NavMeshDebugVertex {
     float pos[3];
     float color[4];
 };
+static_assert(sizeof(NavMeshDebugVertex) == sizeof(float) * 7);
+static_assert(offsetof(NavMeshDebugVertex, pos) == 0);
+static_assert(offsetof(NavMeshDebugVertex, color) == sizeof(float) * 3);
 
 void push_detour_vertex(std::vector<NavMeshDebugVertex>& vertices,
                         const float* rc_pos,
@@ -577,8 +582,8 @@ Vec3f termin_to_recast(const Vec3f& p) {
     return {p[0], p[2], p[1]};
 }
 
-Vec3f recast_to_termin(const float p[3]) {
-    return {p[0], p[2], p[1]};
+Vec3f recast_to_termin(const Vec3f& p) {
+    return {p.x, p.z, p.y};
 }
 
 } // namespace termin

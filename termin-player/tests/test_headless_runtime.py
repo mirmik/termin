@@ -12,6 +12,7 @@ from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
 from termin.physics_components import PhysicsWorldComponent
 from termin.scene import PythonComponent
 from termin.engine import create_scene, scene_ext_attached_names
+from termin.render import SCENE_EXT_TYPE_RENDER_MOUNT, SCENE_EXT_TYPE_RENDER_STATE
 from termin.render_framework import tc_pipeline_registry_count
 
 
@@ -20,6 +21,7 @@ class HeadlessCounterComponent(PythonComponent):
         super().__init__()
         self.start_count = 0
         self.update_count = 0
+        self.before_render_count = 0
         self.last_dt = 0.0
 
     def start(self) -> None:
@@ -28,6 +30,9 @@ class HeadlessCounterComponent(PythonComponent):
     def update(self, dt: float) -> None:
         self.update_count += 1
         self.last_dt = dt
+
+    def before_render(self) -> None:
+        self.before_render_count += 1
 
 
 class HeadlessQuitComponent(PythonComponent):
@@ -442,11 +447,75 @@ def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) 
         component = components[0]
         assert component.start_count == 1
         assert component.update_count == 3
+        assert component.before_render_count == 0
         assert component.last_dt == pytest.approx(0.125)
         assert stats.frames == 3
         assert stats.simulated_time == pytest.approx(0.375)
     finally:
         runtime.shutdown()
+
+
+def test_headless_runtime_ignores_serialized_render_extensions(tmp_path: Path) -> None:
+    (tmp_path / "Main.scene").write_text(
+        json.dumps(
+            {
+                "scene": {
+                    "entities": [],
+                    "extensions": {
+                        "render_mount": {},
+                        "render_state": {},
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=False,
+        load_assets=False,
+        register_builtin_resources=False,
+    )
+
+    try:
+        runtime.initialize()
+        assert scene_ext_attached_names(runtime.scene) == ["collision_world"]
+    finally:
+        runtime.shutdown()
+
+
+@pytest.mark.parametrize(
+    "extension, expected_name",
+    [
+        (SCENE_EXT_TYPE_RENDER_MOUNT, "render_mount"),
+        (SCENE_EXT_TYPE_RENDER_STATE, "render_state"),
+    ],
+)
+def test_headless_runtime_rejects_requested_render_extensions(
+    tmp_path: Path,
+    extension: int,
+    expected_name: str,
+) -> None:
+    (tmp_path / "Main.scene").write_text(
+        json.dumps({"scene": {"entities": []}}),
+        encoding="utf-8",
+    )
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=False,
+        load_assets=False,
+        register_builtin_resources=False,
+        scene_extensions=[extension],
+    )
+
+    with pytest.raises(
+        HeadlessRuntimeError,
+        match=rf"render-only scene extensions.*{expected_name}",
+    ):
+        runtime.initialize()
+    assert runtime.scene is None
 
 
 def test_headless_runtime_run_forever_stops_on_request_quit(tmp_path: Path) -> None:

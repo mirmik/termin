@@ -93,7 +93,7 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
         world = world * offset;
     }
 
-    float size[3] = {
+    const Vec3f size = {
         static_cast<float>(col->box_size.x),
         static_cast<float>(col->box_size.y),
         static_cast<float>(col->box_size.z)
@@ -108,7 +108,7 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
         pass->_draw_box_internal(world, size);
     }
     else if (type == "Sphere") {
-        float uniform_size = std::min({size[0], size[1], size[2]});
+        float uniform_size = std::min({size.x, size.y, size.z});
         float uniform_scale = std::min({sx, sy, sz});
         float radius = (uniform_size / 2.0f) * uniform_scale;
         if (radius > 0) {
@@ -116,8 +116,8 @@ bool draw_collider_callback(tc_component* c, void* user_data) {
         }
     }
     else if (type == "Capsule") {
-        float height = size[2] * sz;
-        float radius = (std::min(size[0], size[1]) / 2.0f) * std::min(sx, sy);
+        float height = size.z * sz;
+        float radius = (std::min(size.x, size.y) / 2.0f) * std::min(sx, sy);
         if (radius > 0) {
             pass->_draw_capsule_internal(world, height, radius);
         }
@@ -218,9 +218,11 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
 // and enqueue lines into the pass-owned ImmediateRenderer.
 // ============================================================================
 
-void ColliderGizmoPass::_draw_box_internal(const Mat44f& entity_world, const float* box_size) {
+void ColliderGizmoPass::_draw_box_internal(
+    const Mat44f& entity_world,
+    const Vec3f& box_size) {
     // Unit box [-0.5, 0.5]^3 scaled by box_size.
-    Mat44f scale = Mat44f::scale(Vec3(box_size[0], box_size[1], box_size[2]));
+    Mat44f scale = Mat44f::scale(Vec3(box_size.x, box_size.y, box_size.z));
     Mat44f model = entity_world * scale;
 
     // 8 corners of the unit box

@@ -60,7 +60,7 @@ size_t remove_instances_in_radius(
     if (!data) {
         return 0;
     }
-    return data->remove_instances_in_radius(FoliageVec3f{x, y, z}, radius);
+    return data->remove_instances_in_radius(Vec3f{x, y, z}, radius);
 }
 
 } // namespace

@@ -5,6 +5,7 @@
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <cmath>
 #include <filesystem>
@@ -28,11 +29,31 @@ namespace {
 
 constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
 
+// Raw vertex-buffer payload shared by the navmesh debug meshes.
+struct NavMeshDebugVertex {
+    float position[3];
+    float color[4];
+};
+
+static_assert(sizeof(NavMeshDebugVertex) == sizeof(float) * 7);
+static_assert(offsetof(NavMeshDebugVertex, position) == 0);
+static_assert(offsetof(NavMeshDebugVertex, color) == sizeof(float) * 3);
+
+void append_recast_point(std::vector<float>& output, const Vec3f& point) {
+    output.push_back(point.x);
+    output.push_back(point.y);
+    output.push_back(point.z);
+}
+
+Vec3f copy_recast_point(const float point[3]) {
+    return Vec3f{point[0], point[1], point[2]};
+}
+
 DetourOffMeshLinkData detour_links_from_bake_input(const NavMeshBakeInput& input) {
     DetourOffMeshLinkData links;
     for (const NavMeshOffMeshLinkRecord& record : input.off_mesh_links) {
-        links.verts.insert(links.verts.end(), std::begin(record.start), std::end(record.start));
-        links.verts.insert(links.verts.end(), std::begin(record.end), std::end(record.end));
+        append_recast_point(links.verts, record.start);
+        append_recast_point(links.verts, record.end);
         links.radii.push_back(record.radius);
         links.dirs.push_back(record.direction);
         links.areas.push_back(record.area_id);
@@ -51,8 +72,8 @@ DetourLinearPathData detour_linear_paths_from_bake_input(const NavMeshBakeInput&
     paths.links.reserve(input.linear_links.size());
 
     for (const NavMeshLinearPathSegmentRecord& record : input.linear_segments) {
-        paths.segment_verts.insert(paths.segment_verts.end(), std::begin(record.start), std::end(record.start));
-        paths.segment_verts.insert(paths.segment_verts.end(), std::begin(record.end), std::end(record.end));
+        append_recast_point(paths.segment_verts, record.start);
+        append_recast_point(paths.segment_verts, record.end);
         paths.areas.push_back(record.area_id);
         paths.flags.push_back(record.flags);
         paths.user_ids.push_back(record.user_id);
@@ -654,10 +675,7 @@ void RecastNavMeshBuilderComponent::build_input_mesh(const float* verts, int nve
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     const float input_color[4] = {0.3f, 0.6f, 0.9f, 0.5f};  // blue, semi-transparent
 
@@ -726,7 +744,7 @@ void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
     if (hf.width == 0 || hf.height == 0) return;
 
     tc_log_info("[NavMesh] HF debug: Recast bmin=(%.2f, %.2f, %.2f) bmax not stored",
-        hf.bmin[0], hf.bmin[1], hf.bmin[2]);
+        hf.bmin.x, hf.bmin.y, hf.bmin.z);
     tc_log_info("[NavMesh] HF debug: grid %dx%d, cs=%.3f ch=%.3f",
         hf.width, hf.height, hf.cs, hf.ch);
 
@@ -737,10 +755,7 @@ void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -757,11 +772,11 @@ void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
 
             for (const auto& span : cell_spans) {
                 // Recast coordinates (Y-up)
-                float rc_x0 = hf.bmin[0] + rx * hf.cs;
+                float rc_x0 = hf.bmin.x + rx * hf.cs;
                 float rc_x1 = rc_x0 + hf.cs;
-                float rc_z0 = hf.bmin[2] + rz * hf.cs;
+                float rc_z0 = hf.bmin.z + rz * hf.cs;
                 float rc_z1 = rc_z0 + hf.cs;
-                float rc_y = hf.bmin[1] + span.smax * hf.ch;
+                float rc_y = hf.bmin.y + span.smax * hf.ch;
 
                 // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
                 float x0 = rc_x0, x1 = rc_x1;
@@ -833,10 +848,7 @@ void RecastNavMeshBuilderComponent::build_regions_mesh() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -887,11 +899,11 @@ void RecastNavMeshBuilderComponent::build_regions_mesh() {
                 uint16_t y_val = chf.y[span_idx];
 
                 // Recast coordinates (Y-up)
-                float rc_x0 = chf.bmin[0] + rx * chf.cs;
+                float rc_x0 = chf.bmin.x + rx * chf.cs;
                 float rc_x1 = rc_x0 + chf.cs;
-                float rc_z0 = chf.bmin[2] + rz * chf.cs;
+                float rc_z0 = chf.bmin.z + rz * chf.cs;
                 float rc_z1 = rc_z0 + chf.cs;
-                float rc_y = chf.bmin[1] + y_val * chf.ch;
+                float rc_y = chf.bmin.y + y_val * chf.ch;
 
                 // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
                 float x0 = rc_x0, x1 = rc_x1;
@@ -976,10 +988,7 @@ void RecastNavMeshBuilderComponent::build_distance_field_mesh() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -1033,11 +1042,11 @@ void RecastNavMeshBuilderComponent::build_distance_field_mesh() {
                 uint16_t y_val = chf.y[span_idx];
 
                 // Recast coordinates (Y-up)
-                float rc_x0 = chf.bmin[0] + rx * chf.cs;
+                float rc_x0 = chf.bmin.x + rx * chf.cs;
                 float rc_x1 = rc_x0 + chf.cs;
-                float rc_z0 = chf.bmin[2] + rz * chf.cs;
+                float rc_z0 = chf.bmin.z + rz * chf.cs;
                 float rc_z1 = rc_z0 + chf.cs;
-                float rc_y = chf.bmin[1] + y_val * chf.ch;
+                float rc_y = chf.bmin.y + y_val * chf.ch;
 
                 // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
                 float x0 = rc_x0, x1 = rc_x1;
@@ -1108,10 +1117,7 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -1158,9 +1164,9 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
             int vz = contour.verts[i * 4 + 2];
 
             // Convert voxel coords to Recast world coords (Y-up)
-            float rc_x = cset.bmin[0] + vx * cset.cs;
-            float rc_y = cset.bmin[1] + vy * cset.ch;
-            float rc_z = cset.bmin[2] + vz * cset.cs;
+            float rc_x = cset.bmin.x + vx * cset.cs;
+            float rc_y = cset.bmin.y + vy * cset.ch;
+            float rc_z = cset.bmin.z + vz * cset.cs;
 
             // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
             float tm_x = rc_x;
@@ -1227,10 +1233,7 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -1290,9 +1293,9 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
             uint16_t vz = pmesh.verts[vi * 3 + 2];
 
             // Convert voxel coords to Recast world coords (Y-up)
-            float rc_x = pmesh.bmin[0] + vx * pmesh.cs;
-            float rc_y = pmesh.bmin[1] + vy * pmesh.ch;
-            float rc_z = pmesh.bmin[2] + vz * pmesh.cs;
+            float rc_x = pmesh.bmin.x + vx * pmesh.cs;
+            float rc_y = pmesh.bmin.y + vy * pmesh.ch;
+            float rc_z = pmesh.bmin.z + vz * pmesh.cs;
 
             // Convert to termin (Z-up): (x, y, z) -> (x, z, y)
             float tm_x = rc_x;
@@ -1352,10 +1355,7 @@ void RecastNavMeshBuilderComponent::build_detail_mesh_debug() {
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
     tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
-    struct Vertex {
-        float pos[3];
-        float color[4];
-    };
+    using Vertex = NavMeshDebugVertex;
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -1499,8 +1499,8 @@ void RecastNavMeshBuilderComponent::capture_heightfield_data(rcHeightfield* hf) 
     data.height = hf->height;
     data.cs = hf->cs;
     data.ch = hf->ch;
-    rcVcopy(data.bmin, hf->bmin);
-    rcVcopy(data.bmax, hf->bmax);
+    data.bmin = copy_recast_point(hf->bmin);
+    data.bmax = copy_recast_point(hf->bmax);
 
     data.spans.resize(hf->width * hf->height);
 
@@ -1528,8 +1528,8 @@ void RecastNavMeshBuilderComponent::capture_compact_data(rcCompactHeightfield* c
     data.span_count = chf->spanCount;
     data.cs = chf->cs;
     data.ch = chf->ch;
-    rcVcopy(data.bmin, chf->bmin);
-    rcVcopy(data.bmax, chf->bmax);
+    data.bmin = copy_recast_point(chf->bmin);
+    data.bmax = copy_recast_point(chf->bmax);
 
     // Per-span data
     data.y.resize(chf->spanCount);
@@ -1558,8 +1558,8 @@ void RecastNavMeshBuilderComponent::capture_contour_data(rcContourSet* cset) {
     auto& data = *debug_data.contours;
     data.cs = cset->cs;
     data.ch = cset->ch;
-    rcVcopy(data.bmin, cset->bmin);
-    rcVcopy(data.bmax, cset->bmax);
+    data.bmin = copy_recast_point(cset->bmin);
+    data.bmax = copy_recast_point(cset->bmax);
 
     data.contours.resize(cset->nconts);
     for (int i = 0; i < cset->nconts; i++) {
@@ -1591,8 +1591,8 @@ void RecastNavMeshBuilderComponent::capture_poly_mesh_data(rcPolyMesh* pmesh) {
     data.nvp = pmesh->nvp;
     data.cs = pmesh->cs;
     data.ch = pmesh->ch;
-    rcVcopy(data.bmin, pmesh->bmin);
-    rcVcopy(data.bmax, pmesh->bmax);
+    data.bmin = copy_recast_point(pmesh->bmin);
+    data.bmax = copy_recast_point(pmesh->bmax);
 
     // Vertices
     data.verts.resize(pmesh->nverts * 3);
