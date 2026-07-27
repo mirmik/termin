@@ -323,9 +323,20 @@ extensions and calls `scene.update(dt)` in a loop until the project requests
 quit or the process is interrupted. `--frames` adds an explicit frame limit for
 finite smoke checks. It attaches the collision world scene extension by default
 so simulation-only physics can run without a window or `RenderingManager`. It
-does not call `scene.before_render()` or `RenderingManager.render_all`. Use
-`--no-assets` and `--no-modules` for narrow smoke tests that do not need project
-asset discovery or module loading.
+does not call `scene.before_render()` or `RenderingManager.render_all`.
+Serialized `render_mount` and `render_state` data is deliberately ignored, and
+requesting either extension explicitly is an error because the headless host
+does not create the services required to use them.
+
+Drawable and other render-only components may remain in a source scene: their
+serialized state is loaded, but their render lifecycle is inactive. Components
+whose `start`, `update`, or `fixed_update` paths require a GPU, window, display
+surface, or `RenderingManager` are not headless-compatible and must report that
+missing service instead of waiting for a render callback. Run such a project
+through a windowed or offscreen render host. `include_render_resources` only
+controls registration of render asset/resource types; it does not create render
+services. Use `--no-assets` and `--no-modules` for narrow smoke tests that do not
+need project asset discovery or module loading.
 
 `termin_runner run --mode project` remains only as a lower-level compatibility
 path. The user-facing command for source project playback is `termin play`.
