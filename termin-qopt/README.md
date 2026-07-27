@@ -12,6 +12,12 @@ The native migration foundation provides the shared C++ target
 caller-owned dense vector/matrix views. Solver APIs and Python bindings have
 not migrated yet; see [CPP_MIGRATION.md](CPP_MIGRATION.md).
 
+The language-neutral solver contract lives in
+[`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
+analytic solutions, KKT bounds, infeasibility/unboundedness certificates,
+nullspace invariants, and HQP priority outcomes without freezing Python
+iteration counts or implementation details.
+
 `termin.robot.conditions` owns `SymCondition` and `ConditionCollection` because
 they depend on the qopt linear-algebra stack. Base `termin.kinematic` remains
 independent of `termin-qopt` and SciPy.
