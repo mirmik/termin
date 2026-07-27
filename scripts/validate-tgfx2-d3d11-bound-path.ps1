@@ -23,6 +23,7 @@ if (-not $BuildType) {
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 . (Join-Path $ScriptDir "Normalize-WindowsBuildEnvironment.ps1")
+. (Join-Path $ScriptDir "Invoke-CMakeBuild.ps1")
 Normalize-WindowsBuildEnvironment
 
 $isWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -40,22 +41,6 @@ if ($Clean -and (Test-Path $BuildDir)) {
     Remove-Item -Recurse -Force $BuildDir
 }
 
-function Get-CMakeGeneratorFromCache {
-    param([string]$BuildDir)
-
-    $cachePath = Join-Path $BuildDir "CMakeCache.txt"
-    if (-not (Test-Path $cachePath)) {
-        return ""
-    }
-
-    $generatorLine = Get-Content $cachePath | Where-Object { $_ -like "CMAKE_GENERATOR:INTERNAL=*" } | Select-Object -First 1
-    if (-not $generatorLine) {
-        return ""
-    }
-
-    return ($generatorLine -split "=", 2)[1]
-}
-
 function Build-CMakeTarget {
     param(
         [string]$BuildDir,
@@ -64,13 +49,11 @@ function Build-CMakeTarget {
         [int]$BuildJobs
     )
 
-    $actualGenerator = Get-CMakeGeneratorFromCache $BuildDir
-    if ($actualGenerator -like "Visual Studio*") {
-        Write-Host "Visual Studio generator detected; building $Target with MSBuild /m:1"
-        & cmake --build $BuildDir --config $BuildType --target $Target -- /m:1
-    } else {
-        & cmake --build $BuildDir --config $BuildType --target $Target --parallel $BuildJobs
-    }
+    Invoke-TerminCMakeBuild `
+        -BuildDir $BuildDir `
+        -BuildType $BuildType `
+        -Target $Target `
+        -BuildJobs $BuildJobs
 }
 
 & (Join-Path $ScriptDir "Ensure-ThirdpartySubmodules.ps1") `

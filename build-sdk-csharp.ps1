@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "scripts\Normalize-WindowsBuildEnvironment.ps1")
+. (Join-Path $ScriptDir "scripts\Invoke-CMakeBuild.ps1")
 Normalize-WindowsBuildEnvironment
 
 $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDir "sdk" }
@@ -16,22 +17,6 @@ $NoParallel = $false
 $BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
 $TerminCsharpEnableOpenGl = $null
 $Profile = "full"
-
-function Get-CMakeGeneratorFromCache {
-    param([string]$BuildDir)
-
-    $cachePath = Join-Path $BuildDir "CMakeCache.txt"
-    if (-not (Test-Path $cachePath)) {
-        return ""
-    }
-
-    $generatorLine = Get-Content $cachePath | Where-Object { $_ -like "CMAKE_GENERATOR:INTERNAL=*" } | Select-Object -First 1
-    if (-not $generatorLine) {
-        return ""
-    }
-
-    return ($generatorLine -split "=", 2)[1]
-}
 
 foreach ($arg in $args) {
     if ($arg -like "--profile=*") {
@@ -70,6 +55,9 @@ if ($Profile -notin @("full", "plot-d3d11")) {
 }
 if ($Profile -eq "plot-d3d11" -and $null -eq $TerminCsharpEnableOpenGl) {
     $TerminCsharpEnableOpenGl = "OFF"
+}
+if ($NoParallel) {
+    $BuildJobs = 1
 }
 
 function Copy-PlotD3D11ShaderPack {
@@ -189,20 +177,7 @@ try {
     & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-    $actualGenerator = Get-CMakeGeneratorFromCache $buildDir
-    if ($actualGenerator -like "Visual Studio*") {
-        Write-Host "Visual Studio generator detected; using MSBuild /m:1 to avoid parallel custom-target races"
-        & cmake --build $buildDir --config $BuildType -- /m:1
-    } else {
-        $buildArgs = @("--build", $buildDir, "--config", $BuildType)
-        if ($NoParallel) {
-            $buildArgs += @("--parallel", "1")
-        } else {
-            $buildArgs += @("--parallel", $BuildJobs)
-        }
-        & cmake @buildArgs
-    }
-    if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
+    Invoke-TerminCMakeBuild -BuildDir $buildDir -BuildType $BuildType -BuildJobs $BuildJobs
 }
 finally { Pop-Location }
 

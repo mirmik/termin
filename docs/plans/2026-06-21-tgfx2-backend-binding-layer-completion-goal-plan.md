@@ -144,8 +144,10 @@ Windows gate preparation:
   `[graphics/d3d11] Validate tgfx2 bound resource path on Windows`.
 - The script configures a D3D11-focused test build, builds
   `tgfx2_d3d11_smoke`, and runs the matching CTest filter.
-- The script mirrors the existing Visual Studio generator guard and uses
-  MSBuild `/m:1` for target builds to avoid known solution-level races.
+- The script originally mirrored the Visual Studio generator guard and used
+  MSBuild `/m:1`. The Windows build-performance pass tracked by Kanboard #952
+  replaced that historical workaround with the shared, bounded MSBuild and
+  compiler scheduler used by the SDK and test entry points.
 - Optional `-WindowTests` additionally builds/runs
   `backend_window_d3d11_present` when SDL/window testing is available.
 
