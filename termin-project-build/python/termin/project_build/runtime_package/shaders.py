@@ -54,6 +54,7 @@ ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
 ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
 ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
 ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
+ENGINE_WORLD2D_SHADER_UUID = "termin-engine-world2d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
     if shader_targets is None:
@@ -473,6 +474,7 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
         builtin_engine_shader_artifact(ENGINE_TEXT2D_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_TEXT2D_SDF_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_TEXT3D_SHADER_UUID),
+        builtin_engine_shader_artifact(ENGINE_WORLD2D_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_SHADOW_MATERIAL_SHADER_UUID),
     ]
 

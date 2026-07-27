@@ -78,6 +78,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/tc_picking.c
     src/tonemap_pass.cpp
     src/ui_widget_pass.cpp
+    src/world2d_pass.cpp
 )
 
 set(TERMIN_RENDER_PASSES_HEADERS
@@ -101,6 +102,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/skybox_pass.hpp
     include/termin/render/tonemap_pass.hpp
     include/termin/render/ui_widget_pass.hpp
+    include/termin/render/world2d_pass.hpp
     include/tc_picking.h
 )
 
@@ -257,6 +259,31 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
             "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
     )
     termin_add_test_labels(termin_render_passes_debug_triangle_pixel_smoke
+        "termin:capability:vulkan")
+
+    add_executable(termin_render_passes_world2d_pass_pixel_smoke
+        tests/test_world2d_pass_pixel_smoke.cpp
+    )
+    target_link_libraries(termin_render_passes_world2d_pass_pixel_smoke PRIVATE
+        termin_render_passes
+        termin_components_render
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_render_passes_world2d_pass_pixel_smoke termin_shaderc)
+    endif()
+    set_target_properties(termin_render_passes_world2d_pass_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_world2d_pass_pixel_smoke
+        COMMAND termin_render_passes_world2d_pass_pixel_smoke
+    )
+    set_tests_properties(termin_render_passes_world2d_pass_pixel_smoke PROPERTIES
+        TIMEOUT 20
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
+    )
+    termin_add_test_labels(termin_render_passes_world2d_pass_pixel_smoke
         "termin:capability:vulkan")
 
     add_executable(termin_render_passes_color_pass_pixel_smoke

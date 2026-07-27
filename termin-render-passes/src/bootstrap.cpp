@@ -12,6 +12,7 @@
 #include <termin/render/skybox_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
+#include <termin/render/world2d_pass.hpp>
 
 namespace termin {
 
@@ -29,6 +30,7 @@ void register_builtin_render_passes() {
     ShadowPass::register_type();
     SkyBoxPass::register_type();
     TonemapPass::register_type();
+    World2DPass::register_type();
 #if defined(__ANDROID__)
     UIWidgetPass::register_type();
 #endif

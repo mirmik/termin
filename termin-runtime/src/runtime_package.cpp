@@ -28,6 +28,7 @@
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/image/image_decode.hpp>
 #include <termin/render/render_pipeline.hpp>
+#include <termin/render/sprite_asset.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 
 extern "C" {
@@ -43,6 +44,7 @@ struct RuntimePackageResourceKeepalive {
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
     std::vector<TcFoliageData> foliage_data;
+    std::vector<TcSpriteAsset> sprites;
     std::vector<TcPipelineTemplate> pipeline_templates;
 };
 
@@ -1307,6 +1309,90 @@ bool load_foliage_data_resource(
     return true;
 }
 
+bool load_sprite_asset_resource(
+    const nos::trent& entry,
+    const nos::trent& spec,
+    RuntimePackageResourceKeepalive& keepalive,
+    std::string& error)
+{
+    const std::string uuid = string_field(spec, "uuid", string_field(entry, "uuid"));
+    const std::string name = string_field(spec, "name", string_field(entry, "name", uuid));
+    const nos::trent* texture = dict_get(spec, "texture");
+    std::string texture_uuid;
+    if (texture && texture->is_string()) {
+        texture_uuid = texture->as_string();
+    } else if (texture && texture->is_dict()) {
+        texture_uuid = string_field(*texture, "uuid");
+    }
+    const nos::trent* region_value = dict_get(spec, "region");
+    const nos::trent* source_size_value = dict_get(spec, "source_size");
+    if (uuid.empty() || texture_uuid.empty() ||
+        !region_value || !region_value->is_list() ||
+        !source_size_value || !source_size_value->is_list() ||
+        region_value->as_list().size() != 4 ||
+        source_size_value->as_list().size() != 2) {
+        error = "sprite_asset requires uuid, texture, region[4], and source_size[2]";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    const auto& region_list = region_value->as_list();
+    const auto& size_list = source_size_value->as_list();
+    for (const nos::trent& value : region_list) {
+        if (!value.is_numer()) {
+            error = "sprite_asset region values must be numbers";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+    }
+    for (const nos::trent& value : size_list) {
+        if (!value.is_numer()) {
+            error = "sprite_asset source_size values must be numbers";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+    }
+    float pivot_x = 0.5f;
+    float pivot_y = 0.5f;
+    const nos::trent* pivot = dict_get(spec, "pivot");
+    if (pivot && pivot->is_list() && pivot->as_list().size() == 2 &&
+        pivot->as_list()[0].is_numer() && pivot->as_list()[1].is_numer()) {
+        pivot_x = static_cast<float>(pivot->as_list()[0].as_numer());
+        pivot_y = static_cast<float>(pivot->as_list()[1].as_numer());
+    }
+    const std::string sampling_name = lowercase_copy(string_field(spec, "sampling", "linear"));
+    if (sampling_name != "linear" && sampling_name != "nearest") {
+        error = "sprite_asset sampling must be 'linear' or 'nearest'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    if (!TcTexture::from_uuid(texture_uuid).is_valid()) {
+        error = "sprite_asset '" + uuid + "' references missing texture '" + texture_uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    TcSpriteAsset sprite = TcSpriteAsset::declare(uuid, name);
+    if (!sprite.update(
+            texture_uuid,
+            SpriteRegion{
+                static_cast<int32_t>(region_list[0].as_numer()),
+                static_cast<int32_t>(region_list[1].as_numer()),
+                static_cast<int32_t>(region_list[2].as_numer()),
+                static_cast<int32_t>(region_list[3].as_numer()),
+            },
+            static_cast<int32_t>(size_list[0].as_numer()),
+            static_cast<int32_t>(size_list[1].as_numer()),
+            pivot_x,
+            pivot_y,
+            static_cast<float>(number_field(spec, "pixels_per_unit", 100.0)),
+            sampling_name == "nearest" ? SpriteSampling::Nearest : SpriteSampling::Linear)) {
+        error = "failed to initialize sprite_asset '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    keepalive.sprites.push_back(std::move(sprite));
+    return true;
+}
+
 bool load_pipeline_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -1394,6 +1480,9 @@ bool load_resource(
     }
     if (type == "mesh") {
         return load_mesh_resource(spec, keepalive, error);
+    }
+    if (type == "sprite_asset") {
+        return load_sprite_asset_resource(entry, spec, keepalive, error);
     }
 
     error = "unsupported resource type '" + type + "'";
@@ -1512,8 +1601,9 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
         ensure_runtime_builtin_textures();
-        constexpr std::array<const char*, 7> resource_order = {
-            "shader", "shader_program", "mesh", "texture", "material", "pipeline", "foliage_data"
+        constexpr std::array<const char*, 8> resource_order = {
+            "shader", "shader_program", "mesh", "texture", "sprite_asset",
+            "material", "pipeline", "foliage_data"
         };
         const auto& resource_list = resources->as_list();
         auto load_entry = [&](const nos::trent& resource) -> bool {
