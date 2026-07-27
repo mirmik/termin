@@ -79,8 +79,15 @@ tc_pipeline_handle make_default_pipeline() {
         adopt_default_pass(ph, p);
     }
 
+    if (tc_pass* p = create_and_configure_pass("World2DPass", "World2D", {
+            {"input_res", "color"},
+            {"output_res", "color_world2d"}
+        })) {
+        adopt_default_pass(ph, p);
+    }
+
     if (tc_pass* p = create_and_configure_pass("ResolvePass", "Resolve", {
-        {"input_res", "color"},
+        {"input_res", "color_world2d"},
         {"output_res", "color_resolved"},
     })) {
         adopt_default_pass(ph, p);
@@ -111,6 +118,7 @@ tc_pipeline_handle make_default_pipeline() {
         "skybox",
         "color_opaque",
         "color",
+        "color_world2d",
         "color_resolved",
         "color_bloom",
         "color+widgets",
@@ -122,7 +130,8 @@ tc_pipeline_handle make_default_pipeline() {
         if (std::string(resource) == "empty" ||
             std::string(resource) == "skybox" ||
             std::string(resource) == "color_opaque" ||
-            std::string(resource) == "color") {
+            std::string(resource) == "color" ||
+            std::string(resource) == "color_world2d") {
             spec.samples = 4;
         }
         pipeline.add_spec(spec);

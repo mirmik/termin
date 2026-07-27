@@ -55,6 +55,11 @@ def test_runtime_texture_export_copies_source_and_import_settings(tmp_path: Path
             "flip_x": True,
             "flip_y": False,
             "transpose": True,
+            "filter": "linear",
+            "mipmaps": False,
+            "wrap": "clamp",
+            "color_space": "srgb",
+            "alpha_mode": "straight",
         },
     }
 

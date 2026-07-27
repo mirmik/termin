@@ -76,6 +76,8 @@ termin_add_module(
         src/xr_origin_component.cpp
         src/xr_thumbstick_locomotion_component.cpp
         src/line_renderer.cpp
+        src/sprite_asset.cpp
+        src/sprite_renderer_2d.cpp
         src/mesh_renderer.cpp
         src/skinned_mesh_renderer.cpp
         src/shader_skinning.cpp
@@ -132,8 +134,22 @@ if(TERMIN_BUILD_TESTS)
         NAME termin_components_render_line_renderer_contract_test
         COMMAND termin_components_render_line_renderer_contract_test
     )
+    add_executable(termin_components_render_sprite_renderer_2d_test
+        tests/test_sprite_renderer_2d.cpp
+    )
+    target_include_directories(termin_components_render_sprite_renderer_2d_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_render_sprite_renderer_2d_test PRIVATE
+        termin_components_render
+    )
+    add_test(
+        NAME termin_components_render_sprite_renderer_2d_test
+        COMMAND termin_components_render_sprite_renderer_2d_test
+    )
     set_target_properties(
         termin_components_render_line_renderer_contract_test
+        termin_components_render_sprite_renderer_2d_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
 endif()

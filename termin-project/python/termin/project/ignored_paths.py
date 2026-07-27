@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from termin.project.settings import (
-    ProjectSettings,
-    ProjectSettingsManager,
-    SERVICE_RESOURCE_IGNORE_PATHS,
-)
+from termin.project.resource_paths import SERVICE_RESOURCE_IGNORE_PATHS
+from termin.project.settings import ProjectSettings, ProjectSettingsManager
 
 
 def project_ignored_roots(

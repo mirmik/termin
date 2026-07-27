@@ -35,6 +35,7 @@ extern "C" {
 
 #include <termin/gui_native/combo_box.hpp>
 #include <termin/gui_native/box_layout.hpp>
+#include <termin/gui_native/canvas.hpp>
 #include <termin/gui_native/status_bar.hpp>
 #include <termin/gui_native/tc_document.hpp>
 
@@ -966,6 +967,36 @@ TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps docume
     CHECK_EQ(std::string(view.pass_combo()->stable_id()), "editor.framegraph.pass");
     CHECK_EQ(std::string(view.symbol_combo()->stable_id()), "editor.framegraph.symbol");
     CHECK_EQ(std::string(view.resource_combo()->stable_id()), "editor.framegraph.resource");
+    CHECK_EQ(
+        std::string(view.main_sampling_combo()->stable_id()),
+        "editor.framegraph.main-sampling");
+    CHECK_EQ(
+        std::string(view.depth_sampling_combo()->stable_id()),
+        "editor.framegraph.depth-sampling");
+    CHECK_EQ(view.main_sampling_combo()->selected_index(), 0);
+    CHECK_EQ(view.depth_sampling_combo()->selected_index(), 0);
+    CHECK_EQ(
+        view.main_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_LINEAR);
+    CHECK_EQ(
+        view.depth_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_LINEAR);
+
+    view.main_sampling_combo()->set_selected_index(1);
+    CHECK_EQ(
+        view.main_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_NEAREST);
+    CHECK_EQ(
+        view.depth_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_LINEAR);
+    view.depth_sampling_combo()->set_selected_index(1);
+    CHECK_EQ(
+        view.depth_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_NEAREST);
+    view.main_sampling_combo()->set_selected_index(0);
+    CHECK_EQ(
+        view.main_preview_canvas()->texture_sampling(),
+        TC_UI_TEXTURE_SAMPLING_LINEAR);
 
     CHECK(view.activate());
     CHECK(view.active());

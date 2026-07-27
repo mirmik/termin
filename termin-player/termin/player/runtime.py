@@ -777,6 +777,8 @@ class PlayerRuntime:
 
         log.info("[PlayerRuntime] Shutting down")
 
+        if self._mcp_executor is not None:
+            self._mcp_executor.close()
         if self._mcp_server is not None:
             self._mcp_server.stop()
             self._mcp_server = None

@@ -27,6 +27,7 @@ def make_editor_pipeline() -> RenderPipeline:
         TonemapPass,
         UIWidgetPass,
         UnifiedGizmoPass,
+        World2DPass,
     )
 
     def get_gizmo_manager():
@@ -91,8 +92,14 @@ def make_editor_pipeline() -> RenderPipeline:
         sort_mode="far_to_near",
     )
 
-    editor_color_pass = ColorPass(
+    world2d_pass = World2DPass(
         input_res="color_transparent",
+        output_res="color_world2d",
+        pass_name="World2D",
+    )
+
+    editor_color_pass = ColorPass(
+        input_res="color_world2d",
         output_res="color_editor",
         shadow_res=None,
         pass_name="EditorColor",
@@ -161,6 +168,7 @@ def make_editor_pipeline() -> RenderPipeline:
         skybox_pass,
         color_pass,
         transparent_pass,
+        world2d_pass,
         editor_color_pass,
         editor_debug_pass,
         editor_debug_transparent_pass,
@@ -205,6 +213,10 @@ def make_editor_pipeline() -> RenderPipeline:
         ),
         ResourceSpec(
             resource="color_transparent",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_world2d",
             format=color_fbo_format,
         ),
         ResourceSpec(
