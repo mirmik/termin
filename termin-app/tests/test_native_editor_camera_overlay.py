@@ -52,8 +52,12 @@ class _Viewport:
         self.document = document
         self.camera = SimpleNamespace(entity=_Entity(controller))
         self.interaction = SimpleNamespace(transform_gizmo=object())
-        self._request_render = lambda: None
+        self.scene_render_requests = 0
+        self._request_scene_render = self.request_scene_render
         self.loaded = None
+
+    def request_scene_render(self) -> None:
+        self.scene_render_requests += 1
 
     def install_overlay(self, name: str, loaded) -> None:
         assert name == "editor-camera"
@@ -76,6 +80,8 @@ def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes() ->
     projection = NativeEditorCameraOverlayProjection.create(viewport)
     assert viewport.loaded is not None
     assert controller.bindings[-1]["camera"] is viewport.camera
+    controller.bindings[-1]["request_render"]()
+    assert viewport.scene_render_requests == 1
     assert viewport.loaded.named("navmesh_btn").active
 
     colliders = viewport.loaded.named("colliders_btn")
