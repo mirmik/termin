@@ -17,6 +17,7 @@ GUARD_TEST_MAIN();
 #include <components/collider_component.hpp>
 #include <termin/scene/scene_manager.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/sprite_asset.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -807,6 +808,45 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
         "runtime-loader-failure-sentinel"
     );
     termin::tgfx2_set_shader_artifact_root("");
+}
+
+TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package_with_texture(root);
+    std::filesystem::create_directories(root / "sprites");
+    write_text(root / "sprites" / "hero.sprite.json", R"({
+  "format": "termin.sprite",
+  "version": 1,
+  "uuid": "runtime-loader-test-sprite",
+  "name": "Hero",
+  "texture": {"uuid": "runtime-loader-test-texture"},
+  "region": [0, 0, 1, 1],
+  "source_size": [1, 1],
+  "pivot": [0.5, 0.5],
+  "pixels_per_unit": 16.0,
+  "sampling": "nearest"
+}
+)");
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest_with_packaged_texture(),
+            "    {\"type\": \"material\"",
+            "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
+            "\"path\": \"sprites/hero.sprite.json\"},\n"
+            "    {\"type\": \"material\""));
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    termin::TcSpriteAsset sprite =
+        termin::TcSpriteAsset::from_uuid("runtime-loader-test-sprite");
+    REQUIRE(sprite.is_loaded());
+    REQUIRE(sprite.get() != nullptr);
+    CHECK_EQ(sprite.get()->texture_uuid, std::string(kTextureUuid));
+    CHECK_EQ(sprite.get()->region.width, 1);
+    CHECK_EQ(sprite.get()->pixels_per_unit, 16.0f);
+    CHECK(sprite.get()->sampling == termin::SpriteSampling::Nearest);
 }
 
 TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {

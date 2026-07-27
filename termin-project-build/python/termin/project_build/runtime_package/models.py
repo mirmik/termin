@@ -36,6 +36,7 @@ class RuntimeRefs:
     materials: dict[str, str] = field(default_factory=dict)
     textures: dict[str, str] = field(default_factory=dict)
     pipelines: dict[str, str] = field(default_factory=dict)
+    sprites: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

@@ -14,7 +14,16 @@ from termin.project_build.runtime_package.package_files import project_relative_
 # bytes in both the Python and native runtime loaders.
 SUPPORTED_TEXTURE_SUFFIXES = {".jpeg", ".jpg", ".png", ".webp"}
 _IGNORED_PATH_PARTS = {".git", "__pycache__", "build", "dist"}
-_IMPORT_SETTING_NAMES = ("flip_x", "flip_y", "transpose")
+_IMPORT_SETTING_NAMES = (
+    "flip_x",
+    "flip_y",
+    "transpose",
+    "filter",
+    "mipmaps",
+    "wrap",
+    "color_space",
+    "alpha_mode",
+)
 
 
 def write_textures(
@@ -229,7 +238,7 @@ def read_texture_import_settings(
     project_root: Path,
     source_path: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> dict[str, bool] | None:
+) -> dict[str, object] | None:
     metadata_path = Path(f"{source_path}.meta")
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -252,16 +261,45 @@ def read_texture_import_settings(
         )
         return None
 
-    defaults = {"flip_x": False, "flip_y": True, "transpose": False}
-    settings: dict[str, bool] = {}
+    defaults: dict[str, object] = {
+        "flip_x": False,
+        "flip_y": True,
+        "transpose": False,
+        "filter": "linear",
+        "mipmaps": False,
+        "wrap": "clamp",
+        "color_space": "srgb",
+        "alpha_mode": "straight",
+    }
+    allowed_strings = {
+        "filter": {"linear", "nearest"},
+        "wrap": {"clamp", "repeat"},
+        "color_space": {"srgb", "linear"},
+        "alpha_mode": {"straight", "opaque"},
+    }
+    settings: dict[str, object] = {}
     for key in _IMPORT_SETTING_NAMES:
         value = metadata.get(key, defaults[key])
-        if not isinstance(value, bool):
+        expected = defaults[key]
+        valid = (
+            isinstance(value, bool)
+            if isinstance(expected, bool)
+            else isinstance(value, str) and value in allowed_strings[key]
+        )
+        if not valid:
+            requirement = (
+                "boolean"
+                if isinstance(expected, bool)
+                else f"one of {sorted(allowed_strings[key])}"
+            )
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="error",
                     path=project_relative_path(project_root, metadata_path),
-                    message=f"Runtime exporter texture import setting '{key}' must be boolean",
+                    message=(
+                        f"Runtime exporter texture import setting '{key}' "
+                        f"must be {requirement}"
+                    ),
                 )
             )
             return None
