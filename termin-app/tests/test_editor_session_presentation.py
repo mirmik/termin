@@ -14,8 +14,7 @@ def test_editor_session_presentation_keeps_project_scene_mode_and_message():
 
 def test_editor_log_is_bounded_and_clearable():
     model = EditorLogModel(max_lines=2)
-    model.append("one\ntwo")
-    model.append("three")
+    model.append_many(["one\ntwo", "three"])
     assert model.text == "two\nthree"
     model.clear()
     assert model.text == ""

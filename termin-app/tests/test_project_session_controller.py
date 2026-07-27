@@ -35,12 +35,22 @@ def _write_project(path: Path, *, name: str = "Test Project") -> Path:
 
 
 def _controller(
+    monkeypatch,
     calls: list[str],
     errors: list[tuple[str, str]],
 ) -> ProjectSessionController:
+    monkeypatch.setattr(
+        session_module.log,
+        "info",
+        lambda message: calls.append(f"log:{message}"),
+    )
+    monkeypatch.setattr(
+        session_module.log,
+        "error",
+        lambda message: calls.append(f"log:{message}"),
+    )
     return ProjectSessionController(
         set_project_state=lambda _directory, _name: calls.append("project_state"),
-        log_to_console=lambda message: calls.append(f"log:{message}"),
         rescan_file_resources=lambda: calls.append("resource_scan"),
         set_project_browser_root=lambda _directory: calls.append("browser_root"),
         get_init_script_editor=lambda: None,
@@ -105,12 +115,15 @@ def test_descriptor_validation_fails_before_publishing(
         "sync_stdlib",
         lambda _root: calls.append("sync_stdlib"),
     )
-    controller = _controller(calls, errors)
+    controller = _controller(monkeypatch, calls, errors)
 
     completed: list[bool] = []
     assert controller.initialize_project(str(project_file), completed.append) is False
 
-    assert calls == [f"log:{errors[0][0]}: {errors[0][1]}"]
+    assert calls == [
+        "log:[ProjectSessionController] "
+        f"{errors[0][0]}: {errors[0][1]}"
+    ]
     assert errors[0][0] == "Project Validation Failed"
     assert completed == [False]
     assert controller.project_file is None
@@ -126,7 +139,7 @@ def test_stdlib_failure_fails_before_publishing(tmp_path, monkeypatch) -> None:
         raise RuntimeError("copy failed")
 
     monkeypatch.setattr(session_module, "sync_stdlib", fail_sync)
-    controller = _controller(calls, errors)
+    controller = _controller(monkeypatch, calls, errors)
 
     assert controller.initialize_project(str(project_file)) is False
 
@@ -156,7 +169,7 @@ def test_initialization_order_and_init_script_after_modules(
         "configure_shader_runtime_for_project",
         staticmethod(lambda _root, **_kwargs: calls.append("shader_runtime")),
     )
-    controller = _controller(calls, errors)
+    controller = _controller(monkeypatch, calls, errors)
     monkeypatch.setattr(
         controller,
         "load_project_modules",
@@ -204,7 +217,7 @@ def test_repeated_initialization_is_rejected_without_mutation(
         "configure_shader_runtime_for_project",
         staticmethod(lambda _root, **_kwargs: None),
     )
-    controller = _controller(calls, errors)
+    controller = _controller(monkeypatch, calls, errors)
     monkeypatch.setattr(
         controller,
         "load_project_modules",
@@ -221,7 +234,9 @@ def test_repeated_initialization_is_rejected_without_mutation(
     assert controller.project_file == first.resolve()
     assert errors[-1][0] == "Project Already Initialized"
     assert len(calls) == 1
-    assert calls[0].startswith("log:Project Already Initialized:")
+    assert calls[0].startswith(
+        "log:[ProjectSessionController] Project Already Initialized:"
+    )
 
 
 def test_module_failure_keeps_repairable_project_without_running_init_script(
@@ -236,7 +251,7 @@ def test_module_failure_keeps_repairable_project_without_running_init_script(
         "configure_shader_runtime_for_project",
         staticmethod(lambda _root, **_kwargs: None),
     )
-    controller = _controller(calls, errors)
+    controller = _controller(monkeypatch, calls, errors)
     monkeypatch.setattr(
         controller,
         "load_project_modules",

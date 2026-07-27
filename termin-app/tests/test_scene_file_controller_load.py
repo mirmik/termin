@@ -106,6 +106,11 @@ def _build_controller(
         "extract_from_file",
         lambda path: calls.append(("extract-editor", path)) or {"camera": {}},
     )
+    monkeypatch.setattr(
+        scene_file_controller_module.log,
+        "error",
+        lambda message: calls.append(("log-error", message)),
+    )
 
     controller = SceneFileController(
         scene_manager=manager,
@@ -138,7 +143,6 @@ def _build_controller(
         on_rendering_changed=lambda: calls.append("rendering-changed"),
         request_viewport_update=lambda: calls.append("viewport-update"),
         update_window_title=lambda: calls.append("title-update"),
-        log_to_console=lambda message: calls.append(("console", message)),
     )
     return controller, manager, active_name
 
@@ -180,7 +184,7 @@ def test_malformed_scene_does_not_replace_active_scene(monkeypatch, tmp_path) ->
     assert not any(isinstance(call, tuple) and call[0] == "stage" for call in calls)
     assert any(
         isinstance(call, tuple)
-        and call[0] == "console"
+        and call[0] == "log-error"
         and str(path) in call[1]
         and "during parse" in call[1]
         for call in calls
@@ -208,7 +212,7 @@ def test_repair_failure_does_not_create_or_replace_scene(monkeypatch, tmp_path) 
     assert not any(isinstance(call, tuple) and call[0] == "stage" for call in calls)
     assert any(
         isinstance(call, tuple)
-        and call[0] == "console"
+        and call[0] == "log-error"
         and path in call[1]
         and "during repair" in call[1]
         for call in calls
@@ -248,7 +252,7 @@ def test_failure_after_staging_creation_destroys_only_staging_scene(
     assert calls.count(("destroy-stage", staged_scene)) == 1
     assert any(
         isinstance(call, tuple)
-        and call[0] == "console"
+        and call[0] == "log-error"
         and path in call[1]
         and f"during {failure_stage}" in call[1]
         for call in calls

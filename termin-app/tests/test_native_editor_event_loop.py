@@ -33,6 +33,8 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
     frame_profiler = Mock()
     profiler_panel = Mock()
     profiler_panel.root = SimpleNamespace(visible=False)
+    editor_log_capture = Mock()
+    editor_log_capture.drain.return_value = False
     game_mode_controller = SimpleNamespace(
         model=SimpleNamespace(is_game_mode=game_mode)
     )
@@ -51,6 +53,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         framegraph_debugger=framegraph_debugger,
         frame_profiler=frame_profiler,
         profiler_panel=profiler_panel,
+        editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
         window=window,
@@ -67,6 +70,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         framegraph_debugger=framegraph_debugger,
         frame_profiler=frame_profiler,
         profiler_panel=profiler_panel,
+        editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
         window=window,
@@ -83,6 +87,7 @@ def test_native_editor_event_loop_polls_services_and_honors_frame_limit() -> Non
     services.spacemouse.poll.assert_called_once_with()
     services.framegraph_debugger.update.assert_called_once_with()
     services.frame_profiler.update.assert_called_once_with()
+    services.editor_log_capture.drain.assert_called_once_with()
     services.request_editor_render.assert_called_once_with()
     services.window_manager.render_requested.assert_called_once_with()
     services.window.set_should_close.assert_called_once_with(True)
@@ -144,6 +149,7 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
         framegraph_debugger=services.framegraph_debugger,
         frame_profiler=services.frame_profiler,
         profiler_panel=services.profiler_panel,
+        editor_log_capture=services.editor_log_capture,
         game_mode_controller=services.game_mode_controller,
         request_editor_render=services.request_editor_render,
         window=services.window,

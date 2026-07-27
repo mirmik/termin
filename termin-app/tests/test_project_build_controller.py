@@ -50,7 +50,7 @@ def _profile(tmp_path: Path, target="desktop") -> BuildProfile:
 def _controller(logs: list[str], saves: list[bool]) -> ProjectBuildController:
     return ProjectBuildController(
         save_scene=lambda: saves.append(True),
-        log_to_console=logs.append,
+        on_output=logs.append,
     )
 
 

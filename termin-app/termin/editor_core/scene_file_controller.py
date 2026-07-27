@@ -89,7 +89,6 @@ class SceneFileController:
         on_rendering_changed: Callable[[], None],
         request_viewport_update: Callable[[], None],
         update_window_title: Callable[[], None],
-        log_to_console: Callable[[str], None],
     ) -> None:
         self._scene_manager = scene_manager
         self._get_dialog_service = get_dialog_service
@@ -110,7 +109,6 @@ class SceneFileController:
         self._on_rendering_changed = on_rendering_changed
         self._request_viewport_update = request_viewport_update
         self._update_window_title = update_window_title
-        self._log_to_console = log_to_console
 
     def new_scene(self) -> None:
         dialogs = self._get_dialog_service()
@@ -210,11 +208,10 @@ class SceneFileController:
             from termin.project.settings import ProjectSettingsManager
 
             ProjectSettingsManager.instance().set_last_scene(path)
-            self._log_to_console(f"Saved: {path}")
+            log.info(f"Saved: {path}")
             self._update_window_title()
         except Exception as e:
             log.error(f"Failed to save scene: {e}")
-            self._log_to_console(f"Error saving: {e}")
 
     def load_scene_from_file(self, path: str) -> None:
         if not path:
@@ -287,7 +284,6 @@ class SceneFileController:
                     )
             message = f"Failed to load scene '{path}' during {stage}: {e}"
             log.error(message)
-            self._log_to_console(message)
             return
 
         try:
@@ -303,7 +299,6 @@ class SceneFileController:
         except Exception as e:
             message = f"Failed to load scene '{path}' during commit: {e}"
             log.error(message)
-            self._log_to_console(message)
 
     def _replace_scene(
         self,
@@ -349,7 +344,7 @@ class SceneFileController:
         with trace.stage("commit-project-settings"):
             ProjectSettingsManager.instance().set_last_scene(path)
 
-        self._log_to_console(f"Loaded: {path}")
+        log.info(f"Loaded: {path}")
         with trace.stage("commit-scene-tree"):
             self._sync_scene_tree()
         with trace.stage("commit-observe-scene"):

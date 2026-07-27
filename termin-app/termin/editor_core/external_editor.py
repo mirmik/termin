@@ -10,7 +10,6 @@ import os
 import platform
 import subprocess
 from pathlib import Path
-from typing import Callable
 
 from tcbase import log
 
@@ -19,7 +18,6 @@ from termin.editor_core.settings import EditorSettings
 
 def open_in_text_editor(
     file_path: str,
-    log_message: Callable[[str], None] | None = None,
 ) -> bool:
     """
     Open file in external text editor.
@@ -28,8 +26,6 @@ def open_in_text_editor(
 
     Args:
         file_path: Path to file to open
-        log_message: Optional callback for logging
-
     Returns:
         True if successful, False otherwise
     """
@@ -48,8 +44,7 @@ def open_in_text_editor(
             else:  # Linux
                 subprocess.Popen(["xdg-open", file_path])
 
-        if log_message:
-            log_message(f"Opened in editor: {file_path}")
+        log.info(f"Opened in editor: {file_path}")
         return True
 
     except Exception as e:

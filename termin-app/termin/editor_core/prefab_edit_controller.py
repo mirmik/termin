@@ -12,6 +12,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
+from tcbase import log
+
 if TYPE_CHECKING:
     from termin.engine import SceneManager
     from termin.editor_core.resource_manager import ResourceManager
@@ -35,7 +37,6 @@ class PrefabEditController:
         resource_manager: "ResourceManager",
         on_mode_changed: Optional[Callable[[bool, str | None], None]] = None,
         on_request_update: Optional[Callable[[], None]] = None,
-        log_message: Optional[Callable[[str], None]] = None,
         get_editor_scene_name: Optional[Callable[[], str | None]] = None,
     ):
         """
@@ -44,14 +45,12 @@ class PrefabEditController:
             resource_manager: Resource manager for materials/meshes.
             on_mode_changed: Callback(is_editing, prefab_name) when mode changes.
             on_request_update: Callback to request viewport update.
-            log_message: Callback to log messages to console.
             get_editor_scene_name: Callback returning the scene to restore after edit.
         """
         self._scene_manager = scene_manager
         self._resource_manager = resource_manager
         self._on_mode_changed = on_mode_changed
         self._on_request_update = on_request_update
-        self._log_message = log_message
         self._get_editor_scene_name = get_editor_scene_name
 
         self._editing = False
@@ -108,9 +107,8 @@ class PrefabEditController:
         # Load prefab into a new "prefab" scene
         try:
             self._load_prefab_into_scene(prefab_path)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load prefab '%s'", prefab_path)
-            self._log(f"Failed to load prefab: {e}")
             self._prefab_path = None
             self._previous_scene_name = None
             return False
@@ -162,9 +160,8 @@ class PrefabEditController:
                 f"Saved prefab '{self.prefab_name}': {stats['entities']} entities"
             )
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to save prefab '%s'", self._prefab_path)
-            self._log(f"Failed to save prefab: {e}")
             return False
 
     def _find_prefab_root(self) -> "Entity | None":
@@ -281,6 +278,4 @@ class PrefabEditController:
         return "editor"
 
     def _log(self, message: str) -> None:
-        """Log message to console."""
-        if self._log_message:
-            self._log_message(f"[Prefab] {message}")
+        log.info(f"[Prefab] {message}")

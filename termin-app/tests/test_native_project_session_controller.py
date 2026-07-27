@@ -181,7 +181,6 @@ def test_native_project_session_controller_configures_startup_operation(monkeypa
         viewport=lambda: object(),
         refresh_ui=lambda: None,
         set_project_state=lambda *_args: None,
-        log_to_console=lambda _message: None,
         rescan_file_resources=lambda: None,
         set_project_browser_root=lambda _path: None,
         get_init_script_editor=lambda: None,

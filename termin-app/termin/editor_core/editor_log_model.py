@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .signal import Signal
 
 
@@ -18,7 +20,15 @@ class EditorLogModel:
         return "\n".join(self._lines)
 
     def append(self, message: str) -> None:
-        self._lines.extend(str(message).splitlines() or [""])
+        self.append_many([message])
+
+    def append_many(self, messages: Iterable[str]) -> None:
+        changed = False
+        for message in messages:
+            self._lines.extend(str(message).splitlines() or [""])
+            changed = True
+        if not changed:
+            return
         del self._lines[:-self._max_lines]
         self.changed.emit(self.text)
 

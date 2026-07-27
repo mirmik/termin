@@ -1,3 +1,4 @@
+from termin.editor_core import scene_file_controller as scene_file_controller_module
 from termin.editor_core.scene_file_controller import SceneFileController
 from termin.project.settings import ProjectSettingsManager
 
@@ -18,7 +19,12 @@ class _ProjectSettings:
         self.calls.append(("last-scene", path))
 
 
-def _controller(calls, prepare_scene_for_save) -> SceneFileController:
+def _controller(monkeypatch, calls, prepare_scene_for_save) -> SceneFileController:
+    monkeypatch.setattr(
+        scene_file_controller_module.log,
+        "error",
+        lambda message: calls.append(("log-error", message)),
+    )
     return SceneFileController(
         scene_manager=_SceneManager(calls),
         get_dialog_service=lambda: None,
@@ -39,7 +45,6 @@ def _controller(calls, prepare_scene_for_save) -> SceneFileController:
         on_rendering_changed=lambda: None,
         request_viewport_update=lambda: None,
         update_window_title=lambda: None,
-        log_to_console=lambda message: calls.append(("log", message)),
     )
 
 
@@ -53,6 +58,7 @@ def test_save_synchronizes_live_render_state_before_scene_serialization(
         lambda: _ProjectSettings(calls),
     )
     controller = _controller(
+        monkeypatch,
         calls,
         lambda name: calls.append(("prepare", name)),
     )
@@ -75,9 +81,15 @@ def test_save_aborts_when_render_state_synchronization_fails(
         "instance",
         lambda: _ProjectSettings(calls),
     )
-    controller = _controller(calls, lambda _name: False)
+    controller = _controller(monkeypatch, calls, lambda _name: False)
 
     controller.save_scene_to_file(str(tmp_path / "scene4.scene"))
 
     assert not any(call[0] == "save" for call in calls)
-    assert calls == [("log", "Error saving: Failed to synchronize scene state before saving 'scene4'")]
+    assert calls == [
+        (
+            "log-error",
+            "Failed to save scene: "
+            "Failed to synchronize scene state before saving 'scene4'",
+        )
+    ]
