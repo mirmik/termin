@@ -605,7 +605,7 @@ only a metadata/invalidation adapter which owns one `VisualScene2D`.
 `GraphicItemRef` is a non-owning scene-plus-generation-handle value; the old
 `shared_ptr<GraphicsItem>` tree and paint/hit callback API no longer exist.
 
-Migration proceeds as follows:
+The readiness sequence through GUI composition is now implemented:
 
 1. add exact ABI-safe `Affine2f` and canonical float 2D geometry values to
    `termin-base`;
@@ -620,14 +620,18 @@ Migration proceeds as follows:
    `termin-visual-scene/examples` scene containing draggable primitive items;
 6. implement GUI-native `SceneView` as an adapter over the shared scene and
    port node-graph consumers and embedded widget positioning;
-7. validate widget/scene composition with a focused
+7. validate widget/scene composition with the focused
    `termin-gui-native/examples` application which renders and interacts with
-   ordinary widgets and `GraphicItem` values in one document;
+   ordinary widgets and `GraphicItemRef` values in one document, including the
+   separate document-owned widget portal;
 8. only after both examples pass, expose `PlotFrame2D`, add retained tcplot
    annotations and implement the interactive marker/callout vertical slice;
-9. migrate language bindings to scene-plus-handle wrappers and remove the old
-   `shared_ptr<GraphicsItem>` storage and callback API after all
-   repository consumers move.
+9. language bindings use scene-plus-handle wrappers and the old
+   `shared_ptr<GraphicsItem>` storage and callback API has been removed after
+   repository consumers moved.
+
+Steps 1–7 and 9 are complete. Step 8 is the next integration stage; the two
+example gates no longer block plot-frame work.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
