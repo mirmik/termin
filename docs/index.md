@@ -31,6 +31,7 @@
 | [termin-mesh](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
 | [termin-default-assets](https://github.com/mirmik/termin-monorepo/blob/master/termin-default-assets/docs/index.md) | Default asset adapters for domain packages |
 | [termin-graphics](https://github.com/mirmik/termin-monorepo/blob/master/termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
+| [termin-visual-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-visual-scene/docs/index.md) | Retained 2D visual identity, topology and interaction |
 | [termin-render](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md) | Render framework, pipelines, frame graph |
 | [termin-display](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md) | Windows/display/platform integration |
 | [termin-window](https://github.com/mirmik/termin-monorepo/blob/master/termin-window/docs/index.md) | Lightweight native windows, portable events and texture presentation |
