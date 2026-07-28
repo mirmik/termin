@@ -11,12 +11,13 @@ vertical slice covers hover, captured data-space dragging, snapping, clipping
 and semantic close actions. This direction is intentionally separate from
 world-space 2D game support.
 
-The item object-model refinement is in progress. The canonical C storage now
-owns typed `tc_graphic_item*` objects following the common embedded-base,
-vtable, body, language, runtime-link and exactly-once deleter architecture used
-by `tc_component`, `tc_pass` and `tc_widget`. The remaining C++
-`Record + std::variant` payload bridge is transitional and must be removed
-before this becomes the long-term C# extension surface.
+The item object-model refinement is implemented. The canonical C storage owns
+typed `tc_graphic_item*` objects following the common embedded-base, vtable,
+body, language, runtime-link and exactly-once deleter architecture used by
+`tc_component`, `tc_pass` and `tc_widget`. Every built-in has a concrete typed
+body and registered runtime type. The former C++ `Record + std::variant`
+canonical store is gone; `GraphicItemPayload2D` remains only as a detached
+snapshot/serialization DTO at the current C++ API boundary.
 
 The shared-foundation refinement is also accepted: no new generic "2D base"
 module is introduced. Exact 2D value math belongs to `termin-base`;
@@ -397,12 +398,11 @@ Built-in item types:
 `CustomBatch` is required so a scene can place specialized retained GPU
 geometry without decomposing it into one item per vertex or sample.
 
-The existing `VisualScene2D::Record` map and `GraphicItemPayload2D`
-`std::variant` are migration sources only. The target implementation stores one
-canonical `tc_graphic_item*` per generation slot, moves common state into that
-base and ports every built-in type to the same registered object/vtable
-contract. No compatibility fallback retaining both canonical item models is
-required during active development.
+The implementation stores one canonical `tc_graphic_item*` per generation
+slot. Common state lives in that base and every built-in uses the same
+registered object/vtable/adopt/deleter contract. There is no parallel
+`VisualScene2D::Record` map or compatibility scene tree. The public
+`GraphicItemPayload2D` variant is a copied detached DTO, not retained storage.
 
 Widget portals are not a core payload kind because that would introduce a
 dependency on `termin-gui-native`. A GUI adapter may register a host-specific
@@ -697,11 +697,11 @@ items; Python tcplot and both C# profiles expose complete generation handles and
 detached snapshot values. C# action delivery uses a polling value so the native
 layer does not borrow a managed delegate.
 
-The next migration replaces the transitional `Record + std::variant` item
-model with the common `tc_graphic_item` C-side object model, ports all built-in
-items, and then updates snapshot, interaction, inspection, serialization and
-language bindings before the scene becomes the composition surface for a
-C#-authored plot module.
+The common `tc_graphic_item` C-side object migration and built-in item port are
+complete. Snapshot, interaction, inspection and serialization consume detached
+values copied through the concrete item vtables. The remaining follow-up is to
+publish the neutral factories and language bindings before the scene becomes
+the composition surface for a C#-authored plot module.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
