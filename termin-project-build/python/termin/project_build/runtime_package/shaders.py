@@ -439,7 +439,7 @@ def write_default_pipeline_shader_artifacts(
     shader_compiler: str | Path | None,
     requested_targets: tuple[str, ...] | None = None,
     fxc: Path | None = None,
-) -> None:
+) -> dict[str, Any]:
     compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     if compiler is None:
         raise FileNotFoundError(
@@ -447,7 +447,8 @@ def write_default_pipeline_shader_artifacts(
             "Default pipeline shaders require precompiled SPIR-V for Android."
         )
 
-    for shader in default_pipeline_engine_shaders():
+    shaders = default_pipeline_engine_shaders()
+    for shader in shaders:
         write_engine_shader_artifact(
             package_dir,
             diagnostics,
@@ -456,6 +457,90 @@ def write_default_pipeline_shader_artifacts(
             requested_targets,
             fxc,
         )
+    return write_builtin_shader_contract(package_dir, shaders, requested_targets)
+
+
+def write_builtin_shader_contract(
+    package_dir: Path,
+    shaders: list[EngineShaderArtifact],
+    requested_targets: tuple[str, ...] | None,
+) -> dict[str, Any]:
+    builtin_root = package_dir / "builtin_shaders"
+    catalog_entries: list[dict[str, Any]] = []
+    contract_shaders: list[dict[str, Any]] = []
+
+    for shader in shaders:
+        catalog_entry = builtin_shader_catalog_entry(shader.uuid)
+        catalog_entries.append(catalog_entry)
+        _write_runtime_required_builtin_sources(builtin_root, shader.uuid, catalog_entry)
+
+        stages: list[tuple[str, str]] = []
+        if shader.vertex_source != "":
+            stages.append(("vertex", "vert"))
+        if shader.fragment_source != "":
+            stages.append(("fragment", "frag"))
+        targets = shader_targets_for_language(
+            shader.language,
+            requested_targets,
+            f"Engine shader '{shader.uuid}'",
+        )
+        contract_shaders.append(
+            {
+                "uuid": shader.uuid,
+                "artifacts": {
+                    target: {
+                        stage_name: artifact_path_text(
+                            shader.uuid,
+                            target,
+                            stage_name,
+                            stage_suffix,
+                        )
+                        for stage_name, stage_suffix in stages
+                    }
+                    for target in targets
+                },
+            }
+        )
+
+    write_json(
+        builtin_root / "engine-shader-catalog.json",
+        {"version": 1, "shaders": catalog_entries},
+    )
+    return {
+        "version": 1,
+        "catalog": "builtin_shaders/engine-shader-catalog.json",
+        "shaders": contract_shaders,
+    }
+
+
+def _write_runtime_required_builtin_sources(
+    builtin_root: Path,
+    shader_uuid: str,
+    catalog_entry: dict[str, Any],
+) -> None:
+    language = catalog_entry.get("language")
+    if language == "shader":
+        program = catalog_entry.get("program")
+        if not isinstance(program, dict) or not isinstance(program.get("path"), str):
+            raise ValueError(f"Built-in shader program '{shader_uuid}' has no source path")
+        source_path = program["path"]
+        target_path = builtin_root / source_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(builtin_shader_source(source_path), encoding="utf-8")
+        return
+
+    if language != "glsl":
+        return
+    stages = catalog_entry.get("stages")
+    if not isinstance(stages, dict):
+        raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has no stage map")
+    for stage in stages.values():
+        source_path = stage if isinstance(stage, str) else stage.get("path")
+        if not isinstance(source_path, str):
+            raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has invalid stage source")
+        target_path = builtin_root / source_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(builtin_shader_source(source_path), encoding="utf-8")
 
 
 def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:

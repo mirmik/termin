@@ -531,6 +531,38 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
 }
 
+TEST_CASE("RuntimePackageLoader exposes packaged builtin shader root") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest(),
+            "\"resources\":",
+            "\"builtin_shader_contract\": {"
+            "\"version\": 1,"
+            "\"catalog\": \"builtin_shaders/engine-shader-catalog.json\","
+            "\"shaders\": [{\"uuid\": \"termin-engine-test\", \"artifacts\": {}}]"
+            "},"
+            "\"resources\":"
+        )
+    );
+    std::filesystem::create_directories(root / "builtin_shaders");
+    write_text(
+        root / "builtin_shaders" / "engine-shader-catalog.json",
+        R"({"version":1,"shaders":[]})"
+    );
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+
+    REQUIRE(result.ok);
+    CHECK(
+        result.shader_runtime.builtin_shader_root ==
+        (root / "builtin_shaders").string()
+    );
+}
+
 TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the scene") {
     const std::filesystem::path root = make_package_root();
     constexpr const char* pipeline_uuid = "runtime-loader-compiled-pipeline";

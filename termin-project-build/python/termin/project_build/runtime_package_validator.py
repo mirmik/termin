@@ -34,6 +34,7 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
         )
     _validate_resource_graph(resource_index, diagnostics)
     _validate_target_requirements(manifest, resource_index, diagnostics)
+    _validate_builtin_shader_contract(package_root, manifest, diagnostics)
     return diagnostics
 
 
@@ -1178,6 +1179,352 @@ def _validate_target_requirements(
         )
     else:
         _validate_required_backends(backends, resource_index, diagnostics)
+
+
+def _validate_builtin_shader_contract(
+    package_root: Path,
+    manifest: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    contract = manifest.get("builtin_shader_contract")
+    if contract is None:
+        return
+    context = "manifest.json:builtin_shader_contract"
+    if not isinstance(contract, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                context,
+                "Runtime package built-in shader contract must be an object",
+            )
+        )
+        return
+    if contract.get("version") != 1:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{context}.version",
+                "Runtime package built-in shader contract requires version 1",
+            )
+        )
+
+    catalog_path = contract.get("catalog")
+    catalog: dict[str, Any] | None = None
+    if not isinstance(catalog_path, str) or catalog_path == "":
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{context}.catalog",
+                "Runtime package built-in shader contract requires a catalog path",
+            )
+        )
+    else:
+        resolved_catalog_path = _validate_relative_existing_path(
+            package_root,
+            catalog_path,
+            f"{context}.catalog",
+            diagnostics,
+        )
+        if resolved_catalog_path is not None:
+            catalog = _read_json_file(resolved_catalog_path, catalog_path, diagnostics)
+
+    catalog_entries: dict[str, dict[str, Any]] = {}
+    if catalog is not None:
+        if catalog.get("version") != 1:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    catalog_path,
+                    "Built-in shader catalog requires version 1",
+                )
+            )
+        raw_catalog_shaders = catalog.get("shaders")
+        if not isinstance(raw_catalog_shaders, list):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    catalog_path,
+                    "Built-in shader catalog must contain a shader list",
+                )
+            )
+        else:
+            for index, entry in enumerate(raw_catalog_shaders):
+                entry_context = f"{catalog_path}:shaders[{index}]"
+                if not isinstance(entry, dict):
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            entry_context,
+                            "Built-in shader catalog entry must be an object",
+                        )
+                    )
+                    continue
+                uuid_value = entry.get("uuid")
+                if not isinstance(uuid_value, str) or uuid_value == "":
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            entry_context,
+                            "Built-in shader catalog entry requires a non-empty UUID",
+                        )
+                    )
+                    continue
+                if uuid_value in catalog_entries:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            entry_context,
+                            f"Duplicate built-in shader catalog UUID '{uuid_value}'",
+                        )
+                    )
+                    continue
+                catalog_entries[uuid_value] = entry
+
+    shaders = contract.get("shaders")
+    if not isinstance(shaders, list) or not shaders:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{context}.shaders",
+                "Runtime package built-in shader contract requires a non-empty shader list",
+            )
+        )
+        return
+
+    required_backends = _manifest_required_backends(manifest)
+    seen_uuids: set[str] = set()
+    for index, shader in enumerate(shaders):
+        shader_context = f"{context}.shaders[{index}]"
+        if not isinstance(shader, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    "Runtime built-in shader entry must be an object",
+                )
+            )
+            continue
+        uuid_value = shader.get("uuid")
+        if not isinstance(uuid_value, str) or uuid_value == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    "Runtime built-in shader entry requires a non-empty UUID",
+                )
+            )
+            continue
+        if uuid_value in seen_uuids:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    f"Duplicate runtime built-in shader UUID '{uuid_value}'",
+                )
+            )
+            continue
+        seen_uuids.add(uuid_value)
+
+        catalog_entry = catalog_entries.get(uuid_value)
+        if catalog is not None and catalog_entry is None:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    f"Runtime built-in shader '{uuid_value}' is absent from its catalog",
+                )
+            )
+        elif catalog_entry is not None and isinstance(catalog_path, str):
+            _validate_runtime_required_catalog_sources(
+                package_root,
+                PurePosixPath(catalog_path).parent,
+                uuid_value,
+                catalog_entry,
+                diagnostics,
+            )
+
+        artifacts = shader.get("artifacts")
+        if not isinstance(artifacts, dict) or not artifacts:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    f"Runtime built-in shader '{uuid_value}' requires artifact mappings",
+                )
+            )
+            continue
+        artifact_backends = list(artifacts)
+        if required_backends is not None and set(artifact_backends) != set(required_backends):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    shader_context,
+                    f"Runtime built-in shader '{uuid_value}' artifact backends "
+                    f"{artifact_backends} do not match runtime backend order {required_backends}",
+                )
+            )
+        for backend, stages in artifacts.items():
+            backend_context = f"{shader_context}.artifacts.{backend}"
+            if backend not in {"vulkan", "opengl", "d3d11"}:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        backend_context,
+                        f"Unsupported built-in shader artifact backend '{backend}'",
+                    )
+                )
+                continue
+            if not isinstance(stages, dict) or not stages:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        backend_context,
+                        "Built-in shader backend requires a non-empty stage map",
+                    )
+                )
+                continue
+            for stage_name, artifact_path in stages.items():
+                stage_context = f"{backend_context}.{stage_name}"
+                if stage_name not in {"vertex", "fragment", "geometry"}:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            stage_context,
+                            f"Unsupported built-in shader stage '{stage_name}'",
+                        )
+                    )
+                    continue
+                if not isinstance(artifact_path, str) or artifact_path == "":
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            stage_context,
+                            "Built-in shader artifact path must be a non-empty string",
+                        )
+                    )
+                    continue
+                expected_path = _builtin_shader_artifact_path(
+                    uuid_value,
+                    backend,
+                    stage_name,
+                )
+                if artifact_path != expected_path:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            stage_context,
+                            f"Built-in shader artifact path must match runtime resolver path "
+                            f"'{expected_path}'",
+                        )
+                    )
+                    continue
+                resolved_artifact = _validate_relative_existing_path(
+                    package_root,
+                    artifact_path,
+                    stage_context,
+                    diagnostics,
+                )
+                if (
+                    resolved_artifact is not None
+                    and (not resolved_artifact.is_file() or resolved_artifact.stat().st_size == 0)
+                ):
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            artifact_path,
+                            f"Built-in shader artifact is empty or not a file: {artifact_path}",
+                        )
+                    )
+
+
+def _manifest_required_backends(manifest: dict[str, Any]) -> list[str] | None:
+    requirements = manifest.get("target_requirements")
+    if not isinstance(requirements, dict):
+        return None
+    backends = requirements.get("backends")
+    if not isinstance(backends, list) or not all(
+        isinstance(backend, str) and backend in {"vulkan", "opengl", "d3d11"}
+        for backend in backends
+    ):
+        return None
+    return backends
+
+
+def _validate_runtime_required_catalog_sources(
+    package_root: Path,
+    catalog_parent: PurePosixPath,
+    shader_uuid: str,
+    entry: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    language = entry.get("language")
+    source_paths: list[str] = []
+    if language == "shader":
+        program = entry.get("program")
+        source_path = program.get("path") if isinstance(program, dict) else None
+        if not isinstance(source_path, str) or source_path == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"builtin_shader_contract:{shader_uuid}",
+                    f"Built-in shader program '{shader_uuid}' requires a source path",
+                )
+            )
+            return
+        source_paths.append(source_path)
+    elif language == "glsl":
+        stages = entry.get("stages")
+        if not isinstance(stages, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"builtin_shader_contract:{shader_uuid}",
+                    f"Built-in GLSL shader '{shader_uuid}' requires a stage map",
+                )
+            )
+            return
+        for stage in stages.values():
+            source_path = stage if isinstance(stage, str) else (
+                stage.get("path") if isinstance(stage, dict) else None
+            )
+            if not isinstance(source_path, str) or source_path == "":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        f"builtin_shader_contract:{shader_uuid}",
+                        f"Built-in GLSL shader '{shader_uuid}' has an invalid stage source",
+                    )
+                )
+                continue
+            source_paths.append(source_path)
+    elif language != "slang":
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"builtin_shader_contract:{shader_uuid}",
+                f"Built-in shader '{shader_uuid}' has unsupported language '{language}'",
+            )
+        )
+        return
+
+    for source_path in source_paths:
+        package_source_path = (catalog_parent / PurePosixPath(source_path)).as_posix()
+        _validate_relative_existing_path(
+            package_root,
+            package_source_path,
+            f"builtin_shader_contract:{shader_uuid}",
+            diagnostics,
+        )
+
+
+def _builtin_shader_artifact_path(uuid_value: str, backend: str, stage: str) -> str:
+    stage_suffix = {
+        "vulkan": {"vertex": "vert", "fragment": "frag", "geometry": "geom"},
+        "opengl": {"vertex": "vert", "fragment": "frag", "geometry": "geom"},
+        "d3d11": {"vertex": "vs", "fragment": "ps", "geometry": "gs"},
+    }[backend][stage]
+    extension = {"vulkan": "spv", "opengl": "glsl", "d3d11": "cso"}[backend]
+    return f"shaders/{backend}/{uuid_value}.{stage_suffix}.{extension}"
 
 
 def _validate_required_backends(

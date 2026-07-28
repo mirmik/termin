@@ -39,6 +39,7 @@
 #include <termin_collision/termin_collision.h>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx2/i_command_list.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/render_state.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
@@ -633,6 +634,7 @@ struct OpenXRRuntimeScene {
             return false;
         }
 
+        tgfx::set_builtin_shader_root(nullptr);
         engine = std::make_unique<termin::EngineCore>();
         termin::runtime::RuntimePackageLoader loader;
         package = loader.load(asset_root);
@@ -643,6 +645,7 @@ struct OpenXRRuntimeScene {
             engine.reset();
             return false;
         }
+        tgfx::set_builtin_shader_root(package.shader_runtime.builtin_shader_root.c_str());
         engine->rendering_manager.render_engine()->configure_shader_artifacts(
             package.shader_runtime.artifact_root,
             package.shader_runtime.cache_root,
@@ -870,6 +873,7 @@ struct OpenXRRuntimeScene {
         }
         scene = {};
         package = termin::runtime::RuntimePackageLoadResult();
+        tgfx::set_builtin_shader_root(nullptr);
         engine.reset();
         ready = false;
     }

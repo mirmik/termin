@@ -23,6 +23,7 @@ struct RuntimePackageLoadOptions {
 
 struct ShaderRuntimeConfiguration {
     std::string artifact_root;
+    std::string builtin_shader_root;
     std::string cache_root;
     std::string compiler_path;
     bool dev_compile_enabled = false;

@@ -39,6 +39,7 @@
 #include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
 
 #include <termin_modules/module_cpp_backend.hpp>
@@ -1019,6 +1020,7 @@ print(json.dumps({
     }
 
     void load_package() {
+        tgfx::set_builtin_shader_root(nullptr);
         termin::runtime::RuntimePackageLoader loader;
         termin::runtime::RuntimePackageLoadOptions options;
         options.scene_extensions = termin::default_scene_extension_ids();
@@ -1026,6 +1028,7 @@ print(json.dumps({
         if (!package.ok) {
             throw std::runtime_error("failed to load runtime package: " + package.message);
         }
+        tgfx::set_builtin_shader_root(package.shader_runtime.builtin_shader_root.c_str());
         engine->rendering_manager.render_engine()->configure_shader_artifacts(
             package.shader_runtime.artifact_root,
             package.shader_runtime.cache_root,
@@ -1455,6 +1458,7 @@ print(json.dumps({
             }
         }
         package = termin::runtime::RuntimePackageLoadResult();
+        tgfx::set_builtin_shader_root(nullptr);
 
         if (engine) {
             engine->scene_manager.set_on_after_render(nullptr);

@@ -210,7 +210,7 @@ def export_runtime_package(
         Path(fxc).resolve() if fxc is not None else None,
     )
     _write_shader_programs(output_dir_path, shader_programs, resources)
-    _write_default_pipeline_shader_artifacts(
+    builtin_shader_contract = _write_default_pipeline_shader_artifacts(
         output_dir_path,
         diagnostics,
         shader_compiler,
@@ -223,6 +223,7 @@ def export_runtime_package(
         "version": 2,
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "entry_scene": entry_identity,
+        "builtin_shader_contract": builtin_shader_contract,
         "resources": resources,
         "scenes": [
             {
