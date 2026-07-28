@@ -33,6 +33,15 @@ uses that marker when no profile is specified and rejects an explicitly
 requested profile that does not match the generated SWIG files. Switch
 profiles through `build-sdk-csharp.*` (or reconfigure and build the native
 CMake target) before invoking managed-only builds.
+
+Both `full` and `plot-d3d11` profiles expose `PlotView2D` data markers.
+`create_data_marker`, `update_data_marker`, `data_marker_snapshot`,
+`destroy_annotation` and `take_annotation_action` exchange value-only
+`PlotAnnotationHandle`, detached snapshot and polling-action objects. Managed
+handle disposal releases only the SWIG value copy; the native view remains the
+sole annotation owner. Cross-view and stale handles fail safely through the
+complete layer/index/generation identity.
+
 `Termin.Wpf` is Windows-only and multitargets `netcoreapp3.1` plus `net8.0-windows` through the WindowsDesktop SDK. The Windows SDK drop writes framework-specific managed assemblies under `sdk/csharp/lib/<tfm>/`; flat `sdk/csharp/lib/*.dll` copies are kept for legacy consumers and use the `netcoreapp3.1` WPF assembly. The Linux `build-sdk-csharp.sh` stage builds and packages `Termin.Native` plus Linux native `.so` runtime artifacts, but intentionally does not build `Termin.Wpf`.
 
 WPF scene hosts use the full D3D11-only SDK:

@@ -660,7 +660,11 @@ The readiness sequence through GUI composition is now implemented:
 
 Steps 1–9 are complete, including the `PlotFrame2D`, render-phase, retained
 annotation-projection and interactive marker/callout portions of step 8. The
-two example gates were completed before plot integration began.
+two example gates were completed before plot integration began. Python scene
+wrappers share a scene invalidation token but never own items; Python tcplot
+and both C# profiles expose complete generation handles and detached snapshot
+values. C# action delivery uses a polling value so the native layer does not
+borrow a managed delegate.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical

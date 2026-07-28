@@ -178,6 +178,8 @@ public:
     void release_gpu();
 };
 
+%include "termin_plot_annotations.i"
+
 %apply double INPUT[] { const double* x, const double* y }
 
 %extend PlotView3D {
