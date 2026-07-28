@@ -383,6 +383,16 @@ def _validate_shader_resource(
     if shader_spec is None:
         return None
 
+    language = shader_spec.get("language")
+    if not isinstance(language, str) or language.lower() not in {"glsl", "hlsl", "slang"}:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime shader spec must declare supported language: glsl, hlsl, or slang",
+            )
+        )
+
     artifacts = shader_spec.get("artifacts")
     if not isinstance(artifacts, dict) or not artifacts:
         diagnostics.append(

@@ -1,5 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
+  "entry_scene": "Scenes/AndroidSmoke.scene",
+  "scenes": [
+    {
+      "identity": "Scenes/AndroidSmoke.scene",
+      "path": "scene.json"
+    }
+  ],
   "resources": [
     {
       "type": "shader",
@@ -16,6 +23,5 @@
       "uuid": "android-triangle-mesh",
       "path": "meshes/android-triangle.tmesh.json"
     }
-  ],
-  "scene": "scene.json"
+  ]
 }
