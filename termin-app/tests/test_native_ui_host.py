@@ -164,6 +164,20 @@ def test_editor_window_registry_routes_renders_and_closes_secondary_windows():
     assert native_windows.closed
 
 
+def test_editor_window_registry_services_platform_without_dispatching_ui_events():
+    native_windows = _NativeWindowManagerProbe()
+    main_host = _WindowManagerTestContent()
+    main_host.event_results = [(False, 7)]
+    manager = EditorWindowRegistry(native_windows, 1, main_host)
+
+    assert manager.service_platform_events() == 1
+    assert native_windows.pump_count == 1
+    assert main_host.event_results == [(False, 7)]
+    assert not main_host.closed
+
+    manager.close()
+
+
 def test_native_menu_activation_route_filters_local_command_id_collisions():
     class MenuBarProbe:
         def connect_activated(self, callback):

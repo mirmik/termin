@@ -281,6 +281,9 @@ class OffscreenEditorWindowRegistry:
             return False, 0
         return self.main.content.poll_events()
 
+    def service_platform_events(self) -> int:
+        return 0
+
     def render_requested(self) -> int:
         if self._closed or not self.main.content.render_requested:
             return 0
