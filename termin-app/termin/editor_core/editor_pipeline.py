@@ -155,7 +155,7 @@ def make_editor_pipeline() -> RenderPipeline:
         input_res="color_bloom",
         output_res="color_tonemapped",
         pass_name="Tonemap",
-        method=2,
+        method=0,
     )
 
     bloom_pass = BloomPass(

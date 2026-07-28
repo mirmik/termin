@@ -100,8 +100,15 @@ tc_pipeline_handle make_default_pipeline() {
         adopt_default_pass(ph, p);
     }
 
+    if (tc_pass* p = create_and_configure_pass("TonemapPass", "Tonemap", {
+        {"input_res", "color_bloom"},
+        {"output_res", "color_tonemapped"},
+    })) {
+        adopt_default_pass(ph, p);
+    }
+
     if (tc_pass* p = create_and_configure_pass("UIWidgetPass", "UIWidgets", {
-            {"input_res", "color_bloom"},
+            {"input_res", "color_tonemapped"},
             {"output_res", "color+widgets"}
         })) {
         adopt_default_pass(ph, p);
@@ -121,6 +128,7 @@ tc_pipeline_handle make_default_pipeline() {
         "color_world2d",
         "color_resolved",
         "color_bloom",
+        "color_tonemapped",
         "color+widgets",
     };
     for (const char* resource : color_resources) {

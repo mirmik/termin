@@ -572,8 +572,16 @@ void bind_render_passes(nb::module_& m) {
                             float threshold,
                             float soft_threshold,
                             float intensity,
-                            int mip_levels) {
-            new (self) BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+                            int mip_levels,
+                            float scatter) {
+            new (self) BloomPass(
+                input_res,
+                output_res,
+                threshold,
+                soft_threshold,
+                intensity,
+                mip_levels,
+                scatter);
             if (!pass_name.empty()) {
                 self->set_pass_name(pass_name);
             }
@@ -585,7 +593,8 @@ void bind_render_passes(nb::module_& m) {
              nb::arg("threshold") = 1.0f,
              nb::arg("soft_threshold") = 0.5f,
              nb::arg("intensity") = 1.0f,
-             nb::arg("mip_levels") = 5)
+             nb::arg("mip_levels") = 5,
+             nb::arg("scatter") = 0.7f)
         .def_rw("input_res", &BloomPass::input_res)
         .def_rw("output_res", &BloomPass::output_res)
         .def_rw("output_res_target", &BloomPass::output_res_target)
@@ -593,6 +602,7 @@ void bind_render_passes(nb::module_& m) {
         .def_rw("soft_threshold", &BloomPass::soft_threshold)
         .def_rw("intensity", &BloomPass::intensity)
         .def_rw("mip_levels", &BloomPass::mip_levels)
+        .def_rw("scatter", &BloomPass::scatter)
         .def("compute_reads", &BloomPass::compute_reads)
         .def("compute_writes", &BloomPass::compute_writes)
         .def("get_inplace_aliases", &BloomPass::get_inplace_aliases)

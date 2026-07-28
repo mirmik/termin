@@ -20,9 +20,9 @@ namespace tgfx { class IRenderDevice; }
 namespace termin {
 
 // BloomPass - HDR bloom with mip-chain downsampling/upsampling.
-// Draws through tgfx::RenderContext2 end-to-end (four sub-passes:
-// bright, downsample chain, upsample chain, composite). Legacy tgfx1
-// dual-path removed in Stage 8.1.
+// Draws through tgfx::RenderContext2 end-to-end (bright prefilter,
+// downsample chain, normalized reconstruction, final smoothing and
+// composite). Legacy tgfx1 dual-path removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API BloomPass : public CxxFramePass {
 public:
     std::string input_res = "color";
@@ -32,6 +32,7 @@ public:
     float soft_threshold = 0.5f;
     float intensity = 1.0f;
     int mip_levels = 5;
+    float scatter = 0.7f;
 
 private:
     // tgfx2 resources — persistent across frames, rebuilt on resize.
@@ -41,6 +42,8 @@ private:
     // the simpler single-FS variant.
     tgfx::IRenderDevice* device2_ = nullptr;
     std::vector<tgfx::TextureHandle> mip_textures_;
+    std::vector<tgfx::TextureHandle> reconstruction_textures_;
+    std::vector<tgfx::TextureHandle> smoothing_textures_;
     tc_shader_handle bright_shader_handle_     = tc_shader_handle_invalid();
     tc_shader_handle downsample_shader_handle_ = tc_shader_handle_invalid();
     tc_shader_handle upsample_shader_handle_   = tc_shader_handle_invalid();
@@ -63,6 +66,7 @@ public:
     INSPECT_FIELD_RANGE(BloomPass, soft_threshold, "Soft Knee", "float", 0.0f, 1.0f)
     INSPECT_FIELD_RANGE(BloomPass, intensity, "Intensity", "float", 0.0f, 5.0f)
     INSPECT_FIELD_RANGE(BloomPass, mip_levels, "Mip Levels", "int", 1, 8)
+    INSPECT_FIELD_RANGE(BloomPass, scatter, "Scatter", "float", 0.0f, 1.0f)
     INSPECT_TYPE_METADATA(BloomPass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
@@ -75,7 +79,8 @@ public:
         float threshold = 1.0f,
         float soft_threshold = 0.5f,
         float intensity = 1.0f,
-        int mip_levels = 5
+        int mip_levels = 5,
+        float scatter = 0.7f
     );
 
     std::set<const char*> compute_reads() const override;

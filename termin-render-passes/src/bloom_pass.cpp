@@ -1,10 +1,10 @@
 // bloom_pass.cpp - HDR bloom post-processing pass implementation.
 //
-// Draws through tgfx::RenderContext2: four sub-passes (bright,
-// downsample chain, upsample chain, composite) with an HDR (RGBA16F)
-// mip chain allocated as tgfx2 textures, std140 UBOs for parameters,
-// reflected texture bindings for all sampler slots. Legacy tgfx1 dual-path
-// removed in Stage 8.1.
+// Draws through tgfx::RenderContext2: bright prefilter, downsample chain,
+// normalized reconstruction, final smoothing and composite, with HDR
+// (RGBA16F) intermediate textures, std140 UBOs for parameters and reflected
+// texture bindings for all sampler slots. Legacy tgfx1 dual-path removed in
+// Stage 8.1.
 #include <termin/render/bloom_pass.hpp>
 #include "termin/render/execute_context.hpp"
 
@@ -19,6 +19,7 @@ extern "C" {
 #include <tgfx/resources/tc_shader.h>
 }
 
+#include <algorithm>
 #include <span>
 #include <tcbase/tc_log.hpp>
 
@@ -38,9 +39,10 @@ constexpr const char* BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composi
 // ================================================================
 
 struct BloomBrightParamsStd140 {
+    float texel_x;
+    float texel_y;
     float threshold;
     float soft_threshold;
-    float _pad[2];
 };
 static_assert(sizeof(BloomBrightParamsStd140) == 16, "std140 alignment");
 
@@ -54,7 +56,7 @@ static_assert(sizeof(BloomDownsampleParamsStd140) == 16, "std140 alignment");
 struct BloomUpsampleParamsStd140 {
     float texel_x;
     float texel_y;
-    float blend_factor;
+    float scatter;
     float _pad;
 };
 static_assert(sizeof(BloomUpsampleParamsStd140) == 16, "std140 alignment");
@@ -75,7 +77,8 @@ BloomPass::BloomPass(
     float threshold_val,
     float soft_threshold_val,
     float intensity_val,
-    int mip_levels_val
+    int mip_levels_val,
+    float scatter_val
 )
     : input_res(input)
     , output_res(output)
@@ -83,6 +86,7 @@ BloomPass::BloomPass(
     , soft_threshold(soft_threshold_val)
     , intensity(intensity_val)
     , mip_levels(mip_levels_val)
+    , scatter(scatter_val)
 {
     pass_name_set("Bloom");
     link_to_type_registry("BloomPass");
@@ -163,12 +167,22 @@ static tgfx::ShaderHandle bloom_resolve_fs(
 void BloomPass::destroy_tgfx2_mip_textures() {
     if (!device2_) {
         mip_textures_.clear();
+        reconstruction_textures_.clear();
+        smoothing_textures_.clear();
         return;
     }
     for (auto& t : mip_textures_) {
         if (t) device2_->destroy(t);
     }
+    for (auto& t : reconstruction_textures_) {
+        if (t) device2_->destroy(t);
+    }
+    for (auto& t : smoothing_textures_) {
+        if (t) device2_->destroy(t);
+    }
     mip_textures_.clear();
+    reconstruction_textures_.clear();
+    smoothing_textures_.clear();
 }
 
 void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
@@ -185,8 +199,11 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
     last_tgfx2_mip_levels_ = count;
 
     for (int i = 0; i < count; i++) {
-        int mip_w = std::max(1, width >> i);
-        int mip_h = std::max(1, height >> i);
+        // Bloom starts at half resolution. Besides reducing bandwidth, the
+        // filtered prepass prevents a one-pixel HDR source from entering the
+        // reconstruction pyramid as a hard grid-aligned impulse.
+        int mip_w = std::max(1, width >> (i + 1));
+        int mip_h = std::max(1, height >> (i + 1));
 
         tgfx::TextureDesc desc;
         desc.width = mip_w;
@@ -196,7 +213,21 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
         desc.format = tgfx::PixelFormat::RGBA16F;
         desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled;
         mip_textures_.push_back(device2_->create_texture(desc));
+        if (i + 1 < count) {
+            reconstruction_textures_.push_back(device2_->create_texture(desc));
+        }
     }
+
+    tgfx::TextureDesc smoothing_desc;
+    smoothing_desc.width = std::max(1, width >> 1);
+    smoothing_desc.height = std::max(1, height >> 1);
+    smoothing_desc.mip_levels = 1;
+    smoothing_desc.sample_count = 1;
+    smoothing_desc.format = tgfx::PixelFormat::RGBA16F;
+    smoothing_desc.usage =
+        tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled;
+    smoothing_textures_.push_back(device2_->create_texture(smoothing_desc));
+    smoothing_textures_.push_back(device2_->create_texture(smoothing_desc));
 }
 
 // Helper — common FSQ draw setup for tgfx2 sub-passes. Sets render state,
@@ -273,6 +304,8 @@ void BloomPass::execute(ExecuteContext& ctx) {
     // === 1. Bright Pass -> mip[0] ===
     {
         BloomBrightParamsStd140 p{};
+        p.texel_x = 1.0f / static_cast<float>(w);
+        p.texel_y = 1.0f / static_cast<float>(h);
         p.threshold = threshold;
         p.soft_threshold = soft_threshold;
         device2_->upload_buffer(
@@ -280,7 +313,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
         c2.begin_pass(mip_textures_[0]);
-        c2.set_viewport(0, 0, w, h);
+        c2.set_viewport(0, 0, std::max(1, w >> 1), std::max(1, h >> 1));
         setup_fsq_state(c2, bright_fs);
         c2.use_shader_resource_layout(bright_raw);
         c2.bind_uniform("u_params", bright_ubo_);
@@ -291,10 +324,10 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
     // === 2. Progressive Downsample ===
     for (int i = 1; i < count && i < (int)mip_textures_.size(); i++) {
-        int src_w = std::max(1, w >> (i - 1));
-        int src_h = std::max(1, h >> (i - 1));
-        int dst_w = std::max(1, w >> i);
-        int dst_h = std::max(1, h >> i);
+        int src_w = std::max(1, w >> i);
+        int src_h = std::max(1, h >> i);
+        int dst_w = std::max(1, w >> (i + 1));
+        int dst_h = std::max(1, h >> (i + 1));
 
         BloomDownsampleParamsStd140 p{};
         p.texel_x = 1.0f / static_cast<float>(src_w);
@@ -313,40 +346,73 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.end_pass();
     }
 
-    // === 3. Progressive Upsample (accumulate bloom via additive blend) ===
+    // === 3. Progressive Upsample ===
+    //
+    // Reconstruct into separate targets instead of relying on framebuffer
+    // load + additive blending. The normalized interpolation keeps bloom
+    // energy stable when mip_levels changes: levels control radius, scatter
+    // controls how much of the wider, lower-resolution bloom is retained.
     for (int i = count - 2; i >= 0; i--) {
         if (i + 1 >= (int)mip_textures_.size()) continue;
 
-        int src_w = std::max(1, w >> (i + 1));
-        int src_h = std::max(1, h >> (i + 1));
-        int dst_w = std::max(1, w >> i);
-        int dst_h = std::max(1, h >> i);
+        int src_w = std::max(1, w >> (i + 2));
+        int src_h = std::max(1, h >> (i + 2));
+        int dst_w = std::max(1, w >> (i + 1));
+        int dst_h = std::max(1, h >> (i + 1));
+        tgfx::TextureHandle low_res =
+            (i + 1 == count - 1)
+                ? mip_textures_[i + 1]
+                : reconstruction_textures_[i + 1];
 
         BloomUpsampleParamsStd140 p{};
         p.texel_x = 1.0f / static_cast<float>(src_w);
         p.texel_y = 1.0f / static_cast<float>(src_h);
-        p.blend_factor = 1.0f;
+        p.scatter = std::clamp(scatter, 0.0f, 1.0f);
         device2_->upload_buffer(
             upsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
-        // Additive blend (ONE, ONE) preserves existing mip[i] content
-        // and sums the upsampled delta on top — equivalent to the former
-        // in-shader `higher + upsampled*blend` but without the self-
-        // sampling feedback loop that Vulkan forbids inside a pass.
-        c2.begin_pass(mip_textures_[i]);
+        c2.begin_pass(reconstruction_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
         setup_fsq_state(c2, upsample_fs);
         c2.use_shader_resource_layout(upsample_raw);
-        c2.set_blend(true);
-        c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
         c2.bind_uniform("u_params", upsample_ubo_);
-        c2.bind_texture("u_texture", mip_textures_[i + 1]);
+        c2.bind_texture("u_high", mip_textures_[i]);
+        c2.bind_texture("u_low", low_res);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
 
-    // === 4. Composite Pass (input + mip[0] -> output) ===
+    // === 4. Final half-resolution smoothing ===
+    //
+    // Reconstruction deliberately retains some detail from mip[0]. Without a
+    // final low-pass, isolated HDR pixels expose that half-resolution kernel
+    // as a visible grid. Two 5x5 binomial passes compose to a smooth 9x9
+    // kernel while staying cheaper than filtering at output resolution.
+    tgfx::TextureHandle bloom_texture =
+        count > 1 ? reconstruction_textures_[0] : mip_textures_[0];
+    const int bloom_w = std::max(1, w >> 1);
+    const int bloom_h = std::max(1, h >> 1);
+    for (tgfx::TextureHandle smoothing_texture : smoothing_textures_) {
+        BloomDownsampleParamsStd140 p{};
+        p.texel_x = 1.0f / static_cast<float>(bloom_w);
+        p.texel_y = 1.0f / static_cast<float>(bloom_h);
+        device2_->upload_buffer(
+            downsample_ubo_,
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
+
+        c2.begin_pass(smoothing_texture);
+        c2.set_viewport(0, 0, bloom_w, bloom_h);
+        setup_fsq_state(c2, downsample_fs);
+        c2.use_shader_resource_layout(downsample_raw);
+        c2.bind_uniform("u_params", downsample_ubo_);
+        c2.bind_texture("u_texture", bloom_texture);
+        c2.draw_fullscreen_quad();
+        c2.end_pass();
+        bloom_texture = smoothing_texture;
+    }
+
+    // === 5. Composite Pass (input + smoothed bloom -> output) ===
     {
         BloomCompositeParamsStd140 p{};
         p.intensity = intensity;
@@ -360,7 +426,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.use_shader_resource_layout(composite_raw);
         c2.bind_uniform("u_params", composite_ubo_);
         c2.bind_texture("u_original", input_tex2);
-        c2.bind_texture("u_bloom", mip_textures_[0]);
+        c2.bind_texture("u_bloom", bloom_texture);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -397,6 +463,7 @@ void BloomPass::register_type() {
     _register_inspect_soft_threshold(inspect);
     _register_inspect_intensity(inspect);
     _register_inspect_mip_levels(inspect);
+    _register_inspect_scatter(inspect);
     _register_inspect_metadata_graph(inspect);
     (void)descriptor.commit();
 }
