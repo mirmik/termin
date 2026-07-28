@@ -600,6 +600,13 @@ Bindings must not expose:
 Inspection snapshots and serialization use detached values and record indices.
 Transient hover, press, capture and dirty state are not serialized.
 
+The implemented `SceneInspection2D` additionally carries separate stable IDs,
+canonical registered payload type names, ordered topology, effective
+transforms/flags, bounds and revisions without runtime handles. The versioned
+`termin.visual_scene.2d` `tc::trent` schema restores only into an empty scene:
+the complete document is validated and built in a staging scene before an
+atomic commit, so an unknown type or malformed record leaves no partial tree.
+
 ## Concurrency
 
 The visual scene must not impose creator-, UI- or render-thread affinity.
