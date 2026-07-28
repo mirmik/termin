@@ -2,12 +2,13 @@
 
 ## Status
 
-Accepted direction; the shared visual-scene foundation, GUI adapters and both
-example gates are implemented. Plot integration is underway: `tcplot` now
+Accepted and implemented direction. The shared visual-scene foundation, GUI
+adapters and both example gates are implemented. `tcplot` now
 publishes detached `PlotFrame2D` projection snapshots and has explicit render
 phase boundaries. It also owns retained generation-handle plot annotations and
-projects them into the shared visual scene. The interactive marker/callout is
-the next vertical slice. This direction is intentionally separate from
+projects them into the shared visual scene. Its interactive marker/callout
+vertical slice covers hover, captured data-space dragging, snapping, clipping
+and semantic close actions. This direction is intentionally separate from
 world-space 2D game support.
 
 The shared-foundation refinement is also accepted: no new generic "2D base"
@@ -563,7 +564,7 @@ own a leader path, bubble background, text item, close action and drag region.
 The annotation controller maintains those handles and recreates or updates
 them when its representation changes.
 
-The initial vertical slice should cover:
+The implemented initial vertical slice covers:
 
 - a data-anchored marker with pixel-sized geometry;
 - a leader and callout text;
@@ -650,9 +651,9 @@ The readiness sequence through GUI composition is now implemented:
    `shared_ptr<GraphicsItem>` storage and callback API has been removed after
    repository consumers moved.
 
-Steps 1–7 and 9 are complete. The `PlotFrame2D`, render-phase and retained
-annotation-projection portions of step 8 are complete; the marker/callout
-vertical slice remains. The two example gates no longer block this work.
+Steps 1–9 are complete, including the `PlotFrame2D`, render-phase, retained
+annotation-projection and interactive marker/callout portions of step 8. The
+two example gates were completed before plot integration began.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
