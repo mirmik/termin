@@ -149,6 +149,8 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         CPLUSPLUS ON
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
         SWIG_FLAGS "${_termin_csharp_swig_flags}"
+        SWIG_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i"
     )
 
     swig_add_library(termin_csharp_native
@@ -330,7 +332,18 @@ if(TERMIN_CSHARP_BUILD_MANAGED)
     endif()
 
     if(TERMIN_CSHARP_BUILD_TESTS AND TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
-        message(STATUS "termin-csharp: Termin.Test is skipped for plot-d3d11 profile")
+        add_custom_target(termin_csharp_tests ALL
+            COMMAND ${CMAKE_COMMAND} -E env
+                "TERMIN_CSHARP_SDK_SHARE_DIR=${TERMIN_CSHARP_SDK_SHARE_DIR}"
+                "TERMIN_BUILTIN_SHADER_ROOT=${TERMIN_CSHARP_SDK_SHARE_DIR}/builtin_shaders"
+                ${DOTNET_EXECUTABLE} run
+                    --project ${CMAKE_CURRENT_SOURCE_DIR}/Termin.PlotBindings.Test/Termin.PlotBindings.Test.csproj
+                    -c $<CONFIG>
+                    -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            VERBATIM
+        )
+        add_dependencies(termin_csharp_tests termin_csharp_managed)
     elseif(TERMIN_CSHARP_BUILD_TESTS)
         add_custom_target(termin_csharp_tests ALL
             COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Test/Termin.Test.csproj -c $<CONFIG>

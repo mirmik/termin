@@ -1233,6 +1233,8 @@ public:
     void release_gpu();
 };
 
+%include "termin_plot_annotations.i"
+
 // ----------------------------------------------------------------------------
 // GpuHost — process-wide tgfx2 runtime bundle.
 //
