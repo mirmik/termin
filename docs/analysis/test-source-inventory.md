@@ -8,11 +8,11 @@ Scope:
 - This is a working audit checklist, not a claim that listed tests are useful.
 
 Current source counts:
-- Total listed entries: 166
-- Current existing listed files: 161
+- Total listed entries: 167
+- Current existing listed files: 162
 - Pruned entries: 5
 - Python-side entries: 121
-- C/C++ entries: 44
+- C/C++ entries: 45
 - CMake test list entries: 1
 
 Status values:
@@ -183,7 +183,12 @@ Status values:
 | reviewed | python | `termin-qopt/tests/hqtasks_test.py` | Small adapter coverage for tracking, equality, bounds, damping, and soft-limit task construction. |
 | reviewed | python | `termin-qopt/tests/qp_solve_test.py` | Consolidated random KKT coverage into deterministic stress test plus analytic equality-QP solution. |
 | reviewed | python | `termin-qopt/tests/robot_test.py` | Robot Jacobian, branching, integration, and IK regressions are useful; long IK loops remain bounded and diagnostic enough for current coverage. Verified by qopt/FEM Python test run. |
+| reviewed | python | `termin-qopt/tests/solver_oracle_test.py` | Language-neutral QP/nullspace/HQP corpus is validated through analytic primal/KKT bounds, basis-independent subspace invariants, hierarchy residuals, and independent certificates for non-optimal statuses. Exact iterations and basis vectors are intentionally excluded. |
 | reviewed | python | `termin-qopt/tests/subspaces_test.py` | Projector/basis contract checks are repetitive but concrete; parameterization would be cosmetic and is not a #43 blocker. Verified by qopt/FEM Python test run. |
+| reviewed | cpp | `termin-qopt/tests/test_dense_views.cpp` | Native foundation coverage checks strided vector access, row-major and column-major matrix layout, transposed views, const conversion, and trivially-copyable view contracts. Verified by the `termin_qopt_dense_views_test` CTest. |
+| reviewed | cpp | `termin-qopt/tests/test_equality_qp.cpp` | Native equality-QP coverage consumes the shared JSON oracle generated at build time, then adds redundant equality, strided view, snapshot aliasing, non-convex, invalid-input, and overlapping-output contracts. Verified by the `termin_qopt_equality_qp_test` CTest. |
+| reviewed | cpp | `termin-qopt/tests/test_active_set_qp.cpp` | Native active-set coverage consumes every shared QP oracle case, then checks bounds/full duals, warm-start constraint removal, blocked and unblocked recession directions, Phase I infeasibility, iteration limits, non-convex rejection, output mutation/overlap, and a deterministic 2D corpus against exhaustive active-subset KKT solutions. Verified by the `termin_qopt_active_set_qp_test` CTest. |
+| reviewed | cpp | `termin-qopt/tests/test_public_headers.cpp` | Downstream-style public-header smoke verifies the installed version symbol and fails compilation if public qopt headers leak Eigen macros. Verified by the `termin_qopt_public_headers_test` CTest and an installed `find_package(termin_qopt)` consumer. |
 | reviewed | cpp | `termin-render-passes/tests/test_builtin_shader_sources.cpp` | Built-in shader source/catalog tests protect resource-root loading, catalog uuid lookup, migrated engine shader table, Slang skybox material params, explicit entries, and vertex-only templates. Verified by `ctest --test-dir build/Release-tests -R '^termin_render_passes_builtin_shader_sources_test$' --output-on-failure`. |
 | reviewed | c | `termin-render/tests/test_drawable_capability.c` | Drawable capability live reindex test checks scene capability count, phase queries, RenderItem collection dispatch, foreach filtering, and detach behavior. Verified by `ctest --test-dir build/Release-tests -R '^termin_render_drawable_test$' --output-on-failure`. |
 | reviewed | c | `termin-scene/tests/test_archetype.c` | Removed stale internal-query commentary; remaining SoA archetype/pool migration/query/destroy/swap-remove checks exercise concrete data preservation and counters. Verified by scene CTest batch. |

@@ -52,6 +52,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
 | `termin-mesh` | `tmesh` | `tmesh` | Legacy short distribution/import name. |
 | `termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
+| `termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
 | `termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
 | `termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
 | `termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
