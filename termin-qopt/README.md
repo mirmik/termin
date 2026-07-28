@@ -13,6 +13,14 @@ vector/matrix views. Native equality and active-set QP APIs cover convex dense
 problems, semantic statuses, rank diagnostics, KKT residuals, inequalities,
 bounds, checked warm starts, and Phase I infeasibility detection.
 
+Native subspace helpers expose QR-first orthonormal nullspace bases and
+projectors through fixed-capacity caller-owned matrices; SVD is an explicit
+rank-deficient policy rather than an implicit ABI choice. The native
+`HierarchicalQpSolver` owns copied task/constraint data, solves priorities in
+ascending order through the active-set API, accumulates hard constraints, and
+restricts each lower level to directions preserving higher-level task values.
+Rank exhaustion and incompatible lower levels return explicit statuses.
+
 The first end-to-end multibody slice is also native: deterministic dense block
 assembly, typed dynamics assembly for `M a = f + Jᵀ λ`, and a maximal-coordinate
 2D rigid-body system with fixed-point and revolute joints. Its public model API

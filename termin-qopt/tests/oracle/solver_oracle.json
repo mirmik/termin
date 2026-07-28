@@ -367,6 +367,46 @@
         "level_task_residual_l2": [2.1213203435596424],
         "level_residual_tolerance": 1e-9
       }
+    },
+    {
+      "id": "robotics_redundant_jacobian",
+      "n_variables": 4,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{
+            "J": [
+              [1.0, 0.0, 0.0, 0.0],
+              [0.0, 1.0, 0.0, 0.0],
+              [0.0, 0.0, 1.0, 1.1]
+            ],
+            "target": [1.0, 0.0, 0.0]
+          }],
+          "equalities": [],
+          "inequalities": []
+        },
+        {
+          "priority": 1,
+          "tasks": [{
+            "J": [
+              [1.0, 0.0, 0.0, 0.0],
+              [0.0, 1.0, 0.0, 0.0],
+              [0.0, 0.0, 1.0, 0.0],
+              [0.0, 0.0, 0.0, 1.0]
+            ],
+            "target": [1.0, 5.0, -2.0, 2.0]
+          }],
+          "equalities": [],
+          "inequalities": []
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 0.0, -2.090497737556561, 1.900452488687783],
+        "primal_linf": 1e-8,
+        "level_task_residual_l2": [0.0, 5.001809627276043],
+        "level_residual_tolerance": 1e-8
+      }
     }
   ]
 }
