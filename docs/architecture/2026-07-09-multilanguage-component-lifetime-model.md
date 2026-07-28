@@ -17,9 +17,11 @@ C++/Python, добавляется C#, возможно добавление и�
 класса-наследника, а предметное поведение вызывается через таблицу виртуальных
 методов.
 
-Также область применения всех четырёх категорий предполагает возможность и
-необходимость сериализации. Предполагается возможность создания собственных
-типов наследников в пользовательском коде и возможность горячей перезагрузки.
+Для всех четырёх категорий предполагается возможность создания собственных
+типов наследников в пользовательском коде и горячей перезагрузки.
+Сериализация при этом является доменной возможностью владельца, а не частью
+общего lifetime-контракта. В частности, `tc_graphic_item` и
+`tc_visual_scene` сериализацию не предоставляют.
 
 Всё это указывает на то, что `tc_component`, `tc_pass`, `tc_widget` и
 `tc_graphic_item` должны следовать единому паттерну построения. Далее в тексте,
@@ -64,9 +66,9 @@ deleter. Перестановка внутри pipeline выполняется �
 принимает встроенную в языковой объект базовую C-структуру вместе с
 creator-supplied deleter, выдаёт generation handle и становится единственным
 владельцем adopted item. Общие transform, visibility, opacity, clipping,
-topology, identity и dirty/revision поля принадлежат `tc_graphic_item`;
-типоспецифичные bounds, snapshot emission, hit testing, serialization и
-lifecycle реализуются через его vtable. Языковой `body`, native language и
+topology и identity принадлежат `tc_graphic_item`; типоспецифичные bounds,
+paint emission, hit testing и lifecycle реализуются через его vtable.
+Языковой `body`, native language и
 runtime type link следуют тем же правилам, что у component/pass/widget.
 
 Операция `adopt` всегда означает передачу владения и требует непустой deleter.
@@ -74,17 +76,18 @@ runtime type link следуют тем же правилам, что у compone
 должно быть отдельной явно названной borrowed-операцией, а не неявным вариантом
 `adopt`. Неуспешный adopt вызывает переданный deleter ровно один раз.
 Уничтожение сначала удаляет item из наблюдаемого состояния контейнера и
-инвалидирует handle, затем вне scene mutex вызывает lifecycle cleanup и ровно
-один deleter.
+инвалидирует handle, затем вызывает lifecycle cleanup и ровно один deleter.
+Текущая visual scene, как и `tc_ui_document`, является thread-confined и не
+содержит внутреннего mutex; многопоточный контракт должен проектироваться
+отдельно.
 
-`VisualScene2D` сведён к одному каноническому `tc_graphic_item*` storage.
+`TcVisualScene` сведён к одному каноническому `tc_graphic_item*` storage.
 Прежний второй `unordered_map<Record>` удалён. Встроенные `Group`, `Rect`,
 `Text`, `Path` и прочие item-типы являются отдельными C++-телами со встроенным
 `tc_graphic_item`, собственным vtable и тем же adopt/deleter путём, что
-пользовательские реализации. Сохранившийся `GraphicItemPayload2D`
-`std::variant` — только detached value DTO для публичных snapshot,
-serialization и совместимости вызывающего C++ API; он не хранится в scene как
-каноническая модель item.
+пользовательские реализации. Закрытой суммы встроенных типов нет ни в storage,
+ни в renderer. Snapshot/state-RPC/serialization слои из visual scene удалены:
+код работает непосредственно с объектами и их виртуальными методами.
 
 ## О фабриках и inspect. 
 

@@ -253,7 +253,7 @@ and specialized plot shaders, but the retained model belongs to `tcplot`.
 The ownership decision does not require `tcplot` to implement another private
 visual tree. [Retained Visual Scene 2D](2026-07-27-retained-visual-scene-2d.md)
 refines this boundary: `tcplot` owns semantic annotations and plot-domain
-anchors, while a reusable generation-handle `VisualScene2D` owns their
+anchors, while a reusable generation-handle `TcVisualScene` owns their
 projected visual nodes, hit regions and pointer interaction state. The same
 scene core may back GUI-native tool scenes without making `tcplot` depend on
 `termin-gui-native`.
