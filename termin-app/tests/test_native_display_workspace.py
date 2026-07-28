@@ -195,7 +195,6 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
         rendering_manager=manager,
         scene="scene",
         request_render=lambda: renders.append(True),
-        request_highlight_render=lambda: renders.append(True),
     )
 
     assert workspace.tabs.page_count == 1

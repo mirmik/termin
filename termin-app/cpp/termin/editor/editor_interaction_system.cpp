@@ -111,9 +111,7 @@ EditorInteractionSystem::EditorInteractionSystem()
     // Setup transform gizmo
     _transform_gizmo.size = 1.5f;
     _transform_gizmo.visible = false;
-  _transform_gizmo.on_transform_changed = [this]() {
-      _request_scene_render();
-  };
+  _transform_gizmo.on_transform_changed = [this]() { _request_update(); };
   _transform_gizmo.on_drag_end = [this](const GeneralPose3 &old_pose,
                                         const GeneralPose3 &new_pose) {
         if (on_transform_end) {
@@ -152,8 +150,7 @@ void EditorInteractionSystem::set_instance(EditorInteractionSystem* inst) {
 void EditorInteractionSystem::clear_callbacks() {
   selection.on_selection_changed = nullptr;
   selection.on_hover_changed = nullptr;
-  on_request_scene_render = nullptr;
-  on_request_highlight_render = nullptr;
+  on_request_update = nullptr;
   on_transform_end = nullptr;
   on_key = nullptr;
   on_entity_click = nullptr;
@@ -173,7 +170,7 @@ void EditorInteractionSystem::set_gizmo_target(Entity entity) {
 void EditorInteractionSystem::set_camera_frustums_visible(bool visible) {
     _camera_frustums_visible = visible;
     _camera_frustum_debug_gizmo.visible = visible;
-    _request_scene_render();
+    _request_update();
 }
 
 void EditorInteractionSystem::set_camera_frustum_render_context(
@@ -232,7 +229,7 @@ void EditorInteractionSystem::on_mouse_button(int button, int action, int mods,
     const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
     if (_dispatch_viewport_pointer(ViewportPointerEvent{
           phase, Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, action, mods})) {
-        _request_scene_render();
+        _request_update();
         return;
     }
 
@@ -252,7 +249,7 @@ void EditorInteractionSystem::on_mouse_button(int button, int action, int mods,
         }
     }
 
-    _request_pick_buffer();
+    _request_update();
 }
 
 void EditorInteractionSystem::on_mouse_move(float x, float y, float dx,
@@ -260,7 +257,7 @@ void EditorInteractionSystem::on_mouse_move(float x, float y, float dx,
                                             tc_display_handle display) {
     if (_dispatch_viewport_pointer(ViewportPointerEvent{
           "move", Vec2f{x, y}, Vec2f{dx, dy}, -1, -1, 0})) {
-        _request_scene_render();
+        _request_update();
         return;
     }
 
@@ -274,10 +271,7 @@ void EditorInteractionSystem::on_mouse_move(float x, float y, float dx,
         }
     }
 
-    if (gizmo_manager.is_dragging()) {
-        _request_scene_render();
-    }
-    _request_pick_buffer();
+    _request_update();
 }
 
 bool EditorInteractionSystem::handle_key_event(const KeyEvent &event,
@@ -349,7 +343,7 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
   tc_log(TC_LOG_INFO,
          "[EditorSnap] snapped transform target to (%.3f, %.3f, %.3f)",
            result.position.x, result.position.y, result.position.z);
-    _request_scene_render();
+    _request_update();
     return true;
 }
 
@@ -358,18 +352,6 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
 // ============================================================================
 
 void EditorInteractionSystem::after_render() {
-    _id_buffer_version++;
-    _id_buffer_fresh = true;
-    _scene_render_requested_for_picking = false;
-    poll_picking();
-}
-
-void EditorInteractionSystem::invalidate_id_buffer() {
-    _id_buffer_fresh = false;
-}
-
-void EditorInteractionSystem::poll_picking() {
-    _picking_poll_count++;
     if (_async_release_pick.valid) {
         _poll_async_release_pick();
     }
@@ -380,17 +362,11 @@ void EditorInteractionSystem::poll_picking() {
         _process_pending_press();
         _pending_press.valid = false;
     }
-    if (!_id_buffer_fresh) {
-        if (_pending_release.valid || _pending_hover.valid) {
-            _request_pick_buffer();
-        }
-        return;
-    }
-    if (_pending_release.valid && !_async_release_pick.valid) {
+    if (_pending_release.valid) {
         _process_pending_release();
         _pending_release.valid = false;
     }
-    if (_pending_hover.valid && !_async_hover_pick.valid) {
+    if (_pending_hover.valid) {
         _process_pending_hover();
         _pending_hover.valid = false;
     }
@@ -445,19 +421,24 @@ void EditorInteractionSystem::_process_pending_release() {
     }
     _has_press = false;
 
+    if (_async_release_pick.valid) {
+        _request_update();
+        return;
+    }
     if (_start_async_surface_pick(screen, vp, display)) {
+        _request_update();
         return;
     }
 
     SurfacePickResult pick = pick_surface_at(screen, vp, display);
     if (_dispatch_entity_click(screen, pick)) {
-        _request_highlight_render();
+        _request_update();
         return;
     }
 
     // Pick entity and select
     selection.select(pick.entity);
-    _request_highlight_render();
+    _request_update();
 }
 
 void EditorInteractionSystem::_process_pending_hover() {
@@ -477,7 +458,12 @@ void EditorInteractionSystem::_process_pending_hover() {
     }
 
     // Pick entity for hover highlight
+    if (_async_hover_pick.valid) {
+        _request_update();
+        return;
+    }
     if (_start_async_entity_pick(screen, vp, display)) {
+        _request_update();
         return;
     }
 
@@ -532,7 +518,6 @@ bool EditorInteractionSystem::_start_async_entity_pick(Vec2f screen,
     _async_hover_pick.event = {screen, vp, display, true};
     _async_hover_pick.fbo = fbo;
     _async_hover_pick.color_request = color_request;
-    _async_hover_pick.id_buffer_version = _id_buffer_version;
     _async_hover_pick.valid = true;
     return true;
 }
@@ -611,7 +596,6 @@ bool EditorInteractionSystem::_start_async_surface_pick(Vec2f screen,
     _async_release_pick.fbo = fbo;
     _async_release_pick.color_request = color_request;
     _async_release_pick.depth_request = depth_request;
-    _async_release_pick.id_buffer_version = _id_buffer_version;
     _async_release_pick.color_ready = false;
     _async_release_pick.depth_ready = false;
     _async_release_pick.color[0] = 0.0f;
@@ -624,12 +608,6 @@ bool EditorInteractionSystem::_start_async_surface_pick(Vec2f screen,
 }
 
 void EditorInteractionSystem::_poll_async_hover_pick() {
-    if (!_id_buffer_fresh ||
-        _async_hover_pick.id_buffer_version != _id_buffer_version) {
-        _pending_hover = _async_hover_pick.event;
-        _async_hover_pick.valid = false;
-        return;
-    }
     float color[4] = {0, 0, 0, 0};
   tc_render_target_handle rt =
       tc_viewport_get_render_target(_async_hover_pick.event.vp);
@@ -645,6 +623,7 @@ void EditorInteractionSystem::_poll_async_hover_pick() {
         return;
     }
     if (!dev->poll_pixel_rgba8(_async_hover_pick.color_request, color)) {
+        _request_update();
         return;
     }
 
@@ -654,15 +633,6 @@ void EditorInteractionSystem::_poll_async_hover_pick() {
 }
 
 void EditorInteractionSystem::_poll_async_release_pick() {
-    if (!_id_buffer_fresh ||
-        _async_release_pick.id_buffer_version != _id_buffer_version) {
-        _pending_release = _async_release_pick.event;
-        _press_x = _pending_release.screen.x;
-        _press_y = _pending_release.screen.y;
-        _has_press = true;
-        _async_release_pick.valid = false;
-        return;
-    }
     const bool debug_pick = picking_debug_enabled();
   tc_render_target_handle rt =
       tc_viewport_get_render_target(_async_release_pick.event.vp);
@@ -695,6 +665,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
                    static_cast<unsigned long long>(_async_release_pick.depth_request),
                    _async_release_pick.depth_ready ? 1 : 0);
         }
+        _request_update();
         return;
     }
 
@@ -735,7 +706,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
                click_handled ? 1 : 0);
     }
     if (click_handled) {
-        _request_highlight_render();
+        _request_update();
         return;
     }
 
@@ -747,7 +718,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
            "after_pick_id=%u",
            previous_selected_pick_id, selection.selected_pick_id);
     }
-    _request_highlight_render();
+    _request_update();
 }
 
 // ============================================================================
@@ -799,7 +770,7 @@ void EditorInteractionSystem::_handle_double_click(Vec2f screen,
     }
 
     orbit->center_on(focus);
-    _request_scene_render();
+    _request_update();
 }
 
 // ============================================================================
@@ -1241,27 +1212,9 @@ bool EditorInteractionSystem::_screen_to_ray(Vec2f screen,
 // Helpers
 // ============================================================================
 
-void EditorInteractionSystem::_request_scene_render() {
-    invalidate_id_buffer();
-    if (on_request_scene_render) {
-        on_request_scene_render();
-    }
-}
-
-void EditorInteractionSystem::_request_highlight_render() {
-    if (on_request_highlight_render) {
-        on_request_highlight_render();
-    }
-}
-
-void EditorInteractionSystem::_request_pick_buffer() {
-    if (_id_buffer_fresh || _scene_render_requested_for_picking) {
-        return;
-    }
-    _scene_render_requested_for_picking = true;
-    _picking_scene_request_count++;
-    if (on_request_scene_render) {
-        on_request_scene_render();
+void EditorInteractionSystem::_request_update() {
+    if (on_request_update) {
+        on_request_update();
     }
 }
 

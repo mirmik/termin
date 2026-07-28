@@ -124,13 +124,6 @@ void bind_editor_interaction(nb::module_& m) {
                 obj.is_none() ? nullptr : nb::cast<EditorInteractionSystem*>(obj));
         }, nb::arg("instance").none())
         .def("clear_callbacks", &EditorInteractionSystem::clear_callbacks)
-        .def("poll_picking", &EditorInteractionSystem::poll_picking)
-        .def("invalidate_id_buffer", &EditorInteractionSystem::invalidate_id_buffer)
-        .def_prop_ro("id_buffer_fresh", &EditorInteractionSystem::id_buffer_fresh)
-        .def_prop_ro("id_buffer_version", &EditorInteractionSystem::id_buffer_version)
-        .def_prop_ro("picking_poll_count", &EditorInteractionSystem::picking_poll_count)
-        .def_prop_ro("picking_scene_request_count",
-            &EditorInteractionSystem::picking_scene_request_count)
         .def_prop_ro("selection",
             [](EditorInteractionSystem& s) -> SelectionManager& {
                 return s.selection;
@@ -194,17 +187,10 @@ void bind_editor_interaction(nb::module_& m) {
             return s.pick_surface_at(
                 Vec2f{x, y}, vp, tc_display_handle{display_index, display_generation});
         })
-        .def_prop_rw("on_request_scene_render",
-            [](EditorInteractionSystem& s) { return s.on_request_scene_render; },
+        .def_prop_rw("on_request_update",
+            [](EditorInteractionSystem& s) { return s.on_request_update; },
             [](EditorInteractionSystem& s, std::function<void()> cb) {
-                s.on_request_scene_render = cb;
-            })
-        .def_prop_rw("on_request_highlight_render",
-            [](EditorInteractionSystem& s) {
-                return s.on_request_highlight_render;
-            },
-            [](EditorInteractionSystem& s, std::function<void()> cb) {
-                s.on_request_highlight_render = cb;
+                s.on_request_update = cb;
             })
         .def_prop_rw("on_transform_end",
             [](EditorInteractionSystem& s) { return s.on_transform_end; },

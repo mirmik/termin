@@ -262,21 +262,8 @@ def _compose_native_editor(
     game_menu = shell.menu_route("game")
     debug_menu = shell.menu_route("debug")
     help_menu = shell.menu_route("help")
-    native_viewport: NativeEditorViewport | None = None
 
-    def request_ui_render(source: str = "ui") -> None:
-        _logger.debug("[EditorRender] request kind=ui source=%s", source)
-        host.request_render_update()
-
-    def request_highlight_render(source: str = "highlight") -> None:
-        _logger.debug("[EditorRender] request kind=highlight source=%s", source)
-        engine.scene_manager.request_render()
-        host.request_render_update()
-
-    def request_editor_render(source: str = "scene") -> None:
-        _logger.debug("[EditorRender] request kind=scene source=%s", source)
-        if native_viewport is not None:
-            native_viewport.interaction.invalidate_id_buffer()
+    def request_editor_render() -> None:
         engine.scene_manager.request_render()
         host.request_render_update()
 
@@ -560,6 +547,7 @@ def _compose_native_editor(
     connect_about_command(help_menu, shell.about_command, about_dialog)
     selected_entity = None
     display_workspace: NativeDisplayWorkspace | None = None
+    native_viewport: NativeEditorViewport | None = None
     inspector_host = None
     suppress_scene_inspector = False
     inspector_model = InspectorModel(resource_manager)
@@ -885,7 +873,6 @@ def _compose_native_editor(
                 rendering_manager=engine.rendering_manager,
                 scene=initial_scene,
                 request_render=request_editor_render,
-                request_highlight_render=request_highlight_render,
                 render_only_active_display=settings_snapshot.render_only_active_display,
             ),
             cleanup=lambda: display_workspace.close(),
@@ -898,10 +885,10 @@ def _compose_native_editor(
 
         def on_viewport_selection_changed(entity: object) -> None:
             scene_tree.select_object(entity if entity.valid() else None)
-            request_highlight_render("selection")
+            request_editor_render()
 
         def on_viewport_hover_changed(_entity: object) -> None:
-            request_highlight_render("hover")
+            request_editor_render()
 
         def on_viewport_transform_end(old_pose: object, new_pose: object) -> None:
             from termin.editor_core.editor_commands import TransformEditCommand
@@ -1989,11 +1976,6 @@ def _compose_native_editor(
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
-        poll_editor_picking=(
-            native_viewport.poll_picking
-            if native_viewport is not None
-            else lambda: None
-        ),
         request_editor_render=request_editor_render,
         window=window,
         frame_limit=composition_config.frame_limit,

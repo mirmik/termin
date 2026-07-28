@@ -49,8 +49,7 @@ class NativeEditorViewport:
         interaction,
         input_manager,
         rendering_manager,
-        request_scene_render: Callable[[], None],
-        request_highlight_render: Callable[[], None],
+        request_render: Callable[[], None],
     ) -> None:
         self.document = document
         self.widget = widget
@@ -61,8 +60,7 @@ class NativeEditorViewport:
         self.interaction = interaction
         self.input_manager = input_manager
         self.rendering_manager = rendering_manager
-        self._request_scene_render = request_scene_render
-        self._request_highlight_render = request_highlight_render
+        self._request_render = request_render
         self._resize_connection = None
         self._ui_overlays: dict[str, object] = {}
         self._camera_overlay = None
@@ -90,8 +88,7 @@ class NativeEditorViewport:
         device,
         rendering_manager,
         scene,
-        request_scene_render: Callable[[], None],
-        request_highlight_render: Callable[[], None],
+        request_render: Callable[[], None],
     ) -> "NativeEditorViewport":
         """Create and connect the complete editor viewport runtime chain."""
 
@@ -177,8 +174,7 @@ class NativeEditorViewport:
             interaction=interaction,
             input_manager=input_manager,
             rendering_manager=rendering_manager,
-            request_scene_render=request_scene_render,
-            request_highlight_render=request_highlight_render,
+            request_render=request_render,
         )
         runtime._resize_connection = widget.connect_before_resize(runtime._on_before_resize)
         try:
@@ -218,14 +214,14 @@ class NativeEditorViewport:
                 _logger.error("Failed to restore rejected viewport overlay root '%s'", name)
             raise RuntimeError(f"native viewport composition rejected overlay {name!r}")
         self._ui_overlays[name] = loaded_document
-        self._request_highlight_render()
+        self._request_render()
 
     def remove_overlay(self, name: str) -> bool:
         loaded_document = self._ui_overlays.pop(name, None)
         if loaded_document is None:
             return False
         loaded_document.close()
-        self._request_highlight_render()
+        self._request_render()
         return True
 
     def configure_interaction(
@@ -241,8 +237,7 @@ class NativeEditorViewport:
     ) -> None:
         self.interaction.selection.on_selection_changed = on_selection_changed
         self.interaction.selection.on_hover_changed = on_hover_changed
-        self.interaction.on_request_scene_render = self._request_scene_render
-        self.interaction.on_request_highlight_render = self._request_highlight_render
+        self.interaction.on_request_update = self._request_render
         self.interaction.on_entity_click = on_entity_click
         self.interaction.on_viewport_pointer_event = on_pointer
         self.interaction.on_key = on_key
@@ -265,7 +260,7 @@ class NativeEditorViewport:
         else:
             self.interaction.set_gizmo_target(selected)
             self._update_gizmo_screen_scale()
-        self._request_highlight_render()
+        self._request_render()
 
     def _update_gizmo_screen_scale(self) -> None:
         """Keep the transform gizmo at the legacy camera-relative scale."""
@@ -284,12 +279,7 @@ class NativeEditorViewport:
     def after_render(self) -> None:
         self.interaction.after_render()
         if self._overlay_drawer is not None and self._overlay_drawer():
-            self._request_highlight_render()
-
-    def poll_picking(self) -> None:
-        """Advance GPU readbacks without scheduling a scene render."""
-        if not self._closed:
-            self.interaction.poll_picking()
+            self._request_render()
 
     def rebind_input_manager(self) -> None:
         """Attach editor input to the viewport recreated by a scene switch."""
@@ -305,7 +295,7 @@ class NativeEditorViewport:
             self._camera_overlay.rebind_camera()
 
     def _on_before_resize(self, _previous, _next) -> None:
-        self._request_scene_render()
+        self._request_render()
 
     def close(self) -> None:
         if self._closed:
