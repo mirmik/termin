@@ -1590,6 +1590,46 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             shader_root = package_path(root, artifact_root_field->as_string());
         }
         result.shader_runtime.artifact_root = shader_root.string();
+        const nos::trent* builtin_contract = dict_get(manifest, "builtin_shader_contract");
+        if (builtin_contract) {
+            if (!builtin_contract->is_dict()) {
+                result.message = "builtin_shader_contract must be an object when provided";
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            if (number_field(*builtin_contract, "version", 0.0) != 1.0) {
+                result.message = "builtin_shader_contract requires version 1";
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            const std::string catalog_path =
+                string_field(*builtin_contract, "catalog");
+            if (catalog_path.empty()) {
+                result.message =
+                    "builtin_shader_contract.catalog must be a non-empty relative path";
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            const nos::trent* builtin_shaders =
+                dict_get(*builtin_contract, "shaders");
+            if (!builtin_shaders || !builtin_shaders->is_list() ||
+                    builtin_shaders->as_list().empty()) {
+                result.message =
+                    "builtin_shader_contract.shaders must be a non-empty list";
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            const std::filesystem::path catalog =
+                package_path(root, catalog_path);
+            if (!std::filesystem::is_regular_file(catalog)) {
+                result.message =
+                    "builtin shader catalog not found: " + catalog.string();
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            result.shader_runtime.builtin_shader_root =
+                catalog.parent_path().string();
+        }
         result.shader_runtime.cache_root = (root / ".shader-cache").string();
         result.shader_runtime.dev_compile_enabled = false;
 

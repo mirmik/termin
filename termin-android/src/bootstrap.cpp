@@ -19,6 +19,7 @@
 #include <inspect/tc_inspect_init.h>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -613,6 +614,7 @@ bool ensure_player_scene_locked() {
         return false;
     }
 
+    tgfx::set_builtin_shader_root(nullptr);
     termin::runtime::RuntimePackageLoader loader;
     g_state.player_package = loader.load(g_state.asset_root);
     if (!g_state.player_package.ok || !g_state.player_package.scene.valid()) {
@@ -627,6 +629,9 @@ bool ensure_player_scene_locked() {
     const std::string cache_root = g_state.app_data_dir.empty()
         ? g_state.player_package.shader_runtime.cache_root
         : (std::filesystem::path(g_state.app_data_dir) / "shader-cache").string();
+    tgfx::set_builtin_shader_root(
+        g_state.player_package.shader_runtime.builtin_shader_root.c_str()
+    );
     g_state.player_engine->rendering_manager.render_engine()->configure_shader_artifacts(
         artifact_root,
         cache_root,
@@ -991,6 +996,7 @@ extern "C" void termin_android_shutdown(void) {
     g_state.shader_artifact_root.clear();
     g_state.shader_artifact_root_explicit = false;
     g_state.native_lib_dir.clear();
+    tgfx::set_builtin_shader_root(nullptr);
     g_state.initialized = false;
 #ifdef __ANDROID__
     if (g_state.scene_extensions_registered) {

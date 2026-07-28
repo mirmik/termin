@@ -112,6 +112,49 @@ def _write_shader_program_resource(package_dir: Path, schema_version: int = 1) -
     )
 
 
+def _write_builtin_shader_contract(package_dir: Path) -> None:
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["target_requirements"] = {"backends": ["vulkan"]}
+    manifest["builtin_shader_contract"] = {
+        "version": 1,
+        "catalog": "builtin_shaders/engine-shader-catalog.json",
+        "shaders": [
+            {
+                "uuid": "termin-engine-test",
+                "artifacts": {
+                    "vulkan": {
+                        "fragment": "shaders/vulkan/termin-engine-test.frag.spv",
+                    }
+                },
+            }
+        ],
+    }
+    _write_json(manifest_path, manifest)
+    _write_json(
+        package_dir / "builtin_shaders" / "engine-shader-catalog.json",
+        {
+            "version": 1,
+            "shaders": [
+                {
+                    "uuid": "termin-engine-test",
+                    "name": "TestFS",
+                    "language": "slang",
+                    "stages": {
+                        "fragment": {
+                            "path": "termin-engine-test.frag.slang",
+                            "entry": "fs_main",
+                        }
+                    },
+                }
+            ],
+        },
+    )
+    artifact = package_dir / "shaders" / "vulkan" / "termin-engine-test.frag.spv"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"SPIR-V")
+
+
 def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
     payload = bytearray(b"TPLT")
 
@@ -163,6 +206,56 @@ def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
 
     assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_accepts_builtin_shader_contract(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_builtin_shader_contract(package_dir)
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_reports_missing_builtin_shader_artifact(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_builtin_shader_contract(package_dir)
+    (
+        package_dir
+        / "shaders"
+        / "vulkan"
+        / "termin-engine-test.frag.spv"
+    ).unlink()
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and diagnostic.path == "shaders/vulkan/termin-engine-test.frag.spv"
+        and "does not exist" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_reports_missing_builtin_shader_catalog(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_builtin_shader_contract(package_dir)
+    (
+        package_dir
+        / "builtin_shaders"
+        / "engine-shader-catalog.json"
+    ).unlink()
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and diagnostic.path == "builtin_shaders/engine-shader-catalog.json"
+        and "does not exist" in diagnostic.message
+        for diagnostic in diagnostics
+    )
 
 
 def test_validate_runtime_package_accepts_bundled_android_smoke_assets() -> None:

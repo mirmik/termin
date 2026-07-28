@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "profiles": {
+    "android": {
+      "target": {
+        "kind": "android",
+        "abi": "arm64-v8a",
+        "ndk_api": 26
+      },
+      "configuration": "debug",
+      "content": {
+        "entry_scene": "Main.scene",
+        "scenes": [
+          "Main.scene"
+        ],
+        "modules": [],
+        "python": {
+          "requirements": []
+        },
+        "resources": {
+          "policy": "strict",
+          "include": []
+        }
+      },
+      "output_dir": "dist/android"
+    }
+  }
+}
