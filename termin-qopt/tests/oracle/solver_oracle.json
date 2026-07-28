@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "numeric_type": "float64",
+  "objective_convention": "minimize 0.5 * x^T H x + g^T x",
+  "constraint_convention": "A_eq x = b_eq; C x <= d",
+  "qp_cases": [
+    {
+      "id": "equality_balanced_2d",
+      "description": "Analytic strictly-convex equality QP.",
+      "input": {
+        "H": [[2.0, 0.0], [0.0, 2.0]],
+        "g": [-2.0, -6.0],
+        "A_eq": [[1.0, 1.0]],
+        "b_eq": [1.0],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [-0.5, 1.5],
+        "tolerances": {
+          "primal_linf": 1e-9,
+          "stationarity_linf": 1e-9,
+          "equality_linf": 1e-9,
+          "inequality_linf": 1e-9,
+          "dual_linf": 1e-9,
+          "complementarity_linf": 1e-9
+        }
+      }
+    },
+    {
+      "id": "unconstrained_coupled_spd",
+      "description": "Analytic unconstrained SPD problem with coupled variables.",
+      "input": {
+        "H": [[4.0, 1.0], [1.0, 2.0]],
+        "g": [-1.0, -3.0],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [-0.14285714285714285, 1.5714285714285714],
+        "tolerances": {
+          "primal_linf": 1e-9,
+          "stationarity_linf": 1e-9,
+          "equality_linf": 1e-9,
+          "inequality_linf": 1e-9,
+          "dual_linf": 1e-9,
+          "complementarity_linf": 1e-9
+        }
+      }
+    },
+    {
+      "id": "single_active_upper_bound",
+      "description": "The unconstrained minimizer violates x <= 0.5.",
+      "input": {
+        "H": [[2.0]],
+        "g": [-2.0],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [[1.0]],
+        "d": [0.5]
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [0.5],
+        "tolerances": {
+          "primal_linf": 1e-9,
+          "stationarity_linf": 1e-9,
+          "equality_linf": 1e-9,
+          "inequality_linf": 1e-9,
+          "dual_linf": 1e-9,
+          "complementarity_linf": 1e-9
+        }
+      }
+    },
+    {
+      "id": "mixed_equality_and_active_inequality",
+      "description": "An equality-constrained optimum clipped by an upper bound.",
+      "input": {
+        "H": [[2.0, 0.0], [0.0, 2.0]],
+        "g": [-4.0, 2.0],
+        "A_eq": [[1.0, 1.0]],
+        "b_eq": [1.0],
+        "C": [[1.0, 0.0]],
+        "d": [1.2]
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [1.2, -0.2],
+        "tolerances": {
+          "primal_linf": 1e-9,
+          "stationarity_linf": 1e-9,
+          "equality_linf": 1e-9,
+          "inequality_linf": 1e-9,
+          "dual_linf": 1e-9,
+          "complementarity_linf": 1e-9
+        }
+      }
+    },
+    {
+      "id": "semidefinite_but_constrained_unique",
+      "description": "A positive-semidefinite Hessian whose flat direction is fixed by an equality.",
+      "input": {
+        "H": [[2.0, 0.0], [0.0, 0.0]],
+        "g": [-4.0, 0.0],
+        "A_eq": [[0.0, 1.0]],
+        "b_eq": [3.0],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [2.0, 3.0],
+        "tolerances": {
+          "primal_linf": 1e-8,
+          "stationarity_linf": 1e-8,
+          "equality_linf": 1e-8,
+          "inequality_linf": 1e-8,
+          "dual_linf": 1e-8,
+          "complementarity_linf": 1e-8
+        }
+      }
+    },
+    {
+      "id": "ill_conditioned_diagonal",
+      "description": "A convex problem with eigenvalues separated by ten orders of magnitude.",
+      "input": {
+        "H": [[2.0, 0.0], [0.0, 2e-10]],
+        "g": [-2.0, -2e-10],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 1.0],
+        "tolerances": {
+          "primal_linf": 1e-6,
+          "stationarity_linf": 1e-9,
+          "equality_linf": 1e-9,
+          "inequality_linf": 1e-9,
+          "dual_linf": 1e-9,
+          "complementarity_linf": 1e-9
+        }
+      }
+    },
+    {
+      "id": "inconsistent_equalities",
+      "description": "The same scalar cannot equal both zero and one.",
+      "input": {
+        "H": [[2.0]],
+        "g": [0.0],
+        "A_eq": [[1.0], [1.0]],
+        "b_eq": [0.0, 1.0],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "infeasible",
+        "certificate": {
+          "kind": "equality_inconsistency",
+          "dual": [1.0, -1.0],
+          "residual_linf": 1e-12,
+          "separation_min": 0.5
+        }
+      }
+    },
+    {
+      "id": "inconsistent_inequalities",
+      "description": "The constraints require x <= 0 and x >= 1.",
+      "input": {
+        "H": [[2.0]],
+        "g": [0.0],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [[1.0], [-1.0]],
+        "d": [0.0, -1.0]
+      },
+      "expected": {
+        "status": "infeasible",
+        "certificate": {
+          "kind": "inequality_farkas",
+          "dual": [1.0, 1.0],
+          "residual_linf": 1e-12,
+          "separation_min": 0.5
+        }
+      }
+    },
+    {
+      "id": "linear_descent_without_curvature",
+      "description": "A zero Hessian and negative linear slope are unbounded along +x.",
+      "input": {
+        "H": [[0.0]],
+        "g": [-1.0],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "unbounded",
+        "certificate": {
+          "kind": "recession_direction",
+          "direction": [1.0],
+          "residual_linf": 1e-12,
+          "descent_min": 0.5
+        }
+      }
+    },
+    {
+      "id": "gradient_dimension_mismatch",
+      "description": "A two-variable Hessian cannot be paired with a one-element gradient.",
+      "input": {
+        "H": [[1.0, 0.0], [0.0, 1.0]],
+        "g": [0.0],
+        "A_eq": [],
+        "b_eq": [],
+        "C": [],
+        "d": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "error": "gradient_dimension_mismatch"
+      }
+    }
+  ],
+  "nullspace_cases": [
+    {
+      "id": "rectangular_full_row_rank",
+      "matrix": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+      "rank_tolerance": {"absolute": 1e-12},
+      "expected": {"rank": 2, "nullity": 1, "residual_linf": 1e-10, "orthogonality_linf": 1e-10}
+    },
+    {
+      "id": "duplicated_rows",
+      "matrix": [[1.0, 2.0, 3.0], [2.0, 4.0, 6.0]],
+      "rank_tolerance": {"absolute": 1e-12},
+      "expected": {"rank": 1, "nullity": 2, "residual_linf": 1e-10, "orthogonality_linf": 1e-10}
+    },
+    {
+      "id": "near_rank_deficient",
+      "matrix": [[1.0, 0.0], [0.0, 1e-10]],
+      "rank_tolerance": {"absolute": 1e-8},
+      "expected": {"rank": 1, "nullity": 1, "residual_linf": 1e-8, "orthogonality_linf": 1e-10}
+    },
+    {
+      "id": "full_column_rank",
+      "matrix": [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+      "rank_tolerance": {"absolute": 1e-12},
+      "expected": {"rank": 2, "nullity": 0, "residual_linf": 1e-10, "orthogonality_linf": 1e-10}
+    }
+  ],
+  "hqp_cases": [
+    {
+      "id": "single_level_identity",
+      "n_variables": 2,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [1.0, 2.0]}],
+          "equalities": [],
+          "inequalities": []
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 2.0],
+        "primal_linf": 1e-9,
+        "level_task_residual_l2": [0.0],
+        "level_residual_tolerance": 1e-9
+      }
+    },
+    {
+      "id": "lower_priority_uses_nullspace",
+      "n_variables": 2,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{"J": [[1.0, 0.0]], "target": [1.0]}],
+          "equalities": [],
+          "inequalities": []
+        },
+        {
+          "priority": 1,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [9.0, 3.0]}],
+          "equalities": [],
+          "inequalities": []
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 3.0],
+        "primal_linf": 1e-8,
+        "level_task_residual_l2": [0.0, 8.0],
+        "level_residual_tolerance": 1e-8
+      }
+    },
+    {
+      "id": "constrained_lower_priority",
+      "n_variables": 2,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{"J": [[1.0, 0.0]], "target": [1.0]}],
+          "equalities": [],
+          "inequalities": []
+        },
+        {
+          "priority": 1,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [1.0, 10.0]}],
+          "equalities": [],
+          "inequalities": [{"C": [[0.0, 1.0]], "d": [3.0]}]
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 3.0],
+        "primal_linf": 1e-8,
+        "level_task_residual_l2": [0.0, 7.0],
+        "level_residual_tolerance": 1e-8
+      }
+    },
+    {
+      "id": "full_rank_priority_is_preserved",
+      "n_variables": 2,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [1.0, 0.0]}],
+          "equalities": [],
+          "inequalities": []
+        },
+        {
+          "priority": 1,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [1.0, 5.0]}],
+          "equalities": [],
+          "inequalities": []
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [1.0, 0.0],
+        "primal_linf": 1e-9,
+        "level_task_residual_l2": [0.0, 5.0],
+        "level_residual_tolerance": 1e-9
+      }
+    },
+    {
+      "id": "single_level_equality",
+      "n_variables": 2,
+      "levels": [
+        {
+          "priority": 0,
+          "tasks": [{"J": [[1.0, 0.0], [0.0, 1.0]], "target": [2.0, 2.0]}],
+          "equalities": [{"A": [[1.0, 1.0]], "b": [1.0]}],
+          "inequalities": []
+        }
+      ],
+      "expected": {
+        "status": "optimal",
+        "primal": [0.5, 0.5],
+        "primal_linf": 1e-9,
+        "level_task_residual_l2": [2.1213203435596424],
+        "level_residual_tolerance": 1e-9
+      }
+    }
+  ]
+}

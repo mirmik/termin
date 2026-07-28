@@ -106,6 +106,16 @@ Source of truth: [termin-graphics docs](https://github.com/mirmik/termin-monorep
 
 Ключевая граница сейчас важна из-за миграции renderer facades: generic GPU utilities без знания frame graph относятся сюда, а frame graph/debugger logic остается в [termin-render](#termin-render).
 
+### termin-visual-scene
+
+Source of truth: [termin-visual-scene docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-visual-scene/docs/index.md)
+
+Отвечает за retained 2D visual identity, generation-checked item handles,
+topology, transforms, hit preparation и pointer interaction. Модуль зависит от
+канонических geometry/path/draw values в `termin-base` и `termin-graphics`, но
+не владеет GPU context, widget tree, plot data или world/entity semantics.
+Обратной зависимости из `termin-graphics` нет.
+
 ### termin-render
 
 Source of truth: [termin-render docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md)

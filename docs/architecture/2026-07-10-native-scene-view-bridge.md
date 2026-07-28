@@ -1,87 +1,82 @@
-# Native SceneView Bridge
+# Native SceneView Adapter
 
-Status: implemented and used by the native pipeline editor; the legacy `tcgui`
-adapter remains only for the explicit legacy tcgui editor entrypoint.
+`SceneView` is the `termin-gui-native` host for the canonical retained scene
+implemented by `termin-visual-scene`. It is not a second retained scene core.
 
-## Decision
-
-`GraphicsScene` is a small retained 2D interaction scene for tools such as the
-node-graph editor. It is not a plot model, render scene or alternative widget
-tree. Plot annotations remain retained domain data in `tcplot`, while 3D scene
-presentation remains behind `Viewport3D`.
-
-The only production consumer of the legacy `tcgui.scene` package is
-`tcnodegraph.NodeGraphView`, used by the pipeline editor. The native bridge is
-therefore data-oriented: generic UI owns transforms, z-order, hit testing,
-selection, dragging, pan/zoom and embedded-widget composition; node shapes,
-sockets, Bezier edges and graph mutation stay in a `tcnodegraph` adapter.
-
-## Ownership
+The public ownership chain is:
 
 ```text
-Python/C++ adapter
-    shared_ptr<GraphicsScene>
-        shared_ptr<GraphicsItem> roots
-            shared_ptr<GraphicsItem> children
-            weak_ptr<GraphicsItem> parent
+shared_ptr<termin::gui_native::GraphicsScene>
+    metadata + invalidation adapter
+    owns one termin::visual::VisualScene2D
+        generation-checked GraphicItemHandle values
 
-tc_ui_document
-    SceneView widget
-        canonical tc_widget children for embedded widget handles
+GraphicItemRef
+    non-owning scene pointer
+    scene lifetime token
+    GraphicItemHandle
+
+SceneView widget
+    camera and grid state
+    SceneInteraction2D
+    SelectionController2D
+    DragController2D
+    widget portal side table
 ```
 
-- `GraphicsScene` exclusively owns roots. A root cannot simultaneously belong
-  to another scene or item.
-- An item exclusively owns its children; the parent link is weak. Reparenting
-  is explicit remove-then-add and cycles are rejected.
-- `SceneView` retains a shared scene and never copies item state.
-- Selection retains only items already owned by the scene and is cleared when
-  their root leaves the scene.
-- An embedded widget is represented by a generation-checked `WidgetHandle`.
-  The scene does not own the widget object. During layout `SceneView` attaches
-  live handles as its canonical `tc_widget` children, so normal document
-  focus, hover, capture, key and text routing remains authoritative. Removing
-  an item or destroying the view detaches the widget without destroying it;
-  the document/caller controls object lifetime. Stale and foreign-parent
-  handles are logged and skipped.
+The `GraphicsScene` name remains as the small GUI-facing adapter used by the
+C++ and Python widget APIs. It owns no item tree or paint callbacks. Topology,
+payloads, affine composition, ordering, hit testing and render snapshots all
+come from its one `VisualScene2D`.
 
-## Coordinates And Interaction
+## Items and rendering
 
-`SceneTransform` is the only world/screen mapping:
+Callers create typed rectangles, rounded rectangles, ellipses, paths,
+polylines and text. Creation returns a `GraphicItemRef`, which is a
+scene-plus-generation-handle value. It becomes invalid when the item or scene
+is destroyed and never owns the item.
 
-```text
-screen = view.bounds.origin + offset + world * zoom
-world  = (screen - view.bounds.origin - offset) / zoom
-```
+`SceneView::paint` prepares the canonical immutable `DrawList2D`, prepends the
+view camera transform and records it in order inside the UI draw list.
+`UiDrawListRenderer` executes that frozen list through the same
+`Canvas2DRenderer` used by other retained-scene hosts. This preserves exact
+affine transforms, geometric clips, opacity and stable scene ordering without
+reintroducing GUI paint callbacks.
 
-Wheel zoom preserves the world point under the pointer. Middle-button capture
-pans. Left-button selection and dragging use reverse stable z-order; children
-are tested before parents. Ctrl toggles selection. Custom hit callbacks receive
-item-local coordinates, allowing edge and socket geometry without teaching
-generic UI about node graphs.
+## Interaction
 
-Custom pointer/key/text handlers run before default scene interaction and can
-consume events. This is the explicit adapter boundary for socket connections,
-context menus and model commands. Item-moved and transform-changed signals let
-the adapter update its domain model without polling.
+Pointer input is mapped from widget coordinates into scene world coordinates.
+The canonical interaction router supplies exact hit testing and per-pointer
+capture. Selection and dragging are explicit controllers owned by the view;
+middle-button pan and wheel zoom remain view camera policies.
 
-## Rendering
+GUI metadata only marks semantic items selectable or draggable. When a
+non-selectable visual child is hit, the view walks generation-checked parents
+to the nearest eligible semantic item. Dragging delegates affine mutation to
+`DragController2D`, so rotation, non-uniform scale and shear are preserved.
 
-`SceneView` records background, bounded grid and item callbacks into the same
-backend-neutral UI draw list. Item callbacks receive the retained item and
-`SceneTransform`; they do not receive a render device or own GPU resources.
-Embedded widgets are laid out and painted through their normal native widget
-vtable. Stable z-order is preserved for equal z values.
+## Widget portals
 
-The bridge deliberately does not define node, socket, edge, plot annotation or
-3D entity classes. Those stay with their domain owners.
+Full widgets are not graphic items. A portal side-table entry associates one
+`GraphicItemHandle` with one `tc_widget_handle`.
 
-## Migration
+- `tc_ui_document` remains the only widget owner.
+- `VisualScene2D` remains the only graphic-item owner.
+- destroying a scene item detaches but does not destroy its widget;
+- destroying a widget removes the stale portal during reconciliation;
+- destroying the view detaches portal widgets without destroying them;
+- one widget cannot be associated with two scene items in the same view.
 
-`tcnodegraph.native_view` is the native adapter built from `GraphicsItem` paint
-and hit callbacks while keeping `Graph`/`GraphController` toolkit-neutral. The
-native editor switches the complete pipeline-editor tree atomically: toolbar,
-file dialogs, context menu, node graph and embedded parameter controls all
-belong to its one `tc_ui_document`. The explicit legacy tcgui entrypoint still
-uses `tcnodegraph.view`; that adapter and its `tcgui.scene` dependency can be
-deleted together with the compatibility frontend.
+During layout, a portal widget receives the camera-projected world bounds of
+its item. Portal widgets paint above scene primitives in stable visual order
+and remain clipped by the `SceneView` bounds. Widget focus, keyboard/text
+input, accessibility and recursive hit testing continue through
+`tc_ui_document`.
+
+## Python contract
+
+Python uses `GraphicsScene` creation methods and `GraphicItemRef` values. The
+old constructible `GraphicsItem`, `shared_ptr<GraphicsItem>` ownership,
+`set_paint_callback`, `set_hit_test_callback` and embedded-widget fields were
+removed. Node graph rendering now projects its model into typed scene payloads
+and registers parameter editors through `SceneView.set_widget_portal`.
