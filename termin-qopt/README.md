@@ -11,7 +11,9 @@ The native migration foundation provides the shared C++ target
 `termin_qopt::termin_qopt`, private Eigen integration, and preliminary
 caller-owned dense vector/matrix views. A provisional native equality-QP API
 now covers convex dense problems, semantic statuses, rank diagnostics, and KKT
-residuals. Active-set QP and Python bindings have not migrated yet; see
+residuals. The provisional native active-set API adds linear inequalities,
+lower/upper bounds, checked warm starts, deterministic working-set updates, and
+Phase I infeasibility detection. Python bindings have not migrated yet; see
 [CPP_MIGRATION.md](CPP_MIGRATION.md).
 
 The language-neutral solver contract lives in

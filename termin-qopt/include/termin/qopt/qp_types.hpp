@@ -32,6 +32,11 @@ enum class QpDiagnostic : std::uint8_t {
   NegativeCurvature,
   DecompositionFailure,
   ResidualTooLarge,
+  InvalidOptions,
+  InvalidBounds,
+  InvalidWarmStart,
+  InconsistentInequalities,
+  IterationLimit,
 };
 
 struct QpTolerance {
@@ -50,6 +55,8 @@ struct QpSolveResult {
   double complementarity_linf = 0.0;
   std::size_t constraint_rank = 0;
   std::size_t reduced_hessian_rank = 0;
+  std::size_t active_set_size = 0;
+  std::size_t iterations = 0;
 };
 
 [[nodiscard]] TERMIN_QOPT_API std::string_view
