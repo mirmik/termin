@@ -5,8 +5,10 @@
 Accepted direction; the shared visual-scene foundation, GUI adapters and both
 example gates are implemented. Plot integration is underway: `tcplot` now
 publishes detached `PlotFrame2D` projection snapshots and has explicit render
-phase boundaries. Retained semantic plot annotations are the next layer. This
-direction is intentionally separate from world-space 2D game support.
+phase boundaries. It also owns retained generation-handle plot annotations and
+projects them into the shared visual scene. The interactive marker/callout is
+the next vertical slice. This direction is intentionally separate from
+world-space 2D game support.
 
 The shared-foundation refinement is also accepted: no new generic "2D base"
 module is introduced. Exact 2D value math belongs to `termin-base`;
@@ -441,6 +443,18 @@ The implemented C++ snapshot is returned by `PlotEngine2D::plot_frame()`.
 Projection and inverse projection operate only on the captured values, so a
 frame remains valid after later pan, zoom, resize or shared-X synchronization.
 
+`PlotAnnotationLayer2D` owns semantic generation handles independently of the
+`GraphicItemHandle` values it projects. One annotation may produce multiple
+visuals with separate phase and clipping policies. Data coordinates, series
+point references, axes fractions and viewport-relative pixels are resolved
+through the current frame; an invalid series reference removes stale projected
+items without invalidating the annotation. Annotation input is routed before
+plot navigation, while an already-captured plot pan keeps ownership.
+
+This is an internal transitive dependency of the public `tcplot::tcplot`
+target. A minimal plotting application still links only `tcplot::tcplot`; it
+does not find or link `termin-visual-scene` directly.
+
 ## Rendering
 
 Scene traversal prepares an immutable revisioned snapshot and lowers its
@@ -636,9 +650,9 @@ The readiness sequence through GUI composition is now implemented:
    `shared_ptr<GraphicsItem>` storage and callback API has been removed after
    repository consumers moved.
 
-Steps 1–7 and 9 are complete. The `PlotFrame2D` and render-phase portion of
-step 8 is complete; retained annotation projection and the marker/callout
-vertical slice remain. The two example gates no longer block this work.
+Steps 1–7 and 9 are complete. The `PlotFrame2D`, render-phase and retained
+annotation-projection portions of step 8 are complete; the marker/callout
+vertical slice remains. The two example gates no longer block this work.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
