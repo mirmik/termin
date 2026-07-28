@@ -3,6 +3,8 @@
 #include <charconv>
 #include <cmath>
 #include <limits>
+#include <locale>
+#include <sstream>
 #include <string_view>
 #include <unordered_set>
 
@@ -91,10 +93,10 @@ bool parse_uint64_string(const std::string& text, uint64_t& result) {
 }
 
 bool parse_finite_double_string(const std::string& text, double& result) {
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    auto parsed = std::from_chars(begin, end, result, std::chars_format::general);
-    return parsed.ec == std::errc() && parsed.ptr == end && std::isfinite(result);
+    std::istringstream input(text);
+    input.imbue(std::locale::classic());
+    input >> std::noskipws >> result;
+    return input.eof() && !input.fail() && std::isfinite(result);
 }
 
 bool validate_node(
