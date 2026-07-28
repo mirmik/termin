@@ -19,6 +19,7 @@
 #include <inspect/tc_inspect_init.h>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -61,67 +62,6 @@ extern "C" {
 #endif
 
 namespace {
-
-class UIWidgetPass final : public termin::CxxFramePass {
-public:
-    static void register_type();
-    std::string input_res = "color";
-    std::string output_res = "color+widgets";
-
-    INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
-    INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
-    INSPECT_TYPE_METADATA(UIWidgetPass, graph, termin::make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}},
-        {{"input_res", "output_res"}}
-    ))
-
-    UIWidgetPass() {
-        pass_name_set("UIWidgets");
-        link_to_type_registry("UIWidgetPass");
-    }
-
-    std::set<const char*> compute_reads() const override {
-        return {input_res.c_str()};
-    }
-
-    std::set<const char*> compute_writes() const override {
-        return {output_res.c_str()};
-    }
-
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {{input_res, output_res}};
-    }
-
-    void execute(termin::ExecuteContext& ctx) override {
-        if (!ctx.ctx2) {
-            tc_log_error("[UIWidgetPass/android] ctx2 is null");
-            return;
-        }
-        auto in_it = ctx.tex2_reads.find(input_res);
-        auto out_it = ctx.tex2_writes.find(output_res);
-        if (in_it == ctx.tex2_reads.end() || !in_it->second ||
-                out_it == ctx.tex2_writes.end() || !out_it->second) {
-            tc_log_warn(
-                "[UIWidgetPass/android] missing tgfx2 resources input='%s' output='%s'",
-                input_res.c_str(),
-                output_res.c_str()
-            );
-            return;
-        }
-        ctx.ctx2->blit(in_it->second, out_it->second);
-    }
-};
-
-void UIWidgetPass::register_type() {
-    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<UIWidgetPass>(
-        "UIWidgetPass", "termin-android");
-    auto& inspect = descriptor.inspect();
-    _register_inspect_input_res(inspect);
-    _register_inspect_output_res(inspect);
-    _register_inspect_metadata_graph(inspect);
-    (void)descriptor.commit();
-}
 
 struct AndroidBootstrapState {
     std::string app_data_dir;
@@ -243,24 +183,6 @@ termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
     }
     termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
     return dynamic_cast<termin::CameraComponent*>(cxx);
-}
-
-void register_android_runtime_types() {
-    static bool registered = false;
-    if (registered) return;
-    registered = true;
-
-    // Core component and inspect descriptors are committed by bootstrap_runtime().
-    // Android owns only its platform-local pass descriptor.
-    UIWidgetPass::register_type();
-
-    tc_log_info(
-        "termin_android_player: runtime descriptors ready mesh=%zu renderer=%zu camera=%zu light=%zu",
-        tc_inspect_field_count("MeshComponent"),
-        tc_inspect_field_count("MeshRenderer"),
-        tc_inspect_field_count("CameraComponent"),
-        tc_inspect_field_count("LightComponent")
-    );
 }
 
 bool ensure_android_scene_pipeline_locked() {
@@ -663,8 +585,6 @@ bool ensure_player_scene_locked() {
         }
     }
 
-    register_android_runtime_types();
-
     const char* required_components[] = {
         "MeshComponent",
         "MeshRenderer",
@@ -694,6 +614,7 @@ bool ensure_player_scene_locked() {
         return false;
     }
 
+    tgfx::set_builtin_shader_root(nullptr);
     termin::runtime::RuntimePackageLoader loader;
     g_state.player_package = loader.load(g_state.asset_root);
     if (!g_state.player_package.ok || !g_state.player_package.scene.valid()) {
@@ -708,6 +629,9 @@ bool ensure_player_scene_locked() {
     const std::string cache_root = g_state.app_data_dir.empty()
         ? g_state.player_package.shader_runtime.cache_root
         : (std::filesystem::path(g_state.app_data_dir) / "shader-cache").string();
+    tgfx::set_builtin_shader_root(
+        g_state.player_package.shader_runtime.builtin_shader_root.c_str()
+    );
     g_state.player_engine->rendering_manager.render_engine()->configure_shader_artifacts(
         artifact_root,
         cache_root,
@@ -1072,6 +996,7 @@ extern "C" void termin_android_shutdown(void) {
     g_state.shader_artifact_root.clear();
     g_state.shader_artifact_root_explicit = false;
     g_state.native_lib_dir.clear();
+    tgfx::set_builtin_shader_root(nullptr);
     g_state.initialized = false;
 #ifdef __ANDROID__
     if (g_state.scene_extensions_registered) {
