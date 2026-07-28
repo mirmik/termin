@@ -21,7 +21,7 @@ namespace termin {
 
 // BloomPass - HDR bloom with mip-chain downsampling/upsampling.
 // Draws through tgfx::RenderContext2 end-to-end (bright prefilter,
-// downsample chain, normalized reconstruction, final smoothing and
+// separable Gaussian downsample chain, normalized reconstruction and
 // composite). Legacy tgfx1 dual-path removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API BloomPass : public CxxFramePass {
 public:
@@ -43,9 +43,10 @@ private:
     tgfx::IRenderDevice* device2_ = nullptr;
     std::vector<tgfx::TextureHandle> mip_textures_;
     std::vector<tgfx::TextureHandle> reconstruction_textures_;
-    std::vector<tgfx::TextureHandle> smoothing_textures_;
+    tgfx::TextureHandle resolve_texture_;
     tc_shader_handle bright_shader_handle_     = tc_shader_handle_invalid();
     tc_shader_handle downsample_shader_handle_ = tc_shader_handle_invalid();
+    tc_shader_handle blur_vertical_shader_handle_ = tc_shader_handle_invalid();
     tc_shader_handle upsample_shader_handle_   = tc_shader_handle_invalid();
     tc_shader_handle composite_shader_handle_  = tc_shader_handle_invalid();
     tgfx::BufferHandle bright_ubo_;

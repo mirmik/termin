@@ -143,64 +143,75 @@ bool impulse_has_smooth_falloff(
     tgfx::RenderContext2& render_ctx,
     tgfx::TextureHandle source
 ) {
-    std::vector<float> impulse(kWidth * kHeight * 4, 0.0f);
-    for (size_t i = 3; i < impulse.size(); i += 4) impulse[i] = 1.0f;
-    const int center_x = static_cast<int>(kWidth / 2);
-    const int center_y = static_cast<int>(kHeight / 2);
-    const size_t center = (static_cast<size_t>(center_y) * kWidth + center_x) * 4;
-    impulse[center + 0] = 32.0f;
-    impulse[center + 1] = 32.0f;
-    impulse[center + 2] = 32.0f;
-    device.upload_texture(
-        source,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(impulse.data()),
-            impulse.size() * sizeof(float)));
-
-    const auto pixels = render_bloom(device, render_ctx, source, 6);
-    if (pixels.empty()) return false;
-
-    // A point source should form one continuous halo. Compare the mean energy
-    // of successive one-pixel rings; small rasterization noise is allowed, but
-    // a secondary bright lobe outside a darker ring is a regression.
-    float previous_mean = 1.0e30f;
     float worst_angular_cv = 0.0f;
-    for (int radius = 3; radius <= 36; radius++) {
-        float sum = 0.0f;
-        float sum_squared = 0.0f;
-        int samples = 0;
-        for (int y = center_y - radius; y <= center_y + radius; y++) {
-            for (int x = center_x - radius; x <= center_x + radius; x++) {
-                const int dx = x - center_x;
-                const int dy = y - center_y;
-                const float distance = std::sqrt(static_cast<float>(dx * dx + dy * dy));
-                if (distance >= radius - 0.5f && distance < radius + 0.5f) {
-                    const float value = red_at(pixels, x, y);
-                    sum += value;
-                    sum_squared += value * value;
-                    samples++;
+    for (int phase_y = 0; phase_y < 2; phase_y++) {
+        for (int phase_x = 0; phase_x < 2; phase_x++) {
+            std::vector<float> impulse(kWidth * kHeight * 4, 0.0f);
+            for (size_t i = 3; i < impulse.size(); i += 4) impulse[i] = 1.0f;
+            const int center_x = static_cast<int>(kWidth / 2) + phase_x;
+            const int center_y = static_cast<int>(kHeight / 2) + phase_y;
+            const size_t center =
+                (static_cast<size_t>(center_y) * kWidth + center_x) * 4;
+            impulse[center + 0] = 320.0f;
+            impulse[center + 1] = 320.0f;
+            impulse[center + 2] = 320.0f;
+            device.upload_texture(
+                source,
+                std::span<const uint8_t>(
+                    reinterpret_cast<const uint8_t*>(impulse.data()),
+                    impulse.size() * sizeof(float)));
+
+            const auto pixels = render_bloom(device, render_ctx, source, 6);
+            if (pixels.empty()) return false;
+
+            // Check every 2x2 sampling phase. A moving point source must form
+            // one continuous halo instead of exposing a different mip-grid
+            // lobe when it crosses a half-resolution texel boundary.
+            float previous_mean = 1.0e30f;
+            for (int radius = 5; radius <= 36; radius++) {
+                float sum = 0.0f;
+                float sum_squared = 0.0f;
+                int samples = 0;
+                for (int y = center_y - radius; y <= center_y + radius; y++) {
+                    for (int x = center_x - radius; x <= center_x + radius; x++) {
+                        const int dx = x - center_x;
+                        const int dy = y - center_y;
+                        const float distance =
+                            std::sqrt(static_cast<float>(dx * dx + dy * dy));
+                        if (distance >= radius - 0.5f &&
+                            distance < radius + 0.5f) {
+                            const float value = red_at(pixels, x, y);
+                            sum += value;
+                            sum_squared += value * value;
+                            samples++;
+                        }
+                    }
                 }
+                const float mean =
+                    samples > 0 ? sum / static_cast<float>(samples) : 0.0f;
+                if (mean > 0.00005f && samples > 1) {
+                    const float variance = std::max(
+                        0.0f,
+                        sum_squared / static_cast<float>(samples) - mean * mean);
+                    worst_angular_cv = std::max(
+                        worst_angular_cv,
+                        std::sqrt(variance) / mean);
+                }
+                if (mean > previous_mean * 1.12f + 0.002f) {
+                    std::fprintf(
+                        stderr,
+                        "Bloom impulse phase (%d,%d) ring brightened at "
+                        "radius %d: %.6f -> %.6f\n",
+                        phase_x,
+                        phase_y,
+                        radius,
+                        previous_mean,
+                        mean);
+                    return false;
+                }
+                previous_mean = mean;
             }
         }
-        const float mean = samples > 0 ? sum / static_cast<float>(samples) : 0.0f;
-        if (mean > 0.003f && samples > 1) {
-            const float variance = std::max(
-                0.0f,
-                sum_squared / static_cast<float>(samples) - mean * mean);
-            worst_angular_cv = std::max(
-                worst_angular_cv,
-                std::sqrt(variance) / mean);
-        }
-        if (mean > previous_mean * 1.12f + 0.002f) {
-            std::fprintf(
-                stderr,
-                "Bloom impulse ring brightened at radius %d: %.6f -> %.6f\n",
-                radius,
-                previous_mean,
-                mean);
-            return false;
-        }
-        previous_mean = mean;
     }
     std::printf("impulse worst angular coefficient of variation: %.4f\n", worst_angular_cv);
     return worst_angular_cv < 0.55f;
