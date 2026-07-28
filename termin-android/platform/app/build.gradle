@@ -58,7 +58,8 @@ android {
                 arguments(
                         "-DTERMIN_ANDROID_SDK_ROOT=${terminAndroidSdkRoot.get()}",
                         "-DTERMIN_ANDROID_ABI=${terminAndroidAbi.get()}",
-                        "-DANDROID_PLATFORM=${terminAndroidPlatform.get()}"
+                        "-DANDROID_PLATFORM=${terminAndroidPlatform.get()}",
+                        "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
                 )
             }
         }

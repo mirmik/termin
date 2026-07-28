@@ -12,7 +12,8 @@
             "mesh": {
               "uuid": "android-triangle-mesh",
               "name": "Android Triangle",
-              "type": "uuid"
+              "type": "uuid",
+              "kind": "tc_mesh"
             }
           }
         },
@@ -22,12 +23,14 @@
             "mesh": {
               "uuid": "android-triangle-mesh",
               "name": "Android Triangle",
-              "type": "uuid"
+              "type": "uuid",
+              "kind": "tc_mesh"
             },
             "material": {
               "uuid": "android-triangle-material",
               "name": "Android Triangle Material",
-              "type": "uuid"
+              "type": "uuid",
+              "kind": "tc_material"
             }
           }
         }

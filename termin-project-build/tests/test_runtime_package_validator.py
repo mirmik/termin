@@ -53,6 +53,7 @@ def _write_shader_resource(package_dir: Path, shader_uuid: str = "shader-uuid") 
         package_dir / "shaders" / f"{shader_uuid}.shader.json",
         {
             "uuid": shader_uuid,
+            "language": "slang",
             "vertex_source_path": f"shaders/vulkan/{shader_uuid}.vert.slang",
             "fragment_source_path": f"shaders/vulkan/{shader_uuid}.frag.slang",
             "artifacts": {
@@ -160,6 +161,12 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
 
 def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_accepts_bundled_android_smoke_assets() -> None:
+    package_dir = Path(__file__).parents[2] / "termin-android" / "assets"
 
     assert validate_runtime_package(package_dir) == []
 
@@ -329,6 +336,37 @@ def test_validate_runtime_package_accepts_shader_artifacts(tmp_path: Path) -> No
     assert validate_runtime_package(package_dir) == []
 
 
+def test_validate_runtime_package_rejects_shader_without_explicit_language(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    shader_path = package_dir / "shaders" / "shader-uuid.shader.json"
+    shader_spec = json.loads(shader_path.read_text(encoding="utf-8"))
+    del shader_spec["language"]
+    _write_json(shader_path, shader_spec)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                }
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path == "shaders/shader-uuid.shader.json"
+        and diagnostic.message
+        == "Runtime shader spec must declare supported language: glsl, hlsl, or slang"
+        for diagnostic in diagnostics
+    )
+
+
 def test_validate_runtime_package_accepts_versioned_shader_program(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_shader_resource(package_dir)
@@ -401,6 +439,7 @@ def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path
         package_dir / "shaders" / "shader-uuid.shader.json",
         {
             "uuid": "shader-uuid",
+            "language": "slang",
             "vertex_source_path": "shaders/vulkan/shader-uuid.vert.slang",
             "fragment_source_path": "shaders/vulkan/shader-uuid.frag.slang",
             "artifacts": {
