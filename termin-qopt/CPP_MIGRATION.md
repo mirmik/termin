@@ -19,6 +19,11 @@
   semantic statuses, diagnostics и residuals;
 - добавлен provisional native active-set QP contract для `Cx <= d` и
   lower/upper bounds с Phase I, warm start и полными dual-векторами;
+- добавлены native nullspace basis/projector helpers: rank-revealing QR по
+  умолчанию, SVD только как явно выбранная rank policy;
+- добавлен native `HierarchicalQpSolver` с typed levels, quadratic tasks,
+  equality/inequality constraints, сохранением старших task values и явными
+  статусами несовместимого младшего уровня;
 - добавлен deterministic dense block assembler со стабильными typed handles и
   caller-owned storage;
 - добавлен dynamics contract для сборки и решения `M a = f + Jᵀ λ`,
@@ -92,8 +97,8 @@ Eigen не должен становиться публичным SDK API.
 3. [x] Зафиксировать независимый solver oracle и semantic statuses.
 4. [x] Перенести `solve_qp_equalities`.
 5. [x] Перенести `solve_qp_active_set`.
-6. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
-7. Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
+6. [x] Перенести nullspace helpers: QR basis first, SVD basis only where needed.
+7. [x] Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
 8. [~] Перенести multibody/FEM assembler поверх того же solver API:
    dense block/dynamics assembly, 2D double pendulum и 3D point-joint
    foundation готовы; FEM и axis-constrained 3D joints остаются отдельными
@@ -107,6 +112,23 @@ Oracle не объявляет текущее Python-поведение прав
 `infeasible`, `unbounded` и `invalid_input` имеют независимые certificates или
 структурную диагностику; текущий Python API не считается совместимым с ними,
 пока не начнёт возвращать semantic status.
+
+## Provisional nullspace/HQP contract
+
+`write_nullspace_basis` и `write_nullspace_projector` принимают strided input
+и caller-owned `n x n` output. Для basis значимы первые `nullity` столбцов,
+остальные обнуляются. Контракт фиксирует rank/nullity и
+residual/orthogonality bounds, но не знаки и порядок basis vectors.
+Rank-revealing QR — штатный путь; SVD включается вызывающим кодом явно.
+
+`HierarchicalQpSolver` копирует зарегистрированные `QuadraticTaskView`,
+`EqualityConstraintView` и `InequalityConstraintView`, поэтому их исходные
+buffers не обязаны жить до `solve`. Уровни исполняются по числовому priority.
+Hard constraints накапливаются, а после каждого уровня допустимые направления
+пересекаются с nullspace его равенств и task Jacobians. Поэтому младший уровень
+не меняет достигнутые старшие task values. Если nullspace исчерпан, новые
+несовместимые constraints дают `Infeasible/LevelSolveFailure`, а не молча
+игнорируются. Output buffers изменяются только при полном `Optimal`.
 
 ## Provisional equality-QP contract
 
