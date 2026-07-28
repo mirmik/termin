@@ -19,10 +19,28 @@
   semantic statuses, diagnostics и residuals;
 - добавлен provisional native active-set QP contract для `Cx <= d` и
   lower/upper bounds с Phase I, warm start и полными dual-векторами;
+- добавлен deterministic dense block assembler со стабильными typed handles и
+  caller-owned storage;
+- добавлен dynamics contract для сборки и решения `M a = f + Jᵀ λ`,
+  `J a = γ`;
+- добавлена maximal-coordinate 2D multibody-модель на canonical
+  `termin-base` types: тела, fixed-point/revolute joints, проекция constraints
+  и reactions;
+- double pendulum проходит общий JSON oracle из Python и C++, а внешний
+  installed-SDK consumer не видит Eigen и собранные матрицы;
+- добавлена maximal-coordinate 3D foundation: principal-axis spatial inertia,
+  world-frame `[linear, angular]` ordering, quaternion exponential update,
+  fixed и two-body point/ball joints;
+- добавлены настоящие fixed/two-body 3D revolute joints: три anchor-строки и
+  две axis-alignment строки оставляют ровно одну относительную twist DOF;
+- старый `RevoluteJoint3D` не переносится под прежней семантикой: его
+  point/ball поведение соответствует `PointJoint3D`, а новый
+  `RevoluteJoint3DHandle` означает axis-constrained шарнир;
 - Python реализация пока остаётся reference implementation.
 
 Инициатива ведётся в Kanboard swimlane `Native QOpt, FEM & Robotics`,
-umbrella #980. Foundation закрыт в #981, solver oracle — в #984.
+umbrella #980. Foundation закрыт в #981, solver oracle — в #984, первый
+multibody vertical slice — в #993–#997.
 
 ## Мотивация
 
@@ -76,7 +94,10 @@ Eigen не должен становиться публичным SDK API.
 5. [x] Перенести `solve_qp_active_set`.
 6. Перенести nullspace helpers: QR basis first, SVD basis only where needed.
 7. Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
-8. Перенести multibody/FEM assembler поверх того же solver API.
+8. [~] Перенести multibody/FEM assembler поверх того же solver API:
+   dense block/dynamics assembly, 2D double pendulum и 3D point-joint
+   foundation готовы; FEM и axis-constrained 3D joints остаются отдельными
+   следующими срезами.
 9. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
 10. Отдельно оценить sparse backend для больших FEM-систем.
 
@@ -143,6 +164,65 @@ caller-owned buffers и private backend. Конкретные solver entry point
 oracle проверяет semantic statuses и KKT bounds, а дополнительный
 детерминированный 2D corpus сравнивает результат с перебором active subsets,
 не фиксируя число итераций или порядок рабочего множества.
+
+## Native dense assembly и 2D multibody contract
+
+`DenseBlockTopology` регистрирует именованные блоки до `finalize()` и выдаёт
+стабильные topology-bound handles. Матрицы и векторы остаются caller-owned:
+assembler только проверяет shape/stride/finite values и детерминированно
+добавляет вклады в переданные views. Очистка storage всегда явная.
+
+`DynamicsTopology` разделяет DOF и constraint blocks, а
+`DynamicsAssembly` собирает:
+
+- mass matrix `M`;
+- generalized load `f`;
+- constraint Jacobian `J`;
+- acceleration-level right-hand side `γ`.
+
+`solve_constrained_dynamics` решает equality QP, публикует физические reactions
+с согласованным знаком и меняет output buffers только при `Optimal`. Таким
+образом FEM, robotics и multibody могут переиспользовать один assembly/solver
+слой, не завися от Eigen в публичном API.
+
+`Multibody2DSystem` — первый пользователь этого слоя. Он использует world-frame
+maximal velocities `[vₓ, vᵧ, ω]`, spatial inertia с локальным центром масс,
+gravity/external loads, fixed-point и revolute constraints. Шаг состоит из
+acceleration solve, semi-implicit integration, mass-metric position projection
+и velocity projection. При ошибке состояние шага откатывается.
+
+Публичный model API принимает `termin::Pose2`/`Vec2`, тела и joints через
+typed handles. Ни `M`, ни `J`, ни Eigen не нужны обычному consumer-у.
+Модель остаётся отдельной от игровой `termin-physics`: общий контракт между
+движками появится только при доказанном runtime-сценарии.
+
+`Multibody3DSystem` продолжает ту же maximal-coordinate модель с шестью DOF на
+тело в порядке `[vₓ,vᵧ,v_z,ωₓ,ωᵧ,ω_z]`. `Pose3` и явные linear/angular поля
+задают семантику; физический layout `Screw3` не используется как неявный
+buffer contract. Spatial inertia хранится как масса, principal moments и
+локальный inertia frame, где translation задаёт COM, а quaternion — главные
+оси. Публичный helper записывает 6x6 матрицу в checked dense view без Eigen.
+
+World-frame bias выводится в той же системе координат, что и generalized
+velocities: центростремительный член для COM и `ω×(Iω)` для центральной
+инерции. Body-frame spatial cross-force formula сюда напрямую неприменима.
+Orientation интегрируется левым quaternion exponential update и нормализуется.
+Fixed/two-body point joints дают три translational constraints и оставляют все
+три относительных вращения свободными. Fixed/two-body revolute joints добавляют
+две независимые строки выравнивания локальных hinge axes. Их position residual
+строится через cross product осей, поэтому не зависит от знака quaternion;
+acceleration RHS включает centripetal и смешанный velocity bias. Публичная
+reaction для revolute разделена на anchor force и поперечный constraint torque;
+его проекция на разрешённую hinge axis равна нулю.
+
+Общий multibody oracle задаёт world-coordinate convention, `J a = γ`, знак
+reactions, gravity convention, quaternion equivalence и допустимые invariant
+bounds для 2D и 3D. Старый Python
+`RevoluteJoint3D` классифицирован как reference-only/retire-name: фактически
+это point/ball joint. Его данные можно перенести в `PointJoint3D`; для нового
+native revolute вызывающий код обязан дополнительно задать ненулевые локальные
+оси обоих joint frames. Нулевая ось отвергается как rank-deficient setup с
+`InvalidJointAxis`.
 
 ## Что не делаем на первом этапе
 
