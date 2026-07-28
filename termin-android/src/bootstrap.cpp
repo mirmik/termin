@@ -62,67 +62,6 @@ extern "C" {
 
 namespace {
 
-class UIWidgetPass final : public termin::CxxFramePass {
-public:
-    static void register_type();
-    std::string input_res = "color";
-    std::string output_res = "color+widgets";
-
-    INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
-    INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
-    INSPECT_TYPE_METADATA(UIWidgetPass, graph, termin::make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}},
-        {{"input_res", "output_res"}}
-    ))
-
-    UIWidgetPass() {
-        pass_name_set("UIWidgets");
-        link_to_type_registry("UIWidgetPass");
-    }
-
-    std::set<const char*> compute_reads() const override {
-        return {input_res.c_str()};
-    }
-
-    std::set<const char*> compute_writes() const override {
-        return {output_res.c_str()};
-    }
-
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {{input_res, output_res}};
-    }
-
-    void execute(termin::ExecuteContext& ctx) override {
-        if (!ctx.ctx2) {
-            tc_log_error("[UIWidgetPass/android] ctx2 is null");
-            return;
-        }
-        auto in_it = ctx.tex2_reads.find(input_res);
-        auto out_it = ctx.tex2_writes.find(output_res);
-        if (in_it == ctx.tex2_reads.end() || !in_it->second ||
-                out_it == ctx.tex2_writes.end() || !out_it->second) {
-            tc_log_warn(
-                "[UIWidgetPass/android] missing tgfx2 resources input='%s' output='%s'",
-                input_res.c_str(),
-                output_res.c_str()
-            );
-            return;
-        }
-        ctx.ctx2->blit(in_it->second, out_it->second);
-    }
-};
-
-void UIWidgetPass::register_type() {
-    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<UIWidgetPass>(
-        "UIWidgetPass", "termin-android");
-    auto& inspect = descriptor.inspect();
-    _register_inspect_input_res(inspect);
-    _register_inspect_output_res(inspect);
-    _register_inspect_metadata_graph(inspect);
-    (void)descriptor.commit();
-}
-
 struct AndroidBootstrapState {
     std::string app_data_dir;
     std::string asset_root;
@@ -243,24 +182,6 @@ termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
     }
     termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
     return dynamic_cast<termin::CameraComponent*>(cxx);
-}
-
-void register_android_runtime_types() {
-    static bool registered = false;
-    if (registered) return;
-    registered = true;
-
-    // Core component and inspect descriptors are committed by bootstrap_runtime().
-    // Android owns only its platform-local pass descriptor.
-    UIWidgetPass::register_type();
-
-    tc_log_info(
-        "termin_android_player: runtime descriptors ready mesh=%zu renderer=%zu camera=%zu light=%zu",
-        tc_inspect_field_count("MeshComponent"),
-        tc_inspect_field_count("MeshRenderer"),
-        tc_inspect_field_count("CameraComponent"),
-        tc_inspect_field_count("LightComponent")
-    );
 }
 
 bool ensure_android_scene_pipeline_locked() {
@@ -662,8 +583,6 @@ bool ensure_player_scene_locked() {
                 *g_state.graphics_host);
         }
     }
-
-    register_android_runtime_types();
 
     const char* required_components[] = {
         "MeshComponent",
