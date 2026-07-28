@@ -2,14 +2,21 @@
 
 ## Status
 
-Accepted and implemented direction. The shared visual-scene foundation, GUI
-adapters and both example gates are implemented. `tcplot` now
+Accepted direction. The shared visual-scene foundation, GUI adapters and both
+example gates are implemented. `tcplot` now
 publishes detached `PlotFrame2D` projection snapshots and has explicit render
 phase boundaries. It also owns retained generation-handle plot annotations and
 projects them into the shared visual scene. Its interactive marker/callout
 vertical slice covers hover, captured data-space dragging, snapping, clipping
 and semantic close actions. This direction is intentionally separate from
 world-space 2D game support.
+
+The item object-model refinement is in progress. The canonical C storage now
+owns typed `tc_graphic_item*` objects following the common embedded-base,
+vtable, body, language, runtime-link and exactly-once deleter architecture used
+by `tc_component`, `tc_pass` and `tc_widget`. The remaining C++
+`Record + std::variant` payload bridge is transitional and must be removed
+before this becomes the long-term C# extension surface.
 
 The shared-foundation refinement is also accepted: no new generic "2D base"
 module is introduced. Exact 2D value math belongs to `termin-base`;
@@ -240,10 +247,11 @@ This lowering boundary is not a second visual vocabulary.
 
 - one lifetime domain per scene;
 - generation-checked item handles;
-- explicit item creation, destruction and reparenting;
+- one canonical C-side `tc_graphic_item*` storage with explicit adoption,
+  destruction and reparenting;
 - visual topology, exact local/world `Affine2f`, ordering and geometric
   clipping;
-- primitive payloads and custom batch references;
+- registered primitive item implementations and custom batch references;
 - local/world bounds and geometric hit testing;
 - hover, press and pointer capture expressed as handles;
 - immutable render/hit snapshots lowered to canonical `DrawList2D` values;
@@ -305,17 +313,24 @@ pool, but public APIs must not expose a universal untyped engine handle.
 
 ### Item ownership
 
-Standard visual primitives are scene-owned records with tagged payloads.
-Extensible custom items may embed a language-neutral item body and vtable and
-must be adopted with exactly one creator-supplied deleter, following the common
-multilanguage lifetime model.
+Every standard or custom visual item embeds one language-neutral
+`tc_graphic_item` base and supplies a vtable for its type-specific behavior.
+The scene adopts the resulting `tc_graphic_item*` with exactly one
+creator-supplied deleter, following the common multilanguage lifetime model
+documented in
+`docs/architecture/2026-07-09-multilanguage-component-lifetime-model.md`.
+Built-in primitives use the same adoption and lifecycle path as user-defined
+items; they are not a privileged payload variant owned by a parallel C++ map.
 
 There is no reference-counted ownership protocol. A language wrapper retains
 the scene invalidation state plus a handle; it does not keep an item alive after
 explicit destruction.
 
 Failed adoption is transactional: either the item becomes reachable through a
-valid scene handle or the supplied deleter is called during rollback.
+valid scene handle or the supplied deleter is called during rollback. `adopt`
+always transfers ownership and requires a non-null deleter. Any future borrowed
+attachment is a separate explicit operation rather than an optional-deleter
+mode.
 
 ### Explicit topology operations
 
@@ -342,12 +357,13 @@ Before an item slot is recycled, the scene:
 1. removes it from topology and ordering structures;
 2. clears selection, hover, press and capture references to it;
 3. invalidates prepared snapshots which reference its revision;
-4. invokes lifecycle cleanup and exactly one deleter when applicable;
-5. increments the slot generation, skipping the invalid zero generation.
+4. invalidates the runtime handle and increments the slot generation, skipping
+   the invalid zero generation;
+5. outside the scene mutex, invokes lifecycle cleanup and exactly one deleter.
 
 ## Item Model
 
-A standard item record contains only state shared by all visual nodes:
+`tc_graphic_item` contains only state and identity shared by all visual nodes:
 
 ```text
 identity        runtime handle, optional stable id, registered type id
@@ -356,10 +372,17 @@ presentation    visible, opacity, local Affine2f
 clipping        none, local clip geometry or inherited clip
 interaction     pointer policy, enabled state, semantic action id
 diagnostics     name, revision, dirty flags
-payload         tagged primitive or adopted custom body
+polyglot        vtable, deleter, native language, body, runtime type link
 ```
 
-Initial payload kinds:
+Type-specific geometry and resources live in implementations embedding that
+base. Their vtables provide local bounds, immutable snapshot emission, hit
+preparation, serialization/deserialization and lifecycle cleanup. Renderer
+execution never calls a language runtime: any language callback needed to
+prepare an item runs at the controlled snapshot-preparation boundary, and the
+published snapshot contains only detached native values and resource handles.
+
+Built-in item types:
 
 - `Group`;
 - `Rect` and `RoundedRect`;
@@ -373,6 +396,13 @@ Initial payload kinds:
 
 `CustomBatch` is required so a scene can place specialized retained GPU
 geometry without decomposing it into one item per vertex or sample.
+
+The existing `VisualScene2D::Record` map and `GraphicItemPayload2D`
+`std::variant` are migration sources only. The target implementation stores one
+canonical `tc_graphic_item*` per generation slot, moves common state into that
+base and ports every built-in type to the same registered object/vtable
+contract. No compatibility fallback retaining both canonical item models is
+required during active development.
 
 Widget portals are not a core payload kind because that would introduce a
 dependency on `termin-gui-native`. A GUI adapter may register a host-specific
@@ -579,10 +609,11 @@ are follow-up capabilities built on the same boundary.
 
 ## C ABI, C++ and Language Bindings
 
-The storage, lifecycle and event contract should have a language-neutral C
-core. C++ provides typed RAII facades for scene access without changing scene
-ownership. Python and C# wrappers carry scene invalidation state plus
-generation handles.
+The storage, lifecycle and event contract has a language-neutral C core.
+`tc_graphic_item` follows the same embedded-base/vtable/body/deleter/runtime-type
+pattern as `tc_component`, `tc_pass` and `tc_widget`. C++ provides typed RAII
+facades for scene access without changing scene ownership. Python and C#
+wrappers carry scene invalidation state plus generation handles.
 
 The C surface consumes the canonical ABI-safe float geometry and
 `tc_affine2f` values from `termin-base`; it does not substitute
@@ -658,13 +689,19 @@ The readiness sequence through GUI composition is now implemented:
    `shared_ptr<GraphicsItem>` storage and callback API has been removed after
    repository consumers moved.
 
-Steps 1–9 are complete, including the `PlotFrame2D`, render-phase, retained
-annotation-projection and interactive marker/callout portions of step 8. The
-two example gates were completed before plot integration began. Python scene
-wrappers share a scene invalidation token but never own items; Python tcplot
-and both C# profiles expose complete generation handles and detached snapshot
-values. C# action delivery uses a polling value so the native layer does not
-borrow a managed delegate.
+Steps 1–9 delivered the first vertical slice, including the `PlotFrame2D`,
+render-phase, retained annotation-projection and interactive marker/callout
+portions of step 8. The two example gates were completed before plot integration
+began. Python scene wrappers share a scene invalidation token but never own
+items; Python tcplot and both C# profiles expose complete generation handles and
+detached snapshot values. C# action delivery uses a polling value so the native
+layer does not borrow a managed delegate.
+
+The next migration replaces the transitional `Record + std::variant` item
+model with the common `tc_graphic_item` C-side object model, ports all built-in
+items, and then updates snapshot, interaction, inspection, serialization and
+language bindings before the scene becomes the composition surface for a
+C#-authored plot module.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
@@ -709,3 +746,6 @@ The direction is implemented when:
   singular transforms, transformed clips, rendering, hit testing, capture and
   annotation projection;
 - documentation and bindings expose one canonical lifetime model.
+- built-in and user-defined graphic items use the same embedded
+  `tc_graphic_item`/vtable/adopt/deleter contract, with no parallel
+  `Record + std::variant` canonical storage.
