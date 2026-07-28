@@ -969,6 +969,32 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "kind": "constant_buffer",
         "scope": "material",
     } in skybox_layout["resources"]
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    contract = manifest["builtin_shader_contract"]
+    assert contract["version"] == 1
+    assert contract["catalog"] == "builtin_shaders/engine-shader-catalog.json"
+    assert {
+        shader["uuid"]
+        for shader in contract["shaders"]
+    } == {
+        shader.uuid
+        for shader in runtime_shaders.default_pipeline_engine_shaders()
+    }
+    catalog = json.loads(
+        (
+            result.package_dir
+            / "builtin_shaders"
+            / "engine-shader-catalog.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert {entry["uuid"] for entry in catalog["shaders"]} == {
+        shader["uuid"] for shader in contract["shaders"]
+    }
+    assert (
+        result.package_dir
+        / "builtin_shaders"
+        / "termin-engine-skybox.shader"
+    ).is_file()
     assert not (result.package_dir / "shaders" / "layout").exists()
 
 
