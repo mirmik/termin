@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted direction; implementation is pending. This note is the architecture
-sketch for the reusable retained 2D visual and interaction layer. The direction
-is intentionally separate from world-space 2D game support.
+Accepted direction; the shared visual-scene foundation, GUI adapters and both
+example gates are implemented. Plot integration is underway: `tcplot` now
+publishes detached `PlotFrame2D` projection snapshots and has explicit render
+phase boundaries. Retained semantic plot annotations are the next layer. This
+direction is intentionally separate from world-space 2D game support.
 
 The shared-foundation refinement is also accepted: no new generic "2D base"
 module is introduced. Exact 2D value math belongs to `termin-base`;
@@ -435,6 +437,10 @@ This supports the common mixed-space marker:
 data ranges, axis transforms, clipping rectangle and pixel scale. It is a value
 snapshot, not a back-reference to a mutable `PlotEngine2D`.
 
+The implemented C++ snapshot is returned by `PlotEngine2D::plot_frame()`.
+Projection and inverse projection operate only on the captured values, so a
+frame remains valid after later pan, zoom, resize or shared-X synchronization.
+
 ## Rendering
 
 Scene traversal prepares an immutable revisioned snapshot and lowers its
@@ -630,8 +636,9 @@ The readiness sequence through GUI composition is now implemented:
    `shared_ptr<GraphicsItem>` storage and callback API has been removed after
    repository consumers moved.
 
-Steps 1–7 and 9 are complete. Step 8 is the next integration stage; the two
-example gates no longer block plot-frame work.
+Steps 1–7 and 9 are complete. The `PlotFrame2D` and render-phase portion of
+step 8 is complete; retained annotation projection and the marker/callout
+vertical slice remain. The two example gates no longer block this work.
 
 Active development does not require a long-lived compatibility fallback. A
 short build-breaking migration is preferable to maintaining two canonical
