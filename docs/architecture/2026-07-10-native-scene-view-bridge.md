@@ -1,67 +1,67 @@
-# Native SceneView Adapter
+# Native SceneView Bridge
 
-`SceneView` is the `termin-gui-native` host for the canonical retained scene
-implemented by `termin-visual-scene`. It is not a second retained scene core.
+`SceneView` is the deliberately small `termin-gui-native` host for
+`termin-visual-scene`. It is a widget, not a second scene model.
 
 The public ownership chain is:
 
 ```text
-shared_ptr<termin::gui_native::GraphicsScene>
-    metadata + invalidation adapter
-    owns one termin::visual::VisualScene2D
-        generation-checked GraphicItemHandle values
-
-GraphicItemRef
-    non-owning scene pointer
-    scene lifetime token
-    GraphicItemHandle
+tc_visual_scene_handle / TcVisualScene
+    resolves a pooled tc_visual_scene
+    the pooled scene owns graphic-item objects
+    exposes generation-checked GraphicItemHandle values
 
 SceneView widget
-    camera and grid state
-    SceneInteraction2D
-    SelectionController2D
-    DragController2D
-    widget portal side table
+    retains only the scene handle
+    owns camera and grid state
+    forwards input in world coordinates
+    keeps temporary widget-portal associations
+
+domain owner (for example nodegraph)
+    creates and mutates items
+    owns stable IDs, selection and drag policy
+    invalidates SceneView after mutations
 ```
 
-The `GraphicsScene` name remains as the small GUI-facing adapter used by the
-C++ and Python widget APIs. It owns no item tree or paint callbacks. Topology,
-payloads, affine composition, ordering, hit testing and render snapshots all
-come from its one `VisualScene2D`.
+There is no GUI-side `GraphicsScene`, `GraphicItemRef`, item metadata store or
+creation API. C++ callers adopt ordinary `GraphicItem2D` objects into
+`TcVisualScene`; Python callers use the creation surface exposed by the same
+visual-scene binding. `SceneView` accepts or returns this non-owning handle
+facade and does not know which concrete item classes it contains.
 
-## Items and rendering
+## Rendering and invalidation
 
-Callers create typed rectangles, rounded rectangles, ellipses, paths,
-polylines and text. Creation returns a `GraphicItemRef`, which is a
-scene-plus-generation-handle value. It becomes invalid when the item or scene
-is destroyed and never owns the item.
+`SceneView::paint` prepends its camera transform and asks `TcVisualScene` to
+append the live tree to a `DrawList2DBuilder`. The resulting canonical draw
+list is recorded in the UI draw list and executed by `UiDrawListRenderer`.
+Exact affine transforms, geometric clips, opacity and stable scene ordering
+therefore remain visual-scene behavior.
 
-`SceneView::paint` prepares the canonical immutable `DrawList2D`, prepends the
-view camera transform and records it in order inside the UI draw list.
-`UiDrawListRenderer` executes that frozen list through the same
-`Canvas2DRenderer` used by other retained-scene hosts. This preserves exact
-affine transforms, geometric clips, opacity and stable scene ordering without
-reintroducing GUI paint callbacks.
+The scene is thread-confined and has no observer, revision or dirty-state
+subsystem. A caller that mutates it calls `SceneView::invalidate_scene`
+(`SceneView.invalidate_scene()` in Python). Replacing the scene or changing a
+portal association invalidates the view automatically.
 
 ## Interaction
 
-Pointer input is mapped from widget coordinates into scene world coordinates.
-The canonical interaction router supplies exact hit testing and per-pointer
-capture. Selection and dragging are explicit controllers owned by the view;
-middle-button pan and wheel zoom remain view camera policies.
+The view converts pointer positions to world coordinates and forwards the raw
+event to an optional callback. If a domain handles pointer down, the view
+captures the pointer until up or cancel; it does not hit-test, select,
+classify or move items itself. Middle-button pan and anchored wheel zoom are
+viewport policies and remain in the widget.
 
-GUI metadata only marks semantic items selectable or draggable. When a
-non-selectable visual child is hit, the view walks generation-checked parents
-to the nearest eligible semantic item. Dragging delegates affine mutation to
-`DragController2D`, so rotation, non-uniform scale and shear are preserved.
+Optional `SceneInteraction2D`, `SelectionController2D` and
+`DragController2D` remain reusable visual-scene policies, but a domain owns
+them when it chooses to use them. Nodegraph currently owns its semantic ID,
+selection, connection and drag state directly.
 
 ## Widget portals
 
-Full widgets are not graphic items. A portal side-table entry associates one
-`GraphicItemHandle` with one `tc_widget_handle`.
+Full widgets are not graphic items. A temporary portal side-table entry
+associates one `GraphicItemHandle` with one `tc_widget_handle`.
 
-- `tc_ui_document` remains the only widget owner.
-- `VisualScene2D` remains the only graphic-item owner.
+- `tc_ui_document` remains the only widget owner;
+- `TcVisualScene` remains the only graphic-item owner;
 - destroying a scene item detaches but does not destroy its widget;
 - destroying a widget removes the stale portal during reconciliation;
 - destroying the view detaches portal widgets without destroying them;
@@ -69,14 +69,6 @@ Full widgets are not graphic items. A portal side-table entry associates one
 
 During layout, a portal widget receives the camera-projected world bounds of
 its item. Portal widgets paint above scene primitives in stable visual order
-and remain clipped by the `SceneView` bounds. Widget focus, keyboard/text
-input, accessibility and recursive hit testing continue through
-`tc_ui_document`.
-
-## Python contract
-
-Python uses `GraphicsScene` creation methods and `GraphicItemRef` values. The
-old constructible `GraphicsItem`, `shared_ptr<GraphicsItem>` ownership,
-`set_paint_callback`, `set_hit_test_callback` and embedded-widget fields were
-removed. Node graph rendering now projects its model into typed scene payloads
-and registers parameter editors through `SceneView.set_widget_portal`.
+and remain clipped by the `SceneView` bounds. Passing portal/tree information
+through a more general scene projection may be designed later; it is not
+encoded as concrete-item knowledge in the view.

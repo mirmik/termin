@@ -608,13 +608,12 @@ Phase 9 rich-text notes:
   MIME/payload/local-coordinate host contract. Headless C++ and Python tests
   cover compositing, ordering, complete input routing, drag/drop, stale
   surfaces, detach and destruction lifetime.
-- `GraphicsScene` is a retained 2D tool-scene, not a plot annotation or render
-  scene model. It exclusively owns shared item roots; items exclusively own
-  children through strong child/weak parent links, reject cycles and expose
-  stable z-order, custom local hit tests and draw-list paint callbacks.
-  `SceneView` owns only camera/interaction state and a shared scene: anchored
-  zoom, captured pan/drag, selection, hover and explicit pointer/key/text
-  adapter handlers. Embedded widgets remain generation-checked document
+- `SceneView` now accepts the canonical shared `TcVisualScene` directly; the
+  former GUI-side `GraphicsScene` metadata/invalidation adapter was removed.
+  The view owns camera/grid behavior, anchored zoom, captured pan and explicit
+  pointer/key/text forwarding, but no item creation, stable IDs, selection or
+  drag policy. Domain owners mutate the scene and explicitly invalidate the
+  view. Embedded widgets remain generation-checked document
   handles and are attached as canonical `tc_widget` children; removal/view
   destruction detaches without silently destroying caller-owned widgets.
   `tcnodegraph.native_view` is now the production projection in the native
@@ -995,9 +994,10 @@ Phase 12 host notes:
   load/save identity and mutations. Both the temporary tcgui window and the
   native editor consume that owner; the former no longer carries a duplicate
   serializer or node factory. `tcnodegraph.native_view` projects the shared
-  graph into native `GraphicsScene` items with socket connection, Bezier edge
-  hit testing, node/group dragging, selection deletion and embedded typed
-  parameter widgets. The production native shell opens the complete editor on
+  graph into canonical `TcVisualScene` items and owns socket connection,
+  semantic IDs, node/group dragging, selection deletion and embedded typed
+  parameter widgets above the deliberately dumb `SceneView`. The production
+  native shell opens the complete editor on
   F11 with native file/input dialogs and context commands. Explicit close
   destroys the dialog, graph parameter subtree and separately owned context
   overlay. Controller, projection, F11 wiring, file roundtrip and lifetime are
