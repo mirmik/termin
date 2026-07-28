@@ -75,7 +75,7 @@ void dispatch_window_input_event(tc_display_handle display, const WindowEvent& e
         case WindowEventType::KeyReleased:
             tc_display_dispatch_key(
                 display,
-                event.key.native_key,
+                window_key_code(event.key.key),
                 event.key.native_scancode,
                 event.type == WindowEventType::KeyReleased
                     ? TC_INPUT_RELEASE
