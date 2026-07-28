@@ -8,11 +8,11 @@ Scope:
 - This is a working audit checklist, not a claim that listed tests are useful.
 
 Current source counts:
-- Total listed entries: 179
-- Current existing listed files: 174
+- Total listed entries: 180
+- Current existing listed files: 175
 - Pruned entries: 5
 - Python-side entries: 123
-- C/C++ entries: 53
+- C/C++ entries: 54
 - CMake test list entries: 1
 - Data fixture entries: 2
 
@@ -194,6 +194,7 @@ Status values:
 | reviewed | cpp | `termin-qopt/tests/test_dense_views.cpp` | Native foundation coverage checks strided vector access, row-major and column-major matrix layout, transposed views, const conversion, and trivially-copyable view contracts. Verified by the `termin_qopt_dense_views_test` CTest. |
 | reviewed | cpp | `termin-qopt/tests/test_equality_qp.cpp` | Native equality-QP coverage consumes the shared JSON oracle generated at build time, then adds redundant equality, strided view, snapshot aliasing, non-convex, invalid-input, and overlapping-output contracts. Verified by the `termin_qopt_equality_qp_test` CTest. |
 | reviewed | cpp | `termin-qopt/tests/test_active_set_qp.cpp` | Native active-set coverage consumes every shared QP oracle case, then checks bounds/full duals, warm-start constraint removal, blocked and unblocked recession directions, Phase I infeasibility, iteration limits, non-convex rejection, output mutation/overlap, and a deterministic 2D corpus against exhaustive active-subset KKT solutions. Verified by the `termin_qopt_active_set_qp_test` CTest. |
+| reviewed | cpp | `termin-qopt/tests/test_hqp.cpp` | Consumes shared nullspace/HQP oracle cases through public Eigen-free APIs; checks QR/SVD basis invariants, projectors, lexicographic task preservation, robotics redundant-Jacobian motion, rank exhaustion, explicit infeasibility, and output preservation on failure. |
 | reviewed | cpp | `termin-qopt/tests/test_public_headers.cpp` | Downstream-style public-header smoke verifies the installed version symbol and fails compilation if public qopt headers leak Eigen macros. Verified by the `termin_qopt_public_headers_test` CTest and an installed `find_package(termin_qopt)` consumer. |
 | reviewed | cpp | `termin-qopt/tests/test_block_assembly.cpp` | Covers stable block handles, deterministic offsets, caller-owned matrix/vector assembly, explicit clear, strided views, invalid topology use, and non-finite contribution rejection. |
 | reviewed | cpp | `termin-qopt/tests/test_dynamics.cpp` | Covers typed `M/f/J/γ` assembly, constrained acceleration/reaction solutions, affine/redundant/inconsistent constraints, strict view validation, and output preservation on failure. |
