@@ -1,7 +1,7 @@
 // bloom_pass.cpp - HDR bloom post-processing pass implementation.
 //
-// Draws through tgfx::RenderContext2: bright prefilter, downsample chain,
-// normalized reconstruction, final smoothing and composite, with HDR
+// Draws through tgfx::RenderContext2: bright prefilter, separable Gaussian
+// downsample chain, normalized reconstruction and composite, with HDR
 // (RGBA16F) intermediate textures, std140 UBOs for parameters and reflected
 // texture bindings for all sampler slots. Legacy tgfx1 dual-path removed in
 // Stage 8.1.
@@ -27,6 +27,7 @@ namespace termin {
 
 constexpr const char* BLOOM_BRIGHT_SHADER_UUID = "termin-engine-bloom-bright";
 constexpr const char* BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample";
+constexpr const char* BLOOM_BLUR_VERTICAL_SHADER_UUID = "termin-engine-bloom-blur-vertical";
 constexpr const char* BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample";
 constexpr const char* BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite";
 
@@ -130,6 +131,10 @@ void BloomPass::ensure_tgfx2_shaders() {
     if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
         downsample_shader_handle_ = tgfx::register_builtin_shader_from_catalog(BLOOM_DOWNSAMPLE_SHADER_UUID);
     }
+    if (tc_shader_handle_is_invalid(blur_vertical_shader_handle_)) {
+        blur_vertical_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(BLOOM_BLUR_VERTICAL_SHADER_UUID);
+    }
     if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
         upsample_shader_handle_ = tgfx::register_builtin_shader_from_catalog(BLOOM_UPSAMPLE_SHADER_UUID);
     }
@@ -168,7 +173,7 @@ void BloomPass::destroy_tgfx2_mip_textures() {
     if (!device2_) {
         mip_textures_.clear();
         reconstruction_textures_.clear();
-        smoothing_textures_.clear();
+        resolve_texture_ = {};
         return;
     }
     for (auto& t : mip_textures_) {
@@ -177,12 +182,12 @@ void BloomPass::destroy_tgfx2_mip_textures() {
     for (auto& t : reconstruction_textures_) {
         if (t) device2_->destroy(t);
     }
-    for (auto& t : smoothing_textures_) {
-        if (t) device2_->destroy(t);
+    if (resolve_texture_) {
+        device2_->destroy(resolve_texture_);
+        resolve_texture_ = {};
     }
     mip_textures_.clear();
     reconstruction_textures_.clear();
-    smoothing_textures_.clear();
 }
 
 void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
@@ -213,21 +218,20 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
         desc.format = tgfx::PixelFormat::RGBA16F;
         desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled;
         mip_textures_.push_back(device2_->create_texture(desc));
-        if (i + 1 < count) {
-            reconstruction_textures_.push_back(device2_->create_texture(desc));
-        }
+        // Unity's Gaussian path uses its "up" chain as the horizontal
+        // temporary, then reuses it as the reconstruction destination.
+        reconstruction_textures_.push_back(device2_->create_texture(desc));
     }
 
-    tgfx::TextureDesc smoothing_desc;
-    smoothing_desc.width = std::max(1, width >> 1);
-    smoothing_desc.height = std::max(1, height >> 1);
-    smoothing_desc.mip_levels = 1;
-    smoothing_desc.sample_count = 1;
-    smoothing_desc.format = tgfx::PixelFormat::RGBA16F;
-    smoothing_desc.usage =
+    tgfx::TextureDesc resolve_desc;
+    resolve_desc.width = std::max(1, width >> 1);
+    resolve_desc.height = std::max(1, height >> 1);
+    resolve_desc.mip_levels = 1;
+    resolve_desc.sample_count = 1;
+    resolve_desc.format = tgfx::PixelFormat::RGBA16F;
+    resolve_desc.usage =
         tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled;
-    smoothing_textures_.push_back(device2_->create_texture(smoothing_desc));
-    smoothing_textures_.push_back(device2_->create_texture(smoothing_desc));
+    resolve_texture_ = device2_->create_texture(resolve_desc);
 }
 
 // Helper — common FSQ draw setup for tgfx2 sub-passes. Sets render state,
@@ -293,13 +297,23 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
     tc_shader* bright_raw = nullptr;
     tc_shader* downsample_raw = nullptr;
+    tc_shader* blur_vertical_raw = nullptr;
     tc_shader* upsample_raw = nullptr;
     tc_shader* composite_raw = nullptr;
     tgfx::ShaderHandle bright_fs     = bloom_resolve_fs(bright_shader_handle_,     device2_, "bright",     &bright_raw);
     tgfx::ShaderHandle downsample_fs = bloom_resolve_fs(downsample_shader_handle_, device2_, "downsample", &downsample_raw);
+    tgfx::ShaderHandle blur_vertical_fs =
+        bloom_resolve_fs(
+            blur_vertical_shader_handle_,
+            device2_,
+            "blur_vertical",
+            &blur_vertical_raw);
     tgfx::ShaderHandle upsample_fs   = bloom_resolve_fs(upsample_shader_handle_,   device2_, "upsample",   &upsample_raw);
     tgfx::ShaderHandle composite_fs  = bloom_resolve_fs(composite_shader_handle_,  device2_, "composite",  &composite_raw);
-    if (!bright_fs || !downsample_fs || !upsample_fs || !composite_fs) return;
+    if (!bright_fs || !downsample_fs || !blur_vertical_fs || !upsample_fs ||
+        !composite_fs) {
+        return;
+    }
 
     // === 1. Bright Pass -> mip[0] ===
     {
@@ -322,7 +336,11 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.end_pass();
     }
 
-    // === 2. Progressive Downsample ===
+    // === 2. Progressive separable Gaussian downsample ===
+    //
+    // This follows Unity URP's Gaussian path: a nine-tap horizontal filter
+    // downsamples into temporary mipUp[i], then an optimized five-sample
+    // vertical filter writes the final mipDown[i].
     for (int i = 1; i < count && i < (int)mip_textures_.size(); i++) {
         int src_w = std::max(1, w >> i);
         int src_h = std::max(1, h >> i);
@@ -330,18 +348,33 @@ void BloomPass::execute(ExecuteContext& ctx) {
         int dst_h = std::max(1, h >> (i + 1));
 
         BloomDownsampleParamsStd140 p{};
-        p.texel_x = 1.0f / static_cast<float>(src_w);
-        p.texel_y = 1.0f / static_cast<float>(src_h);
+        p.texel_x = 2.0f / static_cast<float>(src_w);
+        p.texel_y = 2.0f / static_cast<float>(src_h);
+        device2_->upload_buffer(
+            downsample_ubo_,
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
+
+        c2.begin_pass(reconstruction_textures_[i]);
+        c2.set_viewport(0, 0, dst_w, dst_h);
+        setup_fsq_state(c2, downsample_fs);
+        c2.use_shader_resource_layout(downsample_raw);
+        c2.bind_uniform("u_params", downsample_ubo_);
+        c2.bind_texture("u_texture", mip_textures_[i - 1]);
+        c2.draw_fullscreen_quad();
+        c2.end_pass();
+
+        p.texel_x = 1.0f / static_cast<float>(dst_w);
+        p.texel_y = 1.0f / static_cast<float>(dst_h);
         device2_->upload_buffer(
             downsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, downsample_fs);
-        c2.use_shader_resource_layout(downsample_raw);
+        setup_fsq_state(c2, blur_vertical_fs);
+        c2.use_shader_resource_layout(blur_vertical_raw);
         c2.bind_uniform("u_params", downsample_ubo_);
-        c2.bind_texture("u_texture", mip_textures_[i - 1]);
+        c2.bind_texture("u_texture", reconstruction_textures_[i]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -367,7 +400,9 @@ void BloomPass::execute(ExecuteContext& ctx) {
         BloomUpsampleParamsStd140 p{};
         p.texel_x = 1.0f / static_cast<float>(src_w);
         p.texel_y = 1.0f / static_cast<float>(src_h);
-        p.scatter = std::clamp(scatter, 0.0f, 1.0f);
+        // Match Unity's public Scatter control: keep a small contribution
+        // from both sides even at the inspector endpoints.
+        p.scatter = 0.05f + 0.90f * std::clamp(scatter, 0.0f, 1.0f);
         device2_->upload_buffer(
             upsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
@@ -383,17 +418,18 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.end_pass();
     }
 
-    // === 4. Final half-resolution smoothing ===
-    //
-    // Reconstruction deliberately retains some detail from mip[0]. Without a
-    // final low-pass, isolated HDR pixels expose that half-resolution kernel
-    // as a visible grid. Two 5x5 binomial passes compose to a smooth 9x9
-    // kernel while staying cheaper than filtering at output resolution.
     tgfx::TextureHandle bloom_texture =
         count > 1 ? reconstruction_textures_[0] : mip_textures_[0];
-    const int bloom_w = std::max(1, w >> 1);
-    const int bloom_h = std::max(1, h >> 1);
-    for (tgfx::TextureHandle smoothing_texture : smoothing_textures_) {
+
+    // Termin's fullscreen blit convention accumulates a subpixel phase shift
+    // across the mip pyramid. Resolve once with a separable Gaussian at half
+    // resolution so that the reconstructed point-spread function stays
+    // continuous instead of exposing diagonal mip-grid lobes.
+    {
+        const int bloom_w = std::max(1, w >> 1);
+        const int bloom_h = std::max(1, h >> 1);
+        const tgfx::TextureHandle horizontal_target =
+            count > 1 ? mip_textures_[0] : reconstruction_textures_[0];
         BloomDownsampleParamsStd140 p{};
         p.texel_x = 1.0f / static_cast<float>(bloom_w);
         p.texel_y = 1.0f / static_cast<float>(bloom_h);
@@ -401,7 +437,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
             downsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
-        c2.begin_pass(smoothing_texture);
+        c2.begin_pass(horizontal_target);
         c2.set_viewport(0, 0, bloom_w, bloom_h);
         setup_fsq_state(c2, downsample_fs);
         c2.use_shader_resource_layout(downsample_raw);
@@ -409,10 +445,19 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.bind_texture("u_texture", bloom_texture);
         c2.draw_fullscreen_quad();
         c2.end_pass();
-        bloom_texture = smoothing_texture;
+
+        c2.begin_pass(resolve_texture_);
+        c2.set_viewport(0, 0, bloom_w, bloom_h);
+        setup_fsq_state(c2, blur_vertical_fs);
+        c2.use_shader_resource_layout(blur_vertical_raw);
+        c2.bind_uniform("u_params", downsample_ubo_);
+        c2.bind_texture("u_texture", horizontal_target);
+        c2.draw_fullscreen_quad();
+        c2.end_pass();
+        bloom_texture = resolve_texture_;
     }
 
-    // === 5. Composite Pass (input + smoothed bloom -> output) ===
+    // === 4. Composite Pass (input + resolved bloom -> output) ===
     {
         BloomCompositeParamsStd140 p{};
         p.intensity = intensity;

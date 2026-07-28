@@ -163,6 +163,7 @@ resource names such as `material`, `draw_data`, or `u_params`.
 | `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-ground-grid.slang` |
 | `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-solid-primitive.slang` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
+| `termin-engine-bloom-blur-vertical` | `BloomBlurVerticalFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-blur-vertical.frag.slang` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-upsample.frag.slang` |
 | `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-composite.frag.slang` |
 | `termin-engine-tonemap` | `TonemapEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-tonemap.frag.slang` |

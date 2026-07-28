@@ -30,7 +30,6 @@ def test_builtin_default_pipeline_color_fbos_follow_output_render_target(renderi
     assert formats["color_world2d"] == "render_target"
     assert formats["color_resolved"] == "render_target"
     assert formats["color_bloom"] == "render_target"
-    assert formats["color_tonemapped"] == "render_target"
     assert formats["color+widgets"] == "render_target"
 
     assert samples["empty"] == 4
@@ -49,10 +48,10 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager)
 
     assert "ResolvePass" in pass_types
     assert "World2DPass" in pass_types
+    assert "TonemapPass" not in pass_types
     assert pass_names.index("World2D") < pass_names.index("Resolve")
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
-    assert pass_names.index("Bloom") < pass_names.index("Tonemap")
-    assert pass_names.index("Tonemap") < pass_names.index("UIWidgets")
+    assert pass_names.index("Bloom") < pass_names.index("UIWidgets")
 
 
 def test_builtin_default_pipeline_uses_python_ui_widget_pass_when_available(rendering_manager):

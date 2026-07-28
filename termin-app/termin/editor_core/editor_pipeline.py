@@ -155,7 +155,11 @@ def make_editor_pipeline() -> RenderPipeline:
         input_res="color_bloom",
         output_res="color_tonemapped",
         pass_name="Tonemap",
-        method=0,
+        # Editor materials and project pipelines are authored against the
+        # unmodified display response. Keep this as an explicit copy pass:
+        # applying ACES here changes editor-only midtones and makes the scene
+        # disagree with custom game viewports.
+        method=2,
     )
 
     bloom_pass = BloomPass(

@@ -46,6 +46,7 @@ ENGINE_SHADOW_SHADER_UUID = "termin-engine-shadow"
 ENGINE_GRAYSCALE_SHADER_UUID = "termin-engine-grayscale"
 ENGINE_BLOOM_BRIGHT_SHADER_UUID = "termin-engine-bloom-bright"
 ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample"
+ENGINE_BLOOM_BLUR_VERTICAL_SHADER_UUID = "termin-engine-bloom-blur-vertical"
 ENGINE_BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample"
 ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
 ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
@@ -466,6 +467,7 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
         builtin_engine_shader_artifact(ENGINE_GRAYSCALE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_BLOOM_BRIGHT_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID),
+        builtin_engine_shader_artifact(ENGINE_BLOOM_BLUR_VERTICAL_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_BLOOM_UPSAMPLE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_BLOOM_COMPOSITE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_TONEMAP_SHADER_UUID),

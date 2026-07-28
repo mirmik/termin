@@ -27,6 +27,7 @@ EXPECTED_SHADER_STAGES = (
     "termin-engine-highlight.frag",
     "termin-engine-bloom-bright.frag",
     "termin-engine-bloom-downsample.frag",
+    "termin-engine-bloom-blur-vertical.frag",
     "termin-engine-bloom-upsample.frag",
     "termin-engine-bloom-composite.frag",
     "termin-engine-tonemap.frag",
