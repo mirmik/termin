@@ -2,6 +2,7 @@
 #include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
+#include "tc_input_event.h"
 #ifdef TERMIN_DISPLAY_HAS_SDL
 #include "termin/input/window_input_bridge.hpp"
 #include "termin/window/event.hpp"
@@ -26,6 +27,9 @@ struct CountingInput {
     double last_x = 0.0;
     double last_y = 0.0;
     uint32_t last_codepoint = 0;
+    int last_key = -1;
+    int last_scancode = -1;
+    int last_key_action = -1;
 };
 
 void surface_get_size(tc_render_surface* self, int* width, int* height)
@@ -66,6 +70,14 @@ void count_text(tc_input_manager* self, uint32_t codepoint)
     input->last_codepoint = codepoint;
 }
 
+void count_key(tc_input_manager* self, int key, int scancode, int action, int)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->last_key = key;
+    input->last_scancode = scancode;
+    input->last_key_action = action;
+}
+
 void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t click_count)
 {
     auto* input = reinterpret_cast<CountingInput*>(self->userdata);
@@ -88,6 +100,7 @@ const tc_render_surface_vtable fixed_surface_vtable = {
 const tc_input_manager_vtable counting_input_vtable = {
     .on_mouse_button = count_mouse_button,
     .on_mouse_move = count_mouse_move,
+    .on_key = count_key,
     .on_char = count_text,
 };
 
@@ -99,6 +112,9 @@ void init_counting_input(CountingInput* input)
     input->last_x = 0.0;
     input->last_y = 0.0;
     input->last_codepoint = 0;
+    input->last_key = -1;
+    input->last_scancode = -1;
+    input->last_key_action = -1;
     tc_input_manager_init(&input->manager, &counting_input_vtable);
     input->manager.userdata = input;
 }
@@ -180,6 +196,25 @@ int main()
     termin::dispatch_window_input_event(display, pointer_event);
     if (right_input.last_x != 75.0 || right_input.last_y != 50.0) {
         std::fprintf(stderr, "window bridge used logical instead of framebuffer coordinates\n");
+        return 1;
+    }
+
+    termin::WindowEvent key_event;
+    key_event.type = termin::WindowEventType::KeyPressed;
+    key_event.key.key = termin::WindowKey::W;
+    key_event.key.native_key = 'w';
+    key_event.key.native_scancode = 26;
+    termin::dispatch_window_input_event(display, key_event);
+    if (left_input.last_key != TC_KEY_W ||
+        left_input.last_scancode != 26 ||
+        left_input.last_key_action != TC_INPUT_PRESS) {
+        std::fprintf(
+            stderr,
+            "window bridge did not translate portable key code: "
+            "key=%d scancode=%d action=%d\n",
+            left_input.last_key,
+            left_input.last_scancode,
+            left_input.last_key_action);
         return 1;
     }
 
