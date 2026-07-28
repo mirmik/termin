@@ -126,8 +126,7 @@ class _Interaction:
 
     def __init__(self) -> None:
         self.selection = _Selection()
-        self.on_request_scene_render = None
-        self.on_request_highlight_render = None
+        self.on_request_update = None
         self.on_entity_click = None
         self.on_viewport_pointer_event = None
         self.on_key = None
@@ -147,16 +146,12 @@ class _Interaction:
     def after_render(self) -> None:
         self.after_render_count += 1
 
-    def poll_picking(self) -> None:
-        pass
-
     def set_gizmo_target(self, value) -> None:
         self.gizmo_target = value
         self.transform_gizmo.target = value
 
     def clear_callbacks(self) -> None:
-        self.on_request_scene_render = None
-        self.on_request_highlight_render = None
+        self.on_request_update = None
         self.on_transform_end = None
         self.on_key = None
         self.on_entity_click = None
@@ -247,7 +242,7 @@ def test_native_editor_viewport_uses_legacy_camera_relative_gizmo_scale():
         camera=SimpleNamespace(entity=_Entity(8.0))
     )
     renders = []
-    runtime._request_highlight_render = lambda: renders.append(True)
+    runtime._request_render = lambda: renders.append(True)
 
     runtime.sync_gizmo_target(active_tools=0)
 
@@ -320,8 +315,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         device="device",
         rendering_manager=manager,
         scene="scene",
-        request_scene_render=lambda: renders.append("scene"),
-        request_highlight_render=lambda: renders.append("highlight"),
+        request_render=lambda: renders.append(True),
     )
 
     assert runtime.root.stable_id == "editor.viewport"
@@ -352,7 +346,7 @@ root:
     assert document.root_count == 0
     with pytest.raises(ValueError, match="already installed"):
         runtime.install_overlay("test", loaded_overlay)
-    assert renders == ["highlight"]
+    assert renders == [True]
     renders.clear()
 
     runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
@@ -378,7 +372,7 @@ root:
     assert not renders
     overlay_enabled = True
     runtime.after_render()
-    assert renders == ["highlight"]
+    assert renders == [True]
 
     runtime.close()
     assert CameraOverlay.instances[0].closed
@@ -400,8 +394,7 @@ def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
 
     bootstrap_editor()
     interaction = EditorInteractionSystem()
-    interaction.on_request_scene_render = lambda: None
-    interaction.on_request_highlight_render = lambda: None
+    interaction.on_request_update = lambda: None
     interaction.on_transform_end = lambda _old, _new: None
     interaction.on_key = lambda _event: None
     interaction.on_entity_click = lambda _event: False
@@ -410,7 +403,6 @@ def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
     interaction.selection.on_hover_changed = lambda _entity: None
 
     interaction.clear_callbacks()
-    assert interaction.on_request_scene_render is None
-    assert interaction.on_request_highlight_render is None
+    assert interaction.on_request_update is None
     assert interaction.on_transform_end is None
     assert interaction.on_key is None
