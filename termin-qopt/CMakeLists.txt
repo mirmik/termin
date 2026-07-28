@@ -24,6 +24,7 @@ target_include_directories(termin_qopt_eigen SYSTEM INTERFACE
 )
 
 add_library(termin_qopt SHARED
+    src/active_set_qp.cpp
     src/equality_qp.cpp
     src/qp_types.cpp
     src/termin_qopt.cpp
@@ -74,6 +75,9 @@ if(TERMIN_QOPT_BUILD_TESTS)
             tests/oracle/solver_oracle.json
         VERBATIM
     )
+    add_custom_target(termin_qopt_generate_oracle_header
+        DEPENDS "${TERMIN_QOPT_ORACLE_HEADER}"
+    )
 
     add_executable(termin_qopt_dense_views_test
         tests/test_dense_views.cpp
@@ -89,13 +93,27 @@ if(TERMIN_QOPT_BUILD_TESTS)
 
     add_executable(termin_qopt_equality_qp_test
         tests/test_equality_qp.cpp
-        "${TERMIN_QOPT_ORACLE_HEADER}"
+    )
+    add_dependencies(termin_qopt_equality_qp_test
+        termin_qopt_generate_oracle_header
     )
     target_include_directories(termin_qopt_equality_qp_test PRIVATE
         "${TERMIN_QOPT_GENERATED_TEST_DIR}"
     )
     target_link_libraries(termin_qopt_equality_qp_test PRIVATE termin_qopt)
     add_test(NAME termin_qopt_equality_qp_test COMMAND termin_qopt_equality_qp_test)
+
+    add_executable(termin_qopt_active_set_qp_test
+        tests/test_active_set_qp.cpp
+    )
+    add_dependencies(termin_qopt_active_set_qp_test
+        termin_qopt_generate_oracle_header
+    )
+    target_include_directories(termin_qopt_active_set_qp_test PRIVATE
+        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
+    )
+    target_link_libraries(termin_qopt_active_set_qp_test PRIVATE termin_qopt)
+    add_test(NAME termin_qopt_active_set_qp_test COMMAND termin_qopt_active_set_qp_test)
 endif()
 
 include(GNUInstallDirs)

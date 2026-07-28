@@ -23,8 +23,6 @@ struct DenseVectorView {
     [[nodiscard]] constexpr double& operator[](std::size_t index) const noexcept {
         return data[static_cast<DenseIndex>(index) * stride];
     }
-
-    [[nodiscard]] constexpr operator ConstDenseVectorView() const noexcept;
 };
 
 struct ConstDenseVectorView {
@@ -52,10 +50,6 @@ struct ConstDenseVectorView {
         return data[static_cast<DenseIndex>(index) * stride];
     }
 };
-
-constexpr DenseVectorView::operator ConstDenseVectorView() const noexcept {
-    return ConstDenseVectorView{data, size, stride};
-}
 
 struct DenseMatrixView {
     double* data = nullptr;
@@ -93,8 +87,6 @@ struct DenseMatrixView {
             + static_cast<DenseIndex>(column) * column_stride
         ];
     }
-
-    [[nodiscard]] constexpr operator ConstDenseMatrixView() const noexcept;
 };
 
 struct ConstDenseMatrixView {
@@ -168,15 +160,5 @@ struct ConstDenseMatrixView {
         ];
     }
 };
-
-constexpr DenseMatrixView::operator ConstDenseMatrixView() const noexcept {
-    return ConstDenseMatrixView{
-        data,
-        rows,
-        columns,
-        row_stride,
-        column_stride,
-    };
-}
 
 } // namespace termin::qopt

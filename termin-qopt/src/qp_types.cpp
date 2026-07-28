@@ -36,10 +36,18 @@ std::string_view qp_diagnostic_name(QpDiagnostic diagnostic) noexcept {
     return "non_symmetric_hessian";
   case QpDiagnostic::InvalidTolerance:
     return "invalid_tolerance";
+  case QpDiagnostic::InvalidOptions:
+    return "invalid_options";
+  case QpDiagnostic::InvalidBounds:
+    return "invalid_bounds";
+  case QpDiagnostic::InvalidWarmStart:
+    return "invalid_warm_start";
   case QpDiagnostic::OverlappingOutputs:
     return "overlapping_outputs";
   case QpDiagnostic::InconsistentEqualities:
     return "inconsistent_equalities";
+  case QpDiagnostic::InconsistentInequalities:
+    return "inconsistent_inequalities";
   case QpDiagnostic::LinearDescentInNullspace:
     return "linear_descent_in_nullspace";
   case QpDiagnostic::NegativeCurvature:
@@ -48,6 +56,8 @@ std::string_view qp_diagnostic_name(QpDiagnostic diagnostic) noexcept {
     return "decomposition_failure";
   case QpDiagnostic::ResidualTooLarge:
     return "residual_too_large";
+  case QpDiagnostic::IterationLimit:
+    return "iteration_limit";
   }
   return "unknown";
 }
