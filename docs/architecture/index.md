@@ -22,6 +22,8 @@
 - [Language-neutral deferred dispatcher](2026-07-24-language-neutral-deferred-dispatcher.md) - optional caller-driven `termin-dispatch` с каноническим C ABI, C++/Python projections и без автоматической интеграции в Termin applications.
 - [Centralized frame memory](2026-07-21-centralized-frame-memory.md) - архитектурный набросок общей CPU frame arena, scoped scratch-регионов, telemetry и политики миграции hot-path allocations.
 - [Graphics host and window session](2026-07-21-graphics-host-and-window-session.md) - каноническое владение application graphics domain через `GraphicsHost` и композиционный lifetime `WindowedGraphicsSession`.
+- [Extensible material surface contracts](2026-07-28-extensible-material-surface-contracts.md) - versioned shader-side surface producer/consumer contracts, standard PBR v1 и граница plugin-owned G-buffer/deferred pipelines.
+- [Backend-neutral MRT contract](2026-07-28-backend-neutral-mrt-contract.md) - pass-local ordered color attachments из независимых framegraph textures, pipeline identity, validation и cross-backend semantics.
 
 ## Historical Notes
 

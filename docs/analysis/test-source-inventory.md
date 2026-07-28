@@ -8,12 +8,13 @@ Scope:
 - This is a working audit checklist, not a claim that listed tests are useful.
 
 Current source counts:
-- Total listed entries: 167
-- Current existing listed files: 162
+- Total listed entries: 180
+- Current existing listed files: 175
 - Pruned entries: 5
-- Python-side entries: 121
-- C/C++ entries: 45
+- Python-side entries: 123
+- C/C++ entries: 54
 - CMake test list entries: 1
+- Data fixture entries: 2
 
 Status values:
 - `pending`: not reviewed in this audit checklist yet
@@ -184,11 +185,23 @@ Status values:
 | reviewed | python | `termin-qopt/tests/qp_solve_test.py` | Consolidated random KKT coverage into deterministic stress test plus analytic equality-QP solution. |
 | reviewed | python | `termin-qopt/tests/robot_test.py` | Robot Jacobian, branching, integration, and IK regressions are useful; long IK loops remain bounded and diagnostic enough for current coverage. Verified by qopt/FEM Python test run. |
 | reviewed | python | `termin-qopt/tests/solver_oracle_test.py` | Language-neutral QP/nullspace/HQP corpus is validated through analytic primal/KKT bounds, basis-independent subspace invariants, hierarchy residuals, and independent certificates for non-optimal statuses. Exact iterations and basis vectors are intentionally excluded. |
+| reviewed | python | `termin-qopt/tests/multibody_oracle_test.py` | Validates the shared multibody schema, analytic 3D fixed/two-body hinge certificates, and exercises 2D free-fall, anchored-body, and double-pendulum fixtures through the classified legacy Python reference without treating every legacy API detail as normative. |
+| reviewed | python-support | `termin-qopt/tests/generate_qp_oracle_header.py` | Build-time adapter from the language-neutral solver JSON fixture to a native C++ header; support code only. |
+| reviewed | python-support | `termin-qopt/tests/generate_multibody_oracle_header.py` | Build-time adapter from the language-neutral multibody JSON fixture to a native C++ header; support code only. |
+| reviewed | data | `termin-qopt/tests/oracle/solver_oracle.json` | Shared solver cases, semantic statuses, analytic certificates, and invariant tolerances consumed by Python and C++. |
+| reviewed | data | `termin-qopt/tests/oracle/multibody_oracle.json` | Shared coordinate conventions, legacy-model classification, and free-fall/anchored/fixed-hinge/2D-and-3D-double-pendulum cases consumed by Python and C++. |
 | reviewed | python | `termin-qopt/tests/subspaces_test.py` | Projector/basis contract checks are repetitive but concrete; parameterization would be cosmetic and is not a #43 blocker. Verified by qopt/FEM Python test run. |
 | reviewed | cpp | `termin-qopt/tests/test_dense_views.cpp` | Native foundation coverage checks strided vector access, row-major and column-major matrix layout, transposed views, const conversion, and trivially-copyable view contracts. Verified by the `termin_qopt_dense_views_test` CTest. |
 | reviewed | cpp | `termin-qopt/tests/test_equality_qp.cpp` | Native equality-QP coverage consumes the shared JSON oracle generated at build time, then adds redundant equality, strided view, snapshot aliasing, non-convex, invalid-input, and overlapping-output contracts. Verified by the `termin_qopt_equality_qp_test` CTest. |
 | reviewed | cpp | `termin-qopt/tests/test_active_set_qp.cpp` | Native active-set coverage consumes every shared QP oracle case, then checks bounds/full duals, warm-start constraint removal, blocked and unblocked recession directions, Phase I infeasibility, iteration limits, non-convex rejection, output mutation/overlap, and a deterministic 2D corpus against exhaustive active-subset KKT solutions. Verified by the `termin_qopt_active_set_qp_test` CTest. |
+| reviewed | cpp | `termin-qopt/tests/test_hqp.cpp` | Consumes shared nullspace/HQP oracle cases through public Eigen-free APIs; checks QR/SVD basis invariants, projectors, lexicographic task preservation, robotics redundant-Jacobian motion, rank exhaustion, explicit infeasibility, and output preservation on failure. |
 | reviewed | cpp | `termin-qopt/tests/test_public_headers.cpp` | Downstream-style public-header smoke verifies the installed version symbol and fails compilation if public qopt headers leak Eigen macros. Verified by the `termin_qopt_public_headers_test` CTest and an installed `find_package(termin_qopt)` consumer. |
+| reviewed | cpp | `termin-qopt/tests/test_block_assembly.cpp` | Covers stable block handles, deterministic offsets, caller-owned matrix/vector assembly, explicit clear, strided views, invalid topology use, and non-finite contribution rejection. |
+| reviewed | cpp | `termin-qopt/tests/test_dynamics.cpp` | Covers typed `M/f/J/γ` assembly, constrained acceleration/reaction solutions, affine/redundant/inconsistent constraints, strict view validation, and output preservation on failure. |
+| reviewed | cpp | `termin-qopt/tests/test_multibody2d.cpp` | Covers body validation, COM-offset free fall, persistent loads, anchored-body projection, two-body revolute constraints, reactions, and state rollback contracts. |
+| reviewed | cpp | `termin-qopt/tests/test_multibody3d.cpp` | Consumes shared 3D oracle fixtures and covers spatial inertia, free fall, gyroscopic bias, point joints, true rank-five fixed/two-body revolute joints, one-axis relative twist, reaction work, rank-deficient axis diagnostics, and a two-link 3D pendulum horizon. |
+| reviewed | cpp | `termin-qopt/tests/test_double_pendulum2d.cpp` | Consumes the generated multibody oracle and checks sampled state, position/velocity constraints, and energy drift for the native double pendulum. |
+| reviewed | cpp | `termin-qopt/examples/double_pendulum2d.cpp` | Public-API-only installed-consumer example; registered with CTest to keep assembly/integration usable without exposing Eigen, `M`, or `J`. |
 | reviewed | cpp | `termin-render-passes/tests/test_builtin_shader_sources.cpp` | Built-in shader source/catalog tests protect resource-root loading, catalog uuid lookup, migrated engine shader table, Slang skybox material params, explicit entries, and vertex-only templates. Verified by `ctest --test-dir build/Release-tests -R '^termin_render_passes_builtin_shader_sources_test$' --output-on-failure`. |
 | reviewed | c | `termin-render/tests/test_drawable_capability.c` | Drawable capability live reindex test checks scene capability count, phase queries, RenderItem collection dispatch, foreach filtering, and detach behavior. Verified by `ctest --test-dir build/Release-tests -R '^termin_render_drawable_test$' --output-on-failure`. |
 | reviewed | c | `termin-scene/tests/test_archetype.c` | Removed stale internal-query commentary; remaining SoA archetype/pool migration/query/destroy/swap-remove checks exercise concrete data preservation and counters. Verified by scene CTest batch. |
