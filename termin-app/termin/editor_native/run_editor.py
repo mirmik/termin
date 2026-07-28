@@ -269,6 +269,7 @@ def _compose_native_editor(
 
     def refresh_editor_ui() -> None:
         """Present UI mutations made by a synchronous long-running operation."""
+        window_manager.service_platform_events()
         request_editor_render()
         host.render()
 
@@ -1545,6 +1546,7 @@ def _compose_native_editor(
 
     def on_resource_reloaded(name: str, kind: str) -> None:
         _logger.info("Native editor reloaded %s resource: %s", kind, name)
+        window_manager.service_platform_events()
         request_editor_render()
 
     project_file_watcher, component_file_processor = create_editor_project_file_watcher(

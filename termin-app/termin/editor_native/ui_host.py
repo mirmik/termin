@@ -502,6 +502,17 @@ class EditorWindowRegistry:
                 self.destroy_window(window)
         return True, routed
 
+    def service_platform_events(self) -> int:
+        """Keep the OS connection responsive while application work is synchronous.
+
+        Portable events remain queued in the framework-neutral window manager.
+        Startup code can therefore answer compositor protocol traffic without
+        dispatching UI callbacks against a partially constructed editor.
+        """
+        if self._closed:
+            return 0
+        return int(self.window_manager.pump_events())
+
     def render_requested(self) -> int:
         rendered = 0
         contents = (self.main.content,) + tuple(
