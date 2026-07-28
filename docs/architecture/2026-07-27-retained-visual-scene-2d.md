@@ -476,7 +476,7 @@ plot background and grid
 underlay annotations
 large series and scatter batches
 overlay annotations
-unclipped callouts and plot chrome
+callouts and plot chrome
 ```
 
 Each annotation selects a phase and clipping policy explicitly. Draw order is
@@ -571,7 +571,7 @@ The implemented initial vertical slice covers:
 - hover state;
 - captured dragging with data-space update;
 - at least one semantic marker action;
-- plot clipping and unclipped callout behavior;
+- plot-area clipping across every marker visual;
 - headless hit/render snapshot tests.
 
 Legends, arbitrary rich marker layout, 3D annotations and full widget portals
