@@ -77,13 +77,14 @@ runtime type link следуют тем же правилам, что у compone
 инвалидирует handle, затем вне scene mutex вызывает lifecycle cleanup и ровно
 один deleter.
 
-Текущая реализация `VisualScene2D`, где C storage slot содержит необязательные
-`void* payload/deleter`, а реальные state и закрытый `std::variant` живут во
-втором `unordered_map<Record>`, является переходной и не задаёт целевую
-архитектуру. Эти два слоя должны быть сведены к одному каноническому
-`tc_graphic_item*` storage. Встроенные `Group`, `Rect`, `Text`, `Path` и прочие
-item-типы должны стать обычными реализациями общей модели, а не особыми
-вариантами, зашитыми в контейнер.
+`VisualScene2D` сведён к одному каноническому `tc_graphic_item*` storage.
+Прежний второй `unordered_map<Record>` удалён. Встроенные `Group`, `Rect`,
+`Text`, `Path` и прочие item-типы являются отдельными C++-телами со встроенным
+`tc_graphic_item`, собственным vtable и тем же adopt/deleter путём, что
+пользовательские реализации. Сохранившийся `GraphicItemPayload2D`
+`std::variant` — только detached value DTO для публичных snapshot,
+serialization и совместимости вызывающего C++ API; он не хранится в scene как
+каноническая модель item.
 
 ## О фабриках и inspect. 
 
