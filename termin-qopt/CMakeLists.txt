@@ -32,9 +32,11 @@ add_library(termin_qopt SHARED
     src/block_assembly.cpp
     src/dynamics.cpp
     src/equality_qp.cpp
+    src/hqp.cpp
     src/multibody2d.cpp
     src/multibody3d.cpp
     src/qp_types.cpp
+    src/subspaces.cpp
     src/termin_qopt.cpp
 )
 add_library(termin_qopt::termin_qopt ALIAS termin_qopt)
@@ -202,6 +204,18 @@ if(TERMIN_QOPT_BUILD_TESTS)
     )
     target_link_libraries(termin_qopt_active_set_qp_test PRIVATE termin_qopt)
     add_test(NAME termin_qopt_active_set_qp_test COMMAND termin_qopt_active_set_qp_test)
+
+    add_executable(termin_qopt_hqp_test
+        tests/test_hqp.cpp
+    )
+    add_dependencies(termin_qopt_hqp_test
+        termin_qopt_generate_oracle_header
+    )
+    target_include_directories(termin_qopt_hqp_test PRIVATE
+        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
+    )
+    target_link_libraries(termin_qopt_hqp_test PRIVATE termin_qopt)
+    add_test(NAME termin_qopt_hqp_test COMMAND termin_qopt_hqp_test)
 endif()
 
 include(GNUInstallDirs)
