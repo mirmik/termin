@@ -868,6 +868,31 @@ bool load_shader_program_resource(
         desc.name = property_names.back().c_str();
         desc.property_type = property_types.back().c_str();
         desc.label = property_labels.back().empty() ? nullptr : property_labels.back().c_str();
+        const nos::trent* expected_encoding = dict_get(item, "expected_encoding");
+        const bool is_texture =
+            property_types.back() == "Texture" || property_types.back() == "Texture2D";
+        if (is_texture) {
+            if (!expected_encoding || !expected_encoding->is_string()) {
+                error = "shader program texture property requires expected_encoding";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
+            }
+            const std::string encoding = expected_encoding->as_string();
+            if (encoding == "srgb") {
+                desc.expected_encoding = TC_TEXTURE_ENCODING_SRGB;
+            } else if (encoding == "linear") {
+                desc.expected_encoding = TC_TEXTURE_ENCODING_LINEAR;
+            } else {
+                error = "shader program property expected_encoding must be 'srgb' or 'linear'";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
+            }
+            desc.has_expected_encoding = 1;
+        } else if (expected_encoding) {
+            error = "shader program non-texture property must not have expected_encoding";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
         desc.default_value = default_value.type == TC_UNIFORM_NONE ? nullptr : &default_value;
         desc.default_text = property_default_texts[index].empty()
             ? nullptr : property_default_texts[index].c_str();

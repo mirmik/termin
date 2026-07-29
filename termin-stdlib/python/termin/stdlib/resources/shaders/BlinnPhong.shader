@@ -21,7 +21,7 @@
 @property Color u_specular_color = Color(1.0, 1.0, 1.0, 1.0)
 @property Float u_ambient_factor = 1.0 range(0.0, 1.0)
 @property Float u_shininess = 32.0 range(1.0, 256.0)
-@property Texture2D u_diffuse_texture = "white"
+@property Texture2D u_diffuse_texture = "white" encoding(srgb)
 
 @stage vertex
 import termin_prelude;

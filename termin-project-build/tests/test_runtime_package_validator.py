@@ -517,6 +517,71 @@ def test_validate_runtime_package_rejects_incompatible_shader_program_schema(tmp
     )
 
 
+@pytest.mark.parametrize(
+    ("properties", "message"),
+    [
+        (
+            [{"name": "u_albedo", "property_type": "Texture"}],
+            "Shader program texture property expected_encoding must be 'srgb' or 'linear'",
+        ),
+        (
+            [
+                {
+                    "name": "u_albedo",
+                    "property_type": "Texture",
+                    "expected_encoding": "display-p3",
+                }
+            ],
+            "Shader program texture property expected_encoding must be 'srgb' or 'linear'",
+        ),
+        (
+            [
+                {
+                    "name": "u_factor",
+                    "property_type": "Float",
+                    "expected_encoding": "linear",
+                }
+            ],
+            "Shader program non-texture property must not have expected_encoding",
+        ),
+    ],
+)
+def test_validate_runtime_package_checks_shader_property_encoding_contract(
+    tmp_path: Path,
+    properties: list[dict[str, object]],
+    message: str,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    _write_shader_program_resource(package_dir)
+    program_path = package_dir / "shaders" / "program-uuid.shader-program.json"
+    program = json.loads(program_path.read_text(encoding="utf-8"))
+    program["properties"] = properties
+    _write_json(program_path, program)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                },
+                {
+                    "type": "shader_program",
+                    "uuid": "program-uuid",
+                    "path": "shaders/program-uuid.shader-program.json",
+                },
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(diagnostic.message == message for diagnostic in diagnostics)
+
+
 def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     (package_dir / "shaders" / "vulkan").mkdir(parents=True)
