@@ -696,6 +696,35 @@ void ensure_native_module_registered() {
     registered = true;
 }
 
+void bootstrap_python_player_runtime() {
+    PyObject* module = PyImport_ImportModule("termin.bootstrap");
+    if (module == nullptr) {
+        PyErr_Print();
+        throw std::runtime_error("failed to import termin.bootstrap");
+    }
+
+    PyObject* bootstrap_player = PyObject_GetAttrString(module, "bootstrap_player");
+    if (bootstrap_player == nullptr || !PyCallable_Check(bootstrap_player)) {
+        PyErr_Print();
+        Py_XDECREF(bootstrap_player);
+        Py_DECREF(module);
+        throw std::runtime_error(
+            "termin.bootstrap.bootstrap_player is unavailable"
+        );
+    }
+
+    PyObject* result = PyObject_CallNoArgs(bootstrap_player);
+    Py_DECREF(bootstrap_player);
+    Py_DECREF(module);
+    if (result == nullptr) {
+        PyErr_Print();
+        throw std::runtime_error(
+            "termin.bootstrap.bootstrap_player failed"
+        );
+    }
+    Py_DECREF(result);
+}
+
 std::string module_event_name(termin_modules::ModuleEventKind kind) {
     switch (kind) {
     case termin_modules::ModuleEventKind::Discovered:
@@ -775,7 +804,7 @@ struct PlayerRuntimeHost::Impl {
 
             initialize_python();
             install_player_signal_handlers();
-            termin::bootstrap::bootstrap_player();
+            bootstrap_python_player_runtime();
             runtime_bootstrapped = true;
 
             engine = std::make_unique<EngineCore>();

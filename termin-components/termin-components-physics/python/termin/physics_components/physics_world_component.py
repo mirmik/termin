@@ -28,7 +28,6 @@ class PhysicsWorldComponent(PythonComponent):
             path="gravity",
             label="Gravity",
             kind="vec3",
-            is_serializable=False,
         ),
         "iterations": InspectField(
             path="iterations",
@@ -36,7 +35,6 @@ class PhysicsWorldComponent(PythonComponent):
             kind="int",
             min=1,
             max=100,
-            is_serializable=False,
         ),
         "restitution": InspectField(
             path="restitution",
@@ -45,7 +43,6 @@ class PhysicsWorldComponent(PythonComponent):
             min=0.0,
             max=1.0,
             step=0.05,
-            is_serializable=False,
         ),
         "friction": InspectField(
             path="friction",
@@ -54,20 +51,17 @@ class PhysicsWorldComponent(PythonComponent):
             min=0.0,
             max=2.0,
             step=0.05,
-            is_serializable=False,
         ),
         "ground_enabled": InspectField(
             path="ground_enabled",
             label="Ground Enabled",
             kind="bool",
-            is_serializable=False,
         ),
         "ground_height": InspectField(
             path="ground_height",
             label="Ground Height",
             kind="float",
             step=0.1,
-            is_serializable=False,
         ),
     }
 
@@ -199,6 +193,12 @@ class PhysicsWorldComponent(PythonComponent):
     def fixed_update(self, dt: float):
         if not self._initialized or not self.enabled:
             return
+
+        # ColliderComponent may finish its native attachment after rigid-body
+        # discovery. Reconcile before each step so scene/component ordering
+        # cannot leave a body permanently registered without a collision shape.
+        for rb_comp in self._rigid_body_components:
+            rb_comp._ensure_collider_registered()
 
         self._physics_world.step(dt)
 

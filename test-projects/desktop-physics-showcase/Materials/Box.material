@@ -1,0 +1,10 @@
+{
+  "uuid": "desktop-physics-box-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.92, 0.22, 0.08, 1.0],
+    "u_metallic": 0.08,
+    "u_roughness": 0.42,
+    "u_diffuse_mul": 1.0
+  }
+}

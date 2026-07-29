@@ -123,8 +123,16 @@ void PhysicsWorld::detect_collisions() {
       }
 }
 void PhysicsWorld::add_ground_contacts(RigidBody &b, Collider *c) {
+  std::unique_ptr<colliders::ColliderPrimitive> world_primitive;
+  Collider *ground_collider = c;
+  if (auto *attached = dynamic_cast<colliders::AttachedCollider *>(c)) {
+    world_primitive =
+        attached->collider()->clone_at(attached->world_transform());
+    ground_collider = world_primitive.get();
+  }
+
   Vec3 n(0, 0, 1);
-  if (auto *box = dynamic_cast<BoxCollider *>(c)) {
+  if (auto *box = dynamic_cast<BoxCollider *>(ground_collider)) {
     for (const auto &p : box->get_corners_world())
       if (p.z < ground_height) {
         Contact x;
@@ -135,7 +143,7 @@ void PhysicsWorld::add_ground_contacts(RigidBody &b, Collider *c) {
         x.penetration = ground_height - p.z;
         contacts_.push_back(x);
       }
-  } else if (auto *s = dynamic_cast<SphereCollider *>(c)) {
+  } else if (auto *s = dynamic_cast<SphereCollider *>(ground_collider)) {
     Vec3 p = s->center();
     double d = p.z - s->effective_radius();
     if (d < ground_height) {

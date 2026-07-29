@@ -1,0 +1,771 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "desktop-physics-showcase-main-scene",
+    "entities": [
+      {
+        "uuid": "desktop-physics-arena-floor",
+        "name": "Arena Floor",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 2.0, -0.4],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [10.0, 8.0, 0.8],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-arena-material",
+                "name": "Arena",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-ramp-left",
+        "name": "Left Ramp",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-2.8, 2.0, 1.0],
+          "rotation": [0.0, 0.173648, 0.0, 0.984808]
+        },
+        "scale": [3.4, 2.2, 0.35],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-obstacle-material",
+                "name": "Obstacle",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-ramp-left-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-ramp-left-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": true,
+              "restitution": 0.35,
+              "friction": 0.65
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-ramp-right",
+        "name": "Right Ramp",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [2.8, 2.0, 1.0],
+          "rotation": [0.0, -0.173648, 0.0, 0.984808]
+        },
+        "scale": [3.4, 2.2, 0.35],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-obstacle-material",
+                "name": "Obstacle",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-ramp-right-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-ramp-right-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": true,
+              "restitution": 0.35,
+              "friction": 0.65
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-box-a",
+        "name": "Falling Box A",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-2.0, 1.0, 5.0],
+          "rotation": [0.130526, 0.0, 0.0, 0.991445]
+        },
+        "scale": [1.1, 1.1, 1.1],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-box-material",
+                "name": "Box",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-a-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-a-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.1,
+              "is_static": false,
+              "restitution": 0.35,
+              "friction": 0.55
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-box-b",
+        "name": "Falling Box B",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 2.0, 7.0],
+          "rotation": [0.0, 0.21644, 0.0, 0.976296]
+        },
+        "scale": [1.25, 0.9, 1.0],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-box-material",
+                "name": "Box",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-b-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-b-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.4,
+              "is_static": false,
+              "restitution": 0.3,
+              "friction": 0.6
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-box-c",
+        "name": "Falling Box C",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [2.1, 0.5, 9.0],
+          "rotation": [0.0, 0.0, 0.258819, 0.965926]
+        },
+        "scale": [0.85, 1.25, 1.15],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-box-material",
+                "name": "Box",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-c-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-box-c-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 0.9,
+              "is_static": false,
+              "restitution": 0.42,
+              "friction": 0.48
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-ball-a",
+        "name": "Falling Ball A",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-1.2, 2.4, 6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-ball-material",
+                "name": "Ball",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-a-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-a-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 0.75,
+              "is_static": false,
+              "restitution": 0.72,
+              "friction": 0.32
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-ball-b",
+        "name": "Falling Ball B",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [1.3, 1.4, 8.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.15, 1.15, 1.15],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-ball-material",
+                "name": "Ball",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-b-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-b-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "is_static": false,
+              "restitution": 0.68,
+              "friction": 0.3
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-ball-c",
+        "name": "Falling Ball C",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 3.0, 10.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [0.85, 0.85, 0.85],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "desktop-physics-ball-material",
+                "name": "Ball",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-c-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Sphere",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [1.0, 1.0, 1.0],
+              "convex_hull_mesh": {"type": "none"},
+              "collider_offset_enabled": false,
+              "collider_offset_position": [0.0, 0.0, 0.0],
+              "collider_offset_euler": [0.0, 0.0, 0.0]
+            }
+          },
+          {
+            "source_id": "desktop-physics-ball-c-body",
+            "type": "RigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 0.6,
+              "is_static": false,
+              "restitution": 0.76,
+              "friction": 0.28
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-key-light",
+        "name": "Directional Key Light",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [5.0, -6.0, 12.0],
+          "rotation": [-0.1098, -0.4342, 0.854, 0.2647]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "LightComponent",
+            "data": {
+              "light_type": "directional",
+              "color": [1.0, 0.86, 0.68],
+              "intensity": 1.45,
+              "shadows_enabled": true,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.02,
+              "shadows_map_resolution": 1024,
+              "cascade_count": 3,
+              "max_distance": 50.0,
+              "split_lambda": 0.7,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-fill-light",
+        "name": "Blue Fill Light",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-5.0, -2.0, 6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "LightComponent",
+            "data": {
+              "light_type": "point",
+              "color": [0.2, 0.42, 1.0],
+              "intensity": 3.0,
+              "shadows_enabled": false
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-camera",
+        "name": "Main Camera",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, -17.0, 8.5],
+          "rotation": [-0.258819, 0.0, 0.0, 0.965926]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "CameraComponent",
+            "data": {
+              "near_clip": 0.1,
+              "far_clip": 120.0,
+              "fov_y_degrees": 48.0
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "desktop-physics-world",
+        "name": "Physics World",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "desktop-physics-world-component",
+            "type": "PhysicsWorldComponent",
+            "data": {
+              "enabled": true,
+              "gravity": [0.0, 0.0, -9.81],
+              "iterations": 16,
+              "restitution": 0.38,
+              "friction": 0.58,
+              "ground_enabled": true,
+              "ground_height": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [0.0, 0.0, 1.0, 1.0],
+            "depth": 0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "desktop-physics-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [0.012, 0.018, 0.035, 1.0],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [0.012, 0.018, 0.035, 1.0],
+        "lighting": {
+          "ambient_color": [0.3, 0.38, 0.58],
+          "ambient_intensity": 0.25,
+          "shadow_settings": {
+            "method": 1,
+            "softness": 1.4,
+            "bias": 0.001
+          }
+        },
+        "skybox": {
+          "type": 0,
+          "color": [0.012, 0.018, 0.035]
+        }
+      }
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [-10.0, -14.0, 10.0],
+      "rotation": [-0.16, -0.24, 0.92, 0.25],
+      "radius": 15.0
+    }
+  }
+}
