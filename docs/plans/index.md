@@ -47,6 +47,7 @@
 
 ## 2026-07
 
+- [Texture encoding contract](2026-07-29-texture-encoding-contract-plan.md)
 - [Single application graphics domain](2026-07-16-single-graphics-domain-plan.md)
 - [Transactional Play/Stop](2026-07-16-transactional-play-stop-plan.md)
 - [Build profiles and product build system](2026-07-16-build-profiles-product-build-system-plan.md)
