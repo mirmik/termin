@@ -131,7 +131,7 @@ EditorSnapSource TransformGizmo::preferred_snap_source() const {
 }
 
 Vec3 TransformGizmo::snap_reference_position() const {
-    return _has_target() ? _target->global_pose().lin : Vec3::zero();
+    return _has_target() ? _target->global_position() : Vec3::zero();
 }
 
 Entity TransformGizmo::snap_target_entity() const {
@@ -144,9 +144,7 @@ bool TransformGizmo::snap_to(const Vec3& position) {
     }
 
     GeneralPose3 old_pose = _target->local_pose_for_undo();
-    GeneralPose3 new_global = _target->global_pose();
-    new_global.lin = position;
-    _target->relocate_global(new_global);
+    _target->set_global_position(position);
     _update_position();
 
     if (on_transform_changed) {
@@ -168,11 +166,11 @@ void TransformGizmo::set_orientation_mode(const std::string& mode) {
 
 void TransformGizmo::_update_position() {
     if (_has_target()) {
-        GeneralPose3 pose = _target->global_pose();
+        const Vec3 position = _target->global_position();
         _target_position = Vec3f{
-            static_cast<float>(pose.lin.x),
-            static_cast<float>(pose.lin.y),
-            static_cast<float>(pose.lin.z)
+            static_cast<float>(position.x),
+            static_cast<float>(position.y),
+            static_cast<float>(position.z)
         };
     }
 }
@@ -195,12 +193,12 @@ Vec3f TransformGizmo::_get_world_axis(const std::string& axis) {
     }
 
     // Local orientation: rotate by target's rotation.
-    GeneralPose3 pose = _target->global_pose();
+    const Quat orientation = _target->global_orientation();
     float q[4] = {
-        static_cast<float>(pose.ang.x),
-        static_cast<float>(pose.ang.y),
-        static_cast<float>(pose.ang.z),
-        static_cast<float>(pose.ang.w)
+        static_cast<float>(orientation.x),
+        static_cast<float>(orientation.y),
+        static_cast<float>(orientation.z),
+        static_cast<float>(orientation.w)
     };
     Vec3f result;
     _quat_rotate(q, base, result);
@@ -460,11 +458,11 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
     // Rotation
     if (_is_rotate_element(element)) {
         if (_has_target()) {
-            GeneralPose3 pose = _target->global_pose();
-            _rot_start_quat[0] = static_cast<float>(pose.ang.x);
-            _rot_start_quat[1] = static_cast<float>(pose.ang.y);
-            _rot_start_quat[2] = static_cast<float>(pose.ang.z);
-            _rot_start_quat[3] = static_cast<float>(pose.ang.w);
+            const Quat orientation = _target->global_orientation();
+            _rot_start_quat[0] = static_cast<float>(orientation.x);
+            _rot_start_quat[1] = static_cast<float>(orientation.y);
+            _rot_start_quat[2] = static_cast<float>(orientation.z);
+            _rot_start_quat[3] = static_cast<float>(orientation.w);
         }
         _rot_start_angle = 0.0f;
 
@@ -527,11 +525,8 @@ void TransformGizmo::_apply_translation(const Vec3f& projected_position) {
         new_position = projected_position + _grab_offset;
     }
 
-    GeneralPose3 old_pose = _target->global_pose();
-    GeneralPose3 new_pose = old_pose;
-    new_pose.lin = Vec3{new_position.x, new_position.y, new_position.z};
-
-    _target->relocate_global(new_pose);
+    _target->set_global_position(
+        Vec3{new_position.x, new_position.y, new_position.z});
 }
 
 void TransformGizmo::_apply_rotation(TransformElement element, const Vec3f& plane_hit) {
@@ -583,12 +578,8 @@ void TransformGizmo::_apply_rotation(TransformElement element, const Vec3f& plan
         new_quat[3] /= norm_q;
     }
 
-    GeneralPose3 new_pose;
-    new_pose.lin = Vec3{origin.x, origin.y, origin.z};
-    new_pose.ang = Quat{new_quat[0], new_quat[1], new_quat[2], new_quat[3]};
-    new_pose.scale = _target->global_pose().scale;
-
-    _target->relocate_global(new_pose);
+    _target->set_global_orientation(
+        Quat{new_quat[0], new_quat[1], new_quat[2], new_quat[3]});
 }
 
 bool TransformGizmo::_is_translate_element(TransformElement e) {

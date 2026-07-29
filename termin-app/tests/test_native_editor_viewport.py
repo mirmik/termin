@@ -183,7 +183,7 @@ class _Point:
 class _Entity:
     def __init__(self, position: float) -> None:
         self.transform = SimpleNamespace(
-            global_pose=lambda: SimpleNamespace(lin=_Point(position))
+            global_position=_Point(position)
         )
 
     def valid(self) -> bool:

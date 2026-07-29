@@ -1,4 +1,5 @@
 import unittest
+import math
 
 import numpy as np
 
@@ -19,7 +20,7 @@ from termin.editor_core.editor_commands import (
 from termin.editor_core.undo_stack import UndoStack
 from termin.editor_core.inspector_fields_model import collect_inspect_fields
 from termin.editor_core.entity_inspector_model import EntityInspectorController
-from termin.geombase import GeneralPose3, Vec3
+from termin.geombase import GeneralPose3, Quat, Vec3
 from termin.inspect import InspectField
 from termin.scene import PythonComponent, TcScene, publish_python_component
 from termin.bootstrap import bootstrap_player, shutdown_player
@@ -32,6 +33,26 @@ from termin.prefab import (
 
 
 _EDITOR_PREFAB_PROBE_CLASS = None
+
+
+def _rotation_z(radians: float) -> Quat:
+    half = radians * 0.5
+    return Quat(0.0, 0.0, math.sin(half), math.cos(half))
+
+
+def _assert_affine_near(test, actual, expected, places: int = 9) -> None:
+    for actual_column, expected_column in (
+        (actual.basis.x, expected.basis.x),
+        (actual.basis.y, expected.basis.y),
+        (actual.basis.z, expected.basis.z),
+        (actual.translation, expected.translation),
+    ):
+        for index in range(3):
+            test.assertAlmostEqual(
+                actual_column[index],
+                expected_column[index],
+                places=places,
+            )
 
 
 def _editor_prefab_probe_class():
@@ -164,6 +185,122 @@ class TestEditorUndoCommands(unittest.TestCase):
             [entity.name for entity in self.scene.root_entities],
             ["first", "second", "third"],
         )
+
+    def test_reparent_preserves_exact_world_affine_without_undo_drift(self) -> None:
+        parent = self.scene.create_entity("uniform-parent")
+        parent.transform.set_local_pose(
+            GeneralPose3(
+                ang=_rotation_z(0.35),
+                lin=Vec3(3.0, -1.0, 2.0),
+                scale=Vec3(2.0, 2.0, 2.0),
+            )
+        )
+        child = self.scene.create_entity("child")
+        child.transform.set_local_pose(
+            GeneralPose3(
+                ang=_rotation_z(-0.2),
+                lin=Vec3(7.0, 4.0, -3.0),
+                scale=Vec3(1.0, 1.0, 1.0),
+            )
+        )
+        expected_world = child.transform.global_affine()
+        expected_root_local = child.transform.local_pose()
+
+        stack = UndoStack()
+        stack.push(ReparentEntityCommand(child, None, parent.transform))
+        _assert_affine_near(self, child.transform.global_affine(), expected_world)
+
+        for _ in range(10):
+            stack.undo()
+            self.assertIsNone(child.transform.parent)
+            _assert_affine_near(self, child.transform.global_affine(), expected_world)
+            self.assertAlmostEqual(
+                child.transform.local_pose().lin.x,
+                expected_root_local.lin.x,
+            )
+            stack.redo()
+            self.assertEqual(child.parent, parent)
+            _assert_affine_near(self, child.transform.global_affine(), expected_world)
+
+    def test_reparent_accepts_axis_scaled_and_affine_parent_when_exact(self) -> None:
+        axis_parent = self.scene.create_entity("axis-parent")
+        axis_parent.transform.set_local_scale(Vec3(2.0, 3.0, 4.0))
+        rigid = self.scene.create_entity("rigid")
+        rigid.transform.set_local_position(Vec3(5.0, -2.0, 1.0))
+        rigid_world = rigid.transform.global_affine()
+
+        stack = UndoStack()
+        stack.push(ReparentEntityCommand(rigid, None, axis_parent.transform))
+        _assert_affine_near(self, rigid.transform.global_affine(), rigid_world)
+        stack.undo()
+        _assert_affine_near(self, rigid.transform.global_affine(), rigid_world)
+
+        affine_a = axis_parent.create_child("affine-a")
+        affine_b = axis_parent.create_child("affine-b")
+        shared_rotation = _rotation_z(0.5)
+        affine_a.transform.set_local_pose(
+            GeneralPose3(
+                ang=shared_rotation,
+                lin=Vec3(1.0, 0.0, 0.0),
+                scale=Vec3(1.0, 1.0, 1.0),
+            )
+        )
+        affine_b.transform.set_local_pose(
+            GeneralPose3(
+                ang=shared_rotation,
+                lin=Vec3(-3.0, 2.0, 0.0),
+                scale=Vec3(1.0, 1.0, 1.0),
+            )
+        )
+        affine_child = affine_a.create_child("affine-child")
+        affine_child.transform.set_local_position(Vec3(2.0, 1.0, 0.0))
+        affine_world = affine_child.transform.global_affine()
+
+        stack.push(
+            ReparentEntityCommand(
+                affine_child,
+                affine_a.transform,
+                affine_b.transform,
+            )
+        )
+        self.assertEqual(affine_child.parent, affine_b)
+        _assert_affine_near(
+            self,
+            affine_child.transform.global_affine(),
+            affine_world,
+        )
+
+    def test_reparent_rejects_irreducible_local_shear_transactionally(self) -> None:
+        axis_parent = self.scene.create_entity("axis-parent")
+        axis_parent.transform.set_local_scale(Vec3(2.0, 3.0, 4.0))
+        affine_parent = axis_parent.create_child("affine-parent")
+        affine_parent.transform.set_local_rotation(_rotation_z(0.5))
+        child = affine_parent.create_child("child")
+        child.transform.set_local_position(Vec3(2.0, 1.0, 0.0))
+
+        old_parent = child.parent
+        old_local = child.transform.local_pose()
+        old_world = child.transform.global_affine()
+        old_sibling_index = child.sibling_index
+        stack = UndoStack()
+
+        with self.assertRaises(RuntimeError):
+            stack.push(
+                ReparentEntityCommand(
+                    child,
+                    affine_parent.transform,
+                    None,
+                )
+            )
+
+        self.assertFalse(stack.can_undo)
+        self.assertEqual(child.parent, old_parent)
+        self.assertEqual(child.sibling_index, old_sibling_index)
+        self.assertAlmostEqual(
+            child.transform.local_pose().lin.x,
+            old_local.lin.x,
+        )
+        _assert_affine_near(self, child.transform.global_affine(), old_world)
 
     def test_delete_entity_command_restores_subtree_in_one_undo(self) -> None:
         root = self.scene.create_entity("root")

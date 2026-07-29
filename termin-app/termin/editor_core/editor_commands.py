@@ -1048,8 +1048,9 @@ class ReparentEntityCommand(UndoCommand):
         self._new_parent_uuid = _transform_entity_uuid(new_parent)
         self._old_sibling_index = int(entity.sibling_index)
         self._new_sibling_index = new_sibling_index
-        # Сохраняем local pose для undo
         self._old_local_pose = _clone_pose(entity.transform.local_pose())
+        self._new_local_pose: GeneralPose3 | None = None
+        self._applied_new_sibling_index: int | None = None
         self._prefab_placement = capture_entity_placement(entity)
 
     @property
@@ -1066,14 +1067,17 @@ class ReparentEntityCommand(UndoCommand):
 
     def do(self) -> None:
         entity = self._current_entity()
-        # Сохраняем global pose до смены родителя
-        global_pose = entity.transform.global_pose()
-        # Меняем родителя
-        entity.transform.set_parent(_resolve_parent_transform(self._scene, self._new_parent_uuid))
-        if self._new_sibling_index is not None:
-            entity.sibling_index = self._new_sibling_index
-        # Восстанавливаем global pose (пересчитывает local pose)
-        entity.transform.relocate_global(global_pose)
+        new_parent = _resolve_parent_transform(self._scene, self._new_parent_uuid)
+        entity.transform.reparent_preserve_world(new_parent)
+        if self._new_local_pose is None:
+            if self._new_sibling_index is not None:
+                entity.sibling_index = self._new_sibling_index
+            self._new_local_pose = _clone_pose(entity.transform.local_pose())
+            self._applied_new_sibling_index = int(entity.sibling_index)
+        else:
+            entity.transform.relocate(self._new_local_pose)
+            if self._applied_new_sibling_index is not None:
+                entity.sibling_index = self._applied_new_sibling_index
         if self._prefab_placement is not None:
             try:
                 place_entity_from_live_state(self._prefab_placement, entity)
@@ -1083,13 +1087,15 @@ class ReparentEntityCommand(UndoCommand):
                     _resolve_parent_transform(self._scene, self._old_parent_uuid))
                 entity.sibling_index = self._old_sibling_index
                 entity.transform.relocate(self._old_local_pose)
+                self._new_local_pose = None
+                self._applied_new_sibling_index = None
                 self._prefab_placement.restore()
                 raise
 
     def undo(self) -> None:
         entity = self._current_entity()
-        rollback_global_pose = entity.transform.global_pose()
-        # Возвращаем родителя и восстанавливаем оригинальный local pose
+        rollback_local_pose = _clone_pose(entity.transform.local_pose())
+        rollback_sibling_index = int(entity.sibling_index)
         entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
         entity.sibling_index = self._old_sibling_index
         entity.transform.relocate(self._old_local_pose)
@@ -1100,9 +1106,8 @@ class ReparentEntityCommand(UndoCommand):
                 _logger.exception("Failed to restore prefab entity placement metadata")
                 entity.transform.set_parent(
                     _resolve_parent_transform(self._scene, self._new_parent_uuid))
-                if self._new_sibling_index is not None:
-                    entity.sibling_index = self._new_sibling_index
-                entity.transform.relocate_global(rollback_global_pose)
+                entity.sibling_index = rollback_sibling_index
+                entity.transform.relocate(rollback_local_pose)
                 place_entity_from_live_state(self._prefab_placement, entity)
                 raise
 

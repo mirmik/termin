@@ -288,9 +288,9 @@ class ProceduralMeshViewportInteraction:
         if world_ray is None:
             return None
         origin, direction = world_ray
-        pose = self._entity.transform.global_pose()
-        local_origin = pose.point_to_local(origin)
-        local_direction = pose.vector_to_local(direction)
+        transform = self._entity.transform
+        local_origin = transform.transform_point_inverse(origin)
+        local_direction = transform.transform_vector_inverse(direction)
         return (
             (float(local_origin.x), float(local_origin.y), float(local_origin.z)),
             (float(local_direction.x), float(local_direction.y), float(local_direction.z)),
@@ -300,7 +300,7 @@ class ProceduralMeshViewportInteraction:
         if self._entity is None or not self._entity.valid():
             log.error("[ProceduralMeshEditor] cannot convert point to world space: entity is not available")
             return None
-        return self._entity.transform.global_pose().point_to_global(Vec3(*point))
+        return self._entity.transform.transform_point(Vec3(*point))
 
     def _click_fallback(self, x: float, y: float, surface) -> _ClickFallback:
         if surface.has_mesh_hit:
@@ -321,15 +321,14 @@ class ProceduralMeshViewportInteraction:
         if self._entity is None or not self._entity.valid():
             log.error("[ProceduralMeshEditor] cannot convert point to local space: entity is not available")
             return None
-        local = self._entity.transform.global_pose().point_to_local(point)
+        local = self._entity.transform.transform_point_inverse(point)
         return (float(local.x), float(local.y), float(local.z))
 
     def draw_overlay(self) -> None:
         if self._entity is None or not self._entity.valid():
             return
         try:
-            pose = self._entity.transform.global_pose()
-            center = pose.lin
+            center = self._entity.transform.global_position
         except Exception as error:
             log.error(f"[ProceduralMeshEditor] overlay failed: {error}")
             return
@@ -348,9 +347,9 @@ class ProceduralMeshViewportInteraction:
         renderer.line(
             Vec3(center.x, center.y, center.z - radius), Vec3(center.x, center.y, center.z + radius), anchor_color, True
         )
-        self._draw_document_debug(renderer, pose)
+        self._draw_document_debug(renderer, self._entity.transform)
 
-    def _draw_document_debug(self, renderer, entity_pose) -> None:
+    def _draw_document_debug(self, renderer, entity_transform) -> None:
         if self._model.component is None:
             return
         controller = self._model.controller
@@ -364,7 +363,10 @@ class ProceduralMeshViewportInteraction:
                         renderer,
                         evaluated.solid,
                         style,
-                        self._compose_point_transform(entity_pose, evaluated.point_transform),
+                        self._compose_point_transform(
+                            entity_transform,
+                            evaluated.point_transform,
+                        ),
                     )
 
         visual_model = build_document_visual_model(
@@ -375,7 +377,7 @@ class ProceduralMeshViewportInteraction:
         for polyline in visual_model.polylines:
             self._draw_polyline(
                 renderer,
-                entity_pose,
+                entity_transform,
                 polyline.points,
                 self._color4(polyline.color),
                 polyline.closed,
@@ -383,17 +385,21 @@ class ProceduralMeshViewportInteraction:
             )
         for point in visual_model.points:
             renderer.sphere_wireframe(
-                self._world_vec3(entity_pose, point.point),
+                self._world_vec3(entity_transform, point.point),
                 point.radius,
                 self._color4(point.color),
                 8,
                 point.depth_test,
             )
 
-    def _compose_point_transform(self, entity_pose, document_transform: PointTransform) -> PointTransform:
+    def _compose_point_transform(
+        self,
+        entity_transform,
+        document_transform: PointTransform,
+    ) -> PointTransform:
         def transform(point: tuple[float, float, float]) -> tuple[float, float, float]:
             local_point = document_transform(point)
-            world_point = entity_pose.point_to_global(Vec3(*local_point))
+            world_point = entity_transform.transform_point(Vec3(*local_point))
             return (float(world_point.x), float(world_point.y), float(world_point.z))
 
         return transform
@@ -419,7 +425,7 @@ class ProceduralMeshViewportInteraction:
     def _draw_polyline(
         self,
         renderer,
-        entity_pose,
+        entity_transform,
         points: list[tuple[float, float, float]],
         color: Color4,
         closed: bool,
@@ -429,22 +435,22 @@ class ProceduralMeshViewportInteraction:
             return
         for first, second in zip(points, points[1:], strict=False):
             renderer.line(
-                self._world_vec3(entity_pose, first),
-                self._world_vec3(entity_pose, second),
+                self._world_vec3(entity_transform, first),
+                self._world_vec3(entity_transform, second),
                 color,
                 depth_test,
             )
         if closed:
             renderer.line(
-                self._world_vec3(entity_pose, points[-1]),
-                self._world_vec3(entity_pose, points[0]),
+                self._world_vec3(entity_transform, points[-1]),
+                self._world_vec3(entity_transform, points[0]),
                 color,
                 depth_test,
             )
 
     @staticmethod
-    def _world_vec3(entity_pose, point: tuple[float, float, float]) -> Vec3:
-        world = entity_pose.point_to_global(Vec3(*point))
+    def _world_vec3(entity_transform, point: tuple[float, float, float]) -> Vec3:
+        world = entity_transform.transform_point(Vec3(*point))
         return Vec3(float(world.x), float(world.y), float(world.z))
 
 

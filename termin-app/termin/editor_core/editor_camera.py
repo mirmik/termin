@@ -165,12 +165,18 @@ class EditorCameraManager:
             return None
 
         entity = self.camera.entity
-        pose = entity.transform.global_pose()
+        position = entity.transform.global_position
+        orientation = entity.transform.global_rotation
         orbit_ctrl = self.orbit_controller
 
         result = {
-            "position": [pose.lin.x, pose.lin.y, pose.lin.z],
-            "rotation": [pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w],
+            "position": [position.x, position.y, position.z],
+            "rotation": [
+                orientation.x,
+                orientation.y,
+                orientation.z,
+                orientation.w,
+            ],
             "radius": float(orbit_ctrl.radius) if orbit_ctrl else 5.0,
         }
 
@@ -228,15 +234,15 @@ class EditorCameraManager:
 
         # Restore transform
         if "position" in data and "rotation" in data:
-            from termin.geombase import GeneralPose3, Vec3, Quat
+            from termin.geombase import Vec3, Quat
             pos = data["position"]
             rot = data["rotation"]
-            pose = GeneralPose3(
-                Quat(rot[0], rot[1], rot[2], rot[3]),
-                Vec3(pos[0], pos[1], pos[2]),
-                Vec3(1.0, 1.0, 1.0),
+            entity.transform.set_global_position(
+                Vec3(pos[0], pos[1], pos[2])
             )
-            entity.transform.set_global_pose(pose)
+            entity.transform.set_global_orientation(
+                Quat(rot[0], rot[1], rot[2], rot[3])
+            )
 
         # Sync orbit controller from new transform
         if orbit_ctrl:

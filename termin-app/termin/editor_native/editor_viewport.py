@@ -271,8 +271,8 @@ class NativeEditorViewport:
         if camera is None or camera.entity is None:
             return
 
-        camera_position = camera.entity.transform.global_pose().lin
-        gizmo_position = transform_gizmo.target.transform.global_pose().lin
+        camera_position = camera.entity.transform.global_position
+        gizmo_position = transform_gizmo.target.transform.global_position
         distance = (camera_position - gizmo_position).norm()
         transform_gizmo.set_screen_scale(max(0.1, distance * 0.1))
 

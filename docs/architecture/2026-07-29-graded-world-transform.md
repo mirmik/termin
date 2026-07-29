@@ -3,8 +3,8 @@
 Date: 2026-07-29.
 
 Status: accepted architecture; exact primitives, graded entity cache,
-exact/logical `GeneralTransform3` facade and rigid-consumer contracts
-implemented.
+exact/logical `GeneralTransform3` facade, rigid-consumer contracts and editor
+transform operations implemented.
 
 ## Context
 
@@ -518,7 +518,7 @@ Rendering and the remaining geometric/runtime consumers are tracked
 separately and still need migration before the legacy world-TRS API can be
 removed.
 
-### 5. Editor setters and reparenting
+### 5. Editor setters and reparenting (implemented)
 
 Translation and logical rotation gizmos edit their individual channels.
 World-preserving reparenting computes:
@@ -531,6 +531,23 @@ The first implementation keeps authored locals as TRS. If the exact local
 result contains irreducible shear, the operation is rejected and logged.
 There is no implicit lossy decomposition. A separately named lossy editor
 operation may be designed later if a concrete workflow requires it.
+
+`GeneralTransform3::try_reparent_preserve_world()` implements this as a
+transaction: it computes and validates the candidate local TRS before changing
+the hierarchy. Singular parents, invalid relationships and irreducible local
+shear leave both the parent and local transform unchanged.
+
+Editor reparent commands keep the accepted local pose as their redo snapshot
+and the original local pose as their undo snapshot. Repeated undo/redo
+therefore does not decompose the world transform again and cannot accumulate
+projection drift. Prefab placement metadata failures restore the corresponding
+parent, sibling index and local pose snapshot.
+
+The transform gizmo reads exact world position and logical orientation and
+edits those channels independently. Translation, snapping and rotation do not
+read or rewrite world scale. Camera persistence follows the same position plus
+logical-orientation contract. Editor picking and procedural/foliage geometry
+use exact point, vector and inverse-transpose normal transforms.
 
 ### 6. Remove misleading world TRS APIs
 

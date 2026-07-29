@@ -650,14 +650,20 @@ void PrefabInstanceState::reconcile_structure(
         for (Entity child : runtime.children()) {
             if (!mapped_source_for_entity(
                     _source_entity_ids, _runtime_entities, child).empty()) continue;
-            const GeneralPose3 pose = child.transform().global_pose();
-            if (!child.set_parent_checked(old_parent)) {
+            const GeneralTransform3 parent_transform =
+                old_parent.valid() ? old_parent.transform() : GeneralTransform3{};
+            if (!child.transform().try_reparent_preserve_world(
+                    parent_transform)) {
                 splice_failed = true;
-                add_failure(result, Error::ParentCycle, source_id, "",
-                            "failed to splice a local child out of a removed source entity");
+                add_failure(
+                    result,
+                    Error::RemovalConflict,
+                    source_id,
+                    "",
+                    "failed to splice a local child while preserving its exact "
+                    "world transform");
                 break;
             }
-            child.transform().set_global_pose(pose);
         }
         if (splice_failed) continue;
 

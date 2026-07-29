@@ -61,6 +61,9 @@ struct ENTITY_API GeneralTransform3 {
 
     GeneralTransform3 parent() const;
     void set_parent(GeneralTransform3 new_parent);
+    bool try_reparent_preserve_world(
+        GeneralTransform3 new_parent,
+        double tolerance = 1.0e-10);
     void unparent();
     size_t children_count() const;
     GeneralTransform3 child_at(size_t index) const;
@@ -73,6 +76,7 @@ struct ENTITY_API GeneralTransform3 {
     Vec3 transform_point_inverse(const Vec3& p) const;
     Vec3 transform_vector(const Vec3& v) const;
     Vec3 transform_vector_inverse(const Vec3& v) const;
+    Vec3 transform_normal(const Vec3& n) const;
     Vec3 transform_direction(const Vec3& d) const;
     Vec3 transform_direction_inverse(const Vec3& d) const;
     Vec3 forward(double distance = 1.0) const;

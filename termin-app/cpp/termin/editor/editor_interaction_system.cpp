@@ -1091,14 +1091,15 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
     if (!mesh)
       return result;
 
-        GeneralPose3 pose = result.entity.transform().global_pose();
+        GeneralTransform3 transform = result.entity.transform();
         Mat44f mesh_offset = mesh_component->get_mesh_offset_matrix();
         Mat44f inverse_mesh_offset = mesh_offset.inverse();
         Vec3 camera_position = camera->get_position();
         Vec3 world_direction = (world - camera_position).normalized();
-        Vec3 entity_local_origin = pose.inverse_transform_point(camera_position);
+        Vec3 entity_local_origin =
+            transform.transform_point_inverse(camera_position);
     Vec3 entity_local_direction =
-        pose.inverse_transform_vector(world_direction).normalized();
+        transform.transform_vector_inverse(world_direction).normalized();
     Vec3 local_origin =
         inverse_mesh_offset.transform_point(entity_local_origin);
     Vec3 local_direction =
@@ -1126,9 +1127,9 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
             Vec3 entity_local_hit = mesh_offset.transform_point(local_hit);
       Vec3 entity_local_normal =
           mesh_offset.transform_direction(local_normal).normalized();
-            Vec3 world_hit = pose.transform_point(entity_local_hit);
+            Vec3 world_hit = transform.transform_point(entity_local_hit);
       Vec3 world_normal =
-          pose.to_pose3().transform_vector(entity_local_normal).normalized();
+          transform.transform_normal(entity_local_normal).normalized();
 
             result.has_mesh_hit = true;
             result.mesh_point = world_hit;
