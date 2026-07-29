@@ -65,8 +65,7 @@ class FEMFixedJointComponent(PythonComponent):
         """Точка крепления = позиция этого entity."""
         if self.entity is None:
             return np.zeros(3, dtype=np.float64)
-        pose = self.entity.transform.global_pose()
-        return np.asarray(pose.lin, dtype=np.float64)
+        return np.asarray(self.entity.transform.global_position, dtype=np.float64)
 
     def _find_body_entity(self, scene: "Scene") -> "Entity | None":
         """Найти entity тела по имени."""
@@ -123,7 +122,7 @@ class FEMFixedJointComponent(PythonComponent):
             return
 
         anchor = self.anchor_point
-        body_pos = np.asarray(body_entity.transform.global_pose().lin, dtype=np.float32)
+        body_pos = np.asarray(body_entity.transform.global_position, dtype=np.float32)
 
         # Линия связи
         renderer.line(

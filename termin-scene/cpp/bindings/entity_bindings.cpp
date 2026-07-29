@@ -228,11 +228,12 @@ void bind_entity_class(nb::module_& m) {
         })
 
         .def("inverse_model_matrix", [](Entity& e) {
-            GeneralPose3 gp = e.transform().global_pose();
             double m[16];
-            gp.inverse_matrix4(m);
+            e.transform().inverse_world_matrix(m);
             double buf[16];
-            for (int i = 0; i < 16; ++i) buf[i] = m[i];
+            for (int row = 0; row < 4; ++row)
+                for (int col = 0; col < 4; ++col)
+                    buf[row * 4 + col] = m[col * 4 + row];
             return mat44_row_tuple(buf);
         })
 

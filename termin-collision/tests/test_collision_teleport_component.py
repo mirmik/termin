@@ -5,18 +5,15 @@ from types import SimpleNamespace
 from tcbase import Action, MouseButton
 from termin.colliders import teleport_component
 from termin.colliders.teleport_component import TeleportComponent
-from termin.geombase import Pose3, Quat, Vec3
+from termin.geombase import Vec3
 
 
 class _FakeTransform:
     def __init__(self) -> None:
-        self.relocated_pose = None
+        self.global_position = None
 
-    def global_pose(self) -> Pose3:
-        return Pose3(lin=Vec3(0.0, 0.0, 0.0), ang=Quat.identity())
-
-    def relocate_global(self, pose: Pose3) -> None:
-        self.relocated_pose = pose
+    def set_global_position(self, position: Vec3) -> None:
+        self.global_position = position
 
 
 def test_teleport_component_uses_collision_world_from_scene(monkeypatch) -> None:
@@ -59,4 +56,4 @@ def test_teleport_component_uses_collision_world_from_scene(monkeypatch) -> None
     TeleportComponent.on_mouse_button(SimpleNamespace(entity=target_entity), event)
 
     assert calls == [("from_scene", scene), ("raycast_closest", ray)]
-    assert target_entity.transform.relocated_pose.lin == hit.collider_point
+    assert target_entity.transform.global_position == hit.collider_point

@@ -2,6 +2,8 @@
 #include "termin/collision/collision.hpp"
 #include "termin/geom/general_transform3.hpp"
 #include "termin/entity/entity.hpp"
+#include <cmath>
+#include <stdexcept>
 #include <vector>
 #include <algorithm>
 
@@ -472,6 +474,61 @@ TEST_CASE("AttachedCollider in CollisionWorld")
 
     manifolds = world.detect_contacts();
     CHECK_EQ(manifolds.size(), 1u);
+
+    tc_entity_pool_registry_destroy(pool_h);
+}
+
+TEST_CASE("AttachedCollider rejects affine projection")
+{
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(4);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+    tc_entity_id parent = tc_entity_pool_alloc(pool, "scaled_parent");
+    tc_entity_id child = tc_entity_pool_alloc(pool, "rotated_child");
+    CHECK(tc_entity_pool_set_parent_checked(pool, child, parent));
+
+    const double parent_scale[3] = {2.0, 1.0, 0.5};
+    tc_entity_pool_set_local_scale(pool, parent, parent_scale);
+    const double half_sqrt2 = std::sqrt(0.5);
+    const double child_rotation[4] = {0.0, 0.0, half_sqrt2, half_sqrt2};
+    tc_entity_pool_set_local_rotation(pool, child, child_rotation);
+
+    GeneralTransform3 transform(pool_h, child);
+    SphereCollider sphere(1.0);
+    AttachedCollider attached(&sphere, &transform);
+    bool threw = false;
+    try {
+        (void)attached.center();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+
+    tc_entity_pool_registry_destroy(pool_h);
+}
+
+TEST_CASE("AttachedCollider rejects rotated local collider under axis scale")
+{
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(2);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "axis_scaled");
+    const double scale[3] = {2.0, 1.0, 0.5};
+    tc_entity_pool_set_local_scale(pool, entity, scale);
+
+    const double half_sqrt2 = std::sqrt(0.5);
+    SphereCollider sphere(
+        1.0,
+        GeneralPose3(
+            Quat(0.0, 0.0, half_sqrt2, half_sqrt2),
+            Vec3::zero()));
+    GeneralTransform3 transform(pool_h, entity);
+    AttachedCollider attached(&sphere, &transform);
+    bool threw = false;
+    try {
+        (void)attached.center();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
 
     tc_entity_pool_registry_destroy(pool_h);
 }

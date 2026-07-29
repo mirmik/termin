@@ -257,6 +257,18 @@ if(TERMIN_SCENE_BUILD_TESTS)
         COMMAND termin_scene_world_transform_cache_test
     )
 
+    add_executable(termin_scene_general_transform3_test
+        tests/test_general_transform3.cpp
+    )
+    target_link_libraries(
+        termin_scene_general_transform3_test
+        PRIVATE termin_scene
+    )
+    add_test(
+        NAME termin_scene_general_transform3_test
+        COMMAND termin_scene_general_transform3_test
+    )
+
     set_target_properties(
         termin_scene_data_structures_test termin_scene_archetype_test
         termin_scene_unknown_component_test termin_scene_entity_list_kind_test
@@ -264,6 +276,7 @@ if(TERMIN_SCENE_BUILD_TESTS)
         termin_scene_component_capability_test
         termin_scene_lifecycle_test
         termin_scene_world_transform_cache_test
+        termin_scene_general_transform3_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
 

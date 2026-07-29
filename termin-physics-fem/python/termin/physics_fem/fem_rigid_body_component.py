@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-import warnings
 import numpy as np
 
 from termin.scene import PythonComponent
@@ -11,6 +10,7 @@ from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
 from termin.geombase import Pose3
 from termin.inspect import InspectField
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent
@@ -86,10 +86,14 @@ class FEMRigidBodyComponent(PythonComponent):
 
     def _register_with_fem_world(self, world: "FEMPhysicsWorldComponent"):
         """Зарегистрировать тело в FEM мире."""
+        if self.entity is None or self.entity.transform.try_rigid_pose() is None:
+            entity_name = self.entity.name if self.entity is not None else "<detached>"
+            log.error(
+                f"FEMRigidBodyComponent on '{entity_name}' requires a rigid "
+                "world transform and rejects scaled or affine ancestry"
+            )
+            return
         self._fem_world = world
-
-        # Проверяем scale у предков
-        self._validate_ancestor_scales()
 
         # Создать инерцию
         inertia = SpatialInertia3D(
@@ -114,7 +118,13 @@ class FEMRigidBodyComponent(PythonComponent):
         if self._fem_body is None or self.entity is None:
             return
 
-        pose = self.entity.transform.global_pose()
+        pose = self.entity.transform.try_rigid_pose()
+        if pose is None:
+            log.error(
+                f"FEMRigidBodyComponent on '{self.entity.name}' cannot sync a "
+                "non-rigid world transform to FEM"
+            )
+            return
         self._fem_body.set_pose(Pose3(
             lin=np.asarray(pose.lin, dtype=np.float64),
             ang=np.asarray(pose.ang, dtype=np.float64),
@@ -129,29 +139,9 @@ class FEMRigidBodyComponent(PythonComponent):
             return
 
         fem_pose = self._fem_body.pose()
-        new_pose = Pose3(
-            lin=fem_pose.lin,
-            ang=fem_pose.ang,
-        )
-        self.entity.transform.relocate_global(new_pose)
-
-    def _validate_ancestor_scales(self):
-        """Проверить, что у предков нет non-identity scale."""
-        if self.entity is None:
-            return
-
-        t = self.entity.transform.parent
-        while t is not None:
-            scale = t.local_pose().scale
-            if not np.allclose(scale, [1.0, 1.0, 1.0], atol=1e-6):
-                warnings.warn(
-                    f"FEMRigidBodyComponent on '{self.entity.name}' has ancestor "
-                    f"'{t.name}' with scale {scale}. Physics may behave incorrectly.",
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-                break
-            t = t.parent
+        scene_pose = Pose3(lin=fem_pose.lin, ang=fem_pose.ang)
+        self.entity.transform.set_global_position(scene_pose.lin)
+        self.entity.transform.set_global_orientation(scene_pose.ang)
 
     # --- Вспомогательные фабрики для инерции ---
 

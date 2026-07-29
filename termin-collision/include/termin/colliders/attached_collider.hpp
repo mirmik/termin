@@ -13,7 +13,10 @@
 #include <termin/geom/general_transform3.hpp>
 #include "tc_types.h"  // For tc_entity_id
 #include <cassert>
+#include <cmath>
 #include <memory>
+#include <stdexcept>
+#include <tcbase/tc_log.h>
 
 namespace termin {
 namespace colliders {
@@ -22,7 +25,7 @@ namespace colliders {
 // Коллайдер, привязанный к GeneralTransform3.
 //
 // Наследуется от Collider для полиморфного использования в CollisionWorld.
-// Мировой трансформ = transform_->global_pose() * collider_->transform
+// Мировой трансформ должен оставаться точно представимым как TRS.
 class AttachedCollider : public Collider {
 public:
     ColliderPrimitive* collider_;
@@ -44,7 +47,39 @@ public:
 
     // entity_transform * collider.transform
     GeneralPose3 world_transform() const {
-        return transform_->global_pose() * collider_->transform;
+        const std::optional<Vec3> entity_scale =
+            transform_->decomposed_global_scale();
+        if (!entity_scale) {
+            tc_log_error(
+                "[AttachedCollider] entity '%s' has an affine world transform; "
+                "TRS collider projection is forbidden",
+                transform_->name());
+            throw std::runtime_error(
+                "Attached collider does not support affine entity ancestry");
+        }
+
+        const Quat collider_rotation = collider_->transform.ang.normalized();
+        const bool collider_rotation_is_identity =
+            std::abs(collider_rotation.x) <= 1.0e-12
+            && std::abs(collider_rotation.y) <= 1.0e-12
+            && std::abs(collider_rotation.z) <= 1.0e-12
+            && std::abs(std::abs(collider_rotation.w) - 1.0) <= 1.0e-12;
+        if (transform_->kind() == TransformKind::AxisScaled
+            && !collider_rotation_is_identity) {
+            tc_log_error(
+                "[AttachedCollider] entity '%s' has axis scale and its collider "
+                "has a local rotation; their composition requires shear",
+                transform_->name());
+            throw std::runtime_error(
+                "Attached collider transform would require affine shear");
+        }
+
+        const GeneralPose3 entity_pose{
+            transform_->global_rotation(),
+            transform_->global_position(),
+            *entity_scale,
+        };
+        return entity_pose * collider_->transform;
     }
 
     ColliderType type() const override {
