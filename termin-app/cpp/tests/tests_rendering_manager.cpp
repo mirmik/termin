@@ -8,8 +8,9 @@
 #include "termin/render/tc_pass.hpp"
 #include "termin/render/tc_pipeline_template.hpp"
 
-#include <string>
+#include <cmath>
 #include <optional>
+#include <string>
 #include <tcbase/trent/json.h>
 
 extern "C" {
@@ -1309,6 +1310,17 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_render_target_config rt_config;
     tc_render_target_config_init(&rt_config);
     rt_config.name = "SceneRT";
+    rt_config.dynamic_resolution = true;
+    rt_config.color_format = "rgba8";
+    rt_config.depth_format = "depth24";
+    rt_config.clear_color = true;
+    rt_config.clear_color_value[0] = 0.02f;
+    rt_config.clear_color_value[1] = 0.03f;
+    rt_config.clear_color_value[2] = 0.07f;
+    rt_config.clear_color_value[3] = 1.0f;
+    rt_config.clear_depth = true;
+    rt_config.clear_depth_value = 0.75f;
+    rt_config.pipeline_name = "Default";
     tc_scene_add_render_target_config(scene, &rt_config);
 
     tc_viewport_config config;
@@ -1336,6 +1348,19 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
     REQUIRE(tc_render_target_handle_valid(rt));
     CHECK(std::string(tc_render_target_get_name(rt)) == "SceneRT");
+    CHECK(tc_render_target_get_dynamic_resolution(rt));
+    CHECK(tc_render_target_get_color_format(rt) == TC_TEXTURE_RGBA8);
+    CHECK(tc_render_target_get_depth_format(rt) == TC_TEXTURE_DEPTH24);
+    CHECK(tc_render_target_get_clear_color_enabled(rt));
+    float clear_color[4] = {};
+    tc_render_target_get_clear_color_value(rt, clear_color);
+    CHECK(std::fabs(clear_color[0] - 0.02f) < 0.0001f);
+    CHECK(std::fabs(clear_color[1] - 0.03f) < 0.0001f);
+    CHECK(std::fabs(clear_color[2] - 0.07f) < 0.0001f);
+    CHECK(std::fabs(clear_color[3] - 1.0f) < 0.0001f);
+    CHECK(tc_render_target_get_clear_depth_enabled(rt));
+    CHECK(std::fabs(tc_render_target_get_clear_depth_value(rt) - 0.75f) < 0.0001f);
+    CHECK(tc_pipeline_handle_valid(tc_render_target_get_pipeline(rt)));
 
     manager.detach_scene_full(scene);
     manager.remove_display(display);

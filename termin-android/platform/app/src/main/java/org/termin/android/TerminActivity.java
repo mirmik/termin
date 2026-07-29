@@ -35,7 +35,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
                 renderLoopRunning = false;
                 return;
             }
-            boolean ok = nativeRenderFrame();
+            boolean ok = nativeRenderFrame(frameTimeNanos);
             renderFrameLogCounter += 1;
             if (!ok || renderFrameLogCounter % 60 == 0) {
                 Log.i(TAG, "renderFrame result=" + ok + " frame=" + renderFrameLogCounter);
@@ -108,7 +108,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativeSurfaceDestroyed();
-    private static native boolean nativeRenderFrame();
+    private static native boolean nativeRenderFrame(long frameTimeNanos);
 
     private void startRenderLoop() {
         if (renderLoopRunning) {

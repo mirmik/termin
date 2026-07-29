@@ -1,50 +1,34 @@
 #include "termin/android/bootstrap.h"
 
-#include <mutex>
-#include <memory>
-#include <string>
-#include <stdexcept>
 #include <cstdarg>
 #include <cstdint>
-#include <cstring>
-#include <cmath>
-#include <fstream>
-#include <vector>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #ifdef __ANDROID__
 #include <android/log.h>
 #endif
 
-#include <inspect/tc_inspect_init.h>
-#include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
-#include <tgfx/tgfx_material_handle.hpp>
-#include <tgfx/tgfx_mesh_handle.hpp>
-#include <termin/camera/camera_component.hpp>
-#include <termin/camera/render_camera_utils.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
-#include <termin/entity/component_registry.hpp>
-#include <termin/lighting/light_component.hpp>
-#include <termin/render/execute_context.hpp>
-#include <termin/render/frame_pass.hpp>
-#include <termin/render/render_engine.hpp>
-#include <termin/render/render_pipeline.hpp>
-#include <termin/render/rendering_manager.hpp>
-#include <termin/render/tgfx2_bridge.hpp>
-#include <termin/render/mesh_renderer.hpp>
+#include <termin/platform/offscreen_render_surface.hpp>
+#include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin_collision/termin_collision.h>
 
 extern "C" {
-#include "core/tc_component.h"
+#include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
-#include "render/tc_pipeline.h"
 }
 
 #ifdef __ANDROID__
@@ -53,11 +37,8 @@ extern "C" {
 #endif
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_android.h>
-#include <tgfx2/descriptors.hpp>
-#include <tgfx2/i_command_list.hpp>
-#include <tgfx2/render_context.hpp>
-#include <tgfx2/vulkan/vulkan_render_device.hpp>
 #include <tgfx2/shader_artifact_resolver.hpp>
+#include <tgfx2/vulkan/vulkan_render_device.hpp>
 #include <tgfx2/vulkan/vulkan_swapchain.hpp>
 #endif
 
@@ -75,28 +56,20 @@ struct AndroidBootstrapState {
     bool initialized = false;
 #ifdef __ANDROID__
     std::unique_ptr<tgfx::GraphicsHost> graphics_host;
-    tgfx::VulkanRenderDevice* smoke_device = nullptr;
-    tgfx::ShaderHandle smoke_vertex_shader;
-    tgfx::ShaderHandle smoke_fragment_shader;
-    tgfx::PipelineHandle smoke_pipeline;
-    tgfx::BufferHandle smoke_vertex_buffer;
-    tgfx::BufferHandle smoke_index_buffer;
-    tgfx::TextureHandle smoke_render_target;
-    tgfx::TextureHandle smoke_depth_target;
-    uint32_t smoke_width = 0;
-    uint32_t smoke_height = 0;
-    uint32_t smoke_frame = 0;
-    bool smoke_create_failed = false;
+    tgfx::VulkanRenderDevice* render_device = nullptr;
+    uint32_t swapchain_width = 0;
+    uint32_t swapchain_height = 0;
+    bool renderer_create_failed = false;
+
     std::unique_ptr<termin::EngineCore> player_engine;
     termin::runtime::RuntimePackageLoadResult player_package;
     termin::TcSceneRef player_scene;
-    termin::RenderPipeline player_pipeline;
-    termin::CameraComponent* player_camera = nullptr;
-    tgfx::TextureHandle player_color_target;
-    tgfx::TextureHandle player_depth_target;
-    uint32_t player_width = 0;
-    uint32_t player_height = 0;
+    std::unordered_map<std::string, termin::TcDisplay> player_displays;
+    std::vector<std::string> registered_scene_names;
+    tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    std::vector<tc_viewport_handle> player_viewports;
     uint32_t player_frame = 0;
+    int64_t last_frame_time_nanos = 0;
     bool scene_extensions_registered = false;
 #endif
 };
@@ -172,457 +145,145 @@ void register_android_scene_extensions_locked() {
 }
 
 #ifdef __ANDROID__
-bool create_smoke_renderer_locked();
-void destroy_smoke_renderer_locked();
-bool resize_smoke_renderer_locked(uint32_t width, uint32_t height);
 
-termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
-    tc_component* raw = tc_scene_first_component_of_type(scene.handle(), "CameraComponent");
-    if (!raw) {
-        return nullptr;
-    }
-    termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
-    return dynamic_cast<termin::CameraComponent*>(cxx);
-}
+bool create_renderer_locked();
+void destroy_renderer_locked();
+bool resize_renderer_locked(uint32_t width, uint32_t height);
 
-bool ensure_android_scene_pipeline_locked() {
-    if (g_state.player_pipeline.is_valid()) {
-        return true;
-    }
+void destroy_player_session_locked() {
+    termin::RenderingManager* manager = g_state.player_engine
+        ? &g_state.player_engine->rendering_manager
+        : nullptr;
 
-    tc_pipeline_handle pipeline_handle =
-        g_state.player_engine
-            ? g_state.player_engine->rendering_manager.create_pipeline("Default")
-            : termin::RenderingManager::make_default_pipeline();
-    if (!tc_pipeline_handle_valid(pipeline_handle)) {
-        android_log_error("player: failed to create Default render pipeline");
-        return false;
-    }
-    g_state.player_pipeline = termin::RenderPipeline(pipeline_handle);
-    android_log_info(
-        "player: Default render pipeline created passes=%zu",
-        g_state.player_pipeline.pass_count()
-    );
-    return true;
-}
-
-void reset_smoke_resources_locked() {
-    g_state.smoke_vertex_shader = {};
-    g_state.smoke_fragment_shader = {};
-    g_state.smoke_pipeline = {};
-    g_state.smoke_vertex_buffer = {};
-    g_state.smoke_index_buffer = {};
-    g_state.smoke_render_target = {};
-    g_state.smoke_depth_target = {};
-}
-
-void reset_player_resources_locked() {
-    g_state.player_color_target = {};
-    g_state.player_depth_target = {};
-    g_state.player_width = 0;
-    g_state.player_height = 0;
-}
-
-void destroy_player_targets_locked() {
-    if (!g_state.smoke_device) {
-        reset_player_resources_locked();
-        return;
+    if (manager) {
+        manager->set_display_factory(nullptr);
+        if (g_state.player_scene.valid()
+                && manager->topology().is_attached(g_state.player_scene.handle())) {
+            manager->detach_scene_full(g_state.player_scene.handle(), true);
+        }
+        for (auto& [name, display] : g_state.player_displays) {
+            (void)name;
+            if (display.is_valid()) {
+                manager->remove_display(display.handle());
+            }
+        }
     }
 
-    auto& device = *g_state.smoke_device;
-    if (g_state.player_color_target) {
-        device.destroy(g_state.player_color_target);
+    for (auto& [name, display] : g_state.player_displays) {
+        (void)name;
+        if (display.is_valid() && !display.destroy()) {
+            tc_log_error("termin_android_player: failed to destroy display");
+        }
     }
-    if (g_state.player_depth_target) {
-        device.destroy(g_state.player_depth_target);
-    }
-    reset_player_resources_locked();
-}
+    g_state.player_displays.clear();
+    g_state.presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    g_state.player_viewports.clear();
 
-void destroy_player_scene_locked() {
-    destroy_player_targets_locked();
-    if (g_state.player_pipeline.is_valid()) {
-        g_state.player_pipeline.destroy();
+    if (g_state.player_engine) {
+        for (const std::string& name : g_state.registered_scene_names) {
+            g_state.player_engine->scene_manager.unregister_scene(name);
+        }
     }
-    if (g_state.player_scene.valid()) {
-        g_state.player_scene.destroy();
-        g_state.player_scene = termin::TcSceneRef();
+    g_state.registered_scene_names.clear();
+    g_state.player_scene = termin::TcSceneRef();
+
+    for (termin::runtime::RuntimePackageScene& packaged_scene : g_state.player_package.scenes) {
+        if (packaged_scene.scene.valid()) {
+            packaged_scene.scene.destroy();
+        }
     }
     g_state.player_package = termin::runtime::RuntimePackageLoadResult();
-    g_state.player_camera = nullptr;
-    g_state.player_engine.reset();
+
+    if (g_state.player_engine) {
+        if (!g_state.player_engine->shutdown()) {
+            tc_log_error("termin_android_player: EngineCore shutdown failed");
+        }
+        g_state.player_engine.reset();
+    }
+
     g_state.player_frame = 0;
+    g_state.last_frame_time_nanos = 0;
 }
 
-void destroy_smoke_resources_locked() {
-    if (!g_state.smoke_device) {
-        reset_smoke_resources_locked();
-        return;
+tc_display_handle create_player_display_locked(const std::string& requested_name) {
+    if (!g_state.render_device || g_state.swapchain_width == 0 || g_state.swapchain_height == 0) {
+        tc_log_error(
+            "termin_android_player: display '%s' requested before graphics initialization",
+            requested_name.c_str()
+        );
+        return TC_DISPLAY_HANDLE_INVALID;
     }
 
-    auto& device = *g_state.smoke_device;
-    if (g_state.smoke_pipeline) {
-        device.destroy(g_state.smoke_pipeline);
-    }
-    if (g_state.smoke_index_buffer) {
-        device.destroy(g_state.smoke_index_buffer);
-    }
-    if (g_state.smoke_vertex_buffer) {
-        device.destroy(g_state.smoke_vertex_buffer);
-    }
-    if (g_state.smoke_render_target) {
-        device.destroy(g_state.smoke_render_target);
-    }
-    if (g_state.smoke_depth_target) {
-        device.destroy(g_state.smoke_depth_target);
-    }
-    if (g_state.smoke_fragment_shader) {
-        device.destroy(g_state.smoke_fragment_shader);
-    }
-    if (g_state.smoke_vertex_shader) {
-        device.destroy(g_state.smoke_vertex_shader);
-    }
-    reset_smoke_resources_locked();
-}
-
-#if 0
-std::vector<uint8_t> read_asset_file_locked(const char* relative_path) {
-    std::string path = g_state.asset_root;
-    if (!path.empty() && path.back() != '/') {
-        path.push_back('/');
-    }
-    path += relative_path;
-
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        throw std::runtime_error("failed to open asset file: " + path);
-    }
-    in.seekg(0, std::ios::end);
-    std::streamoff size = in.tellg();
-    if (size <= 0) {
-        throw std::runtime_error("asset file is empty: " + path);
-    }
-    in.seekg(0, std::ios::beg);
-
-    std::vector<uint8_t> bytes(static_cast<size_t>(size));
-    in.read(reinterpret_cast<char*>(bytes.data()), size);
-    if (!in) {
-        throw std::runtime_error("failed to read asset file: " + path);
-    }
-    android_log_info("smoke: loaded shader asset '%s' bytes=%zu", path.c_str(), bytes.size());
-    return bytes;
-}
-
-struct Mat4 {
-    float v[16] = {};
-};
-
-Mat4 mat4_identity() {
-    Mat4 out;
-    out.v[0] = 1.0f;
-    out.v[5] = 1.0f;
-    out.v[10] = 1.0f;
-    out.v[15] = 1.0f;
-    return out;
-}
-
-Mat4 mat4_mul(const Mat4& a, const Mat4& b) {
-    Mat4 out;
-    for (int col = 0; col < 4; ++col) {
-        for (int row = 0; row < 4; ++row) {
-            float sum = 0.0f;
-            for (int k = 0; k < 4; ++k) {
-                sum += a.v[k * 4 + row] * b.v[col * 4 + k];
-            }
-            out.v[col * 4 + row] = sum;
-        }
-    }
-    return out;
-}
-
-Mat4 mat4_translation(float x, float y, float z) {
-    Mat4 out = mat4_identity();
-    out.v[12] = x;
-    out.v[13] = y;
-    out.v[14] = z;
-    return out;
-}
-
-Mat4 mat4_rotation_x(float radians) {
-    Mat4 out = mat4_identity();
-    float c = std::cos(radians);
-    float s = std::sin(radians);
-    out.v[5] = c;
-    out.v[6] = s;
-    out.v[9] = -s;
-    out.v[10] = c;
-    return out;
-}
-
-Mat4 mat4_rotation_y(float radians) {
-    Mat4 out = mat4_identity();
-    float c = std::cos(radians);
-    float s = std::sin(radians);
-    out.v[0] = c;
-    out.v[2] = -s;
-    out.v[8] = s;
-    out.v[10] = c;
-    return out;
-}
-
-Mat4 mat4_perspective(float fovy_radians, float aspect, float near_z, float far_z) {
-    Mat4 out;
-    float f = 1.0f / std::tan(fovy_radians * 0.5f);
-    out.v[0] = f / aspect;
-    out.v[5] = -f;
-    out.v[10] = far_z / (near_z - far_z);
-    out.v[11] = -1.0f;
-    out.v[14] = (far_z * near_z) / (near_z - far_z);
-    return out;
-}
-
-Mat4 smoke_mvp_locked() {
-    constexpr float kPi = 3.14159265358979323846f;
-    float aspect = 1.0f;
-    if (g_state.smoke_height != 0) {
-        aspect = static_cast<float>(g_state.smoke_width) / static_cast<float>(g_state.smoke_height);
-    }
-    float t = static_cast<float>(g_state.smoke_frame) * 0.016f;
-    Mat4 projection = mat4_perspective(55.0f * kPi / 180.0f, aspect, 0.1f, 20.0f);
-    Mat4 view = mat4_translation(0.0f, 0.0f, -3.0f);
-    Mat4 model = mat4_mul(mat4_rotation_y(t), mat4_rotation_x(t * 0.67f));
-    return mat4_mul(projection, mat4_mul(view, model));
-}
-
-bool create_smoke_mesh_resources_locked() {
-    if (!g_state.smoke_device) {
-        android_log_error("smoke: cannot create mesh resources without Vulkan device");
-        tc_log_error("termin_android_smoke: cannot create mesh resources without Vulkan device");
-        return false;
-    }
-    if (g_state.smoke_width == 0 || g_state.smoke_height == 0) {
-        android_log_error("smoke: cannot create mesh resources for empty swapchain");
-        tc_log_error("termin_android_smoke: cannot create mesh resources for empty swapchain");
-        return false;
+    const std::string name = requested_name.empty() ? "Main" : requested_name;
+    auto existing = g_state.player_displays.find(name);
+    if (existing != g_state.player_displays.end() && existing->second.is_valid()) {
+        return existing->second.handle();
     }
 
-    auto& device = *g_state.smoke_device;
-
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.debug_name = "android_smoke_cube_vs";
-    vs_desc.bytecode = read_asset_file_locked("shaders/android_smoke_cube.vert.spv");
-    g_state.smoke_vertex_shader = device.create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.debug_name = "android_smoke_cube_fs";
-    fs_desc.bytecode = read_asset_file_locked("shaders/android_smoke_cube.frag.spv");
-    g_state.smoke_fragment_shader = device.create_shader(fs_desc);
-
-    tgfx::TextureDesc rt_desc;
-    rt_desc.width = g_state.smoke_width;
-    rt_desc.height = g_state.smoke_height;
-    rt_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-    rt_desc.usage = tgfx::TextureUsage::ColorAttachment |
-                    tgfx::TextureUsage::CopySrc |
-                    tgfx::TextureUsage::Sampled;
-    g_state.smoke_render_target = device.create_texture(rt_desc);
-
-    tgfx::TextureDesc depth_desc;
-    depth_desc.width = g_state.smoke_width;
-    depth_desc.height = g_state.smoke_height;
-    depth_desc.format = tgfx::PixelFormat::D32F;
-    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
-    g_state.smoke_depth_target = device.create_texture(depth_desc);
-
-    tgfx::PipelineDesc pipeline_desc;
-    pipeline_desc.vertex_shader = g_state.smoke_vertex_shader;
-    pipeline_desc.fragment_shader = g_state.smoke_fragment_shader;
-    pipeline_desc.topology = tgfx::PrimitiveTopology::TriangleList;
-    pipeline_desc.depth_stencil.depth_test = true;
-    pipeline_desc.depth_stencil.depth_write = true;
-    pipeline_desc.depth_stencil.depth_compare = tgfx::CompareOp::Less;
-    pipeline_desc.raster.cull = tgfx::CullMode::None;
-    pipeline_desc.color_formats = {tgfx::PixelFormat::RGBA8_UNorm};
-    pipeline_desc.depth_format = tgfx::PixelFormat::D32F;
-
-    tgfx::VertexBufferLayout layout;
-    layout.stride = 6 * sizeof(float);
-    layout.attributes = {
-        {0, tgfx::VertexFormat::Float3, 0},
-        {1, tgfx::VertexFormat::Float3, 3 * sizeof(float)},
-    };
-    pipeline_desc.vertex_layouts.push_back(layout);
-    g_state.smoke_pipeline = device.create_pipeline(pipeline_desc);
-
-    const float vertices[] = {
-        -0.55f, -0.55f, -0.55f,  0.95f, 0.10f, 0.10f,
-         0.55f, -0.55f, -0.55f,  0.95f, 0.70f, 0.10f,
-         0.55f,  0.55f, -0.55f,  0.95f, 0.95f, 0.10f,
-        -0.55f,  0.55f, -0.55f,  0.15f, 0.85f, 0.20f,
-        -0.55f, -0.55f,  0.55f,  0.10f, 0.70f, 0.95f,
-         0.55f, -0.55f,  0.55f,  0.25f, 0.25f, 1.00f,
-         0.55f,  0.55f,  0.55f,  0.90f, 0.20f, 0.95f,
-        -0.55f,  0.55f,  0.55f,  0.80f, 0.80f, 1.00f,
-    };
-    tgfx::BufferDesc vb_desc;
-    vb_desc.size = sizeof(vertices);
-    vb_desc.usage = tgfx::BufferUsage::Vertex;
-    vb_desc.cpu_visible = true;
-    g_state.smoke_vertex_buffer = device.create_buffer(vb_desc);
-    device.upload_buffer(
-        g_state.smoke_vertex_buffer,
-        {reinterpret_cast<const uint8_t*>(vertices), sizeof(vertices)}
+    tc_display_handle handle = termin::create_offscreen_display(
+        g_state.render_device,
+        static_cast<int>(g_state.swapchain_width),
+        static_cast<int>(g_state.swapchain_height),
+        name.c_str()
     );
+    if (!tc_display_handle_valid(handle)) {
+        tc_log_error(
+            "termin_android_player: failed to create offscreen display '%s'",
+            name.c_str()
+        );
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
 
-    const uint32_t indices[] = {
-        4, 5, 6,  4, 6, 7,
-        1, 0, 3,  1, 3, 2,
-        0, 4, 7,  0, 7, 3,
-        5, 1, 2,  5, 2, 6,
-        3, 7, 6,  3, 6, 2,
-        0, 1, 5,  0, 5, 4,
-    };
-    tgfx::BufferDesc ib_desc;
-    ib_desc.size = sizeof(indices);
-    ib_desc.usage = tgfx::BufferUsage::Index;
-    ib_desc.cpu_visible = true;
-    g_state.smoke_index_buffer = device.create_buffer(ib_desc);
-    device.upload_buffer(
-        g_state.smoke_index_buffer,
-        {reinterpret_cast<const uint8_t*>(indices), sizeof(indices)}
-    );
-
-    android_log_info(
-        "smoke: cube resources created rt=%ux%u vs=%u fs=%u pipeline=%u vb=%u ib=%u",
-        g_state.smoke_width,
-        g_state.smoke_height,
-        g_state.smoke_vertex_shader.id,
-        g_state.smoke_fragment_shader.id,
-        g_state.smoke_pipeline.id,
-        g_state.smoke_vertex_buffer.id,
-        g_state.smoke_index_buffer.id
-    );
-    tc_log_info(
-        "termin_android_smoke: cube resources created rt=%ux%u pipeline=%u",
-        g_state.smoke_width,
-        g_state.smoke_height,
-        g_state.smoke_pipeline.id
-    );
-    return true;
+    g_state.player_displays.emplace(name, termin::TcDisplay(handle));
+    return handle;
 }
-#endif
-#endif
 
-bool ensure_player_targets_locked() {
-#ifdef __ANDROID__
-    if (!g_state.smoke_device) {
-        android_log_error("player: cannot create render targets without Vulkan device");
-        return false;
-    }
-    if (g_state.smoke_width == 0 || g_state.smoke_height == 0) {
-        android_log_error("player: cannot create render targets for empty swapchain");
-        return false;
-    }
-    if (g_state.player_color_target &&
-        g_state.player_depth_target &&
-        g_state.player_width == g_state.smoke_width &&
-        g_state.player_height == g_state.smoke_height) {
+bool ensure_player_session_locked() {
+    if (g_state.player_engine
+            && g_state.player_scene.valid()
+            && tc_display_handle_valid(g_state.presentation_display)
+            && !g_state.player_viewports.empty()) {
         return true;
     }
-
-    destroy_player_targets_locked();
-
-    auto& device = *g_state.smoke_device;
-
-    tgfx::TextureDesc color_desc;
-    color_desc.width = g_state.smoke_width;
-    color_desc.height = g_state.smoke_height;
-    color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-    color_desc.usage = tgfx::TextureUsage::ColorAttachment |
-                       tgfx::TextureUsage::CopySrc |
-                       tgfx::TextureUsage::CopyDst |
-                       tgfx::TextureUsage::Sampled;
-    g_state.player_color_target = device.create_texture(color_desc);
-
-    tgfx::TextureDesc depth_desc;
-    depth_desc.width = g_state.smoke_width;
-    depth_desc.height = g_state.smoke_height;
-    depth_desc.format = tgfx::PixelFormat::D32F;
-    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
-                       tgfx::TextureUsage::CopySrc |
-                       tgfx::TextureUsage::Sampled;
-    g_state.player_depth_target = device.create_texture(depth_desc);
-
-    if (!g_state.player_color_target || !g_state.player_depth_target) {
-        android_log_error("player: failed to create render target textures");
-        destroy_player_targets_locked();
+    if (!g_state.graphics_host || !g_state.render_device) {
+        tc_log_error("termin_android_player: graphics host is unavailable");
         return false;
     }
-
-    g_state.player_width = g_state.smoke_width;
-    g_state.player_height = g_state.smoke_height;
-    android_log_info("player: render targets created %ux%u", g_state.player_width, g_state.player_height);
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool ensure_player_scene_locked() {
-#ifdef __ANDROID__
-    if (g_state.player_scene.valid() && g_state.player_pipeline.is_valid() && g_state.player_camera) {
-        return true;
-    }
-
-    if (!g_state.player_engine) {
-        register_android_scene_extensions_locked();
-        g_state.player_engine = std::make_unique<termin::EngineCore>();
-        if (g_state.graphics_host) {
-            g_state.player_engine->rendering_manager.render_engine()->set_graphics_host(
-                *g_state.graphics_host);
-        }
-    }
-
-    const char* required_components[] = {
-        "MeshComponent",
-        "MeshRenderer",
-        "CameraComponent",
-        "LightComponent",
-        "UnknownComponent",
-    };
-    for (const char* name : required_components) {
-        if (!tc_component_registry_has(name)) {
-            android_log_error("player: required component is not registered: %s", name);
-            tc_log_error("termin_android_player: required component is not registered: %s", name);
-            return false;
-        }
-    }
-
     if (g_state.asset_root.empty()) {
-        android_log_error("player: asset_root is empty; runtime package cannot be loaded");
-        tc_log_error("termin_android_player: asset_root is empty; runtime package cannot be loaded");
+        tc_log_error("termin_android_player: asset_root is empty");
         return false;
     }
 
     const std::filesystem::path manifest_path =
         std::filesystem::path(g_state.asset_root) / "manifest.json";
     if (!std::filesystem::is_regular_file(manifest_path)) {
-        android_log_error("player: runtime manifest not found at '%s'", manifest_path.c_str());
-        tc_log_error("termin_android_player: runtime manifest not found at '%s'", manifest_path.c_str());
+        tc_log_error(
+            "termin_android_player: runtime manifest not found at '%s'",
+            manifest_path.c_str()
+        );
         return false;
     }
+
+    destroy_player_session_locked();
+    register_android_scene_extensions_locked();
+
+    g_state.player_engine = std::make_unique<termin::EngineCore>();
+    g_state.player_engine->rendering_manager.render_engine()->set_graphics_host(
+        *g_state.graphics_host
+    );
 
     tgfx::set_builtin_shader_root(nullptr);
     termin::runtime::RuntimePackageLoader loader;
     g_state.player_package = loader.load(g_state.asset_root);
     if (!g_state.player_package.ok || !g_state.player_package.scene.valid()) {
-        android_log_error("player: runtime package load failed: %s", g_state.player_package.message.c_str());
-        tc_log_error("termin_android_player: runtime package load failed: %s", g_state.player_package.message.c_str());
-        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
+        tc_log_error(
+            "termin_android_player: runtime package load failed: %s",
+            g_state.player_package.message.c_str()
+        );
+        destroy_player_session_locked();
         return false;
     }
+
     const std::string artifact_root = g_state.shader_artifact_root_explicit
         ? g_state.shader_artifact_root
         : g_state.player_package.shader_runtime.artifact_root;
@@ -639,231 +300,216 @@ bool ensure_player_scene_locked() {
         g_state.player_package.shader_runtime.dev_compile_enabled
     );
 
-    termin::CameraComponent* camera = find_player_camera(g_state.player_package.scene);
-    if (!camera) {
-        android_log_error("player: runtime package loaded but has no CameraComponent");
-        tc_log_error("termin_android_player: runtime package loaded but has no CameraComponent");
-        g_state.player_package.scene.destroy();
-        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
+    termin::SceneManager& scene_manager = g_state.player_engine->scene_manager;
+    for (const termin::runtime::RuntimePackageScene& packaged_scene
+            : g_state.player_package.scenes) {
+        scene_manager.register_scene(packaged_scene.identity, packaged_scene.scene.handle());
+        scene_manager.set_scene_path(
+            packaged_scene.identity,
+            packaged_scene.scene.source_path()
+        );
+        scene_manager.set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
+        g_state.registered_scene_names.push_back(packaged_scene.identity);
+    }
+
+    const std::string& entry_scene_name = g_state.player_package.entry_scene_identity;
+    if (!scene_manager.has_scene(entry_scene_name)) {
+        tc_log_error(
+            "termin_android_player: entry scene '%s' was not registered",
+            entry_scene_name.c_str()
+        );
+        destroy_player_session_locked();
         return false;
     }
-    if (!ensure_android_scene_pipeline_locked()) {
-        g_state.player_package.scene.destroy();
-        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
-        return false;
-    }
+    scene_manager.set_mode(entry_scene_name, TC_SCENE_MODE_PLAY);
+
+    termin::RenderingManager& manager = g_state.player_engine->rendering_manager;
+    manager.set_display_factory([](const std::string& name) {
+        return create_player_display_locked(name);
+    });
+
     g_state.player_scene = g_state.player_package.scene;
-    g_state.player_camera = camera;
+    g_state.player_viewports = manager.attach_scene_full(g_state.player_scene.handle());
+    if (g_state.player_viewports.empty()) {
+        tc_log_error(
+            "termin_android_player: entry scene render_mount created no viewports"
+        );
+        destroy_player_session_locked();
+        return false;
+    }
+
+    g_state.presentation_display = manager.get_display_by_name("Main");
+    if (!tc_display_handle_valid(g_state.presentation_display)) {
+        tc_log_error(
+            "termin_android_player: entry scene render_mount has no 'Main' display"
+        );
+        destroy_player_session_locked();
+        return false;
+    }
+
+    scene_manager.request_render();
     android_log_info(
-        "player: runtime package loaded entities=%zu pipeline_passes=%zu",
+        "player: attached runtime package entities=%zu viewports=%zu targets=%zu",
         g_state.player_scene.entity_count(),
-        g_state.player_pipeline.pass_count()
+        g_state.player_viewports.size(),
+        manager.managed_render_targets().size()
+    );
+    tc_log_info(
+        "termin_android_player: attached scene '%s' through RenderingManager",
+        entry_scene_name.c_str()
     );
     return true;
-#else
-    return false;
-#endif
 }
 
-int render_player_frame_locked() {
-#ifdef __ANDROID__
-    if (!g_state.smoke_device) {
-        if (!create_smoke_renderer_locked()) {
-            return 0;
-        }
+double frame_delta_seconds_locked(int64_t frame_time_nanos) {
+    if (g_state.last_frame_time_nanos == 0) {
+        g_state.last_frame_time_nanos = frame_time_nanos;
+        return 0.0;
     }
-    if (!ensure_player_scene_locked() || !ensure_player_targets_locked()) {
+    const int64_t elapsed = frame_time_nanos - g_state.last_frame_time_nanos;
+    g_state.last_frame_time_nanos = frame_time_nanos;
+    if (elapsed <= 0) {
+        throw std::runtime_error("non-monotonic Choreographer frame timestamp");
+    }
+    return static_cast<double>(elapsed) / 1'000'000'000.0;
+}
+
+int render_player_frame_locked(int64_t frame_time_nanos) {
+    if (frame_time_nanos <= 0) {
+        tc_log_error("termin_android_player: frame timestamp must be positive");
+        return 0;
+    }
+    if (!g_state.render_device && !create_renderer_locked()) {
+        return 0;
+    }
+    if (!ensure_player_session_locked()) {
         return 0;
     }
 
     try {
-        g_state.player_camera->set_aspect(
-            g_state.player_height == 0
-                ? 1.0
-                : static_cast<double>(g_state.player_width) / static_cast<double>(g_state.player_height)
-        );
+        const double dt = frame_delta_seconds_locked(frame_time_nanos);
+        const bool rendered = g_state.player_engine->tick_and_render(dt);
+        if (!rendered) {
+            return 1;
+        }
 
-        termin::RenderEngine* engine = g_state.player_engine->rendering_manager.render_engine();
-        if (!engine) {
-            android_log_error("player: RenderEngine is unavailable");
+        termin::TcDisplay display(g_state.presentation_display);
+        uint32_t output_texture_id = 0;
+        if (!display.validate_output(
+                reinterpret_cast<uintptr_t>(g_state.render_device),
+                &output_texture_id)) {
+            tc_log_error(
+                "termin_android_player: RenderingManager presentation output is invalid"
+            );
             return 0;
         }
 
-        termin::RenderTargetContext target;
-        target.name = "Main";
-        target.render_rect = termin::Rect2i{
-            0,
-            0,
-            static_cast<int>(g_state.player_width),
-            static_cast<int>(g_state.player_height)
-        };
-        target.output_color_tex = g_state.player_color_target;
-        target.output_depth_tex = g_state.player_depth_target;
-        target.clear_color_enabled = true;
-        target.clear_color[0] = 0.0f;
-        target.clear_color[1] = 0.0f;
-        target.clear_color[2] = 0.0f;
-        target.clear_color[3] = 1.0f;
-        target.clear_depth_enabled = true;
-        target.clear_depth = 1.0f;
-        target.camera = termin::make_render_camera(
-            *g_state.player_camera,
-            target.render_rect.height == 0
-                ? 1.0
-                : static_cast<double>(target.render_rect.width) /
-                  static_cast<double>(target.render_rect.height)
+        const bool recreate = g_state.render_device->swapchain()->compose_and_present(
+            tgfx::TextureHandle{output_texture_id}
         );
-
-        std::unordered_map<std::string, termin::RenderTargetContext> targets;
-        targets.emplace(target.name, target);
-        std::vector<termin::Light> lights;
-
-        engine->render_scene_pipeline_offscreen(
-            g_state.player_pipeline,
-            g_state.player_scene.handle(),
-            targets,
-            lights,
-            target.name
-        );
-
-        bool recreate = g_state.smoke_device->swapchain()->compose_and_present(
-            g_state.player_color_target);
         ++g_state.player_frame;
         if (recreate || g_state.player_frame == 1 || g_state.player_frame % 60 == 0) {
             android_log_info(
-                "player: rendered tc_scene frame=%u recreate=%d",
+                "player: rendered topology frame=%u recreate=%d",
                 g_state.player_frame,
                 recreate ? 1 : 0
             );
         }
-        if (recreate) {
-            resize_smoke_renderer_locked(
+        if (recreate && !resize_renderer_locked(
                 static_cast<uint32_t>(g_state.surface_width),
-                static_cast<uint32_t>(g_state.surface_height)
-            );
+                static_cast<uint32_t>(g_state.surface_height))) {
+            return 0;
         }
         return 1;
-    } catch (const std::exception& e) {
-        android_log_error("player: render failed: %s", e.what());
-        tc_log_error("termin_android_player: render failed: %s", e.what());
-        destroy_smoke_renderer_locked();
+    } catch (const std::exception& error) {
+        android_log_error("player: render failed: %s", error.what());
+        tc_log_error("termin_android_player: render failed: %s", error.what());
+        destroy_renderer_locked();
         return 0;
     }
-#else
-    return 0;
-#endif
 }
 
-void destroy_smoke_renderer_locked() {
-#ifdef __ANDROID__
-    if (g_state.smoke_device) {
-        android_log_info("smoke: destroy renderer");
+void destroy_renderer_locked() {
+    if (g_state.render_device) {
+        android_log_info("renderer: destroy");
         try {
-            g_state.smoke_device->wait_idle();
-            destroy_player_scene_locked();
-            destroy_smoke_resources_locked();
-        } catch (const std::exception& e) {
-            android_log_error("smoke: destroy failed: %s", e.what());
-            tc_log_error("termin_android_smoke: destroy failed: %s", e.what());
+            g_state.render_device->wait_idle();
+        } catch (const std::exception& error) {
+            android_log_error("renderer: wait_idle failed: %s", error.what());
+            tc_log_error("termin_android_renderer: wait_idle failed: %s", error.what());
         }
-    } else {
-        destroy_player_scene_locked();
     }
+
+    destroy_player_session_locked();
     g_state.graphics_host.reset();
-    g_state.smoke_device = nullptr;
-    reset_smoke_resources_locked();
-    g_state.smoke_width = 0;
-    g_state.smoke_height = 0;
-    g_state.smoke_frame = 0;
-#endif
+    g_state.render_device = nullptr;
+    g_state.swapchain_width = 0;
+    g_state.swapchain_height = 0;
 }
 
-#ifdef __ANDROID__
-bool resize_smoke_renderer_locked(uint32_t width, uint32_t height) {
-    if (!g_state.smoke_device || !g_state.smoke_device->swapchain()) {
+bool resize_renderer_locked(uint32_t width, uint32_t height) {
+    if (!g_state.render_device || !g_state.render_device->swapchain()) {
         return false;
     }
     if (width == 0 || height == 0) {
-        android_log_error("smoke: invalid resize %ux%u", width, height);
-        tc_log_error("termin_android_smoke: invalid resize %ux%u", width, height);
-        destroy_smoke_renderer_locked();
+        tc_log_error("termin_android_renderer: invalid resize %ux%u", width, height);
+        destroy_renderer_locked();
         return false;
     }
 
     try {
-        android_log_info("smoke: recreate swapchain size=%ux%u", width, height);
-        tc_log_info("termin_android_smoke: recreate swapchain size=%ux%u", width, height);
-        g_state.smoke_device->swapchain()->recreate(width, height);
-        g_state.smoke_width = g_state.smoke_device->swapchain()->width();
-        g_state.smoke_height = g_state.smoke_device->swapchain()->height();
-        destroy_player_targets_locked();
+        g_state.render_device->swapchain()->recreate(width, height);
+        g_state.swapchain_width = g_state.render_device->swapchain()->width();
+        g_state.swapchain_height = g_state.render_device->swapchain()->height();
+
+        for (auto& [name, display] : g_state.player_displays) {
+            if (!display.resize(
+                    static_cast<int>(g_state.swapchain_width),
+                    static_cast<int>(g_state.swapchain_height))) {
+                throw std::runtime_error(
+                    "failed to resize offscreen display '" + name + "'"
+                );
+            }
+        }
+
         android_log_info(
-            "smoke: swapchain recreated %ux%u images=%u",
-            g_state.smoke_width,
-            g_state.smoke_height,
-            g_state.smoke_device->swapchain()->image_count()
-        );
-        tc_log_info(
-            "termin_android_smoke: swapchain recreated %ux%u images=%u",
-            g_state.smoke_width,
-            g_state.smoke_height,
-            g_state.smoke_device->swapchain()->image_count()
+            "renderer: swapchain resized %ux%u images=%u",
+            g_state.swapchain_width,
+            g_state.swapchain_height,
+            g_state.render_device->swapchain()->image_count()
         );
         return true;
-    } catch (const std::exception& e) {
-        android_log_error("smoke: swapchain recreate failed: %s", e.what());
-        tc_log_error("termin_android_smoke: swapchain recreate failed: %s", e.what());
-        destroy_smoke_renderer_locked();
+    } catch (const std::exception& error) {
+        android_log_error("renderer: swapchain resize failed: %s", error.what());
+        tc_log_error("termin_android_renderer: swapchain resize failed: %s", error.what());
+        destroy_renderer_locked();
         return false;
     }
 }
-#endif
 
-void release_window_locked() {
-    destroy_smoke_renderer_locked();
-#ifdef __ANDROID__
-    if (g_state.window) {
-        ANativeWindow_release(g_state.window);
-    }
-#endif
-    g_state.window = nullptr;
-    g_state.surface_width = 0;
-    g_state.surface_height = 0;
-#ifdef __ANDROID__
-    g_state.smoke_create_failed = false;
-#endif
-}
-
-#ifdef __ANDROID__
-bool create_smoke_renderer_locked() {
-    if (g_state.smoke_create_failed) {
-        android_log_info("smoke: create skipped after earlier failure on this surface");
+bool create_renderer_locked() {
+    if (g_state.renderer_create_failed) {
+        android_log_info("renderer: create skipped after earlier failure on this surface");
         return false;
     }
     if (!g_state.window) {
-        android_log_error("smoke: cannot create renderer without ANativeWindow");
-        tc_log_error("termin_android_smoke: cannot create renderer without ANativeWindow");
+        tc_log_error("termin_android_renderer: cannot create without ANativeWindow");
         return false;
     }
     if (g_state.surface_width <= 0 || g_state.surface_height <= 0) {
-        android_log_error(
-            "smoke: invalid surface size %dx%d",
-            static_cast<int>(g_state.surface_width),
-            static_cast<int>(g_state.surface_height)
-        );
         tc_log_error(
-            "termin_android_smoke: invalid surface size %dx%d",
+            "termin_android_renderer: invalid surface size %dx%d",
             static_cast<int>(g_state.surface_width),
             static_cast<int>(g_state.surface_height)
         );
         return false;
     }
 
-    destroy_smoke_renderer_locked();
+    destroy_renderer_locked();
 
     try {
         android_log_info(
-            "smoke: create Vulkan renderer for surface=%p size=%dx%d",
+            "renderer: create Vulkan surface=%p size=%dx%d",
             static_cast<void*>(g_state.window),
             static_cast<int>(g_state.surface_width),
             static_cast<int>(g_state.surface_height)
@@ -878,18 +524,19 @@ bool create_smoke_renderer_locked() {
         info.swapchain_height = static_cast<uint32_t>(g_state.surface_height);
         ANativeWindow* window = g_state.window;
         info.surface_factory = [window](VkInstance instance) -> VkSurfaceKHR {
-            VkAndroidSurfaceCreateInfoKHR ci{};
-            ci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-            ci.window = window;
+            VkAndroidSurfaceCreateInfoKHR create_info{};
+            create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+            create_info.window = window;
             VkSurfaceKHR surface = VK_NULL_HANDLE;
-            VkResult result = vkCreateAndroidSurfaceKHR(instance, &ci, nullptr, &surface);
+            const VkResult result = vkCreateAndroidSurfaceKHR(
+                instance,
+                &create_info,
+                nullptr,
+                &surface
+            );
             if (result != VK_SUCCESS) {
-                android_log_error(
-                    "smoke: vkCreateAndroidSurfaceKHR failed result=%d",
-                    static_cast<int>(result)
-                );
                 tc_log_error(
-                    "termin_android_smoke: vkCreateAndroidSurfaceKHR failed result=%d",
+                    "termin_android_renderer: vkCreateAndroidSurfaceKHR failed result=%d",
                     static_cast<int>(result)
                 );
                 return VK_NULL_HANDLE;
@@ -908,44 +555,45 @@ bool create_smoke_renderer_locked() {
                 false
             )
         );
-        tgfx::VulkanRenderDevice* render_device_ptr = render_device.get();
+        g_state.render_device = render_device.get();
         g_state.graphics_host = tgfx::GraphicsHost::adopt_application_device(
-            std::move(render_device));
-        g_state.smoke_device = render_device_ptr;
-        if (g_state.player_engine) {
-            g_state.player_engine->rendering_manager.render_engine()->set_graphics_host(
-                *g_state.graphics_host);
-        }
-
-        g_state.smoke_width = g_state.smoke_device->swapchain()->width();
-        g_state.smoke_height = g_state.smoke_device->swapchain()->height();
+            std::move(render_device)
+        );
+        g_state.swapchain_width = g_state.render_device->swapchain()->width();
+        g_state.swapchain_height = g_state.render_device->swapchain()->height();
 
         android_log_info(
-            "smoke: Vulkan renderer created swapchain=%ux%u images=%u",
-            g_state.smoke_width,
-            g_state.smoke_height,
-            g_state.smoke_device->swapchain()->image_count()
-        );
-        tc_log_info(
-            "termin_android_smoke: Vulkan renderer created swapchain=%ux%u images=%u",
-            g_state.smoke_width,
-            g_state.smoke_height,
-            g_state.smoke_device->swapchain()->image_count()
+            "renderer: Vulkan swapchain=%ux%u images=%u",
+            g_state.swapchain_width,
+            g_state.swapchain_height,
+            g_state.render_device->swapchain()->image_count()
         );
         return true;
-    } catch (const std::exception& e) {
-        android_log_error("smoke: create failed: %s", e.what());
-        tc_log_error("termin_android_smoke: create failed: %s", e.what());
-        destroy_smoke_renderer_locked();
-        g_state.smoke_create_failed = true;
+    } catch (const std::exception& error) {
+        android_log_error("renderer: create failed: %s", error.what());
+        tc_log_error("termin_android_renderer: create failed: %s", error.what());
+        destroy_renderer_locked();
+        g_state.renderer_create_failed = true;
         return false;
     }
 }
 
-int render_smoke_frame_locked() {
-    return render_player_frame_locked();
-}
 #endif
+
+void release_window_locked() {
+#ifdef __ANDROID__
+    destroy_renderer_locked();
+    if (g_state.window) {
+        ANativeWindow_release(g_state.window);
+    }
+#endif
+    g_state.window = nullptr;
+    g_state.surface_width = 0;
+    g_state.surface_height = 0;
+#ifdef __ANDROID__
+    g_state.renderer_create_failed = false;
+#endif
+}
 
 } // namespace
 
@@ -967,7 +615,6 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
     g_state.asset_root = config->asset_root ? config->asset_root : "";
     g_state.native_lib_dir = config->native_lib_dir ? config->native_lib_dir : "";
     g_state.initialized = true;
-
     g_state.shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
     g_state.shader_artifact_root_explicit = false;
 
@@ -1055,7 +702,7 @@ extern "C" void termin_android_on_surface_created(ANativeWindow* window) {
 #endif
     g_state.window = window;
 #ifdef __ANDROID__
-    g_state.smoke_create_failed = false;
+    g_state.renderer_create_failed = false;
 #endif
     android_log_info(
         "surface_created: window=%p size=%dx%d; waiting for surfaceChanged before render",
@@ -1073,7 +720,8 @@ extern "C" void termin_android_on_surface_created(ANativeWindow* window) {
 
 extern "C" void termin_android_on_surface_changed(int32_t width, int32_t height) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
-    bool size_changed = g_state.surface_width != width || g_state.surface_height != height;
+    const bool size_changed =
+        g_state.surface_width != width || g_state.surface_height != height;
     g_state.surface_width = width;
     g_state.surface_height = height;
     android_log_info(
@@ -1087,26 +735,23 @@ extern "C" void termin_android_on_surface_changed(int32_t width, int32_t height)
         static_cast<int>(width),
         static_cast<int>(height)
     );
-    if (size_changed && g_state.smoke_device) {
+#ifdef __ANDROID__
+    if (size_changed && g_state.render_device) {
         if (width <= 0 || height <= 0) {
-            android_log_error(
-                "surface_changed: invalid resize %dx%d",
-                static_cast<int>(width),
-                static_cast<int>(height)
-            );
             tc_log_error(
                 "termin_android_on_surface_changed: invalid resize %dx%d",
                 static_cast<int>(width),
                 static_cast<int>(height)
             );
-            destroy_smoke_renderer_locked();
+            destroy_renderer_locked();
             return;
         }
-        resize_smoke_renderer_locked(
+        resize_renderer_locked(
             static_cast<uint32_t>(width),
             static_cast<uint32_t>(height)
         );
     }
+#endif
 }
 
 extern "C" void termin_android_on_surface_destroyed(void) {
@@ -1116,18 +761,19 @@ extern "C" void termin_android_on_surface_destroyed(void) {
     tc_log_info("termin_android_on_surface_destroyed");
 }
 
-extern "C" int termin_android_render_frame(void) {
+extern "C" int termin_android_render_frame(int64_t frame_time_nanos) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
 #ifdef __ANDROID__
-    return render_smoke_frame_locked();
+    return render_player_frame_locked(frame_time_nanos);
 #else
+    (void)frame_time_nanos;
     tc_log_error("termin_android_render_frame: only supported on Android");
     return 0;
 #endif
 }
 
-extern "C" int termin_android_smoke_render(void) {
-    return termin_android_render_frame();
+extern "C" int termin_android_smoke_render(int64_t frame_time_nanos) {
+    return termin_android_render_frame(frame_time_nanos);
 }
 
 extern "C" ANativeWindow* termin_android_native_window(void) {
