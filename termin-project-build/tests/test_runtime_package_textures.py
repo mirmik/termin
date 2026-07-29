@@ -58,10 +58,65 @@ def test_runtime_texture_export_copies_source_and_import_settings(tmp_path: Path
             "filter": "linear",
             "mipmaps": False,
             "wrap": "clamp",
-            "color_space": "srgb",
+            "encoding": "srgb",
             "alpha_mode": "straight",
         },
     }
+
+
+def test_runtime_texture_export_preserves_linear_encoding(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    source_path = project / "Textures" / "Normal.png"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"PNG source bytes")
+    _write_json(
+        Path(f"{source_path}.meta"),
+        {"uuid": "normal-uuid", "encoding": "linear"},
+    )
+
+    package_dir = tmp_path / "package"
+    resources: list[dict[str, str]] = []
+    diagnostics = []
+    write_textures(
+        project,
+        package_dir,
+        {"normal-uuid": "Normal"},
+        resources,
+        diagnostics,
+    )
+
+    assert diagnostics == []
+    spec = json.loads(
+        (package_dir / "textures" / "normal-uuid.texture.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert spec["import_settings"]["encoding"] == "linear"
+
+
+def test_runtime_texture_export_rejects_obsolete_color_space(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    source_path = project / "Textures" / "Legacy.png"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"PNG source bytes")
+    _write_json(
+        Path(f"{source_path}.meta"),
+        {"uuid": "legacy-uuid", "color_space": "linear"},
+    )
+
+    resources: list[dict[str, str]] = []
+    diagnostics = []
+    write_textures(
+        project,
+        tmp_path / "package",
+        {"legacy-uuid": "Legacy"},
+        resources,
+        diagnostics,
+    )
+
+    assert resources == []
+    assert len(diagnostics) == 1
+    assert "field 'color_space' is obsolete" in diagnostics[0].message
 
 
 def test_runtime_texture_export_reports_missing_or_unsupported_source(tmp_path: Path) -> None:

@@ -1807,7 +1807,7 @@ def test_export_runtime_package_includes_project_texture_referenced_by_material(
             "filter": "linear",
             "mipmaps": False,
             "wrap": "clamp",
-            "color_space": "srgb",
+            "encoding": "srgb",
             "alpha_mode": "straight",
         },
     }

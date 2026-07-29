@@ -182,7 +182,8 @@ std::string texture_spec(const std::string& source_path = "textures/albedo.png")
         << "  \"uuid\": \"" << kTextureUuid << "\",\n"
         << "  \"name\": \"" << kTextureName << "\",\n"
         << "  \"source_path\": \"" << source_path << "\",\n"
-        << "  \"import_settings\": {\"flip_x\": true, \"flip_y\": false, \"transpose\": true}\n"
+        << "  \"import_settings\": {\"flip_x\": true, \"flip_y\": false, "
+           "\"transpose\": true, \"encoding\": \"srgb\"}\n"
         << "}\n";
     return out.str();
 }
@@ -771,6 +772,7 @@ TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materia
     CHECK(texture.flip_x());
     CHECK_FALSE(texture.flip_y());
     CHECK(texture.transpose());
+    CHECK(texture.encoding() == tgfx::TextureEncoding::SRGB);
     CHECK_EQ(std::string(texture.name()), std::string(kTextureName));
     CHECK_EQ(std::filesystem::path(texture.source_path()), root / "textures" / "albedo.png");
 
@@ -825,6 +827,24 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid_settings.ok);
     CHECK(invalid_settings.message.find("must be boolean") != std::string::npos);
+
+    write_text(
+        root / "textures" / "test.texture.json",
+        replace_once(texture_spec(), "\"encoding\": \"srgb\"", "\"encoding\": \"display-p3\"")
+    );
+    termin::runtime::RuntimePackageLoadResult invalid_encoding =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(invalid_encoding.ok);
+    CHECK(invalid_encoding.message.find("must be 'srgb' or 'linear'") != std::string::npos);
+
+    write_text(
+        root / "textures" / "test.texture.json",
+        replace_once(texture_spec(), ", \"encoding\": \"srgb\"", "")
+    );
+    termin::runtime::RuntimePackageLoadResult missing_encoding =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing_encoding.ok);
+    CHECK(missing_encoding.message.find("field 'encoding' must be a string") != std::string::npos);
 
     write_text(root / "textures" / "test.texture.json", texture_spec());
     write_text(

@@ -34,6 +34,7 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
                 name="__white_1x1__",
                 source_path="__white_1x1__",
                 uuid=white_texture.uuid,
+                encoding="linear",
             )
             rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
 
@@ -45,6 +46,7 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
                 name="__normal_1x1__",
                 source_path="__normal_1x1__",
                 uuid=normal_texture.uuid,
+                encoding="linear",
             )
             rm.register_texture_asset("__normal_1x1__", normal_asset, uuid=normal_texture.uuid)
 
