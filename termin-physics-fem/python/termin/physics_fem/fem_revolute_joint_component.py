@@ -80,9 +80,10 @@ class FEMRevoluteJointComponent(PythonComponent):
 
     def _compute_joint_point(self, entity_a: "Entity") -> np.ndarray:
         """Вычислить точку шарнира в мировых координатах."""
-        pose_a = entity_a.transform.global_pose()
-        # Преобразуем локальное смещение в мировые координаты
-        return np.asarray(pose_a.transform_point(self.joint_offset_in_body_a), dtype=np.float64)
+        return np.asarray(
+            entity_a.transform.transform_point(self.joint_offset_in_body_a),
+            dtype=np.float64,
+        )
 
     def _find_entity_by_name(self, scene: "Scene", name: str) -> "Entity | None":
         """Найти entity по имени."""
@@ -154,7 +155,7 @@ class FEMRevoluteJointComponent(PythonComponent):
 
         # Линия к телу A
         body_a_pos = np.asarray(
-            entity_a.transform.global_pose().lin,
+            entity_a.transform.global_position,
             dtype=np.float32
         )
         renderer.line(
@@ -167,7 +168,7 @@ class FEMRevoluteJointComponent(PythonComponent):
         # Линия к телу B
         if self._body_b_component is not None and self._body_b_component.entity is not None:
             body_b_pos = np.asarray(
-                self._body_b_component.entity.transform.global_pose().lin,
+                self._body_b_component.entity.transform.global_position,
                 dtype=np.float32
             )
             renderer.line(

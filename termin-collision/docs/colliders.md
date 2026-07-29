@@ -107,13 +107,20 @@ Raycast: **Moller-Trumbore** по каждой грани.
 
 ## AttachedCollider
 
-Обёртка, привязывающая `ColliderPrimitive` к `GeneralTransform3` (entity transform). Мировой трансформ:
+Обёртка, привязывающая `ColliderPrimitive` к `GeneralTransform3` (entity
+transform). Текущий narrow phase принимает только точный TRS-класс:
 
 ```
-world = entity_transform.global_pose() * collider.transform
+world = decomposed_entity_world_trs * collider.transform
 ```
 
-При каждом запросе создаёт world-space копию примитива через `clone_at()`. Хранит `owner_entity_id_` для связи с entity.
+`Affine` ancestry отвергается с диагностикой. Для `AxisScaled` также
+отвергается локально повёрнутый collider, потому что эта композиция требует
+shear и не представима `GeneralPose3`. `Rigid` и `Similarity` принимают
+локальный поворот collider; `AxisScaled` без такого поворота остаётся точным.
+
+При каждом запросе создаёт world-space копию примитива через `clone_at()`.
+Хранит `owner_entity_id_` для связи с entity.
 
 ## UnionCollider
 

@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from termin.scene import PythonComponent
 from termin.physics._physics_native import PhysicsWorld, RigidBody
-from termin.geombase import GeneralPose3, Pose3, Vec3
+from termin.geombase import Pose3, Vec3
 from termin.inspect import InspectField
+from tcbase import log
 
 from typing import TYPE_CHECKING, Optional
-import warnings
+import math
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
@@ -76,35 +77,52 @@ class RigidBodyComponent(PythonComponent):
         if self.entity is None:
             return
 
-        self._validate_ancestor_scales()
-        self._half_extents = self._compute_half_extents()
+        pose_and_scale = self._physics_pose_and_scale()
+        if pose_and_scale is None:
+            return
+        _, scale = pose_and_scale
+        self._half_extents = self._compute_half_extents(scale)
 
         scene = self.entity.scene if self.entity else None
         if scene:
             self._find_and_register_with_physics_world(scene)
 
-    def _validate_ancestor_scales(self):
+    def _physics_pose_and_scale(self) -> tuple[Pose3, Vec3] | None:
         if self.entity is None:
-            return
+            return None
 
-        t = self.entity.transform.parent
-        while t is not None:
-            scale = t.local_pose().scale
-            if not scale.approx_eq(Vec3(1.0, 1.0, 1.0), 1e-6):
-                warnings.warn(
-                    f"RigidBodyComponent on '{self.entity.name}' has ancestor "
-                    f"'{t.name}' with scale {scale}. Physics may behave incorrectly.",
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-                break
-            t = t.parent
+        transform = self.entity.transform
+        scale = transform.decomposed_global_scale()
+        if scale is None:
+            log.error(
+                f"RigidBodyComponent on '{self.entity.name}' rejects an affine "
+                "world transform; rigid physics requires a decomposed world basis"
+            )
+            return None
+        if (
+            not math.isfinite(scale.x)
+            or not math.isfinite(scale.y)
+            or not math.isfinite(scale.z)
+            or scale.x <= 0.0
+            or scale.y <= 0.0
+            or scale.z <= 0.0
+        ):
+            log.error(
+                f"RigidBodyComponent on '{self.entity.name}' rejects non-positive "
+                f"or non-finite world scale {scale}"
+            )
+            return None
+        return (
+            Pose3(
+                transform.global_rotation.copy(),
+                transform.global_position.copy(),
+            ),
+            scale,
+        )
 
-    def _compute_half_extents(self) -> Vec3:
+    def _compute_half_extents(self, global_scale: Vec3) -> Vec3:
         if self.entity is None:
             return Vec3(0.5, 0.5, 0.5)
-
-        global_scale = self.entity.transform.global_pose().scale
 
         from termin.colliders.collider_component import ColliderComponent
         from termin.colliders import BoxCollider, SphereCollider
@@ -143,8 +161,12 @@ class RigidBodyComponent(PythonComponent):
 
         self._physics_world = world
 
-        py_pose = self.entity.transform.global_pose()
-        cpp_pose = Pose3(py_pose.ang.copy(), py_pose.lin.copy())
+        pose_and_scale = self._physics_pose_and_scale()
+        if pose_and_scale is None:
+            self._physics_world = None
+            return
+        cpp_pose, scale = pose_and_scale
+        self._half_extents = self._compute_half_extents(scale)
 
         sx, sy, sz = self._half_extents * 2.0
         body = RigidBody.create_box(sx, sy, sz, self.mass, cpp_pose, self.is_static)
@@ -163,23 +185,20 @@ class RigidBodyComponent(PythonComponent):
         cpp_body = self._physics_world.get_body(self._body_index)
         cpp_pose = cpp_body.pose
 
-        current_global_scale = self.entity.transform.global_pose().scale.copy()
-        global_pose = GeneralPose3(
-            ang=cpp_pose.ang.copy(),
-            lin=cpp_pose.lin.copy(),
-            scale=current_global_scale
-        )
-
-        self.entity.transform.relocate_global(global_pose)
+        self.entity.transform.set_global_position(cpp_pose.lin)
+        self.entity.transform.set_global_orientation(cpp_pose.ang)
 
     def sync_to_physics(self):
         if self._body_index < 0 or self._physics_world is None or self.entity is None:
             return
 
-        py_pose = self.entity.transform.global_pose()
+        pose_and_scale = self._physics_pose_and_scale()
+        if pose_and_scale is None:
+            return
+        py_pose, _ = pose_and_scale
         cpp_body = self._physics_world.get_body(self._body_index)
 
-        cpp_body.pose = Pose3(py_pose.ang.copy(), py_pose.lin.copy())
+        cpp_body.pose = py_pose
 
         cpp_body.linear_velocity = Vec3(0, 0, 0)
         cpp_body.angular_velocity = Vec3(0, 0, 0)

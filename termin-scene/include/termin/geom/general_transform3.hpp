@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <termin/geom/affine3.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include "core/tc_entity_pool.h"
 #include <termin/export.hpp>
@@ -9,6 +11,13 @@
 namespace termin {
 
 class Entity;
+
+enum class TransformKind : uint8_t {
+    Rigid = TC_TRANSFORM_RIGID,
+    Similarity = TC_TRANSFORM_SIMILARITY,
+    AxisScaled = TC_TRANSFORM_AXIS_SCALED,
+    Affine = TC_TRANSFORM_AFFINE,
+};
 
 // Transform view into entity pool data. Uses an entity handle for safe access.
 struct ENTITY_API GeneralTransform3 {
@@ -35,6 +44,14 @@ struct ENTITY_API GeneralTransform3 {
     Vec3 global_position() const;
     Quat global_rotation() const;
     Vec3 global_scale() const;
+    void set_global_position(const Vec3& p);
+    void set_global_orientation(const Quat& q);
+    TransformKind kind() const;
+    Basis3d linear_basis() const;
+    Affine3d global_affine() const;
+    std::optional<Vec3> decomposed_global_scale() const;
+    Vec3 basis_axis_lengths() const;
+    std::optional<Pose3> try_rigid_pose() const;
     void relocate(const GeneralPose3& pose);
     void relocate(const Pose3& pose);
     GeneralPose3 global_pose() const;
@@ -65,6 +82,12 @@ struct ENTITY_API GeneralTransform3 {
     Vec3 right(double distance = 1.0) const;
     Vec3 left(double distance = 1.0) const;
     void world_matrix(double* m) const;
+    bool try_inverse_world_affine(
+        Affine3d& inverse,
+        double epsilon = 1.0e-12) const;
+    void inverse_world_matrix(
+        double* m,
+        double epsilon = 1.0e-12) const;
 
     tc_entity_handle handle() const { return _h; }
     tc_entity_pool* pool() const { return pool_ptr(); }

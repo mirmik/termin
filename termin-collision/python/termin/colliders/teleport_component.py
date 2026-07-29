@@ -38,8 +38,4 @@ class TeleportComponent(InputComponent):
         if hit.entity is self.entity:
             return
 
-        from termin.geombase import Pose3
-
-        old_pose = self.entity.transform.global_pose()
-        new_pose = Pose3(lin=hit.collider_point, ang=old_pose.ang)
-        self.entity.transform.relocate_global(new_pose)
+        self.entity.transform.set_global_position(hit.collider_point)

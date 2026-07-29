@@ -2,7 +2,9 @@
 
 Date: 2026-07-29.
 
-Status: accepted architecture; exact primitives and graded entity cache implemented.
+Status: accepted architecture; exact primitives, graded entity cache,
+exact/logical `GeneralTransform3` facade and rigid-consumer contracts
+implemented.
 
 ## Context
 
@@ -377,8 +379,9 @@ The entity pool now maintains the target invariant:
 world affine == parent world affine * local TRS affine
 ```
 
-`GeneralPose3::global_pose()` cannot be the canonical exact world value after
-this change. Migrating that facade and its consumers remains the next stage.
+`GeneralPose3::global_pose()` is retained only as a legacy decomposed view. It
+returns no scale claim for affine entities. Exact consumers use
+`GeneralTransform3::global_affine()` or `linear_basis()`.
 
 ## Selected cache layout
 
@@ -449,7 +452,7 @@ Dirty propagation must:
 The C entity-pool API exposes kind, exact basis/affine and exact 4x4 matrix
 views. Existing local TRS storage and serialization do not change.
 
-### 3. Exact `GeneralTransform3` operations
+### 3. Exact `GeneralTransform3` operations (implemented)
 
 Move geometric operations to the exact world affine:
 
@@ -467,7 +470,27 @@ Keep logical operations on the quaternion channel:
 
 Add explicit `global_affine()`, `kind()` and `try_rigid_pose()` APIs.
 
-### 4. Consumer migration
+The implemented facade also makes scale policy visible:
+
+- `decomposed_global_scale()` returns a value only for decomposed states;
+- `basis_axis_lengths()` is the explicitly named column-length
+  approximation;
+- legacy `global_scale()` remains temporarily for migration and logs/returns
+  invalid values for `Affine`.
+
+`set_global_position()` uses the exact parent affine inverse.
+`set_global_orientation()` changes the logical quaternion channel. The legacy
+whole-TRS `set_global_pose()` now computes the exact candidate local affine and
+rejects it when it cannot be represented by the authored local TRS.
+
+`world_matrix()`, `inverse_world_matrix()`, point transforms and vector
+transforms all use the exact basis. Singular inverse operations log and throw;
+`try_inverse_world_affine()` provides the non-throwing probe.
+
+Python exposes the same distinctions through `TransformKind`, `Basis3d`,
+`Affine3d` and the corresponding `GeneralTransform3` methods.
+
+### 4. Consumer migration (in progress)
 
 Migrate consumers by contract rather than mechanically replacing the type:
 
@@ -479,6 +502,21 @@ Migrate consumers by contract rather than mechanically replacing the type:
   affine ancestry;
 - code that needs scale chooses a decomposed-only or explicitly approximate
   API.
+
+The rigid-physics, collision and FEM boundary has been migrated. Ordinary
+rigid-body collision accepts exact decomposed world scale for shape sizing,
+requires finite strictly positive scale and synchronizes position and logical
+orientation without overwriting authored scale. It rejects affine ancestry,
+reflections and singular scale with an error log.
+
+FEM rigid bodies require an exact rigid world pose. Collision attachment
+accepts decomposed world transforms, but rejects the `AxisScaled` plus rotated
+local-collider combination because that composition would require shear.
+Collider offsets and FEM joint anchors use exact point transformation.
+
+Rendering and the remaining geometric/runtime consumers are tracked
+separately and still need migration before the legacy world-TRS API can be
+removed.
 
 ### 5. Editor setters and reparenting
 

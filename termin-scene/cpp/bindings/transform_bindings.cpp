@@ -1,5 +1,6 @@
 #include <termin/bindings/transform_bindings.hpp>
 #include <termin/bindings/entity_helpers.hpp>
+#include <nanobind/stl/optional.h>
 
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
@@ -12,6 +13,12 @@ namespace nb = nanobind;
 namespace termin {
 
 void bind_transform(nb::module_& m) {
+    nb::enum_<TransformKind>(m, "TransformKind")
+        .value("Rigid", TransformKind::Rigid)
+        .value("Similarity", TransformKind::Similarity)
+        .value("AxisScaled", TransformKind::AxisScaled)
+        .value("Affine", TransformKind::Affine);
+
     nb::class_<GeneralTransform3>(m, "GeneralTransform3")
         .def("__init__", [](GeneralTransform3* self) {
             tc_entity_pool_handle pool_handle = get_standalone_pool_handle();
@@ -56,6 +63,18 @@ void bind_transform(nb::module_& m) {
         })
         .def("local_pose", &GeneralTransform3::local_pose)
         .def("global_pose", &GeneralTransform3::global_pose)
+        .def_prop_ro("kind", &GeneralTransform3::kind)
+        .def("global_affine", &GeneralTransform3::global_affine)
+        .def("linear_basis", &GeneralTransform3::linear_basis)
+        .def(
+            "decomposed_global_scale",
+            &GeneralTransform3::decomposed_global_scale,
+            "Exact decomposed world scale, or None for an affine/sheared transform.")
+        .def(
+            "basis_axis_lengths",
+            &GeneralTransform3::basis_axis_lengths,
+            "Approximation policy: lengths of the exact world-basis columns.")
+        .def("try_rigid_pose", &GeneralTransform3::try_rigid_pose)
         .def("set_local_pose", [](GeneralTransform3& self, const GeneralPose3& pose) {
             self.set_local_pose(pose);
         })
@@ -77,6 +96,14 @@ void bind_transform(nb::module_& m) {
         .def("set_local_scale", [](GeneralTransform3& self, float x, float y, float z) {
             self.set_local_scale(Vec3(x, y, z));
         }, nb::arg("x"), nb::arg("y"), nb::arg("z"))
+        .def(
+            "set_global_position",
+            &GeneralTransform3::set_global_position,
+            nb::arg("position"))
+        .def(
+            "set_global_orientation",
+            &GeneralTransform3::set_global_orientation,
+            nb::arg("orientation"))
         .def_prop_ro("global_position", &GeneralTransform3::global_position)
         .def_prop_ro("global_rotation", &GeneralTransform3::global_rotation)
         .def_prop_ro("global_scale", &GeneralTransform3::global_scale)
@@ -154,6 +181,17 @@ void bind_transform(nb::module_& m) {
             }
             return mat44_row_tuple(data);
         })
+        .def("inverse_world_matrix", [](const GeneralTransform3& self, double epsilon) {
+            double column_major[16];
+            double row_major[16];
+            self.inverse_world_matrix(column_major, epsilon);
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    row_major[row * 4 + col] = column_major[col * 4 + row];
+                }
+            }
+            return mat44_row_tuple(row_major);
+        }, nb::arg("epsilon") = 1.0e-12)
         .def("__repr__", [](const GeneralTransform3& self) {
             const char* n = self.name();
             std::string name_str = n ? n : "<unnamed>";

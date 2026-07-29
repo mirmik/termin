@@ -17,3 +17,13 @@ Canonical component classes:
 - `termin.physics_fem.FEMRigidBodyComponent`
 - `termin.physics_fem.FEMFixedJointComponent`
 - `termin.physics_fem.FEMRevoluteJointComponent`
+
+## Transform contract
+
+FEM rigid bodies accept only scene transforms classified as `Rigid`. Their
+mass and inertia are component-owned, so scaled or affine scene ancestry is
+rejected rather than projected into a pose. Solver-to-scene synchronization
+updates world position and logical orientation separately.
+
+Joint anchors use exact world positions, and body-local joint offsets are
+mapped with the exact scene affine transform.
