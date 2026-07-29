@@ -1,8 +1,14 @@
 """Тесты физического движка: падение кубиков на плоскость."""
 
 import math
+
+import pytest
+
+from termin.colliders import AttachedCollider, BoxCollider
+from termin.geombase import GeneralPose3
 from termin.geombase._geom_native import Pose3, Vec3, Quat
 from termin.physics import RigidBody, PhysicsWorld
+from termin.scene import GeneralTransform3
 
 
 def test_drop_cube():
@@ -30,6 +36,29 @@ def test_drop_cube():
     assert cube.position().z < 1.0, "Кубик должен упасть"
     assert cube.position().z > 0.4, "Кубик должен лежать на земле"
     assert abs(cube.linear_velocity.z) < 0.5, "Кубик должен быть в покое"
+
+
+def test_ground_contacts_support_scene_attached_box_collider():
+    world = PhysicsWorld()
+    world.ground_enabled = True
+
+    pose = Pose3(lin=Vec3(0.0, 0.0, 2.0))
+    body_index = world.add_body(RigidBody.create_box(1.0, 1.0, 1.0, 1.0, pose))
+
+    transform = GeneralTransform3(GeneralPose3(lin=pose.lin.copy()))
+    collider = BoxCollider.from_size(Vec3(1.0, 1.0, 1.0))
+    attached = AttachedCollider(collider, transform)
+    world.register_collider(body_index, attached)
+
+    for _ in range(120):
+        world.step(1.0 / 60.0)
+        body_pose = world.get_body(body_index).pose
+        transform.relocate(
+            GeneralPose3(ang=body_pose.ang.copy(), lin=body_pose.lin.copy())
+        )
+
+    body = world.get_body(body_index)
+    assert body.position().z == pytest.approx(0.5, abs=0.1)
 
 
 def test_tilted_cube():

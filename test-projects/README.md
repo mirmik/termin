@@ -7,3 +7,7 @@ settings, build profiles, packaged applications, and device runs.
 
 Each project owns its build and run instructions in its local `README.md`.
 
+- `android-render-showcase`: Android/Vulkan rendering, packaging, and Surface
+  lifecycle coverage.
+- `desktop-physics-showcase`: desktop runtime packaging with falling rigid
+  bodies, collisions, lighting, and shadows.

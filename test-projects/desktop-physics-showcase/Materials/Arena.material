@@ -1,0 +1,10 @@
+{
+  "uuid": "desktop-physics-arena-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.1, 0.14, 0.2, 1.0],
+    "u_metallic": 0.05,
+    "u_roughness": 0.86,
+    "u_diffuse_mul": 1.0
+  }
+}
