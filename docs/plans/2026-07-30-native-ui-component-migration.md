@@ -2,7 +2,7 @@
 
 Дата: 2026-07-30.
 
-Статус: план.
+Статус: одобрен 2026-07-30.
 
 Связанный umbrella доски: `#244 [ui/native] Add native UI manager parity layer`.
 
