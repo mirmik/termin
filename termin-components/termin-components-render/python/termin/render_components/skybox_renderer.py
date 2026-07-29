@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.geombase import Pose3, Vec3
+from termin.geombase import Vec3
 from termin.render_components import MeshRenderer
 from termin.render_framework import RenderContext
 
@@ -15,7 +15,9 @@ class SkyboxRenderer(MeshRenderer):
             return
         camera_entity = context.camera.entity if context.camera is not None else None
         if camera_entity is not None:
-            self.entity.transform.relocate(Pose3(lin=camera_entity.transform.global_pose().lin))
+            self.entity.transform.set_global_position(
+                camera_entity.transform.global_position
+            )
         view_no_translation = context.view.with_translation(Vec3.zero())
         context.graphics.set_depth_mask(False)
         context.graphics.set_depth_func("lequal")

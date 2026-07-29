@@ -76,10 +76,9 @@ Light LightComponent::to_light() const {
     l.shadows = shadows;
 
     if (entity().valid()) {
-        auto pose = entity().transform().global_pose();
-        Vec3 forward = pose.ang.rotate(Vec3(0.0, 1.0, 0.0));
-        l.direction = forward;
-        l.position = pose.lin;
+        const GeneralTransform3 transform = entity().transform();
+        l.direction = transform.global_rotation().rotate(Vec3(0.0, 1.0, 0.0));
+        l.position = transform.global_position();
     }
 
     return l;

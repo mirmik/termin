@@ -156,7 +156,8 @@ Mat44f NavMeshKeeperComponent::get_model_matrix(const Entity& entity) const {
         return Mat44f::identity();
     }
 
-    const Pose3 bake_frame = navmesh_bake_frame_from_pose(entity.transform().global_pose());
+    const Pose3 bake_frame =
+        navmesh_bake_frame_from_transform(entity.transform());
     return to_mat44f(bake_frame.as_mat44());
 }
 

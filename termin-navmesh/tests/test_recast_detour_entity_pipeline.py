@@ -15,11 +15,11 @@ try:
         DetourQuerySession,
         MeshSource,
         RecastNavMeshBuilderComponent,
-        navmesh_bake_frame_from_pose,
+        navmesh_bake_frame_from_transform,
         navmesh_bake_to_world_point,
         navmesh_world_to_bake_point,
     )
-    from termin.scene import Entity
+    from termin.scene import Entity, TransformKind
     from tmesh import CubeMesh
 except ImportError as exc:  # pragma: no cover - depends on built SDK availability.
     pytestmark = pytest.mark.skip(reason=str(exc))
@@ -118,7 +118,7 @@ def test_world_space_query_uses_builder_pose_frame() -> None:
     _attach_cube_mesh(root, "navmesh-world-space-cube")
 
     query = _build_query_session(builder)
-    bake_frame = navmesh_bake_frame_from_pose(root.transform.global_pose())
+    bake_frame = navmesh_bake_frame_from_transform(root.transform)
 
     bake_start = (-1.5, -1.5, 0.2)
     bake_end = (1.5, 1.5, 0.2)
@@ -164,6 +164,29 @@ def test_descendant_mesh_source_keeps_child_transform_scale() -> None:
         query,
         start=(0.5, -1.0, 0.2),
         end=(3.5, 1.0, 0.2),
+    )
+
+
+def test_descendant_mesh_source_preserves_affine_promoted_geometry() -> None:
+    root = Entity("navmesh_affine_root")
+    root.transform.set_local_scale(4.0, 2.0, 0.3)
+
+    builder = RecastNavMeshBuilderComponent()
+    root.add_component(builder)
+    _configure_builder(builder)
+    builder.mesh_source = MeshSource.AllDescendants.value
+
+    child = root.create_child("navmesh_affine_cube")
+    child.transform.set_local_rotation(Pose3.rotateZ(0.7853981633974483).ang)
+    _attach_cube_mesh(child, "navmesh-affine-cube")
+
+    assert child.transform.kind == TransformKind.Affine
+    query = _build_query_session(builder)
+
+    _assert_query_path(
+        query,
+        start=(-1.0, 0.0, 0.2),
+        end=(1.0, 0.0, 0.2),
     )
 
 

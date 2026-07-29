@@ -51,7 +51,7 @@ RecastBuildResult RecastNavMeshBuilderComponent::build_from_entity_geometry() {
 
     double b_data[16];
     entity().get_world_matrix(b_data);
-    GeneralPose3 base_pose = entity().transform().global_pose();
+    const GeneralTransform3 base_transform = entity().transform();
     Mat44 base_inv = recast_navmesh_builder_frame_inverse(entity());
 
     bool recurse = (mesh_source == static_cast<int>(MeshSource::AllDescendants));
@@ -66,10 +66,12 @@ RecastBuildResult RecastNavMeshBuilderComponent::build_from_entity_geometry() {
         b_data[8], b_data[9], b_data[10], b_data[11]);
     tc_log_info("[NavMesh] Base world matrix col3 (pos): (%.2f, %.2f, %.2f, %.2f)",
         b_data[12], b_data[13], b_data[14], b_data[15]);
-    tc_log_info("[NavMesh] Base bake frame keeps TR only: position=(%.2f, %.2f, %.2f) "
-                "scale_preserved_in_geometry=(%.2f, %.2f, %.2f)",
-        base_pose.lin.x, base_pose.lin.y, base_pose.lin.z,
-        base_pose.scale.x, base_pose.scale.y, base_pose.scale.z);
+    const Vec3 base_position = base_transform.global_position();
+    tc_log_info("[NavMesh] Base bake frame keeps logical TR only: "
+                "position=(%.2f, %.2f, %.2f), exact linear transform "
+                "preserved in geometry, transform_kind=%d",
+        base_position.x, base_position.y, base_position.z,
+        static_cast<int>(base_transform.kind()));
 
     NavMeshBakeContext context;
     context.builder_entity = entity();

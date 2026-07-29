@@ -113,8 +113,8 @@ Mat44 CameraComponent::get_view_matrix() const {
         return Mat44::identity();
     }
 
-    GeneralPose3 gpose = entity().transform().global_pose();
-    Pose3 pose(gpose.ang, gpose.lin);
+    const GeneralTransform3 transform = entity().transform();
+    Pose3 pose(transform.global_rotation(), transform.global_position());
     Pose3 inv_pose = pose.inverse();
     return inv_pose.as_mat44();
 }

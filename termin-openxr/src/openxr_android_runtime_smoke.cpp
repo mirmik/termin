@@ -756,8 +756,11 @@ struct OpenXRRuntimeScene {
         tc_render_target_get_clear_color_value(render_target, target.clear_color);
         target.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(render_target);
         target.clear_depth = tc_render_target_get_clear_depth_value(render_target);
-        termin::GeneralPose3 origin_pose = xr_origin->entity().transform().global_pose();
-        termin::Pose3 origin_pose3(origin_pose.ang, origin_pose.lin);
+        const termin::GeneralTransform3 origin_transform =
+            xr_origin->entity().transform();
+        termin::Pose3 origin_pose3(
+            origin_transform.global_rotation(),
+            origin_transform.global_position());
         // XrOriginComponent uses engine authoring axes: +X right, +Y forward,
         // +Z up. OpenXR reference poses are first converted from +X right, +Y
         // up, -Z forward into that engine basis, then optionally yaw-aligned

@@ -14,7 +14,7 @@
 #include <vector>
 
 #include <termin/foliage/foliage_data_registry.hpp>
-#include <termin/geom/general_pose3.hpp>
+#include <termin/geom/general_transform3.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
@@ -195,14 +195,22 @@ FoliageGpuInstance make_gpu_instance(const FoliageInstance& instance) {
     return gpu;
 }
 
-Mat44f layer_model_without_scale(const Entity& entity) {
-    GeneralPose3 pose = entity.transform().global_pose();
-    return Mat44f::compose(pose.lin, pose.ang, Vec3(1.0, 1.0, 1.0));
+Mat44f layer_logical_orientation_model(const Entity& entity) {
+    const GeneralTransform3 transform = entity.transform();
+    return Mat44f::compose(
+        Vec3::zero(),
+        transform.global_rotation(),
+        Vec3(1.0, 1.0, 1.0));
 }
 
-Mat44f layer_model_with_scale(const Entity& entity) {
-    GeneralPose3 pose = entity.transform().global_pose();
-    return Mat44f::compose(pose.lin, pose.ang, pose.scale);
+Mat44f layer_exact_position_model(const Entity& entity) {
+    double world[16];
+    entity.transform().world_matrix(world);
+    Mat44f model;
+    for (size_t i = 0; i < 16; ++i) {
+        model.data[i] = static_cast<float>(world[i]);
+    }
+    return model;
 }
 
 bool foliage_render_item_draw_encoder(
@@ -705,8 +713,8 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
         float u_vector_model[16];
     };
     ColorPushData push{};
-    Mat44f position_model = layer_model_with_scale(entity());
-    Mat44f vector_model = layer_model_without_scale(entity());
+    Mat44f position_model = layer_exact_position_model(entity());
+    Mat44f vector_model = layer_logical_orientation_model(entity());
     std::memcpy(push.u_position_model, position_model.data, sizeof(push.u_position_model));
     std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
 

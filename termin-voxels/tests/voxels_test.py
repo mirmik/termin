@@ -467,6 +467,36 @@ class MeshVoxelizerTest(unittest.TestCase):
 
         self.assertTrue(has_voxel_near_target)
 
+    def test_voxelize_with_affine_shear_transform(self):
+        """Вокселизация применяет полную affine-матрицу, включая shear."""
+        from termin.mesh.mesh import Mesh3
+
+        vertices = np.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ], dtype=np.float32)
+        triangles = np.array([[0, 1, 2]], dtype=np.int32)
+        mesh = Mesh3(vertices=vertices, triangles=triangles)
+
+        transform = np.eye(4, dtype=np.float32)
+        transform[0, 1] = 1.5
+        transform[:3, 3] = [2.0, 3.0, 1.0]
+
+        grid = VoxelGrid(origin=(1, 2, 0), cell_size=0.1)
+        voxelizer = MeshVoxelizer(grid)
+        count = voxelizer.voxelize_mesh(mesh, transform_matrix=transform)
+
+        self.assertGreater(count, 0)
+        world_positions = [
+            grid.voxel_to_world(vx, vy, vz)
+            for vx, vy, vz, _vtype in grid.iter_non_empty()
+        ]
+        self.assertTrue(
+            any(world[0] > 3.2 and world[1] > 3.7 for world in world_positions),
+            "expected voxels near the sheared Y vertex",
+        )
+
     def test_empty_mesh(self):
         """Пустой меш не должен создавать вокселей."""
         from termin.mesh.mesh import Mesh3
