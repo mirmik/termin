@@ -1,0 +1,10 @@
+{
+  "render_sync_mode": "none",
+  "application": {
+    "id": "org.termin.testprojects.androidshowcase",
+    "label": "Termin Android Render Showcase",
+    "version_code": 1,
+    "version_name": "0.1.0"
+  }
+}
+

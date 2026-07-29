@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -1001,6 +1002,83 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         / "termin-engine-shadow.slang"
     ).is_file()
     assert not (result.package_dir / "shaders" / "layout").exists()
+
+
+@full_runtime_package_exporter
+def test_export_runtime_package_compiles_default_pipeline_shadow_variants(
+    tmp_path: Path,
+) -> None:
+    source_project = (
+        Path(__file__).resolve().parents[2]
+        / "tests"
+        / "fixtures"
+        / "android-project-build-smoke"
+    )
+    project = tmp_path / "AndroidShadowSmoke"
+    shutil.copytree(source_project, project)
+    mesh_path = project / "Models" / "SmokeTriangle.obj"
+    mesh_path.parent.mkdir(exist_ok=True)
+    mesh_path.write_text(
+        "v 0 0 0\n"
+        "v 1 0 0\n"
+        "v 0 1 0\n"
+        "vn 0 0 1\n"
+        "f 1//1 2//1 3//1\n",
+        encoding="utf-8",
+    )
+    _write_json(
+        Path(str(mesh_path) + ".meta"),
+        {"uuid": "android-project-build-smoke-triangle"},
+    )
+    material_path = project / "Materials" / "ShadowCaster.material"
+    material_path.parent.mkdir(exist_ok=True)
+    _write_json(
+        material_path,
+        {
+            "uuid": "android-project-build-shadow-material",
+            "shader": "CookTorrancePBR",
+            "uniforms": {
+                "u_color": [0.8, 0.2, 0.1, 1.0],
+                "u_roughness": 0.5,
+            },
+        },
+    )
+    scene_path = project / "Main.scene"
+    scene_data = json.loads(scene_path.read_text(encoding="utf-8"))
+    mesh_renderer = scene_data["scene"]["entities"][0]["components"][1]
+    mesh_renderer["data"]["material"] = {
+        "uuid": "android-project-build-shadow-material",
+        "name": "ShadowCaster",
+        "type": "uuid",
+        "kind": "tc_material",
+    }
+    mesh_renderer["data"]["cast_shadow"] = True
+    _write_json(scene_path, scene_data)
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+        shader_targets=("vulkan",),
+    )
+
+    shadow_specs = list((result.package_dir / "shaders").glob("shv_*.shader.json"))
+    shadow_vertex_artifacts = list(
+        (result.package_dir / "shaders" / "vulkan").glob("shv_*.vert.spv")
+    )
+    assert len(shadow_specs) == 1
+    assert len(shadow_vertex_artifacts) == 1
+    material_spec = json.loads(
+        (
+            result.package_dir
+            / "materials"
+            / "android-project-build-shadow-material.tmat.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert material_spec["uniforms"]["u_color"] == pytest.approx(
+        [0.8, 0.2, 0.1, 1.0]
+    )
 
 
 @full_runtime_package_exporter
