@@ -79,7 +79,7 @@ public:
             transform_->global_position(),
             *entity_scale,
         };
-        return entity_pose * collider_->transform;
+        return entity_pose.compose_trs_projected(collider_->transform);
     }
 
     ColliderType type() const override {

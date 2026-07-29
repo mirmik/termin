@@ -43,7 +43,6 @@ struct ENTITY_API GeneralTransform3 {
     void set_local_scale(const Vec3& s);
     Vec3 global_position() const;
     Quat global_rotation() const;
-    Vec3 global_scale() const;
     void set_global_position(const Vec3& p);
     void set_global_orientation(const Quat& q);
     TransformKind kind() const;
@@ -54,10 +53,6 @@ struct ENTITY_API GeneralTransform3 {
     std::optional<Pose3> try_rigid_pose() const;
     void relocate(const GeneralPose3& pose);
     void relocate(const Pose3& pose);
-    GeneralPose3 global_pose() const;
-    void set_global_pose(const GeneralPose3& gpose);
-    void relocate_global(const GeneralPose3& gpose);
-    void relocate_global(const Pose3& pose);
 
     GeneralTransform3 parent() const;
     void set_parent(GeneralTransform3 new_parent);

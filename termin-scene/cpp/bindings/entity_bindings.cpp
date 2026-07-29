@@ -207,16 +207,6 @@ void bind_entity_class(nb::module_& m) {
             return e.transform();
         })
 
-        // Pose shortcuts
-        .def("global_pose", [](Entity& e) {
-            GeneralPose3 gp = e.transform().global_pose();
-            nb::dict result;
-            result["lin"] = gp.lin;
-            result["ang"] = gp.ang;
-            result["scale"] = gp.scale;
-            return result;
-        })
-
         .def("model_matrix", [](Entity& e) {
             double m[16];
             e.transform().world_matrix(m);

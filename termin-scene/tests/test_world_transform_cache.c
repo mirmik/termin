@@ -86,10 +86,8 @@ static int test_classification_and_exact_shear(void) {
     CHECK(basis_near(actual.basis, expected.basis));
 
     double scale[3] = {10.0, 20.0, 30.0};
-    CHECK(!tc_entity_pool_try_get_global_scale(pool, child, scale));
+    CHECK(!tc_entity_pool_try_get_decomposed_global_scale(pool, child, scale));
     CHECK(scale[0] == 10.0 && scale[1] == 20.0 && scale[2] == 30.0);
-    tc_entity_pool_get_global_scale(pool, child, scale);
-    CHECK(isnan(scale[0]) && isnan(scale[1]) && isnan(scale[2]));
 
     double matrix[16];
     double expected_matrix[16];
@@ -201,7 +199,8 @@ static int test_zero_negative_growth_and_reuse(void) {
     CHECK(tc_entity_pool_get_world_transform_kind(pool, reused)
           == TC_TRANSFORM_AXIS_SCALED);
     double exact_scale[3];
-    CHECK(tc_entity_pool_try_get_global_scale(pool, reused, exact_scale));
+    CHECK(tc_entity_pool_try_get_decomposed_global_scale(
+        pool, reused, exact_scale));
     CHECK(exact_scale[0] == -2.0
           && exact_scale[1] == -2.0
           && exact_scale[2] == -2.0);

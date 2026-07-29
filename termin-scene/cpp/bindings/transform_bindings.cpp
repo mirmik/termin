@@ -64,7 +64,6 @@ void bind_transform(nb::module_& m) {
             return nb::cast(e);
         })
         .def("local_pose", &GeneralTransform3::local_pose)
-        .def("global_pose", &GeneralTransform3::global_pose)
         .def_prop_ro("kind", &GeneralTransform3::kind)
         .def("global_affine", &GeneralTransform3::global_affine)
         .def("linear_basis", &GeneralTransform3::linear_basis)
@@ -79,9 +78,6 @@ void bind_transform(nb::module_& m) {
         .def("try_rigid_pose", &GeneralTransform3::try_rigid_pose)
         .def("set_local_pose", [](GeneralTransform3& self, const GeneralPose3& pose) {
             self.set_local_pose(pose);
-        })
-        .def("set_global_pose", [](GeneralTransform3& self, const GeneralPose3& pose) {
-            self.set_global_pose(pose);
         })
         .def("local_position", &GeneralTransform3::local_position)
         .def("local_rotation", &GeneralTransform3::local_rotation)
@@ -108,18 +104,11 @@ void bind_transform(nb::module_& m) {
             nb::arg("orientation"))
         .def_prop_ro("global_position", &GeneralTransform3::global_position)
         .def_prop_ro("global_rotation", &GeneralTransform3::global_rotation)
-        .def_prop_ro("global_scale", &GeneralTransform3::global_scale)
         .def("relocate", [](GeneralTransform3& self, const Pose3& pose) {
             self.relocate(pose);
         })
         .def("relocate", [](GeneralTransform3& self, const GeneralPose3& pose) {
             self.relocate(pose);
-        })
-        .def("relocate_global", [](GeneralTransform3& self, const Pose3& pose) {
-            self.relocate_global(pose);
-        })
-        .def("relocate_global", [](GeneralTransform3& self, const GeneralPose3& pose) {
-            self.relocate_global(pose);
         })
         .def("add_child", [](GeneralTransform3& self, GeneralTransform3 child) {
             child.set_parent(self);
