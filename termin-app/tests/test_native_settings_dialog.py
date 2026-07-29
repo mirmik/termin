@@ -1,7 +1,6 @@
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
-from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.settings_dialog import build_native_settings_dialog
 from termin.gui_native import Rect
 
@@ -15,6 +14,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     renders = []
     applied = []
     applied_display_policy = []
+    saved = []
     viewport = lambda: Rect(0.0, 0.0, 900.0, 600.0)
     dialog_service = NativeDialogService(
         document,
@@ -29,25 +29,27 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
         request_render=lambda: renders.append(True),
         apply_font_size=applied.append,
         apply_render_only_active_display=applied_display_policy.append,
+        on_saved=saved.append,
     )
 
     assert dialog.show()
-    editor_row = dialog.root.children[0]
-    assert editor_row.bounds.x - dialog.root.bounds.x == EDITOR_UI_METRICS.dialog_padding
-    assert editor_row.bounds.height == (
-        EDITOR_UI_METRICS.compact_status_row
-        + EDITOR_UI_METRICS.compact_spacing
-        + EDITOR_UI_METRICS.field_row
-    )
-    assert editor_row.children[0].bounds.height == EDITOR_UI_METRICS.compact_status_row
-    assert editor_row.children[1].bounds.height == EDITOR_UI_METRICS.field_row
-    assert dialog.root.children[-2].bounds.height == EDITOR_UI_METRICS.field_row
+    assert dialog.tabs.page_count == 2
+    assert dialog.tabs.page_title(1) == "Build Toolchain"
+    dialog.tabs.selected_index = 1
+    document.layout_roots(viewport())
+    assert dialog.build_gradle.widget.stable_id == "editor.settings.build.gradle"
+    assert dialog.build_gradle.widget.bounds.height > 0
+    assert dialog.build_adb.widget.bounds.y > dialog.build_gradle.widget.bounds.y
     assert dialog.text_editor.text == "/usr/bin/editor"
+    assert dialog.build_gradle.text == "/opt/gradle/bin/gradle"
     assert dialog.vsync_enabled.checked is True
     assert dialog.fps_limit.value == 60
     assert dialog.render_only_active_display.checked is True
     dialog.text_editor.text = " /opt/code "
     dialog.slang_compiler.text = " /opt/slangc "
+    dialog.build_sdk_root.text = " /opt/termin/sdk "
+    dialog.build_gradle.text = " /opt/gradle-8/bin/gradle "
+    dialog.build_adb.text = " /opt/android/platform-tools/adb "
     dialog.font_size.value = 18.0
     dialog.font_size_small.value = 12.0
     dialog.mcp_enabled.checked = True
@@ -61,6 +63,9 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert dialog.dialog.activate("ok")
     assert settings.text_editor == "/opt/code"
     assert settings.slang_compiler == "/opt/slangc"
+    assert settings.build_sdk_root == "/opt/termin/sdk"
+    assert settings.build_gradle == "/opt/gradle-8/bin/gradle"
+    assert settings.build_adb == "/opt/android/platform-tools/adb"
     assert settings.mcp_enabled is True
     assert settings.vsync_enabled is False
     assert settings.fps_limit == 120
@@ -68,6 +73,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert settings.sync_count == 1
     assert applied == [18.0, 18.0]
     assert applied_display_policy == [False]
+    assert len(saved) == 1
 
     assert dialog.show()
     dialog.close()

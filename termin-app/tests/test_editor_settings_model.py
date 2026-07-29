@@ -1,5 +1,9 @@
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
 
+from termin.project_build import ToolchainContext
 from termin.editor_core.settings_model import EditorSettingsController, EditorSettingsSnapshot
 
 
@@ -7,6 +11,15 @@ class _Settings:
     def __init__(self):
         self.text_editor = "/usr/bin/editor"
         self.slang_compiler = "/usr/bin/slangc"
+        self.build_sdk_root = ""
+        self.build_termin_root = ""
+        self.build_android_sdk_root = ""
+        self.build_shader_compiler = ""
+        self.build_fxc = ""
+        self.build_android_script = ""
+        self.build_quest_openxr_script = ""
+        self.build_gradle = "/opt/gradle/bin/gradle"
+        self.build_adb = ""
         self.font_size = 14.0
         self.font_size_small = 11.0
         self.mcp_enabled = False
@@ -26,6 +39,60 @@ class _Settings:
 
     def set_slang_compiler(self, value):
         self.slang_compiler = value or ""
+
+    def get_build_sdk_root(self):
+        return self.build_sdk_root
+
+    def set_build_sdk_root(self, value):
+        self.build_sdk_root = value or ""
+
+    def get_build_termin_root(self):
+        return self.build_termin_root
+
+    def set_build_termin_root(self, value):
+        self.build_termin_root = value or ""
+
+    def get_build_android_sdk_root(self):
+        return self.build_android_sdk_root
+
+    def set_build_android_sdk_root(self, value):
+        self.build_android_sdk_root = value or ""
+
+    def get_build_shader_compiler(self):
+        return self.build_shader_compiler
+
+    def set_build_shader_compiler(self, value):
+        self.build_shader_compiler = value or ""
+
+    def get_build_fxc(self):
+        return self.build_fxc
+
+    def set_build_fxc(self, value):
+        self.build_fxc = value or ""
+
+    def get_build_android_script(self):
+        return self.build_android_script
+
+    def set_build_android_script(self, value):
+        self.build_android_script = value or ""
+
+    def get_build_quest_openxr_script(self):
+        return self.build_quest_openxr_script
+
+    def set_build_quest_openxr_script(self, value):
+        self.build_quest_openxr_script = value or ""
+
+    def get_build_gradle(self):
+        return self.build_gradle
+
+    def set_build_gradle(self, value):
+        self.build_gradle = value or ""
+
+    def get_build_adb(self):
+        return self.build_adb
+
+    def set_build_adb(self, value):
+        self.build_adb = value or ""
 
     def get_font_size(self):
         return self.font_size
@@ -76,6 +143,15 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
         EditorSettingsSnapshot(
             text_editor="  /opt/code  ",
             slang_compiler="  /opt/slangc  ",
+            build_sdk_root=" /opt/termin/sdk ",
+            build_termin_root=" /src/termin ",
+            build_android_sdk_root=" /opt/termin/sdk/android ",
+            build_shader_compiler=" /opt/termin/sdk/bin/termin_shaderc ",
+            build_fxc="",
+            build_android_script=" /src/termin/build-android-apk.sh ",
+            build_quest_openxr_script="",
+            build_gradle=" /opt/gradle-8/bin/gradle ",
+            build_adb=" /opt/android/platform-tools/adb ",
             font_size=18.0,
             font_size_small=12.0,
             mcp_server_enabled=True,
@@ -88,6 +164,9 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert saved.text_editor == "/opt/code"
     assert settings.text_editor == "/opt/code"
     assert settings.slang_compiler == "/opt/slangc"
+    assert settings.build_sdk_root == "/opt/termin/sdk"
+    assert settings.build_gradle == "/opt/gradle-8/bin/gradle"
+    assert settings.build_adb == "/opt/android/platform-tools/adb"
     assert settings.font_size == 18.0
     assert settings.font_size_small == 12.0
     assert settings.mcp_enabled is True
@@ -95,15 +174,20 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert settings.fps_limit == 144
     assert settings.render_only_active_display is False
     assert settings.sync_count == 1
+    assert controller.toolchain_context() == ToolchainContext(
+        sdk_root=Path("/opt/termin/sdk"),
+        termin_root=Path("/src/termin"),
+        android_sdk_root=Path("/opt/termin/sdk/android"),
+        shader_compiler=Path("/opt/termin/sdk/bin/termin_shaderc"),
+        android_build_script=Path("/src/termin/build-android-apk.sh"),
+        gradle=Path("/opt/gradle-8/bin/gradle"),
+        adb=Path("/opt/android/platform-tools/adb"),
+    )
 
     with pytest.raises(ValueError, match="8..32"):
-        controller.save(
-            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True, 0, True)
-        )
+        controller.save(replace(saved, font_size=40.0))
     assert settings.sync_count == 1
 
     with pytest.raises(ValueError, match="FPS limit"):
-        controller.save(
-            EditorSettingsSnapshot("", "", 14.0, 11.0, False, True, 60.5, True)
-        )
+        controller.save(replace(saved, fps_limit=60.5))
     assert settings.sync_count == 1

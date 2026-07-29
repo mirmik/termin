@@ -166,12 +166,13 @@ def build_profile(
 def resolve_profile_build_request(
     profile: BuildProfile,
     *,
+    editor_settings: ToolchainContext | None = None,
     toolchain: ToolchainContext | None = None,
 ) -> ProfileBuildRequest:
     """Resolve and validate the exact request used by every profile frontend."""
 
     local = create_local_toolchain_context(
-        invocation_overrides=toolchain or ToolchainContext()
+        editor_settings=editor_settings, invocation_overrides=toolchain or ToolchainContext()
     )
     request = compile_profile_build_request(profile, local)
     validate_resolved_profile_request(request)
@@ -182,12 +183,17 @@ def resolve_profile_build_request(
 def build_profile_result(
     profile: BuildProfile,
     *,
+    editor_settings: ToolchainContext | None = None,
     toolchain: ToolchainContext | None = None,
     log_callback=None,
 ) -> Any:
     """Build one profile and return its target result to interactive frontends."""
 
-    request = resolve_profile_build_request(profile, toolchain=toolchain)
+    request = resolve_profile_build_request(
+        profile,
+        editor_settings=editor_settings,
+        toolchain=toolchain,
+    )
     return execute_profile_build_request_result(request, log_callback=log_callback)
 
 

@@ -109,6 +109,43 @@ def test_compile_desktop_request_is_pure_and_uses_profile_defaults(tmp_path: Pat
     assert request.context.dist_dir == (project / "dist/dev").resolve()
     assert request.context.target_options == {"desktop": {"os": "linux", "arch": "x86_64"}}
     assert request.runtime_backends == ("vulkan", "opengl")
+
+
+def test_resolve_profile_request_passes_editor_and_invocation_layers(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
+    editor_settings = ToolchainContext(gradle=tmp_path / "editor-gradle")
+    invocation = ToolchainContext(adb=tmp_path / "invocation-adb")
+    calls = []
+
+    def create_context(**kwargs):
+        calls.append(kwargs)
+        return ToolchainContext()
+
+    monkeypatch.setattr(profile_build, "create_local_toolchain_context", create_context)
+    monkeypatch.setattr(
+        profile_build,
+        "inspect_request_capabilities",
+        lambda _request: SimpleNamespace(diagnostics=()),
+    )
+
+    request = profile_build.resolve_profile_build_request(
+        profile,
+        editor_settings=editor_settings,
+        toolchain=invocation,
+    )
+
+    assert request.name == "dev"
+    assert calls == [
+        {
+            "editor_settings": editor_settings,
+            "invocation_overrides": invocation,
+        }
+    ]
     assert request.shader_compiler is None
     assert request.sdk_root is None
 
@@ -143,9 +180,7 @@ def test_compile_android_and_quest_requests_use_local_toolchain_context(tmp_path
     assert quest.abi == "arm64-v8a"
     assert quest.platform == "android-26"
     assert quest.build_script == tmp_path / "build-quest.sh"
-    assert quest.context.target_options == {
-        "quest_openxr": {"abi": "arm64-v8a", "ndk_api": 26}
-    }
+    assert quest.context.target_options == {"quest_openxr": {"abi": "arm64-v8a", "ndk_api": 26}}
 
 
 def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch) -> None:
@@ -179,28 +214,31 @@ def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
     _allow_routing_without_local_preflight(monkeypatch)
 
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-            "--target",
-            "desktop",
-        ]
-    ) == 0
+    assert (
+        profile_build.main(
+            [
+                "build",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+                "--target",
+                "desktop",
+            ]
+        )
+        == 0
+    )
 
     assert calls == [
         {
             "project_root": project.resolve(),
-                "entry_scene": (project / "Scenes/Main.scene").resolve(),
-                "scenes": (
-                    (project / "Scenes/Main.scene").resolve(),
-                    (project / "Scenes/Menu.scene").resolve(),
-                ),
+            "entry_scene": (project / "Scenes/Main.scene").resolve(),
+            "scenes": (
+                (project / "Scenes/Main.scene").resolve(),
+                (project / "Scenes/Menu.scene").resolve(),
+            ),
             "output_dir": (project / "dist/linux-dev").resolve(),
             "shader_compiler": None,
             "fxc": None,
@@ -268,19 +306,22 @@ def test_profile_build_routes_android_family_typed_request(
     )
     _allow_routing_without_local_preflight(monkeypatch, local)
 
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "product",
-            "--target",
-            target,
-        ]
-    ) == 0
+    assert (
+        profile_build.main(
+            [
+                "build",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "product",
+                "--target",
+                target,
+            ]
+        )
+        == 0
+    )
 
     assert calls[0]["abi"] == expected["abi"]
     assert calls[0]["platform"] == expected["platform"]
@@ -382,7 +423,11 @@ def test_profile_build_rejects_missing_entry_scene_before_wrapper(
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(
         profiles_path,
-        {"dev": _desktop_profile(content=_content(entry_scene="Scenes/Missing.scene", scenes=["Scenes/Missing.scene"]))},
+        {
+            "dev": _desktop_profile(
+                content=_content(entry_scene="Scenes/Missing.scene", scenes=["Scenes/Missing.scene"])
+            )
+        },
     )
     calls: list[dict] = []
     monkeypatch.setattr(profile_build, "build_desktop_project", lambda **kwargs: calls.append(kwargs))
@@ -400,13 +445,7 @@ def test_profile_build_reports_missing_secondary_scene_at_profile_path(tmp_path:
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(
         profiles_path,
-        {
-            "dev": _desktop_profile(
-                content=_content(
-                    scenes=["Scenes/Main.scene", "Scenes/Missing.scene"]
-                )
-            )
-        },
+        {"dev": _desktop_profile(content=_content(scenes=["Scenes/Main.scene", "Scenes/Missing.scene"]))},
     )
     profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
 
@@ -420,19 +459,22 @@ def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) 
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(profiles_path, {"dev": _desktop_profile()})
 
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-            "--target",
-            "android",
-        ]
-    ) == 2
+    assert (
+        profile_build.main(
+            [
+                "build",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+                "--target",
+                "android",
+            ]
+        )
+        == 2
+    )
     assert "target mismatch" in capsys.readouterr().err
 
 
@@ -440,17 +482,20 @@ def test_profile_build_cli_rejects_schema_v1(tmp_path: Path, capsys) -> None:
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(profiles_path, {"dev": _desktop_profile()}, version=1)
 
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-        ]
-    ) == 2
+    assert (
+        profile_build.main(
+            [
+                "build",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+            ]
+        )
+        == 2
+    )
     assert "schema v1 is not migrated automatically" in capsys.readouterr().err
 
 
@@ -459,19 +504,22 @@ def test_profile_build_resolve_writes_canonical_request_summary(tmp_path: Path) 
     _write_profiles(profiles_path, {"dev": _desktop_profile()})
     request_path = tmp_path / "request.json"
 
-    assert profile_build.main(
-        [
-            "resolve",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-            "--request-output",
-            str(request_path),
-        ]
-    ) == 0
+    assert (
+        profile_build.main(
+            [
+                "resolve",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+                "--request-output",
+                str(request_path),
+            ]
+        )
+        == 0
+    )
 
     summary = json.loads(request_path.read_text(encoding="utf-8"))
     assert summary == {
@@ -491,28 +539,34 @@ def test_profile_build_list_and_show_use_typed_store(tmp_path: Path, capsys) -> 
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(profiles_path, {"dev": _desktop_profile()})
 
-    assert profile_build.main(
-        [
-            "profiles",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-        ]
-    ) == 0
+    assert (
+        profile_build.main(
+            [
+                "profiles",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+            ]
+        )
+        == 0
+    )
     assert "dev (desktop)" in capsys.readouterr().out
 
-    assert profile_build.main(
-        [
-            "profile",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-        ]
-    ) == 0
+    assert (
+        profile_build.main(
+            [
+                "profile",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+            ]
+        )
+        == 0
+    )
     output = capsys.readouterr().out
     assert "Target: desktop" in output
     assert "Runtime backends: vulkan, opengl" in output
@@ -538,15 +592,18 @@ def test_profile_build_returns_nonzero_for_builder_error_diagnostic(
     monkeypatch.setattr(profile_build, "build_desktop_project", fake_builder)
     _allow_routing_without_local_preflight(monkeypatch)
 
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-        ]
-    ) == 1
+    assert (
+        profile_build.main(
+            [
+                "build",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+            ]
+        )
+        == 1
+    )
     assert "error: manifest.json: package is invalid" in capsys.readouterr().out

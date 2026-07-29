@@ -29,6 +29,15 @@ class EditorSettings:
     KEY_FONT_SIZE = "Editor/fontSize"
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
     KEY_SLANG_COMPILER = "Shader/slangCompiler"
+    KEY_BUILD_SDK_ROOT = "Build/sdkRoot"
+    KEY_BUILD_TERMIN_ROOT = "Build/terminRoot"
+    KEY_BUILD_ANDROID_SDK_ROOT = "Build/androidSdkRoot"
+    KEY_BUILD_SHADER_COMPILER = "Build/shaderCompiler"
+    KEY_BUILD_FXC = "Build/fxc"
+    KEY_BUILD_ANDROID_SCRIPT = "Build/androidScript"
+    KEY_BUILD_QUEST_OPENXR_SCRIPT = "Build/questOpenxrScript"
+    KEY_BUILD_GRADLE = "Build/gradle"
+    KEY_BUILD_ADB = "Build/adb"
     KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
     KEY_VSYNC_ENABLED = "Editor/vsyncEnabled"
     KEY_FPS_LIMIT = "Editor/fpsLimit"
@@ -78,7 +87,6 @@ class EditorSettings:
         """Сохранить путь к файлу проекта."""
         self.set(self.KEY_LAST_PROJECT_PATH, str(path))
 
-
     def get_text_editor(self) -> str | None:
         """Получить путь к внешнему текстовому редактору."""
         return self.get(self.KEY_TEXT_EDITOR)
@@ -124,7 +132,14 @@ class EditorSettings:
         elif system == "Darwin":  # macOS
             candidates = [
                 Path("/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"),
-                Path.home() / "Applications" / "Visual Studio Code.app" / "Contents" / "Resources" / "app" / "bin" / "code",
+                Path.home()
+                / "Applications"
+                / "Visual Studio Code.app"
+                / "Contents"
+                / "Resources"
+                / "app"
+                / "bin"
+                / "code",
             ]
         else:  # Linux
             candidates = [
@@ -151,6 +166,60 @@ class EditorSettings:
     def set_slang_compiler(self, compiler_path: str | None) -> None:
         """Сохранить путь к компилятору Slang."""
         self.set(self.KEY_SLANG_COMPILER, compiler_path or "")
+
+    def get_build_sdk_root(self) -> str | None:
+        return self.get(self.KEY_BUILD_SDK_ROOT) or None
+
+    def set_build_sdk_root(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_SDK_ROOT, path or "")
+
+    def get_build_termin_root(self) -> str | None:
+        return self.get(self.KEY_BUILD_TERMIN_ROOT) or None
+
+    def set_build_termin_root(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_TERMIN_ROOT, path or "")
+
+    def get_build_android_sdk_root(self) -> str | None:
+        return self.get(self.KEY_BUILD_ANDROID_SDK_ROOT) or None
+
+    def set_build_android_sdk_root(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_ANDROID_SDK_ROOT, path or "")
+
+    def get_build_shader_compiler(self) -> str | None:
+        return self.get(self.KEY_BUILD_SHADER_COMPILER) or None
+
+    def set_build_shader_compiler(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_SHADER_COMPILER, path or "")
+
+    def get_build_fxc(self) -> str | None:
+        return self.get(self.KEY_BUILD_FXC) or None
+
+    def set_build_fxc(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_FXC, path or "")
+
+    def get_build_android_script(self) -> str | None:
+        return self.get(self.KEY_BUILD_ANDROID_SCRIPT) or None
+
+    def set_build_android_script(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_ANDROID_SCRIPT, path or "")
+
+    def get_build_quest_openxr_script(self) -> str | None:
+        return self.get(self.KEY_BUILD_QUEST_OPENXR_SCRIPT) or None
+
+    def set_build_quest_openxr_script(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_QUEST_OPENXR_SCRIPT, path or "")
+
+    def get_build_gradle(self) -> str | None:
+        return self.get(self.KEY_BUILD_GRADLE) or None
+
+    def set_build_gradle(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_GRADLE, path or "")
+
+    def get_build_adb(self) -> str | None:
+        return self.get(self.KEY_BUILD_ADB) or None
+
+    def set_build_adb(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_ADB, path or "")
 
     def get_mcp_server_enabled(self) -> bool:
         """Whether to start the editor MCP server when env override is absent."""
