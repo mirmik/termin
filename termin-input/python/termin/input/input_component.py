@@ -59,6 +59,9 @@ class InputComponent(PythonComponent):
     def on_mouse_button(self, event):
         pass
 
+    def on_pointer(self, event):
+        pass
+
     def on_mouse_move(self, event):
         pass
 

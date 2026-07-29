@@ -2,6 +2,18 @@
 
 namespace termin {
 
+void InputHandler::_cb_on_pointer(tc_component* c, tc_pointer_event* event) {
+    if (!c || c->kind != TC_CXX_COMPONENT) return;
+
+    CxxComponent* comp = CxxComponent::from_tc(c);
+    if (!comp) return;
+
+    InputHandler* handler = dynamic_cast<InputHandler*>(comp);
+    if (!handler) return;
+
+    handler->on_pointer(event);
+}
+
 void InputHandler::_cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
     if (!c || c->kind != TC_CXX_COMPONENT) return;
 
@@ -51,6 +63,7 @@ void InputHandler::_cb_on_key(tc_component* c, tc_key_event* event) {
 }
 
 const tc_input_vtable InputHandler::cxx_input_vtable = {
+    &InputHandler::_cb_on_pointer,
     &InputHandler::_cb_on_mouse_button,
     &InputHandler::_cb_on_mouse_move,
     &InputHandler::_cb_on_scroll,

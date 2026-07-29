@@ -158,6 +158,56 @@ struct KeyEvent : public tc_key_event {
     }
 };
 
+/**
+ * Device-neutral pointer event.
+ */
+struct PointerEvent : public tc_pointer_event {
+    PointerEvent() {
+        viewport = TC_VIEWPORT_HANDLE_INVALID;
+        pointer_id = 0;
+        device = TC_POINTER_DEVICE_TOUCH;
+        phase = TC_POINTER_MOVE;
+        x = 0.0;
+        y = 0.0;
+        dx = 0.0;
+        dy = 0.0;
+        pressure = 0.0f;
+        source = TC_INPUT_SOURCE_RUNTIME;
+        handled = false;
+    }
+
+    PointerEvent(
+        tc_viewport_handle viewport_,
+        uint64_t pointer_id_,
+        int device_,
+        int phase_,
+        double x_,
+        double y_,
+        double dx_ = 0.0,
+        double dy_ = 0.0,
+        float pressure_ = 0.0f,
+        uint32_t source_ = TC_INPUT_SOURCE_RUNTIME
+    ) {
+        tc_pointer_event_init_source(
+            this, viewport_, pointer_id_, device_, phase_, x_, y_, dx_, dy_,
+            pressure_, source_);
+    }
+
+    explicit PointerEvent(const tc_pointer_event& e) {
+        viewport = e.viewport;
+        pointer_id = e.pointer_id;
+        device = e.device;
+        phase = e.phase;
+        x = e.x;
+        y = e.y;
+        dx = e.dx;
+        dy = e.dy;
+        pressure = e.pressure;
+        source = e.source;
+        handled = e.handled;
+    }
+};
+
 using tcbase::Action;
 using tcbase::Mods;
 using tcbase::MouseButton;

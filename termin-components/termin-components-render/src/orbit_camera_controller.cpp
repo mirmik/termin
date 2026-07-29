@@ -355,6 +355,72 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 // === Input handlers ===
 // Events are C struct pointers (tc_mouse_button_event*, etc.)
 
+void OrbitCameraController::on_pointer(tc_pointer_event* e) {
+    if (_prevent_moving || !e || !_event_targets_this_camera(e->viewport)) {
+        return;
+    }
+    if (e->device != TC_POINTER_DEVICE_TOUCH &&
+        e->device != TC_POINTER_DEVICE_PEN) {
+        return;
+    }
+
+    ViewportState& state = _get_viewport_state(viewport_key(e->viewport));
+    if (e->phase == TC_POINTER_DOWN) {
+        state.touch_points[e->pointer_id] = {e->x, e->y};
+        return;
+    }
+    if (e->phase == TC_POINTER_CANCEL) {
+        state.touch_points.erase(e->pointer_id);
+        return;
+    }
+
+    auto point = state.touch_points.find(e->pointer_id);
+    if (point == state.touch_points.end()) {
+        return;
+    }
+
+    if (e->phase == TC_POINTER_MOVE) {
+        if (state.touch_points.size() == 1) {
+            point->second = {e->x, e->y};
+            orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
+            return;
+        }
+
+        if (state.touch_points.size() == 2) {
+            auto first = state.touch_points.begin();
+            auto second = std::next(first);
+            const double old_center_x = (first->second.x + second->second.x) * 0.5;
+            const double old_center_y = (first->second.y + second->second.y) * 0.5;
+            const double old_dx = first->second.x - second->second.x;
+            const double old_dy = first->second.y - second->second.y;
+            const double old_span = std::hypot(old_dx, old_dy);
+
+            point->second = {e->x, e->y};
+
+            first = state.touch_points.begin();
+            second = std::next(first);
+            const double new_center_x = (first->second.x + second->second.x) * 0.5;
+            const double new_center_y = (first->second.y + second->second.y) * 0.5;
+            const double new_dx = first->second.x - second->second.x;
+            const double new_dy = first->second.y - second->second.y;
+            const double new_span = std::hypot(new_dx, new_dy);
+
+            pan(
+                -(new_center_x - old_center_x) * _pan_speed,
+                (new_center_y - old_center_y) * _pan_speed);
+            zoom((old_span - new_span) * _touch_zoom_speed);
+            return;
+        }
+
+        point->second = {e->x, e->y};
+        return;
+    }
+
+    if (e->phase == TC_POINTER_UP) {
+        state.touch_points.erase(point);
+    }
+}
+
 void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
     if (!e || !_event_targets_this_camera(e->viewport)) {
         return;

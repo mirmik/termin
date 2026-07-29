@@ -18,6 +18,7 @@ _DISPLAY_EVENT_EXPORTS = {
     "KeyEvent",
     "MouseButtonEvent",
     "MouseMoveEvent",
+    "PointerEvent",
     "ScrollEvent",
 }
 
@@ -39,6 +40,7 @@ __all__ = [
     "KeyEvent",
     "MouseButtonEvent",
     "MouseMoveEvent",
+    "PointerEvent",
     "ScrollEvent",
     "XrHand",
     "XrInput",

@@ -8,6 +8,7 @@ struct tc_mouse_button_event;
 struct tc_mouse_move_event;
 struct tc_scroll_event;
 struct tc_key_event;
+struct tc_pointer_event;
 
 namespace termin {
 
@@ -18,6 +19,7 @@ private:
 public:
     virtual ~InputHandler() = default;
 
+    virtual void on_pointer(tc_pointer_event* event) {}
     virtual void on_mouse_button(tc_mouse_button_event* event) {}
     virtual void on_mouse_move(tc_mouse_move_event* event) {}
     virtual void on_scroll(tc_scroll_event* event) {}
@@ -44,6 +46,7 @@ protected:
     }
 
 private:
+    static void _cb_on_pointer(tc_component* c, tc_pointer_event* event);
     static void _cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event);
     static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);
     static void _cb_on_scroll(tc_component* c, tc_scroll_event* event);

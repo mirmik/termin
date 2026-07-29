@@ -27,6 +27,9 @@ struct tc_viewport_input_manager {
     double last_cursor_x;
     double last_cursor_y;
     bool has_cursor;
+
+    // Private linked list of per-pointer positions used to compute deltas.
+    void* pointer_states;
 };
 
 // Create viewport input manager and auto-attach to viewport

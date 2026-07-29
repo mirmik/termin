@@ -48,12 +48,13 @@ static void editor_destroy(tc_input_manager* m) {
 }
 
 tc_input_manager_vtable EditorViewportInputManager::_vtable = {
-    editor_on_mouse_button,
-    editor_on_mouse_move,
-    editor_on_scroll,
-    editor_on_key,
-    editor_on_char,
-    editor_destroy
+    .on_pointer = nullptr,
+    .on_mouse_button = editor_on_mouse_button,
+    .on_mouse_move = editor_on_mouse_move,
+    .on_scroll = editor_on_scroll,
+    .on_key = editor_on_key,
+    .on_char = editor_on_char,
+    .destroy = editor_destroy,
 };
 
 // ============================================================================

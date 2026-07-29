@@ -40,6 +40,17 @@ typedef struct tc_input_manager_vtable tc_input_manager_vtable;
 // ============================================================================
 
 struct tc_input_manager_vtable {
+    // Device-neutral pointer event in display pixels.
+    void (*on_pointer)(
+        tc_input_manager* self,
+        uint64_t pointer_id,
+        int device,
+        int phase,
+        double x,
+        double y,
+        float pressure
+    );
+
     // Mouse button event. click_count is host-supplied (1=single, 2=double).
     void (*on_mouse_button)(tc_input_manager* self, int button, int action, int mods,
                             uint32_t click_count);
@@ -99,6 +110,20 @@ static inline void tc_input_manager_on_mouse_button(
     }
 }
 
+static inline void tc_input_manager_on_pointer(
+    tc_input_manager* m,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    float pressure
+) {
+    if (m && m->vtable && m->vtable->on_pointer) {
+        m->vtable->on_pointer(m, pointer_id, device, phase, x, y, pressure);
+    }
+}
+
 static inline void tc_input_manager_on_mouse_move(
     tc_input_manager* m, double x, double y
 ) {
@@ -154,6 +179,15 @@ TERMIN_DISPLAY_API void tc_input_manager_free(tc_input_manager* m);
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
     tc_input_manager* m, int button, int action, int mods, uint32_t click_count);
+
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_pointer(
+    tc_input_manager* m,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    float pressure);
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(
     tc_input_manager* m, double x, double y);

@@ -58,6 +58,7 @@ private:
     double _orbit_speed = 0.2;
     double _pan_speed = 0.005;
     double _zoom_speed = 0.5;
+    double _touch_zoom_speed = 0.02;
     bool _prevent_moving = false;
     // === Per-viewport state for drag operations ===
     struct ViewportState {
@@ -66,6 +67,11 @@ private:
         double last_x = 0.0;
         double last_y = 0.0;
         bool has_last = false;
+        struct TouchPoint {
+            double x = 0.0;
+            double y = 0.0;
+        };
+        std::unordered_map<uint64_t, TouchPoint> touch_points;
     };
     std::unordered_map<uintptr_t, ViewportState> _viewport_states;
     // === Camera component reference (CmpRef validates entity liveness) ===
@@ -148,6 +154,7 @@ public:
 
     // === InputHandler interface ===
 
+    void on_pointer(tc_pointer_event* event) override;
     void on_mouse_button(tc_mouse_button_event* event) override;
     void on_mouse_move(tc_mouse_move_event* event) override;
     void on_scroll(tc_scroll_event* event) override;

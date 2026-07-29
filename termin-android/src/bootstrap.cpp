@@ -29,6 +29,10 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
+#include "render/tc_display.h"
+#include "render/tc_viewport.h"
+#include "render/tc_viewport_input_manager.h"
+#include "tc_input_event.h"
 }
 
 #ifdef __ANDROID__
@@ -55,6 +59,15 @@ struct AndroidBootstrapState {
     int32_t surface_height = 0;
     bool initialized = false;
 #ifdef __ANDROID__
+    struct QueuedPointerEvent {
+        uint64_t pointer_id = 0;
+        int device = TC_POINTER_DEVICE_TOUCH;
+        int phase = TC_POINTER_MOVE;
+        double x = 0.0;
+        double y = 0.0;
+        float pressure = 0.0f;
+    };
+
     std::unique_ptr<tgfx::GraphicsHost> graphics_host;
     tgfx::VulkanRenderDevice* render_device = nullptr;
     uint32_t swapchain_width = 0;
@@ -68,6 +81,8 @@ struct AndroidBootstrapState {
     std::vector<std::string> registered_scene_names;
     tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
     std::vector<tc_viewport_handle> player_viewports;
+    std::vector<tc_viewport_input_manager*> viewport_input_managers;
+    std::vector<QueuedPointerEvent> pointer_events;
     uint32_t player_frame = 0;
     int64_t last_frame_time_nanos = 0;
     bool scene_extensions_registered = false;
@@ -155,6 +170,11 @@ void destroy_player_session_locked() {
         ? &g_state.player_engine->rendering_manager
         : nullptr;
 
+    for (tc_viewport_input_manager* input : g_state.viewport_input_managers) {
+        tc_viewport_input_manager_free(input);
+    }
+    g_state.viewport_input_managers.clear();
+
     if (manager) {
         manager->set_display_factory(nullptr);
         if (g_state.player_scene.valid()
@@ -203,6 +223,78 @@ void destroy_player_session_locked() {
 
     g_state.player_frame = 0;
     g_state.last_frame_time_nanos = 0;
+}
+
+void setup_player_input_locked() {
+    int active_viewports = 0;
+    for (tc_viewport_handle viewport : g_state.player_viewports) {
+        if (!tc_viewport_alive(viewport)) continue;
+
+        const char* raw_mode = tc_viewport_get_input_mode(viewport);
+        const std::string mode =
+            raw_mode && raw_mode[0] != '\0' ? raw_mode : "simple";
+        if (mode == "none" || mode == "editor") {
+            if (mode == "editor") {
+                tc_log_warn(
+                    "termin_android_player: viewport '%s' requests editor-only input mode",
+                    tc_viewport_get_name(viewport));
+            }
+            continue;
+        }
+        if (mode != "simple" && mode != "basic") {
+            tc_log_error(
+                "termin_android_player: unsupported input mode '%s' for viewport '%s'",
+                mode.c_str(),
+                tc_viewport_get_name(viewport));
+            continue;
+        }
+        if (tc_viewport_get_input_manager(viewport)) {
+            ++active_viewports;
+            continue;
+        }
+        tc_viewport_input_manager* input =
+            tc_viewport_input_manager_new(viewport);
+        if (!input) {
+            tc_log_error(
+                "termin_android_player: failed to create input manager for viewport '%s'",
+                tc_viewport_get_name(viewport));
+            continue;
+        }
+        g_state.viewport_input_managers.push_back(input);
+        ++active_viewports;
+    }
+    tc_log_info(
+        "termin_android_player: input configured for %d viewport(s)",
+        active_viewports);
+}
+
+void dispatch_pointer_events_locked() {
+    if (g_state.pointer_events.empty()) return;
+    if (!tc_display_handle_valid(g_state.presentation_display)) {
+        tc_log_error(
+            "termin_android_player: dropping %zu pointer event(s) without presentation display",
+            g_state.pointer_events.size());
+        g_state.pointer_events.clear();
+        return;
+    }
+
+    for (const AndroidBootstrapState::QueuedPointerEvent& event
+            : g_state.pointer_events) {
+        if (!tc_display_dispatch_pointer(
+                g_state.presentation_display,
+                event.pointer_id,
+                event.device,
+                event.phase,
+                event.x,
+                event.y,
+                event.pressure)) {
+            tc_log_error(
+                "termin_android_player: failed to dispatch pointer id=%llu phase=%d",
+                (unsigned long long)event.pointer_id,
+                event.phase);
+        }
+    }
+    g_state.pointer_events.clear();
 }
 
 tc_display_handle create_player_display_locked(const std::string& requested_name) {
@@ -347,6 +439,7 @@ bool ensure_player_session_locked() {
         return false;
     }
 
+    setup_player_input_locked();
     scene_manager.request_render();
     android_log_info(
         "player: attached runtime package entities=%zu viewports=%zu targets=%zu",
@@ -387,6 +480,7 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
     }
 
     try {
+        dispatch_pointer_events_locked();
         const double dt = frame_delta_seconds_locked(frame_time_nanos);
         const bool rendered = g_state.player_engine->tick_and_render(dt);
         if (!rendered) {
@@ -591,6 +685,9 @@ void release_window_locked() {
     g_state.surface_width = 0;
     g_state.surface_height = 0;
 #ifdef __ANDROID__
+    g_state.pointer_events.clear();
+#endif
+#ifdef __ANDROID__
     g_state.renderer_create_failed = false;
 #endif
 }
@@ -759,6 +856,50 @@ extern "C" void termin_android_on_surface_destroyed(void) {
     release_window_locked();
     android_log_info("surface_destroyed");
     tc_log_info("termin_android_on_surface_destroyed");
+}
+
+extern "C" void termin_android_on_pointer(
+    uint64_t pointer_id,
+    int32_t device,
+    int32_t phase,
+    float x,
+    float y,
+    float pressure
+) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+#ifdef __ANDROID__
+    if (device < TC_POINTER_DEVICE_MOUSE || device > TC_POINTER_DEVICE_PEN) {
+        tc_log_error("termin_android_on_pointer: invalid device %d", (int)device);
+        return;
+    }
+    if (phase < TC_POINTER_DOWN || phase > TC_POINTER_CANCEL) {
+        tc_log_error("termin_android_on_pointer: invalid phase %d", (int)phase);
+        return;
+    }
+    constexpr size_t kMaxQueuedPointerEvents = 4096;
+    if (g_state.pointer_events.size() >= kMaxQueuedPointerEvents) {
+        tc_log_error(
+            "termin_android_on_pointer: input queue overflow; dropping pointer id=%llu",
+            (unsigned long long)pointer_id);
+        return;
+    }
+    g_state.pointer_events.push_back({
+        pointer_id,
+        (int)device,
+        (int)phase,
+        (double)x,
+        (double)y,
+        pressure,
+    });
+#else
+    (void)pointer_id;
+    (void)device;
+    (void)phase;
+    (void)x;
+    (void)y;
+    (void)pressure;
+    tc_log_error("termin_android_on_pointer: only supported on Android");
+#endif
 }
 
 extern "C" int termin_android_render_frame(int64_t frame_time_nanos) {

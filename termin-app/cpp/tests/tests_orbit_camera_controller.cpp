@@ -7,6 +7,8 @@
 
 #include <termin/camera/camera_component.hpp>
 
+#include <cmath>
+
 extern "C" {
 #include "core/tc_entity_pool.h"
 #include "core/tc_scene.h"
@@ -18,6 +20,7 @@ using guard::Approx;
 using termin::CameraComponent;
 using termin::Entity;
 using termin::OrbitCameraController;
+using termin::PointerEvent;
 using termin::ScrollEvent;
 
 namespace {
@@ -115,4 +118,65 @@ TEST_CASE("OrbitCameraController center_on keeps camera offset from target")
     CHECK_EQ(focused_offset.z, Approx(initial_offset.z).epsilon(1e-12));
 
     tc_entity_free(rig.entity.handle());
+}
+
+TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
+{
+    tc_scene_handle scene = tc_scene_new_named("orbit-camera-touch-test");
+    REQUIRE(tc_scene_alive(scene));
+    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(
+        tc_scene_entity_pool(scene));
+    REQUIRE(tc_entity_pool_handle_valid(scene_pool));
+
+    CameraRig rig = make_camera_rig("touch-camera", scene_pool);
+    tc_render_target_handle render_target = tc_render_target_new("touch-rt");
+    REQUIRE(tc_render_target_handle_valid(render_target));
+    tc_render_target_set_scene(render_target, scene);
+    tc_render_target_set_camera(render_target, rig.camera->tc_component_ptr());
+
+    tc_viewport_handle viewport =
+        tc_viewport_new("touch-viewport", TC_SCENE_HANDLE_INVALID);
+    REQUIRE(tc_viewport_handle_valid(viewport));
+    tc_viewport_set_render_target(viewport, render_target);
+
+    const termin::Vec3 initial_position =
+        rig.entity.transform().global_position();
+    PointerEvent first_down(
+        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
+        20.0, 20.0);
+    rig.controller->on_pointer(&first_down);
+    PointerEvent first_move(
+        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
+        40.0, 20.0, 20.0, 0.0);
+    rig.controller->on_pointer(&first_move);
+    const termin::Vec3 orbited_position =
+        rig.entity.transform().global_position();
+    CHECK(
+        std::abs(orbited_position.x - initial_position.x) > 1e-6 ||
+        std::abs(orbited_position.y - initial_position.y) > 1e-6);
+
+    PointerEvent second_down(
+        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
+        140.0, 20.0);
+    rig.controller->on_pointer(&second_down);
+    const double radius_before_pinch = rig.controller->radius;
+    PointerEvent second_move(
+        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
+        160.0, 20.0, 20.0, 0.0);
+    rig.controller->on_pointer(&second_move);
+    CHECK(rig.controller->radius < radius_before_pinch);
+
+    PointerEvent first_cancel(
+        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL,
+        40.0, 20.0);
+    PointerEvent second_cancel(
+        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL,
+        160.0, 20.0);
+    rig.controller->on_pointer(&first_cancel);
+    rig.controller->on_pointer(&second_cancel);
+
+    tc_viewport_free(viewport);
+    tc_render_target_free(render_target);
+    tc_entity_free(rig.entity.handle());
+    tc_scene_free(scene);
 }

@@ -8,6 +8,7 @@ import android.view.Choreographer;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.MotionEvent;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -64,6 +65,10 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         surfaceView.setZOrderOnTop(true);
         surfaceView.getHolder().setFormat(PixelFormat.OPAQUE);
         surfaceView.getHolder().addCallback(this);
+        surfaceView.setOnTouchListener((view, event) -> {
+            dispatchPointerEvent(event);
+            return true;
+        });
         setContentView(surfaceView);
     }
 
@@ -108,7 +113,70 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativeSurfaceDestroyed();
+    private static native void nativePointer(
+            long pointerId,
+            int device,
+            int phase,
+            float x,
+            float y,
+            float pressure);
     private static native boolean nativeRenderFrame(long frameTimeNanos);
+
+    private static final int POINTER_MOUSE = 0;
+    private static final int POINTER_TOUCH = 1;
+    private static final int POINTER_PEN = 2;
+    private static final int POINTER_DOWN = 0;
+    private static final int POINTER_MOVE = 1;
+    private static final int POINTER_UP = 2;
+    private static final int POINTER_CANCEL = 3;
+
+    private void dispatchPointerEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_MOVE) {
+            for (int index = 0; index < event.getPointerCount(); ++index) {
+                dispatchPointer(event, index, POINTER_MOVE);
+            }
+            return;
+        }
+        if (action == MotionEvent.ACTION_CANCEL) {
+            for (int index = 0; index < event.getPointerCount(); ++index) {
+                dispatchPointer(event, index, POINTER_CANCEL);
+            }
+            return;
+        }
+
+        int phase;
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            phase = POINTER_DOWN;
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+            phase = POINTER_UP;
+        } else {
+            return;
+        }
+        dispatchPointer(event, event.getActionIndex(), phase);
+    }
+
+    private void dispatchPointer(MotionEvent event, int index, int phase) {
+        nativePointer(
+                event.getPointerId(index),
+                pointerDevice(event.getToolType(index)),
+                phase,
+                event.getX(index),
+                event.getY(index),
+                event.getPressure(index)
+        );
+    }
+
+    private static int pointerDevice(int toolType) {
+        if (toolType == MotionEvent.TOOL_TYPE_MOUSE) {
+            return POINTER_MOUSE;
+        }
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS
+                || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            return POINTER_PEN;
+        }
+        return POINTER_TOUCH;
+    }
 
     private void startRenderLoop() {
         if (renderLoopRunning) {
