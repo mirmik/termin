@@ -485,7 +485,7 @@
             "editor_entities": {
               "camera": [
                 {
-                  "source_id": "3848839d-7ad2-4860-9839-97e1d141c10d",
+                  "source_id": "5aa5da6c-b56f-48b4-be66-d9ecf1a50aa3",
                   "type": "CameraComponent",
                   "data": {
                     "enabled": true,
@@ -500,7 +500,7 @@
                   }
                 },
                 {
-                  "source_id": "3123a3dc-b584-4939-84fc-e6061c008555",
+                  "source_id": "b23cc9b6-76e7-48a4-85cb-0f2b06c1df61",
                   "type": "OrbitCameraController",
                   "data": {
                     "enabled": true,
@@ -627,7 +627,7 @@
       "editor_entities": {
         "camera": [
           {
-            "source_id": "3848839d-7ad2-4860-9839-97e1d141c10d",
+            "source_id": "5aa5da6c-b56f-48b4-be66-d9ecf1a50aa3",
             "type": "CameraComponent",
             "data": {
               "enabled": true,
@@ -642,7 +642,7 @@
             }
           },
           {
-            "source_id": "3123a3dc-b584-4939-84fc-e6061c008555",
+            "source_id": "b23cc9b6-76e7-48a4-85cb-0f2b06c1df61",
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,

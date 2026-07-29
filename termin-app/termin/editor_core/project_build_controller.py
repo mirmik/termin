@@ -109,7 +109,7 @@ class ProjectBuildController:
         self._save_scene()
         result = build_profile_result(
             profile,
-            editor_settings=self._toolchain_settings(),
+            user_settings=self._toolchain_settings(),
             log_callback=self._emit,
         )
         self._report_build(profile, result)
@@ -169,7 +169,7 @@ class ProjectBuildController:
     def _inspect(self, profile: BuildProfile):
         return inspect_profile_capabilities(
             profile,
-            editor_settings=self._toolchain_settings(),
+            user_settings=self._toolchain_settings(),
         )
 
     @staticmethod

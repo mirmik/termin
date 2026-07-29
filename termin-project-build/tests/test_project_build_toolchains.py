@@ -4,6 +4,9 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+from tcbase import Settings
+
 from termin.project_build.capability_reports import inspect_profile_capabilities
 from termin.project_build.profile_build import main
 from termin.project_build.profiles import BuildProfileStore
@@ -14,6 +17,7 @@ from termin.project_build.toolchains import (
     create_local_toolchain_context,
     resolve_toolchain_context,
 )
+from termin.project_build.user_settings import UserToolchainSettings
 
 
 def _write_json(path: Path, data: object) -> None:
@@ -107,24 +111,84 @@ def test_provider_precedence_is_per_field_and_derivation_uses_final_roots(
 ) -> None:
     install_sdk = tmp_path / "install-sdk"
     env_sdk = tmp_path / "env-sdk"
-    editor_sdk = tmp_path / "editor-sdk"
+    user_sdk = tmp_path / "user-sdk"
     invocation_shaderc = _write_tool(tmp_path / "invocation/termin_shaderc")
-    editor_fxc = _write_tool(editor_sdk / "bin/fxc")
-    editor_gradle = _write_tool(tmp_path / "editor/gradle")
+    user_fxc = _write_tool(user_sdk / "bin/fxc")
+    user_gradle = _write_tool(tmp_path / "user/gradle")
 
     context = create_local_toolchain_context(
         installation_defaults=ToolchainContext(sdk_root=install_sdk),
         environ={"TERMIN_SDK": str(env_sdk), "GRADLE_BIN": str(tmp_path / "env/gradle")},
-        editor_settings=ToolchainContext(sdk_root=editor_sdk, gradle=editor_gradle),
+        user_settings=ToolchainContext(sdk_root=user_sdk, gradle=user_gradle),
         invocation_overrides=ToolchainContext(shader_compiler=invocation_shaderc),
         path_search=lambda _name: None,
     )
 
-    assert context.sdk_root == editor_sdk.resolve()
+    assert context.sdk_root == user_sdk.resolve()
     assert context.shader_compiler == invocation_shaderc.resolve()
-    assert context.fxc == editor_fxc.resolve()
-    assert context.gradle == editor_gradle.resolve()
-    assert context.android_sdk_root == (editor_sdk / "android").resolve()
+    assert context.fxc == user_fxc.resolve()
+    assert context.gradle == user_gradle.resolve()
+    assert context.android_sdk_root == (user_sdk / "android").resolve()
+
+
+def test_user_toolchain_settings_persist_complete_context(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    store = UserToolchainSettings(Settings(str(settings_path), True))
+    context = ToolchainContext(
+        sdk_root=tmp_path / "sdk",
+        termin_root=tmp_path / "termin",
+        android_sdk_root=tmp_path / "android",
+        shader_compiler=tmp_path / "termin_shaderc",
+        fxc=tmp_path / "fxc",
+        android_build_script=tmp_path / "build-android-apk.sh",
+        quest_openxr_build_script=tmp_path / "build-quest-openxr-apk.sh",
+        gradle=tmp_path / "gradle",
+        adb=tmp_path / "adb",
+    )
+
+    assert store.save(context) == context
+    assert store.path == settings_path
+    assert UserToolchainSettings(Settings(str(settings_path), True)).load() == context
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux XDG config path contract")
+def test_default_user_toolchain_settings_use_lowercase_termin_directory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    assert UserToolchainSettings().path == tmp_path / "termin/settings.json"
+
+
+def test_default_user_settings_override_environment_but_not_invocation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_root = tmp_path / "config"
+    monkeypatch.setenv(
+        "APPDATA" if os.name == "nt" else "XDG_CONFIG_HOME",
+        str(config_root),
+    )
+    environment_gradle = _write_tool(tmp_path / "environment/gradle")
+    user_gradle = _write_tool(tmp_path / "user/gradle")
+    invocation_gradle = _write_tool(tmp_path / "invocation/gradle")
+    UserToolchainSettings().save(ToolchainContext(gradle=user_gradle))
+
+    from_user = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(),
+        environ={"GRADLE_BIN": str(environment_gradle)},
+        path_search=lambda _name: None,
+    )
+    from_invocation = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(),
+        environ={"GRADLE_BIN": str(environment_gradle)},
+        invocation_overrides=ToolchainContext(gradle=invocation_gradle),
+        path_search=lambda _name: None,
+    )
+
+    assert from_user.gradle == user_gradle.resolve()
+    assert from_invocation.gradle == invocation_gradle.resolve()
 
 
 def test_resolver_normalizes_static_provider_paths(tmp_path: Path) -> None:
@@ -148,6 +212,7 @@ def test_explicit_environment_does_not_leak_process_path(
     context = create_local_toolchain_context(
         installation_defaults=ToolchainContext(),
         environ={},
+        load_user_settings=False,
     )
 
     assert context.shader_compiler is None
@@ -156,14 +221,13 @@ def test_explicit_environment_does_not_leak_process_path(
 
 def test_supplied_environment_path_drives_tool_discovery(tmp_path: Path) -> None:
     tools = tmp_path / "environment-tools"
-    shaderc = _write_tool(
-        tools / ("termin_shaderc.exe" if os.name == "nt" else "termin_shaderc")
-    )
+    shaderc = _write_tool(tools / ("termin_shaderc.exe" if os.name == "nt" else "termin_shaderc"))
     gradle = _write_tool(tools / ("gradle.exe" if os.name == "nt" else "gradle"))
 
     context = create_local_toolchain_context(
         installation_defaults=ToolchainContext(),
         environ={"PATH": str(tools)},
+        load_user_settings=False,
     )
 
     assert context.shader_compiler == shaderc.resolve()
@@ -183,6 +247,7 @@ def test_system_android_environment_does_not_override_termin_android_sdk(
             "ANDROID_SDK_ROOT": str(system_android_sdk),
         },
         path_search=lambda _name: None,
+        load_user_settings=False,
     )
 
     assert context.android_sdk_root == (termin_sdk / "android").resolve()
@@ -203,6 +268,7 @@ def test_desktop_report_is_stable_and_does_not_mutate_profile(tmp_path: Path) ->
         invocation_overrides=local,
         environ={},
         host_os="linux",
+        load_user_settings=False,
     )
 
     assert report.buildable
@@ -226,6 +292,7 @@ def test_desktop_report_distinguishes_invalid_sdk_and_missing_tools(tmp_path: Pa
         invocation_overrides=ToolchainContext(sdk_root=invalid_sdk),
         environ={},
         host_os="linux",
+        load_user_settings=False,
     )
     codes = {diagnostic.code for diagnostic in report.diagnostics}
 
@@ -254,6 +321,7 @@ def test_android_report_has_stable_build_tool_and_abi_codes(tmp_path: Path) -> N
         installation_defaults=ToolchainContext(),
         invocation_overrides=local,
         environ={},
+        load_user_settings=False,
     )
     codes = {diagnostic.code for diagnostic in report.diagnostics}
 
@@ -276,21 +344,25 @@ def test_cli_json_is_the_same_canonical_report_as_editor_api(
     local = _write_sdk(tmp_path / "sdk", desktop_os=desktop_os)
     monkeypatch.setenv("TERMIN_SDK", str(local.sdk_root))
     monkeypatch.setenv("TERMIN_SHADERC", str(local.shader_compiler))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
 
     expected = inspect_profile_capabilities(profile).to_dict()
-    assert main(
-        [
-            "capabilities",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-            "--json",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "capabilities",
+                "--project-root",
+                str(project),
+                "--profiles-path",
+                str(profiles_path),
+                "--profile",
+                "dev",
+                "--json",
+            ]
+        )
+        == 0
+    )
 
     assert json.loads(capsys.readouterr().out) == expected
 
