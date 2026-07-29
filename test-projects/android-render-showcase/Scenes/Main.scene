@@ -1,0 +1,325 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "android-render-showcase-main-scene",
+    "entities": [
+      {
+        "uuid": "android-showcase-ground",
+        "name": "Ground",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "android-showcase-ground-mesh",
+                "name": "GroundPlane",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "android-showcase-ground-material",
+                "name": "Ground",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-center-cube",
+        "name": "Center Cube",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, 0.4, 0.0],
+          "rotation": [0.0, 0.0, 0.19509, 0.980785]
+        },
+        "scale": [1.8, 1.8, 1.8],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "android-showcase-cube-mesh",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "android-showcase-center-cube-material",
+                "name": "CenterCube",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-left-cube",
+        "name": "Left Pedestal",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-2.5, 0.8, 0.0],
+          "rotation": [0.0, 0.0, -0.130526, 0.991445]
+        },
+        "scale": [1.1, 1.1, 1.1],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "android-showcase-cube-mesh",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "android-showcase-left-cube-material",
+                "name": "LeftCube",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-right-pyramid",
+        "name": "Right Pyramid",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [2.5, 1.0, 0.0],
+          "rotation": [0.0, 0.0, 0.258819, 0.965926]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "android-showcase-pyramid-mesh",
+                "name": "Pyramid",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              }
+            }
+          },
+          {
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "android-showcase-pyramid-material",
+                "name": "Pyramid",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-key-light",
+        "name": "Directional Key Light",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [3.0, -4.0, 6.0],
+          "rotation": [-0.1098, -0.4342, 0.854, 0.2647]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "LightComponent",
+            "data": {
+              "light_type": "directional",
+              "color": [1.0, 0.88, 0.72],
+              "intensity": 1.35,
+              "shadows_enabled": true,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.02,
+              "shadows_map_resolution": 1024,
+              "cascade_count": 3,
+              "max_distance": 40.0,
+              "split_lambda": 0.7,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-fill-light",
+        "name": "Blue Fill Light",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [-3.0, -1.5, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "LightComponent",
+            "data": {
+              "light_type": "point",
+              "color": [0.25, 0.45, 1.0],
+              "intensity": 2.4,
+              "shadows_enabled": false
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-camera",
+        "name": "Main Camera",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [0.0, -9.0, 4.5],
+          "rotation": [-0.19509, 0.0, 0.0, 0.980785]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "type": "CameraComponent",
+            "data": {
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "fov_y_degrees": 52.0
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [0.0, 0.0, 1.0, 1.0],
+            "depth": 0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "android-showcase-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [0.015, 0.02, 0.04, 1.0],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [0.015, 0.02, 0.04, 1.0],
+        "lighting": {
+          "ambient_color": [0.32, 0.4, 0.62],
+          "ambient_intensity": 0.26,
+          "shadow_settings": {
+            "method": 1,
+            "softness": 1.5,
+            "bias": 0.001
+          }
+        },
+        "skybox": {
+          "type": 0,
+          "color": [0.015, 0.02, 0.04]
+        }
+      }
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [-7.0, -9.0, 6.0],
+      "rotation": [-0.12, -0.25, 0.93, 0.24],
+      "radius": 10.0
+    }
+  }
+}

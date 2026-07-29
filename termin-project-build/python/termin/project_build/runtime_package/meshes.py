@@ -47,6 +47,57 @@ def write_meshes(
         )
 
 
+def prepare_project_mesh_resources(
+    project_root: Path,
+    meshes: dict[str, str],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    """Register project mesh sources needed by scene shader-usage collection."""
+    from termin.default_assets.resource_manager import DefaultResourceManager
+
+    resource_manager = DefaultResourceManager.instance()
+    for uuid_value, name in sorted(meshes.items()):
+        if resource_manager.get_mesh_asset_by_uuid(uuid_value) is not None:
+            continue
+
+        source_path = find_mesh_source(
+            project_root,
+            uuid_value,
+            name,
+            diagnostics,
+        )
+        if source_path is None:
+            continue
+
+        try:
+            asset = resource_manager.get_or_create_mesh_asset(
+                name=name,
+                source_path=str(source_path),
+                uuid=uuid_value,
+            )
+            meta_path = Path(str(source_path) + ".meta")
+            if meta_path.is_file():
+                with open(meta_path, "r", encoding="utf-8") as source:
+                    spec = json.load(source)
+                if not isinstance(spec, dict):
+                    raise ValueError(f"mesh meta JSON root must be an object: {meta_path}")
+                asset.parse_spec(spec)
+            mesh = asset.data
+            if mesh is None or not mesh.is_valid:
+                raise ValueError(f"mesh asset did not produce a valid TcMesh: {source_path}")
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=project_relative_path(project_root, source_path),
+                    message=(
+                        "Runtime exporter failed to prepare mesh for shader usage "
+                        f"collection: {exc}"
+                    ),
+                )
+            )
+
+
 def export_mesh_spec(
     project_root: Path,
     uuid_value: str,

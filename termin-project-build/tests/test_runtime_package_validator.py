@@ -140,6 +140,7 @@ def _write_builtin_shader_contract(package_dir: Path) -> None:
                     "uuid": "termin-engine-test",
                     "name": "TestFS",
                     "language": "slang",
+                    "runtime_sources": ["termin-engine-test.frag.slang"],
                     "stages": {
                         "fragment": {
                             "path": "termin-engine-test.frag.slang",
@@ -153,6 +154,11 @@ def _write_builtin_shader_contract(package_dir: Path) -> None:
     artifact = package_dir / "shaders" / "vulkan" / "termin-engine-test.frag.spv"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_bytes(b"SPIR-V")
+    (
+        package_dir
+        / "builtin_shaders"
+        / "termin-engine-test.frag.slang"
+    ).write_text("// runtime source\n", encoding="utf-8")
 
 
 def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
@@ -253,6 +259,27 @@ def test_validate_runtime_package_reports_missing_builtin_shader_catalog(
     assert any(
         diagnostic.level == "error"
         and diagnostic.path == "builtin_shaders/engine-shader-catalog.json"
+        and "does not exist" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_reports_missing_builtin_shader_runtime_source(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_builtin_shader_contract(package_dir)
+    (
+        package_dir
+        / "builtin_shaders"
+        / "termin-engine-test.frag.slang"
+    ).unlink()
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and diagnostic.path == "builtin_shaders/termin-engine-test.frag.slang"
         and "does not exist" in diagnostic.message
         for diagnostic in diagnostics
     )

@@ -521,26 +521,33 @@ def _write_runtime_required_builtin_sources(
     shader_uuid: str,
     catalog_entry: dict[str, Any],
 ) -> None:
+    runtime_sources = catalog_entry.get("runtime_sources", [])
+    if not isinstance(runtime_sources, list) or not all(
+        isinstance(source_path, str) and source_path != ""
+        for source_path in runtime_sources
+    ):
+        raise ValueError(
+            f"Built-in shader '{shader_uuid}' has invalid runtime source paths"
+        )
+    source_paths = set(runtime_sources)
+
     language = catalog_entry.get("language")
     if language == "shader":
         program = catalog_entry.get("program")
         if not isinstance(program, dict) or not isinstance(program.get("path"), str):
             raise ValueError(f"Built-in shader program '{shader_uuid}' has no source path")
-        source_path = program["path"]
-        target_path = builtin_root / source_path
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(builtin_shader_source(source_path), encoding="utf-8")
-        return
+        source_paths.add(program["path"])
+    elif language == "glsl":
+        stages = catalog_entry.get("stages")
+        if not isinstance(stages, dict):
+            raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has no stage map")
+        for stage in stages.values():
+            source_path = stage if isinstance(stage, str) else stage.get("path")
+            if not isinstance(source_path, str):
+                raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has invalid stage source")
+            source_paths.add(source_path)
 
-    if language != "glsl":
-        return
-    stages = catalog_entry.get("stages")
-    if not isinstance(stages, dict):
-        raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has no stage map")
-    for stage in stages.values():
-        source_path = stage if isinstance(stage, str) else stage.get("path")
-        if not isinstance(source_path, str):
-            raise ValueError(f"Built-in GLSL shader '{shader_uuid}' has invalid stage source")
+    for source_path in source_paths:
         target_path = builtin_root / source_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(builtin_shader_source(source_path), encoding="utf-8")

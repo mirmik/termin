@@ -10,8 +10,109 @@ from termin.project_build.runtime_package.models import (
     ShaderSpec,
 )
 from termin.project_build.runtime_package.package_files import write_json
+from termin.project_build.runtime_package.package_files import project_relative_path
 from termin.project_build.runtime_package.shaders import shader_program_to_spec
 from termin.project_build.runtime_package.textures import collect_material_texture_refs
+
+
+def prepare_project_material_resources(
+    project_root: Path,
+    materials: dict[str, str],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    """Load referenced project materials after registering their shader assets."""
+    import json
+
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.default_assets.render.shader_asset import ShaderAsset
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.stdlib import stdlib_root
+
+    resource_manager = DefaultResourceManager.instance()
+    material_paths: dict[str, Path] = {}
+    for path in project_root.rglob("*.material"):
+        rel = path.relative_to(project_root)
+        if any(part in {".git", "__pycache__", "build", "dist"} for part in rel.parts):
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(document, dict) and document.get("uuid") in materials:
+            material_paths[document["uuid"]] = path
+
+    for uuid_value, name in sorted(materials.items()):
+        material_path = material_paths.get(uuid_value)
+        if material_path is None:
+            continue
+        try:
+            document = json.loads(material_path.read_text(encoding="utf-8"))
+            shader_name = document.get("shader")
+            if not isinstance(shader_name, str) or not shader_name:
+                raise ValueError("material has no canonical shader name")
+
+            if resource_manager.get_shader_asset(shader_name) is None:
+                shader_path = _find_project_or_standard_shader(
+                    project_root,
+                    stdlib_root(),
+                    shader_name,
+                )
+                shader_asset = ShaderAsset.from_file(shader_path, name=shader_name)
+                resource_manager.register_shader_asset(
+                    shader_name,
+                    shader_asset,
+                    source_path=str(shader_path),
+                    uuid=shader_asset.uuid,
+                )
+
+            existing_asset = resource_manager.get_material_asset_by_uuid(uuid_value)
+            existing_material = (
+                existing_asset.cached_data if existing_asset is not None else None
+            )
+            if existing_material is not None and existing_material.phase_count > 0:
+                continue
+            if existing_material is not None:
+                raise ValueError(
+                    "material was preloaded before its shader dependency and has no phases"
+                )
+
+            material_asset = MaterialAsset.from_file(material_path, name=name)
+            resource_manager.register_material_asset(
+                name,
+                material_asset,
+                source_path=str(material_path),
+                uuid=uuid_value,
+            )
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=project_relative_path(project_root, material_path),
+                    message=f"Runtime exporter failed to prepare project material: {exc}",
+                )
+            )
+
+
+def _find_project_or_standard_shader(
+    project_root: Path,
+    standard_root: Path,
+    shader_name: str,
+) -> Path:
+    matches = sorted(
+        path
+        for path in project_root.rglob(f"{shader_name}.shader")
+        if not any(
+            part in {".git", "__pycache__", "build", "dist"}
+            for part in path.relative_to(project_root).parts
+        )
+    )
+    if matches:
+        return matches[0]
+
+    standard_path = standard_root / "shaders" / f"{shader_name}.shader"
+    if standard_path.is_file():
+        return standard_path
+    raise FileNotFoundError(f"shader asset '{shader_name}' was not found")
 
 
 def write_materials(
