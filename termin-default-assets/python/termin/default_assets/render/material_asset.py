@@ -371,36 +371,6 @@ def _declare_canonical_texture_slots(phase, properties: list[dict]) -> None:
         phase.declare_texture(prop["name"], prop["expected_encoding"])
 
 
-def _texture_encoding_name(texture) -> str:
-    from tgfx import TextureEncoding
-
-    return "srgb" if texture.encoding == TextureEncoding.SRGB else "linear"
-
-
-def _validate_canonical_texture_bindings(
-    properties: list[dict],
-    textures: dict,
-    *,
-    context: str,
-) -> None:
-    texture_properties = _canonical_texture_properties(properties)
-    _validate_canonical_texture_defaults(properties)
-    for name, texture in textures.items():
-        prop = texture_properties.get(name)
-        if prop is None:
-            continue
-        actual = _texture_encoding_name(texture)
-        expected = prop["expected_encoding"]
-        if actual != expected:
-            log.error(
-                f"[MaterialAsset] {context}: texture slot '{name}' expects "
-                f"{expected}, got {actual} from '{texture.name}'"
-            )
-            raise ValueError(
-                f"texture slot '{name}' expects {expected}, got {actual}"
-            )
-
-
 def _apply_canonical_texture_defaults(phase, properties: list[dict]) -> None:
     from termin.render.texture_handle import get_normal_texture_handle, get_white_texture_handle
 
@@ -531,12 +501,6 @@ def _parse_material_content(
         tc_tex = _resolve_texture_ref(ref)
         if tc_tex is not None:
             textures[uniform_name] = tc_tex
-
-    _validate_canonical_texture_bindings(
-        program.properties,
-        textures,
-        context=f"loading material '{name or 'material'}'",
-    )
 
     # Create TcMaterial
     mat = TcMaterial.create(name or "material", file_uuid or "")

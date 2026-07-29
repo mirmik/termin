@@ -85,7 +85,7 @@ def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_
     assert texture.uuid == texture_uuid
 
 
-def test_material_texture_assignment_rejects_encoding_mismatch_without_mutation() -> None:
+def test_material_texture_assignment_binds_encoding_mismatch() -> None:
     DefaultResourceManager._reset_for_testing()
     rm = DefaultResourceManager.instance()
     _register_stdlib_shader(rm, "CookTorrancePBR")
@@ -96,7 +96,6 @@ def test_material_texture_assignment_rejects_encoding_mismatch_without_mutation(
         ),
         name="CookTorrancePBR",
     )
-    previous = material.textures["u_albedo_texture"]
     linear = TcTexture.from_data(
         data=np.full((1, 1, 4), 255, dtype=np.uint8),
         width=1,
@@ -106,11 +105,11 @@ def test_material_texture_assignment_rejects_encoding_mismatch_without_mutation(
         encoding=TextureEncoding.LINEAR,
     )
 
-    assert material.set_texture("u_albedo_texture", linear) == 0
-    assert material.textures["u_albedo_texture"].uuid == previous.uuid
+    assert material.set_texture("u_albedo_texture", linear) > 0
+    assert material.textures["u_albedo_texture"].uuid == linear.uuid
 
 
-def test_material_load_rejects_texture_encoding_mismatch() -> None:
+def test_material_load_binds_texture_encoding_mismatch() -> None:
     DefaultResourceManager._reset_for_testing()
     rm = DefaultResourceManager.instance()
     _register_stdlib_shader(rm, "CookTorrancePBR")
@@ -136,17 +135,18 @@ def test_material_load_rejects_texture_encoding_mismatch() -> None:
         uuid=texture_uuid,
     )
 
-    with pytest.raises(ValueError, match="expects srgb, got linear"):
-        _parse_material_content(
-            json.dumps(
-                {
-                    "uuid": "material-mismatch",
-                    "shader": "CookTorrancePBR",
-                    "textures": {"u_albedo_texture": texture_uuid},
-                }
-            ),
-            name="Mismatch",
-        )
+    material, _uuid = _parse_material_content(
+        json.dumps(
+            {
+                "uuid": "material-mismatch",
+                "shader": "CookTorrancePBR",
+                "textures": {"u_albedo_texture": texture_uuid},
+            }
+        ),
+        name="Mismatch",
+    )
+
+    assert material.textures["u_albedo_texture"].uuid == texture_uuid
 
 
 def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:

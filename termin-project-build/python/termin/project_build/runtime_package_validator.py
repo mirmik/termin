@@ -1211,10 +1211,11 @@ def _validate_material_graph(
             if actual_encoding in {"srgb", "linear"} and actual_encoding != expected_encoding:
                 diagnostics.append(
                     RuntimePackageExportDiagnostic(
-                        "error",
+                        "warning",
                         context,
                         f"Runtime material texture slot expects {expected_encoding}, "
-                        f"but texture '{uuid_value}' is {actual_encoding}",
+                        f"but texture '{uuid_value}' is {actual_encoding}; "
+                        "the binding remains renderable",
                     )
                 )
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 import gc
-import pytest
 
 
 def _shader_source(
@@ -292,7 +291,6 @@ def test_shader_update_rejects_incompatible_texture_schema_transactionally(
     previous_phase_count = material.phase_count
     previous_texture_uuid = material.textures["u_albedo"].uuid
     previous_program_uuid = material.shader_program_uuid
-    previous_program_version = material.shader_program_version
 
     linear_asset = ShaderAsset(
         parse_shader_text(
@@ -306,18 +304,18 @@ def test_shader_update_rejects_incompatible_texture_schema_transactionally(
     )
     assert linear_asset.program is not None
 
-    with pytest.raises(ValueError, match="expects linear, got srgb"):
-        update_material_shader(
-            material,
-            linear_asset.program,
-            "HotReloadLinear",
-            "hot-reload-linear",
-        )
+    update_material_shader(
+        material,
+        linear_asset.program,
+        "HotReloadLinear",
+        "hot-reload-linear",
+    )
 
     assert material.phase_count == previous_phase_count
     assert material.textures["u_albedo"].uuid == previous_texture_uuid
-    assert material.shader_program_uuid == previous_program_uuid
-    assert material.shader_program_version == previous_program_version
+    assert material.shader_program_uuid != previous_program_uuid
+    assert material.shader_program_uuid == "hot-reload-linear"
+    assert material.shader_program_version == linear_asset.program.version
 
 
 def test_shader_asset_releases_program_without_invalidating_live_handles(tmp_path: Path) -> None:

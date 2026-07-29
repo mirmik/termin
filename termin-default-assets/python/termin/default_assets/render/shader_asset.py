@@ -64,7 +64,6 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         _apply_canonical_property_defaults,
         _apply_canonical_texture_defaults,
         _canonical_render_state,
-        _validate_canonical_texture_bindings,
         _validate_canonical_texture_defaults,
     )
     from termin_assets import get_resource_manager
@@ -75,11 +74,6 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     old_uniforms = dict(material.uniforms)
     old_textures = dict(material.textures)
     _validate_canonical_texture_defaults(program.properties)
-    _validate_canonical_texture_bindings(
-        program.properties,
-        old_textures,
-        context=f"updating material '{material.name}' shader",
-    )
     material.clear_phases()
     material.shader_name = shader_name or program.name
     material.set_shader_program_dependency(program.uuid, program.version)

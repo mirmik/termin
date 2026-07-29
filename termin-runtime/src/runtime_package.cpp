@@ -766,8 +766,8 @@ bool apply_material_textures(
             return false;
         }
         if (material.set_texture(name.c_str(), texture) == 0) {
-            error = "material '" + material_uuid + "' texture slot '" + name
-                + "' violates its encoding contract";
+            error = "material '" + material_uuid + "' failed to bind texture slot '"
+                + name + "'";
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }

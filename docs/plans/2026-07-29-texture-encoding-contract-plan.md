@@ -220,7 +220,9 @@ storage заодно нормализуется в переносимый RGBA l
 
 Parsed material construction объявляет expected encoding для texture slots.
 Низкоуровневый `tc_material_phase_set_texture` проверяет его, если schema
-присутствует, логирует mismatch и не портит предыдущее состояние.
+присутствует. Mismatch логируется как предупреждение, но texture всё равно
+привязывается без изменения её encoding: это семантическая диагностика, а не
+условие безопасности рендера.
 
 Все штатные material shaders мигрируют одновременно с ужесточением parser:
 
@@ -281,7 +283,8 @@ image/texture/sampler glTF сохраняется: если sampler являет
 3. RGB sampling sRGB texture даёт linear значения; alpha не декодируется.
 4. Linear texture sampling не применяет transfer function.
 5. Одинаковые pixels с разным encoding не разделяют resource identity.
-6. Material property знает ожидаемый encoding и отклоняет mismatch.
+6. Material property знает ожидаемый encoding, предупреждает о mismatch и
+   сохраняет работоспособный binding.
 7. Editor preview, editor render и runtime package одинаково трактуют asset.
 8. glTF не дублирует однозначные textures и детерминированно разделяет только
    реальные sRGB/Linear collisions.
@@ -314,7 +317,7 @@ image/texture/sampler glTF сохраняется: если sampler являет
 
 - хранить expected encoding в texture slots;
 - проверять editor/load/runtime/hot-reload assignment;
-- отклонять mismatch транзакционно и логировать ошибку.
+- принимать mismatch без изменения texture и логировать предупреждение.
 
 ### Этап 5. Inspector
 
@@ -350,7 +353,7 @@ image/texture/sampler glTF сохраняется: если sampler являет
 - одинаковые pixels с разным encoding имеют разные identities/native handles;
 - изменение encoding в inspector сохраняет остальные import settings,
   увеличивает version и пересоздаёт texture;
-- material mismatch отклоняется и сохраняет прежний корректный binding;
+- material mismatch логируется предупреждением и использует переданную texture;
 - `"white"` выбирает вариант по expected encoding, `"normal"` требует Linear;
 - editor и runtime package дают одинаковые texture/property contracts;
 - Vulkan, OpenGL и D3D11 проходят один sampling reference;
@@ -402,7 +405,7 @@ SDK/test скриптом.
 - texture import metadata, `TextureAsset`, `tc_texture`, runtime package и
   native backend format используют единый `TextureEncoding`;
 - shader properties объявляют `encoding(srgb|linear)`, а material binding
-  транзакционно отклоняет несовпадение;
+  предупреждает о несовпадении, не ломая отрисовку;
 - inspector меняет только encoding, сохраняет остальные import settings и
   показывает encoding-aware preview;
 - glTF создаёт один обычный asset для однозначного usage и две стабильные
