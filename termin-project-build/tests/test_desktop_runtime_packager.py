@@ -995,6 +995,11 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         / "builtin_shaders"
         / "termin-engine-skybox.shader"
     ).is_file()
+    assert (
+        result.package_dir
+        / "builtin_shaders"
+        / "termin-engine-shadow.slang"
+    ).is_file()
     assert not (result.package_dir / "shaders" / "layout").exists()
 
 

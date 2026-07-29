@@ -170,6 +170,24 @@ def test_supplied_environment_path_drives_tool_discovery(tmp_path: Path) -> None
     assert context.gradle == gradle.resolve()
 
 
+def test_system_android_environment_does_not_override_termin_android_sdk(
+    tmp_path: Path,
+) -> None:
+    termin_sdk = tmp_path / "termin-sdk"
+    system_android_sdk = tmp_path / "system-android-sdk"
+
+    context = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(sdk_root=termin_sdk),
+        environ={
+            "ANDROID_HOME": str(system_android_sdk),
+            "ANDROID_SDK_ROOT": str(system_android_sdk),
+        },
+        path_search=lambda _name: None,
+    )
+
+    assert context.android_sdk_root == (termin_sdk / "android").resolve()
+
+
 def test_desktop_report_is_stable_and_does_not_mutate_profile(tmp_path: Path) -> None:
     project, profiles_path = _write_project(
         tmp_path,
