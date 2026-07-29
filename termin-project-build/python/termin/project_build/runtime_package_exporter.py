@@ -30,11 +30,15 @@ from termin.project_build.runtime_package.models import (
     RuntimePackageExportResult,
     ShaderSpec as _ShaderSpec,
 )
-from termin.project_build.runtime_package.meshes import write_meshes as _write_meshes
+from termin.project_build.runtime_package.meshes import (
+    prepare_project_mesh_resources as _prepare_project_mesh_resources,
+    write_meshes as _write_meshes,
+)
 from termin.project_build.runtime_package.materials import (
     export_material_spec,
     fallback_material_spec,
     material_textures_to_json as _material_textures_to_json,
+    prepare_project_material_resources as _prepare_project_material_resources,
     shader_to_spec as _shader_to_spec,
     write_materials,
 )
@@ -138,6 +142,12 @@ def export_runtime_package(
     _collect_project_material_refs(project_root_path, refs, diagnostics)
     try:
         _prepare_standard_resources(refs.meshes, refs.materials)
+        _prepare_project_mesh_resources(project_root_path, refs.meshes, diagnostics)
+        _prepare_project_material_resources(
+            project_root_path,
+            refs.materials,
+            diagnostics,
+        )
     except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -285,17 +295,21 @@ def _collect_pipeline_shader_usages(
     shaders: dict[str, _ShaderSpec],
     scene_path: str,
 ) -> None:
-    if not pipelines:
+    builtin_pipeline_names = _builtin_pipeline_names(scene_data)
+    if not pipelines and not builtin_pipeline_names:
         return
 
+    engine = None
     try:
         from termin.bootstrap import bootstrap_player
         from termin.default_assets.resource_manager import DefaultResourceManager
-        from termin.engine import deserialize_scene
+        from termin.engine import EngineCore, deserialize_scene
         from termin.render_framework import collect_shader_usages_for_pipeline
 
         bootstrap_player()
         DefaultResourceManager.instance()
+        if builtin_pipeline_names:
+            engine = EngineCore()
     except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -339,8 +353,62 @@ def _collect_pipeline_shader_usages(
                         message=f"Runtime exporter failed to collect pipeline shader usages: {exc}",
                     )
                 )
+        if engine is not None:
+            for pipeline_name in sorted(builtin_pipeline_names):
+                pipeline = None
+                try:
+                    pipeline = engine.rendering_manager.create_pipeline(pipeline_name)
+                    if pipeline is None:
+                        raise ValueError(
+                            f"built-in pipeline '{pipeline_name}' could not be instantiated"
+                        )
+                    for shader in collect_shader_usages_for_pipeline(
+                        scene.scene_handle(),
+                        pipeline,
+                    ):
+                        shaders[shader.uuid] = _shader_to_spec(shader)
+                except Exception as exc:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            level="error",
+                            path=scene_path,
+                            message=(
+                                f"Runtime exporter failed to collect built-in pipeline "
+                                f"'{pipeline_name}' shader usages: {exc}"
+                            ),
+                        )
+                    )
+                finally:
+                    if pipeline is not None:
+                        pipeline.destroy()
     finally:
         scene.destroy()
+        if engine is not None:
+            engine.shutdown()
+
+
+def _builtin_pipeline_names(scene_data: dict[str, Any]) -> set[str]:
+    scene = scene_data.get("scene", scene_data)
+    if not isinstance(scene, dict):
+        return set()
+    extensions = scene.get("extensions")
+    if not isinstance(extensions, dict):
+        return set()
+    render_mount = extensions.get("render_mount")
+    if not isinstance(render_mount, dict):
+        return set()
+    render_targets = render_mount.get("render_target_configs")
+    if not isinstance(render_targets, list):
+        return set()
+
+    names: set[str] = set()
+    for render_target in render_targets:
+        if not isinstance(render_target, dict):
+            continue
+        pipeline_name = render_target.get("pipeline_name")
+        if pipeline_name == "Default":
+            names.add(pipeline_name)
+    return names
 
 
 def _validate_resource_policy(resource_policy: str) -> None:

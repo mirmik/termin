@@ -1,0 +1,10 @@
+{
+  "uuid": "android-showcase-pyramid-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.5, 0.22, 0.82, 1.0],
+    "u_metallic": 0.2,
+    "u_roughness": 0.46,
+    "u_diffuse_mul": 1.0
+  }
+}
