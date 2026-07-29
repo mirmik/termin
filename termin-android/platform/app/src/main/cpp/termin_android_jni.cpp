@@ -110,8 +110,12 @@ Java_org_termin_android_TerminActivity_nativeSurfaceDestroyed(JNIEnv*, jclass) {
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_org_termin_android_TerminActivity_nativeRenderFrame(JNIEnv*, jclass) {
-    int ok = termin_android_render_frame();
+Java_org_termin_android_TerminActivity_nativeRenderFrame(
+    JNIEnv*,
+    jclass,
+    jlong frame_time_nanos
+) {
+    int ok = termin_android_render_frame(static_cast<int64_t>(frame_time_nanos));
     if (!ok) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "nativeRenderFrame failed");
     }

@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 
 
@@ -7,6 +8,53 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_android_runtime_uses_rendering_manager_topology() -> None:
+    bootstrap = _read_text(REPO_ROOT / "termin-android/src/bootstrap.cpp")
+    activity = _read_text(
+        REPO_ROOT
+        / "termin-android/platform/app/src/main/java/org/termin/android/TerminActivity.java"
+    )
+    scene = json.loads(_read_text(REPO_ROOT / "termin-android/assets/scene.json"))
+
+    required_bootstrap_fragments = (
+        "create_offscreen_display(",
+        "attach_scene_full(",
+        "tick_and_render(",
+        "validate_output(",
+        "compose_and_present(",
+    )
+    forbidden_bootstrap_fragments = (
+        "RenderTargetContext",
+        "find_player_camera",
+        "player_pipeline",
+        "player_color_target",
+        "player_depth_target",
+        "std::vector<termin::Light>",
+        "render_scene_pipeline_offscreen(",
+        "#if 0",
+    )
+
+    assert [
+        fragment
+        for fragment in required_bootstrap_fragments
+        if fragment not in bootstrap
+    ] == []
+    assert [
+        fragment
+        for fragment in forbidden_bootstrap_fragments
+        if fragment in bootstrap
+    ] == []
+    assert "nativeRenderFrame(frameTimeNanos)" in activity
+
+    mount = scene["extensions"]["render_mount"]
+    assert mount["viewport_configs"][0]["display_name"] == "Main"
+    assert mount["viewport_configs"][0]["render_target"]["name"] == "Main Target"
+    target = mount["render_target_configs"][0]
+    assert target["camera_uuid"] == "android-camera-entity"
+    assert target["pipeline_name"] == "Default"
+    assert target["dynamic_resolution"] is True
 
 
 def test_editor_camera_mode_controller_has_no_frontend_dependency() -> None:
