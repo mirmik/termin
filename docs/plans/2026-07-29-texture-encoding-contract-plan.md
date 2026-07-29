@@ -2,9 +2,9 @@
 
 Дата: 2026-07-29.
 
-Статус: реализация начата. Graphics foundation (`#1048`) реализован и
-проверен на Vulkan/OpenGL; D3D11 mapping и sampling fixture ожидают
-Windows-проверки.
+Статус: этапы graphics foundation (`#1048`) и asset/runtime propagation
+(`#1049`) реализованы и проверены под Linux. Обе карточки остаются в `On Test`,
+но не блокируют следующие этапы.
 
 Связанный эпик доски: `#1045 [render] Нормализовать linear HDR и color-space тракт`.
 
@@ -388,7 +388,8 @@ SDK/test скриптом.
 7. `#1053` — sRGB-correct mipmaps и backend parity;
 8. `#1055` — итоговый editor/runtime/cross-backend integration gate.
 
-`#1048` находится в `On Test`: Linux SDK/test suite и Vulkan/OpenGL sampling
-reference пройдены, требуется Windows D3D11 verification. Остальные карточки
-остаются в `Blocked` с типизированными зависимостями, соответствующими
+`#1048` находится в `On Test`, её blocker-связи с последующими этапами сняты.
+`#1049` реализован и переведён в `On Test`; `#1050` и `#1053` разблокированы
+и находятся в `Ready`.
+Остальные карточки сохраняют типизированные зависимости, соответствующие
 последовательности миграции.

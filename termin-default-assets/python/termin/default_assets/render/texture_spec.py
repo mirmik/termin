@@ -10,6 +10,18 @@ from pathlib import Path
 from tcbase import log
 
 
+TEXTURE_ENCODINGS = frozenset({"srgb", "linear"})
+
+
+def validate_texture_encoding(value: object) -> str:
+    """Return a serialized texture encoding or raise a useful import error."""
+    if not isinstance(value, str) or value not in TEXTURE_ENCODINGS:
+        raise ValueError(
+            f"Unsupported texture encoding {value!r}; expected 'srgb' or 'linear'"
+        )
+    return value
+
+
 @dataclass
 class TextureSpec:
     """
@@ -29,8 +41,11 @@ class TextureSpec:
     mipmaps: bool = False
     wrap: str = "clamp"
     # Pixel interpretation. Textures remain straight-alpha in CPU storage.
-    color_space: str = "srgb"
+    encoding: str = "srgb"
     alpha_mode: str = "straight"
+
+    def __post_init__(self) -> None:
+        self.encoding = validate_texture_encoding(self.encoding)
 
     @classmethod
     def load(cls, spec_path: str | Path) -> "TextureSpec":
@@ -42,6 +57,13 @@ class TextureSpec:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("Texture metadata root must be an object")
+            if "color_space" in data:
+                raise ValueError(
+                    "Texture metadata field 'color_space' is obsolete; "
+                    "rename it to 'encoding'"
+                )
             return cls(
                 flip_x=data.get("flip_x", False),
                 flip_y=data.get("flip_y", True),
@@ -49,12 +71,12 @@ class TextureSpec:
                 filter=data.get("filter", "linear"),
                 mipmaps=data.get("mipmaps", False),
                 wrap=data.get("wrap", "clamp"),
-                color_space=data.get("color_space", "srgb"),
+                encoding=data.get("encoding", "srgb"),
                 alpha_mode=data.get("alpha_mode", "straight"),
             )
         except Exception:
-            log.warning(f"[TextureSpec] Failed to load spec from {spec_path}", exc_info=True)
-            return cls()
+            log.error(f"[TextureSpec] Failed to load spec from {spec_path}", exc_info=True)
+            raise
 
     @classmethod
     def for_texture_file(cls, texture_path: str | Path) -> "TextureSpec":
@@ -82,6 +104,7 @@ class TextureSpec:
 
         # Update with our fields
         data = existing_data.copy()
+        data.pop("color_space", None)
         data.update({
             "flip_x": self.flip_x,
             "flip_y": self.flip_y,
@@ -89,7 +112,7 @@ class TextureSpec:
             "filter": self.filter,
             "mipmaps": self.mipmaps,
             "wrap": self.wrap,
-            "color_space": self.color_space,
+            "encoding": self.encoding,
             "alpha_mode": self.alpha_mode,
         })
         with open(path, "w", encoding="utf-8") as f:

@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin_assets import DataAsset
-from tgfx import TcTexture
+from tgfx import TcTexture, TextureEncoding
+
+from termin.default_assets.render.texture_spec import validate_texture_encoding
 
 if TYPE_CHECKING:
     import numpy as np
@@ -31,6 +33,7 @@ class TextureAsset(DataAsset[TcTexture]):
         name: str = "texture",
         source_path: Path | str | None = None,
         uuid: str | None = None,
+        encoding: str | None = None,
     ):
         super().__init__(data=texture_data, name=name, source_path=source_path, uuid=uuid)
         # Spec settings (parsed from spec file)
@@ -40,7 +43,13 @@ class TextureAsset(DataAsset[TcTexture]):
         self._filter: str = "linear"
         self._mipmaps: bool = False
         self._wrap: str = "clamp"
-        self._color_space: str = "srgb"
+        if encoding is None and texture_data is not None and texture_data.is_valid:
+            encoding = (
+                "srgb"
+                if texture_data.encoding == TextureEncoding.SRGB
+                else "linear"
+            )
+        self._encoding = validate_texture_encoding(encoding or "srgb")
         self._alpha_mode: str = "straight"
 
     # --- Convenience property ---
@@ -101,8 +110,8 @@ class TextureAsset(DataAsset[TcTexture]):
         return self._wrap
 
     @property
-    def color_space(self) -> str:
-        return self._color_space
+    def encoding(self) -> str:
+        return self._encoding
 
     @property
     def alpha_mode(self) -> str:
@@ -118,14 +127,16 @@ class TextureAsset(DataAsset[TcTexture]):
         self._filter = spec_data.get("filter", "linear")
         self._mipmaps = spec_data.get("mipmaps", False)
         self._wrap = spec_data.get("wrap", "clamp")
-        self._color_space = spec_data.get("color_space", "srgb")
+        if "color_space" in spec_data:
+            raise ValueError(
+                "Texture metadata field 'color_space' is obsolete; rename it to 'encoding'"
+            )
+        self._encoding = validate_texture_encoding(spec_data.get("encoding", "srgb"))
         self._alpha_mode = spec_data.get("alpha_mode", "straight")
         if self._filter not in {"linear", "nearest"}:
             raise ValueError(f"Unsupported texture filter: {self._filter}")
         if self._wrap not in {"clamp", "repeat"}:
             raise ValueError(f"Unsupported texture wrap: {self._wrap}")
-        if self._color_space not in {"srgb", "linear"}:
-            raise ValueError(f"Unsupported texture color space: {self._color_space}")
         if self._alpha_mode not in {"straight", "opaque"}:
             raise ValueError(f"Unsupported texture alpha mode: {self._alpha_mode}")
 
@@ -142,7 +153,7 @@ class TextureAsset(DataAsset[TcTexture]):
         spec["filter"] = self._filter
         spec["mipmaps"] = self._mipmaps
         spec["wrap"] = self._wrap
-        spec["color_space"] = self._color_space
+        spec["encoding"] = self._encoding
         spec["alpha_mode"] = self._alpha_mode
         return spec
 
@@ -161,6 +172,7 @@ class TextureAsset(DataAsset[TcTexture]):
             name=self._name,
             source_path=source_path,
             uuid=self.uuid,
+            encoding=self._native_encoding(),
         )
         texture.set_mipmap(self._mipmaps)
         texture.set_clamp(self._wrap == "clamp")
@@ -198,7 +210,7 @@ class TextureAsset(DataAsset[TcTexture]):
         asset._filter = spec.filter
         asset._mipmaps = spec.mipmaps
         asset._wrap = spec.wrap
-        asset._color_space = spec.color_space
+        asset._encoding = spec.encoding
         asset._alpha_mode = spec.alpha_mode
         asset.texture_data = asset._texture_from_decoded(decoded, str(path))
         return asset
@@ -207,6 +219,8 @@ class TextureAsset(DataAsset[TcTexture]):
     def from_data(
         cls,
         data: "np.ndarray",
+        *,
+        encoding: str,
         name: str = "texture",
         flip_x: bool = False,
         flip_y: bool = True,
@@ -216,7 +230,6 @@ class TextureAsset(DataAsset[TcTexture]):
         height, width = data.shape[:2]
         channels = data.shape[2] if data.ndim == 3 else 1
 
-        asset = cls(texture_data=None, name=name)
         texture_data = TcTexture.from_data(
             data=data,
             width=width,
@@ -226,10 +239,18 @@ class TextureAsset(DataAsset[TcTexture]):
             flip_y=flip_y,
             transpose=transpose,
             name=name,
-            uuid=asset.uuid,
+            encoding=(
+                TextureEncoding.SRGB
+                if validate_texture_encoding(encoding) == "srgb"
+                else TextureEncoding.LINEAR
+            ),
         )
-        asset.texture_data = texture_data
-        return asset
+        return cls(
+            texture_data=texture_data,
+            name=name,
+            uuid=texture_data.uuid,
+            encoding=encoding,
+        )
 
     @classmethod
     def white_1x1(cls) -> "TextureAsset":
@@ -237,4 +258,10 @@ class TextureAsset(DataAsset[TcTexture]):
         return cls(
             texture_data=TcTexture.white_1x1(),
             name="__white_1x1__",
+            encoding="linear",
         )
+
+    def _native_encoding(self) -> TextureEncoding:
+        if self._encoding == "srgb":
+            return TextureEncoding.SRGB
+        return TextureEncoding.LINEAR

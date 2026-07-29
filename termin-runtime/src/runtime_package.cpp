@@ -453,7 +453,8 @@ void ensure_runtime_builtin_textures() {
         TextureTransformFlags{false, true, false},
         "__white_1x1__",
         "__white_1x1__",
-        ""
+        "",
+        tgfx::TextureEncoding::Linear
     });
     if (white.is_valid()) {
         keepalive.push_back(std::move(white));
@@ -467,7 +468,8 @@ void ensure_runtime_builtin_textures() {
         TextureTransformFlags{false, true, false},
         "__normal_1x1__",
         "__normal_1x1__",
-        ""
+        "",
+        tgfx::TextureEncoding::Linear
     });
     if (normal.is_valid()) {
         keepalive.push_back(std::move(normal));
@@ -1031,6 +1033,23 @@ bool required_bool_field(
     return true;
 }
 
+bool required_string_field(
+    const nos::trent& object,
+    const char* field_name,
+    std::string& value,
+    std::string& error,
+    const std::string& context
+) {
+    const nos::trent* field = dict_get(object, field_name);
+    if (!field || !field->is_string()) {
+        error = context + " field '" + field_name + "' must be a string";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    value = field->as_string();
+    return true;
+}
+
 bool load_texture_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -1074,6 +1093,21 @@ bool load_texture_resource(
         !required_bool_field(*import_settings, "transpose", transform.transpose, error, settings_context)) {
         return false;
     }
+    std::string encoding_name;
+    if (!required_string_field(
+            *import_settings, "encoding", encoding_name, error, settings_context)) {
+        return false;
+    }
+    tgfx::TextureEncoding encoding;
+    if (encoding_name == "srgb") {
+        encoding = tgfx::TextureEncoding::SRGB;
+    } else if (encoding_name == "linear") {
+        encoding = tgfx::TextureEncoding::Linear;
+    } else {
+        error = settings_context + " field 'encoding' must be 'srgb' or 'linear'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
 
     try {
         const std::filesystem::path source_path = package_path(root, source_rel_path);
@@ -1101,6 +1135,7 @@ bool load_texture_resource(
             name,
             source_path.string(),
             uuid,
+            encoding,
         });
         if (!texture.is_valid()) {
             error = "failed to create texture '" + uuid + "' from " + spec_path.string();

@@ -21,7 +21,7 @@ _IMPORT_SETTING_NAMES = (
     "filter",
     "mipmaps",
     "wrap",
-    "color_space",
+    "encoding",
     "alpha_mode",
 )
 
@@ -260,6 +260,18 @@ def read_texture_import_settings(
             )
         )
         return None
+    if "color_space" in metadata:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="error",
+                path=project_relative_path(project_root, metadata_path),
+                message=(
+                    "Runtime exporter texture metadata field 'color_space' is obsolete; "
+                    "rename it to 'encoding'"
+                ),
+            )
+        )
+        return None
 
     defaults: dict[str, object] = {
         "flip_x": False,
@@ -268,13 +280,13 @@ def read_texture_import_settings(
         "filter": "linear",
         "mipmaps": False,
         "wrap": "clamp",
-        "color_space": "srgb",
+        "encoding": "srgb",
         "alpha_mode": "straight",
     }
     allowed_strings = {
         "filter": {"linear", "nearest"},
         "wrap": {"clamp", "repeat"},
-        "color_space": {"srgb", "linear"},
+        "encoding": {"srgb", "linear"},
         "alpha_mode": {"straight", "opaque"},
     }
     settings: dict[str, object] = {}
