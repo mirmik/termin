@@ -11,6 +11,19 @@ from pathlib import Path
 from typing import Any
 
 from tcbase import Settings
+from termin.project_build.user_settings import (
+    KEY_BUILD_ADB as USER_KEY_BUILD_ADB,
+    KEY_BUILD_ANDROID_SCRIPT as USER_KEY_BUILD_ANDROID_SCRIPT,
+    KEY_BUILD_ANDROID_SDK_ROOT as USER_KEY_BUILD_ANDROID_SDK_ROOT,
+    KEY_BUILD_FXC as USER_KEY_BUILD_FXC,
+    KEY_BUILD_GRADLE as USER_KEY_BUILD_GRADLE,
+    KEY_BUILD_QUEST_OPENXR_SCRIPT as USER_KEY_BUILD_QUEST_OPENXR_SCRIPT,
+    KEY_BUILD_SDK_ROOT as USER_KEY_BUILD_SDK_ROOT,
+    KEY_BUILD_SHADER_COMPILER as USER_KEY_BUILD_SHADER_COMPILER,
+    KEY_BUILD_TERMIN_ROOT as USER_KEY_BUILD_TERMIN_ROOT,
+    TERMIN_USER_SETTINGS_APP_ID,
+    TOOLCHAIN_SETTING_KEYS,
+)
 
 
 class EditorSettings:
@@ -22,6 +35,8 @@ class EditorSettings:
     """
 
     _instance: "EditorSettings | None" = None
+    LEGACY_APP_ID = "TerminEditor"
+    KEY_LEGACY_MIGRATION = "Migration/terminEditorSettingsV1"
 
     # Ключи настроек
     KEY_LAST_PROJECT_PATH = "ProjectBrowser/lastProjectPath"
@@ -29,15 +44,15 @@ class EditorSettings:
     KEY_FONT_SIZE = "Editor/fontSize"
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
     KEY_SLANG_COMPILER = "Shader/slangCompiler"
-    KEY_BUILD_SDK_ROOT = "Build/sdkRoot"
-    KEY_BUILD_TERMIN_ROOT = "Build/terminRoot"
-    KEY_BUILD_ANDROID_SDK_ROOT = "Build/androidSdkRoot"
-    KEY_BUILD_SHADER_COMPILER = "Build/shaderCompiler"
-    KEY_BUILD_FXC = "Build/fxc"
-    KEY_BUILD_ANDROID_SCRIPT = "Build/androidScript"
-    KEY_BUILD_QUEST_OPENXR_SCRIPT = "Build/questOpenxrScript"
-    KEY_BUILD_GRADLE = "Build/gradle"
-    KEY_BUILD_ADB = "Build/adb"
+    KEY_BUILD_SDK_ROOT = USER_KEY_BUILD_SDK_ROOT
+    KEY_BUILD_TERMIN_ROOT = USER_KEY_BUILD_TERMIN_ROOT
+    KEY_BUILD_ANDROID_SDK_ROOT = USER_KEY_BUILD_ANDROID_SDK_ROOT
+    KEY_BUILD_SHADER_COMPILER = USER_KEY_BUILD_SHADER_COMPILER
+    KEY_BUILD_FXC = USER_KEY_BUILD_FXC
+    KEY_BUILD_ANDROID_SCRIPT = USER_KEY_BUILD_ANDROID_SCRIPT
+    KEY_BUILD_QUEST_OPENXR_SCRIPT = USER_KEY_BUILD_QUEST_OPENXR_SCRIPT
+    KEY_BUILD_GRADLE = USER_KEY_BUILD_GRADLE
+    KEY_BUILD_ADB = USER_KEY_BUILD_ADB
     KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
     KEY_VSYNC_ENABLED = "Editor/vsyncEnabled"
     KEY_FPS_LIMIT = "Editor/fpsLimit"
@@ -50,8 +65,16 @@ class EditorSettings:
     DEFAULT_FPS_LIMIT: int = 60
     DEFAULT_RENDER_ONLY_ACTIVE_DISPLAY: bool = True
 
-    def __init__(self):
-        self._settings = Settings("TerminEditor")
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        legacy_settings: Settings | None = None,
+        *,
+        migrate_legacy: bool = True,
+    ):
+        self._settings = settings or Settings(TERMIN_USER_SETTINGS_APP_ID)
+        if migrate_legacy:
+            self._migrate_legacy_settings(legacy_settings or Settings(self.LEGACY_APP_ID))
 
     @classmethod
     def instance(cls) -> "EditorSettings":
@@ -71,6 +94,30 @@ class EditorSettings:
     def sync(self) -> None:
         """Принудительно сохранить настройки на диск."""
         self._settings.save()
+
+    @property
+    def path(self) -> Path:
+        return Path(self._settings.path)
+
+    def _migrate_legacy_settings(self, legacy: Settings) -> None:
+        if bool(self.get(self.KEY_LEGACY_MIGRATION, False)):
+            return
+        keys = (
+            self.KEY_LAST_PROJECT_PATH,
+            self.KEY_TEXT_EDITOR,
+            self.KEY_FONT_SIZE,
+            self.KEY_FONT_SIZE_SMALL,
+            self.KEY_SLANG_COMPILER,
+            self.KEY_MCP_SERVER_ENABLED,
+            self.KEY_VSYNC_ENABLED,
+            self.KEY_FPS_LIMIT,
+            self.KEY_RENDER_ONLY_ACTIVE_DISPLAY,
+            *TOOLCHAIN_SETTING_KEYS,
+        )
+        for key in keys:
+            if not self._settings.contains(key) and legacy.contains(key):
+                self.set(key, legacy.get(key))
+        self.set(self.KEY_LEGACY_MIGRATION, True)
 
     # --- Удобные методы для частых настроек ---
 

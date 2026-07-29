@@ -53,19 +53,21 @@ class ToolchainCapabilityReport:
 def inspect_profile_capabilities(
     profile: BuildProfile,
     *,
-    editor_settings: ToolchainContext | None = None,
+    user_settings: ToolchainContext | None = None,
     invocation_overrides: ToolchainContext | None = None,
     installation_defaults: ToolchainContext | None = None,
     environ: Mapping[str, str] | None = None,
     host_os: str | None = None,
+    load_user_settings: bool = True,
 ) -> ToolchainCapabilityReport:
     """Resolve local providers and inspect a profile without mutating project data."""
 
     context = create_local_toolchain_context(
-        editor_settings=editor_settings,
+        user_settings=user_settings,
         invocation_overrides=invocation_overrides,
         installation_defaults=installation_defaults,
         environ=environ,
+        load_user_settings=load_user_settings,
     )
     request = compile_profile_build_request(profile, context)
     return inspect_request_capabilities(request, host_os=host_os)

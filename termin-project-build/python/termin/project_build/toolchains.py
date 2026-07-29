@@ -113,11 +113,12 @@ def resolve_toolchain_context(
 
 def create_local_toolchain_context(
     *,
-    editor_settings: ToolchainContext | None = None,
+    user_settings: ToolchainContext | None = None,
     invocation_overrides: ToolchainContext | None = None,
     installation_defaults: ToolchainContext | None = None,
     environ: Mapping[str, str] | None = None,
     path_search: Callable[[str], str | None] | None = None,
+    load_user_settings: bool = True,
 ) -> ToolchainContext:
     """Build the canonical local context with documented provider precedence."""
 
@@ -132,8 +133,13 @@ def create_local_toolchain_context(
         installation_provider,
         EnvironmentToolchainContextProvider(effective_environ),
     ]
-    if editor_settings is not None:
-        providers.append(StaticToolchainContextProvider(editor_settings))
+    effective_user_settings = user_settings
+    if effective_user_settings is None and load_user_settings:
+        from termin.project_build.user_settings import UserToolchainSettings
+
+        effective_user_settings = UserToolchainSettings().load()
+    if effective_user_settings is not None:
+        providers.append(StaticToolchainContextProvider(effective_user_settings))
     if invocation_overrides is not None:
         providers.append(StaticToolchainContextProvider(invocation_overrides))
     executable_search = (

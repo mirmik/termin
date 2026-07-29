@@ -111,14 +111,14 @@ def test_compile_desktop_request_is_pure_and_uses_profile_defaults(tmp_path: Pat
     assert request.runtime_backends == ("vulkan", "opengl")
 
 
-def test_resolve_profile_request_passes_editor_and_invocation_layers(
+def test_resolve_profile_request_passes_user_and_invocation_layers(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     project, profiles_path = _write_project(tmp_path)
     _write_profiles(profiles_path, {"dev": _desktop_profile()})
     profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
-    editor_settings = ToolchainContext(gradle=tmp_path / "editor-gradle")
+    user_settings = ToolchainContext(gradle=tmp_path / "user-gradle")
     invocation = ToolchainContext(adb=tmp_path / "invocation-adb")
     calls = []
 
@@ -135,14 +135,14 @@ def test_resolve_profile_request_passes_editor_and_invocation_layers(
 
     request = profile_build.resolve_profile_build_request(
         profile,
-        editor_settings=editor_settings,
+        user_settings=user_settings,
         toolchain=invocation,
     )
 
     assert request.name == "dev"
     assert calls == [
         {
-            "editor_settings": editor_settings,
+            "user_settings": user_settings,
             "invocation_overrides": invocation,
         }
     ]

@@ -1,9 +1,12 @@
 from dataclasses import replace
+import os
 from pathlib import Path
 
 import pytest
+from tcbase import Settings
 
 from termin.project_build import ToolchainContext
+from termin.editor_core.settings import EditorSettings
 from termin.editor_core.settings_model import EditorSettingsController, EditorSettingsSnapshot
 
 
@@ -132,6 +135,47 @@ class _Settings:
 
     def sync(self):
         self.sync_count += 1
+
+
+def test_editor_settings_use_common_config_and_migrate_legacy_values_once(
+    tmp_path,
+) -> None:
+    common_path = tmp_path / "termin/settings.json"
+    legacy_path = tmp_path / "TerminEditor/settings.json"
+    common = Settings(str(common_path), True)
+    legacy = Settings(str(legacy_path), True)
+    common.set(EditorSettings.KEY_FONT_SIZE, 20)
+    legacy.set(EditorSettings.KEY_FONT_SIZE, 16)
+    legacy.set(EditorSettings.KEY_TEXT_EDITOR, "/legacy/editor")
+    legacy.set(EditorSettings.KEY_BUILD_GRADLE, "/legacy/gradle")
+
+    settings = EditorSettings(common, legacy)
+
+    assert settings.path == common_path
+    assert settings.get_font_size() == 20
+    assert settings.get_text_editor() == "/legacy/editor"
+    assert settings.get_build_gradle() == "/legacy/gradle"
+    assert common.get(EditorSettings.KEY_LEGACY_MIGRATION, False) is True
+
+    legacy.set(EditorSettings.KEY_TEXT_EDITOR, "/changed/legacy/editor")
+    reloaded = EditorSettings(
+        Settings(str(common_path), True),
+        Settings(str(legacy_path), True),
+    )
+
+    assert reloaded.get_text_editor() == "/legacy/editor"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux XDG config path contract")
+def test_editor_settings_default_to_lowercase_termin_config(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    settings = EditorSettings(migrate_legacy=False)
+
+    assert settings.path == tmp_path / "termin/settings.json"
 
 
 def test_editor_settings_controller_validates_normalizes_and_persists():

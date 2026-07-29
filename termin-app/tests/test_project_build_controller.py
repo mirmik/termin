@@ -238,6 +238,6 @@ def test_editor_toolchain_settings_reach_capabilities_and_build(monkeypatch, tmp
     assert controller.capability_diagnostics(BuildProfileAction.BUILD, profile) == ()
     controller.execute(BuildProfileAction.BUILD, profile)
 
-    assert inspected == [(profile, {"editor_settings": configured})]
+    assert inspected == [(profile, {"user_settings": configured})]
     assert built[0][0] == profile
-    assert built[0][1]["editor_settings"] == configured
+    assert built[0][1]["user_settings"] == configured

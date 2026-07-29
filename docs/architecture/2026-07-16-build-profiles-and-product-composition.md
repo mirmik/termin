@@ -68,8 +68,8 @@ profile when inspected on a Linux machine that cannot build it.
 
 Local SDK roots, FXC/Slang executables, Android SDK/NDK, Gradle, ADB, environment
 overrides and future remote executors belong to a separate local context. They
-may come from the SDK installation, environment variables or editor-local
-settings, but not from the portable project profile.
+may come from the SDK installation, environment variables or shared Termin
+user settings, but not from the portable project profile.
 
 Toolchain discovery reports capabilities. It never mutates a profile or
 silently substitutes a different target/backend.
@@ -79,7 +79,8 @@ order:
 
 1. defaults inferred from the running SDK/source installation;
 2. environment overrides;
-3. editor-local settings;
+3. shared user settings from `~/.config/termin/settings.json` on Linux or
+   `%APPDATA%/termin/settings.json` on Windows;
 4. explicit invocation overrides.
 
 After that merge, unset tools are derived from the final SDK, Termin and

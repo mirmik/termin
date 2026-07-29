@@ -42,6 +42,10 @@ from termin.project_build.toolchains import (
     create_local_toolchain_context,
     resolve_toolchain_context,
 )
+from termin.project_build.user_settings import (
+    TERMIN_USER_SETTINGS_APP_ID,
+    UserToolchainSettings,
+)
 
 
 _LAZY_EXPORTS = {
@@ -153,6 +157,8 @@ __all__ = [
     "ToolchainContext",
     "ToolchainCapabilityReport",
     "ToolchainContextProvider",
+    "TERMIN_USER_SETTINGS_APP_ID",
+    "UserToolchainSettings",
     "create_local_toolchain_context",
     "inspect_profile_capabilities",
     "inspect_request_capabilities",
