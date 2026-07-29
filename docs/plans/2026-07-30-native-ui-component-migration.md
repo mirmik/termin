@@ -92,20 +92,17 @@ UIComponent (scene, CPU ownership)
             |
             | borrowed document capability
             v
-SceneUiCompositor (termin-render-passes, GPU ownership)
-    owns font atlas / draw-list renderer / device caches
-    borrows RenderContext2 and framegraph output
+native UIWidgetPass (termin-render-passes, render-domain ownership)
+    selects framegraph target and collects UIComponent documents
+    owns NativeDocumentPainter and its GPU resources
             |
-            | uses toolkit renderer without scene/framegraph dependency
             v
 NativeDocumentPainter (termin-gui-native)
-            |
-            v
-native UIWidgetPass
+    lays out and paints borrowed documents into an active RenderContext2 pass
 ```
 
 `UIComponent` не владеет `GraphicsHost`, render device, framegraph texture или
-application loop. GPU resources принадлежат compositor/render domain и
+application loop. GPU resources принадлежат `UIWidgetPass`/render domain и
 освобождаются до shutdown устройства.
 
 UI asset не хранит уже созданный widget tree. Один asset может использоваться
@@ -176,13 +173,13 @@ paint_documents(
   системную ошибку pass;
 - хранит GPU caches в render domain и сбрасывает их при смене устройства.
 
-`SceneUiCompositor` в `termin-render-passes` адаптирует эту операцию к
-framegraph: выбирает attachment/load semantics, при необходимости переносит
-distinct input в output и не делает лишний `blit` для inplace alias. Таким
-образом `termin-gui-native` не получает зависимость от scene или framegraph.
+`UIWidgetPass` сам адаптирует эту операцию к framegraph: выбирает
+attachment/load semantics, при необходимости переносит distinct input в output
+и не делает лишний `blit` для inplace alias. `termin-gui-native` при этом не
+получает зависимость от scene или framegraph.
 
 `DocumentRenderer` для standalone/windowed UI должен использовать ту же
-низкоуровневую compose primitive, чтобы scene path не стал второй
+низкоуровневую paint primitive, чтобы scene path не стал второй
 реализацией renderer.
 
 ### Input
@@ -242,10 +239,11 @@ Python loader удаляется после перевода editor camera scrip
 Hot reload сначала строит новый document целиком и только затем атомарно
 заменяет старый instance. Ошибка сохраняет прежний работающий document.
 
-### 3. Встраиваемый native compositor
+### 3. Встраиваемый native document painter
 
-Выделить общую compose primitive, которая рисует native document в borrowed
-`RenderContext2`/framegraph target.
+Выделить общую paint primitive, которая рисует native document в уже открытый
+caller-owned `RenderContext2` pass. `UIWidgetPass` владеет painter и
+самостоятельно работает с framegraph target.
 
 Проверить:
 
@@ -282,7 +280,7 @@ document через официальный multilingual native contract.
 - собирать scene UI capabilities;
 - применять enabled/layer/internal-entity filtering;
 - стабильно сортировать submissions;
-- вызывать compositor;
+- вызывать native document painter;
 - регистрировать один и тот же pass type на desktop/Android/OpenXR.
 
 После этого удалить Python `UIWidgetPass` и его bootstrap registration.
@@ -329,7 +327,7 @@ Editor должен показывать parse/type/materialization diagnostics 
 Runtime package validation должна падать до запуска при Python-only widget
 type, отсутствующем native factory или неэкспортированном UI asset.
 
-OpenXR использует тот же component/pass/compositor; platform-specific
+OpenXR использует тот же component/pass/painter; platform-specific
 устройства дают только normalized pointer/ray events.
 
 ### 9. Cutover и удаление legacy path
@@ -353,7 +351,7 @@ native bindings. Никакой runtime fallback на legacy loader/pass не о
 ```text
 native UiScript + asset recipe ──> native UIComponent ──┐
                                                        ├─> native UIWidgetPass
-embedded compositor ────────────────────────────────────┘
+native document painter ────────────────────────────────┘
 
 native UIComponent ──> viewport input bridge
 
@@ -376,7 +374,7 @@ all gates ──> legacy deletion
 - component registration/serialization/lifetime;
 - scene UI capability iteration and stable ordering;
 - input coordinate conversion, capture cancellation and handled propagation;
-- compositor draw-list and target-load semantics.
+- document painter draw-list и `UIWidgetPass` target-load semantics.
 
 ### Integration
 
