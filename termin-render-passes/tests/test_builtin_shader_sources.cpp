@@ -744,8 +744,10 @@ TEST_CASE("built-in skybox shader is explicit Slang material shader") {
     CHECK(fragment.find("struct MaterialParams") != std::string::npos);
     CHECK(fragment.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
 
-    CHECK(vertex.find("material.u_view") != std::string::npos);
-    CHECK(vertex.find("material.u_projection") != std::string::npos);
+    CHECK(vertex.find("material.u_inv_view_projection") != std::string::npos);
+    CHECK(vertex.find("near_world") != std::string::npos);
+    CHECK(vertex.find("far_world") != std::string::npos);
+    CHECK(vertex.find("clip.xyww") == std::string::npos);
     CHECK(fragment.find("material.u_skybox_type") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_color") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_top_color") != std::string::npos);

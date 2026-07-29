@@ -22,7 +22,6 @@ extern "C" {
 #include <tcbase/tc_log.hpp>
 
 #include <cstring>
-#include <span>
 #include <vector>
 
 namespace termin {
@@ -42,30 +41,6 @@ constexpr const char* SKYBOX_ENGINE_SHADER_UUID = "termin-engine-skybox";
 //
 // A single fragment stage branches on u_skybox_type to cover both solid
 // and gradient variants, so the program compiles to one pipeline.
-
-// ============================================================================
-// Cube geometry (position-only) — identical to tc_scene_skybox's mesh.
-// ============================================================================
-
-static const float CUBE_VERTICES[8 * 3] = {
-    -1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-    -1.0f,  1.0f, -1.0f,
-    -1.0f, -1.0f,  1.0f,
-     1.0f, -1.0f,  1.0f,
-     1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
-};
-
-static const uint32_t CUBE_INDICES[36] = {
-    0, 1, 2,  0, 2, 3,   // back
-    4, 6, 5,  4, 7, 6,   // front
-    0, 4, 5,  0, 5, 1,   // bottom
-    3, 2, 6,  3, 6, 7,   // top
-    1, 5, 6,  1, 6, 2,   // right
-    0, 3, 7,  0, 7, 4,   // left
-};
 
 // ============================================================================
 // Construction
@@ -105,7 +80,7 @@ std::vector<ResourceSpec> SkyBoxPass::get_resource_specs() const {
 // ============================================================================
 
 void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
-    if (!tc_shader_handle_is_invalid(skybox_shader_handle_) && cube_vbo_) return;
+    if (!tc_shader_handle_is_invalid(skybox_shader_handle_)) return;
     if (!ctx.ctx2) return;
 
     device2_ = &ctx.ctx2->device();
@@ -167,26 +142,6 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
             skybox_layout_.block_size);
     }
 
-    tgfx::BufferDesc vbo_desc;
-    vbo_desc.size = sizeof(CUBE_VERTICES);
-    vbo_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
-    cube_vbo_ = device2_->create_buffer(vbo_desc);
-    device2_->upload_buffer(
-        cube_vbo_,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(CUBE_VERTICES),
-            sizeof(CUBE_VERTICES)));
-
-    tgfx::BufferDesc ibo_desc;
-    ibo_desc.size = sizeof(CUBE_INDICES);
-    ibo_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
-    cube_ibo_ = device2_->create_buffer(ibo_desc);
-    device2_->upload_buffer(
-        cube_ibo_,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(CUBE_INDICES),
-            sizeof(CUBE_INDICES)));
-
 }
 
 // ============================================================================
@@ -238,13 +193,17 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
     Mat44 view64 = ctx.camera->get_view_matrix();
     Mat44 proj64 = ctx.camera->get_projection_matrix();
+    Mat44 inv_view_projection64 = (proj64 * view64).inverse();
 
-    std::vector<double> view_data(view64.data, view64.data + 16);
-    std::vector<double> proj_data(proj64.data, proj64.data + 16);
+    std::vector<double> inv_view_projection_data(
+        inv_view_projection64.data,
+        inv_view_projection64.data + 16);
 
     std::vector<MaterialProperty> values;
-    values.emplace_back("u_view",       "Mat4", std::move(view_data));
-    values.emplace_back("u_projection", "Mat4", std::move(proj_data));
+    values.emplace_back(
+        "u_inv_view_projection",
+        "Mat4",
+        std::move(inv_view_projection_data));
     values.emplace_back("u_skybox_type", "Int", variant_int);
     values.emplace_back(
         "u_skybox_color", "Color",
@@ -281,12 +240,6 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->bind_shader(sky_vs, sky_fs);
     ctx.ctx2->use_shader_resource_layout(raw);
 
-    tgfx::VertexLayoutDesc cube_layout;
-    cube_layout.stride = 3 * sizeof(float);
-    cube_layout.attribute_count = 1;
-    cube_layout.attributes[0] = {0, tgfx::VertexFormat::Float3, 0, tgfx::intern_vertex_semantic("position")};
-    ctx.ctx2->set_vertex_layout(cube_layout);
-
     std::vector<uint8_t> material_data(skybox_layout_.block_size, 0);
     std140_pack(skybox_layout_, values, material_data.data());
     ctx.ctx2->bind_uniform_data(
@@ -294,15 +247,13 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
         material_data.data(),
         static_cast<uint32_t>(material_data.size()));
 
-    ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
+    ctx.ctx2->draw_fullscreen_quad_with_bound_shader();
     ctx.ctx2->end_pass();
 }
 
 void SkyBoxPass::destroy() {
     if (device2_) {
         // skybox_shader_handle_ is static engine shader — not released.
-        if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
-        if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
         device2_ = nullptr;
     }
     skybox_layout_ = MaterialUboLayout{};
