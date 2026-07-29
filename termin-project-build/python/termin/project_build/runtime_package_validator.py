@@ -358,12 +358,56 @@ def _validate_shader_program_resource(
                     f"Runtime shader program field '{field_name}' must be a non-empty string",
                 )
             )
-    if not isinstance(spec.get("properties"), list):
+    properties = spec.get("properties")
+    if not isinstance(properties, list):
         diagnostics.append(
             RuntimePackageExportDiagnostic(
                 "error", resource_path, "Runtime shader program properties must be a list"
             )
         )
+    else:
+        for index, prop in enumerate(properties):
+            context = f"{resource_path}:properties[{index}]"
+            if not isinstance(prop, dict):
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error", context, "Shader program property must be an object"
+                    )
+                )
+                continue
+            property_type = prop.get("property_type")
+            if not isinstance(prop.get("name"), str) or prop["name"] == "":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error", context, "Shader program property name must be non-empty"
+                    )
+                )
+            if not isinstance(property_type, str) or property_type == "":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error", context, "Shader program property_type must be non-empty"
+                    )
+                )
+                continue
+            expected_encoding = prop.get("expected_encoding")
+            if property_type in {"Texture", "Texture2D"}:
+                if expected_encoding not in {"srgb", "linear"}:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            context,
+                            "Shader program texture property expected_encoding "
+                            "must be 'srgb' or 'linear'",
+                        )
+                    )
+            elif expected_encoding is not None:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        context,
+                        "Shader program non-texture property must not have expected_encoding",
+                    )
+                )
     phases = spec.get("phases")
     if not isinstance(phases, list) or not phases:
         diagnostics.append(

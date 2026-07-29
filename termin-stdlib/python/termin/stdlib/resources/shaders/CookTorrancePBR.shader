@@ -29,11 +29,11 @@
 @property Float u_diffuse_mul = 1.0 range(0.1, 10.0)
 @property Color u_emission_color = Color(0.0, 0.0, 0.0, 1.0)
 @property Float u_emission_intensity = 0.0 range(0.0, 100.0)
-@property Texture2D u_albedo_texture = "white"
-@property Texture2D u_normal_texture = "normal"
-@property Texture2D u_metallic_roughness_texture = "white"
-@property Texture2D u_occlusion_texture = "white"
-@property Texture2D u_emissive_texture = "white"
+@property Texture2D u_albedo_texture = "white" encoding(srgb)
+@property Texture2D u_normal_texture = "normal" encoding(linear)
+@property Texture2D u_metallic_roughness_texture = "white" encoding(linear)
+@property Texture2D u_occlusion_texture = "white" encoding(linear)
+@property Texture2D u_emissive_texture = "white" encoding(srgb)
 @property Float u_normal_strength = 1.0 range(0.0, 2.0)
 
 @stage vertex

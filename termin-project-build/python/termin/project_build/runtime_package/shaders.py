@@ -197,6 +197,8 @@ def shader_program_to_spec(program: Any) -> dict[str, Any]:
             "property_type": str(prop["property_type"]),
             "label": str(prop.get("label", "")),
         }
+        if prop.get("expected_encoding") is not None:
+            item["expected_encoding"] = str(prop["expected_encoding"])
         default = prop.get("default")
         if default is not None:
             item["default"] = list(default) if isinstance(default, tuple) else default

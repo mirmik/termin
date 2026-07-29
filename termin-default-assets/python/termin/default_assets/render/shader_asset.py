@@ -30,6 +30,7 @@ def _property_descriptor(prop) -> dict:
     return {
         "name": prop.name,
         "property_type": prop.property_type,
+        "expected_encoding": prop.expected_encoding,
         "label": prop.label or "",
         "default": prop.default,
         "range_min": prop.range_min,

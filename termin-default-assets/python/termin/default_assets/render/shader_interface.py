@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-PropertySignature = tuple[str, str]
+PropertySignature = tuple[str, str, str | None]
 GraphInputSignature = tuple[PropertySignature, ...]
 
 
@@ -17,7 +17,11 @@ class ShaderInterfaceChange:
 
 
 def _property_signature(prop: dict) -> PropertySignature:
-    return (str(prop["name"]), str(prop["property_type"]))
+    return (
+        str(prop["name"]),
+        str(prop["property_type"]),
+        prop.get("expected_encoding"),
+    )
 
 
 def shader_material_interface_signature(program: Any | None) -> tuple[Any, ...]:
@@ -32,6 +36,7 @@ def shader_material_interface_signature(program: Any | None) -> tuple[Any, ...]:
                 (
                     prop["name"],
                     prop["property_type"],
+                    prop.get("expected_encoding"),
                     prop.get("default"),
                     prop["range_min"],
                     prop["range_max"],

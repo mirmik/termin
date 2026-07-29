@@ -97,7 +97,11 @@ std::string shader_program_spec() {
         << "  \"features\": 1,\n"
         << "  \"properties\": [\n"
         << "    {\"name\": \"u_color\", \"property_type\": \"Color\", "
-           "\"default\": [1.0, 0.5, 0.25, 1.0]}\n"
+           "\"default\": [1.0, 0.5, 0.25, 1.0]},\n"
+        << "    {\"name\": \"u_albedo_texture\", \"property_type\": \"Texture\", "
+           "\"expected_encoding\": \"srgb\", \"default\": \"white\"},\n"
+        << "    {\"name\": \"u_normal_texture\", \"property_type\": \"Texture\", "
+           "\"expected_encoding\": \"linear\", \"default\": \"normal\"}\n"
         << "  ],\n"
         << "  \"phases\": [\n"
         << "    {\"phase_mark\": \"opaque\", \"priority\": 0, \"shader\": \""
@@ -471,7 +475,14 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK_EQ(std::string(material.shader_program_uuid()), std::string(kProgramUuid));
     CHECK_EQ(material.shader_program_version(), program.version());
     REQUIRE(program.get() != nullptr);
-    CHECK_EQ(program.get()->property_count, 1u);
+    REQUIRE_EQ(program.get()->property_count, 3u);
+    CHECK(program.get()->properties[1].has_expected_encoding != 0);
+    CHECK(
+        program.get()->properties[1].expected_encoding
+        == TC_TEXTURE_ENCODING_SRGB);
+    CHECK(
+        program.get()->properties[2].expected_encoding
+        == TC_TEXTURE_ENCODING_LINEAR);
     CHECK_EQ(program.get()->phase_count, 1u);
     tc_shader* program_phase_shader = tc_shader_get(program.get()->phases[0].shader);
     REQUIRE(program_phase_shader != nullptr);
@@ -662,6 +673,33 @@ TEST_CASE("RuntimePackageLoader rejects incompatible shader program schema") {
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(result.ok);
     CHECK(result.message.find("requires schema_version 1") != std::string::npos);
+}
+
+TEST_CASE("RuntimePackageLoader validates shader texture property encoding") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    write_text(
+        root / "shaders" / "test.shader-program.json",
+        replace_once(
+            shader_program_spec(),
+            ", \"expected_encoding\": \"srgb\"",
+            ""));
+    termin::runtime::RuntimePackageLoadResult missing =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing.ok);
+    CHECK(missing.message.find("requires expected_encoding") != std::string::npos);
+
+    write_text(
+        root / "shaders" / "test.shader-program.json",
+        replace_once(
+            shader_program_spec(),
+            "\"expected_encoding\": \"srgb\"",
+            "\"expected_encoding\": \"display-p3\""));
+    termin::runtime::RuntimePackageLoadResult invalid =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(invalid.ok);
+    CHECK(invalid.message.find("must be 'srgb' or 'linear'") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or invalid") {
