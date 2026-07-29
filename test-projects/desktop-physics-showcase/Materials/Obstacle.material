@@ -1,0 +1,10 @@
+{
+  "uuid": "desktop-physics-obstacle-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.72, 0.48, 0.08, 1.0],
+    "u_metallic": 0.1,
+    "u_roughness": 0.58,
+    "u_diffuse_mul": 1.0
+  }
+}
