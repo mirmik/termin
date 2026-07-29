@@ -76,7 +76,7 @@ inline tgfx::BlendFactor convert_blend_factor_tgfx2(BlendFactor factor) {
 
 // Get global position from Entity.
 inline Vec3 get_global_position(const Entity& entity) {
-    return entity.transform().global_pose().lin;
+    return entity.transform().global_position();
 }
 
 MaterialPipelinePassContract color_material_pass_contract()

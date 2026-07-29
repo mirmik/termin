@@ -1,6 +1,7 @@
 #pragma once
 
 #include <termin/geom/general_pose3.hpp>
+#include <termin/geom/general_transform3.hpp>
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
@@ -9,6 +10,10 @@ namespace termin {
 
 inline Pose3 navmesh_bake_frame_from_pose(const GeneralPose3& base_pose) {
     return Pose3{base_pose.ang, base_pose.lin};
+}
+
+inline Pose3 navmesh_bake_frame_from_transform(const GeneralTransform3& transform) {
+    return Pose3{transform.global_rotation(), transform.global_position()};
 }
 
 inline Vec3 navmesh_world_to_bake_point(const Pose3& bake_frame, const Vec3& world_point) {

@@ -505,6 +505,8 @@ void bind_recast_navmesh_builder(nb::module_& m) {
 
     m.def("navmesh_bake_frame_from_pose", &navmesh_bake_frame_from_pose,
           nb::arg("base_pose"));
+    m.def("navmesh_bake_frame_from_transform", &navmesh_bake_frame_from_transform,
+          nb::arg("transform"));
     m.def("navmesh_world_to_bake_point", [](const Pose3& bake_frame, nb::handle point) {
         return point_to_python(navmesh_world_to_bake_point(bake_frame, py_vec3(point)));
     }, nb::arg("bake_frame"), nb::arg("point"));

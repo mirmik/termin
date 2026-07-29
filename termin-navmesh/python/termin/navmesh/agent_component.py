@@ -170,7 +170,7 @@ class NavMeshAgentComponent(InputComponent):
             return False
 
         # Получаем текущую позицию агента (мировые координаты)
-        position = self.entity.transform.global_pose().lin
+        position = self.entity.transform.global_position
         start = np.array([position.x, position.y, position.z], dtype=np.float32)
         log.info(f"[NavMeshAgent] agent position: ({position.x:.2f}, {position.y:.2f}, {position.z:.2f})")
 
@@ -208,7 +208,7 @@ class NavMeshAgentComponent(InputComponent):
             return
 
         # Текущая позиция (мировые координаты)
-        position = self.entity.transform.global_pose().lin
+        position = self.entity.transform.global_position
         current_pos = np.array([position.x, position.y, position.z], dtype=np.float32)
 
         # Целевая точка пути

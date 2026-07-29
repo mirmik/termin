@@ -4,7 +4,7 @@ Date: 2026-07-29.
 
 Status: accepted architecture; exact primitives, graded entity cache,
 exact/logical `GeneralTransform3` facade, rigid-consumer contracts and editor
-transform operations implemented.
+transform operations, and geometric/runtime consumer migration implemented.
 
 ## Context
 
@@ -490,7 +490,7 @@ transforms all use the exact basis. Singular inverse operations log and throw;
 Python exposes the same distinctions through `TransformKind`, `Basis3d`,
 `Affine3d` and the corresponding `GeneralTransform3` methods.
 
-### 4. Consumer migration (in progress)
+### 4. Consumer migration (implemented)
 
 Migrate consumers by contract rather than mechanically replacing the type:
 
@@ -514,9 +514,31 @@ accepts decomposed world transforms, but rejects the `AxisScaled` plus rotated
 local-collider combination because that composition would require shear.
 Collider offsets and FEM joint anchors use exact point transformation.
 
-Rendering and the remaining geometric/runtime consumers are tracked
-separately and still need migration before the legacy world-TRS API can be
-removed.
+Rendering, bounds, mesh queries, foliage, voxelization, navmesh geometry and
+skeleton matrices now consume exact model matrices or exact affine operations.
+Camera, light, XR origin and locomotion paths consume world position and the
+logical quaternion orientation explicitly.
+
+Navmesh bake space deliberately keeps only logical world translation and
+orientation as its frame; all source geometry is transformed into that frame
+through exact model matrices, so scale and hierarchy-generated shear remain in
+the baked geometry. Off-mesh-link centering uses exact point transforms.
+
+Foliage instance positions use the exact entity affine. Scale-free prototype
+offsets retain the component's established logical-orientation policy rather
+than extracting a rotation from the geometric basis.
+
+Surface-edge queries convert points and vectors with the exact combined
+entity/mesh-offset transform and convert normals as covectors. The underlying
+mesh query currently accepts only a diagonal measurement metric, so this one
+consumer uses the explicitly named column-length approximation of the exact
+combined basis. Tests fix that policy for affine-promoted entities; it is not
+presented as a general world scale.
+
+The remaining production references named `global_pose` belong to the
+independent kinematic and optimization pose graphs, not to scene-entity world
+transforms. Scene consumers outside the legacy API implementation no longer
+read entity `global_pose()` or unconditional `global_scale()`.
 
 ### 5. Editor setters and reparenting (implemented)
 

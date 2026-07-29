@@ -70,13 +70,19 @@ def _find_surface_edge_for_entity(
         log.error("[SurfaceEdgeQuery] MeshComponent has no mesh")
         return None
 
-    pose = entity.transform.global_pose()
+    transform = entity.transform
     mesh_offset = mesh_component.get_mesh_offset_matrix()
     inverse_mesh_offset = mesh_offset.inverse()
-    metric = entity.transform.global_scale
-    local_point = _world_point_to_mesh_local(pose, inverse_mesh_offset, mesh_point)
-    local_normal = _world_vector_to_mesh_local(pose, inverse_mesh_offset, mesh_normal)
-    local_up = _world_vector_to_mesh_local(pose, inverse_mesh_offset, Vec3(0.0, 0.0, 1.0))
+    metric = _surface_edge_axis_length_metric(transform, mesh_offset)
+    local_point = _world_point_to_mesh_local(
+        transform, inverse_mesh_offset, mesh_point
+    )
+    local_normal = _world_normal_to_mesh_query(
+        transform, mesh_offset, mesh_normal, metric
+    )
+    local_up = _world_vector_to_mesh_local(
+        transform, inverse_mesh_offset, Vec3(0.0, 0.0, 1.0)
+    )
 
     if edge_direction is None:
         edge = mesh.find_surface_edge(
@@ -87,7 +93,9 @@ def _find_surface_edge_for_entity(
             metric,
         )
     else:
-        local_edge_direction = _world_vector_to_mesh_local(pose, inverse_mesh_offset, edge_direction)
+        local_edge_direction = _world_vector_to_mesh_local(
+            transform, inverse_mesh_offset, edge_direction
+        )
         edge = mesh.find_surface_edge_aligned(
             int(triangle_index),
             local_point,
@@ -102,7 +110,7 @@ def _find_surface_edge_for_entity(
         return None
 
     local_edge = edge["point"]
-    world_edge = _mesh_point_to_world(pose, mesh_offset, local_edge)
+    world_edge = _mesh_point_to_world(transform, mesh_offset, local_edge)
     indices = edge["indices"]
     return SurfaceEdgeHit(
         world_edge,
@@ -112,13 +120,56 @@ def _find_surface_edge_for_entity(
     )
 
 
-def _world_point_to_mesh_local(pose, inverse_mesh_offset, point: Vec3) -> Vec3:
-    return inverse_mesh_offset.transform_point(pose.point_to_local(point))
+def _world_point_to_mesh_local(transform, inverse_mesh_offset, point: Vec3) -> Vec3:
+    return inverse_mesh_offset.transform_point(
+        transform.transform_point_inverse(point)
+    )
 
 
-def _world_vector_to_mesh_local(pose, inverse_mesh_offset, vector: Vec3) -> Vec3:
-    return inverse_mesh_offset.transform_direction(pose.vector_to_local(vector))
+def _world_vector_to_mesh_local(transform, inverse_mesh_offset, vector: Vec3) -> Vec3:
+    return inverse_mesh_offset.transform_direction(
+        transform.transform_vector_inverse(vector)
+    )
 
 
-def _mesh_point_to_world(pose, mesh_offset, point: Vec3) -> Vec3:
-    return pose.transform_point(mesh_offset.transform_point(point))
+def _world_normal_to_mesh_query(
+    transform,
+    mesh_offset,
+    normal: Vec3,
+    metric: Vec3,
+) -> Vec3:
+    # A normal is a covector. For local-to-world basis L its local components
+    # are L^T * n_world, not L^-1 * n_world. The mesh query applies its
+    # diagonal metric M to every supplied vector, so encode the covector as
+    # M^-2 * L^T * n_world; after the query's multiplication this becomes the
+    # correct M^-T local normal for its documented approximate metric space.
+    axis_x, axis_y, axis_z = _mesh_world_basis_axes(transform, mesh_offset)
+    return Vec3(
+        axis_x.dot(normal) / (metric.x * metric.x),
+        axis_y.dot(normal) / (metric.y * metric.y),
+        axis_z.dot(normal) / (metric.z * metric.z),
+    ).normalized()
+
+
+def _surface_edge_axis_length_metric(transform, mesh_offset) -> Vec3:
+    """Column-length approximation used by the diagonal mesh-query metric."""
+    axis_x, axis_y, axis_z = _mesh_world_basis_axes(transform, mesh_offset)
+    return Vec3(axis_x.norm(), axis_y.norm(), axis_z.norm())
+
+
+def _mesh_world_basis_axes(transform, mesh_offset) -> tuple[Vec3, Vec3, Vec3]:
+    return (
+        transform.transform_vector(
+            mesh_offset.transform_direction(Vec3.unit_x())
+        ),
+        transform.transform_vector(
+            mesh_offset.transform_direction(Vec3.unit_y())
+        ),
+        transform.transform_vector(
+            mesh_offset.transform_direction(Vec3.unit_z())
+        ),
+    )
+
+
+def _mesh_point_to_world(transform, mesh_offset, point: Vec3) -> Vec3:
+    return transform.transform_point(mesh_offset.transform_point(point))

@@ -171,7 +171,8 @@ std::vector<PathfindingWorldPointCandidate> PathfindingWorld::candidates_for_wor
             continue;
         }
 
-        const Pose3 bake_frame = navmesh_bake_frame_from_pose(entity.transform().global_pose());
+        const Pose3 bake_frame =
+            navmesh_bake_frame_from_transform(entity.transform());
         DetourClosestPointResult closest = entry.component->closest_point_world(bake_frame, point);
         if (!closest.success) {
             tc_log_warn("[PathfindingWorld] skipped point query world: entity='%s' "
@@ -238,7 +239,8 @@ std::vector<PathfindingWorldCandidate> PathfindingWorld::candidates_for_world_po
             continue;
         }
 
-        const Pose3 bake_frame = navmesh_bake_frame_from_pose(entity.transform().global_pose());
+        const Pose3 bake_frame =
+            navmesh_bake_frame_from_transform(entity.transform());
         DetourClosestPointResult start_closest = entry.component->closest_point_world(bake_frame, start);
         DetourClosestPointResult end_closest = entry.component->closest_point_world(bake_frame, end);
         if (!start_closest.success || !end_closest.success) {

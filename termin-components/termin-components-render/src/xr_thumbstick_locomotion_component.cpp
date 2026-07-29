@@ -253,8 +253,8 @@ void XrThumbstickLocomotionComponent::_apply_move(
     const Vec2& stick,
     double dt
 ) {
-    GeneralPose3 pose = entity().transform().global_pose();
-    const Quat origin_rot = pose.ang;
+    GeneralTransform3 transform = entity().transform();
+    const Quat origin_rot = transform.global_rotation();
 
     Vec3 right{1.0, 0.0, 0.0};
     Vec3 forward{0.0, 1.0, 0.0};
@@ -271,8 +271,7 @@ void XrThumbstickLocomotionComponent::_apply_move(
     forward = projected_normalized(forward, Vec3{0.0, 1.0, 0.0});
 
     Vec3 delta = (right * stick.x + forward * stick.y) * (move_speed * speed_multiplier * dt);
-    pose.lin = pose.lin + delta;
-    entity().transform().relocate_global(pose);
+    transform.set_global_position(transform.global_position() + delta);
 }
 
 void XrThumbstickLocomotionComponent::_apply_turn(const xr::XrRigInputState& input, double dt) {
@@ -284,10 +283,12 @@ void XrThumbstickLocomotionComponent::_apply_turn(const xr::XrRigInputState& inp
         return;
     }
 
-    GeneralPose3 pose = entity().transform().global_pose();
+    GeneralTransform3 transform = entity().transform();
     const double yaw = stick.x * turn_speed_degrees * kPi / 180.0 * dt;
-    pose.ang = Quat::from_axis_angle(Vec3{0.0, 0.0, 1.0}, yaw) * pose.ang;
-    entity().transform().relocate_global(pose);
+    const Quat orientation =
+        Quat::from_axis_angle(Vec3{0.0, 0.0, 1.0}, yaw)
+        * transform.global_rotation();
+    transform.set_global_orientation(orientation);
 }
 
 const char* xr_locomotion_frame_to_string(XrLocomotionFrame frame) {

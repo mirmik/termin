@@ -370,13 +370,11 @@ inline void OffMeshLinkComponent::center_entity() {
     Vec3 old_end = end_world();
     Vec3 center = (old_start + old_end) * 0.5;
 
-    GeneralPose3 new_pose = ent.transform().global_pose();
-    new_pose.lin = center;
-    ent.transform().relocate_global(new_pose);
+    GeneralTransform3 transform = ent.transform();
+    transform.set_global_position(center);
 
-    GeneralPose3 centered_pose = ent.transform().global_pose();
-    Vec3 new_start_local = centered_pose.inverse_transform_point(old_start);
-    Vec3 new_end_local = centered_pose.inverse_transform_point(old_end);
+    Vec3 new_start_local = transform.transform_point_inverse(old_start);
+    Vec3 new_end_local = transform.transform_point_inverse(old_end);
     start_local = tc_vec3{new_start_local.x, new_start_local.y, new_start_local.z};
     end_local = tc_vec3{new_end_local.x, new_end_local.y, new_end_local.z};
 
