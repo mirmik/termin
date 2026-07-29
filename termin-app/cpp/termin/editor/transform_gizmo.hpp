@@ -43,9 +43,11 @@ public:
     virtual ~TransformGizmoTarget() = default;
 
     virtual bool valid() const = 0;
-    virtual GeneralPose3 global_pose() const = 0;
+    virtual Vec3 global_position() const = 0;
+    virtual Quat global_orientation() const = 0;
     virtual GeneralPose3 local_pose_for_undo() const = 0;
-    virtual void relocate_global(const GeneralPose3& pose) = 0;
+    virtual void set_global_position(const Vec3& position) = 0;
+    virtual void set_global_orientation(const Quat& orientation) = 0;
 
     virtual Entity entity() const { return Entity(); }
     virtual bool supports_transform_undo() const { return false; }
@@ -62,9 +64,19 @@ public:
     explicit EntityTransformGizmoTarget(Entity entity) : _entity(entity) {}
 
     bool valid() const override { return _entity.valid(); }
-    GeneralPose3 global_pose() const override { return _entity.transform().global_pose(); }
+    Vec3 global_position() const override {
+        return _entity.transform().global_position();
+    }
+    Quat global_orientation() const override {
+        return _entity.transform().global_rotation();
+    }
     GeneralPose3 local_pose_for_undo() const override { return _entity.transform().local_pose(); }
-    void relocate_global(const GeneralPose3& pose) override { _entity.transform().relocate_global(pose); }
+    void set_global_position(const Vec3& position) override {
+        _entity.transform().set_global_position(position);
+    }
+    void set_global_orientation(const Quat& orientation) override {
+        _entity.transform().set_global_orientation(orientation);
+    }
     Entity entity() const override { return _entity; }
     bool supports_transform_undo() const override { return true; }
     bool can_snap() const override { return true; }

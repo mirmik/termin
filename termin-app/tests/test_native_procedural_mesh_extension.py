@@ -68,22 +68,18 @@ def _increment(widget) -> None:
     assert widget.dispatch_pointer_event(event) == EventResult.Handled
 
 
-class _Pose:
-    lin = Vec3(0.0, 0.0, 0.0)
-
-    def point_to_global(self, point):
-        return Vec3(point.x, point.y, point.z)
-
-    def point_to_local(self, point):
-        return Vec3(point.x, point.y, point.z)
-
-    def vector_to_local(self, vector):
-        return Vec3(vector.x, vector.y, vector.z)
-
-
 class _Entity:
     name = "ProceduralMesh"
-    transform = SimpleNamespace(global_pose=lambda: _Pose())
+    transform = SimpleNamespace(
+        global_position=Vec3(0.0, 0.0, 0.0),
+        transform_point=lambda point: Vec3(point.x, point.y, point.z),
+        transform_point_inverse=lambda point: Vec3(point.x, point.y, point.z),
+        transform_vector_inverse=lambda vector: Vec3(
+            vector.x,
+            vector.y,
+            vector.z,
+        ),
+    )
 
     def valid(self) -> bool:
         return True

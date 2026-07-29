@@ -282,7 +282,7 @@ class FoliageLayerEditorExtension:
         if entity is None or not entity.valid():
             log.error("[FoliageLayerEditor] cannot convert point to local space: entity is not available")
             return None
-        return entity.transform.global_pose().point_to_local(point)
+        return entity.transform.transform_point_inverse(point)
 
     def _local_direction_from_world(self, vector: Vec3) -> Vec3 | None:
         entity = self._entity
@@ -291,7 +291,7 @@ class FoliageLayerEditorExtension:
                 "[FoliageLayerEditor] cannot convert direction to local space: entity is not available"
             )
             return None
-        return entity.transform.global_pose().ang.inverse_rotate(vector)
+        return entity.transform.transform_vector_inverse(vector)
 
     def _local_radius_from_world_radius(
         self,
@@ -310,7 +310,7 @@ class FoliageLayerEditorExtension:
         entity = self._entity
         if entity is None or not entity.valid():
             return None
-        return entity.transform.global_pose().point_to_global(point)
+        return entity.transform.transform_point(point)
 
     def _request_viewport_update(self) -> None:
         editor = self._editor

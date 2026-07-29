@@ -107,9 +107,9 @@ class ViewportGeometryController:
         camera = self._get_camera()
         if camera is None or camera.entity is None:
             return Vec3(0.0, 0.0, 0.0)
-        cam_pose = camera.entity.transform.global_pose()
-        cam_pos = cam_pose.lin
-        forward = cam_pose.vector_to_global(Vec3(0.0, 1.0, 0.0))
+        transform = camera.entity.transform
+        cam_pos = transform.global_position
+        forward = transform.transform_direction(Vec3(0.0, 1.0, 0.0))
         return Vec3(
             float(cam_pos.x + forward.x * 5.0),
             float(cam_pos.y + forward.y * 5.0),
@@ -229,9 +229,11 @@ class ViewportGeometryController:
         if entity is None or not entity.valid():
             log.error("[ViewportGeometryController] entity local OXY plane pick failed: entity is not available")
             return None
-        pose = entity.transform.global_pose()
-        origin = pose.point_to_global(Vec3(0.0, 0.0, 0.0))
-        normal = pose.vector_to_global(Vec3(0.0, 0.0, 1.0))
+        transform = entity.transform
+        origin = transform.global_position
+        axis_x = transform.transform_vector(Vec3(1.0, 0.0, 0.0))
+        axis_y = transform.transform_vector(Vec3(0.0, 1.0, 0.0))
+        normal = axis_x.cross(axis_y).normalized()
         return self.world_point_on_plane(
             x,
             y,

@@ -8,6 +8,8 @@
 #include <termin/geom/pose3.hpp>
 #include "core/tc_entity_pool_registry.h"
 
+#include <stdexcept>
+
 namespace nb = nanobind;
 
 namespace termin {
@@ -129,6 +131,33 @@ void bind_transform(nb::module_& m) {
                 self.set_parent(nb::cast<GeneralTransform3>(parent));
             }
         }, nb::arg("parent").none())
+        .def(
+            "try_reparent_preserve_world",
+            [](GeneralTransform3& self, nb::object parent, double tolerance) {
+                const GeneralTransform3 parent_transform = parent.is_none()
+                    ? GeneralTransform3{}
+                    : nb::cast<GeneralTransform3>(parent);
+                return self.try_reparent_preserve_world(
+                    parent_transform, tolerance);
+            },
+            nb::arg("parent").none(),
+            nb::arg("tolerance") = 1.0e-10,
+            "Reparent transactionally while preserving the exact world affine. "
+            "Returns False when the new local transform would require shear.")
+        .def(
+            "reparent_preserve_world",
+            [](GeneralTransform3& self, nb::object parent, double tolerance) {
+                const GeneralTransform3 parent_transform = parent.is_none()
+                    ? GeneralTransform3{}
+                    : nb::cast<GeneralTransform3>(parent);
+                if (!self.try_reparent_preserve_world(
+                        parent_transform, tolerance)) {
+                    throw std::runtime_error(
+                        "Cannot preserve the exact world transform while reparenting");
+                }
+            },
+            nb::arg("parent").none(),
+            nb::arg("tolerance") = 1.0e-10)
         .def("_unparent", &GeneralTransform3::unparent)
         .def("unparent", &GeneralTransform3::unparent)
         .def("link", [](GeneralTransform3& self, GeneralTransform3 child) {
@@ -145,6 +174,9 @@ void bind_transform(nb::module_& m) {
         })
         .def("transform_vector_inverse", [](const GeneralTransform3& self, const Vec3& vec) {
             return self.transform_vector_inverse(vec);
+        })
+        .def("transform_normal", [](const GeneralTransform3& self, const Vec3& normal) {
+            return self.transform_normal(normal);
         })
         .def("transform_direction", [](const GeneralTransform3& self, const Vec3& vec) {
             return self.transform_direction(vec);

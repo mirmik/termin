@@ -40,35 +40,40 @@ public:
         return _component && _component->entity().valid();
     }
 
-    GeneralPose3 global_pose() const override {
-        GeneralPose3 pose;
-        pose.ang = Quat::identity();
-        pose.scale = Vec3{1.0, 1.0, 1.0};
-        Vec3 point = _endpoint == OFF_MESH_LINK_ENDPOINT_START
+    Vec3 global_position() const override {
+        return _endpoint == OFF_MESH_LINK_ENDPOINT_START
             ? _component->start_world()
             : _component->end_world();
-        pose.lin = point;
-        return pose;
+    }
+
+    Quat global_orientation() const override {
+        return Quat::identity();
     }
 
     GeneralPose3 local_pose_for_undo() const override {
-        return global_pose();
+        return GeneralPose3{
+            Quat::identity(),
+            global_position(),
+            Vec3{1.0, 1.0, 1.0},
+        };
     }
 
-    void relocate_global(const GeneralPose3& pose) override {
+    void set_global_position(const Vec3& position) override {
         if (!valid()) {
             tc_log(TC_LOG_ERROR, "[OffMeshLinkEditorVisual] cannot relocate endpoint: target is invalid");
             return;
         }
 
         Entity ent = _component->entity();
-        Vec3 local = ent.transform().global_pose().inverse_transform_point(pose.lin);
+        Vec3 local = ent.transform().transform_point_inverse(position);
         if (_endpoint == OFF_MESH_LINK_ENDPOINT_START) {
             _component->start_local = to_tc_vec3(local);
         } else {
             _component->end_local = to_tc_vec3(local);
         }
     }
+
+    void set_global_orientation(const Quat&) override {}
 
     Entity entity() const override {
         return _component ? _component->entity() : Entity();

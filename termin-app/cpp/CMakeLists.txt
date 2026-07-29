@@ -330,6 +330,7 @@ if(BUILD_TESTS)
         tests/tests_inspect_registry.cpp
         tests/tests_orbit_camera_controller.cpp
         tests/tests_camera_frustum_debug_gizmo.cpp
+        tests/tests_transform_gizmo.cpp
         tests/tests_rendering_manager.cpp
         tests/tests_frame_profiler_controller.cpp
         tests/tests_shader_parser_std140.cpp
