@@ -2,7 +2,7 @@
 
 Date: 2026-07-29.
 
-Status: proposed architecture concept.
+Status: accepted architecture; implementation pending.
 
 ## Context
 
@@ -53,13 +53,11 @@ representation only when composition requires it.
 
 ## Non-goals
 
-- This concept does not select AoS, SoA, archetype or sparse-payload storage.
+- This concept does not move authored local transforms into ECS archetypes.
 - It does not require scalar decomposition of matrices for SIMD.
 - It does not define automatic lossy projection from arbitrary affine values
   back to TRS.
 - It does not make shear an ordinary authored property in the first version.
-- It does not claim that tagged representation alone saves memory. An inline
-  tagged union is normally as large as its largest alternative.
 
 ## Transform states
 
@@ -105,19 +103,16 @@ enum class TransformKind : uint8_t {
 class WorldTransform3 {
     Vec3d translation_;
 
-    // Logical scene-graph orientation. It is composed from local quaternion
-    // channels even when basis_ becomes affine.
+    // Logical scene-graph orientation.
     Quatd orientation_;
 
+    // Exact for decomposed states and invalid for Affine.
+    Vec3d scale_;
+
+    // Exact geometric linear transform in every state.
+    Basis3d basis_;
+
     TransformKind kind_;
-
-    union {
-        // Active for Rigid, Similarity and AxisScaled.
-        Vec3d scale_;
-
-        // Active for Affine and authoritative for geometric transformation.
-        Basis3d basis_;
-    };
 };
 ```
 
@@ -141,9 +136,9 @@ Affine:
     orientation remains the logical quaternion channel
 ```
 
-The concrete C/C++ representation may avoid a language union if construction
-or ABI constraints make another closed layout simpler. The invariants and API
-are more important than the initial byte layout.
+The basis is materialized for every state. `kind` does not select an optional
+storage payload; it declares which stronger operations and decomposed values
+are valid.
 
 ## Logical orientation and geometric basis
 
@@ -155,9 +150,9 @@ orientation = product of authored local quaternion channels
 basis       = exact linear transformation of geometry
 ```
 
-For `Rigid`, `Similarity` and `AxisScaled`, the basis is reconstructed from
-orientation and scale. For `Affine`, the stored basis is authoritative and
-need not equal `R(orientation) * D`.
+For `Rigid`, `Similarity` and `AxisScaled`, the stored basis must equal the
+basis reconstructed from orientation and scale. For `Affine`, the stored basis
+is still authoritative but need not equal `R(orientation) * D`.
 
 Keeping logical orientation avoids deriving a quaternion from an arbitrary
 basis through polar or QR decomposition. It gives stable semantics to:
@@ -270,21 +265,10 @@ public:
 };
 ```
 
-`linear_basis()` materializes the exact basis:
+`linear_basis()` returns the materialized exact basis:
 
 ```cpp
-switch (kind_) {
-case TransformKind::Rigid:
-    return Basis3d::from_quat(orientation_);
-
-case TransformKind::Similarity:
-case TransformKind::AxisScaled:
-    return Basis3d::from_quat(orientation_)
-         * Basis3d::from_scale(scale_);
-
-case TransformKind::Affine:
-    return basis_;
-}
+return basis_;
 ```
 
 Expected consumer boundaries are:
@@ -397,25 +381,154 @@ world affine == parent world affine * local TRS affine
 this change. It should be replaced or clearly exposed as a policy-based lossy
 view.
 
-## Storage boundary
+## Selected cache layout
 
-This concept intentionally does not decide the physical cache layout.
-Possible layouts include:
+The entity pool keeps a fixed-capacity world cache for every entity. There is
+one storage path and no optional per-entity allocation:
 
-- an inline tagged value per entity;
-- separate transform columns in ECS archetypes;
-- a common compact decomposed value plus sparse affine payloads;
-- an always-affine cache plus representation metadata.
+```c
+Vec3* world_positions;
+Quat* world_orientations;
+Vec3* world_scales;
+uint8_t* world_transform_kinds;
+Vec3* world_basis_x;
+Vec3* world_basis_y;
+Vec3* world_basis_z;
+```
 
-The semantic model should be implemented and tested before choosing a more
-complex sparse representation. A normal inline tagged union does not save
-memory because it occupies the size of `Basis3d` plus common fields.
+The three basis columns always contain the exact linear world transform. This
+materialized basis replaces the current 4x4 `world_matrices` cache; a consumer
+that requires a 4x4 model matrix expands the basis columns and translation at
+the API boundary.
 
-The local transform, world transform and logical orientation may also be
-placed in archetype component columns if Termin adopts archetype systems as
-the authoritative mutation path. That requires reliable per-row change
-tracking before mutable queries can update transforms without leaving the
-world cache stale.
+The other columns retain stronger semantic information:
+
+- `world_positions` is the exact affine translation and provides a direct hot
+  path for position-only consumers;
+- `world_orientations` is the logical quaternion channel;
+- `world_scales` is exact only for `Rigid`, `Similarity` and `AxisScaled`;
+- `world_transform_kinds` states which guarantees are valid.
+
+`global_scale()` must not return the contents of `world_scales` for an
+`Affine` entity. Callers must either require a decomposed transform or request
+an explicitly named approximation.
+
+Local authoring remains in the existing position, quaternion and scale
+columns. Moving local transforms into ECS archetypes is a separate
+architecture change and is not part of this migration.
+
+## Implementation sequence
+
+The migration is deliberately staged so that exact geometry becomes available
+before the misleading TRS-shaped world API is removed.
+
+### 1. Exact geometry primitives
+
+Add standard-layout `Basis3d` and `Affine3d` ABI types with:
+
+- construction from quaternion and diagonal scale;
+- exact composition;
+- point and vector transformation;
+- checked inversion with logged singular failure;
+- conversion to and from the public 4x4 matrix convention.
+
+The primitive tests establish matrix order and serve as the reference for
+scene propagation.
+
+### 2. Graded entity world cache
+
+Replace the lossy world-matrix cache with the fixed columns described above.
+Dirty propagation must:
+
+- classify roots from local scale;
+- compose exact translation and basis;
+- compose logical quaternion orientation independently;
+- promote according to the graded state table;
+- recompute state from current inputs so a subtree can demote;
+- preserve the existing lazy-update contract.
+
+The C entity-pool API exposes kind, exact basis/affine and exact 4x4 matrix
+views. Existing local TRS storage and serialization do not change.
+
+### 3. Exact `GeneralTransform3` operations
+
+Move geometric operations to the exact world affine:
+
+- point and vector transform;
+- inverse point and vector transform;
+- model and inverse-model matrix;
+- geometric bounds helpers.
+
+Keep logical operations on the quaternion channel:
+
+- global orientation;
+- forward, up and right;
+- global orientation setters;
+- rigid-pose extraction.
+
+Add explicit `global_affine()`, `kind()` and `try_rigid_pose()` APIs.
+
+### 4. Consumer migration
+
+Migrate consumers by contract rather than mechanically replacing the type:
+
+- rendering, bounds, mesh queries, voxelization and navmesh geometry use exact
+  affine values;
+- cameras, locomotion and editor orientation tools use position and logical
+  orientation;
+- rigid physics accepts only its documented transform class and logs rejected
+  affine ancestry;
+- code that needs scale chooses a decomposed-only or explicitly approximate
+  API.
+
+### 5. Editor setters and reparenting
+
+Translation and logical rotation gizmos edit their individual channels.
+World-preserving reparenting computes:
+
+```text
+new local affine = inverse(new parent world affine) * old world affine
+```
+
+The first implementation keeps authored locals as TRS. If the exact local
+result contains irreducible shear, the operation is rejected and logged.
+There is no implicit lossy decomposition. A separately named lossy editor
+operation may be designed later if a concrete workflow requires it.
+
+### 6. Remove misleading world TRS APIs
+
+After all in-tree consumers are migrated:
+
+- remove or rename exact-looking `GeneralPose3` composition and inverse
+  operations that are only TRS projections;
+- remove `global_pose()` as the canonical world value;
+- remove unconditional `global_scale()`;
+- keep deliberately lossy conversion only behind policy-named APIs.
+
+The migration is complete when no exact geometric path reconstructs a world
+transform from quaternion and component-wise scale.
+
+## Implementation tracking
+
+The project board tracks the migration as:
+
+1. `#1058` - exact `Basis3d` and `Affine3d` geometry primitives;
+2. `#1059` - graded exact entity world-transform cache;
+3. `#1060` - exact geometric and logical `GeneralTransform3` APIs;
+4. `#1061` - rigid physics, collision and FEM contract;
+5. `#1062` - editor gizmos and world-preserving reparenting;
+6. `#1063` - remaining geometric and runtime consumers;
+7. `#1064` - removal of lossy world-TRS APIs.
+
+The dependency graph is:
+
+```text
+#1058 -> #1059 -> #1060
+                      |
+                      +-> #1061 -+
+                      +-> #1062 -+-> #1064
+                      +-> #1063 -+
+```
 
 ## Verification
 
@@ -444,17 +557,22 @@ Tests must also assert the advertised kind guarantees. A `Rigid`,
 `Similarity` or `AxisScaled` result must reconstruct the same affine basis
 without shear.
 
-## Open decisions
+## Initial policy choices
 
-1. Whether zero scale is rejected at authoring time or allowed as a
-   non-invertible transform.
-2. Whether negative scale is permitted in decomposed world states and how
-   reflection signs are represented.
-3. Whether importers may create authored local affine nodes for source formats
-   that contain irreducible shear.
-4. Whether `Similarity` classification requires positive scale.
-5. Whether any axis-preserving non-uniform composition cases beyond identity
-   rotation are worth retaining without promotion.
-6. Whether logical orientation is cached inside the value or in a separate
-   component column.
-7. The eventual AoS, archetype-column or sparse affine-payload layout.
+1. Zero local scale is allowed. It produces a non-invertible transform;
+   checked inverse operations fail and log. A zero uniform scale is classified
+   as `AxisScaled`, not `Similarity`.
+2. Negative local scale is allowed and its signs are retained in
+   `AxisScaled`. Reflections are not folded into the logical quaternion.
+3. `Similarity` requires a strictly positive uniform scale. A negative uniform
+   scale is `AxisScaled`.
+4. Authored local affine transforms are not supported in the first version.
+   Importers must reject irreducible local shear or bake it into asset data
+   under an importer-specific policy.
+5. The initial promotion implementation recognizes identity local rotation as
+   the only special commuting case for an `AxisScaled` parent. More cases may
+   be added only with exact classification tests.
+6. Logical orientation is stored in its own fixed world-cache column.
+7. Exact names for decomposed-only scale access and supported approximations
+   are ordinary API design within `#1060`; no approximation may use the
+   unconditional name `global_scale`.
