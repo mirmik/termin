@@ -129,7 +129,11 @@ def _project_matches(selector: Path, project_value: object) -> bool:
     if not isinstance(project_value, str) or not project_value:
         return False
     project = _canonical_path(project_value)
-    return selector == project or project in selector.parents
+    return (
+        selector == project
+        or project in selector.parents
+        or selector in project.parents
+    )
 
 
 @dataclass(frozen=True)
@@ -182,20 +186,6 @@ class EditorSessionResolver:
                 raise EditorMcpClientError(
                     f"Editor instance '{self.instance_id}' is not registered in {self.registry_dir}"
                 )
-        elif self.project_selector is not None:
-            project_sessions = [
-                session for session in sessions if _project_matches(self.project_selector, session.get("project_path"))
-            ]
-            if project_sessions:
-                sessions = project_sessions
-            elif len(sessions) > 1:
-                projects = sorted(
-                    {str(session.get("project_path")) for session in sessions if session.get("project_path")}
-                )
-                raise EditorMcpClientError(
-                    f"No editor matches project '{self.project_selector}'. "
-                    f"Registered projects: {', '.join(projects) or '(unknown)'}"
-                )
 
         if not sessions:
             raise EditorMcpClientError(f"No editor sessions are registered in {self.registry_dir}")
@@ -203,9 +193,36 @@ class EditorSessionResolver:
             return sessions[0]
 
         reachable = [session for session in sessions if _session_is_reachable(session)]
-        if len(reachable) == 1:
-            return reachable[0]
-        candidates = reachable or sessions
+        candidates = reachable
+        if self.project_selector is not None:
+            project_candidates = [
+                session
+                for session in reachable
+                if _project_matches(
+                    self.project_selector,
+                    session.get("project_path"),
+                )
+            ]
+            if project_candidates:
+                candidates = project_candidates
+            elif len(reachable) == 1:
+                return reachable[0]
+            elif reachable:
+                projects = sorted(
+                    {
+                        str(session.get("project_path"))
+                        for session in reachable
+                        if session.get("project_path")
+                    }
+                )
+                raise EditorMcpClientError(
+                    f"No editor matches project '{self.project_selector}'. "
+                    f"Reachable projects: {', '.join(projects) or '(unknown)'}"
+                )
+
+        if len(candidates) == 1:
+            return candidates[0]
+        candidates = candidates or sessions
         summaries = json.dumps(
             [_session_summary(session, reachable=session in reachable) for session in candidates],
             ensure_ascii=False,
