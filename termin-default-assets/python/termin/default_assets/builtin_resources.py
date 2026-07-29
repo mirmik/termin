@@ -38,6 +38,22 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
             )
             rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
 
+    if rm._texture_registry.get_asset("__white_srgb_1x1__") is None:
+        white_srgb_texture = get_white_texture_handle("srgb")
+        if white_srgb_texture.is_valid:
+            white_srgb_asset = TextureAsset(
+                texture_data=white_srgb_texture,
+                name="__white_srgb_1x1__",
+                source_path="__white_srgb_1x1__",
+                uuid=white_srgb_texture.uuid,
+                encoding="srgb",
+            )
+            rm.register_texture_asset(
+                "__white_srgb_1x1__",
+                white_srgb_asset,
+                uuid=white_srgb_texture.uuid,
+            )
+
     if rm._texture_registry.get_asset("__normal_1x1__") is None:
         normal_texture = get_normal_texture_handle()
         if normal_texture.is_valid:

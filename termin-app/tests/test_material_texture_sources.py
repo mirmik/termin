@@ -5,6 +5,12 @@ class _Resources:
     def list_texture_names(self):
         return ["__white_1x1__", "brick", "normal_map"]
 
+    def get_texture_asset(self, name):
+        class Asset:
+            encoding = "linear"
+
+        return Asset() if name in {"brick", "normal_map"} else None
+
 
 class _RenderTarget:
     alive = True

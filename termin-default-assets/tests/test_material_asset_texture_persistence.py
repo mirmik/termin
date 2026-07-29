@@ -8,7 +8,7 @@ from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.render.texture_asset import TextureAsset
 from termin.stdlib import stdlib_root
-from tgfx import TcTexture
+from tgfx import TcTexture, TextureEncoding
 
 
 def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:
@@ -31,6 +31,7 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
         channels=4,
         name="SavedTexture",
         uuid=texture_uuid,
+        encoding=TextureEncoding.SRGB,
     )
     texture_asset = TextureAsset(texture_data=None, name="SavedTexture", uuid=texture_uuid)
     rm.register_texture_asset("SavedTexture", texture_asset, uuid=texture_uuid)
@@ -82,6 +83,70 @@ def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_
     texture = material.textures["u_albedo_texture"]
     assert texture.is_valid
     assert texture.uuid == texture_uuid
+
+
+def test_material_texture_assignment_rejects_encoding_mismatch_without_mutation() -> None:
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    _register_stdlib_shader(rm, "CookTorrancePBR")
+
+    material, _uuid = _parse_material_content(
+        (stdlib_root() / "materials" / "CookTorrancePBR.material").read_text(
+            encoding="utf-8"
+        ),
+        name="CookTorrancePBR",
+    )
+    previous = material.textures["u_albedo_texture"]
+    linear = TcTexture.from_data(
+        data=np.full((1, 1, 4), 255, dtype=np.uint8),
+        width=1,
+        height=1,
+        channels=4,
+        name="LinearData",
+        encoding=TextureEncoding.LINEAR,
+    )
+
+    assert material.set_texture("u_albedo_texture", linear) == 0
+    assert material.textures["u_albedo_texture"].uuid == previous.uuid
+
+
+def test_material_load_rejects_texture_encoding_mismatch() -> None:
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    _register_stdlib_shader(rm, "CookTorrancePBR")
+
+    texture_uuid = "linear-albedo-uuid"
+    linear = TcTexture.from_data(
+        data=np.full((1, 1, 4), 255, dtype=np.uint8),
+        width=1,
+        height=1,
+        channels=4,
+        name="LinearAlbedo",
+        uuid=texture_uuid,
+        encoding=TextureEncoding.LINEAR,
+    )
+    rm.register_texture_asset(
+        "LinearAlbedo",
+        TextureAsset(
+            texture_data=linear,
+            name="LinearAlbedo",
+            uuid=texture_uuid,
+            encoding="linear",
+        ),
+        uuid=texture_uuid,
+    )
+
+    with pytest.raises(ValueError, match="expects srgb, got linear"):
+        _parse_material_content(
+            json.dumps(
+                {
+                    "uuid": "material-mismatch",
+                    "shader": "CookTorrancePBR",
+                    "textures": {"u_albedo_texture": texture_uuid},
+                }
+            ),
+            name="Mismatch",
+        )
 
 
 def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:

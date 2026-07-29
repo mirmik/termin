@@ -400,6 +400,25 @@ def _validate_shader_program_resource(
                             "must be 'srgb' or 'linear'",
                         )
                     )
+                default = prop.get("default")
+                if default not in {None, "white", "normal"}:
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            context,
+                            "Shader program texture property default must be "
+                            "'white' or 'normal'",
+                        )
+                    )
+                elif default == "normal" and expected_encoding != "linear":
+                    diagnostics.append(
+                        RuntimePackageExportDiagnostic(
+                            "error",
+                            context,
+                            "Shader program texture property normal default "
+                            "requires linear expected_encoding",
+                        )
+                    )
             elif expected_encoding is not None:
                 diagnostics.append(
                     RuntimePackageExportDiagnostic(
@@ -1103,8 +1122,64 @@ def _validate_material_graph(
     textures = material_spec.get("textures")
     if not isinstance(textures, dict):
         return
+    program_resource = (
+        resource_index.get(program_uuid)
+        if isinstance(program_uuid, str) and program_uuid != ""
+        else None
+    )
+    program_spec = (
+        program_resource.get("spec")
+        if isinstance(program_resource, dict)
+        else None
+    )
+    texture_contract: dict[str, str] = {}
+    if isinstance(program_spec, dict):
+        properties = program_spec.get("properties")
+        if isinstance(properties, list):
+            texture_contract = {
+                prop["name"]: prop["expected_encoding"]
+                for prop in properties
+                if isinstance(prop, dict)
+                and prop.get("property_type") in {"Texture", "Texture2D"}
+                and isinstance(prop.get("name"), str)
+                and prop.get("expected_encoding") in {"srgb", "linear"}
+            }
     for slot_name, reference in textures.items():
         if not isinstance(slot_name, str) or not isinstance(reference, dict):
+            continue
+        expected_encoding = texture_contract.get(slot_name)
+        context = f"{resource_path}:textures.{slot_name}"
+        if isinstance(program_spec, dict) and expected_encoding is None:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Runtime material texture slot '{slot_name}' is not declared "
+                    "by its shader program",
+                )
+            )
+            continue
+        if expected_encoding is None:
+            if reference.get("kind") == "asset":
+                uuid_value = reference.get("uuid")
+                if isinstance(uuid_value, str) and uuid_value != "":
+                    _validate_resource_ref(
+                        uuid_value,
+                        "texture",
+                        resource_index,
+                        diagnostics,
+                        context,
+                    )
+            continue
+        if reference.get("kind") == "builtin":
+            if reference.get("name") == "normal" and expected_encoding != "linear":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        context,
+                        "Runtime builtin normal texture requires a Linear slot",
+                    )
+                )
             continue
         if reference.get("kind") != "asset":
             continue
@@ -1115,8 +1190,33 @@ def _validate_material_graph(
                 "texture",
                 resource_index,
                 diagnostics,
-                f"{resource_path}:textures.{slot_name}",
+                context,
             )
+            texture_resource = resource_index.get(uuid_value)
+            texture_spec = (
+                texture_resource.get("spec")
+                if isinstance(texture_resource, dict)
+                else None
+            )
+            import_settings = (
+                texture_spec.get("import_settings")
+                if isinstance(texture_spec, dict)
+                else None
+            )
+            actual_encoding = (
+                import_settings.get("encoding")
+                if isinstance(import_settings, dict)
+                else None
+            )
+            if actual_encoding in {"srgb", "linear"} and actual_encoding != expected_encoding:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        context,
+                        f"Runtime material texture slot expects {expected_encoding}, "
+                        f"but texture '{uuid_value}' is {actual_encoding}",
+                    )
+                )
 
 
 def _validate_shader_program_graph(

@@ -440,64 +440,54 @@ std::vector<TcTexture>& runtime_builtin_texture_keepalive() {
 }
 
 void ensure_runtime_builtin_textures() {
-    auto& keepalive = runtime_builtin_texture_keepalive();
-    if (!keepalive.empty()) {
+    auto& textures = runtime_builtin_texture_keepalive();
+    if (textures.size() == 3
+        && textures[0].is_valid()
+        && textures[1].is_valid()
+        && textures[2].is_valid()) {
         return;
     }
-
-    // Match the editor's built-in texture UUIDs. They are content-hash UUIDs,
-    // not the legacy "__white_1x1__" literal UUID used by TcTexture::white_1x1().
-    const uint8_t white_pixel[4] = {255, 255, 255, 255};
-    TcTexture white = TcTexture::from_data(TcTextureCreateInfo{
-        TexturePixelDataView{white_pixel, 1, 1, 4},
-        TextureTransformFlags{false, true, false},
-        "__white_1x1__",
-        "__white_1x1__",
-        "",
-        tgfx::TextureEncoding::Linear
-    });
-    if (white.is_valid()) {
-        keepalive.push_back(std::move(white));
-    } else {
-        tc_log_error("RuntimePackageLoader: failed to create built-in white texture");
-    }
-
-    const uint8_t normal_pixel[4] = {128, 128, 255, 255};
-    TcTexture normal = TcTexture::from_data(TcTextureCreateInfo{
-        TexturePixelDataView{normal_pixel, 1, 1, 4},
-        TextureTransformFlags{false, true, false},
-        "__normal_1x1__",
-        "__normal_1x1__",
-        "",
-        tgfx::TextureEncoding::Linear
-    });
-    if (normal.is_valid()) {
-        keepalive.push_back(std::move(normal));
-    } else {
-        tc_log_error("RuntimePackageLoader: failed to create built-in normal texture");
+    textures.clear();
+    textures.push_back(TcTexture::white_1x1());
+    textures.push_back(TcTexture::white_1x1_srgb());
+    textures.push_back(TcTexture::normal_1x1());
+    for (const TcTexture& texture : textures) {
+        if (!texture.is_valid()) {
+            tc_log_error("RuntimePackageLoader: failed to create builtin texture");
+            textures.clear();
+            return;
+        }
     }
 }
 
-TcTexture runtime_builtin_texture(const std::string& name) {
+TcTexture runtime_builtin_texture(
+    const std::string& name,
+    tc_texture_encoding expected_encoding
+) {
     ensure_runtime_builtin_textures();
-    const char* expected_name = nullptr;
+    const auto& textures = runtime_builtin_texture_keepalive();
+    if (textures.size() != 3) return {};
     if (name == "white") {
-        expected_name = "__white_1x1__";
-    } else if (name == "normal") {
-        expected_name = "__normal_1x1__";
-    } else {
-        return {};
+        return expected_encoding == TC_TEXTURE_ENCODING_SRGB
+            ? textures[1]
+            : textures[0];
     }
-
-    for (const TcTexture& texture : runtime_builtin_texture_keepalive()) {
-        if (texture.is_valid() && std::string(texture.name()) == expected_name) {
-            return texture;
+    if (name == "normal") {
+        if (expected_encoding != TC_TEXTURE_ENCODING_LINEAR) {
+            tc_log_error(
+                "RuntimePackageLoader: builtin normal texture is only valid for Linear slots");
+            return {};
         }
+        return textures[2];
     }
     return {};
 }
 
-TcTexture runtime_material_texture_from_spec(const nos::trent& spec, const std::string& material_uuid) {
+TcTexture runtime_material_texture_from_spec(
+    const nos::trent& spec,
+    const std::string& material_uuid,
+    tc_texture_encoding expected_encoding
+) {
     if (spec.is_string()) {
         const std::string uuid = spec.as_string();
         if (uuid.empty()) {
@@ -525,7 +515,7 @@ TcTexture runtime_material_texture_from_spec(const nos::trent& spec, const std::
     const std::string kind = string_field(spec, "kind");
     if (kind == "builtin") {
         const std::string name = string_field(spec, "name");
-        TcTexture texture = runtime_builtin_texture(name);
+        TcTexture texture = runtime_builtin_texture(name, expected_encoding);
         if (!texture.is_valid()) {
             tc_log_error(
                 "RuntimePackageLoader: material '%s' references unknown builtin texture '%s'",
@@ -636,16 +626,119 @@ void apply_material_uniforms(TcMaterial& material, const nos::trent* uniforms, c
     }
 }
 
-void apply_material_textures(TcMaterial& material, const nos::trent* textures, const std::string& material_uuid) {
+bool material_texture_slot_encoding(
+    const TcMaterial& material,
+    const std::string& name,
+    tc_texture_encoding& encoding
+) {
+    tc_material* raw = material.get();
+    if (!raw) return false;
+    for (size_t phase_index = 0; phase_index < raw->phase_count; ++phase_index) {
+        tc_material_texture* slot =
+            tc_material_phase_find_texture(&raw->phases[phase_index], name.c_str());
+        if (slot && slot->has_expected_encoding) {
+            encoding = static_cast<tc_texture_encoding>(slot->expected_encoding);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool configure_material_texture_slots(
+    TcMaterial& material,
+    const TcShaderProgram& program,
+    const std::string& material_uuid,
+    std::string& error
+) {
+    tc_material* raw_material = material.get();
+    tc_shader_program* raw_program = program.get();
+    if (!raw_material || !raw_program) {
+        error = "material '" + material_uuid + "' has stale material or shader program";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    for (uint32_t property_index = 0;
+         property_index < raw_program->property_count;
+         ++property_index) {
+        const tc_shader_program_property& property =
+            raw_program->properties[property_index];
+        const bool is_texture =
+            std::strcmp(property.property_type, "Texture") == 0
+            || std::strcmp(property.property_type, "Texture2D") == 0;
+        if (!is_texture) continue;
+        if (!property.has_expected_encoding) {
+            error = "material '" + material_uuid + "' texture slot '"
+                + property.name + "' has no encoding contract";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        const auto expected =
+            static_cast<tc_texture_encoding>(property.expected_encoding);
+        for (size_t phase_index = 0;
+             phase_index < raw_material->phase_count;
+             ++phase_index) {
+            if (!tc_material_phase_declare_texture(
+                    &raw_material->phases[phase_index],
+                    property.name,
+                    expected)) {
+                error = "material '" + material_uuid
+                    + "' failed to declare texture slot '" + property.name + "'";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
+            }
+        }
+    }
+
+    for (uint32_t property_index = 0;
+         property_index < raw_program->property_count;
+         ++property_index) {
+        const tc_shader_program_property& property =
+            raw_program->properties[property_index];
+        const bool is_texture =
+            std::strcmp(property.property_type, "Texture") == 0
+            || std::strcmp(property.property_type, "Texture2D") == 0;
+        if (!is_texture) continue;
+        const auto expected =
+            static_cast<tc_texture_encoding>(property.expected_encoding);
+        const std::string default_name =
+            property.has_default && property.default_text[0] != '\0'
+            ? property.default_text : "white";
+        TcTexture texture = runtime_builtin_texture(default_name, expected);
+        if (!texture.is_valid()) {
+            error = "material '" + material_uuid + "' texture slot '"
+                + property.name + "' has invalid builtin default '"
+                + default_name + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        if (material.set_texture(property.name, texture) == 0) {
+            error = "material '" + material_uuid
+                + "' failed to bind default for texture slot '"
+                + property.name + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+bool apply_material_textures(
+    TcMaterial& material,
+    const nos::trent* textures,
+    const std::string& material_uuid,
+    std::string& error
+) {
     if (!textures) {
-        return;
+        return true;
     }
     if (!textures->is_dict()) {
         tc_log_error(
             "RuntimePackageLoader: material '%s' textures must be an object",
             material_uuid.c_str()
         );
-        return;
+        error = "material '" + material_uuid + "' textures must be an object";
+        return false;
     }
 
     for (const auto& item : textures->as_dict()) {
@@ -655,14 +748,31 @@ void apply_material_textures(TcMaterial& material, const nos::trent* textures, c
                 "RuntimePackageLoader: material '%s' texture name must not be empty",
                 material_uuid.c_str()
             );
-            continue;
+            error = "material '" + material_uuid + "' texture name must not be empty";
+            return false;
         }
-        TcTexture texture = runtime_material_texture_from_spec(item.second, material_uuid);
+        tc_texture_encoding expected_encoding = TC_TEXTURE_ENCODING_LINEAR;
+        if (!material_texture_slot_encoding(material, name, expected_encoding)) {
+            error = "material '" + material_uuid
+                + "' texture slot '" + name + "' is not in shader schema";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        TcTexture texture = runtime_material_texture_from_spec(
+            item.second, material_uuid, expected_encoding);
         if (!texture.is_valid()) {
-            continue;
+            error = "material '" + material_uuid
+                + "' failed to resolve texture slot '" + name + "'";
+            return false;
         }
-        material.set_texture(name.c_str(), texture);
+        if (material.set_texture(name.c_str(), texture) == 0) {
+            error = "material '" + material_uuid + "' texture slot '" + name
+                + "' violates its encoding contract";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
     }
+    return true;
 }
 
 bool load_shader_resource(
@@ -994,8 +1104,9 @@ bool load_material_resource(
     }
 
     const std::string program_uuid = string_field(spec, "shader_program");
+    TcShaderProgram program;
     if (!program_uuid.empty()) {
-        TcShaderProgram program = TcShaderProgram::find(program_uuid);
+        program = TcShaderProgram::find(program_uuid);
         if (!program.is_valid()) {
             error = "material '" + uuid + "' references missing shader program '" + program_uuid + "'";
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -1034,8 +1145,15 @@ bool load_material_resource(
         }
     }
 
+    if (program.is_valid()
+        && !configure_material_texture_slots(material, program, uuid, error)) {
+        return false;
+    }
     apply_material_uniforms(material, dict_get(spec, "uniforms"), uuid);
-    apply_material_textures(material, dict_get(spec, "textures"), uuid);
+    if (!apply_material_textures(
+            material, dict_get(spec, "textures"), uuid, error)) {
+        return false;
+    }
 
     keepalive.materials.push_back(std::move(material));
     return true;

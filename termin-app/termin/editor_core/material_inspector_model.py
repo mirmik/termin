@@ -18,6 +18,7 @@ class MaterialTextureValue:
     tag: str
     name: str
     default_kind: str = "white"
+    expected_encoding: str = "linear"
 
 
 @dataclass(frozen=True)
@@ -201,7 +202,20 @@ class MaterialInspectorController:
         default_kind: str = "white",
     ) -> MaterialInspectorSnapshot:
         material = self._require_material()
-        texture = self._resolve_texture(tag, texture_name, default_kind)
+        prop = self._property(name)
+        expected_encoding = prop.get("expected_encoding")
+        if expected_encoding not in ("srgb", "linear"):
+            _logger.error("Material texture property '%s' has no encoding contract", name)
+            raise ValueError(f"texture property '{name}' has no encoding contract")
+        if default_kind == "normal" and expected_encoding != "linear":
+            _logger.error("Material texture property '%s' cannot use an sRGB normal default", name)
+            raise ValueError(f"texture property '{name}' cannot use normal default")
+        texture = self._resolve_texture(
+            tag,
+            texture_name,
+            default_kind,
+            expected_encoding,
+        )
         if texture is None or not texture.is_valid:
             _logger.error(
                 "Cannot resolve valid material texture '%s' (%s:%s)",
@@ -225,7 +239,8 @@ class MaterialInspectorController:
         if kind in ("Texture", "Texture2D"):
             default = prop.get("default")
             default_kind = default if default in ("white", "normal") else "white"
-            texture = self._texture_value(name, default_kind)
+            expected_encoding = str(prop.get("expected_encoding") or "")
+            texture = self._texture_value(name, default_kind, expected_encoding)
             return MaterialPropertySnapshot(name, label, kind, None, texture=texture)
         value = material.uniforms.get(name, prop.get("default"))
         if kind in ("Vec2", "Vec3", "Vec4", "Color"):
@@ -240,29 +255,59 @@ class MaterialInspectorController:
             maximum=None if prop["range_max"] is None else float(prop["range_max"]),
         )
 
-    def _texture_value(self, name: str, default_kind: str) -> MaterialTextureValue:
+    def _texture_value(
+        self,
+        name: str,
+        default_kind: str,
+        expected_encoding: str,
+    ) -> MaterialTextureValue:
         material = self._require_material()
         texture = material.textures.get(name)
         if texture is None or not texture.is_valid:
-            return MaterialTextureValue("default", "", default_kind)
+            return MaterialTextureValue(
+                "default", "", default_kind, expected_encoding
+            )
         asset_name = self._resource_manager.find_texture_name(texture)
-        if asset_name and asset_name != "__white_1x1__":
-            return MaterialTextureValue("file", asset_name, default_kind)
+        if asset_name and asset_name not in (
+            "__white_1x1__",
+            "__white_srgb_1x1__",
+            "__normal_1x1__",
+        ):
+            return MaterialTextureValue(
+                "file", asset_name, default_kind, expected_encoding
+            )
         from termin.default_assets.render.material_asset import _classify_render_target_texture
 
         reference = _classify_render_target_texture(texture)
         if reference is not None:
-            return MaterialTextureValue(f"rt_{reference['channel']}", reference["target"], default_kind)
-        return MaterialTextureValue("default", "", default_kind)
+            return MaterialTextureValue(
+                f"rt_{reference['channel']}",
+                reference["target"],
+                default_kind,
+                expected_encoding,
+            )
+        return MaterialTextureValue(
+            "default", "", default_kind, expected_encoding
+        )
 
-    def _resolve_texture(self, tag: str, name: str, default_kind: str):
+    def _resolve_texture(
+        self,
+        tag: str,
+        name: str,
+        default_kind: str,
+        expected_encoding: str,
+    ):
         if tag == "default" or not name:
             from termin.render.texture_handle import (
                 get_normal_texture_handle,
                 get_white_texture_handle,
             )
 
-            return get_normal_texture_handle() if default_kind == "normal" else get_white_texture_handle()
+            return (
+                get_normal_texture_handle()
+                if default_kind == "normal"
+                else get_white_texture_handle(expected_encoding)
+            )
         if tag == "file":
             return self._resource_manager.get_texture_handle(name)
         if tag in ("rt_color", "rt_depth") and self._render_target_texture is not None:

@@ -1,5 +1,6 @@
 from pathlib import Path
 import gc
+import pytest
 
 
 def _shader_source(
@@ -257,6 +258,66 @@ def test_shader_asset_round_trips_and_applies_matrix_defaults(tmp_path: Path) ->
         for row in range(4):
             assert matrix[column, row] == (1.0 if column == row else 0.0)
     assert uniforms["u_texel_size"] == (0.25, 0.5)
+
+
+def test_shader_update_rejects_incompatible_texture_schema_transactionally(
+    tmp_path: Path,
+) -> None:
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.default_assets.render.shader_asset import ShaderAsset, update_material_shader
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.materials import parse_shader_text
+
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    srgb_asset = ShaderAsset(
+        parse_shader_text(
+            _shader_source(
+                "float4(1.0, 1.0, 1.0, 1.0)",
+                '@property Texture2D u_albedo = "white" encoding(srgb)',
+            )
+        ),
+        name="HotReload",
+        uuid="hot-reload-srgb",
+    )
+    rm.register_shader_asset("HotReload", srgb_asset)
+    material_path = tmp_path / "HotReload.material"
+    material_path.write_text(
+        '{"uuid": "hot-reload-encoding-material", "shader": "HotReload", '
+        '"shader_uuid": "hot-reload-srgb"}\n',
+        encoding="utf-8",
+    )
+    material = MaterialAsset.from_file(material_path, name="HotReload").material
+    assert material is not None
+    previous_phase_count = material.phase_count
+    previous_texture_uuid = material.textures["u_albedo"].uuid
+    previous_program_uuid = material.shader_program_uuid
+    previous_program_version = material.shader_program_version
+
+    linear_asset = ShaderAsset(
+        parse_shader_text(
+            _shader_source(
+                "float4(1.0, 1.0, 1.0, 1.0)",
+                '@property Texture2D u_albedo = "white" encoding(linear)',
+            )
+        ),
+        name="HotReloadLinear",
+        uuid="hot-reload-linear",
+    )
+    assert linear_asset.program is not None
+
+    with pytest.raises(ValueError, match="expects linear, got srgb"):
+        update_material_shader(
+            material,
+            linear_asset.program,
+            "HotReloadLinear",
+            "hot-reload-linear",
+        )
+
+    assert material.phase_count == previous_phase_count
+    assert material.textures["u_albedo"].uuid == previous_texture_uuid
+    assert material.shader_program_uuid == previous_program_uuid
+    assert material.shader_program_version == previous_program_version
 
 
 def test_shader_asset_releases_program_without_invalidating_live_handles(tmp_path: Path) -> None:

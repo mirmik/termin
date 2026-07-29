@@ -61,7 +61,7 @@ class _Program:
         {"name": "count", "label": "Count", "property_type": "Int", "default": 1, "range_min": 0.0, "range_max": 8.0},
         {"name": "direction", "label": "Direction", "property_type": "Vec3", "default": (0.0, 0.0, 1.0), "range_min": None, "range_max": None},
         {"name": "tint", "label": "Tint", "property_type": "Color", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
-        {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "range_min": None, "range_max": None},
+        {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "expected_encoding": "srgb", "range_min": None, "range_max": None},
     ]
 
 
@@ -98,7 +98,9 @@ def test_material_inspector_snapshot_and_property_edits_share_one_controller():
     assert snapshot.properties[1].minimum == 0.0
     assert snapshot.properties[1].maximum == 1.0
     assert snapshot.properties[4].value == pytest.approx((1.0, 0.5, 0.0, 0.75))
-    assert snapshot.properties[5].texture == MaterialTextureValue("file", "brick", "white")
+    assert snapshot.properties[5].texture == MaterialTextureValue(
+        "file", "brick", "white", "srgb"
+    )
 
     controller.set_property("roughness", 0.75)
     controller.set_property("count", 4.9)

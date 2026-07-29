@@ -202,14 +202,19 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     registered_meshes = manager.register_builtin_meshes()
 
     assert manager.get_texture_asset("__white_1x1__") is not None
+    assert manager.get_texture_asset("__white_srgb_1x1__") is not None
     assert manager.get_texture_asset("__normal_1x1__") is not None
     white_texture = manager.get_texture_handle("__white_1x1__")
+    white_srgb_texture = manager.get_texture_handle("__white_srgb_1x1__")
     normal_texture = manager.get_texture_handle("__normal_1x1__")
     assert isinstance(white_texture, TcTexture)
+    assert isinstance(white_srgb_texture, TcTexture)
     assert isinstance(normal_texture, TcTexture)
     assert white_texture.is_valid
+    assert white_srgb_texture.is_valid
     assert normal_texture.is_valid
     assert white_texture.uuid == "__white_1x1__"
+    assert white_srgb_texture.uuid == "__white_srgb_1x1__"
     assert normal_texture.uuid == "__normal_1x1__"
     assert manager.get_handle_by_uuid("tc_texture", "__white_1x1__").uuid == "__white_1x1__"
     assert not TcTexture.from_uuid("5fb7972ad02ddfad").is_valid

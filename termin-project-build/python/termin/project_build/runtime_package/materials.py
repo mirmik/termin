@@ -143,7 +143,7 @@ def material_to_spec(
     }
     program_uuid = material.shader_program_uuid
     if program_uuid:
-        from tgfx import TcShaderProgram
+        from tgfx import TcShaderProgram, TextureEncoding
 
         program = TcShaderProgram.find(program_uuid)
         if not program.is_valid:
@@ -160,6 +160,25 @@ def material_to_spec(
             shaders[phase_shader.uuid] = shader_to_spec(phase_shader)
         shader_programs[program_uuid] = shader_program_to_spec(program)
         spec["shader_program"] = program_uuid
+        texture_contract = {
+            prop["name"]: prop["expected_encoding"]
+            for prop in program.properties
+            if prop["property_type"] in ("Texture", "Texture2D")
+        }
+        for slot_name, texture in material.textures.items():
+            expected = texture_contract.get(slot_name)
+            if expected is None or texture is None or not texture.is_valid:
+                continue
+            actual = (
+                "srgb"
+                if texture.encoding == TextureEncoding.SRGB
+                else "linear"
+            )
+            if actual != expected:
+                raise ValueError(
+                    f"Material '{material.uuid}' texture slot '{slot_name}' "
+                    f"expects {expected}, got {actual}"
+                )
     uniforms = material_uniforms_to_json(material)
     if uniforms:
         spec["uniforms"] = uniforms
@@ -197,7 +216,7 @@ def material_textures_to_json(material: Any) -> dict[str, Any]:
         if texture.name == "__normal_1x1__":
             result[name] = {"kind": "builtin", "name": "normal"}
             continue
-        if texture.name == "__white_1x1__":
+        if texture.name in ("__white_1x1__", "__white_srgb_1x1__"):
             result[name] = {"kind": "builtin", "name": "white"}
             continue
         texture_uuid = texture.uuid
