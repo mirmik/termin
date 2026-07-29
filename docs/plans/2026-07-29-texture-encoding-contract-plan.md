@@ -196,12 +196,15 @@ Format naming/parsing, byte size, validation, readback and backend tests дол�
 sRGB mip levels должны фильтроваться в linear space. Нельзя усреднять
 sRGB-encoded bytes как linear числа.
 
-Сейчас OpenGL учитывает texture mipmap policy, а Vulkan/D3D11 bridge создаёт
-один level. После введения sRGB formats требуется выровнять поведение backend:
+Общий backend-neutral upload path строит полную mip chain на CPU и загружает
+каждый level в OpenGL, Vulkan и D3D11. Поэтому backend не выбирает собственный
+алгоритм фильтрации: RGB sRGB-текстур декодируется в linear перед усреднением и
+кодируется обратно, alpha и Linear/Data payload усредняются численно. RGB
+storage заодно нормализуется в переносимый RGBA layout в этом же общем месте.
 
-- одинаково соблюдать asset mipmap policy;
-- использовать native sRGB-aware generation либо явную linear filtering path;
-- тестировать не только level 0, но и выборку уменьшенных mip levels.
+Неподдерживаемые сочетания, включая mipmaps для GPU-first texture без
+определённой source chain, завершаются диагностикой, а не молчаливым fallback
+на level 0.
 
 ### `termin-materials` и shader metadata
 
@@ -389,6 +392,6 @@ SDK/test скриптом.
 7. `#1053` — sRGB-correct mipmaps и backend parity;
 8. `#1055` — итоговый editor/runtime/cross-backend integration gate.
 
-`#1048`, `#1049`, `#1050`, `#1051`, `#1052` и `#1054` реализованы и находятся
-в `On Test`; их blocker-связи с последующими этапами сняты. `#1053` находится
-в `Ready`. `#1055` сохраняет типизированную зависимость только от `#1053`.
+`#1048`, `#1049`, `#1050`, `#1051`, `#1052`, `#1054` и `#1053` реализованы и
+находятся в `On Test`; их blocker-связи с последующими этапами сняты. `#1055`
+готова к итоговой integration-проверке.
