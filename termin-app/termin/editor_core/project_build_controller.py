@@ -13,6 +13,7 @@ from termin.editor_core.build_profiles_model import BuildProfileAction
 from termin.project_build import (
     BuildProfile,
     ProfileDiagnostic,
+    ToolchainContext,
     compile_profile_build_request,
     inspect_profile_capabilities,
 )
@@ -29,16 +30,18 @@ class ProjectBuildController:
         *,
         save_scene: Callable[[], None],
         on_output: Callable[[str], None] | None = None,
+        toolchain_settings: Callable[[], ToolchainContext] | None = None,
     ) -> None:
         self._save_scene = save_scene
         self._on_output = on_output
+        self._toolchain_settings = toolchain_settings or ToolchainContext
 
     def capability_diagnostics(
         self,
         action: BuildProfileAction,
         profile: BuildProfile,
     ) -> tuple[ProfileDiagnostic, ...]:
-        report = inspect_profile_capabilities(profile)
+        report = self._inspect(profile)
         if action == BuildProfileAction.DRY_RUN:
             return ()
         if action in (BuildProfileAction.BUILD, BuildProfileAction.RUN):
@@ -90,7 +93,7 @@ class ProjectBuildController:
             raise
 
     def _dry_run(self, profile: BuildProfile) -> None:
-        report = inspect_profile_capabilities(profile)
+        report = self._inspect(profile)
         request = compile_profile_build_request(profile, report.context)
         self._emit(f"Target: {request.target}")
         self._emit(f"Entry scene: {request.context.entry_scene.as_posix()}")
@@ -104,7 +107,11 @@ class ProjectBuildController:
         from termin.project_build import build_profile_result
 
         self._save_scene()
-        result = build_profile_result(profile, log_callback=self._emit)
+        result = build_profile_result(
+            profile,
+            editor_settings=self._toolchain_settings(),
+            log_callback=self._emit,
+        )
         self._report_build(profile, result)
         return result
 
@@ -112,17 +119,14 @@ class ProjectBuildController:
         result = self._build(profile)
         launcher_path = result.runtime_result.launcher_path
         if launcher_path is None or not launcher_path.is_file():
-            raise FileNotFoundError(
-                f"desktop launcher is missing after build: "
-                f"{launcher_path or result.dist_dir}"
-            )
+            raise FileNotFoundError(f"desktop launcher is missing after build: {launcher_path or result.dist_dir}")
         self._emit(f"Launching: {launcher_path}")
         subprocess.Popen([str(launcher_path)], cwd=str(launcher_path.parent))
 
     def _install(self, profile: BuildProfile) -> None:
         from termin.project_build import install_android_apk
 
-        report = inspect_profile_capabilities(profile)
+        report = self._inspect(profile)
         request = compile_profile_build_request(profile, report.context)
         apk_path = self._apk_path(request)
         log_path = request.context.logs_dir / f"{request.target}-deploy.log"
@@ -138,11 +142,9 @@ class ProjectBuildController:
         from termin.project.settings import load_project_settings
         from termin.project_build import launch_android_app
 
-        report = inspect_profile_capabilities(profile)
+        report = self._inspect(profile)
         request = compile_profile_build_request(profile, report.context)
-        application_id = load_project_settings(
-            request.context.project_root
-        ).application.application_id
+        application_id = load_project_settings(request.context.project_root).application.application_id
         log_path = request.context.logs_dir / f"{request.target}-deploy.log"
         launch_android_app(
             application_id,
@@ -162,18 +164,18 @@ class ProjectBuildController:
             self._emit(f"Application ID: {result.application_id}")
             self._emit(f"Build log: {result.log_path}")
         for diagnostic in result.diagnostics:
-            self._emit(
-                f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}"
-            )
+            self._emit(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
+
+    def _inspect(self, profile: BuildProfile):
+        return inspect_profile_capabilities(
+            profile,
+            editor_settings=self._toolchain_settings(),
+        )
 
     @staticmethod
     def _apk_path(request) -> Path:
         qualifier = "-quest-openxr" if request.target == "quest_openxr" else ""
-        return (
-            request.context.dist_dir
-            / "apk"
-            / f"{request.context.project_name}{qualifier}-debug.apk"
-        )
+        return request.context.dist_dir / "apk" / f"{request.context.project_name}{qualifier}-debug.apk"
 
     def _emit(self, message: str) -> None:
         normalized = str(message)

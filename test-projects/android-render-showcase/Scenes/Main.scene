@@ -1,37 +1,69 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "android-render-showcase-main-scene",
+    "uuid": "",
     "entities": [
       {
         "uuid": "android-showcase-ground",
         "name": "Ground",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
+            "source_id": "0dcca2c9-84a4-4a6d-9ffb-98940045e8bc",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "mesh_generated": false,
               "mesh": {
                 "uuid": "android-showcase-ground-mesh",
                 "name": "GroundPlane",
                 "type": "uuid",
                 "kind": "tc_mesh"
-              }
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
+            "source_id": "7bfb75ff-3051-49f7-8620-5964965350a3",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
@@ -41,7 +73,9 @@
                 "type": "uuid",
                 "kind": "tc_material"
               },
-              "cast_shadow": false
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
             }
           }
         ]
@@ -49,32 +83,64 @@
       {
         "uuid": "android-showcase-center-cube",
         "name": "Center Cube",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.4, 0.0],
-          "rotation": [0.0, 0.0, 0.19509, 0.980785]
+          "position": [
+            0.0,
+            0.4,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.19509,
+            0.980785
+          ]
         },
-        "scale": [1.8, 1.8, 1.8],
+        "scale": [
+          1.8,
+          1.8,
+          1.8
+        ],
         "components": [
           {
+            "source_id": "1ff36da3-9727-4177-a2a9-0b23eef3df69",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "mesh_generated": false,
               "mesh": {
                 "uuid": "android-showcase-cube-mesh",
                 "name": "Cube",
                 "type": "uuid",
                 "kind": "tc_mesh"
-              }
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
+            "source_id": "ef55681f-a6c1-46ed-a16f-5178c2a11be2",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
@@ -84,7 +150,9 @@
                 "type": "uuid",
                 "kind": "tc_material"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
             }
           }
         ]
@@ -92,32 +160,64 @@
       {
         "uuid": "android-showcase-left-cube",
         "name": "Left Pedestal",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [-2.5, 0.8, 0.0],
-          "rotation": [0.0, 0.0, -0.130526, 0.991445]
+          "position": [
+            -2.5,
+            0.8,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            -0.130526,
+            0.991445
+          ]
         },
-        "scale": [1.1, 1.1, 1.1],
+        "scale": [
+          1.1,
+          1.1,
+          1.1
+        ],
         "components": [
           {
+            "source_id": "9488852c-b096-43d2-bfae-f52ea2d59791",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "mesh_generated": false,
               "mesh": {
                 "uuid": "android-showcase-cube-mesh",
                 "name": "Cube",
                 "type": "uuid",
                 "kind": "tc_mesh"
-              }
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
+            "source_id": "2a00b0d0-c1c6-4da3-b60e-1bf8b036da44",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
@@ -127,7 +227,9 @@
                 "type": "uuid",
                 "kind": "tc_material"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
             }
           }
         ]
@@ -135,32 +237,64 @@
       {
         "uuid": "android-showcase-right-pyramid",
         "name": "Right Pyramid",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [2.5, 1.0, 0.0],
-          "rotation": [0.0, 0.0, 0.258819, 0.965926]
+          "position": [
+            2.5,
+            1.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.258819,
+            0.965926
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
+            "source_id": "bf60706f-f613-4136-8237-64640cfbf536",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "mesh_generated": false,
               "mesh": {
                 "uuid": "android-showcase-pyramid-mesh",
                 "name": "Pyramid",
                 "type": "uuid",
                 "kind": "tc_mesh"
-              }
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
+            "source_id": "fba506bd-6bc4-40a1-927b-9a82b174c770",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
@@ -170,7 +304,9 @@
                 "type": "uuid",
                 "kind": "tc_material"
               },
-              "cast_shadow": true
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
             }
           }
         ]
@@ -178,32 +314,51 @@
       {
         "uuid": "android-showcase-key-light",
         "name": "Directional Key Light",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [3.0, -4.0, 6.0],
-          "rotation": [-0.1098, -0.4342, 0.854, 0.2647]
+          "position": [
+            3.0,
+            -4.0,
+            6.0
+          ],
+          "rotation": [
+            -0.1098,
+            -0.4342,
+            0.854,
+            0.2647
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
+            "source_id": "d437dfcb-4b21-410d-9865-716460669a5c",
             "type": "LightComponent",
             "data": {
+              "enabled": true,
               "light_type": "directional",
-              "color": [1.0, 0.88, 0.72],
+              "color": [
+                1.0,
+                0.88,
+                0.72
+              ],
               "intensity": 1.35,
               "shadows_enabled": true,
               "shadows_bias": 0.001,
               "shadows_normal_bias": 0.02,
-              "shadows_map_resolution": 1024,
-              "cascade_count": 3,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 3.0,
               "max_distance": 40.0,
-              "split_lambda": 0.7,
+              "split_lambda": 0.699999988079071,
               "cascade_blend": true
             }
           }
@@ -212,26 +367,52 @@
       {
         "uuid": "android-showcase-fill-light",
         "name": "Blue Fill Light",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [-3.0, -1.5, 3.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            -3.0,
+            -1.5,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
+            "source_id": "0ba01976-6479-4837-b4b2-b9a5268016fb",
             "type": "LightComponent",
             "data": {
+              "enabled": true,
               "light_type": "point",
-              "color": [0.25, 0.45, 1.0],
+              "color": [
+                0.25,
+                0.45,
+                1.0
+              ],
               "intensity": 2.4,
-              "shadows_enabled": false
+              "shadows_enabled": false,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.0,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 1.0,
+              "max_distance": 100.0,
+              "split_lambda": 0.5,
+              "cascade_blend": true
             }
           }
         ]
@@ -239,25 +420,45 @@
       {
         "uuid": "android-showcase-camera",
         "name": "Main Camera",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
-          "position": [0.0, -9.0, 4.5],
-          "rotation": [-0.19509, 0.0, 0.0, 0.980785]
+          "position": [
+            0.0,
+            -9.0,
+            4.5
+          ],
+          "rotation": [
+            -0.19509,
+            0.0,
+            0.0,
+            0.980785
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
+            "source_id": "b8f5c603-16c7-406e-ac81-d28ce76ce8f2",
             "type": "CameraComponent",
             "data": {
+              "enabled": true,
               "near_clip": 0.1,
               "far_clip": 100.0,
-              "fov_y_degrees": 52.0
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 52.00000000000001,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xffffffffffffffff"
             }
           }
         ]
@@ -265,6 +466,66 @@
     ],
     "layer_names": {},
     "flag_names": {},
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": {
+            "position": [
+              -6.389166433418909,
+              -15.269562299804189,
+              8.505007957804477
+            ],
+            "rotation": [
+              -0.2223511055525157,
+              0.049241386959308506,
+              -0.2105374579250813,
+              0.9506888294706857
+            ],
+            "radius": 17.5,
+            "editor_entities": {
+              "camera": [
+                {
+                  "source_id": "837062fe-f00a-4c23-ac80-7c4faad0e9ca",
+                  "type": "CameraComponent",
+                  "data": {
+                    "enabled": true,
+                    "near_clip": 0.1,
+                    "far_clip": 100.0,
+                    "ortho_size": 5.0,
+                    "fov_x_degrees": 59.99999999999999,
+                    "fov_y_degrees": 45.0,
+                    "fov_mode": "FixHorizontal",
+                    "layer_mask": "0xffffffffffffffff",
+                    "render_category_mask": "0xfffffffffffffffc"
+                  }
+                },
+                {
+                  "source_id": "ea8700cb-34a4-4863-9b71-78fff380ef77",
+                  "type": "OrbitCameraController",
+                  "data": {
+                    "enabled": true,
+                    "radius": 17.5,
+                    "min_radius": 1.0,
+                    "max_radius": 100.0
+                  }
+                },
+                {
+                  "type": "EditorCameraUIController",
+                  "data": {
+                    "enabled": true,
+                    "colliders_enabled": false,
+                    "wireframe_enabled": false,
+                    "navmesh_enabled": false,
+                    "ortho_enabled": false,
+                    "gizmo_world_orientation_enabled": false
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
     "extensions": {
       "render_mount": {
         "pipeline_templates": [],
@@ -275,8 +536,13 @@
             "render_target": {
               "name": "Main Target"
             },
-            "region": [0.0, 0.0, 1.0, 1.0],
-            "depth": 0,
+            "region": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0.0,
             "input_mode": "simple",
             "block_input_in_editor": false,
             "enabled": true
@@ -289,37 +555,115 @@
             "dynamic_resolution": true,
             "color_format": "rgba8",
             "depth_format": "depth24",
-            "clear_color": [0.015, 0.02, 0.04, 1.0],
+            "clear_color": [
+              0.014999999664723873,
+              0.019999999552965164,
+              0.03999999910593033,
+              1.0
+            ],
             "clear_depth": 1.0,
             "pipeline_name": "Default",
-            "layer_mask": 4294967295,
+            "layer_mask": 4294967295.0,
             "enabled": true
           }
         ]
       },
       "render_state": {
-        "background_color": [0.015, 0.02, 0.04, 1.0],
+        "background_color": [
+          0.014999999664723873,
+          0.019999999552965164,
+          0.03999999910593033,
+          1.0
+        ],
         "lighting": {
-          "ambient_color": [0.32, 0.4, 0.62],
-          "ambient_intensity": 0.26,
+          "ambient_color": [
+            0.3199999928474426,
+            0.4000000059604645,
+            0.6200000047683716
+          ],
+          "ambient_intensity": 0.25999999046325684,
           "shadow_settings": {
-            "method": 1,
+            "method": 1.0,
             "softness": 1.5,
-            "bias": 0.001
+            "bias": 0.0010000000474974513
           }
         },
         "skybox": {
-          "type": 0,
-          "color": [0.015, 0.02, 0.04]
+          "type": 1.0,
+          "color": [
+            0.014999999664723873,
+            0.019999999552965164,
+            0.03999999910593033
+          ],
+          "top_color": [
+            0.1469135731458664,
+            0.4659259617328644,
+            0.9444444179534912
+          ],
+          "bottom_color": [
+            0.6000000238418579,
+            0.5,
+            0.4000000059604645
+          ]
         }
-      }
+      },
+      "collision_world": {}
     }
   },
   "editor": {
     "camera": {
-      "position": [-7.0, -9.0, 6.0],
-      "rotation": [-0.12, -0.25, 0.93, 0.24],
-      "radius": 10.0
+      "position": [
+        -6.389166433418909,
+        -15.269562299804189,
+        8.505007957804477
+      ],
+      "rotation": [
+        -0.2223511055525157,
+        0.049241386959308506,
+        -0.2105374579250813,
+        0.9506888294706857
+      ],
+      "radius": 17.5,
+      "editor_entities": {
+        "camera": [
+          {
+            "source_id": "837062fe-f00a-4c23-ac80-7c4faad0e9ca",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xfffffffffffffffc"
+            }
+          },
+          {
+            "source_id": "ea8700cb-34a4-4863-9b71-78fff380ef77",
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 17.5,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "navmesh_enabled": false,
+              "ortho_enabled": false,
+              "gizmo_world_orientation_enabled": false
+            }
+          }
+        ]
+      }
     }
   }
 }

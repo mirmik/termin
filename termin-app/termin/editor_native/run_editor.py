@@ -225,11 +225,7 @@ def _compose_native_editor(
     if composition_config.mode == "windowed":
         from termin.display.window import PresentationMode
 
-        presentation_mode = (
-            PresentationMode.VSYNC
-            if settings_snapshot.vsync_enabled
-            else PresentationMode.IMMEDIATE
-        )
+        presentation_mode = PresentationMode.VSYNC if settings_snapshot.vsync_enabled else PresentationMode.IMMEDIATE
     else:
         presentation_mode = None
     platform_stage = session.begin_stage(
@@ -517,6 +513,15 @@ def _compose_native_editor(
         if display_workspace is not None:
             display_workspace.set_render_only_active_display(enabled)
 
+    settings_saved_handlers: list[Callable[[], None]] = []
+
+    def notify_settings_saved(_snapshot) -> None:
+        for handler in tuple(settings_saved_handlers):
+            try:
+                handler()
+            except Exception:
+                _logger.exception("Editor settings change handler failed")
+
     settings_dialog = workspace_stage.own(
         "settings dialog",
         build_native_settings_dialog(
@@ -527,6 +532,7 @@ def _compose_native_editor(
             request_render=request_editor_render,
             apply_font_size=host.apply_font_size,
             apply_render_only_active_display=apply_render_only_active_display,
+            on_saved=notify_settings_saved,
         ),
         cleanup=lambda: settings_dialog.close(),
     )
@@ -1445,6 +1451,7 @@ def _compose_native_editor(
         project_build_controller = ProjectBuildController(
             save_scene=scene_file_controller.save_scene,
             on_output=present_profile_output,
+            toolchain_settings=settings_controller.toolchain_context,
         )
         profiles_controller = BuildProfilesController(
             BuildProfileStorePersistence(
@@ -1477,14 +1484,11 @@ def _compose_native_editor(
             cleanup=lambda: build_profiles_window.close(),
         )
         build_profiles_window_ref[0] = build_profiles_window
-        project_build_commands[shell.build_profiles_command] = (
-            build_profiles_window.show
-        )
+        settings_saved_handlers.append(build_profiles_window.refresh)
+        project_build_commands[shell.build_profiles_command] = build_profiles_window.show
         project_build_commands.update(
             {
-                command_id: (
-                    lambda action=action: build_profiles_window.execute(action)
-                )
+                command_id: (lambda action=action: build_profiles_window.execute(action))
                 for command_id, action in profile_command_actions.items()
             }
         )
@@ -1739,9 +1743,7 @@ def _compose_native_editor(
         project_stage.own(
             "game mode controller",
             game_mode_controller,
-            cleanup=lambda: native_bootstrap.close_game_mode_controller(
-                game_mode_controller
-            ),
+            cleanup=lambda: native_bootstrap.close_game_mode_controller(game_mode_controller),
         )
 
     def on_project_resource_settings_changed() -> None:

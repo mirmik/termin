@@ -1,0 +1,10 @@
+interface:
+  display_name: "Termin Editor MCP"
+  short_description: "Управление живым редактором Termin через MCP"
+  default_prompt: "Use $termin-editor-mcp and its native MCP tools to inspect or manipulate this project in the running Termin editor."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "termin_editor"
+      description: "Project-scoped Termin editor MCP server"

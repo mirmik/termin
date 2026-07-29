@@ -91,6 +91,18 @@ does not require restarting the broker or MCP client. A clean editor shutdown
 removes only its owned descriptor. Stale descriptors left by crashed processes
 are probed and ignored when one live match remains.
 
+## Agent skill
+
+The repository ships `.agents/skills/termin-editor-mcp` using the open Agent
+Skills layout. Compatible agents discover the skill directly while working in
+this checkout; no user-local copy or deployment manifest is required. The skill
+documents editor launch, tool selection, session isolation, and CLI fallback
+workflows.
+
+The stdio broker also returns concise server-wide instructions during MCP
+initialization, so MCP clients can use its tools even when they do not implement
+Agent Skills discovery.
+
 For Codex, add a project-scoped `.codex/config.toml` in a trusted checkout:
 
 ```toml

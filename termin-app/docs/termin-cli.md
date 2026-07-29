@@ -149,6 +149,15 @@ the CLI; Install and Launch are enabled only for Android-family profiles when
 their exact APK/ADB prerequisites are available. Action output is mirrored to
 the Build Profiles Output tab and the editor console.
 
+Workstation-specific paths are configured under
+**Edit > Settings... > Build Toolchain**, not in `build_profiles.json`. The
+editor stores Termin SDK/source roots, the Termin Android SDK slice,
+`termin_shaderc`, FXC, Android/Quest build scripts, Gradle and ADB in its local
+user settings. These values form the editor-local `ToolchainContext` layer and
+override installation/environment discovery without making the project dirty.
+Changing the settings refreshes the selected profile's action capabilities;
+the same resolved paths are then passed to the actual build or deploy action.
+
 The v2 model already reserves explicit scene, module, Python-requirement and
 resource roots. Builds currently reject non-trivial roots with a structured
 `profile.feature_pending` diagnostic until their dependency-closure stages are
