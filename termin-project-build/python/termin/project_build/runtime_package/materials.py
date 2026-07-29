@@ -77,7 +77,12 @@ def export_material_spec(
 
         material = TcMaterial.from_uuid(uuid_value)
         if material.is_valid:
-            return material_to_spec(material, shaders, shader_programs)
+            return material_to_spec(
+                material,
+                diagnostics,
+                shaders,
+                shader_programs,
+            )
     except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -114,6 +119,7 @@ def export_material_spec(
 
 def material_to_spec(
     material: Any,
+    diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, ShaderSpec],
     shader_programs: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
@@ -175,9 +181,16 @@ def material_to_spec(
                 else "linear"
             )
             if actual != expected:
-                raise ValueError(
-                    f"Material '{material.uuid}' texture slot '{slot_name}' "
-                    f"expects {expected}, got {actual}"
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        level="warning",
+                        path=f"materials/{material.uuid}.tmat.json",
+                        message=(
+                            f"Material texture slot '{slot_name}' expects "
+                            f"{expected}, got {actual}; exporting the binding "
+                            "unchanged"
+                        ),
+                    )
                 )
     uniforms = material_uniforms_to_json(material)
     if uniforms:

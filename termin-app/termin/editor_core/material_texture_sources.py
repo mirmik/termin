@@ -60,6 +60,9 @@ class MaterialTextureSourceCatalog:
         default_kind: str = "white",
         expected_encoding: str | None = None,
     ) -> tuple[MaterialTextureSource, ...]:
+        # Encoding is a diagnostic material-slot contract, not a source filter:
+        # mismatched textures remain selectable and the material API warns when
+        # binding them.
         entries = [MaterialTextureSource(f"Default ({default_kind})", "default", "")]
         entries.extend(self._render_target_sources())
         entries.extend(
@@ -69,10 +72,6 @@ class MaterialTextureSourceCatalog:
                 "__white_1x1__",
                 "__white_srgb_1x1__",
                 "__normal_1x1__",
-            )
-            and (
-                expected_encoding is None
-                or self._asset_matches_encoding(name, expected_encoding)
             )
         )
         result = []
@@ -102,6 +101,10 @@ class MaterialTextureSourceCatalog:
         """Return CPU pixels for a texture-source thumbnail, when available."""
 
         try:
+            from termin.editor_core.resource_inspector_models import (
+                prepare_texture_preview_pixels,
+            )
+
             if tag == "default":
                 from termin.render.texture import get_normal_texture, get_white_texture
 
@@ -110,25 +113,41 @@ class MaterialTextureSourceCatalog:
                     if default_kind == "normal"
                     else get_white_texture(expected_encoding)
                 )
-                return texture._image_data
+                encoding = "linear" if default_kind == "normal" else expected_encoding
+                return prepare_texture_preview_pixels(texture._image_data, encoding)
             if tag == "file":
                 texture = self._resource_manager.get_texture(name)
-                return None if texture is None else texture._image_data
+                if texture is None:
+                    return None
+                asset = self._resource_manager.get_texture_asset(name)
+                if asset is None:
+                    _logger.error(
+                        "Material texture preview has no asset metadata: %s",
+                        name,
+                    )
+                    return None
+                return prepare_texture_preview_pixels(
+                    texture._image_data,
+                    asset.encoding,
+                )
             if tag in ("rt_color", "rt_depth"):
+                from tgfx import TextureEncoding
+
                 texture = self.resolve_render_target(
                     name,
                     "depth" if tag == "rt_depth" else "color",
                 )
-                return None if texture is None else texture.data
+                if texture is None:
+                    return None
+                encoding = (
+                    "srgb"
+                    if texture.encoding == TextureEncoding.SRGB
+                    else "linear"
+                )
+                return prepare_texture_preview_pixels(texture.data, encoding)
         except Exception:
             _logger.exception("Failed to resolve material texture preview: %s/%s", tag, name)
         return None
-
-    def _asset_matches_encoding(self, name: str, expected_encoding: str) -> bool:
-        asset = self._resource_manager.get_texture_asset(name)
-        if asset is None:
-            return False
-        return asset.encoding == expected_encoding
 
     def _render_target_sources(self) -> list[MaterialTextureSource]:
         names = set()

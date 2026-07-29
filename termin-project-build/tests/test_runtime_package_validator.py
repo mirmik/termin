@@ -823,7 +823,7 @@ def test_validate_runtime_package_checks_texture_resource_and_material_reference
     ]
 
 
-def test_validate_runtime_package_rejects_material_texture_encoding_mismatch(
+def test_validate_runtime_package_warns_about_material_texture_encoding_mismatch(
     tmp_path: Path,
 ) -> None:
     package_dir = _write_valid_package(tmp_path)
@@ -886,9 +886,13 @@ def test_validate_runtime_package_rejects_material_texture_encoding_mismatch(
     diagnostics = validate_runtime_package(package_dir)
 
     assert any(
-        diagnostic.path == "materials/material-uuid.tmat.json:textures.u_albedo"
+        diagnostic.level == "warning"
+        and diagnostic.path == "materials/material-uuid.tmat.json:textures.u_albedo"
         and diagnostic.message
-        == "Runtime material texture slot expects srgb, but texture 'texture-uuid' is linear"
+        == (
+            "Runtime material texture slot expects srgb, but texture "
+            "'texture-uuid' is linear; the binding remains renderable"
+        )
         for diagnostic in diagnostics
     )
 

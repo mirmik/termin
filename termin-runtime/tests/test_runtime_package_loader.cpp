@@ -841,7 +841,7 @@ TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materia
     CHECK_EQ(std::string(bound_texture->header.uuid), std::string(kTextureUuid));
 }
 
-TEST_CASE("RuntimePackageLoader rejects material texture encoding mismatch") {
+TEST_CASE("RuntimePackageLoader binds material texture encoding mismatch") {
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
     write_text(
@@ -853,8 +853,15 @@ TEST_CASE("RuntimePackageLoader rejects material texture encoding mismatch") {
 
     termin::runtime::RuntimePackageLoadResult result =
         termin::runtime::load_runtime_package(root.string());
-    CHECK_FALSE(result.ok);
-    CHECK(result.message.find("violates its encoding contract") != std::string::npos);
+    REQUIRE(result.ok);
+
+    termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
+    REQUIRE(material.is_valid());
+    tc_material_texture* binding =
+        require_texture(material.default_phase(), "u_albedo_texture");
+    tc_texture* bound_texture = tc_texture_get(binding->texture);
+    REQUIRE(bound_texture != nullptr);
+    CHECK_EQ(bound_texture->encoding, TC_TEXTURE_ENCODING_LINEAR);
 }
 
 TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
