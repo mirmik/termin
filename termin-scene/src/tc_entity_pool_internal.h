@@ -64,7 +64,10 @@ struct tc_entity_pool {
     Vec3* world_positions;
     Quat* world_rotations;
     Vec3* world_scales;
-    double* world_matrices;
+    uint8_t* world_transform_kinds;
+    Vec3* world_basis_x;
+    Vec3* world_basis_y;
+    Vec3* world_basis_z;
 
     char** names;
     char** uuids;

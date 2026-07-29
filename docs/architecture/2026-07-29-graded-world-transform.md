@@ -2,7 +2,7 @@
 
 Date: 2026-07-29.
 
-Status: accepted architecture; implementation pending.
+Status: accepted architecture; exact primitives and graded entity cache implemented.
 
 ## Context
 
@@ -70,11 +70,11 @@ AxisScaled  T * R * non-uniform S
 Affine      T * arbitrary Basis
 ```
 
-`Rigid` is an element of `SE(3)`. In the initial proposal, `Similarity` adds a
-positive uniform scale and remains closed under composition; the treatment of
-negative uniform scale is an open policy decision. `AxisScaled` is the single
-fragile decomposed tier: it remains useful while scale axes are compatible
-with later rotations, but promotes to `Affine` when they are not.
+`Rigid` is an element of `SE(3)`. `Similarity` adds a strictly positive uniform
+scale and remains closed under composition. Zero and negative uniform scales
+are classified as `AxisScaled`. `AxisScaled` is the single fragile decomposed
+tier: it remains useful while scale axes are compatible with later rotations,
+but promotes to `Affine` when they are not.
 
 The state names describe exact guarantees, not merely likely contents.
 
@@ -350,10 +350,11 @@ must choose one explicit contract:
 
 Silent TRS decomposition is not acceptable.
 
-## Current Termin mismatch
+## Previous Termin mismatch
 
-The current entity pool caches local and world position, quaternion and scale
-separately, plus a world matrix. World values are composed as:
+Before this migration, the entity pool cached local and world position,
+quaternion and scale separately, plus a world matrix. World values were
+composed as:
 
 ```text
 world_rotation = parent_rotation * local_rotation
@@ -361,9 +362,8 @@ world_scale    = parent_scale component-wise multiplied by local_scale
 world_matrix   = TRS(world_position, world_rotation, world_scale)
 ```
 
-This treats TRS as closed. The cached world matrix is reconstructed from the
-lossy world pose and therefore also loses shear. It is not an exact product of
-the parent world matrix and local matrix.
+That treated TRS as closed. The cached world matrix was reconstructed from the
+lossy world pose and therefore also lost shear.
 
 Relevant implementation:
 
@@ -371,15 +371,14 @@ Relevant implementation:
 - `termin-scene/cpp/geom/general_transform3.cpp`;
 - `termin-render/src/drawable.cpp`.
 
-The target invariant is:
+The entity pool now maintains the target invariant:
 
 ```text
 world affine == parent world affine * local TRS affine
 ```
 
 `GeneralPose3::global_pose()` cannot be the canonical exact world value after
-this change. It should be replaced or clearly exposed as a policy-based lossy
-view.
+this change. Migrating that facade and its consumers remains the next stage.
 
 ## Selected cache layout
 
@@ -422,7 +421,7 @@ architecture change and is not part of this migration.
 The migration is deliberately staged so that exact geometry becomes available
 before the misleading TRS-shaped world API is removed.
 
-### 1. Exact geometry primitives
+### 1. Exact geometry primitives (implemented)
 
 Add standard-layout `Basis3d` and `Affine3d` ABI types with:
 
@@ -435,7 +434,7 @@ Add standard-layout `Basis3d` and `Affine3d` ABI types with:
 The primitive tests establish matrix order and serve as the reference for
 scene propagation.
 
-### 2. Graded entity world cache
+### 2. Graded entity world cache (implemented)
 
 Replace the lossy world-matrix cache with the fixed columns described above.
 Dirty propagation must:

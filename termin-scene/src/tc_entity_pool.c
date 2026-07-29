@@ -7,6 +7,8 @@
 #include "core/tc_scene.h"
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_types.h>
+#include <geom/tc_affine3.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -314,7 +316,10 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->world_positions = calloc(initial_capacity, sizeof(Vec3));
     pool->world_rotations = calloc(initial_capacity, sizeof(Quat));
     pool->world_scales = calloc(initial_capacity, sizeof(Vec3));
-    pool->world_matrices = calloc(initial_capacity * 16, sizeof(double));
+    pool->world_transform_kinds = calloc(initial_capacity, sizeof(uint8_t));
+    pool->world_basis_x = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_basis_y = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_basis_z = calloc(initial_capacity, sizeof(Vec3));
 
     pool->names = calloc(initial_capacity, sizeof(char*));
     pool->uuids = calloc(initial_capacity, sizeof(char*));
@@ -420,7 +425,10 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->world_positions);
     free(pool->world_rotations);
     free(pool->world_scales);
-    free(pool->world_matrices);
+    free(pool->world_transform_kinds);
+    free(pool->world_basis_x);
+    free(pool->world_basis_y);
+    free(pool->world_basis_z);
     free(pool->names);
     free(pool->uuids);
     free(pool->runtime_ids);
@@ -498,14 +506,20 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->world_positions = realloc(pool->world_positions, new_cap * sizeof(Vec3));
     pool->world_rotations = realloc(pool->world_rotations, new_cap * sizeof(Quat));
     pool->world_scales = realloc(pool->world_scales, new_cap * sizeof(Vec3));
-    pool->world_matrices = realloc(pool->world_matrices, new_cap * 16 * sizeof(double));
+    pool->world_transform_kinds = realloc(pool->world_transform_kinds, new_cap * sizeof(uint8_t));
+    pool->world_basis_x = realloc(pool->world_basis_x, new_cap * sizeof(Vec3));
+    pool->world_basis_y = realloc(pool->world_basis_y, new_cap * sizeof(Vec3));
+    pool->world_basis_z = realloc(pool->world_basis_z, new_cap * sizeof(Vec3));
     memset(pool->local_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
     memset(pool->local_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
     memset(pool->local_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
     memset(pool->world_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
     memset(pool->world_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
     memset(pool->world_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
-    memset(pool->world_matrices + old_cap * 16, 0, (new_cap - old_cap) * 16 * sizeof(double));
+    memset(pool->world_transform_kinds + old_cap, 0, (new_cap - old_cap) * sizeof(uint8_t));
+    memset(pool->world_basis_x + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_basis_y + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_basis_z + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
 
     pool->names = realloc(pool->names, new_cap * sizeof(char*));
     pool->uuids = realloc(pool->uuids, new_cap * sizeof(char*));
@@ -581,11 +595,10 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     pool->world_positions[idx] = vec3_zero();
     pool->world_rotations[idx] = quat_identity();
     pool->world_scales[idx] = vec3_one();
-
-    // Clear world matrix to identity
-    double* wm = &pool->world_matrices[idx * 16];
-    memset(wm, 0, 16 * sizeof(double));
-    wm[0] = wm[5] = wm[10] = wm[15] = 1.0;
+    pool->world_transform_kinds[idx] = TC_TRANSFORM_RIGID;
+    pool->world_basis_x[idx] = (Vec3){1.0, 0.0, 0.0};
+    pool->world_basis_y[idx] = (Vec3){0.0, 1.0, 0.0};
+    pool->world_basis_z[idx] = (Vec3){0.0, 0.0, 1.0};
 
     free(pool->names[idx]);
     pool->names[idx] = str_dup(name ? name : "entity");
@@ -1017,8 +1030,16 @@ void tc_entity_pool_get_global_pose(
         rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
     }
     if (scale) {
-        Vec3 s = pool->world_scales[idx];
-        scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+        if (pool->world_transform_kinds[idx] == TC_TRANSFORM_AFFINE) {
+            tc_log_warn(
+                "[tc_entity_pool] get_global_pose: entity idx=%u has affine world "
+                "transform; exact decomposed scale is unavailable",
+                idx);
+            fill_vec3(scale, NAN, NAN, NAN);
+        } else {
+            Vec3 s = pool->world_scales[idx];
+            scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+        }
     }
 }
 
@@ -1085,14 +1106,101 @@ void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id
     xyzw[0] = q.x; xyzw[1] = q.y; xyzw[2] = q.z; xyzw[3] = q.w;
 }
 
-void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_scale", id); fill_vec3(xyz, 1.0, 1.0, 1.0); return; }
-    // Lazy update if dirty
+bool tc_entity_pool_try_get_global_scale(
+    const tc_entity_pool* pool,
+    tc_entity_id id,
+    double* xyz
+) {
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("try_get_global_scale", id);
+        return false;
+    }
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
     }
+    if (pool->world_transform_kinds[id.index] == TC_TRANSFORM_AFFINE) {
+        return false;
+    }
     Vec3 s = pool->world_scales[id.index];
-    xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
+    if (xyz) {
+        xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
+    }
+    return true;
+}
+
+void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("get_global_scale", id);
+        fill_vec3(xyz, 1.0, 1.0, 1.0);
+        return;
+    }
+    if (tc_entity_pool_try_get_global_scale(pool, id, xyz)) {
+        return;
+    }
+    tc_log_warn(
+        "[tc_entity_pool] get_global_scale: entity idx=%u has affine world "
+        "transform; exact decomposed scale is unavailable",
+        id.index);
+    fill_vec3(xyz, NAN, NAN, NAN);
+}
+
+static tc_basis3d world_basis_at(const tc_entity_pool* pool, uint32_t idx) {
+    return tc_basis3d_new(
+        pool->world_basis_x[idx],
+        pool->world_basis_y[idx],
+        pool->world_basis_z[idx]);
+}
+
+static tc_affine3d world_affine_at(const tc_entity_pool* pool, uint32_t idx) {
+    return tc_affine3d_new(world_basis_at(pool, idx), pool->world_positions[idx]);
+}
+
+tc_transform_kind tc_entity_pool_get_world_transform_kind(
+    const tc_entity_pool* pool,
+    tc_entity_id id
+) {
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("get_world_transform_kind", id);
+        return TC_TRANSFORM_RIGID;
+    }
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    return (tc_transform_kind)pool->world_transform_kinds[id.index];
+}
+
+void tc_entity_pool_get_world_basis(
+    const tc_entity_pool* pool,
+    tc_entity_id id,
+    tc_basis3d* basis
+) {
+    if (!basis) return;
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("get_world_basis", id);
+        *basis = tc_basis3d_identity();
+        return;
+    }
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    *basis = world_basis_at(pool, id.index);
+}
+
+void tc_entity_pool_get_world_affine(
+    const tc_entity_pool* pool,
+    tc_entity_id id,
+    tc_affine3d* affine
+) {
+    if (!affine) return;
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("get_world_affine", id);
+        *affine = tc_affine3d_identity();
+        return;
+    }
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    *affine = world_affine_at(pool, id.index);
 }
 
 void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
@@ -1101,7 +1209,7 @@ void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
     }
-    memcpy(m16, &pool->world_matrices[id.index * 16], 16 * sizeof(double));
+    tc_affine3d_to_matrix4(world_affine_at(pool, id.index), m16);
 }
 
 // Simple quaternion multiply
@@ -1114,57 +1222,40 @@ static Quat quat_mul(Quat a, Quat b) {
     };
 }
 
-// Rotate vector by quaternion
-static Vec3 quat_rotate(Quat q, Vec3 v) {
-    Vec3 u = {q.x, q.y, q.z};
-    double s = q.w;
-
-    double dot_uv = u.x*v.x + u.y*v.y + u.z*v.z;
-    double dot_uu = u.x*u.x + u.y*u.y + u.z*u.z;
-
-    Vec3 cross = {
-        u.y*v.z - u.z*v.y,
-        u.z*v.x - u.x*v.z,
-        u.x*v.y - u.y*v.x
-    };
-
-    return (Vec3){
-        2.0*dot_uv*u.x + (s*s - dot_uu)*v.x + 2.0*s*cross.x,
-        2.0*dot_uv*u.y + (s*s - dot_uu)*v.y + 2.0*s*cross.y,
-        2.0*dot_uv*u.z + (s*s - dot_uu)*v.z + 2.0*s*cross.z
-    };
+static bool quat_is_identity_rotation(Quat q) {
+    return q.x == 0.0 && q.y == 0.0 && q.z == 0.0
+        && (q.w == 1.0 || q.w == -1.0);
 }
 
-static void compute_world_matrix(double* m, Vec3 pos, Quat rot, Vec3 scale) {
-    // Rotation matrix from quaternion - OUTPUT COLUMN-MAJOR (OpenGL convention)
-    // Column-major layout: m[col * 4 + row]
-    double xx = rot.x * rot.x, yy = rot.y * rot.y, zz = rot.z * rot.z;
-    double xy = rot.x * rot.y, xz = rot.x * rot.z, yz = rot.y * rot.z;
-    double wx = rot.w * rot.x, wy = rot.w * rot.y, wz = rot.w * rot.z;
+static tc_transform_kind classify_scale(Vec3 scale) {
+    if (scale.x == 1.0 && scale.y == 1.0 && scale.z == 1.0) {
+        return TC_TRANSFORM_RIGID;
+    }
+    if (scale.x > 0.0 && scale.x == scale.y && scale.y == scale.z) {
+        return TC_TRANSFORM_SIMILARITY;
+    }
+    return TC_TRANSFORM_AXIS_SCALED;
+}
 
-    // Column 0
-    m[0]  = (1 - 2*(yy + zz)) * scale.x;
-    m[1]  = 2*(xy + wz) * scale.x;
-    m[2]  = 2*(xz - wy) * scale.x;
-    m[3]  = 0;
+static void store_world_basis(tc_entity_pool* pool, uint32_t idx, tc_basis3d basis) {
+    pool->world_basis_x[idx] = basis.x;
+    pool->world_basis_y[idx] = basis.y;
+    pool->world_basis_z[idx] = basis.z;
+}
 
-    // Column 1
-    m[4]  = 2*(xy - wz) * scale.y;
-    m[5]  = (1 - 2*(xx + zz)) * scale.y;
-    m[6]  = 2*(yz + wx) * scale.y;
-    m[7]  = 0;
-
-    // Column 2
-    m[8]  = 2*(xz + wy) * scale.z;
-    m[9]  = 2*(yz - wx) * scale.z;
-    m[10] = (1 - 2*(xx + yy)) * scale.z;
-    m[11] = 0;
-
-    // Column 3 (translation)
-    m[12] = pos.x;
-    m[13] = pos.y;
-    m[14] = pos.z;
-    m[15] = 1;
+static void set_root_world_transform(tc_entity_pool* pool, uint32_t idx) {
+    Vec3 scale = pool->local_scales[idx];
+    pool->world_positions[idx] = pool->local_positions[idx];
+    pool->world_rotations[idx] = pool->local_rotations[idx];
+    pool->world_scales[idx] = scale;
+    pool->world_transform_kinds[idx] = (uint8_t)classify_scale(scale);
+    store_world_basis(
+        pool,
+        idx,
+        tc_affine3d_trs(
+            pool->local_positions[idx],
+            pool->local_rotations[idx],
+            scale).basis);
 }
 
 // Lazy update of a single entity's world transform
@@ -1174,18 +1265,13 @@ static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
     tc_entity_id parent_id = pool->parent_ids[idx];
 
     if (!tc_entity_id_valid(parent_id)) {
-        // Root entity - world = local
-        pool->world_positions[idx] = pool->local_positions[idx];
-        pool->world_rotations[idx] = pool->local_rotations[idx];
-        pool->world_scales[idx] = pool->local_scales[idx];
+        set_root_world_transform(pool, idx);
     } else if (!tc_entity_pool_alive(pool, parent_id)) {
         // Parent was deleted (generation mismatch) - treat as root
         tc_log(TC_LOG_WARN, "[update_entity_transform] idx=%u has stale parent (idx=%u gen=%u, current gen=%u) - treating as root",
             idx, parent_id.index, parent_id.generation, pool->generations[parent_id.index]);
         pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;  // Fix the stale reference
-        pool->world_positions[idx] = pool->local_positions[idx];
-        pool->world_rotations[idx] = pool->local_rotations[idx];
-        pool->world_scales[idx] = pool->local_scales[idx];
+        set_root_world_transform(pool, idx);
     } else {
         // Has valid parent - update parent first if dirty, then combine
         uint32_t parent_idx = parent_id.index;
@@ -1193,33 +1279,37 @@ static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
             update_entity_transform(pool, parent_idx);
         }
 
-        Vec3 pw = pool->world_positions[parent_idx];
-        Quat rw = pool->world_rotations[parent_idx];
-        Vec3 sw = pool->world_scales[parent_idx];
-
         Vec3 lp = pool->local_positions[idx];
         Quat lr = pool->local_rotations[idx];
         Vec3 ls = pool->local_scales[idx];
+        tc_affine3d parent = world_affine_at(pool, parent_idx);
+        tc_affine3d local = tc_affine3d_trs(lp, lr, ls);
+        tc_affine3d world = tc_affine3d_mul(parent, local);
+        tc_transform_kind parent_kind =
+            (tc_transform_kind)pool->world_transform_kinds[parent_idx];
 
-        // Scale local position by parent scale, rotate, add parent position
-        Vec3 scaled_pos = {lp.x * sw.x, lp.y * sw.y, lp.z * sw.z};
-        Vec3 rotated_pos = quat_rotate(rw, scaled_pos);
+        pool->world_positions[idx] = world.translation;
+        pool->world_rotations[idx] =
+            quat_mul(pool->world_rotations[parent_idx], lr);
+        store_world_basis(pool, idx, world.basis);
 
-        pool->world_positions[idx] = (Vec3){
-            pw.x + rotated_pos.x,
-            pw.y + rotated_pos.y,
-            pw.z + rotated_pos.z
-        };
-        pool->world_rotations[idx] = quat_mul(rw, lr);
-        pool->world_scales[idx] = (Vec3){sw.x * ls.x, sw.y * ls.y, sw.z * ls.z};
+        if (parent_kind == TC_TRANSFORM_AFFINE
+            || (parent_kind == TC_TRANSFORM_AXIS_SCALED
+                && !quat_is_identity_rotation(lr))) {
+            pool->world_transform_kinds[idx] = TC_TRANSFORM_AFFINE;
+            pool->world_scales[idx] = (Vec3){NAN, NAN, NAN};
+        } else {
+            Vec3 parent_scale = pool->world_scales[parent_idx];
+            Vec3 world_scale = {
+                parent_scale.x * ls.x,
+                parent_scale.y * ls.y,
+                parent_scale.z * ls.z
+            };
+            pool->world_scales[idx] = world_scale;
+            pool->world_transform_kinds[idx] =
+                (uint8_t)classify_scale(world_scale);
+        }
     }
-
-    compute_world_matrix(
-        &pool->world_matrices[idx * 16],
-        pool->world_positions[idx],
-        pool->world_rotations[idx],
-        pool->world_scales[idx]
-    );
 
     pool->transform_dirty[idx] = false;
 }
