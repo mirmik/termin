@@ -35,9 +35,14 @@ def test_native_resource_inspectors_project_snapshots():
             resolution="256 × 128",
             channels="4",
             path="/project/albedo.png",
+            encoding="linear",
+            error="Failed to reimport texture",
         )
     )
     assert "resolution" in texture.controls
+    assert texture.controls["encoding"].selected_text == "Linear"
+    assert "ordinary color images" in texture.controls["encoding-hint"].text
+    assert texture.controls["error"].text == "Failed to reimport texture"
     assert texture.controls["flip-y"].checked
 
     mesh.rebuild(

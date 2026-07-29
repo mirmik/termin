@@ -140,6 +140,47 @@ class TextureAsset(DataAsset[TcTexture]):
         if self._alpha_mode not in {"straight", "opaque"}:
             raise ValueError(f"Unsupported texture alpha mode: {self._alpha_mode}")
 
+    def reload_with_spec(self, spec_data: dict | None) -> bool:
+        """Apply import settings and reload without exposing a partial state."""
+        previous_settings = (
+            self._flip_x,
+            self._flip_y,
+            self._transpose,
+            self._filter,
+            self._mipmaps,
+            self._wrap,
+            self._encoding,
+            self._alpha_mode,
+        )
+        try:
+            self.parse_spec(spec_data)
+            if self.reload():
+                return True
+        except Exception:
+            (
+                self._flip_x,
+                self._flip_y,
+                self._transpose,
+                self._filter,
+                self._mipmaps,
+                self._wrap,
+                self._encoding,
+                self._alpha_mode,
+            ) = previous_settings
+            raise
+
+        (
+            self._flip_x,
+            self._flip_y,
+            self._transpose,
+            self._filter,
+            self._mipmaps,
+            self._wrap,
+            self._encoding,
+            self._alpha_mode,
+        ) = previous_settings
+        return False
+
     def _build_spec_data(self) -> dict:
         """Build spec data with texture settings."""
         spec = super()._build_spec_data()

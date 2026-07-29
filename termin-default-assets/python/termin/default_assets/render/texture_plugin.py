@@ -59,20 +59,20 @@ class TextureRuntimePlugin:
 
         tc_texture_declare(asset.uuid, name)
 
-    def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
+    def reload(self, context: "AssetContext", result: "PreLoadResult") -> bool:
         rm = context.resource_manager
         asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
-            return
+            return False
 
         if not asset.is_loaded:
-            return
+            asset.parse_spec(result.spec_data)
+            return True
 
         if not asset.should_reload_from_file():
-            return
+            return True
 
-        asset.parse_spec(result.spec_data)
-        asset.reload()
+        return asset.reload_with_spec(result.spec_data)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)

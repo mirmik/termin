@@ -113,6 +113,29 @@ class NativeTextureInspector:
             ("Path", snapshot.path, "path"),
         ):
             _label_row(self.document, self.root, self.controls, label, value, key)
+        encoding_row = _row(self.document, "Encoding", "encoding")
+        encoding = self.document.create_combo_box()
+        encoding.add_item("sRGB")
+        encoding.add_item("Linear")
+        encoding.selected_index = 0 if snapshot.encoding == "srgb" else 1
+        encoding_row.add_stretch_child(encoding.widget)
+        self.root.add_fixed_child(encoding_row, 28.0)
+        self.controls["encoding"] = encoding
+        hint = self.document.create_label(
+            "sRGB: ordinary color images. Linear: numeric data, including normal maps.",
+            "native-texture-encoding-hint",
+        )
+        self.root.add_fixed_child(hint, 42.0)
+        self.controls["encoding-hint"] = hint
+        if snapshot.error:
+            _label_row(
+                self.document,
+                self.root,
+                self.controls,
+                "Error",
+                snapshot.error,
+                "error",
+            )
         flip_x = _checkbox_row(self.document, self.root, self.controls, "Flip X", snapshot.flip_x, "flip-x")
         flip_y = _checkbox_row(self.document, self.root, self.controls, "Flip Y", snapshot.flip_y, "flip-y")
         transpose = _checkbox_row(
@@ -120,21 +143,24 @@ class NativeTextureInspector:
         )
         owner = weakref.ref(self)
 
-        def changed(_value: bool) -> None:
+        def save() -> None:
             current = owner()
             if current is not None:
                 current.rebuild(
                     current.controller.save_import_settings(
+                        encoding="srgb" if encoding.selected_index == 0 else "linear",
                         flip_x=flip_x.checked,
                         flip_y=flip_y.checked,
                         transpose=transpose.checked,
                     )
                 )
 
-        flip_x.connect_changed(changed)
-        flip_y.connect_changed(changed)
-        transpose.connect_changed(changed)
-        self.root.preferred_size = Size(300.0, 160.0 + 9.0 * 28.0)
+        encoding.connect_changed(lambda _index, _text: save())
+        flip_x.connect_changed(lambda _value: save())
+        flip_y.connect_changed(lambda _value: save())
+        transpose.connect_changed(lambda _value: save())
+        error_height = 28.0 if snapshot.error else 0.0
+        self.root.preferred_size = Size(300.0, 160.0 + 10.0 * 28.0 + 42.0 + error_height)
         self.request_render()
 
 
