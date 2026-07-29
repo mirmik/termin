@@ -2,17 +2,16 @@
 
 Дата: 2026-07-29.
 
-Статус: этапы graphics foundation (`#1048`), asset/runtime propagation
-(`#1049`), shader property encoding contract (`#1050`), material validation
-(`#1051`), inspector (`#1052`) и glTF import (`#1054`) реализованы и проверены
-под Linux. Карточки остаются в `On Test`, но не блокируют следующие этапы.
+Статус: все этапы `#1048`–`#1055` реализованы и проверены под Linux.
+Карточки остаются в `On Test` для Windows/D3D11-проверки, но считаются
+сделанными и не блокируют дальнейшую работу.
 
 Связанный эпик доски: `#1045 [render] Нормализовать linear HDR и color-space тракт`.
 
 ## Контекст
 
-Текущий рендер-тракт внешне похож на linear/HDR pipeline, но кодировка
-исходных текстур в нём не является настоящей частью контракта:
+До этой миграции рендер-тракт внешне был похож на linear/HDR pipeline, но
+кодировка исходных текстур не являлась настоящей частью контракта:
 
 - `TextureSpec` и `TextureAsset` сохраняют строковое поле `color_space` со
   значениями `srgb` и `linear`;
@@ -392,6 +391,46 @@ SDK/test скриптом.
 7. `#1053` — sRGB-correct mipmaps и backend parity;
 8. `#1055` — итоговый editor/runtime/cross-backend integration gate.
 
-`#1048`, `#1049`, `#1050`, `#1051`, `#1052`, `#1054` и `#1053` реализованы и
-находятся в `On Test`; их blocker-связи с последующими этапами сняты. `#1055`
-готова к итоговой integration-проверке.
+`#1048`, `#1049`, `#1050`, `#1051`, `#1052`, `#1054`, `#1053` и `#1055`
+реализованы и находятся в `On Test`; их blocker-связи с последующими этапами
+сняты.
+
+## Результат реализации
+
+На 2026-07-29 контракт проведён через весь штатный тракт:
+
+- texture import metadata, `TextureAsset`, `tc_texture`, runtime package и
+  native backend format используют единый `TextureEncoding`;
+- shader properties объявляют `encoding(srgb|linear)`, а material binding
+  транзакционно отклоняет несовпадение;
+- inspector меняет только encoding, сохраняет остальные import settings и
+  показывает encoding-aware preview;
+- glTF создаёт один обычный asset для однозначного usage и две стабильные
+  encoding-вариации только при реальной коллизии; обе вариации проверены на
+  настоящем `CookTorrancePBR`-материале;
+- общий CPU upload path строит mip chain с linear-space фильтрацией RGB для
+  sRGB и числовой фильтрацией Linear/alpha;
+- OpenGL и Vulkan sampling одного mipmapped RGBA8 fixture дают `0.21586` для
+  sRGB RGB и `0.50196` для Linear RGB и alpha. Тот же тест встроен в D3D11
+  smoke и ожидает Windows-прогона.
+
+Проверки Linux:
+
+```text
+./run-tests.sh
+    All tests passed
+
+termin-glb/tests/test_glb_texture_encoding.py
+    13 passed
+
+tgfx2_opengl_bound_resource_set
+    sRGB 0.216; Linear 0.502; alpha 0.502
+
+tgfx2_vulkan_smoke
+    sRGB 0.216; Linear 0.502; alpha 0.502
+```
+
+Старое имя `color_space` не поддерживается как fallback. Оставшиеся упоминания
+в asset/runtime коде являются только явной диагностикой устаревших metadata;
+`color_space` в Vulkan swapchain обозначает presentation color space и к
+texture encoding не относится.

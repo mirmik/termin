@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <tcbase/tc_types.h>
 
 // DLL export/import macros for Windows
 // TC_POOL_API is dllexport for the module currently building TC_API symbols.
@@ -167,6 +168,13 @@ TC_POOL_API tc_entity_id tc_entity_pool_find_by_uuid(const tc_entity_pool* pool,
 // Transform data
 // ============================================================================
 
+typedef enum tc_transform_kind {
+    TC_TRANSFORM_RIGID = 0,
+    TC_TRANSFORM_SIMILARITY = 1,
+    TC_TRANSFORM_AXIS_SCALED = 2,
+    TC_TRANSFORM_AFFINE = 3
+} tc_transform_kind;
+
 // Local pose (position, rotation, scale)
 TC_POOL_API void tc_entity_pool_get_local_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_set_local_position(tc_entity_pool* pool, tc_entity_id id, const double* xyz);
@@ -190,12 +198,22 @@ TC_POOL_API void tc_entity_pool_set_local_pose(
 // Global(World) pose (cached, auto-updated)
 TC_POOL_API void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw);
+// Returns false for Affine entities: there is no exact decomposed world scale.
+TC_POOL_API bool tc_entity_pool_try_get_global_scale(
+    const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 
 TC_POOL_API void tc_entity_pool_get_global_pose(
     const tc_entity_pool* pool, tc_entity_id id,
     double* position, double* rotation, double* scale
 );
+
+TC_POOL_API tc_transform_kind tc_entity_pool_get_world_transform_kind(
+    const tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API void tc_entity_pool_get_world_basis(
+    const tc_entity_pool* pool, tc_entity_id id, tc_basis3d* basis);
+TC_POOL_API void tc_entity_pool_get_world_affine(
+    const tc_entity_pool* pool, tc_entity_id id, tc_affine3d* affine);
 
 // World matrix (col-major 4x4)
 TC_POOL_API void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16);
