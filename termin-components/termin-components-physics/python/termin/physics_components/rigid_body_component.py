@@ -69,6 +69,7 @@ class RigidBodyComponent(PythonComponent):
         self.friction = friction
         self._body_index: int = -1
         self._physics_world: Optional[PhysicsWorld] = None
+        self._registered_collider = None
         self._half_extents = Vec3(0.5, 0.5, 0.5)
 
     def start(self):
@@ -159,6 +160,12 @@ class RigidBodyComponent(PythonComponent):
         if self._body_index >= 0 and self._physics_world is world:
             return
 
+        # PhysicsWorldComponent can discover this component before its own
+        # start() callback runs. Derive collision dimensions here as well so
+        # registration is independent of scene entity/component order.
+        self._validate_ancestor_scales()
+        self._half_extents = self._compute_half_extents()
+
         self._physics_world = world
 
         pose_and_scale = self._physics_pose_and_scale()
@@ -168,15 +175,61 @@ class RigidBodyComponent(PythonComponent):
         cpp_pose, scale = pose_and_scale
         self._half_extents = self._compute_half_extents(scale)
 
-        sx, sy, sz = self._half_extents * 2.0
-        body = RigidBody.create_box(sx, sy, sz, self.mass, cpp_pose, self.is_static)
+        body = self._create_body(cpp_pose)
         self._body_index = world.add_body(body)
+        self._ensure_collider_registered()
 
+    def _ensure_collider_registered(self) -> bool:
         from termin.colliders.collider_component import ColliderComponent
 
+        if (
+            self.entity is None
+            or self._physics_world is None
+            or self._body_index < 0
+        ):
+            return False
+
         collider_comp = self.entity.get_component(ColliderComponent)
-        if collider_comp is not None and collider_comp.attached is not None:
-            world.register_collider(self._body_index, collider_comp.attached)
+        if collider_comp is None or collider_comp.attached is None:
+            return False
+
+        collider = collider_comp.attached
+        if collider is self._registered_collider:
+            return True
+
+        self._physics_world.register_collider(self._body_index, collider)
+        self._registered_collider = collider
+        return True
+
+    def _create_body(self, pose: Pose3) -> RigidBody:
+        from termin.colliders.collider_component import ColliderComponent
+        from termin.colliders import SphereCollider
+
+        collider_comp = (
+            self.entity.get_component(ColliderComponent)
+            if self.entity is not None
+            else None
+        )
+        if collider_comp is not None and isinstance(
+            collider_comp.collider,
+            SphereCollider,
+        ):
+            return RigidBody.create_sphere(
+                self._half_extents.x,
+                self.mass,
+                pose,
+                self.is_static,
+            )
+
+        sx, sy, sz = self._half_extents * 2.0
+        return RigidBody.create_box(
+            sx,
+            sy,
+            sz,
+            self.mass,
+            pose,
+            self.is_static,
+        )
 
     def _sync_from_physics(self):
         if self._body_index < 0 or self._physics_world is None or self.entity is None:
