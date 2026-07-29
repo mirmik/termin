@@ -38,11 +38,53 @@ def preload_project_resources(project_root: Path, log_prefix: str) -> None:
                 if processor is not None:
                     pending.append((processor.priority, str(path)))
 
+        _register_standard_shaders_for_project_materials(
+            resource_manager,
+            [Path(path) for _priority, path in pending if Path(path).suffix == ".material"],
+            log_prefix,
+        )
         for _priority, path in sorted(pending, key=lambda item: (item[0], item[1])):
             by_extension[Path(path).suffix.lower()].on_file_added(path)
     except Exception:
         from tcbase import log
         log.error(f"{log_prefix} Failed to preload project resources", exc_info=True)
+
+
+def _register_standard_shaders_for_project_materials(
+    resource_manager,
+    material_paths: list[Path],
+    log_prefix: str,
+) -> None:
+    """Make stdlib shader assets available before material preloaders run."""
+    from tcbase import log
+    from termin.default_assets.render.shader_asset import ShaderAsset
+    from termin.stdlib import stdlib_root
+
+    for material_path in material_paths:
+        try:
+            document = json.loads(material_path.read_text(encoding="utf-8"))
+            shader_name = document.get("shader") if isinstance(document, dict) else None
+            if not isinstance(shader_name, str) or not shader_name:
+                continue
+            if resource_manager.get_shader_asset(shader_name) is not None:
+                continue
+
+            shader_path = stdlib_root() / "shaders" / f"{shader_name}.shader"
+            if not shader_path.is_file():
+                continue
+            shader_asset = ShaderAsset.from_file(shader_path, name=shader_name)
+            resource_manager.register_shader_asset(
+                shader_name,
+                shader_asset,
+                source_path=str(shader_path),
+                uuid=shader_asset.uuid,
+            )
+        except Exception:
+            log.error(
+                f"{log_prefix} Failed to prepare shader dependency for "
+                f"project material '{material_path}'",
+                exc_info=True,
+            )
 
 
 def cleanup_project_build_runtime_state(log_prefix: str) -> None:

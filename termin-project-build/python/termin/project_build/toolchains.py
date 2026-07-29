@@ -54,9 +54,9 @@ class EnvironmentToolchainContextProvider:
         return ToolchainContext(
             sdk_root=_environment_path(self.environ, "TERMIN_SDK"),
             termin_root=root,
-            android_sdk_root=_first_environment_path(
+            android_sdk_root=_environment_path(
                 self.environ,
-                ("TERMIN_ANDROID_SDK_ROOT", "ANDROID_SDK_ROOT", "ANDROID_HOME"),
+                "TERMIN_ANDROID_SDK_ROOT",
             ),
             shader_compiler=_environment_path(self.environ, "TERMIN_SHADERC"),
             fxc=_environment_path(self.environ, "TERMIN_FXC"),

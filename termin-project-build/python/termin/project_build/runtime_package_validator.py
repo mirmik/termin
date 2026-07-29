@@ -1603,7 +1603,20 @@ def _validate_runtime_required_catalog_sources(
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
     language = entry.get("language")
-    source_paths: list[str] = []
+    runtime_sources = entry.get("runtime_sources", [])
+    if not isinstance(runtime_sources, list) or not all(
+        isinstance(source_path, str) and source_path != ""
+        for source_path in runtime_sources
+    ):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"builtin_shader_contract:{shader_uuid}",
+                f"Built-in shader '{shader_uuid}' has invalid runtime source paths",
+            )
+        )
+        return
+    source_paths = set(runtime_sources)
     if language == "shader":
         program = entry.get("program")
         source_path = program.get("path") if isinstance(program, dict) else None
@@ -1616,7 +1629,7 @@ def _validate_runtime_required_catalog_sources(
                 )
             )
             return
-        source_paths.append(source_path)
+        source_paths.add(source_path)
     elif language == "glsl":
         stages = entry.get("stages")
         if not isinstance(stages, dict):
@@ -1641,7 +1654,7 @@ def _validate_runtime_required_catalog_sources(
                     )
                 )
                 continue
-            source_paths.append(source_path)
+            source_paths.add(source_path)
     elif language != "slang":
         diagnostics.append(
             RuntimePackageExportDiagnostic(
