@@ -149,7 +149,10 @@ class NativeMaterialInspector:
         preview.add_stretch_child(image.widget)
         control.add_fixed_child(preview, 48.0)
 
-        choices = self.texture_sources.choices(prop.texture.default_kind)
+        choices = self.texture_sources.choices(
+            prop.texture.default_kind,
+            prop.texture.expected_encoding,
+        )
         combo = self.document.create_combo_box()
         selected = 0
         for index, choice in enumerate(choices):
@@ -164,6 +167,7 @@ class NativeMaterialInspector:
                 choice.tag,
                 choice.name,
                 prop.texture.default_kind,
+                prop.texture.expected_encoding,
             )
             if pixels is not None:
                 self._preview_releases.append(self.show_texture_preview(image, pixels))

@@ -79,6 +79,7 @@ class _TextureAsset:
     def __init__(self, name, uuid):
         self.name = name
         self.uuid = uuid
+        self.encoding = "linear"
 
 
 class _ResourceManager:

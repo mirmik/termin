@@ -55,13 +55,25 @@ class MaterialTextureSourceCatalog:
     def set_scene_getter(self, getter: SceneGetter | None) -> None:
         self._scene_getter = getter
 
-    def choices(self, default_kind: str = "white") -> tuple[MaterialTextureSource, ...]:
+    def choices(
+        self,
+        default_kind: str = "white",
+        expected_encoding: str | None = None,
+    ) -> tuple[MaterialTextureSource, ...]:
         entries = [MaterialTextureSource(f"Default ({default_kind})", "default", "")]
         entries.extend(self._render_target_sources())
         entries.extend(
             MaterialTextureSource(name, "file", name)
             for name in self._resource_manager.list_texture_names()
-            if name != "__white_1x1__"
+            if name not in (
+                "__white_1x1__",
+                "__white_srgb_1x1__",
+                "__normal_1x1__",
+            )
+            and (
+                expected_encoding is None
+                or self._asset_matches_encoding(name, expected_encoding)
+            )
         )
         result = []
         seen = set()
@@ -80,14 +92,24 @@ class MaterialTextureSourceCatalog:
             render_target_pool=self._render_target_pool,
         )
 
-    def preview_pixels(self, tag: str, name: str, default_kind: str):
+    def preview_pixels(
+        self,
+        tag: str,
+        name: str,
+        default_kind: str,
+        expected_encoding: str = "linear",
+    ):
         """Return CPU pixels for a texture-source thumbnail, when available."""
 
         try:
             if tag == "default":
                 from termin.render.texture import get_normal_texture, get_white_texture
 
-                texture = get_normal_texture() if default_kind == "normal" else get_white_texture()
+                texture = (
+                    get_normal_texture()
+                    if default_kind == "normal"
+                    else get_white_texture(expected_encoding)
+                )
                 return texture._image_data
             if tag == "file":
                 texture = self._resource_manager.get_texture(name)
@@ -101,6 +123,12 @@ class MaterialTextureSourceCatalog:
         except Exception:
             _logger.exception("Failed to resolve material texture preview: %s/%s", tag, name)
         return None
+
+    def _asset_matches_encoding(self, name: str, expected_encoding: str) -> bool:
+        asset = self._resource_manager.get_texture_asset(name)
+        if asset is None:
+            return False
+        return asset.encoding == expected_encoding
 
     def _render_target_sources(self) -> list[MaterialTextureSource]:
         names = set()

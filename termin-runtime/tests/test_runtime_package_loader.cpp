@@ -511,8 +511,22 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     tc_uniform_value* enabled = require_uniform(phase, "u_enabled", TC_UNIFORM_INT);
     CHECK_EQ(enabled->data.i, 1);
 
-    require_texture(phase, "u_albedo_texture");
-    require_texture(phase, "u_normal_texture");
+    tc_material_texture* albedo_slot =
+        require_texture(phase, "u_albedo_texture");
+    tc_material_texture* normal_slot =
+        require_texture(phase, "u_normal_texture");
+    CHECK(albedo_slot->has_expected_encoding != 0);
+    CHECK(normal_slot->has_expected_encoding != 0);
+    CHECK_EQ(albedo_slot->expected_encoding, TC_TEXTURE_ENCODING_SRGB);
+    CHECK_EQ(normal_slot->expected_encoding, TC_TEXTURE_ENCODING_LINEAR);
+    REQUIRE(tc_texture_get(albedo_slot->texture) != nullptr);
+    REQUIRE(tc_texture_get(normal_slot->texture) != nullptr);
+    CHECK_EQ(
+        tc_texture_get(albedo_slot->texture)->encoding,
+        TC_TEXTURE_ENCODING_SRGB);
+    CHECK_EQ(
+        tc_texture_get(normal_slot->texture)->encoding,
+        TC_TEXTURE_ENCODING_LINEAR);
 
     tc_scene_handle scene = result.scene.handle();
     CHECK_EQ(tc_scene_count_components_of_type(scene, "LightComponent"), 1);
@@ -825,6 +839,22 @@ TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materia
     tc_texture* bound_texture = tc_texture_get(binding->texture);
     REQUIRE(bound_texture != nullptr);
     CHECK_EQ(std::string(bound_texture->header.uuid), std::string(kTextureUuid));
+}
+
+TEST_CASE("RuntimePackageLoader rejects material texture encoding mismatch") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package_with_texture(root);
+    write_text(
+        root / "textures" / "test.texture.json",
+        replace_once(
+            texture_spec(),
+            "\"encoding\": \"srgb\"",
+            "\"encoding\": \"linear\""));
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(result.ok);
+    CHECK(result.message.find("violates its encoding contract") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {

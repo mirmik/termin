@@ -544,6 +544,28 @@ def test_validate_runtime_package_rejects_incompatible_shader_program_schema(tmp
             ],
             "Shader program non-texture property must not have expected_encoding",
         ),
+        (
+            [
+                {
+                    "name": "u_albedo",
+                    "property_type": "Texture",
+                    "expected_encoding": "srgb",
+                    "default": "checker",
+                }
+            ],
+            "Shader program texture property default must be 'white' or 'normal'",
+        ),
+        (
+            [
+                {
+                    "name": "u_normal",
+                    "property_type": "Texture",
+                    "expected_encoding": "srgb",
+                    "default": "normal",
+                }
+            ],
+            "Shader program texture property normal default requires linear expected_encoding",
+        ),
     ],
 )
 def test_validate_runtime_package_checks_shader_property_encoding_contract(
@@ -799,6 +821,76 @@ def test_validate_runtime_package_checks_texture_resource_and_material_reference
             "Runtime package path does not exist: textures/texture-uuid.png",
         )
     ]
+
+
+def test_validate_runtime_package_rejects_material_texture_encoding_mismatch(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    _write_shader_program_resource(package_dir)
+    program_path = package_dir / "shaders" / "program-uuid.shader-program.json"
+    program = json.loads(program_path.read_text(encoding="utf-8"))
+    program["properties"] = [
+        {
+            "name": "u_albedo",
+            "property_type": "Texture",
+            "expected_encoding": "srgb",
+            "default": "white",
+        }
+    ]
+    _write_json(program_path, program)
+    _write_json(
+        package_dir / "materials" / "material-uuid.tmat.json",
+        {
+            "uuid": "material-uuid",
+            "shader_program": "program-uuid",
+            "phases": [{"mark": "opaque", "shader": "shader-uuid", "priority": 0}],
+            "textures": {
+                "u_albedo": {"kind": "asset", "uuid": "texture-uuid", "name": "Albedo"},
+            },
+        },
+    )
+    _write_json(
+        package_dir / "textures" / "texture-uuid.texture.json",
+        {
+            "uuid": "texture-uuid",
+            "name": "Albedo",
+            "source_path": "textures/texture-uuid.png",
+            "import_settings": {
+                "encoding": "linear",
+                "flip_x": False,
+                "flip_y": True,
+                "transpose": False,
+            },
+        },
+    )
+    (package_dir / "textures" / "texture-uuid.png").write_bytes(b"PNG")
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {"type": "shader", "uuid": "shader-uuid", "path": "shaders/shader-uuid.shader.json"},
+                {
+                    "type": "shader_program",
+                    "uuid": "program-uuid",
+                    "path": "shaders/program-uuid.shader-program.json",
+                },
+                {"type": "material", "uuid": "material-uuid", "path": "materials/material-uuid.tmat.json"},
+                {"type": "texture", "uuid": "texture-uuid", "path": "textures/texture-uuid.texture.json"},
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path == "materials/material-uuid.tmat.json:textures.u_albedo"
+        and diagnostic.message
+        == "Runtime material texture slot expects srgb, but texture 'texture-uuid' is linear"
+        for diagnostic in diagnostics
+    )
 
 
 def test_validate_runtime_package_accepts_compiled_pipeline_template(tmp_path: Path) -> None:

@@ -35,6 +35,7 @@ class _Phase:
 
 class _Texture:
     is_valid = True
+    encoding = "srgb"
 
     def __init__(self) -> None:
         self._image_data = np.array([[[32, 64, 128, 255]]], dtype=np.uint8)
@@ -67,7 +68,7 @@ class _Program:
         {"name": "roughness", "label": "Roughness", "property_type": "Float", "default": 0.5, "range_min": 0.0, "range_max": 1.0},
         {"name": "direction", "label": "Direction", "property_type": "Vec3", "default": (0.0, 0.0, 1.0), "range_min": None, "range_max": None},
         {"name": "tint", "label": "Tint", "property_type": "Color", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
-        {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "range_min": None, "range_max": None},
+        {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "expected_encoding": "srgb", "range_min": None, "range_max": None},
     ]
 
 
@@ -100,6 +101,15 @@ class _Resources:
 
     def get_texture(self, name):
         return self.texture if name == "brick" else None
+
+    def get_texture_asset(self, name):
+        if name != "brick":
+            return None
+
+        class Asset:
+            encoding = "srgb"
+
+        return Asset()
 
     def find_material_name(self, _material):
         return None
