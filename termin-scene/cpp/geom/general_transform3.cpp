@@ -136,15 +136,6 @@ Quat GeneralTransform3::global_rotation() const {
     tc_entity_pool_get_global_rotation(p, _h.id, v);
     return {v[0], v[1], v[2], v[3]};
 }
-Vec3 GeneralTransform3::global_scale() const {
-    auto *p = pool_ptr();
-    if (!p)
-        return {1, 1, 1};
-    double v[3];
-    tc_entity_pool_get_global_scale(p, _h.id, v);
-    return {v[0], v[1], v[2]};
-}
-
 void GeneralTransform3::set_global_position(const Vec3& position) {
     auto* p = pool_ptr();
     if (!p)
@@ -214,7 +205,7 @@ std::optional<Vec3> GeneralTransform3::decomposed_global_scale() const {
     if (!p)
         return Vec3{1.0, 1.0, 1.0};
     double scale[3];
-    if (!tc_entity_pool_try_get_global_scale(p, _h.id, scale))
+    if (!tc_entity_pool_try_get_decomposed_global_scale(p, _h.id, scale))
         return std::nullopt;
     return Vec3{scale[0], scale[1], scale[2]};
 }
@@ -236,74 +227,6 @@ void GeneralTransform3::relocate(const Pose3 &pose) {
     gp.ang = pose.ang;
     gp.lin = pose.lin;
     set_local_pose(gp);
-}
-
-GeneralPose3 GeneralTransform3::global_pose() const {
-    GeneralPose3 pose;
-    auto *p = pool_ptr();
-    if (!p)
-        return pose;
-    double a[3], b[4], c[3];
-    tc_entity_pool_get_global_pose(p, _h.id, a, b, c);
-    pose.lin = {a[0], a[1], a[2]};
-    pose.ang = {b[0], b[1], b[2], b[3]};
-    pose.scale = {c[0], c[1], c[2]};
-    return pose;
-}
-void GeneralTransform3::set_global_pose(const GeneralPose3 &g) {
-    auto *p = pool_ptr();
-    if (!p)
-        return;
-    auto parent_id = tc_entity_pool_parent(p, _h.id);
-    if (!tc_entity_id_valid(parent_id)) {
-        set_local_pose(g);
-        return;
-    }
-    Affine3d parent_affine;
-    tc_entity_pool_get_world_affine(p, parent_id, &parent_affine);
-    Affine3d parent_inverse;
-    if (!parent_affine.try_inverse(parent_inverse)) {
-        tc_log_error(
-            "[GeneralTransform3] cannot set global pose for '%s': "
-            "parent world transform is singular",
-            name());
-        throw std::runtime_error(
-            "Cannot set global pose through a singular parent transform");
-    }
-
-    double parent_xyzw[4];
-    tc_entity_pool_get_global_rotation(p, parent_id, parent_xyzw);
-    const Quat parent_orientation{
-        parent_xyzw[0], parent_xyzw[1], parent_xyzw[2], parent_xyzw[3]};
-    const Quat local_orientation =
-        (parent_orientation.inverse() * g.ang).normalized();
-    const Affine3d local_affine =
-        parent_inverse * Affine3d::trs(g.lin, g.ang.normalized(), g.scale);
-    GeneralPose3 local_pose;
-    const double tolerance = 1.0e-10;
-    if (!try_affine_as_oriented_trs(
-            local_affine, local_orientation, local_pose, tolerance)) {
-        tc_log_error(
-            "[GeneralTransform3] cannot set global pose for '%s': requested "
-            "world TRS requires shear in the local transform",
-            name());
-        throw std::runtime_error(
-            "Requested global pose is not representable by the local TRS transform");
-    }
-    set_local_pose(local_pose);
-}
-void GeneralTransform3::relocate_global(const GeneralPose3 &pose) { set_global_pose(pose); }
-void GeneralTransform3::relocate_global(const Pose3 &pose) {
-    const std::optional<Vec3> scale = decomposed_global_scale();
-    if (!scale) {
-        tc_log_error(
-            "[GeneralTransform3] cannot relocate global rigid pose for '%s': "
-            "current affine world transform has no exact decomposed scale",
-            name());
-        throw std::runtime_error(
-            "Cannot preserve scale while relocating an affine world transform");
-    }
-    set_global_pose(GeneralPose3{pose.ang, pose.lin, *scale});
 }
 
 GeneralTransform3 GeneralTransform3::parent() const {

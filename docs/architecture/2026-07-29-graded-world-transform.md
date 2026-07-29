@@ -4,7 +4,8 @@ Date: 2026-07-29.
 
 Status: accepted architecture; exact primitives, graded entity cache,
 exact/logical `GeneralTransform3` facade, rigid-consumer contracts and editor
-transform operations, and geometric/runtime consumer migration implemented.
+transform operations, geometric/runtime consumer migration and world-TRS API
+removal implemented.
 
 ## Context
 
@@ -379,9 +380,9 @@ The entity pool now maintains the target invariant:
 world affine == parent world affine * local TRS affine
 ```
 
-`GeneralPose3::global_pose()` is retained only as a legacy decomposed view. It
-returns no scale claim for affine entities. Exact consumers use
-`GeneralTransform3::global_affine()` or `linear_basis()`.
+Scene transforms do not expose a `global_pose()` TRS view. Exact consumers use
+`GeneralTransform3::global_affine()` or `linear_basis()`; logical consumers
+read `global_position` and `global_rotation` independently.
 
 ## Selected cache layout
 
@@ -411,9 +412,9 @@ The other columns retain stronger semantic information:
 - `world_scales` is exact only for `Rigid`, `Similarity` and `AxisScaled`;
 - `world_transform_kinds` states which guarantees are valid.
 
-`global_scale()` must not return the contents of `world_scales` for an
-`Affine` entity. Callers must either require a decomposed transform or request
-an explicitly named approximation.
+The cache-internal `world_scales` column is never exposed unconditionally.
+Callers must either require a decomposed transform or request an explicitly
+named approximation.
 
 Local authoring remains in the existing position, quaternion and scale
 columns. Moving local transforms into ECS archetypes is a separate
@@ -474,14 +475,12 @@ The implemented facade also makes scale policy visible:
 
 - `decomposed_global_scale()` returns a value only for decomposed states;
 - `basis_axis_lengths()` is the explicitly named column-length
-  approximation;
-- legacy `global_scale()` remains temporarily for migration and logs/returns
-  invalid values for `Affine`.
+  approximation.
 
 `set_global_position()` uses the exact parent affine inverse.
-`set_global_orientation()` changes the logical quaternion channel. The legacy
-whole-TRS `set_global_pose()` now computes the exact candidate local affine and
-rejects it when it cannot be represented by the authored local TRS.
+`set_global_orientation()` changes the logical quaternion channel. There is no
+whole-world-TRS setter: callers edit the independent world channels or use the
+transactional exact-affine reparenting operation.
 
 `world_matrix()`, `inverse_world_matrix()`, point transforms and vector
 transforms all use the exact basis. Singular inverse operations log and throw;
@@ -571,18 +570,28 @@ read or rewrite world scale. Camera persistence follows the same position plus
 logical-orientation contract. Editor picking and procedural/foliage geometry
 use exact point, vector and inverse-transpose normal transforms.
 
-### 6. Remove misleading world TRS APIs
+### 6. Remove misleading world TRS APIs (implemented)
 
-After all in-tree consumers are migrated:
+After all in-tree consumers were migrated:
 
-- remove or rename exact-looking `GeneralPose3` composition and inverse
-  operations that are only TRS projections;
-- remove `global_pose()` as the canonical world value;
-- remove unconditional `global_scale()`;
-- keep deliberately lossy conversion only behind policy-named APIs.
+- `GeneralPose3` multiplication and `inverse()` were replaced by
+  `compose_trs_projected()` and `inverse_trs_projected()`;
+- scene `global_pose()`, `set_global_pose()` and `relocate_global()` were
+  removed;
+- unconditional `global_scale()` was removed;
+- exact scene access now consists of affine/basis operations and independent
+  logical position/orientation channels;
+- deliberately lossy access remains only behind policy-named APIs such as
+  `basis_axis_lengths()`.
 
-The migration is complete when no exact geometric path reconstructs a world
-transform from quaternion and component-wise scale.
+The C entity-pool API follows the same contract:
+`tc_entity_pool_try_get_decomposed_global_scale()` is the only decomposed scale
+probe, while basis, affine and matrix access remain exact.
+
+No exact geometric path reconstructs a world transform from quaternion and
+component-wise scale. `GeneralPose3` remains the authored local TRS value used
+by animation and serialization; its non-closed algebra is conspicuous at every
+call site.
 
 ## Implementation tracking
 

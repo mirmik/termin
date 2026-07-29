@@ -195,18 +195,12 @@ TC_POOL_API void tc_entity_pool_set_local_pose(
     const double* position, const double* rotation, const double* scale
 );
 
-// Global(World) pose (cached, auto-updated)
+// Global(World) transform channels (cached, auto-updated)
 TC_POOL_API void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
 TC_POOL_API void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw);
 // Returns false for Affine entities: there is no exact decomposed world scale.
-TC_POOL_API bool tc_entity_pool_try_get_global_scale(
+TC_POOL_API bool tc_entity_pool_try_get_decomposed_global_scale(
     const tc_entity_pool* pool, tc_entity_id id, double* xyz);
-TC_POOL_API void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz);
-
-TC_POOL_API void tc_entity_pool_get_global_pose(
-    const tc_entity_pool* pool, tc_entity_id id,
-    double* position, double* rotation, double* scale
-);
 
 TC_POOL_API tc_transform_kind tc_entity_pool_get_world_transform_kind(
     const tc_entity_pool* pool, tc_entity_id id);

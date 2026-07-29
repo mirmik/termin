@@ -37,7 +37,7 @@ TEST_CASE("Vec3 named directions follow Termin axes")
     CHECK(Vec3::down() == -Vec3::unit_z());
 }
 
-TEST_CASE("GeneralPose3 identity and inverse")
+TEST_CASE("GeneralPose3 identity and projected inverse")
 {
     GeneralPose3 id = GeneralPose3::identity();
     Vec3 p{1.0, 2.0, -3.0};
@@ -46,7 +46,7 @@ TEST_CASE("GeneralPose3 identity and inverse")
     CHECK_EQ(t.y, p.y);
     CHECK_EQ(t.z, p.z);
 
-    GeneralPose3 inv = id.inverse();
+    GeneralPose3 inv = id.inverse_trs_projected();
     Vec3 back = inv.transform_point(t);
     CHECK_EQ(back.x, Approx(p.x).epsilon(1e-12));
     CHECK_EQ(back.y, Approx(p.y).epsilon(1e-12));
@@ -65,7 +65,7 @@ TEST_CASE("GeneralPose3 compose with scale")
         Vec3{0.5, 0.0, 0.0},
         Vec3{1.0, 1.0, 1.0});
 
-    GeneralPose3 world = parent * child;
+    GeneralPose3 world = parent.compose_trs_projected(child);
 
     // Translation should include parent offset + rotated (scaled) child offset
     CHECK_EQ(world.lin.x, Approx(1.0 + 2.0 * 0.5).epsilon(1e-12));

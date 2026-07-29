@@ -1011,38 +1011,6 @@ void tc_entity_pool_set_local_pose(
 // Forward declaration for lazy update
 static void update_entity_transform(tc_entity_pool* pool, uint32_t idx);
 
-void tc_entity_pool_get_global_pose(
-    const tc_entity_pool* pool, tc_entity_id id,
-    double* position, double* rotation, double* scale
-) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_pose", id); return; }
-    // Lazy update if dirty
-    if (pool->transform_dirty[id.index]) {
-        update_entity_transform((tc_entity_pool*)pool, id.index);
-    }
-    uint32_t idx = id.index;
-    if (position) {
-        Vec3 p = pool->world_positions[idx];
-        position[0] = p.x; position[1] = p.y; position[2] = p.z;
-    }
-    if (rotation) {
-        Quat q = pool->world_rotations[idx];
-        rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
-    }
-    if (scale) {
-        if (pool->world_transform_kinds[idx] == TC_TRANSFORM_AFFINE) {
-            tc_log_warn(
-                "[tc_entity_pool] get_global_pose: entity idx=%u has affine world "
-                "transform; exact decomposed scale is unavailable",
-                idx);
-            fill_vec3(scale, NAN, NAN, NAN);
-        } else {
-            Vec3 s = pool->world_scales[idx];
-            scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
-        }
-    }
-}
-
 static uint32_t increment_version(uint32_t v) {
     return (v + 1) % 0x7FFFFFFF;
 }
@@ -1106,13 +1074,13 @@ void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id
     xyzw[0] = q.x; xyzw[1] = q.y; xyzw[2] = q.z; xyzw[3] = q.w;
 }
 
-bool tc_entity_pool_try_get_global_scale(
+bool tc_entity_pool_try_get_decomposed_global_scale(
     const tc_entity_pool* pool,
     tc_entity_id id,
     double* xyz
 ) {
     if (!tc_entity_pool_alive(pool, id)) {
-        WARN_DEAD_ENTITY("try_get_global_scale", id);
+        WARN_DEAD_ENTITY("try_get_decomposed_global_scale", id);
         return false;
     }
     if (pool->transform_dirty[id.index]) {
@@ -1126,22 +1094,6 @@ bool tc_entity_pool_try_get_global_scale(
         xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
     }
     return true;
-}
-
-void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) {
-        WARN_DEAD_ENTITY("get_global_scale", id);
-        fill_vec3(xyz, 1.0, 1.0, 1.0);
-        return;
-    }
-    if (tc_entity_pool_try_get_global_scale(pool, id, xyz)) {
-        return;
-    }
-    tc_log_warn(
-        "[tc_entity_pool] get_global_scale: entity idx=%u has affine world "
-        "transform; exact decomposed scale is unavailable",
-        id.index);
-    fill_vec3(xyz, NAN, NAN, NAN);
 }
 
 static tc_basis3d world_basis_at(const tc_entity_pool* pool, uint32_t idx) {

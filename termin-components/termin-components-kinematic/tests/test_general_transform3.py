@@ -38,13 +38,21 @@ class TestGeneralTransform3Basics:
         assert_vec3_approx(t.local_pose().lin, (1, 2, 3))
         assert_vec3_approx(t.local_pose().scale, (2, 2, 2))
 
-    def test_global_pose_no_parent(self):
+    def test_world_channels_no_parent(self):
         pose = GeneralPose3(lin=Vec3(1, 2, 3), scale=Vec3(2, 2, 2))
         t = GeneralTransform3(pose)
 
-        global_pose = t.global_pose()
-        assert_vec3_approx(global_pose.lin, (1, 2, 3))
-        assert_vec3_approx(global_pose.scale, (2, 2, 2))
+        assert_vec3_approx(t.global_position, (1, 2, 3))
+        assert_vec3_approx(t.decomposed_global_scale(), (2, 2, 2))
+
+    def test_legacy_world_trs_api_is_not_exposed(self):
+        t = GeneralTransform3()
+
+        public_names = dir(t)
+        assert "global_pose" not in public_names
+        assert "global_scale" not in public_names
+        assert "set_global_pose" not in public_names
+        assert "relocate_global" not in public_names
 
 
 class TestGeneralTransform3ScaleInheritance:
@@ -56,8 +64,7 @@ class TestGeneralTransform3ScaleInheritance:
         child = GeneralTransform3(GeneralPose3(scale=Vec3(1, 1, 1)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
-        assert_vec3_approx(child_global.scale, (2, 2, 2))
+        assert_vec3_approx(child.decomposed_global_scale(), (2, 2, 2))
 
     def test_scale_multiplies_through_hierarchy(self):
         """Scales multiply: grandchild scale = parent * child * grandchild."""
@@ -68,8 +75,8 @@ class TestGeneralTransform3ScaleInheritance:
         parent.add_child(child)
         child.add_child(grandchild)
 
-        grandchild_global = grandchild.global_pose()
-        assert_vec3_approx(grandchild_global.scale, (6, 6, 6))
+        assert_vec3_approx(
+            grandchild.decomposed_global_scale(), (6, 6, 6))
 
     def test_non_uniform_scale_inheritance(self):
         """Non-uniform scales inherit correctly."""
@@ -77,8 +84,7 @@ class TestGeneralTransform3ScaleInheritance:
         child = GeneralTransform3(GeneralPose3(scale=Vec3(1, 2, 0.5)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
-        assert_vec3_approx(child_global.scale, (2, 6, 2))
+        assert_vec3_approx(child.decomposed_global_scale(), (2, 6, 2))
 
 
 class TestGeneralTransform3PositionWithScale:
@@ -90,8 +96,7 @@ class TestGeneralTransform3PositionWithScale:
         child = GeneralTransform3(GeneralPose3(lin=Vec3(1, 0, 0)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
-        assert_vec3_approx(child_global.lin, (2, 0, 0))
+        assert_vec3_approx(child.global_position, (2, 0, 0))
 
     def test_non_uniform_scale_affects_position(self):
         """Non-uniform parent scale affects child position per axis."""
@@ -99,8 +104,7 @@ class TestGeneralTransform3PositionWithScale:
         child = GeneralTransform3(GeneralPose3(lin=Vec3(1, 1, 1)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
-        assert_vec3_approx(child_global.lin, (2, 3, 4))
+        assert_vec3_approx(child.global_position, (2, 3, 4))
 
     def test_parent_translation_and_scale(self):
         """Parent at [10,0,0] with scale [2,2,2], child at local [1,0,0]."""
@@ -111,9 +115,8 @@ class TestGeneralTransform3PositionWithScale:
         child = GeneralTransform3(GeneralPose3(lin=Vec3(1, 0, 0)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
         # child [1,0,0] scaled by 2 -> [2,0,0], then parent adds [10,0,0] -> [12,0,0]
-        assert_vec3_approx(child_global.lin, (12, 0, 0))
+        assert_vec3_approx(child.global_position, (12, 0, 0))
 
     def test_three_level_hierarchy_position(self):
         """Three-level hierarchy with scale at each level."""
@@ -131,9 +134,8 @@ class TestGeneralTransform3PositionWithScale:
         # leaf local [1,0,0] scaled by middle scale [3,3,3] -> [3,0,0]
         # middle local [1,0,0] + [3,0,0] = [4,0,0]
         # [4,0,0] scaled by root scale [2,2,2] -> [8,0,0]
-        leaf_global = leaf.global_pose()
-        assert_vec3_approx(leaf_global.lin, (8, 0, 0))
-        assert_vec3_approx(leaf_global.scale, (6, 6, 6))
+        assert_vec3_approx(leaf.global_position, (8, 0, 0))
+        assert_vec3_approx(leaf.decomposed_global_scale(), (6, 6, 6))
 
 
 class TestGeneralTransform3RotationWithScale:
@@ -150,9 +152,8 @@ class TestGeneralTransform3RotationWithScale:
         child = GeneralTransform3(GeneralPose3(lin=Vec3(1, 0, 0)))
         parent.add_child(child)
 
-        child_global = child.global_pose()
         # Child [1,0,0] scaled by 2 -> [2,0,0], rotated 90 around Z -> [0,2,0]
-        assert_vec3_approx(child_global.lin, (0, 2, 0))
+        assert_vec3_approx(child.global_position, (0, 2, 0))
 
     def test_child_rotated_parent_scaled(self):
         """Parent scaled, child rotated."""
@@ -164,9 +165,8 @@ class TestGeneralTransform3RotationWithScale:
         child = GeneralTransform3(child_pose)
         parent.add_child(child)
 
-        child_global = child.global_pose()
         # Child position [1,0,0] scaled by parent -> [2,0,0]
-        assert_vec3_approx(child_global.lin, (2, 0, 0))
+        assert_vec3_approx(child.global_position, (2, 0, 0))
 
 
 class TestGeneralTransform3Relocate:
@@ -192,13 +192,13 @@ class TestGeneralTransform3Relocate:
         assert_vec3_approx(pose.lin, (5, 5, 5))
         assert_vec3_approx(pose.scale, (3, 3, 3))
 
-    def test_relocate_global_with_pose3(self):
-        """relocate_global() with Pose3 preserves scale."""
+    def test_world_position_and_orientation_setters_preserve_scale(self):
         parent = GeneralTransform3(GeneralPose3(lin=Vec3(10, 0, 0)))
         child = GeneralTransform3(GeneralPose3(scale=Vec3(2, 2, 2)))
         parent.add_child(child)
 
-        child.relocate_global(Pose3(lin=Vec3(15, 0, 0)))
+        child.set_global_position(Vec3(15, 0, 0))
+        child.set_global_orientation(Pose3.identity().ang)
 
         # Global position should be [15,0,0], so local should be [5,0,0]
         assert_vec3_approx(child.local_pose().lin, (5, 0, 0))
@@ -211,15 +211,14 @@ class TestGeneralTransform3Relocate:
         parent.add_child(child)
 
         # Initial child global position
-        initial = child.global_pose().lin
+        initial = child.global_position
         assert_vec3_approx(initial, (2, 0, 0))
 
         # Move parent
         parent.relocate(GeneralPose3(lin=Vec3(10, 0, 0), scale=Vec3(2, 2, 2)))
 
         # Child should update
-        updated = child.global_pose()
-        assert_vec3_approx(updated.lin, (12, 0, 0))
+        assert_vec3_approx(child.global_position, (12, 0, 0))
 
 
 class TestGeneralTransform3TransformPoint:
@@ -369,7 +368,7 @@ class TestGeneralTransform3EdgeCases:
         child = GeneralTransform3(GeneralPose3(lin=Vec3(1, 0, 0)))
 
         parent1.add_child(child)
-        assert_vec3_approx(child.global_pose().lin, (2, 0, 0))
+        assert_vec3_approx(child.global_position, (2, 0, 0))
 
         parent2.add_child(child)  # reparent
-        assert_vec3_approx(child.global_pose().lin, (3, 0, 0))
+        assert_vec3_approx(child.global_position, (3, 0, 0))
