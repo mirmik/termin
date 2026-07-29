@@ -6,6 +6,8 @@
 // MaterialParams layout from @property entries, and values (camera matrices +
 // colors + variant selector) are packed each frame and bound through reflected
 // material resources. No hand-coded layout, no gradient/solid shader split.
+// The pass uses RenderContext2's fullscreen geometry; a projected cube is not
+// a safe fullscreen primitive because its edges cross the camera plane.
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
@@ -35,9 +37,6 @@ private:
     // pass re-creations) so Play/Stop doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
     tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
-    tgfx::BufferHandle cube_vbo_;
-    tgfx::BufferHandle cube_ibo_;
-
     // Parsed from the canonical built-in .shader program at ensure_resources
     // time. The layout drives std140_pack and the UBO block_size.
     MaterialUboLayout skybox_layout_;
