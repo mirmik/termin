@@ -1,6 +1,7 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
 #include "tc_display_input_router_internal.h"
+#include "tc_input_event.h"
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
 #include <math.h>
@@ -412,6 +413,35 @@ tc_input_manager* tc_display_get_input_manager(tc_display_handle handle) {
         return NULL;
     }
     return display->input_endpoint;
+}
+
+bool tc_display_dispatch_pointer(
+    tc_display_handle handle,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    float pressure
+) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_pointer");
+    if (!tc_display_validate_pointer_event(display, x, y,
+                                           "tc_display_dispatch_pointer")) return false;
+    if (device < TC_POINTER_DEVICE_MOUSE || device > TC_POINTER_DEVICE_PEN) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_pointer] invalid pointer device %d", device);
+        return false;
+    }
+    if (phase < TC_POINTER_DOWN || phase > TC_POINTER_CANCEL) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_pointer] invalid pointer phase %d", phase);
+        return false;
+    }
+    if (!isfinite(pressure)) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_pointer] non-finite pressure");
+        return false;
+    }
+    tc_input_manager_on_pointer(
+        display->input_endpoint, pointer_id, device, phase, x, y, pressure);
+    return true;
 }
 
 bool tc_display_dispatch_pointer_move(tc_display_handle handle, double x, double y) {

@@ -12,8 +12,10 @@ typedef void (*tc_py_input_on_mouse_button_fn)(void* py_self, tc_mouse_button_ev
 typedef void (*tc_py_input_on_mouse_move_fn)(void* py_self, tc_mouse_move_event* event);
 typedef void (*tc_py_input_on_scroll_fn)(void* py_self, tc_scroll_event* event);
 typedef void (*tc_py_input_on_key_fn)(void* py_self, tc_key_event* event);
+typedef void (*tc_py_input_on_pointer_fn)(void* py_self, tc_pointer_event* event);
 
 typedef struct {
+    tc_py_input_on_pointer_fn on_pointer;
     tc_py_input_on_mouse_button_fn on_mouse_button;
     tc_py_input_on_mouse_move_fn on_mouse_move;
     tc_py_input_on_scroll_fn on_scroll;

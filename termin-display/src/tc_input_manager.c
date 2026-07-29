@@ -38,6 +38,18 @@ void tc_input_manager_free(tc_input_manager* m) {
 // Exported Dispatch Functions (for C#/FFI - inline versions not exported)
 // ============================================================================
 
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_pointer(
+    tc_input_manager* m,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    float pressure
+) {
+    tc_input_manager_on_pointer(m, pointer_id, device, phase, x, y, pressure);
+}
+
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
     tc_input_manager* m, int button, int action, int mods, uint32_t click_count
 ) {

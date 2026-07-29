@@ -3,12 +3,7 @@
 #include "core/tc_component.h"
 #include "core/tc_input_component.h"
 
-static const tc_input_vtable g_test_input_vtable = {
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-};
+static const tc_input_vtable g_test_input_vtable = {0};
 
 GUARD_C_TEST(test_input_source_mask_defaults_and_updates) {
     tc_component component;

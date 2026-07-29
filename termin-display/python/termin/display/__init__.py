@@ -11,6 +11,7 @@ from termin.display._display_native import _input_manager_on_char as _input_mana
 from termin.display._display_native import _input_manager_on_key as _input_manager_on_key
 from termin.display._display_native import _input_manager_on_mouse_button as _input_manager_on_mouse_button
 from termin.display._display_native import _input_manager_on_mouse_move as _input_manager_on_mouse_move
+from termin.display._display_native import _input_manager_on_pointer as _input_manager_on_pointer
 from termin.display._display_native import _input_manager_on_scroll as _input_manager_on_scroll
 from termin.display._display_native import _viewport_get_input_manager as _viewport_get_input_manager
 from termin.display._display_native import _viewport_input_manager_free as _viewport_input_manager_free

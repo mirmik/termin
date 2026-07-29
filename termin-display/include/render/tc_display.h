@@ -66,6 +66,14 @@ TERMIN_DISPLAY_API bool tc_display_validate_output(
 // ============================================================================
 
 TERMIN_DISPLAY_API tc_input_manager* tc_display_get_input_manager(tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_display_dispatch_pointer(
+    tc_display_handle display,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    float pressure);
 TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_move(tc_display_handle display, double x, double y);
 TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_button(
     tc_display_handle display, double x, double y, int button, int action, int mods,

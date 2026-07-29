@@ -30,6 +30,9 @@ struct CountingInput {
     int last_key = -1;
     int last_scancode = -1;
     int last_key_action = -1;
+    int pointer_events = 0;
+    uint64_t last_pointer_id = 0;
+    int last_pointer_phase = -1;
 };
 
 void surface_get_size(tc_render_surface* self, int* width, int* height)
@@ -89,6 +92,17 @@ void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t c
     input->last_click_count = click_count;
 }
 
+void count_pointer(tc_input_manager* self, uint64_t pointer_id, int, int phase,
+                   double x, double y, float)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->pointer_events += 1;
+    input->last_pointer_id = pointer_id;
+    input->last_pointer_phase = phase;
+    input->last_x = x;
+    input->last_y = y;
+}
+
 const tc_render_surface_vtable fixed_surface_vtable = {
     .get_size = surface_get_size,
     .resize = surface_resize,
@@ -98,6 +112,7 @@ const tc_render_surface_vtable fixed_surface_vtable = {
 };
 
 const tc_input_manager_vtable counting_input_vtable = {
+    .on_pointer = count_pointer,
     .on_mouse_button = count_mouse_button,
     .on_mouse_move = count_mouse_move,
     .on_key = count_key,
@@ -115,6 +130,9 @@ void init_counting_input(CountingInput* input)
     input->last_key = -1;
     input->last_scancode = -1;
     input->last_key_action = -1;
+    input->pointer_events = 0;
+    input->last_pointer_id = 0;
+    input->last_pointer_phase = -1;
     tc_input_manager_init(&input->manager, &counting_input_vtable);
     input->manager.userdata = input;
 }
@@ -187,6 +205,33 @@ int main()
                      right_input.releases);
         return 1;
     }
+
+    // A touch remains captured by the viewport where it started even after
+    // crossing into another viewport.
+    assert(tc_display_dispatch_pointer(
+        display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
+        25.0, 50.0, 1.0f));
+    assert(tc_display_dispatch_pointer(
+        display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
+        75.0, 50.0, 1.0f));
+    assert(tc_display_dispatch_pointer(
+        display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_UP,
+        75.0, 50.0, 0.0f));
+    assert(left_input.pointer_events == 3);
+    assert(right_input.pointer_events == 0);
+    assert(left_input.last_pointer_id == 42);
+    assert(left_input.last_pointer_phase == TC_POINTER_UP);
+
+    // Capture is released after UP, so reusing the platform pointer id starts
+    // a new contact in the viewport under the new DOWN position.
+    assert(tc_display_dispatch_pointer(
+        display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
+        75.0, 50.0, 1.0f));
+    assert(right_input.pointer_events == 1);
+    assert(tc_display_dispatch_pointer(
+        display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL,
+        75.0, 50.0, 0.0f));
+    assert(right_input.pointer_events == 2);
 
 #ifdef TERMIN_DISPLAY_HAS_SDL
     termin::WindowEvent pointer_event;

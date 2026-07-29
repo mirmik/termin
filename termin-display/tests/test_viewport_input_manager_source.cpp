@@ -13,8 +13,10 @@ namespace {
 
 struct InputProbe {
     int mouse_buttons = 0;
+    int pointer_events = 0;
     uint32_t last_source = 0;
     uint32_t last_click_count = 0;
+    double last_pointer_dx = 0.0;
 };
 
 InputProbe g_probe;
@@ -27,7 +29,15 @@ void record_mouse_button(tc_component*, tc_mouse_button_event* event)
     event->handled = true;
 }
 
+void record_pointer(tc_component*, tc_pointer_event* event)
+{
+    g_probe.pointer_events += 1;
+    g_probe.last_source = event->source;
+    g_probe.last_pointer_dx = event->dx;
+}
+
 const tc_input_vtable probe_input_vtable = {
+    .on_pointer = record_pointer,
     .on_mouse_button = record_mouse_button,
 };
 
@@ -132,6 +142,22 @@ int main()
                      "runtime input was not delivered after restoring runtime mask: count=%d source=%u\n",
                      g_probe.mouse_buttons,
                      g_probe.last_source);
+        return 1;
+    }
+
+    tc_input_manager_on_pointer(
+        input, 7, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 10.0, 20.0, 1.0f);
+    tc_input_manager_on_pointer(
+        input, 7, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 14.0, 20.0, 1.0f);
+    if (g_probe.pointer_events != 2 ||
+        g_probe.last_source != TC_INPUT_SOURCE_RUNTIME ||
+        g_probe.last_pointer_dx != 4.0) {
+        std::fprintf(
+            stderr,
+            "pointer input was not delivered with tracked delta: count=%d source=%u dx=%f\n",
+            g_probe.pointer_events,
+            g_probe.last_source,
+            g_probe.last_pointer_dx);
         return 1;
     }
 

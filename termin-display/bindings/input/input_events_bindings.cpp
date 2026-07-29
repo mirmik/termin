@@ -18,6 +18,46 @@ namespace termin {
 void bind_input_events(nb::module_& m) {
     m.attr("INPUT_SOURCE_RUNTIME") = nb::int_(static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME));
     m.attr("INPUT_SOURCE_EDITOR") = nb::int_(static_cast<uint32_t>(TC_INPUT_SOURCE_EDITOR));
+    m.attr("POINTER_DEVICE_MOUSE") = TC_POINTER_DEVICE_MOUSE;
+    m.attr("POINTER_DEVICE_TOUCH") = TC_POINTER_DEVICE_TOUCH;
+    m.attr("POINTER_DEVICE_PEN") = TC_POINTER_DEVICE_PEN;
+    m.attr("POINTER_DOWN") = TC_POINTER_DOWN;
+    m.attr("POINTER_MOVE") = TC_POINTER_MOVE;
+    m.attr("POINTER_UP") = TC_POINTER_UP;
+    m.attr("POINTER_CANCEL") = TC_POINTER_CANCEL;
+
+    nb::class_<PointerEvent>(m, "PointerEvent",
+        "Device-neutral pointer event.")
+        .def(nb::init<>())
+        .def("__init__", [](PointerEvent* self, const TcViewport& viewport,
+                            uint64_t pointer_id, int device, int phase,
+                            double x, double y, double dx, double dy,
+                            float pressure, uint32_t source) {
+            new (self) PointerEvent(
+                viewport.handle(), pointer_id, device, phase, x, y, dx, dy,
+                pressure, source);
+        }, nb::arg("viewport"), nb::arg("pointer_id"), nb::arg("device"),
+           nb::arg("phase"), nb::arg("x"), nb::arg("y"),
+           nb::arg("dx") = 0.0, nb::arg("dy") = 0.0,
+           nb::arg("pressure") = 0.0f,
+           nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME))
+        .def_prop_rw("viewport",
+            [](const PointerEvent& self) {
+                return TcViewport::from_handle(self.viewport);
+            },
+            [](PointerEvent& self, const TcViewport& vp) {
+                self.viewport = vp.handle();
+            })
+        .def_rw("pointer_id", &PointerEvent::pointer_id)
+        .def_rw("device", &PointerEvent::device)
+        .def_rw("phase", &PointerEvent::phase)
+        .def_rw("x", &PointerEvent::x)
+        .def_rw("y", &PointerEvent::y)
+        .def_rw("dx", &PointerEvent::dx)
+        .def_rw("dy", &PointerEvent::dy)
+        .def_rw("pressure", &PointerEvent::pressure)
+        .def_rw("source", &PointerEvent::source)
+        .def_rw("handled", &PointerEvent::handled);
 
     nb::class_<MouseButtonEvent>(m, "MouseButtonEvent",
         "Mouse button press/release event.\n\n"

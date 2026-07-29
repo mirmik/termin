@@ -9,6 +9,7 @@
 #include "render/tc_render_surface.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "tc_input_event.h"
 
 namespace nb = nanobind;
 
@@ -22,6 +23,7 @@ namespace termin {
 // it passes its class-specific vtable pointer.
 
 struct PyInputManagerVTable {
+    nb::object on_pointer;
     nb::object on_mouse_button;
     nb::object on_mouse_move;
     nb::object on_scroll;
@@ -32,6 +34,21 @@ struct PyInputManagerVTable {
 };
 
 // C callbacks that dispatch to Python methods via stored vtable
+static void py_on_pointer(tc_input_manager* m, uint64_t pointer_id, int device, int phase,
+                          double x, double y, float pressure) {
+    if (!m || !m->body || !m->userdata) return;
+    PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
+    if (vt->on_pointer.is_none()) return;
+
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
+        vt->on_pointer(py_obj, pointer_id, device, phase, x, y, pressure);
+    } catch (const std::exception& e) {
+        tc::Log::warn("py_on_pointer: Python callback threw: %s", e.what());
+    }
+}
+
 static void py_on_mouse_button(tc_input_manager* m, int button, int action, int mods,
                                uint32_t click_count) {
     if (!m || !m->body || !m->userdata) return;
@@ -123,7 +140,8 @@ void bind_tc_input_manager(nb::module_& m) {
         nb::object on_mouse_move,
         nb::object on_scroll,
         nb::object on_key,
-        nb::object on_char
+        nb::object on_char,
+        nb::object on_pointer
     ) -> uintptr_t {
         auto* vt = new PyInputManagerVTable();
         vt->on_mouse_button = on_mouse_button;
@@ -131,8 +149,10 @@ void bind_tc_input_manager(nb::module_& m) {
         vt->on_scroll = on_scroll;
         vt->on_key = on_key;
         vt->on_char = on_char;
+        vt->on_pointer = on_pointer;
 
         vt->c_vtable = {
+            .on_pointer = py_on_pointer,
             .on_mouse_button = py_on_mouse_button,
             .on_mouse_move = py_on_mouse_move,
             .on_scroll = py_on_scroll,
@@ -142,7 +162,9 @@ void bind_tc_input_manager(nb::module_& m) {
         };
 
         return reinterpret_cast<uintptr_t>(vt);
-    });
+    }, nb::arg("on_mouse_button"), nb::arg("on_mouse_move"),
+       nb::arg("on_scroll"), nb::arg("on_key"), nb::arg("on_char"),
+       nb::arg("on_pointer") = nb::none());
 
     // Create input manager with class vtable
     m.def("_input_manager_new", [](uintptr_t vtable_ptr, nb::object py_manager) -> uintptr_t {
@@ -176,6 +198,12 @@ void bind_tc_input_manager(nb::module_& m) {
     }, nb::arg("ptr"), nb::arg("button"), nb::arg("action"), nb::arg("mods"),
        nb::arg("click_count") = 1);
 
+    m.def("_input_manager_on_pointer", [](uintptr_t ptr, uint64_t pointer_id, int device,
+                                          int phase, double x, double y, float pressure) {
+        tc_input_manager* m = reinterpret_cast<tc_input_manager*>(ptr);
+        tc_input_manager_on_pointer(m, pointer_id, device, phase, x, y, pressure);
+    });
+
     m.def("_input_manager_on_mouse_move", [](uintptr_t ptr, double x, double y) {
         tc_input_manager* m = reinterpret_cast<tc_input_manager*>(ptr);
         tc_input_manager_on_mouse_move(m, x, y);
@@ -203,6 +231,13 @@ void bind_tc_input_manager(nb::module_& m) {
     m.attr("TC_MOUSE_BUTTON_LEFT") = TC_MOUSE_BUTTON_LEFT;
     m.attr("TC_MOUSE_BUTTON_RIGHT") = TC_MOUSE_BUTTON_RIGHT;
     m.attr("TC_MOUSE_BUTTON_MIDDLE") = TC_MOUSE_BUTTON_MIDDLE;
+    m.attr("TC_POINTER_DEVICE_MOUSE") = TC_POINTER_DEVICE_MOUSE;
+    m.attr("TC_POINTER_DEVICE_TOUCH") = TC_POINTER_DEVICE_TOUCH;
+    m.attr("TC_POINTER_DEVICE_PEN") = TC_POINTER_DEVICE_PEN;
+    m.attr("TC_POINTER_DOWN") = TC_POINTER_DOWN;
+    m.attr("TC_POINTER_MOVE") = TC_POINTER_MOVE;
+    m.attr("TC_POINTER_UP") = TC_POINTER_UP;
+    m.attr("TC_POINTER_CANCEL") = TC_POINTER_CANCEL;
     m.attr("TC_MOD_SHIFT") = TC_MOD_SHIFT;
     m.attr("TC_MOD_CONTROL") = TC_MOD_CONTROL;
     m.attr("TC_MOD_ALT") = TC_MOD_ALT;

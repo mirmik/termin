@@ -31,6 +31,17 @@ extern "C" {
 #define TC_MOD_ALT     0x0004
 #define TC_MOD_SUPER   0x0008
 
+// Pointer device types
+#define TC_POINTER_DEVICE_MOUSE 0
+#define TC_POINTER_DEVICE_TOUCH 1
+#define TC_POINTER_DEVICE_PEN   2
+
+// Pointer phases
+#define TC_POINTER_DOWN   0
+#define TC_POINTER_MOVE   1
+#define TC_POINTER_UP     2
+#define TC_POINTER_CANCEL 3
+
 // Key codes (matching GLFW values)
 #define TC_KEY_SPACE         32
 #define TC_KEY_ESCAPE        256
@@ -124,6 +135,21 @@ typedef struct tc_key_event {
     uint32_t source;
     bool handled;
 } tc_key_event;
+
+// Device-neutral pointer event. pointer_id is stable from DOWN through UP/CANCEL.
+typedef struct tc_pointer_event {
+    tc_viewport_handle viewport;
+    uint64_t pointer_id;
+    int device;
+    int phase;
+    double x;
+    double y;
+    double dx;
+    double dy;
+    float pressure;
+    uint32_t source;
+    bool handled;
+} tc_pointer_event;
 
 typedef struct tc_mouse_button_event_init_info {
     tc_viewport_handle viewport;
@@ -265,6 +291,49 @@ static inline void tc_key_event_init(
     int action, int mods
 ) {
     tc_key_event_init_source(e, viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
+}
+
+static inline void tc_pointer_event_init_source(
+    tc_pointer_event* e,
+    tc_viewport_handle viewport,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    double dx,
+    double dy,
+    float pressure,
+    uint32_t source
+) {
+    e->viewport = viewport;
+    e->pointer_id = pointer_id;
+    e->device = device;
+    e->phase = phase;
+    e->x = x;
+    e->y = y;
+    e->dx = dx;
+    e->dy = dy;
+    e->pressure = pressure;
+    e->source = source;
+    e->handled = false;
+}
+
+static inline void tc_pointer_event_init(
+    tc_pointer_event* e,
+    tc_viewport_handle viewport,
+    uint64_t pointer_id,
+    int device,
+    int phase,
+    double x,
+    double y,
+    double dx,
+    double dy,
+    float pressure
+) {
+    tc_pointer_event_init_source(
+        e, viewport, pointer_id, device, phase, x, y, dx, dy, pressure,
+        TC_INPUT_SOURCE_RUNTIME);
 }
 
 #ifdef __cplusplus

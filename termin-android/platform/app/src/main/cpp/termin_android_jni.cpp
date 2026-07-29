@@ -109,6 +109,27 @@ Java_org_termin_android_TerminActivity_nativeSurfaceDestroyed(JNIEnv*, jclass) {
     termin_android_on_surface_destroyed();
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_termin_android_TerminActivity_nativePointer(
+    JNIEnv*,
+    jclass,
+    jlong pointer_id,
+    jint device,
+    jint phase,
+    jfloat x,
+    jfloat y,
+    jfloat pressure
+) {
+    termin_android_on_pointer(
+        static_cast<uint64_t>(pointer_id),
+        static_cast<int32_t>(device),
+        static_cast<int32_t>(phase),
+        x,
+        y,
+        pressure
+    );
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_termin_android_TerminActivity_nativeRenderFrame(
     JNIEnv*,

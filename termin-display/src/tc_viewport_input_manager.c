@@ -16,6 +16,14 @@
 // Dispatch Callbacks
 // ============================================================================
 
+static bool dispatch_pointer_cb(tc_component* c, void* user_data) {
+    tc_pointer_event* event = (tc_pointer_event*)user_data;
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_pointer(c, event);
+    }
+    return !event->handled;
+}
+
 static bool dispatch_mouse_button_cb(tc_component* c, void* user_data) {
     tc_mouse_button_event* event = (tc_mouse_button_event*)user_data;
     if (tc_component_accepts_input_source(c, event->source)) {
@@ -95,9 +103,109 @@ static inline tc_viewport_input_manager* vim_from(tc_input_manager* self) {
     return self ? (tc_viewport_input_manager*)self->userdata : NULL;
 }
 
+typedef struct tc_viewport_pointer_state {
+    uint64_t pointer_id;
+    int device;
+    double x;
+    double y;
+    struct tc_viewport_pointer_state* next;
+} tc_viewport_pointer_state;
+
+static tc_viewport_pointer_state* vim_find_pointer(
+    tc_viewport_input_manager* m,
+    uint64_t pointer_id,
+    int device,
+    tc_viewport_pointer_state** previous
+) {
+    tc_viewport_pointer_state* prev = NULL;
+    tc_viewport_pointer_state* current =
+        (tc_viewport_pointer_state*)m->pointer_states;
+    while (current) {
+        if (current->pointer_id == pointer_id && current->device == device) {
+            if (previous) *previous = prev;
+            return current;
+        }
+        prev = current;
+        current = current->next;
+    }
+    if (previous) *previous = NULL;
+    return NULL;
+}
+
+static tc_viewport_pointer_state* vim_ensure_pointer(
+    tc_viewport_input_manager* m,
+    uint64_t pointer_id,
+    int device
+) {
+    tc_viewport_pointer_state* state = vim_find_pointer(m, pointer_id, device, NULL);
+    if (state) return state;
+    state = (tc_viewport_pointer_state*)calloc(1, sizeof(tc_viewport_pointer_state));
+    if (!state) {
+        tc_log(TC_LOG_ERROR, "[tc_viewport_input_manager] pointer state allocation failed");
+        return NULL;
+    }
+    state->pointer_id = pointer_id;
+    state->device = device;
+    state->next = (tc_viewport_pointer_state*)m->pointer_states;
+    m->pointer_states = state;
+    return state;
+}
+
+static void vim_remove_pointer(
+    tc_viewport_input_manager* m,
+    uint64_t pointer_id,
+    int device
+) {
+    tc_viewport_pointer_state* previous = NULL;
+    tc_viewport_pointer_state* state =
+        vim_find_pointer(m, pointer_id, device, &previous);
+    if (!state) return;
+    if (previous) {
+        previous->next = state->next;
+    } else {
+        m->pointer_states = state->next;
+    }
+    free(state);
+}
+
 // ============================================================================
 // VTable Callbacks
 // ============================================================================
+
+static void vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phase,
+                           double x, double y, float pressure) {
+    tc_viewport_input_manager* m = vim_from(self);
+    if (!m || !tc_viewport_alive(m->viewport)) return;
+
+    tc_viewport_pointer_state* state = vim_find_pointer(m, pointer_id, device, NULL);
+    double dx = 0.0;
+    double dy = 0.0;
+    if (state && phase != TC_POINTER_DOWN) {
+        dx = x - state->x;
+        dy = y - state->y;
+    }
+    if (!state && phase != TC_POINTER_UP && phase != TC_POINTER_CANCEL) {
+        state = vim_ensure_pointer(m, pointer_id, device);
+    }
+    if (state) {
+        state->x = x;
+        state->y = y;
+    }
+
+    tc_pointer_event event;
+    tc_pointer_event_init_source(
+        &event, m->viewport, pointer_id, device, phase, x, y, dx, dy, pressure,
+        TC_INPUT_SOURCE_RUNTIME);
+
+    dispatch_to_internal_entities(m->viewport, dispatch_pointer_cb, &event);
+    if (!event.handled) {
+        dispatch_to_scene(m->viewport, dispatch_pointer_cb, &event);
+    }
+
+    if (phase == TC_POINTER_UP || phase == TC_POINTER_CANCEL) {
+        vim_remove_pointer(m, pointer_id, device);
+    }
+}
 
 static void vim_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
                                 uint32_t click_count) {
@@ -190,12 +298,13 @@ static void vim_destroy(tc_input_manager* self) {
 // ============================================================================
 
 static const tc_input_manager_vtable g_vim_vtable = {
-    vim_on_mouse_button,
-    vim_on_mouse_move,
-    vim_on_scroll,
-    vim_on_key,
-    vim_on_char,
-    vim_destroy
+    .on_pointer = vim_on_pointer,
+    .on_mouse_button = vim_on_mouse_button,
+    .on_mouse_move = vim_on_mouse_move,
+    .on_scroll = vim_on_scroll,
+    .on_key = vim_on_key,
+    .on_char = vim_on_char,
+    .destroy = vim_destroy,
 };
 
 // ============================================================================
@@ -212,6 +321,7 @@ tc_viewport_input_manager* tc_viewport_input_manager_new(tc_viewport_handle view
     m->last_cursor_x = 0.0;
     m->last_cursor_y = 0.0;
     m->has_cursor = false;
+    m->pointer_states = NULL;
 
     // Auto-attach to viewport
     tc_viewport_set_input_manager(viewport, &m->base);
@@ -229,5 +339,12 @@ void tc_viewport_input_manager_free(tc_viewport_input_manager* m) {
         }
     }
 
+    tc_viewport_pointer_state* state =
+        (tc_viewport_pointer_state*)m->pointer_states;
+    while (state) {
+        tc_viewport_pointer_state* next = state->next;
+        free(state);
+        state = next;
+    }
     free(m);
 }

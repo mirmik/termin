@@ -3,6 +3,12 @@
 
 static tc_python_input_callbacks g_py_input_callbacks = {0};
 
+static void py_input_on_pointer(tc_component* c, tc_pointer_event* event) {
+    if (g_py_input_callbacks.on_pointer && c->body) {
+        g_py_input_callbacks.on_pointer(c->body, event);
+    }
+}
+
 static void py_input_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
     if (g_py_input_callbacks.on_mouse_button && c->body) {
         g_py_input_callbacks.on_mouse_button(c->body, event);
@@ -28,6 +34,7 @@ static void py_input_on_key(tc_component* c, tc_key_event* event) {
 }
 
 static const tc_input_vtable g_python_input_vtable = {
+    .on_pointer = py_input_on_pointer,
     .on_mouse_button = py_input_on_mouse_button,
     .on_mouse_move = py_input_on_mouse_move,
     .on_scroll = py_input_on_scroll,

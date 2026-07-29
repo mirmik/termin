@@ -12,8 +12,10 @@ typedef struct tc_mouse_button_event tc_mouse_button_event;
 typedef struct tc_mouse_move_event tc_mouse_move_event;
 typedef struct tc_scroll_event tc_scroll_event;
 typedef struct tc_key_event tc_key_event;
+typedef struct tc_pointer_event tc_pointer_event;
 
 typedef struct tc_input_vtable {
+    void (*on_pointer)(tc_component* self, tc_pointer_event* event);
     void (*on_mouse_button)(tc_component* self, tc_mouse_button_event* event);
     void (*on_mouse_move)(tc_component* self, tc_mouse_move_event* event);
     void (*on_scroll)(tc_component* self, tc_scroll_event* event);
@@ -27,6 +29,13 @@ static inline bool tc_component_is_input_handler(const tc_component* c) {
 static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
     if (!c) return NULL;
     return tc_input_capability_get(c);
+}
+
+static inline void tc_component_on_pointer(tc_component* c, tc_pointer_event* event) {
+    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
+    if (c && c->enabled && event && vt && vt->on_pointer) {
+        vt->on_pointer(c, event);
+    }
 }
 
 static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
