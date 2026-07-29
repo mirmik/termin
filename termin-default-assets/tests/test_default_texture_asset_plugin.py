@@ -18,17 +18,18 @@ class FakeLoadedTextureAsset:
     is_loaded = True
 
     def __init__(self) -> None:
-        self.parsed_spec = None
+        self.reloaded_spec = None
         self.reload_count = 0
 
     def should_reload_from_file(self) -> bool:
         return True
 
-    def parse_spec(self, spec_data) -> None:
-        self.parsed_spec = spec_data
-
-    def reload(self) -> None:
+    def reload_with_spec(self, spec_data) -> bool:
+        self.reloaded_spec = spec_data
         self.reload_count += 1
+        return True
+
+
 def test_texture_runtime_reload_stays_in_asset_layer() -> None:
     resource_manager = FakeResourceManager()
     asset = FakeLoadedTextureAsset()
@@ -45,5 +46,5 @@ def test_texture_runtime_reload_stays_in_asset_layer() -> None:
         result,
     )
 
-    assert asset.parsed_spec == {"flip_y": False}
+    assert asset.reloaded_spec == {"flip_y": False}
     assert asset.reload_count == 1

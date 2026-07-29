@@ -30,11 +30,51 @@ class TextureInspectorSnapshot:
     channels: str = "—"
     file_size: str = "—"
     path: str = ""
+    encoding: str = "srgb"
     flip_x: bool = False
     flip_y: bool = True
     transpose: bool = False
     preview_pixels: Any = field(default=None, compare=False, repr=False)
+    error: str = ""
     message: str = "No texture selected."
+
+
+def prepare_texture_preview_pixels(pixels: Any, encoding: str) -> Any:
+    """Return SDR preview pixels without changing the texture's stored values."""
+    if pixels is None or encoding == "srgb":
+        return pixels
+    if encoding != "linear":
+        raise ValueError(f"unsupported texture preview encoding: {encoding}")
+
+    import numpy as np
+
+    source = np.asarray(pixels)
+    if source.ndim != 3 or source.shape[2] not in (3, 4):
+        raise ValueError("texture preview requires an H×W RGB or RGBA array")
+
+    if source.dtype.kind == "f":
+        linear = np.clip(source.astype(np.float32, copy=False), 0.0, 1.0)
+        converted = linear.copy()
+        rgb = linear[:, :, :3]
+        converted[:, :, :3] = np.where(
+            rgb <= 0.0031308,
+            rgb * 12.92,
+            1.055 * np.power(rgb, 1.0 / 2.4) - 0.055,
+        )
+        return converted
+
+    if source.dtype.kind not in ("u", "i"):
+        raise ValueError("texture preview pixels must be integer or floating point")
+    maximum = float(np.iinfo(source.dtype).max)
+    linear_rgb = np.clip(source[:, :, :3].astype(np.float32) / maximum, 0.0, 1.0)
+    srgb_rgb = np.where(
+        linear_rgb <= 0.0031308,
+        linear_rgb * 12.92,
+        1.055 * np.power(linear_rgb, 1.0 / 2.4) - 0.055,
+    )
+    converted = source.copy()
+    converted[:, :, :3] = np.rint(srgb_rgb * maximum).astype(source.dtype)
+    return converted
 
 
 class TextureInspectorController:
@@ -73,7 +113,7 @@ class TextureInspectorController:
             )
             return self._snapshot
 
-        from tgfx import TcTexture
+        from tgfx import TcTexture, TextureEncoding
         from termin.render.texture import Texture
 
         asset = self._resource_manager.get_texture_asset(name) if name else None
@@ -83,6 +123,7 @@ class TextureInspectorController:
         flip_x = bool(asset.flip_x) if asset is not None else False
         flip_y = bool(asset.flip_y) if asset is not None else True
         transpose = bool(asset.transpose) if asset is not None else False
+        encoding = str(asset.encoding) if asset is not None else "srgb"
         width = height = channels = 0
         pixels = None
         if isinstance(texture, Texture):
@@ -92,12 +133,23 @@ class TextureInspectorController:
             source = source or str(texture.source_path or "")
             if asset is None:
                 flip_x, flip_y, transpose = texture.flip_x, texture.flip_y, texture.transpose
+                encoding = (
+                    "srgb"
+                    if texture.texture_data is not None
+                    and texture.texture_data.encoding == TextureEncoding.SRGB
+                    else "linear"
+                )
         elif isinstance(texture, TcTexture):
             width, height, channels = texture.width, texture.height, texture.channels
             pixels = texture.data
             source = source or str(texture.source_path or "")
             if asset is None:
                 flip_x, flip_y, transpose = texture.flip_x, texture.flip_y, texture.transpose
+                encoding = (
+                    "srgb"
+                    if texture.encoding == TextureEncoding.SRGB
+                    else "linear"
+                )
         if pixels is not None and len(pixels.shape) == 3:
             channels = int(pixels.shape[2])
         if asset is None and source:
@@ -105,6 +157,7 @@ class TextureInspectorController:
 
             spec = TextureSpec.for_texture_file(source)
             flip_x, flip_y, transpose = spec.flip_x, spec.flip_y, spec.transpose
+            encoding = spec.encoding
         self._snapshot = TextureInspectorSnapshot(
             True,
             name=name,
@@ -113,31 +166,86 @@ class TextureInspectorController:
             channels=str(channels) if channels > 0 else "—",
             file_size=format_file_size(os.path.getsize(source)) if source and os.path.exists(source) else "—",
             path=source,
+            encoding=encoding,
             flip_x=bool(flip_x),
             flip_y=bool(flip_y),
             transpose=bool(transpose),
-            preview_pixels=pixels,
+            preview_pixels=prepare_texture_preview_pixels(pixels, encoding),
             message="",
         )
         return self._snapshot
 
-    def save_import_settings(self, *, flip_x: bool, flip_y: bool, transpose: bool) -> TextureInspectorSnapshot:
+    def save_import_settings(
+        self,
+        *,
+        encoding: str,
+        flip_x: bool,
+        flip_y: bool,
+        transpose: bool,
+    ) -> TextureInspectorSnapshot:
         if not self._snapshot.path:
             raise ValueError("texture import settings require a source path")
-        from termin.default_assets.render.texture_spec import TextureSpec
-
-        TextureSpec(flip_x=flip_x, flip_y=flip_y, transpose=transpose).save_for_texture(
-            self._snapshot.path
+        from termin.default_assets.render.texture_spec import (
+            TextureSpec,
+            validate_texture_encoding,
         )
-        self._snapshot = replace(
-            self._snapshot,
+
+        encoding = validate_texture_encoding(encoding)
+        previous_spec = TextureSpec.for_texture_file(self._snapshot.path)
+        updated_spec = replace(
+            previous_spec,
+            encoding=encoding,
             flip_x=flip_x,
             flip_y=flip_y,
             transpose=transpose,
         )
+        reload_committed = False
+        try:
+            updated_spec.save_for_texture(self._snapshot.path)
+            self._reload_texture()
+            reload_committed = True
+            refreshed = self._resource_manager.get_texture(self._snapshot.name)
+            if refreshed is None:
+                raise RuntimeError(
+                    f"reimported texture '{self._snapshot.name}' is not registered"
+                )
+            self.set_target(refreshed, name=self._snapshot.name)
+        except Exception as exc:
+            _logger.exception(
+                "Texture inspector failed to save/reimport '%s'",
+                self._snapshot.path,
+            )
+            try:
+                previous_spec.save_for_texture(self._snapshot.path)
+                if reload_committed:
+                    self._reload_texture()
+            except Exception:
+                _logger.exception(
+                    "Texture inspector failed to restore texture state for '%s'",
+                    self._snapshot.path,
+                )
+            self._snapshot = replace(
+                self._snapshot,
+                error=f"Failed to reimport texture: {exc}",
+            )
         if self._changed is not None:
             self._changed()
         return self._snapshot
+
+    def _reload_texture(self) -> None:
+        plugin = self._resource_manager.asset_type_plugins.get_import("texture")
+        if plugin is None:
+            raise RuntimeError("texture import plugin is not registered")
+        result = plugin.preload(self._snapshot.path)
+        if result is None:
+            raise RuntimeError("texture import plugin rejected the source file")
+        if self._snapshot.uuid and result.uuid != self._snapshot.uuid:
+            raise RuntimeError(
+                f"texture UUID changed during reimport: "
+                f"{self._snapshot.uuid} -> {result.uuid or '<missing>'}"
+            )
+        if not self._resource_manager.reload_file(result):
+            raise RuntimeError("texture runtime recreation failed")
 
 
 @dataclass(frozen=True)
@@ -334,4 +442,5 @@ __all__ = [
     "TextureInspectorController",
     "TextureInspectorSnapshot",
     "format_file_size",
+    "prepare_texture_preview_pixels",
 ]
