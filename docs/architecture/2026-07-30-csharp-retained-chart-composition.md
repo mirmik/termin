@@ -2,9 +2,10 @@
 
 ## Status
 
-Intent accepted. The projection contract, retained native grid item and
-value-only range/tick/text-measurement utilities are implemented. Native
-series items, typed C# wrappers and managed chart composition remain.
+Intent accepted. The projection contract, retained native grid and
+line/scatter series items, and value-only range/tick/text-measurement
+utilities are implemented. Typed C# wrappers and managed chart composition
+remain.
 
 The existing retained visual-scene initiative delivered the common
 `tc_graphic_item` object model and a tcplot annotation vertical slice. It did
@@ -139,6 +140,37 @@ projection during native paint, filters ticks to the current range and emits
 one backend-neutral path. Its C API accepts only scene/projection/item handles
 and detached arrays or values.
 
+`PlotLineSeriesItem2D` and `PlotScatterSeriesItem2D` own copied native data,
+explicit style and a shared retained GPU body. Their C ABI supports complete
+replacement, incremental line append, detached snapshots/copies and native
+nearest-point queries. Paint contributes one small `DrawRetainedBatch2D`
+command; the command shares the render body so a frozen draw list cannot
+observe a destroyed item or double-release its buffers.
+
+The generic retained-batch command belongs to `tgfx2`, not tcplot. It receives
+the effective scene transform, opacity, viewport and rectangular clip, then
+executes through `RenderContext2`. The Canvas executor flushes ordinary
+geometry around it and restores its state afterwards. Arbitrary geometric
+clips are deliberately rejected with an error for retained batches; chart
+plot-area clips are axis-aligned rectangles and stay on the scissor fast path.
+Supporting arbitrary native-batch masks requires a separate stencil/mask
+contract rather than silently broadening a clip to its bounds.
+
+Line items retain an amortized-growth point VBO. Solid, dash, dot and
+colormapped ribbons remain one draw per series; append uploads only the solid
+line tail. Scatter uses one persistent instance stream and one instanced draw,
+replacing the former per-point Canvas loop. `PlotEngine2D` now delegates to
+the same `PlotLineSeriesGpu2D` and `PlotScatterSeriesGpu2D` implementations,
+so the migration does not keep a second series renderer.
+
+The Linux Vulkan performance fixture records a steady render of one 100k-point
+line plus one 100k-point scatter at 1280×720 after warm-up, including texture
+allocation and `wait_idle`. The 2026-07-30 Aurora run measured 0.324 ms/frame;
+the automated regression tolerance is 250 ms/frame to remain portable to slow
+CI/software devices. Scene snapshot construction is separately verified to
+stay O(items), not O(points): 25 snapshots of the same 200k-point line produced
+14 commands each in 19 µs total on that run.
+
 ## Typed language surface
 
 Every chart part exposed to C# has a typed handle-only wrapper:
@@ -202,7 +234,7 @@ active development. It must not preserve two permanent chart implementations.
 1. Complete neutral GraphicItem factories and full typed C# wrappers.
 2. Extract optimized native series/grid render bodies from `PlotEngine2D` into
    plot-specific `GraphicItem2D` classes without regressing the persistent-VBO
-   path.
+   path. **Implemented.**
 3. Expose native plot projection, tick and measurement utilities needed by a
    managed composer.
 4. Implement a C# single-panel `Chart2D` composition over one
