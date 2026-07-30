@@ -54,7 +54,7 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager)
     assert pass_names.index("Bloom") < pass_names.index("UIWidgets")
 
 
-def test_builtin_default_pipeline_uses_python_ui_widget_pass_when_available(rendering_manager):
+def test_builtin_default_pipeline_uses_native_ui_widget_pass_projection(rendering_manager):
     pipeline = rendering_manager.create_pipeline("Default")
 
     widget_pass = next(

@@ -55,6 +55,20 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_lighting REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(
+        termin_gui_native
+        termin_gui_native::document_renderer)
+else()
+    find_package(termin_gui_native REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(
+        termin_components_ui
+        termin_components_ui::termin_components_ui)
+else()
+    find_package(termin_components_ui REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -140,6 +154,8 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_components_render::termin_components_render
     termin_components_mesh::termin_components_mesh
     termin_lighting::termin_lighting
+    termin_gui_native::document_renderer
+    termin_components_ui::termin_components_ui
 )
 target_link_libraries(termin_render_passes PRIVATE
     termin_components_collision::termin_components_collision
@@ -199,6 +215,56 @@ endif()
 
 if(TERMIN_RENDER_PASSES_BUILD_TESTS)
     enable_testing()
+
+    add_executable(termin_render_passes_ui_widget_pass_test
+        tests/test_ui_widget_pass.cpp
+    )
+    target_include_directories(
+        termin_render_passes_ui_widget_pass_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(
+        termin_render_passes_ui_widget_pass_test PRIVATE
+        termin_render_passes
+    )
+    set_target_properties(
+        termin_render_passes_ui_widget_pass_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_ui_widget_pass_test
+        COMMAND termin_render_passes_ui_widget_pass_test
+    )
+
+    add_executable(termin_render_passes_ui_widget_pass_pixel_smoke
+        tests/test_ui_widget_pass_pixel_smoke.cpp
+    )
+    target_link_libraries(
+        termin_render_passes_ui_widget_pass_pixel_smoke PRIVATE
+        termin_render_passes
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(
+            termin_render_passes_ui_widget_pass_pixel_smoke
+            termin_shaderc)
+    endif()
+    set_target_properties(
+        termin_render_passes_ui_widget_pass_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_ui_widget_pass_pixel_smoke
+        COMMAND termin_render_passes_ui_widget_pass_pixel_smoke
+    )
+    set_tests_properties(
+        termin_render_passes_ui_widget_pass_pixel_smoke PROPERTIES
+        TIMEOUT 20
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
+    )
+    termin_add_test_labels(
+        termin_render_passes_ui_widget_pass_pixel_smoke
+        "termin:capability:vulkan")
 
     add_executable(termin_render_passes_builtin_shader_sources_test
         tests/test_builtin_shader_sources.cpp

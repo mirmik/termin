@@ -32,6 +32,7 @@
 #include <termin/render/render_pipeline.hpp>
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
+#include <termin/render/ui_widget_pass.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/xr/xr_origin_component.hpp>
@@ -271,60 +272,6 @@ void set_pass_int(tc_pass *pass, const char *field, int value) {
     tc_value_free(&field_value);
 }
 
-class UIWidgetPass : public termin::CxxFramePass {
-  public:
-    static void register_type();
-    std::string input_res = "color";
-    std::string output_res = "color+widgets";
-
-  public:
-    INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
-    INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
-    INSPECT_TYPE_METADATA(UIWidgetPass, graph,
-                          termin::make_pass_graph_metadata({{"input_res", "fbo"}}, {{"output_res", "fbo"}}, {}))
-
-    UIWidgetPass() {
-        pass_name_set("UIWidgets");
-        link_to_type_registry("UIWidgetPass");
-    }
-
-    std::set<const char *> compute_reads() const override { return {input_res.c_str()}; }
-
-    std::set<const char *> compute_writes() const override { return {output_res.c_str()}; }
-
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override { return {}; }
-
-    void execute(termin::ExecuteContext &ctx) override {
-        if (!ctx.ctx2) {
-            tc_log_error("[OpenXR UIWidgetPass] ctx.ctx2 is null");
-            return;
-        }
-
-        auto in_it = ctx.tex2_reads.find(input_res);
-        if (in_it == ctx.tex2_reads.end() || !in_it->second) {
-            tc_log_warn("[OpenXR UIWidgetPass] missing tgfx2 input '%s'", input_res.c_str());
-            return;
-        }
-        auto out_it = ctx.tex2_writes.find(output_res);
-        if (out_it == ctx.tex2_writes.end() || !out_it->second) {
-            tc_log_warn("[OpenXR UIWidgetPass] missing tgfx2 output '%s'", output_res.c_str());
-            return;
-        }
-
-        ctx.ctx2->blit(in_it->second, out_it->second);
-    }
-};
-
-inline void UIWidgetPass::register_type() {
-    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<UIWidgetPass>(
-        "UIWidgetPass", "termin-openxr-smoke");
-    auto& inspect = descriptor.inspect();
-    _register_inspect_input_res(inspect);
-    _register_inspect_output_res(inspect);
-    _register_inspect_metadata_graph(inspect);
-    (void)descriptor.commit();
-}
-
 termin::RenderPipeline make_openxr_scene_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("OpenXRScene");
     termin::RenderPipeline pipeline(ph);
@@ -494,7 +441,7 @@ void register_openxr_scene_runtime() {
     termin_collision_runtime_init();
     tc::KindRegistryCpp::instance();
     termin::MeshComponent::register_type();
-    UIWidgetPass::register_type();
+    termin::UIWidgetPass::register_type();
     termin::XrOriginComponent::register_type();
     termin::XrThumbstickLocomotionComponent::register_type();
 }

@@ -34,10 +34,13 @@ def test_highlight_selected_color_is_normalized() -> None:
 
 def test_ui_widget_pass_is_exported_from_render_passes() -> None:
     from termin.render_passes import UIWidgetPass
+    from termin.render_framework.python_pass import PythonFramePass
 
     pass_obj = UIWidgetPass()
 
+    assert not isinstance(pass_obj, PythonFramePass)
     assert pass_obj.pass_name == "UIWidgets"
     assert pass_obj.compute_reads() == {"color+ui"}
     assert pass_obj.compute_writes() == {"color+widgets"}
     assert pass_obj.get_inplace_aliases() == [("color+ui", "color+widgets")]
+    assert pass_obj.include_internal_entities is False

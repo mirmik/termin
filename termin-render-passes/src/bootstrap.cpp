@@ -31,9 +31,7 @@ void register_builtin_render_passes() {
     SkyBoxPass::register_type();
     TonemapPass::register_type();
     World2DPass::register_type();
-#if defined(__ANDROID__)
     UIWidgetPass::register_type();
-#endif
 }
 
 } // namespace termin

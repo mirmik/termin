@@ -18,3 +18,16 @@ Shadow camera helpers (`ShadowCameraParams`, `build_shadow_view_matrix`,
 `compute_frustum_corners`, `fit_shadow_frustum_to_camera`) are part of the
 public `termin.render_passes` Python API. The legacy `termin._native.render`
 surface has been removed; use the canonical package directly.
+
+`UIWidgetPass` is one native C++ pass on desktop, Android, and OpenXR. It
+collects the `scene_ui_document` component capability, applies component,
+entity, layer, and optional internal-hierarchy filtering, then submits the
+documents in stable `(priority, identity)` order to
+`NativeDocumentPainter`. The pass owns painter GPU resources; UI components
+and their document assets remain CPU-only.
+
+For distinct framegraph resources the pass copies input scene color to the
+output before opening the UI pass with load semantics. For an inplace alias it
+opens the existing target with load semantics directly. The Python
+`termin.render_passes.ui_widget` module is only a projection of this native
+type and contains no render implementation.
