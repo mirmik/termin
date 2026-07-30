@@ -1,4 +1,9 @@
-from termin.editor_core.project_file_action_controller import ProjectFileActionController
+import pytest
+
+from termin.editor_core.project_file_action_controller import (
+    TEXTURE_FILE_EXTENSIONS,
+    ProjectFileActionController,
+)
 
 
 class _Recorder:
@@ -103,3 +108,25 @@ def test_project_file_actions_select_files_for_inspector() -> None:
     assert recorder.inspector.texture_path == "/project/albedo.png"
     assert recorder.inspector.mesh_path == "/project/mesh.stl"
     assert recorder.inspector.glb_path == "/project/model.glb"
+
+
+@pytest.mark.parametrize("extension", sorted(TEXTURE_FILE_EXTENSIONS))
+def test_project_file_actions_route_supported_textures_to_inspector(extension: str) -> None:
+    recorder = _Recorder()
+    controller = _make_controller(recorder)
+
+    controller.select_file(f"/project/albedo{extension}")
+
+    assert recorder.inspector.texture_path == f"/project/albedo{extension}"
+
+
+@pytest.mark.parametrize("extension", [".bmp", ".tga", ".hdr", ".exr"])
+def test_project_file_actions_do_not_route_unsupported_images_to_texture_inspector(
+    extension: str,
+) -> None:
+    recorder = _Recorder()
+    controller = _make_controller(recorder)
+
+    controller.select_file(f"/project/unsupported{extension}")
+
+    assert recorder.inspector.texture_path is None

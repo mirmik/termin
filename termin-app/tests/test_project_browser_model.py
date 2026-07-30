@@ -118,6 +118,18 @@ def test_project_browser_rejects_roots_and_navigation_outside_project(tmp_path: 
         controller.navigate(tmp_path.parent)
 
 
+@pytest.mark.parametrize("extension", [".png", ".jpg", ".jpeg", ".webp"])
+def test_project_browser_labels_supported_image_formats_as_textures(extension: str) -> None:
+    assert file_subtitle(Path(f"albedo{extension}")) == "Texture"
+
+
+@pytest.mark.parametrize("extension", [".bmp", ".tga", ".hdr", ".exr"])
+def test_project_browser_does_not_label_unsupported_image_formats_as_textures(
+    extension: str,
+) -> None:
+    assert file_subtitle(Path(f"unsupported{extension}")) != "Texture"
+
+
 def test_project_browser_exposes_and_routes_mutation_actions(tmp_path: Path):
     _project_tree(tmp_path)
     glb = tmp_path / "actor.glb"

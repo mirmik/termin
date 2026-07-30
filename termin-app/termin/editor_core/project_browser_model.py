@@ -8,6 +8,7 @@ import logging
 import mimetypes
 from pathlib import Path
 
+from termin.image import SUPPORTED_RGBA8_EXTENSIONS
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
 
 from .project_operations import ProjectOperations
@@ -25,12 +26,7 @@ _KNOWN_EXTENSIONS = {
     ".glb": "GLB",
     ".gltf": "GLTF",
     ".glsl": "GLSL",
-    ".png": "Texture",
-    ".jpg": "Texture",
-    ".jpeg": "Texture",
-    ".bmp": "Texture",
-    ".hdr": "HDR",
-    ".exr": "EXR",
+    **{extension: "Texture" for extension in SUPPORTED_RGBA8_EXTENSIONS},
     ".stl": "Mesh",
     ".obj": "Mesh",
     ".wav": "Audio",

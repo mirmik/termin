@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from termin.image import SUPPORTED_RGBA8_EXTENSIONS
+
 if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
 
@@ -12,7 +14,7 @@ class TextureImportPlugin:
     """Import-side plugin for texture source files."""
 
     type_id = "texture"
-    extensions = {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
+    extensions = SUPPORTED_RGBA8_EXTENSIONS
     priority = 10
 
     def preload(self, path: str) -> "PreLoadResult | None":
