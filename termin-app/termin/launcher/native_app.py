@@ -7,17 +7,21 @@ import os
 from pathlib import Path
 import time
 from typing import Callable
+import weakref
 
 from termin.gui_native import (
     CollectionItem,
     CollectionModel,
     Color,
-    TcDocument,
     EdgeInsets,
+    FileDialogMode,
+    FileDialogModel,
     ImageFit,
+    Rect,
     StyleField,
     StyleOverride,
     StyleRole,
+    TcDocument,
 )
 from termin.launcher.controller import LauncherController, LauncherScreen
 
@@ -33,15 +37,20 @@ class NativeLauncherProjection:
         document: TcDocument,
         controller: LauncherController,
         *,
+        viewport: Callable[[], Rect] = lambda: Rect(0.0, 0.0, 1024.0, 640.0),
         request_render: Callable[[], None] = lambda: None,
     ) -> None:
         self.document = document
         self.controller = controller
+        self.viewport = viewport
         self.request_render = request_render
         self.root = None
         self.widgets: dict[str, object] = {}
         self.models: dict[str, object] = {}
         self._recent_paths: tuple[str, ...] = ()
+        self._next_dialog_key = 1
+        self._file_dialogs: dict[int, object] = {}
+        self._file_dialog_callbacks: dict[int, Callable[[str | None], None]] = {}
         self._configure_theme()
         self._build_current_screen()
 
@@ -174,6 +183,8 @@ class NativeLauncherProjection:
 
     def close(self) -> None:
         """Release widget callbacks before the owning document shuts down."""
+        for key in tuple(self._file_dialogs):
+            self._discard_file_dialog(key)
         if self.root is not None and self.document.is_alive(self.root.handle):
             self.document.destroy_widget_recursive(self.root.handle)
         self.root = None
@@ -340,7 +351,18 @@ class NativeLauncherProjection:
         self.request_render()
 
     def _open_existing(self) -> None:
-        opened = self.controller.open_existing_project()
+        self._show_file_dialog(
+            FileDialogMode.OpenFile,
+            title="Open Termin Project",
+            initial_directory=str(Path.home()),
+            filter_string="Termin Project | *.terminproj;;All files | *",
+            on_result=self._open_existing_path,
+        )
+
+    def _open_existing_path(self, path: str | None) -> None:
+        if path is None:
+            return
+        opened = self.controller.open_project(path)
         if opened and not self.controller.state.should_quit:
             self._build_current_screen()
             return
@@ -355,13 +377,97 @@ class NativeLauncherProjection:
             self.request_render()
 
     def _choose_location(self) -> None:
-        chosen = self.controller.choose_new_project_location()
-        if chosen is not None:
-            location = self.widgets["location"]
-            location.text = chosen
-            location.caret = len(chosen)
+        location = self.controller.state.new_project_location.strip()
+        initial_directory = location if os.path.isdir(location) else str(Path.home())
+        self._show_file_dialog(
+            FileDialogMode.OpenDirectory,
+            title="Select Project Location",
+            initial_directory=initial_directory,
+            on_result=self._apply_project_location,
+        )
+
+    def _apply_project_location(self, path: str | None) -> None:
+        if path is None:
+            return
+        self.controller.set_new_project_location(path)
+        location = self.widgets.get("location")
+        if location is not None:
+            location.text = path
+            location.caret = len(path)
         self._sync_error()
         self.request_render()
+
+    @property
+    def active_file_dialog_count(self) -> int:
+        return len(self._file_dialogs)
+
+    def _show_file_dialog(
+        self,
+        mode: FileDialogMode,
+        *,
+        title: str,
+        initial_directory: str,
+        on_result: Callable[[str | None], None],
+        filter_string: str | None = None,
+    ) -> None:
+        dialog = self.document.create_file_dialog(mode)
+        dialog.title = title
+        dialog.set_initial_directory(initial_directory)
+        if filter_string is not None:
+            dialog.set_filters(FileDialogModel.parse_filter_string(filter_string))
+
+        key = self._next_dialog_key
+        self._next_dialog_key += 1
+        self._file_dialogs[key] = dialog
+        self._file_dialog_callbacks[key] = on_result
+        weak_projection = weakref.ref(self)
+
+        def finished(path: str | None) -> None:
+            projection = weak_projection()
+            if projection is not None:
+                projection._finish_file_dialog(key, path)
+
+        dialog.connect_path_finished(finished)
+        try:
+            shown = dialog.show(self.viewport())
+        except Exception as exc:
+            self._discard_file_dialog(key)
+            self.controller.report_error(f"Failed to open file dialog: {exc}")
+            self._sync_error()
+            self.request_render()
+            return
+        if not shown:
+            self._discard_file_dialog(key)
+            self.controller.report_error("Failed to open file dialog")
+            self._sync_error()
+            self.request_render()
+            return
+        self.request_render()
+
+    def _finish_file_dialog(self, key: int, path: str | None) -> None:
+        callback = self._file_dialog_callbacks.pop(key, None)
+        dialog = self._file_dialogs.pop(key, None)
+        try:
+            if callback is None:
+                _logger.error("Native launcher file dialog finished without callback: %d", key)
+            else:
+                callback(path)
+        except Exception as exc:
+            _logger.exception("Native launcher file dialog callback failed")
+            self.controller.report_error(f"Failed to process selected path: {exc}")
+            self._sync_error()
+        finally:
+            self._destroy_file_dialog(key, dialog)
+            self.request_render()
+
+    def _discard_file_dialog(self, key: int) -> None:
+        self._file_dialog_callbacks.pop(key, None)
+        self._destroy_file_dialog(key, self._file_dialogs.pop(key, None))
+
+    def _destroy_file_dialog(self, key: int, dialog) -> None:
+        if dialog is not None and self.document.is_alive(dialog.handle):
+            if not self.document.destroy_widget_recursive(dialog.handle):
+                _logger.error("Failed to destroy native launcher file dialog: %d", key)
 
     def _create_project(self) -> None:
         self.controller.create_new_project()
@@ -431,9 +537,15 @@ def run_native_launcher(controller: LauncherController) -> None:
         window = host.window
         apply_editor_window_icon(window)
         release_background = _install_background(host)
+
+        def launcher_viewport() -> Rect:
+            width, height = window.framebuffer_size()
+            return Rect(0.0, 0.0, float(width), float(height))
+
         projection = NativeLauncherProjection(
             host.document,
             controller,
+            viewport=launcher_viewport,
             request_render=host.request_render_update,
         )
         frame_limit = _smoke_frame_limit()
