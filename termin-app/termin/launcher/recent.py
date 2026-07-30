@@ -66,6 +66,11 @@ class RecentProjects:
         self._projects = self._projects[:MAX_RECENT]
         self.save()
 
+    def restore(self, projects: list[dict]) -> None:
+        """Restore a previously captured recent-project list."""
+        self._projects = [dict(project) for project in projects[:MAX_RECENT]]
+        self.save()
+
     def remove(self, project_path: str):
         """Remove a project from the list."""
         project_path = os.path.abspath(project_path)
