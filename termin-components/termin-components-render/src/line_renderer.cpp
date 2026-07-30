@@ -132,11 +132,12 @@ bool decode_line_render_mode(uint32_t value, LineRenderMode& mode) {
     return decode_line_render_mode(static_cast<int>(value), mode);
 }
 
-bool uses_material_fragment_variant_for_pass(
+bool uses_final_color_fragment_variant_for_pass(
     LineRenderMode mode,
     const MaterialPipelinePassContract& pass_contract)
 {
-    if (!pass_contract.uses_material_fragment ||
+    if (pass_contract.fragment_composition !=
+            MaterialFragmentComposition::FinalColor ||
         pass_contract.required_material_fragment_input.semantics.empty()) {
         return false;
     }
@@ -255,7 +256,7 @@ bool encode_line_batch_render_item_tgfx2(
     MaterialPipelineShaderBinding tube_body_shader{};
     MaterialPipelineShaderBinding tube_cap_shader{};
     const bool use_material_fragment =
-        uses_material_fragment_variant_for_pass(mode, context.pass_contract);
+        uses_final_color_fragment_variant_for_pass(mode, context.pass_contract);
     if (!has_override_color && mode == LineRenderMode::WorldTube
         && use_material_fragment) {
         TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
@@ -784,7 +785,7 @@ RenderItemTaskRejection line_render_item_task_shader_planner(
     }
     TcShader original_shader(request.candidate_shader);
     out_plan.final_shader = request.candidate_shader;
-    if (!uses_material_fragment_variant_for_pass(
+    if (!uses_final_color_fragment_variant_for_pass(
             mode,
             *request.contract->shader_contract)) {
         out_detail = nullptr;

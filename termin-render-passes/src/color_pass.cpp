@@ -85,7 +85,6 @@ MaterialPipelinePassContract color_material_pass_contract()
     contract.debug_name = "color";
     contract.required_material_fragment_input =
         material_pipeline_standard_material_fragment_interface();
-    contract.uses_material_fragment = true;
     contract.vertex_output_adapter =
         material_pipeline_standard_material_vertex_output_adapter();
     contract.static_vertex_transform =
