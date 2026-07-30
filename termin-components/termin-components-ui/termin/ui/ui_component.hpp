@@ -69,6 +69,11 @@ private:
     void cancel_interaction(
         tc_ui_pointer_cancel_reason reason,
         bool clear_focus);
+    bool physical_to_logical(
+        float physical_x,
+        float physical_y,
+        tc_ui_point& logical);
+    void synchronize_presentation_revision();
     bool dispatch_ui_pointer(const tc_ui_pointer_event& event);
     static const char* clipboard_get_text(void* user_data);
     static bool clipboard_set_text(
@@ -86,6 +91,7 @@ private:
     std::optional<TouchCapture> touch_capture_;
     tc_input_platform_services platform_services_{};
     std::string clipboard_cache_;
+    std::uint64_t input_presentation_revision_ = 0;
     bool text_input_enabled_ = false;
 };
 
