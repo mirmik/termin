@@ -5,6 +5,9 @@ This directory contains C# sample applications for the `Termin.Native` SDK.
 Projects:
 
 - `PlotDemoApp` - WPF/D3D11 D3DImage hosts for 2D, multi-panel 2D, and 3D plot demos.
+- `RetainedChartComposition` - platform-neutral construction and customization
+  of a managed `Chart2D` backed by native retained items. It replaces the
+  standard plot background without adding a native layout forwarding method.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,
   OpenGL, raw framebuffer, or raw display-pointer dependency.
@@ -14,6 +17,18 @@ Build from the repository root:
 ```powershell
 dotnet build termin-csharp/Termin.CSharp.sln -m:1
 ```
+
+The retained composition example can consume an installed SDK by setting
+`TerminSdkRoot`; pass the same SDK root at runtime so it can find the font:
+
+```powershell
+dotnet run --project termin-csharp/examples/RetainedChartComposition/RetainedChartComposition.csproj `
+  -p:TerminSdkRoot=C:\TerminSdk -- C:\TerminSdk
+```
+
+Until the retained WPF host is introduced, this example validates composition
+and native data ownership with a headless Vulkan host on Linux.
+`PlotDemoApp` remains the rendered transitional example.
 
 `-m:1` keeps the solution build serial. The individual projects build normally,
 but the parallel solution build can fail on Windows without useful diagnostics

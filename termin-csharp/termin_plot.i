@@ -6,6 +6,7 @@
 #include "tcplot/styles.hpp"
 #include "tcplot/orbit_camera.hpp"
 #include "tcplot/gpu_host.hpp"
+#include "tcplot/plot_layout2d.hpp"
 #include "tcplot/plot_view2d.hpp"
 #include "tcplot/plot_view2d_multi.hpp"
 #include "tcplot/plot_view3d.hpp"
@@ -39,6 +40,16 @@
 %apply double* OUTPUT {
     double* out_x, double* out_y, double* out_z,
     double* out_screen_dist_px
+}
+
+%typemap(cstype, out = "out float") float* OUTPUT "out float"
+%typemap(csin)   float* OUTPUT "out $csinput"
+%typemap(imtype) float* OUTPUT "out float"
+%typemap(ctype)  float* OUTPUT "float*"
+%typemap(in)     float* OUTPUT "$1 = $input;"
+%apply float* OUTPUT {
+    float* out_width, float* out_height, float* out_ascent,
+    float* out_descent, float* out_line_height
 }
 
 namespace tgfx {
@@ -179,6 +190,7 @@ public:
 };
 
 %include "termin_plot_annotations.i"
+%include "termin_plot_retained.i"
 
 %apply double INPUT[] { const double* x, const double* y }
 

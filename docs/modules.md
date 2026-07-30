@@ -205,6 +205,13 @@ Plotting library поверх tgfx/tcgui. Должен переиспользо�
 
 Маркеры, подписи, callouts, legends и интерактивные handles графиков должны жить как retained plot annotation model внутри `tcplot`, а не как виджеты `termin-gui`; см. [UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
 
+Целевая C#-композиция chart описана в
+[C# Retained Chart Composition](architecture/2026-07-30-csharp-retained-chart-composition.md).
+Plot-domain data, projection, ticks и оптимизированные series items остаются в
+`tcplot`, но реализуют общий `tc_graphic_item` contract и собираются managed
+кодом в одну `TcVisualScene`. `termin-visual-scene` не должен приобретать
+знание о series, axes, data ranges или chart layout.
+
 ### termin-nodegraph
 
 Source of truth: [termin-nodegraph docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-nodegraph/docs/index.md)

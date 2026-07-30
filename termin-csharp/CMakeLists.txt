@@ -85,6 +85,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     termin_csharp_require_package(termin_mesh tmesh::termin_mesh)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+    termin_csharp_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_csharp_require_package(tcplot tcplot::tcplot)
 
     if(TERMIN_CSHARP_PROFILE STREQUAL "full")
@@ -150,7 +151,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
         SWIG_FLAGS "${_termin_csharp_swig_flags}"
         SWIG_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i"
+            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i;${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_retained.i"
     )
 
     swig_add_library(termin_csharp_native
@@ -176,6 +177,12 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib"
     )
+    if(NOT WIN32)
+        set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_WITH_INSTALL_RPATH TRUE
+        )
+    endif()
 
     target_include_directories(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -192,6 +199,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tgfx::termin_graphics
             tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     else()
@@ -206,6 +214,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             termin_components_kinematic::termin_components_kinematic
             termin_render::termin_render
             termin_render_passes::termin_render_passes
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     endif()
@@ -219,6 +228,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tmesh::termin_mesh
             tgfx::termin_graphics
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     else()
@@ -244,6 +254,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tgfx::termin_graphics
             tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             termin_materials::termin_materials
             termin_modules::termin_modules
             tmesh::termin_mesh
@@ -251,12 +262,24 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         )
     endif()
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)
-        add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:${_dep}>
-                "${TERMIN_CSHARP_RUNTIME_DIR}/"
-            VERBATIM
-        )
+        if(WIN32)
+            add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_dep}>
+                    "${TERMIN_CSHARP_RUNTIME_DIR}/"
+                VERBATIM
+            )
+        else()
+            add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND}
+                    "-DSOURCE_FILE=$<TARGET_FILE:${_dep}>"
+                    "-DSONAME_FILE=$<TARGET_SONAME_FILE:${_dep}>"
+                    "-DLINKER_FILE=$<TARGET_LINKER_FILE:${_dep}>"
+                    "-DDESTINATION_DIR=${TERMIN_CSHARP_RUNTIME_DIR}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyUnixRuntimeLibrary.cmake"
+                VERBATIM
+            )
+        endif()
     endforeach()
     if(WIN32)
         add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
