@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -54,3 +55,5 @@ class ShaderSpec:
     geometry_entry: str = "main"
     allow_precompiled_default: bool = False
     features: int = 0
+    surface_producer: dict[str, Any] | None = None
+    surface_interface_source: str = ""

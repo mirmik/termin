@@ -13,6 +13,7 @@ from termin.project_build.runtime_package.package_files import write_json
 from termin.project_build.runtime_package.package_files import project_relative_path
 from termin.project_build.runtime_package.shaders import shader_program_to_spec
 from termin.project_build.runtime_package.textures import collect_material_texture_refs
+from termin.project_build.common import find_project_or_standard_shader
 
 
 def prepare_project_material_resources(
@@ -26,8 +27,6 @@ def prepare_project_material_resources(
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.stdlib import stdlib_root
-
     resource_manager = DefaultResourceManager.instance()
     material_paths: dict[str, Path] = {}
     for path in project_root.rglob("*.material"):
@@ -52,11 +51,7 @@ def prepare_project_material_resources(
                 raise ValueError("material has no canonical shader name")
 
             if resource_manager.get_shader_asset(shader_name) is None:
-                shader_path = _find_project_or_standard_shader(
-                    project_root,
-                    stdlib_root(),
-                    shader_name,
-                )
+                shader_path = find_project_or_standard_shader(project_root, shader_name)
                 shader_asset = ShaderAsset.from_file(shader_path, name=shader_name)
                 resource_manager.register_shader_asset(
                     shader_name,
@@ -91,28 +86,6 @@ def prepare_project_material_resources(
                     message=f"Runtime exporter failed to prepare project material: {exc}",
                 )
             )
-
-
-def _find_project_or_standard_shader(
-    project_root: Path,
-    standard_root: Path,
-    shader_name: str,
-) -> Path:
-    matches = sorted(
-        path
-        for path in project_root.rglob(f"{shader_name}.shader")
-        if not any(
-            part in {".git", "__pycache__", "build", "dist"}
-            for part in path.relative_to(project_root).parts
-        )
-    )
-    if matches:
-        return matches[0]
-
-    standard_path = standard_root / "shaders" / f"{shader_name}.shader"
-    if standard_path.is_file():
-        return standard_path
-    raise FileNotFoundError(f"shader asset '{shader_name}' was not found")
 
 
 def write_materials(
@@ -360,6 +333,24 @@ def fallback_material_spec(uuid_value: str, name: str, default_shader_uuid: str)
 def shader_to_spec(shader: Any) -> ShaderSpec:
     if shader.fragment_source == "":
         raise ValueError(f"Shader '{shader.uuid}' has no fragment source")
+    surface_producer = shader.surface_producer if shader.has_surface_producer else None
+    surface_interface_source = ""
+    if surface_producer is not None:
+        from termin.materials import SurfaceContractKey, SurfaceContractRegistry
+
+        contract = SurfaceContractRegistry.find(
+            SurfaceContractKey(
+                surface_producer["contract_id"],
+                surface_producer["contract_version"],
+            )
+        )
+        if contract is None:
+            raise ValueError(
+                f"Shader '{shader.uuid}' references an unregistered surface "
+                f"contract '{surface_producer['contract_id']}@"
+                f"{surface_producer['contract_version']}'"
+            )
+        surface_interface_source = contract.interface_source
     return ShaderSpec(
         uuid=shader.uuid,
         name=shader.name or shader.uuid,
@@ -372,6 +363,8 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
         fragment_entry=shader.fragment_entry,
         geometry_entry=shader.geometry_entry,
         features=int(shader.features),
+        surface_producer=surface_producer,
+        surface_interface_source=surface_interface_source,
     )
 
 

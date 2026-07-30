@@ -304,6 +304,15 @@ def write_shader(
     vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
     if fragment_source_path != vertex_source_path:
         fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
+    fragment_compile_source_path = fragment_source_path
+    if shader.surface_interface_source:
+        fragment_compile_source_path = (
+            vulkan_dir / f"{shader.uuid}.frag.compile.{source_ext}"
+        )
+        fragment_compile_source_path.write_text(
+            f"{shader.surface_interface_source}\n{shader.fragment_source}",
+            encoding="utf-8",
+        )
 
     geometry_source_path = None
     if shader.geometry_source != "":
@@ -333,7 +342,7 @@ def write_shader(
                     path
                     for path in (
                         vertex_source_path,
-                        fragment_source_path,
+                        fragment_compile_source_path,
                         geometry_source_path,
                     )
                     if path is not None
@@ -356,7 +365,7 @@ def write_shader(
                 shader.language,
                 target,
                 "fragment",
-                fragment_source_path,
+                fragment_compile_source_path,
                 target_dir / artifact_filename(shader.uuid, target, "fragment", "frag"),
                 f"{shader.name or shader.uuid}:fragment",
                 shader.fragment_entry,
@@ -403,6 +412,8 @@ def write_shader(
             for target in targets
         },
     }
+    if shader.surface_producer is not None:
+        shader_spec["surface_producer"] = shader.surface_producer
     if geometry_source_path is not None:
         shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.{source_ext}"
         shader_spec["geometry_entry"] = shader.geometry_entry
