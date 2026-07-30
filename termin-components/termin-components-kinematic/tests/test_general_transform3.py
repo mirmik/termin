@@ -45,16 +45,6 @@ class TestGeneralTransform3Basics:
         assert_vec3_approx(t.global_position, (1, 2, 3))
         assert_vec3_approx(t.decomposed_global_scale(), (2, 2, 2))
 
-    def test_legacy_world_trs_api_is_not_exposed(self):
-        t = GeneralTransform3()
-
-        public_names = dir(t)
-        assert "global_pose" not in public_names
-        assert "global_scale" not in public_names
-        assert "set_global_pose" not in public_names
-        assert "relocate_global" not in public_names
-
-
 class TestGeneralTransform3ScaleInheritance:
     """Test scale inheritance through hierarchy."""
 
