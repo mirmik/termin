@@ -1,7 +1,7 @@
 import pytest
 
 from termin.colliders.collider_component import ColliderComponent
-from termin.geombase import GeneralPose3, Pose3, Vec3
+from termin.geombase import GeneralPose3, Vec3
 from termin.physics._physics_native import PhysicsWorld
 from termin.physics_components import PhysicsWorldComponent, RigidBodyComponent
 from termin.scene import TcScene
@@ -28,6 +28,7 @@ def test_rigid_body_component_creates_sphere_body_for_sphere_collider() -> None:
     scene = TcScene.create("sphere-rigid-body-component")
     try:
         entity = scene.create_entity("Ball")
+        entity.transform.relocate(GeneralPose3(scale=Vec3(2.0, 3.0, 4.0)))
         collider = ColliderComponent()
         collider.collider_type = "Sphere"
         collider.box_size = (1.0, 1.0, 1.0)
@@ -35,12 +36,27 @@ def test_rigid_body_component_creates_sphere_body_for_sphere_collider() -> None:
         rigid_body = RigidBodyComponent(mass=2.0)
         entity.add_component(rigid_body)
 
-        rigid_body._half_extents = rigid_body._compute_half_extents()
-        body = rigid_body._create_body(Pose3())
+        world = PhysicsWorld()
+        rigid_body._register_with_world(world)
+        body = world.get_body(rigid_body._body_index)
 
-        assert body.inertia.x == pytest.approx(0.2)
-        assert body.inertia.y == pytest.approx(0.2)
-        assert body.inertia.z == pytest.approx(0.2)
+        attached_transform = collider.attached.world_transform()
+        collision_radius = collider.collider.radius * min(
+            attached_transform.scale.x,
+            attached_transform.scale.y,
+            attached_transform.scale.z,
+        )
+        assert collision_radius == pytest.approx(1.0)
+        assert rigid_body._half_extents == Vec3(
+            collision_radius,
+            collision_radius,
+            collision_radius,
+        )
+
+        # Solid sphere inertia: 2/5 * mass * radius^2.
+        assert body.inertia.x == pytest.approx(0.8)
+        assert body.inertia.y == pytest.approx(0.8)
+        assert body.inertia.z == pytest.approx(0.8)
     finally:
         scene.destroy()
 
@@ -60,6 +76,8 @@ def test_rigid_body_registration_computes_scaled_shape_before_component_start() 
         world = PhysicsWorld()
         rigid_body._register_with_world(world)
         body = world.get_body(rigid_body._body_index)
+
+        assert rigid_body._half_extents == Vec3(1.0, 1.5, 2.0)
 
         # Box inertia for mass 2 and full extents 2x3x4.
         assert body.inertia.x == pytest.approx(25.0 / 6.0)

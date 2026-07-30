@@ -1,4 +1,6 @@
-def test_rigid_body_accepts_decomposed_scale_and_rejects_affine_world() -> None:
+def test_rigid_body_accepts_decomposed_scale_and_rejects_affine_world(
+    capfd,
+) -> None:
     import math
 
     import termin.bootstrap
@@ -49,12 +51,16 @@ def test_rigid_body_accepts_decomposed_scale_and_rejects_affine_world() -> None:
     affine_component = RigidBodyComponent()
     child.add_component(affine_component)
     assert affine_component._physics_pose_and_scale() is None
+    affine_log = capfd.readouterr().err
+    assert "rejects an affine world transform" in affine_log
 
     reflected = scene.create_entity("reflected")
     reflected.transform.set_local_scale(Vec3(-1.0, 1.0, 1.0))
     reflected_component = RigidBodyComponent()
     reflected.add_component(reflected_component)
     assert reflected_component._physics_pose_and_scale() is None
+    reflected_log = capfd.readouterr().err
+    assert "rejects non-positive or non-finite world scale" in reflected_log
 
     scene.destroy()
     termin.bootstrap.shutdown_player()

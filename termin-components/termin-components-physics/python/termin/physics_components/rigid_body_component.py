@@ -136,8 +136,16 @@ class RigidBodyComponent(PythonComponent):
                 return _componentwise_mul(hs, global_scale)
             if isinstance(collider, SphereCollider):
                 r = collider.radius
-                max_scale = max(global_scale.x, global_scale.y, global_scale.z)
-                return Vec3(r * max_scale, r * max_scale, r * max_scale)
+                uniform_scale = min(
+                    global_scale.x,
+                    global_scale.y,
+                    global_scale.z,
+                )
+                return Vec3(
+                    r * uniform_scale,
+                    r * uniform_scale,
+                    r * uniform_scale,
+                )
 
         return _componentwise_mul(Vec3(0.5, 0.5, 0.5), global_scale)
 
@@ -159,12 +167,6 @@ class RigidBodyComponent(PythonComponent):
 
         if self._body_index >= 0 and self._physics_world is world:
             return
-
-        # PhysicsWorldComponent can discover this component before its own
-        # start() callback runs. Derive collision dimensions here as well so
-        # registration is independent of scene entity/component order.
-        self._validate_ancestor_scales()
-        self._half_extents = self._compute_half_extents()
 
         self._physics_world = world
 
