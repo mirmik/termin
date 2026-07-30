@@ -34,11 +34,10 @@ EXPECTED_IMPORT_EXTENSIONS = {
     ".mp3": "audio_clip",
     ".pipeline": "pipeline",
     ".png": "texture",
+    ".webp": "texture",
     ".prefab": "prefab",
     ".shader": "shader",
     ".stl": "mesh",
-    ".bmp": "texture",
-    ".tga": "texture",
     ".uiscript": "ui",
     ".voxels": "voxel_grid",
     ".wav": "audio_clip",
@@ -106,6 +105,10 @@ def _module_source_path(module_name: str) -> Path:
 
 
 def _literal_string_set(value: ast.AST) -> set[str]:
+    if isinstance(value, ast.Name) and value.id == "SUPPORTED_RGBA8_EXTENSIONS":
+        from termin.image import SUPPORTED_RGBA8_EXTENSIONS
+
+        return set(SUPPORTED_RGBA8_EXTENSIONS)
     assert isinstance(value, ast.Set)
     result: set[str] = set()
     for item in value.elts:

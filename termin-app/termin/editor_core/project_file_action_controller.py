@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Callable
 
 from tcbase import log
+from termin.image import SUPPORTED_RGBA8_EXTENSIONS
 
 from termin.editor_core.inspector_model import InspectorModel
 
 
 SCENE_FILE_EXTENSIONS = frozenset({".scene"})
 PIPELINE_FILE_EXTENSIONS = frozenset({".pipeline"})
-TEXTURE_FILE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"})
+TEXTURE_FILE_EXTENSIONS = SUPPORTED_RGBA8_EXTENSIONS
 MESH_FILE_EXTENSIONS = frozenset({".obj", ".stl"})
 GLB_FILE_EXTENSIONS = frozenset({".glb", ".gltf"})
 
