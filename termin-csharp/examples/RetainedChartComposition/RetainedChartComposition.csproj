@@ -13,7 +13,7 @@
       <Private>true</Private>
     </Reference>
     <None Include="$(TerminSdkRoot)\csharp\runtimes\**\*"
-          Link="runtimes\%(RecursiveDir)%(Filename)%(Extension)"
+          TargetPath="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(TerminSdkRoot)\csharp\share\**\*"
           Link="share\%(RecursiveDir)%(Filename)%(Extension)"

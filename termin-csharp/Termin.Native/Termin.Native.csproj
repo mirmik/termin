@@ -40,7 +40,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="runtimes\**\*"
+          Pack="true"
+          PackagePath="runtimes"
+          TargetPath="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="share\**\*" Pack="true" PackagePath="share" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
