@@ -11,7 +11,10 @@ if (!File.Exists(fontPath))
     throw new FileNotFoundException(
         "Pass the Termin SDK root as the only argument.", fontPath);
 
-using var host = new GpuHost(fontPath, BackendType.Null);
+var backend = OperatingSystem.IsWindows()
+    ? BackendType.D3D11
+    : BackendType.Vulkan;
+using var host = new GpuHost(fontPath, backend);
 using var chart = new Chart2D(
     host,
     960,

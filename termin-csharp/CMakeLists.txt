@@ -177,6 +177,12 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib"
     )
+    if(NOT WIN32)
+        set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_WITH_INSTALL_RPATH TRUE
+        )
+    endif()
 
     target_include_directories(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -256,12 +262,24 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         )
     endif()
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)
-        add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:${_dep}>
-                "${TERMIN_CSHARP_RUNTIME_DIR}/"
-            VERBATIM
-        )
+        if(WIN32)
+            add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_dep}>
+                    "${TERMIN_CSHARP_RUNTIME_DIR}/"
+                VERBATIM
+            )
+        else()
+            add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND}
+                    "-DSOURCE_FILE=$<TARGET_FILE:${_dep}>"
+                    "-DSONAME_FILE=$<TARGET_SONAME_FILE:${_dep}>"
+                    "-DLINKER_FILE=$<TARGET_LINKER_FILE:${_dep}>"
+                    "-DDESTINATION_DIR=${TERMIN_CSHARP_RUNTIME_DIR}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyUnixRuntimeLibrary.cmake"
+                VERBATIM
+            )
+        endif()
     endforeach()
     if(WIN32)
         add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD

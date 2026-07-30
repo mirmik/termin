@@ -27,8 +27,8 @@ dotnet run --project termin-csharp/examples/RetainedChartComposition/RetainedCha
 ```
 
 Until the retained WPF host is introduced, this example validates composition
-and native data ownership with the null backend. `PlotDemoApp` remains the
-rendered transitional example.
+and native data ownership with a headless Vulkan host on Linux.
+`PlotDemoApp` remains the rendered transitional example.
 
 `-m:1` keeps the solution build serial. The individual projects build normally,
 but the parallel solution build can fail on Windows without useful diagnostics

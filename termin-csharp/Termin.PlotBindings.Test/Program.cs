@@ -297,28 +297,22 @@ using var action = new PlotAnnotationActionPoll2D();
 if (action.available)
     throw new InvalidOperationException("A default annotation action is available");
 
-static void CompilePlotAnnotationSurface(
-    PlotView2D view,
-    PlotAnnotationHandle handle)
+var shareDir = Environment.GetEnvironmentVariable(
+    "TERMIN_CSHARP_SDK_SHARE_DIR");
+if (string.IsNullOrWhiteSpace(shareDir))
+    throw new InvalidOperationException(
+        "TERMIN_CSHARP_SDK_SHARE_DIR is required");
+var fontPath = Path.Combine(shareDir, "fonts", "DroidSans.ttf");
+if (!File.Exists(fontPath))
+    throw new FileNotFoundException("SDK test font is missing", fontPath);
+
+if (!OperatingSystem.IsWindows())
 {
-    using var created = view.create_data_marker(1.0, 2.0, "managed marker");
-    _ = view.update_data_marker(created, 3.0, 4.0, "updated");
-    using var marker = view.data_marker_snapshot(created);
-    using var action = view.take_annotation_action();
-    _ = view.destroy_annotation(handle);
+    using var host = new GpuHost(fontPath, BackendType.Vulkan);
+    TestManagedChartComposition(host);
 }
-
-if (OperatingSystem.IsWindows())
+else
 {
-    var shareDir = Environment.GetEnvironmentVariable(
-        "TERMIN_CSHARP_SDK_SHARE_DIR");
-    if (string.IsNullOrWhiteSpace(shareDir))
-        throw new InvalidOperationException(
-            "TERMIN_CSHARP_SDK_SHARE_DIR is required");
-    var fontPath = Path.Combine(shareDir, "fonts", "DroidSans.ttf");
-    if (!File.Exists(fontPath))
-        throw new FileNotFoundException("SDK test font is missing", fontPath);
-
     using var host = new GpuHost(fontPath, BackendType.D3D11);
     TestManagedChartComposition(host);
     using var view = new PlotView2D(host);
