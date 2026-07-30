@@ -1,14 +1,20 @@
 package org.termin.android;
 
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.graphics.PixelFormat;
+import android.graphics.Insets;
 import android.os.Bundle;
+import android.os.Build;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Choreographer;
+import android.view.DisplayCutout;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.MotionEvent;
+import android.view.WindowInsets;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -28,6 +34,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private boolean surfaceAlive = false;
     private boolean renderLoopRunning = false;
     private int renderFrameLogCounter = 0;
+    private WindowInsets currentWindowInsets;
 
     private final Choreographer.FrameCallback renderFrameCallback = new Choreographer.FrameCallback() {
         @Override
@@ -69,7 +76,24 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
             dispatchPointerEvent(event);
             return true;
         });
+        surfaceView.setOnApplyWindowInsetsListener((view, insets) -> {
+            currentWindowInsets = insets;
+            publishPresentationMetrics();
+            return insets;
+        });
         setContentView(surfaceView);
+        publishPresentationMetrics();
+        surfaceView.requestApplyInsets();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        Log.i(TAG, "onConfigurationChanged densityDpi=" + configuration.densityDpi
+                + " fontScale=" + configuration.fontScale
+                + " orientation=" + configuration.orientation);
+        publishPresentationMetrics();
+        surfaceView.requestApplyInsets();
     }
 
     @Override
@@ -97,6 +121,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         Log.i(TAG, "surfaceChanged format=" + format + " size=" + width + "x" + height);
         stopRenderLoop();
         nativeSurfaceChanged(width, height);
+        publishPresentationMetrics();
         startRenderLoop();
     }
 
@@ -112,6 +137,13 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeShutdown();
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);
+    private static native void nativePresentationMetricsChanged(
+            float densityScale,
+            float fontScale,
+            float safeInsetLeft,
+            float safeInsetTop,
+            float safeInsetRight,
+            float safeInsetBottom);
     private static native void nativeSurfaceDestroyed();
     private static native void nativePointer(
             long pointerId,
@@ -176,6 +208,55 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
             return POINTER_PEN;
         }
         return POINTER_TOUCH;
+    }
+
+    private void publishPresentationMetrics() {
+        DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
+        float density = displayMetrics.density;
+        float fontScale = density > 0.0f
+                ? displayMetrics.scaledDensity / density
+                : 0.0f;
+        int left = 0;
+        int top = 0;
+        int right = 0;
+        int bottom = 0;
+
+        if (currentWindowInsets != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Insets insets = currentWindowInsets.getInsets(
+                        WindowInsets.Type.systemBars()
+                                | WindowInsets.Type.displayCutout());
+                left = insets.left;
+                top = insets.top;
+                right = insets.right;
+                bottom = insets.bottom;
+            } else {
+                left = currentWindowInsets.getSystemWindowInsetLeft();
+                top = currentWindowInsets.getSystemWindowInsetTop();
+                right = currentWindowInsets.getSystemWindowInsetRight();
+                bottom = currentWindowInsets.getSystemWindowInsetBottom();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    DisplayCutout cutout = currentWindowInsets.getDisplayCutout();
+                    if (cutout != null) {
+                        left = Math.max(left, cutout.getSafeInsetLeft());
+                        top = Math.max(top, cutout.getSafeInsetTop());
+                        right = Math.max(right, cutout.getSafeInsetRight());
+                        bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                    }
+                }
+            }
+        }
+
+        Log.i(TAG, "presentationMetrics density=" + density
+                + " fontScale=" + fontScale
+                + " insets=[" + left + "," + top + "," + right + "," + bottom + "]");
+        nativePresentationMetricsChanged(
+                density,
+                fontScale,
+                left,
+                top,
+                right,
+                bottom);
     }
 
     private void startRenderLoop() {

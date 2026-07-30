@@ -10,7 +10,7 @@
         android:theme="@style/TerminTheme">
         <activity
             android:name="org.termin.android.TerminActivity"
-            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:configChanges="density|fontScale|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -157,7 +157,22 @@ bool UIComponent::set_ui_layout_uuid(const std::string& uuid) {
     }
 
     try {
+        tc_ui_presentation_metrics previous_metrics{};
+        const gui_native::TcDocument previous = document();
+        const bool preserve_metrics =
+            previous.valid() &&
+            previous.has_presentation_metrics() &&
+            previous.presentation_metrics(previous_metrics);
         gui_native::LoadedUiScript replacement = asset.instantiate();
+        if (preserve_metrics &&
+            !replacement.document().set_presentation_metrics(
+                previous_metrics)) {
+            tc::Log::error(
+                "[UIComponent] failed to preserve presentation metrics while "
+                "replacing UI asset '%s'",
+                uuid.c_str());
+            return false;
+        }
         ui_layout_ = asset;
         loaded_ = std::move(replacement);
         bind_document_services();
@@ -209,8 +224,23 @@ bool UIComponent::reload_document() {
     }
     const gui_native::TcUiDocumentAsset asset = ui_layout();
     try {
+        tc_ui_presentation_metrics previous_metrics{};
+        const gui_native::TcDocument previous = document();
+        const bool preserve_metrics =
+            previous.valid() &&
+            previous.has_presentation_metrics() &&
+            previous.presentation_metrics(previous_metrics);
         gui_native::LoadedUiScript replacement =
             asset.reload_instance(*loaded_);
+        if (preserve_metrics &&
+            !replacement.document().set_presentation_metrics(
+                previous_metrics)) {
+            tc::Log::error(
+                "[UIComponent] failed to preserve presentation metrics while "
+                "reloading UI asset '%s'",
+                ui_layout_uuid().c_str());
+            return false;
+        }
         loaded_ = std::move(replacement);
         bind_document_services();
         return true;

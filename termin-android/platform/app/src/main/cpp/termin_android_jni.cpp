@@ -104,6 +104,40 @@ Java_org_termin_android_TerminActivity_nativeSurfaceChanged(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_termin_android_TerminActivity_nativePresentationMetricsChanged(
+    JNIEnv*,
+    jclass,
+    jfloat density_scale,
+    jfloat font_scale,
+    jfloat safe_inset_left,
+    jfloat safe_inset_top,
+    jfloat safe_inset_right,
+    jfloat safe_inset_bottom
+) {
+    const termin_android_presentation_metrics metrics{
+        density_scale,
+        font_scale,
+        safe_inset_left,
+        safe_inset_top,
+        safe_inset_right,
+        safe_inset_bottom,
+    };
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kLogTag,
+        "nativePresentationMetricsChanged density=%.3f font=%.3f "
+        "insets=[%.1f,%.1f,%.1f,%.1f]",
+        static_cast<double>(density_scale),
+        static_cast<double>(font_scale),
+        static_cast<double>(safe_inset_left),
+        static_cast<double>(safe_inset_top),
+        static_cast<double>(safe_inset_right),
+        static_cast<double>(safe_inset_bottom)
+    );
+    termin_android_on_presentation_metrics_changed(&metrics);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_termin_android_TerminActivity_nativeSurfaceDestroyed(JNIEnv*, jclass) {
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeSurfaceDestroyed");
     termin_android_on_surface_destroyed();
