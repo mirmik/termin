@@ -7,6 +7,7 @@ GUARD_TEST_MAIN();
 #include <core/tc_component.h>
 #include <core/tc_input_capability.h>
 #include <core/tc_input_source.h>
+#include <core/tc_input_component.h>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
 #include <termin/entity/unknown_component.hpp>
@@ -14,6 +15,7 @@ GUARD_TEST_MAIN();
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/ui/tc_scene_ui_document_capability.h>
 #include <termin/ui/ui_component.hpp>
+#include <tc_input_event.h>
 
 namespace {
 
@@ -29,11 +31,37 @@ root:
       icon: A
 )";
 
+constexpr const char* kInputSource = R"(
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: root
+  children:
+    - type: termin.gui.IconButton
+      name: action
+      icon: A
+      anchor: top-left
+      size: 30
+)";
+
 termin::gui_native::TcUiDocumentAsset declare_asset(
     const char* uuid = "ui-component-test"
 ) {
     return termin::gui_native::TcUiDocumentAsset::declare_source(
         uuid, "Component UI", "UI/component.uiscript", kSource);
+}
+
+struct PlatformProbe {
+    bool text_input_enabled = false;
+    tc_input_cursor cursor = TC_INPUT_CURSOR_DEFAULT;
+};
+
+void set_cursor(void* userdata, tc_input_cursor cursor) {
+    static_cast<PlatformProbe*>(userdata)->cursor = cursor;
+}
+
+void set_text_input_enabled(void* userdata, bool enabled) {
+    static_cast<PlatformProbe*>(userdata)->text_input_enabled = enabled;
 }
 
 } // namespace
@@ -133,6 +161,7 @@ TEST_CASE("UIComponent asset replacement and failed reload are transactional") {
     component.on_added_to_entity();
     CHECK(component.has_document());
 
+    component.clear_document();
     TcUiDocumentAsset::clear_registry_for_tests();
 }
 
@@ -196,5 +225,85 @@ TEST_CASE("UIComponent native inspect serialization uses a typed asset ref") {
 
     tc_value_free(&data);
     delete component;
+    TcUiDocumentAsset::clear_registry_for_tests();
+}
+
+TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown") {
+    using namespace termin;
+    using namespace termin::gui_native;
+
+    TcUiDocumentAsset::clear_registry_for_tests();
+    const TcUiDocumentAsset asset = TcUiDocumentAsset::declare_source(
+        "ui-component-input",
+        "Component Input UI",
+        "UI/component-input.uiscript",
+        kInputSource);
+    UIComponent component;
+    REQUIRE(component.set_ui_layout_uuid(asset.uuid()));
+    const TcDocument document = component.document();
+    document.layout_roots({0.0f, 0.0f, 200.0f, 100.0f});
+
+    tc_widget* root = tc_ui_document_resolve_widget(
+        document.handle(), tc_ui_document_root_at(document.handle(), 0));
+    REQUIRE(root != nullptr);
+    REQUIRE_EQ(tc_widget_child_count(root), 1u);
+    tc_widget* button = tc_widget_child_at(root, 0);
+    REQUIRE(button != nullptr);
+    const tc_ui_rect bounds = tc_widget_bounds(button);
+    const double x = bounds.x + bounds.width * 0.5;
+    const double y = bounds.y + bounds.height * 0.5;
+
+    PlatformProbe platform;
+    const tc_input_platform_services services = {
+        .userdata = &platform,
+        .clipboard_text = nullptr,
+        .set_clipboard_text = nullptr,
+        .set_cursor = set_cursor,
+        .set_text_input_enabled = set_text_input_enabled,
+    };
+
+    tc_pointer_event down;
+    tc_pointer_event_init_source(
+        &down, TC_VIEWPORT_HANDLE_INVALID,
+        17, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
+        x, y, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
+    down.platform_services = &services;
+    tc_component_on_pointer(component.tc_component_ptr(), &down);
+    REQUIRE(down.handled);
+    CHECK_FALSE(tc_widget_handle_is_invalid(document.pointer_capture()));
+
+    tc_pointer_event secondary;
+    tc_pointer_event_init_source(
+        &secondary, TC_VIEWPORT_HANDLE_INVALID,
+        18, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
+        x, y, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
+    secondary.platform_services = &services;
+    tc_component_on_pointer(component.tc_component_ptr(), &secondary);
+    CHECK_FALSE(secondary.handled);
+
+    tc_pointer_event primary_move;
+    tc_pointer_event_init_source(
+        &primary_move, TC_VIEWPORT_HANDLE_INVALID,
+        17, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
+        500.0, 500.0, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
+    primary_move.platform_services = &services;
+    tc_component_on_pointer(component.tc_component_ptr(), &primary_move);
+    CHECK(primary_move.handled);
+
+    tc_input_focus_event focus_lost;
+    tc_input_focus_event_init_source(
+        &focus_lost, TC_VIEWPORT_HANDLE_INVALID, TC_INPUT_SOURCE_RUNTIME);
+    focus_lost.platform_services = &services;
+    tc_component_on_focus_lost(component.tc_component_ptr(), &focus_lost);
+    CHECK(tc_widget_handle_is_invalid(document.pointer_capture()));
+    CHECK(tc_widget_handle_is_invalid(document.focused_widget()));
+    CHECK_FALSE(platform.text_input_enabled);
+    CHECK_EQ(platform.cursor, TC_INPUT_CURSOR_DEFAULT);
+
+    primary_move.handled = false;
+    tc_component_on_pointer(component.tc_component_ptr(), &primary_move);
+    CHECK_FALSE(primary_move.handled);
+
+    component.clear_document();
     TcUiDocumentAsset::clear_registry_for_tests();
 }

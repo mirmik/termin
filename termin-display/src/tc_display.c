@@ -498,6 +498,55 @@ bool tc_display_dispatch_text(tc_display_handle handle, uint32_t codepoint) {
     return true;
 }
 
+bool tc_display_dispatch_text_utf8(
+    tc_display_handle handle,
+    const char* text_utf8
+) {
+    tc_display* display =
+        tc_display_get_alive(handle, "tc_display_dispatch_text_utf8");
+    if (!display || !display->input_endpoint || !text_utf8) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_display_dispatch_text_utf8] display input endpoint or text "
+            "is unavailable");
+        return false;
+    }
+    tc_input_manager_on_text(display->input_endpoint, text_utf8);
+    return true;
+}
+
+bool tc_display_dispatch_focus_lost(tc_display_handle handle) {
+    tc_display* display =
+        tc_display_get_alive(handle, "tc_display_dispatch_focus_lost");
+    if (!display || !display->input_endpoint) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_display_dispatch_focus_lost] display input endpoint is "
+            "unavailable");
+        return false;
+    }
+    tc_input_manager_on_focus_lost(display->input_endpoint);
+    return true;
+}
+
+bool tc_display_set_input_platform_services(
+    tc_display_handle handle,
+    const tc_input_platform_services* services
+) {
+    tc_display* display = tc_display_get_alive(
+        handle, "tc_display_set_input_platform_services");
+    if (!display || !display->input_endpoint) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_display_set_input_platform_services] display input endpoint "
+            "is unavailable");
+        return false;
+    }
+    tc_input_manager_set_platform_services(
+        display->input_endpoint, services);
+    return true;
+}
+
 // ============================================================================
 // Surface Delegation
 // ============================================================================

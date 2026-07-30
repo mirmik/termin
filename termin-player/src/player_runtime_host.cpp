@@ -1340,6 +1340,11 @@ print(json.dumps({
 
     void clear_input() {
         if (window) {
+            if (display && display->is_valid()) {
+                tc_display_dispatch_focus_lost(display->handle());
+                tc_display_set_input_platform_services(
+                    display->handle(), nullptr);
+            }
             attach_window_input_display(*window, TC_DISPLAY_HANDLE_INVALID);
         }
         for (tc_viewport_input_manager* input : viewport_input_managers) {

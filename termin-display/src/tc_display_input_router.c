@@ -18,6 +18,8 @@ static void router_on_mouse_move(tc_input_manager* self, double x, double y);
 static void router_on_scroll(tc_input_manager* self, double x, double y, int mods);
 static void router_on_key(tc_input_manager* self, int key, int scancode, int action, int mods);
 static void router_on_char(tc_input_manager* self, uint32_t codepoint);
+static void router_on_text(tc_input_manager* self, const char* text_utf8);
+static void router_on_focus_lost(tc_input_manager* self);
 static void router_destroy(tc_input_manager* self);
 
 static const tc_input_manager_vtable g_router_vtable = {
@@ -28,6 +30,8 @@ static const tc_input_manager_vtable g_router_vtable = {
     .on_key = router_on_key,
     .on_char = router_on_char,
     .destroy = router_destroy,
+    .on_text = router_on_text,
+    .on_focus_lost = router_on_focus_lost,
 };
 
 // ============================================================================
@@ -102,6 +106,47 @@ static inline tc_display_input_router* router_from(tc_input_manager* self) {
 static tc_viewport_handle router_viewport_at_cursor(tc_display_input_router* r) {
     if (!tc_display_alive(r->display)) return TC_VIEWPORT_HANDLE_INVALID;
     return tc_display_viewport_at_screen(r->display, (float)r->last_cursor_x, (float)r->last_cursor_y);
+}
+
+static tc_input_manager* router_viewport_manager(
+    tc_display_input_router* r,
+    tc_viewport_handle viewport
+) {
+    if (!r || !tc_viewport_handle_valid(viewport) || !tc_viewport_alive(viewport)) {
+        return NULL;
+    }
+    tc_input_manager* manager = tc_viewport_get_input_manager(viewport);
+    if (manager) {
+        tc_input_manager_set_platform_services(
+            manager,
+            &r->base.platform_services);
+    }
+    return manager;
+}
+
+static void router_to_viewport_local(
+    tc_viewport_handle viewport,
+    double display_x,
+    double display_y,
+    double* local_x,
+    double* local_y
+) {
+    int pixel_x = 0;
+    int pixel_y = 0;
+    tc_viewport_get_pixel_rect(viewport, &pixel_x, &pixel_y, NULL, NULL);
+    *local_x = display_x - (double)pixel_x;
+    *local_y = display_y - (double)pixel_y;
+}
+
+static tc_viewport_handle router_keyboard_viewport(tc_display_input_router* r) {
+    tc_viewport_handle viewport = r->active_viewport;
+    if (!tc_viewport_handle_valid(viewport)) {
+        viewport = r->focused_viewport;
+    }
+    if (!tc_viewport_handle_valid(viewport) && tc_display_alive(r->display)) {
+        viewport = tc_display_get_first_viewport(r->display);
+    }
+    return viewport;
 }
 
 static tc_pointer_capture* router_find_capture(
@@ -185,10 +230,13 @@ static void router_on_pointer(tc_input_manager* self, uint64_t pointer_id, int d
     }
 
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
+            double local_x = 0.0;
+            double local_y = 0.0;
+            router_to_viewport_local(viewport, x, y, &local_x, &local_y);
             tc_input_manager_on_pointer(
-                vm, pointer_id, device, phase, x, y, pressure);
+                vm, pointer_id, device, phase, local_x, local_y, pressure);
         }
     }
 
@@ -218,7 +266,7 @@ static void router_on_mouse_button(tc_input_manager* self, int button, int actio
 
     // Forward to viewport's input manager
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
             tc_input_manager_on_mouse_button(vm, button, action, mods, click_count);
         }
@@ -241,9 +289,12 @@ static void router_on_mouse_move(tc_input_manager* self, double x, double y) {
 
     // Forward to viewport's input manager
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
-            tc_input_manager_on_mouse_move(vm, x, y);
+            double local_x = 0.0;
+            double local_y = 0.0;
+            router_to_viewport_local(viewport, x, y, &local_x, &local_y);
+            tc_input_manager_on_mouse_move(vm, local_x, local_y);
         }
     }
 }
@@ -259,7 +310,7 @@ static void router_on_scroll(tc_input_manager* self, double x, double y, int mod
 
     // Forward to viewport's input manager
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
             tc_input_manager_on_scroll(vm, x, y, mods);
         }
@@ -270,18 +321,11 @@ static void router_on_key(tc_input_manager* self, int key, int scancode, int act
     tc_display_input_router* r = router_from(self);
     if (!r) return;
 
-    // Priority: active viewport > focused viewport > first viewport
-    tc_viewport_handle viewport = r->active_viewport;
-    if (!tc_viewport_handle_valid(viewport)) {
-        viewport = r->focused_viewport;
-    }
-    if (!tc_viewport_handle_valid(viewport) && tc_display_alive(r->display)) {
-        viewport = tc_display_get_first_viewport(r->display);
-    }
+    tc_viewport_handle viewport = router_keyboard_viewport(r);
 
     // Forward to viewport's input manager
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
             tc_input_manager_on_key(vm, key, scancode, action, mods);
         }
@@ -292,20 +336,50 @@ static void router_on_char(tc_input_manager* self, uint32_t codepoint) {
     tc_display_input_router* r = router_from(self);
     if (!r) return;
 
-    // Same priority as key events
-    tc_viewport_handle viewport = r->active_viewport;
-    if (!tc_viewport_handle_valid(viewport)) {
-        viewport = r->focused_viewport;
-    }
-    if (!tc_viewport_handle_valid(viewport) && tc_display_alive(r->display)) {
-        viewport = tc_display_get_first_viewport(r->display);
-    }
+    tc_viewport_handle viewport = router_keyboard_viewport(r);
 
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
-        tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
         if (vm) {
             tc_input_manager_on_char(vm, codepoint);
         }
+    }
+}
+
+static void router_on_text(tc_input_manager* self, const char* text_utf8) {
+    tc_display_input_router* r = router_from(self);
+    if (!r) return;
+    tc_viewport_handle viewport = router_keyboard_viewport(r);
+    tc_input_manager* vm = router_viewport_manager(r, viewport);
+    if (vm) {
+        tc_input_manager_on_text(vm, text_utf8);
+    }
+}
+
+static void router_on_focus_lost(tc_input_manager* self) {
+    tc_display_input_router* r = router_from(self);
+    if (!r) return;
+
+    tc_pointer_capture* capture = r->pointer_captures;
+    while (capture) {
+        tc_pointer_capture* next = capture->next;
+        free(capture);
+        capture = next;
+    }
+    r->pointer_captures = NULL;
+    r->active_viewport = TC_VIEWPORT_HANDLE_INVALID;
+    r->focused_viewport = TC_VIEWPORT_HANDLE_INVALID;
+    r->has_cursor = false;
+
+    if (!tc_display_alive(r->display)) return;
+    tc_viewport_handle viewport = tc_display_get_first_viewport(r->display);
+    while (tc_viewport_handle_valid(viewport)) {
+        tc_viewport_handle next = tc_viewport_get_display_next(viewport);
+        tc_input_manager* vm = router_viewport_manager(r, viewport);
+        if (vm) {
+            tc_input_manager_on_focus_lost(vm);
+        }
+        viewport = next;
     }
 }
 

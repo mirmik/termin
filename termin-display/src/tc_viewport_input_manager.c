@@ -56,6 +56,22 @@ static bool dispatch_key_cb(tc_component* c, void* user_data) {
     return !event->handled;
 }
 
+static bool dispatch_text_cb(tc_component* c, void* user_data) {
+    tc_text_event* event = (tc_text_event*)user_data;
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_text(c, event);
+    }
+    return !event->handled;
+}
+
+static bool dispatch_focus_lost_cb(tc_component* c, void* user_data) {
+    tc_input_focus_event* event = (tc_input_focus_event*)user_data;
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_focus_lost(c, event);
+    }
+    return true;
+}
+
 // ============================================================================
 // Internal Entities Dispatch
 // ============================================================================
@@ -101,6 +117,12 @@ static void dispatch_to_scene(
 
 static inline tc_viewport_input_manager* vim_from(tc_input_manager* self) {
     return self ? (tc_viewport_input_manager*)self->userdata : NULL;
+}
+
+static const tc_input_platform_services* vim_platform_services(
+    tc_viewport_input_manager* m
+) {
+    return &m->base.platform_services;
 }
 
 typedef struct tc_viewport_pointer_state {
@@ -196,6 +218,7 @@ static void vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int devi
     tc_pointer_event_init_source(
         &event, m->viewport, pointer_id, device, phase, x, y, dx, dy, pressure,
         TC_INPUT_SOURCE_RUNTIME);
+    event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_pointer_cb, &event);
     if (!event.handled) {
@@ -224,6 +247,7 @@ static void vim_on_mouse_button(tc_input_manager* self, int button, int action, 
         TC_INPUT_SOURCE_RUNTIME
     };
     tc_mouse_button_event_init_source(&event, &info);
+    event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_button_cb, &event);
     if (event.handled) return;
@@ -245,6 +269,7 @@ static void vim_on_mouse_move(tc_input_manager* self, double x, double y) {
 
     tc_mouse_move_event event;
     tc_mouse_move_event_init_source(&event, m->viewport, x, y, dx, dy, TC_INPUT_SOURCE_RUNTIME);
+    event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_move_cb, &event);
     if (event.handled) return;
@@ -266,6 +291,7 @@ static void vim_on_scroll(tc_input_manager* self, double xoffset, double yoffset
         TC_INPUT_SOURCE_RUNTIME
     };
     tc_scroll_event_init_source(&event, &info);
+    event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_scroll_cb, &event);
     if (event.handled) return;
@@ -278,6 +304,7 @@ static void vim_on_key(tc_input_manager* self, int key, int scancode, int action
 
     tc_key_event event;
     tc_key_event_init_source(&event, m->viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
+    event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_key_cb, &event);
     if (event.handled) return;
@@ -285,8 +312,72 @@ static void vim_on_key(tc_input_manager* self, int key, int scancode, int action
 }
 
 static void vim_on_char(tc_input_manager* self, uint32_t codepoint) {
-    (void)self;
-    (void)codepoint;
+    char text[5] = {0};
+    if (codepoint <= 0x7f) {
+        text[0] = (char)codepoint;
+    } else if (codepoint <= 0x7ff) {
+        text[0] = (char)(0xc0 | (codepoint >> 6));
+        text[1] = (char)(0x80 | (codepoint & 0x3f));
+    } else if (codepoint <= 0xffff) {
+        if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+            tc_log(TC_LOG_WARN, "[tc_viewport_input_manager] ignored UTF-16 surrogate codepoint");
+            return;
+        }
+        text[0] = (char)(0xe0 | (codepoint >> 12));
+        text[1] = (char)(0x80 | ((codepoint >> 6) & 0x3f));
+        text[2] = (char)(0x80 | (codepoint & 0x3f));
+    } else if (codepoint <= 0x10ffff) {
+        text[0] = (char)(0xf0 | (codepoint >> 18));
+        text[1] = (char)(0x80 | ((codepoint >> 12) & 0x3f));
+        text[2] = (char)(0x80 | ((codepoint >> 6) & 0x3f));
+        text[3] = (char)(0x80 | (codepoint & 0x3f));
+    } else {
+        tc_log(TC_LOG_WARN, "[tc_viewport_input_manager] ignored invalid Unicode codepoint");
+        return;
+    }
+    tc_input_manager_on_text(self, text);
+}
+
+static void vim_on_text(tc_input_manager* self, const char* text_utf8) {
+    tc_viewport_input_manager* m = vim_from(self);
+    if (!m || !tc_viewport_alive(m->viewport) || !text_utf8 || !text_utf8[0]) return;
+
+    tc_text_event event;
+    tc_text_event_init_source(
+        &event, m->viewport, text_utf8, TC_INPUT_SOURCE_RUNTIME);
+    event.platform_services = vim_platform_services(m);
+    dispatch_to_internal_entities(m->viewport, dispatch_text_cb, &event);
+    if (!event.handled) {
+        dispatch_to_scene(m->viewport, dispatch_text_cb, &event);
+    }
+}
+
+static void vim_on_focus_lost(tc_input_manager* self) {
+    tc_viewport_input_manager* m = vim_from(self);
+    if (!m || !tc_viewport_alive(m->viewport)) return;
+
+    tc_viewport_pointer_state* state =
+        (tc_viewport_pointer_state*)m->pointer_states;
+    while (state) {
+        tc_viewport_pointer_state* next = state->next;
+        vim_on_pointer(
+            self,
+            state->pointer_id,
+            state->device,
+            TC_POINTER_CANCEL,
+            state->x,
+            state->y,
+            0.0f);
+        state = next;
+    }
+
+    tc_input_focus_event event;
+    tc_input_focus_event_init_source(
+        &event, m->viewport, TC_INPUT_SOURCE_RUNTIME);
+    event.platform_services = vim_platform_services(m);
+    dispatch_to_internal_entities(m->viewport, dispatch_focus_lost_cb, &event);
+    dispatch_to_scene(m->viewport, dispatch_focus_lost_cb, &event);
+    m->has_cursor = false;
 }
 
 static void vim_destroy(tc_input_manager* self) {
@@ -305,6 +396,8 @@ static const tc_input_manager_vtable g_vim_vtable = {
     .on_key = vim_on_key,
     .on_char = vim_on_char,
     .destroy = vim_destroy,
+    .on_text = vim_on_text,
+    .on_focus_lost = vim_on_focus_lost,
 };
 
 // ============================================================================
@@ -331,6 +424,8 @@ tc_viewport_input_manager* tc_viewport_input_manager_new(tc_viewport_handle view
 
 void tc_viewport_input_manager_free(tc_viewport_input_manager* m) {
     if (!m) return;
+
+    vim_on_focus_lost(&m->base);
 
     // Detach from viewport
     if (tc_viewport_alive(m->viewport)) {

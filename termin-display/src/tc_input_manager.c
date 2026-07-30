@@ -77,3 +77,16 @@ TERMIN_DISPLAY_API void tc_input_manager_dispatch_key(
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_char(tc_input_manager* m, uint32_t codepoint) {
     tc_input_manager_on_char(m, codepoint);
 }
+
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_text(
+    tc_input_manager* m,
+    const char* text_utf8
+) {
+    tc_input_manager_on_text(m, text_utf8);
+}
+
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_focus_lost(
+    tc_input_manager* m
+) {
+    tc_input_manager_on_focus_lost(m);
+}

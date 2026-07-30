@@ -12,12 +12,14 @@ if(COMMAND termin_require_package)
     termin_require_package(termin_inspect termin_inspect::termin_inspect)
     termin_require_package(termin_scene termin_scene::termin_scene)
     termin_require_package(termin_input termin_input::termin_input)
+    termin_require_package(termin_display termin_display::termin_display)
     termin_require_package(termin_gui_native termin_gui_native::termin_gui_native)
 else()
     find_package(termin_base REQUIRED)
     find_package(termin_inspect REQUIRED)
     find_package(termin_scene REQUIRED)
     find_package(termin_input REQUIRED)
+    find_package(termin_display REQUIRED)
     find_package(termin_gui_native REQUIRED)
 endif()
 
@@ -35,12 +37,14 @@ termin_add_module(
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_input::termin_input
+        termin_display::termin_display
         termin_gui_native::termin_gui_native
     FIND_DEPS
         termin_base
         termin_inspect
         termin_scene
         termin_input
+        termin_display
         termin_gui_native
     INSTALL_HEADERS
         termin

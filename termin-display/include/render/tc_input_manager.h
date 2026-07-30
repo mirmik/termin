@@ -3,6 +3,7 @@
 #define TC_INPUT_MANAGER_H
 
 #include "tc_types.h"
+#include "core/tc_input_platform_services.h"
 #include "render/termin_display_api.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -69,6 +70,10 @@ struct tc_input_manager_vtable {
 
     // Cleanup
     void (*destroy)(tc_input_manager* self);
+
+    // Committed UTF-8 text and focus/capture teardown.
+    void (*on_text)(tc_input_manager* self, const char* text_utf8);
+    void (*on_focus_lost)(tc_input_manager* self);
 };
 
 // ============================================================================
@@ -83,6 +88,10 @@ struct tc_input_manager {
 
     // User data for callbacks
     void* userdata;
+
+    // Borrowed platform callbacks are copied into each manager and inherited
+    // by child viewport managers during dispatch.
+    tc_input_platform_services platform_services;
 };
 
 // ============================================================================
@@ -96,6 +105,9 @@ static inline void tc_input_manager_init(
     m->vtable = vtable;
     m->body = NULL;
     m->userdata = NULL;
+    const tc_input_platform_services empty_services = {
+        NULL, NULL, NULL, NULL, NULL};
+    m->platform_services = empty_services;
 }
 
 // ============================================================================
@@ -154,6 +166,32 @@ static inline void tc_input_manager_on_char(tc_input_manager* m, uint32_t codepo
     }
 }
 
+static inline void tc_input_manager_on_text(
+    tc_input_manager* m,
+    const char* text_utf8
+) {
+    if (m && m->vtable && m->vtable->on_text) {
+        m->vtable->on_text(m, text_utf8 ? text_utf8 : "");
+    }
+}
+
+static inline void tc_input_manager_on_focus_lost(tc_input_manager* m) {
+    if (m && m->vtable && m->vtable->on_focus_lost) {
+        m->vtable->on_focus_lost(m);
+    }
+}
+
+static inline void tc_input_manager_set_platform_services(
+    tc_input_manager* m,
+    const tc_input_platform_services* services
+) {
+    if (m) {
+        const tc_input_platform_services empty_services = {
+            NULL, NULL, NULL, NULL, NULL};
+        m->platform_services = services ? *services : empty_services;
+    }
+}
+
 static inline void tc_input_manager_destroy(tc_input_manager* m) {
     if (m && m->vtable && m->vtable->destroy) {
         m->vtable->destroy(m);
@@ -200,6 +238,13 @@ TERMIN_DISPLAY_API void tc_input_manager_dispatch_key(
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_char(
     tc_input_manager* m, uint32_t codepoint);
+
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_text(
+    tc_input_manager* m,
+    const char* text_utf8);
+
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_focus_lost(
+    tc_input_manager* m);
 
 #ifdef __cplusplus
 }
