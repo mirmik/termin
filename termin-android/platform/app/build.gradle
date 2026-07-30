@@ -82,6 +82,7 @@ android {
         main {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
             assets.srcDir file(terminAndroidAssetsDir.get())
+            assets.srcDir layout.buildDirectory.dir("generated/terminRuntimeAssets").get().asFile
         }
     }
 }
@@ -105,6 +106,28 @@ tasks.register("copyTerminAndroidLibraries", Copy) {
     }
 }
 
+tasks.register("copyTerminAndroidRuntimeAssets", Copy) {
+    def sdkShareDir = new File(
+            new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()),
+            "share/termin"
+    )
+    def sdkFont = new File(sdkShareDir, "fonts/DroidSans.ttf")
+    from(sdkFont) {
+        into("fonts")
+    }
+    into(layout.buildDirectory.dir("generated/terminRuntimeAssets"))
+    doFirst {
+        if (!sdkFont.isFile()) {
+            throw new GradleException(
+                    "Termin Android SDK UI font not found: ${sdkFont}. " +
+                    "Run ./build-sdk-android.sh --abi ${terminAndroidAbi.get()} first."
+            )
+        }
+        delete(layout.buildDirectory.dir("generated/terminRuntimeAssets"))
+    }
+}
+
 tasks.named("preBuild") {
     dependsOn("copyTerminAndroidLibraries")
+    dependsOn("copyTerminAndroidRuntimeAssets")
 }

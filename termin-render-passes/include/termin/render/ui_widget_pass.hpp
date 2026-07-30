@@ -54,6 +54,7 @@ private:
 
     std::unique_ptr<gui_native::NativeDocumentPainter> painter_;
     std::string configured_font_path_;
+    bool font_configuration_attempted_ = false;
 };
 
 } // namespace termin

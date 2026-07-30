@@ -1081,6 +1081,16 @@ def test_export_runtime_package_compiles_default_pipeline_shadow_variants(
         result.package_dir / shadow_spec["artifacts"]["vulkan"]["vertex"]
     )
     assert shadow_vertex_artifact.is_file()
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    registered_shader_uuids = {
+        resource["uuid"]
+        for resource in manifest["resources"]
+        if resource["type"] == "shader"
+    }
+    assert not {
+        document["uuid"]
+        for _path, document in shader_specs
+    } & registered_shader_uuids
     material_spec = json.loads(
         (
             result.package_dir
