@@ -227,6 +227,7 @@ nb::object translate_sdl_event(const SDL_Event& event) {
                 case SDL_WINDOWEVENT_EXPOSED:
                 case SDL_WINDOWEVENT_RESIZED:
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
+                case SDL_WINDOWEVENT_DISPLAY_CHANGED:
                 case SDL_WINDOWEVENT_RESTORED:
                 case SDL_WINDOWEVENT_MAXIMIZED:
                 case SDL_WINDOWEVENT_FOCUS_GAINED:
@@ -531,6 +532,8 @@ void bind_sdl(nb::module_& m) {
         .def("framebuffer_size", &SDLBackendWindow::framebuffer_size,
              "Drawable size (width, height). Updates after host resize; "
              "the next present() will recreate the Vulkan swapchain.")
+        .def_prop_ro("content_scale", &SDLBackendWindow::content_scale,
+             "Physical framebuffer pixels per logical window coordinate.")
         .def("present", &SDLBackendWindow::present, nb::arg("color_tex"),
              "Publish color_tex to the window surface. GL: blit + SwapWindow. "
              "Vulkan: acquire + compose + present.");

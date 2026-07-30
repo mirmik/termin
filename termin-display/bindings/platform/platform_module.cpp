@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/pair.h>
 
 #include <tcbase/tc_log.hpp>
 
@@ -13,7 +14,10 @@ namespace nb = nanobind;
 namespace termin {
 
 void bind_backend_window(nb::module_& m) {
-    nb::class_<BackendWindow>(m, "BackendWindow");
+    nb::class_<BackendWindow>(m, "BackendWindow")
+        .def("window_size", &BackendWindow::window_size)
+        .def("framebuffer_size", &BackendWindow::framebuffer_size)
+        .def_prop_ro("content_scale", &BackendWindow::content_scale);
     nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
 }
 
