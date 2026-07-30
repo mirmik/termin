@@ -59,6 +59,11 @@ else()
     find_package(termin_graphics REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_materials termin_materials::termin_materials)
+else()
+    find_package(termin_materials REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_skeleton termin_skeleton::termin_skeleton)
 else()
     find_package(termin_skeleton REQUIRED)
@@ -214,6 +219,7 @@ target_link_libraries(termin_bootstrap
         tmesh::termin_mesh
         tgfx::termin_graphics
         tgfx::termin_graphics2
+        termin_materials::termin_materials
         termin_skeleton::termin_skeleton
         termin_voxels::termin_voxels
         termin_navmesh::termin_navmesh

@@ -7,6 +7,7 @@
 #include <termin/entity/unknown_component.hpp>
 #include <termin/foliage/components_bootstrap.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
+#include <termin/materials/surface_contract_registry.h>
 #include <termin/render/components_bootstrap.hpp>
 #include <termin/ui/components_bootstrap.hpp>
 #include <termin/render/builtin_passes.hpp>
@@ -121,6 +122,9 @@ void tc_init(void) {
     tc_animation_init();
 #endif
     tc_material_init();
+    if (!tc_surface_contract_registry_register_builtins()) {
+        tc_log_error("[Bootstrap] failed to register built-in material surface contracts");
+    }
     tc_pipeline_template_init();
     tc_pipeline_pool_init();
     tc_display_pool_init();
