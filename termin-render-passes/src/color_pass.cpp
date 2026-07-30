@@ -5,6 +5,7 @@
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
+#include "termin/render/shader_abi.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <tgfx/tgfx_shader_handle.hpp>
@@ -37,6 +38,155 @@ extern "C" {
 namespace termin {
 
 namespace {
+
+constexpr const char* STANDARD_PBR_FORWARD_CONSUMER = R"slang(
+import termin_lighting;
+import termin_shadows;
+
+static const float TERMIN_STANDARD_PBR_PI = 3.14159265359;
+
+struct FragmentOutput {
+    float4 color : SV_Target0;
+};
+
+float termin_standard_pbr_distribution_ggx(
+    float normal_dot_half,
+    float roughness)
+{
+    float alpha = roughness * roughness;
+    float alpha_squared = alpha * alpha;
+    float denominator =
+        normal_dot_half * normal_dot_half * (alpha_squared - 1.0) + 1.0;
+    return alpha_squared /
+        (TERMIN_STANDARD_PBR_PI * denominator * denominator);
+}
+
+float termin_standard_pbr_geometry_smith(
+    float normal_dot_view,
+    float normal_dot_light,
+    float roughness)
+{
+    float remapped_roughness = roughness + 1.0;
+    float k = (remapped_roughness * remapped_roughness) / 8.0;
+    float view_term =
+        normal_dot_view /
+        (normal_dot_view * (1.0 - k) + k);
+    float light_term =
+        normal_dot_light /
+        (normal_dot_light * (1.0 - k) + k);
+    return view_term * light_term;
+}
+
+float3 termin_standard_pbr_fresnel_schlick(
+    float cosine,
+    float3 reflectance_zero)
+{
+    return reflectance_zero +
+        (1.0 - reflectance_zero) *
+        pow(clamp(1.0 - cosine, 0.0, 1.0), 5.0);
+}
+
+[shader("fragment")]
+FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
+    TerminStandardSurfaceV1 surface = evaluate_standard_surface(input);
+    float3 normal = normalize(surface.normal_world);
+    float3 view_direction =
+        normalize(get_camera_position() - input.world_pos);
+    float metallic = saturate(surface.metallic);
+    float roughness =
+        max(saturate(surface.perceptual_roughness), 0.04);
+    float occlusion = saturate(surface.occlusion);
+    float3 reflectance_zero =
+        lerp(float3(0.04, 0.04, 0.04), surface.base_color, metallic);
+
+    float3 ambient =
+        get_ambient_color() * get_ambient_intensity() *
+        surface.base_color * (1.0 - metallic) * occlusion;
+    float3 direct = float3(0.0, 0.0, 0.0);
+
+    for (int light_index = 0;
+         light_index < get_light_count();
+         ++light_index) {
+        float3 light_direction;
+        float attenuation = 1.0;
+
+        if (get_light_type(light_index) == LIGHT_TYPE_DIRECTIONAL) {
+            light_direction = normalize(-get_light_direction(light_index));
+        } else {
+            float3 to_light =
+                get_light_position(light_index) - input.world_pos;
+            float distance_to_light = length(to_light);
+            light_direction =
+                to_light / max(distance_to_light, 0.0001);
+            attenuation = compute_distance_attenuation(
+                get_light_attenuation(light_index),
+                get_light_range(light_index),
+                distance_to_light);
+
+            if (get_light_type(light_index) == LIGHT_TYPE_SPOT) {
+                attenuation *= compute_spot_weight(
+                    get_light_direction(light_index),
+                    light_direction,
+                    get_light_inner_angle(light_index),
+                    get_light_outer_angle(light_index));
+            }
+        }
+
+        float3 half_direction =
+            normalize(view_direction + light_direction);
+        float normal_dot_light =
+            max(dot(normal, light_direction), 0.0);
+        float normal_dot_view =
+            max(dot(normal, view_direction), 0.001);
+        float normal_dot_half =
+            max(dot(normal, half_direction), 0.0);
+        float half_dot_view =
+            max(dot(half_direction, view_direction), 0.0);
+
+        float distribution = termin_standard_pbr_distribution_ggx(
+            normal_dot_half,
+            roughness);
+        float geometry = termin_standard_pbr_geometry_smith(
+            normal_dot_view,
+            normal_dot_light,
+            roughness);
+        float3 fresnel = termin_standard_pbr_fresnel_schlick(
+            half_dot_view,
+            reflectance_zero);
+        float3 specular =
+            distribution * geometry * fresnel /
+            (4.0 * normal_dot_view * normal_dot_light + 0.0001);
+        float3 diffuse_weight =
+            (1.0 - fresnel) * (1.0 - metallic);
+        float3 diffuse =
+            diffuse_weight * surface.base_color /
+            TERMIN_STANDARD_PBR_PI;
+
+        float shadow = 1.0;
+        if (get_light_type(light_index) == LIGHT_TYPE_DIRECTIONAL) {
+            shadow = compute_shadow_auto(
+                light_index,
+                input.world_pos);
+        }
+
+        float3 radiance =
+            get_light_color(light_index) *
+            get_light_intensity(light_index) *
+            attenuation;
+        direct +=
+            (diffuse + specular) *
+            radiance *
+            normal_dot_light *
+            shadow;
+    }
+
+    FragmentOutput output;
+    output.color = float4(
+        ambient + direct + surface.emission,
+        saturate(surface.opacity));
+    return output;
+}
+)slang";
 
 // Convert tc_render_state to C++ RenderState
 inline RenderState convert_render_state(const tc_render_state& s) {
@@ -79,10 +229,12 @@ inline Vec3 get_global_position(const Entity& entity) {
     return entity.transform().global_position();
 }
 
-MaterialPipelinePassContract color_material_pass_contract()
+MaterialPipelinePassContract build_color_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = "color";
+    contract.fragment_composition =
+        MaterialFragmentComposition::SurfaceConsumerOrFinalColor;
     contract.required_material_fragment_input =
         material_pipeline_standard_material_fragment_interface();
     contract.vertex_output_adapter =
@@ -106,6 +258,35 @@ MaterialPipelinePassContract color_material_pass_contract()
     contract.foliage_vertex_transform =
         material_pipeline_make_foliage_material_vertex_transform_provider(
             "foliage");
+
+    MaterialSurfaceConsumerContract consumer;
+    consumer.accepted_surface = {
+        TC_STANDARD_PBR_SURFACE_CONTRACT_ID,
+        TC_STANDARD_PBR_SURFACE_CONTRACT_VERSION,
+    };
+    consumer.consumer_source = STANDARD_PBR_FORWARD_CONSUMER;
+    consumer.fragment_entry = "termin_standard_pbr_forward";
+    consumer.source_identity =
+        "termin.surface.standard-pbr@1:forward-consumer:v1";
+    consumer.required_fragment_input.semantics.push_back(
+        {"world_pos", MaterialPipelineValueType::Float3});
+    consumer.resources = {
+        material_pipeline_abi_resource_decl(
+            ShaderAbiResourceId::Lighting,
+            TC_SHADER_STAGE_FRAGMENT,
+            MaterialPipelineResourceOwner::Pass,
+            static_cast<uint32_t>(sizeof(LightingUBOData))),
+        material_pipeline_abi_resource_decl(
+            ShaderAbiResourceId::ShadowBlock,
+            TC_SHADER_STAGE_FRAGMENT,
+            MaterialPipelineResourceOwner::Pass,
+            2064u),
+        material_pipeline_abi_resource_decl(
+            ShaderAbiResourceId::ShadowMaps,
+            TC_SHADER_STAGE_FRAGMENT,
+            MaterialPipelineResourceOwner::Pass),
+    };
+    contract.surface_consumer = std::move(consumer);
     return contract;
 }
 
@@ -180,6 +361,11 @@ bool plan_color_item_shader(
 }
 
 } // anonymous namespace
+
+MaterialPipelinePassContract color_material_pass_contract()
+{
+    return build_color_material_pass_contract();
+}
 
 ColorPass::ColorPass(const ColorPassConfig& config)
     : input_res(config.input_res),

@@ -136,8 +136,10 @@ bool uses_final_color_fragment_variant_for_pass(
     LineRenderMode mode,
     const MaterialPipelinePassContract& pass_contract)
 {
-    if (pass_contract.fragment_composition !=
-            MaterialFragmentComposition::FinalColor ||
+    if ((pass_contract.fragment_composition !=
+             MaterialFragmentComposition::FinalColor &&
+         pass_contract.fragment_composition !=
+             MaterialFragmentComposition::SurfaceConsumerOrFinalColor) ||
         pass_contract.required_material_fragment_input.semantics.empty()) {
         return false;
     }

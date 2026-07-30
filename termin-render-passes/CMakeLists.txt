@@ -379,6 +379,34 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
     termin_add_test_labels(termin_render_passes_color_pass_pixel_smoke
         "termin:capability:vulkan")
 
+    add_executable(termin_render_passes_standard_surface_forward_test
+        tests/test_standard_surface_forward.cpp
+    )
+    target_include_directories(
+        termin_render_passes_standard_surface_forward_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(
+        termin_render_passes_standard_surface_forward_test PRIVATE
+        termin_render_passes
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(
+            termin_render_passes_standard_surface_forward_test
+            termin_shaderc)
+        target_compile_definitions(
+            termin_render_passes_standard_surface_forward_test PRIVATE
+            TERMIN_STANDARD_SURFACE_FORWARD_TEST_SHADERC="$<TARGET_FILE:termin_shaderc>")
+    endif()
+    set_target_properties(
+        termin_render_passes_standard_surface_forward_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_standard_surface_forward_test
+        COMMAND termin_render_passes_standard_surface_forward_test
+    )
+
     add_executable(termin_render_passes_bloom_pass_pixel_smoke
         tests/test_bloom_pass_pixel_smoke.cpp
     )
