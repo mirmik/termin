@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlotDemoApp", "examples\Plo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SceneApp", "examples\SceneApp\SceneApp.csproj", "{87710962-FA6C-41AB-8B98-0A32B504BEB1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RetainedChartComposition", "examples\RetainedChartComposition\RetainedChartComposition.csproj", "{63B43A7B-1D67-4A8F-90EC-FA63537D076B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,18 @@ Global
 		{87710962-FA6C-41AB-8B98-0A32B504BEB1}.Release|x64.Build.0 = Release|Any CPU
 		{87710962-FA6C-41AB-8B98-0A32B504BEB1}.Release|x86.ActiveCfg = Release|Any CPU
 		{87710962-FA6C-41AB-8B98-0A32B504BEB1}.Release|x86.Build.0 = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|x64.Build.0 = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Debug|x86.Build.0 = Debug|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|x64.ActiveCfg = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|x64.Build.0 = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|x86.ActiveCfg = Release|Any CPU
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -92,5 +106,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{5B1A142F-4500-423C-95A6-88CB41845B31} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
 		{87710962-FA6C-41AB-8B98-0A32B504BEB1} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
+		{63B43A7B-1D67-4A8F-90EC-FA63537D076B} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
 	EndGlobalSection
 EndGlobal

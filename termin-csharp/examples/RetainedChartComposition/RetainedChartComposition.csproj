@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TerminSdkRoot Condition="'$(TerminSdkRoot)' == ''">..\..\..\sdk</TerminSdkRoot>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(TerminSdkRoot)\csharp\lib\Termin.Native.dll')">
+    <Reference Include="Termin.Native">
+      <HintPath>$(TerminSdkRoot)\csharp\lib\Termin.Native.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <None Include="$(TerminSdkRoot)\csharp\runtimes\**\*"
+          TargetPath="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(TerminSdkRoot)\csharp\share\**\*"
+          Link="share\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(TerminSdkRoot)\csharp\lib\Termin.Native.dll')">
+    <ProjectReference Include="..\..\Termin.Native\Termin.Native.csproj" />
+  </ItemGroup>
+</Project>
