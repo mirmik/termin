@@ -4,8 +4,16 @@ from termin.project.settings import ProjectSettingsManager
 
 
 class _SceneManager:
-    def __init__(self, calls: list[object]) -> None:
+    def __init__(
+        self,
+        calls: list[object],
+        scene_path: str | None = None,
+    ) -> None:
         self.calls = calls
+        self.scene_path = scene_path
+
+    def get_scene_path(self, _name: str) -> str | None:
+        return self.scene_path
 
     def save_scene(self, name: str, path: str, editor_data) -> None:
         self.calls.append(("save", name, path, editor_data))
@@ -19,15 +27,22 @@ class _ProjectSettings:
         self.calls.append(("last-scene", path))
 
 
-def _controller(monkeypatch, calls, prepare_scene_for_save) -> SceneFileController:
+def _controller(
+    monkeypatch,
+    calls,
+    prepare_scene_for_save,
+    *,
+    scene_manager=None,
+    dialog_service=None,
+) -> SceneFileController:
     monkeypatch.setattr(
         scene_file_controller_module.log,
         "error",
         lambda message: calls.append(("log-error", message)),
     )
     return SceneFileController(
-        scene_manager=_SceneManager(calls),
-        get_dialog_service=lambda: None,
+        scene_manager=scene_manager or _SceneManager(calls),
+        get_dialog_service=lambda: dialog_service,
         get_editor_scene_name=lambda: "scene4",
         set_editor_scene_name=lambda _name: None,
         get_scene=lambda: None,
@@ -76,15 +91,23 @@ def test_save_aborts_when_render_state_synchronization_fails(
     monkeypatch, tmp_path
 ) -> None:
     calls: list[object] = []
+    path = str(tmp_path / "scene4.scene")
     monkeypatch.setattr(
         ProjectSettingsManager,
         "instance",
         lambda: _ProjectSettings(calls),
     )
-    controller = _controller(monkeypatch, calls, lambda _name: False)
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: False,
+        scene_manager=_SceneManager(calls, path),
+    )
+    completions: list[bool] = []
 
-    controller.save_scene_to_file(str(tmp_path / "scene4.scene"))
+    controller.save_scene(completions.append)
 
+    assert completions == [False]
     assert not any(call[0] == "save" for call in calls)
     assert calls == [
         (
@@ -93,3 +116,88 @@ def test_save_aborts_when_render_state_synchronization_fails(
             "Failed to synchronize scene state before saving 'scene4'",
         )
     ]
+
+
+def test_save_existing_scene_reports_success_after_persistence(
+    monkeypatch, tmp_path
+) -> None:
+    calls: list[object] = []
+    path = str(tmp_path / "scene4.scene")
+    monkeypatch.setattr(
+        ProjectSettingsManager,
+        "instance",
+        lambda: _ProjectSettings(calls),
+    )
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: True,
+        scene_manager=_SceneManager(calls, path),
+    )
+    completions: list[bool] = []
+
+    controller.save_scene(completions.append)
+
+    assert completions == [True]
+    assert ("save", "scene4", path, None) in calls
+
+
+class _SaveDialog:
+    def __init__(self) -> None:
+        self.on_result = None
+
+    def show_save_file(
+        self,
+        *,
+        title,
+        directory,
+        filter_string,
+        on_result,
+        default_name="",
+    ) -> None:
+        self.on_result = on_result
+
+
+def test_save_as_completes_only_after_dialog_result(monkeypatch, tmp_path) -> None:
+    calls: list[object] = []
+    dialogs = _SaveDialog()
+    monkeypatch.setattr(
+        ProjectSettingsManager,
+        "instance",
+        lambda: _ProjectSettings(calls),
+    )
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: True,
+        dialog_service=dialogs,
+    )
+    completions: list[bool] = []
+
+    controller.save_scene(completions.append)
+
+    assert completions == []
+    assert dialogs.on_result is not None
+    path = str(tmp_path / "saved.scene")
+    dialogs.on_result(path)
+    assert completions == [True]
+    assert ("save", "scene4", path, None) in calls
+
+
+def test_save_as_cancellation_reports_failure(monkeypatch) -> None:
+    calls: list[object] = []
+    dialogs = _SaveDialog()
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: True,
+        dialog_service=dialogs,
+    )
+    completions: list[bool] = []
+
+    controller.save_scene(completions.append)
+
+    assert dialogs.on_result is not None
+    dialogs.on_result(None)
+    assert completions == [False]
+    assert not any(call[0] == "save" for call in calls)

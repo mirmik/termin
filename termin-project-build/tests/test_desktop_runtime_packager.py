@@ -1778,7 +1778,14 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     assert program_data["uuid"] == program_uuid
     assert program_data["phases"][0]["shader"] == shader_uuid
     assert program_data["properties"][1]["range_max"] == 1.0
-    assert not list(result.package_dir.rglob("*.shader"))
+    shader_sources = {
+        path.relative_to(result.package_dir)
+        for path in result.package_dir.rglob("*.shader")
+    }
+    assert shader_sources == {
+        Path("builtin_shaders/termin-engine-skybox.shader"),
+    }
+    assert Path("shaders", f"{shader_uuid}.shader") not in shader_sources
     assert shader_data["artifacts"] == {
         "vulkan": {
             "vertex": f"shaders/vulkan/{shader_uuid}.vert.spv",
