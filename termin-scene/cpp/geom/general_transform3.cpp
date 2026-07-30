@@ -136,6 +136,9 @@ Quat GeneralTransform3::global_rotation() const {
     tc_entity_pool_get_global_rotation(p, _h.id, v);
     return {v[0], v[1], v[2], v[3]};
 }
+Pose3 GeneralTransform3::global_pose() const {
+    return {global_rotation(), global_position()};
+}
 void GeneralTransform3::set_global_position(const Vec3& position) {
     auto* p = pool_ptr();
     if (!p)
@@ -175,6 +178,10 @@ void GeneralTransform3::set_global_orientation(const Quat& orientation) {
     set_local_rotation(
         (parent_orientation.inverse() * orientation).normalized());
 }
+void GeneralTransform3::set_global_pose(const Pose3& pose) {
+    set_global_position(pose.lin);
+    set_global_orientation(pose.ang);
+}
 
 TransformKind GeneralTransform3::kind() const {
     auto* p = pool_ptr();
@@ -213,6 +220,14 @@ std::optional<Vec3> GeneralTransform3::decomposed_global_scale() const {
 Vec3 GeneralTransform3::basis_axis_lengths() const {
     const Basis3d basis = linear_basis();
     return {basis.x.norm(), basis.y.norm(), basis.z.norm()};
+}
+
+Vec3 GeneralTransform3::lossy_scale() const {
+    return basis_axis_lengths();
+}
+
+GeneralPose3 GeneralTransform3::lossy_global_pose() const {
+    return {global_rotation(), global_position(), lossy_scale()};
 }
 
 std::optional<Pose3> GeneralTransform3::try_rigid_pose() const {

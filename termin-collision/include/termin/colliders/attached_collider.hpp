@@ -25,7 +25,8 @@ namespace colliders {
 // Коллайдер, привязанный к GeneralTransform3.
 //
 // Наследуется от Collider для полиморфного использования в CollisionWorld.
-// Мировой трансформ должен оставаться точно представимым как TRS.
+// Affine world transforms are projected to a Unity-style lossy TRS:
+// logical world rotation plus world-basis column lengths.
 class AttachedCollider : public Collider {
 public:
     ColliderPrimitive* collider_;
@@ -47,39 +48,27 @@ public:
 
     // entity_transform * collider.transform
     GeneralPose3 world_transform() const {
-        const std::optional<Vec3> entity_scale =
-            transform_->decomposed_global_scale();
-        if (!entity_scale) {
+        const Affine3d affine = transform_->global_affine();
+        const double determinant = affine.determinant();
+        if (!affine.is_finite() || !std::isfinite(determinant)
+            || std::abs(determinant) <= 1.0e-12) {
             tc_log_error(
-                "[AttachedCollider] entity '%s' has an affine world transform; "
-                "TRS collider projection is forbidden",
+                "[AttachedCollider] entity '%s' has a singular or non-finite "
+                "world transform; lossy collider projection is undefined",
                 transform_->name());
             throw std::runtime_error(
-                "Attached collider does not support affine entity ancestry");
+                "Attached collider cannot project a singular world transform");
         }
-
-        const Quat collider_rotation = collider_->transform.ang.normalized();
-        const bool collider_rotation_is_identity =
-            std::abs(collider_rotation.x) <= 1.0e-12
-            && std::abs(collider_rotation.y) <= 1.0e-12
-            && std::abs(collider_rotation.z) <= 1.0e-12
-            && std::abs(std::abs(collider_rotation.w) - 1.0) <= 1.0e-12;
-        if (transform_->kind() == TransformKind::AxisScaled
-            && !collider_rotation_is_identity) {
+        if (determinant < 0.0) {
             tc_log_error(
-                "[AttachedCollider] entity '%s' has axis scale and its collider "
-                "has a local rotation; their composition requires shear",
+                "[AttachedCollider] entity '%s' has a reflected world "
+                "transform; lossy collider projection is forbidden",
                 transform_->name());
             throw std::runtime_error(
-                "Attached collider transform would require affine shear");
+                "Attached collider does not support reflected world transforms");
         }
-
-        const GeneralPose3 entity_pose{
-            transform_->global_rotation(),
-            transform_->global_position(),
-            *entity_scale,
-        };
-        return entity_pose.compose_trs_projected(collider_->transform);
+        return transform_->lossy_global_pose().compose_trs_projected(
+            collider_->transform);
     }
 
     ColliderType type() const override {

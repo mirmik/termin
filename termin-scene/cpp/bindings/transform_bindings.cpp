@@ -75,6 +75,14 @@ void bind_transform(nb::module_& m) {
             "basis_axis_lengths",
             &GeneralTransform3::basis_axis_lengths,
             "Approximation policy: lengths of the exact world-basis columns.")
+        .def(
+            "lossy_scale",
+            &GeneralTransform3::lossy_scale,
+            "Unity-style lossy world scale: exact world-basis column lengths.")
+        .def(
+            "lossy_global_pose",
+            &GeneralTransform3::lossy_global_pose,
+            "Logical world pose paired with lossy_scale().")
         .def("try_rigid_pose", &GeneralTransform3::try_rigid_pose)
         .def("set_local_pose", [](GeneralTransform3& self, const GeneralPose3& pose) {
             self.set_local_pose(pose);
@@ -102,8 +110,13 @@ void bind_transform(nb::module_& m) {
             "set_global_orientation",
             &GeneralTransform3::set_global_orientation,
             nb::arg("orientation"))
+        .def(
+            "set_global_pose",
+            &GeneralTransform3::set_global_pose,
+            nb::arg("pose"))
         .def_prop_ro("global_position", &GeneralTransform3::global_position)
         .def_prop_ro("global_rotation", &GeneralTransform3::global_rotation)
+        .def_prop_ro("global_pose", &GeneralTransform3::global_pose)
         .def("relocate", [](GeneralTransform3& self, const Pose3& pose) {
             self.relocate(pose);
         })

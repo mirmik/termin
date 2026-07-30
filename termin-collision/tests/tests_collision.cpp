@@ -478,7 +478,7 @@ TEST_CASE("AttachedCollider in CollisionWorld")
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider rejects affine projection")
+TEST_CASE("AttachedCollider projects affine ancestry through lossy scale")
 {
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(4);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
@@ -488,25 +488,29 @@ TEST_CASE("AttachedCollider rejects affine projection")
 
     const double parent_scale[3] = {2.0, 1.0, 0.5};
     tc_entity_pool_set_local_scale(pool, parent, parent_scale);
-    const double half_sqrt2 = std::sqrt(0.5);
-    const double child_rotation[4] = {0.0, 0.0, half_sqrt2, half_sqrt2};
+    const double sin_eighth_turn = std::sin(0.125 * std::acos(-1.0));
+    const double cos_eighth_turn = std::cos(0.125 * std::acos(-1.0));
+    const double child_rotation[4] = {
+        0.0, 0.0, sin_eighth_turn, cos_eighth_turn};
     tc_entity_pool_set_local_rotation(pool, child, child_rotation);
 
     GeneralTransform3 transform(pool_h, child);
-    SphereCollider sphere(1.0);
-    AttachedCollider attached(&sphere, &transform);
-    bool threw = false;
-    try {
-        (void)attached.center();
-    } catch (const std::runtime_error&) {
-        threw = true;
-    }
-    CHECK(threw);
+    BoxCollider box(Vec3(0.5, 0.5, 0.5));
+    AttachedCollider attached(&box, &transform);
+    const GeneralPose3 projected = attached.world_transform();
+    const double expected_xy_scale = std::sqrt(2.5);
+
+    CHECK(transform.kind() == termin::TransformKind::Affine);
+    CHECK_EQ(projected.scale.x, Approx(expected_xy_scale).epsilon(1e-12));
+    CHECK_EQ(projected.scale.y, Approx(expected_xy_scale).epsilon(1e-12));
+    CHECK_EQ(projected.scale.z, Approx(0.5).epsilon(1e-12));
+    CHECK_EQ(projected.ang.z, Approx(sin_eighth_turn).epsilon(1e-12));
+    CHECK_EQ(projected.ang.w, Approx(cos_eighth_turn).epsilon(1e-12));
 
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider rejects rotated local collider under axis scale")
+TEST_CASE("AttachedCollider projects rotated local collider under axis scale")
 {
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(2);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
@@ -515,13 +519,35 @@ TEST_CASE("AttachedCollider rejects rotated local collider under axis scale")
     tc_entity_pool_set_local_scale(pool, entity, scale);
 
     const double half_sqrt2 = std::sqrt(0.5);
-    SphereCollider sphere(
-        1.0,
+    BoxCollider box(
+        Vec3(0.5, 0.5, 0.5),
         GeneralPose3(
             Quat(0.0, 0.0, half_sqrt2, half_sqrt2),
             Vec3::zero()));
     GeneralTransform3 transform(pool_h, entity);
-    AttachedCollider attached(&sphere, &transform);
+    AttachedCollider attached(&box, &transform);
+    const GeneralPose3 projected = attached.world_transform();
+
+    CHECK_EQ(projected.scale.x, Approx(2.0).epsilon(1e-12));
+    CHECK_EQ(projected.scale.y, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(projected.scale.z, Approx(0.5).epsilon(1e-12));
+    CHECK_EQ(projected.ang.z, Approx(half_sqrt2).epsilon(1e-12));
+    CHECK_EQ(projected.ang.w, Approx(half_sqrt2).epsilon(1e-12));
+
+    tc_entity_pool_registry_destroy(pool_h);
+}
+
+TEST_CASE("AttachedCollider rejects singular lossy projection")
+{
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(2);
+    tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "singular");
+    const double scale[3] = {2.0, 0.0, 0.5};
+    tc_entity_pool_set_local_scale(pool, entity, scale);
+
+    BoxCollider box(Vec3(0.5, 0.5, 0.5));
+    GeneralTransform3 transform(pool_h, entity);
+    AttachedCollider attached(&box, &transform);
     bool threw = false;
     try {
         (void)attached.center();

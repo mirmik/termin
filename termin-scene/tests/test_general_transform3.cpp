@@ -104,6 +104,16 @@ int main() {
         expected.basis.y.norm(),
         expected.basis.z.norm(),
     }));
+    CHECK(vec_near(transform.lossy_scale(), axis_lengths));
+    const termin::GeneralPose3 lossy_pose = transform.lossy_global_pose();
+    CHECK(vec_near(lossy_pose.lin, transform.global_position()));
+    CHECK(vec_near(lossy_pose.scale, axis_lengths));
+    const termin::Quat logical_rotation = transform.global_rotation();
+    CHECK(near(std::abs(
+        lossy_pose.ang.x * logical_rotation.x
+        + lossy_pose.ang.y * logical_rotation.y
+        + lossy_pose.ang.z * logical_rotation.z
+        + lossy_pose.ang.w * logical_rotation.w), 1.0));
 
     double world_matrix[16];
     double inverse_matrix[16];
@@ -132,6 +142,21 @@ int main() {
         + requested_orientation.y * actual_orientation.y
         + requested_orientation.z * actual_orientation.z
         + requested_orientation.w * actual_orientation.w), 1.0));
+
+    const termin::Vec3 authored_scale = child.transform().local_scale();
+    const termin::Pose3 requested_pose{
+        rotation_z(-0.4),
+        {-3.0, 8.0, 1.25},
+    };
+    child.transform().set_global_pose(requested_pose);
+    const termin::Pose3 actual_pose = child.transform().global_pose();
+    CHECK(vec_near(actual_pose.lin, requested_pose.lin));
+    CHECK(near(std::abs(
+        requested_pose.ang.x * actual_pose.ang.x
+        + requested_pose.ang.y * actual_pose.ang.y
+        + requested_pose.ang.z * actual_pose.ang.z
+        + requested_pose.ang.w * actual_pose.ang.w), 1.0));
+    CHECK(vec_near(child.transform().local_scale(), authored_scale));
 
     termin::Entity rigid = termin::Entity::create(pool_handle, "rigid");
     rigid.transform().set_local_position({1.0, 2.0, 3.0});

@@ -13,7 +13,7 @@ def test_exact_and_logical_transform_apis() -> None:
                 import math
 
                 import termin.bootstrap
-                from termin.geombase import Affine3d, GeneralPose3, Quat, Vec3
+                from termin.geombase import Affine3d, GeneralPose3, Pose3, Quat, Vec3
                 from termin.scene import TcScene, TransformKind
 
                 def near(a, b, epsilon=1.0e-10):
@@ -78,6 +78,11 @@ def test_exact_and_logical_transform_apis() -> None:
                 assert vec_near(exact.basis.y, expected.basis.y)
                 assert vec_near(exact.basis.z, expected.basis.z)
                 assert vec_near(exact.translation, expected.translation)
+                lossy_scale = transform.lossy_scale()
+                assert vec_near(lossy_scale, transform.basis_axis_lengths())
+                lossy_pose = transform.lossy_global_pose()
+                assert vec_near(lossy_pose.lin, transform.global_position)
+                assert vec_near(lossy_pose.scale, lossy_scale)
 
                 model = child.model_matrix()
                 inverse = child.inverse_model_matrix()
@@ -89,6 +94,14 @@ def test_exact_and_logical_transform_apis() -> None:
                 requested = Vec3(11.0, -7.0, 2.5)
                 transform.set_global_position(requested)
                 assert vec_near(transform.global_position, requested)
+                authored_scale = transform.local_scale()
+                requested_pose = Pose3(
+                    ang=rotation_z(-0.4),
+                    lin=Vec3(-3.0, 8.0, 1.25),
+                )
+                transform.set_global_pose(requested_pose)
+                assert vec_near(transform.global_pose.lin, requested_pose.lin)
+                assert vec_near(transform.local_scale(), authored_scale)
 
                 singular = scene.create_entity("singular")
                 singular.transform.set_local_scale(Vec3(1.0, 0.0, 1.0))
