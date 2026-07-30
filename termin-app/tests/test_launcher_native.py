@@ -23,6 +23,9 @@ class MemoryRecentProjects:
         self.remove(project_path)
         self.entries.insert(0, {"name": Path(project_path).stem, "path": project_path})
 
+    def restore(self, projects: list[dict]) -> None:
+        self.entries = list(projects)
+
     def remove(self, project_path: str) -> None:
         self.entries = [entry for entry in self.entries if entry["path"] != project_path]
 

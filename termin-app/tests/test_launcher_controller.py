@@ -15,6 +15,7 @@ class FakeRecentProjects:
     projects: list[dict]
     added: list[str] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
+    restored: list[list[dict]] = field(default_factory=list)
 
     def list(self) -> list[dict]:
         return list(self.projects)
@@ -23,6 +24,10 @@ class FakeRecentProjects:
         self.added.append(project_path)
         self.projects = [entry for entry in self.projects if entry["path"] != project_path]
         self.projects.insert(0, {"name": "Opened", "path": project_path})
+
+    def restore(self, projects: list[dict]) -> None:
+        self.restored.append(projects)
+        self.projects = list(projects)
 
     def remove(self, project_path: str) -> None:
         self.removed.append(project_path)
@@ -144,7 +149,9 @@ def test_failed_launch_dispatch() -> None:
 
     assert controller.open_project(project_path) is False
     assert calls.launch_calls == [project_path]
-    assert recent.added == []
+    assert recent.added == [project_path]
+    assert recent.projects == []
+    assert recent.restored == [[]]
     assert controller.state.should_quit is False
     assert controller.state.last_error == "editor unavailable"
 
@@ -157,3 +164,36 @@ def test_successful_launch_updates_recent_and_quit_state() -> None:
     assert recent.added == [project_path]
     assert controller.state.recent_projects[0].path == project_path
     assert controller.state.should_quit is True
+
+
+def test_recent_project_is_persisted_before_non_returning_dispatch() -> None:
+    controller, recent, calls = make_controller()
+    project_path = "/projects/Demo/Demo.terminproj"
+
+    class ProcessReplaced(BaseException):
+        pass
+
+    def replace_process(path: str) -> LaunchResult:
+        calls.launch_calls.append(path)
+        assert recent.projects[0]["path"] == project_path
+        raise ProcessReplaced
+
+    services = calls.services()
+    controller = LauncherController(
+        recent,
+        LauncherServices(
+            create_project=services.create_project,
+            launch_editor=replace_process,
+            report_error=services.report_error,
+        ),
+    )
+
+    try:
+        controller.open_project(project_path)
+    except ProcessReplaced:
+        pass
+    else:
+        raise AssertionError("non-returning dispatch simulation unexpectedly returned")
+
+    assert recent.projects[0]["path"] == project_path
+    assert recent.restored == []

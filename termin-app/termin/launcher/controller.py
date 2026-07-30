@@ -33,6 +33,8 @@ class RecentProjectStore(Protocol):
 
     def add(self, project_path: str) -> None: ...
 
+    def restore(self, projects: list[dict]) -> None: ...
+
     def remove(self, project_path: str) -> None: ...
 
 
@@ -139,21 +141,44 @@ class LauncherController:
 
     def open_project(self, project_path: str) -> bool:
         self.state.last_error = None
+        previous_recent_projects = self._recent.list()
+        try:
+            # Linux transfers control to the editor with exec, so successful
+            # dispatch never returns. Persist the selection before dispatch and
+            # restore the exact previous list if launch fails synchronously.
+            self._recent.add(project_path)
+        except Exception as exc:
+            self._report_error(f"Failed to update the recent project list: {exc}")
         try:
             result = self._services.launch_editor(project_path)
         except Exception as exc:
-            self._report_error(f"Failed to launch editor: {exc}")
+            self._report_launch_failure(
+                f"Failed to launch editor: {exc}",
+                previous_recent_projects,
+            )
             return False
         if not result.started:
-            self._report_error(result.error or "Failed to launch editor")
+            self._report_launch_failure(
+                result.error or "Failed to launch editor",
+                previous_recent_projects,
+            )
             return False
-        try:
-            self._recent.add(project_path)
-        except Exception as exc:
-            self._report_error(f"Editor started, but the recent project list could not be updated: {exc}")
         self.refresh_recent_projects()
         self.state.should_quit = result.should_quit
         return True
+
+    def _report_launch_failure(
+        self,
+        message: str,
+        previous_recent_projects: list[dict],
+    ) -> None:
+        try:
+            self._recent.restore(previous_recent_projects)
+        except Exception as exc:
+            message = (
+                f"{message}; additionally failed to restore the recent project list: {exc}"
+            )
+        self._report_error(message)
 
     def _report_error(self, message: str) -> None:
         self.state.last_error = message
