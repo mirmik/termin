@@ -428,10 +428,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "android-showcase-native-ui-component",
@@ -443,40 +456,10 @@
                 "kind": "ui_document",
                 "role": "ui_document",
                 "uuid": "android-showcase-native-runtime-hud",
-                "name": "Native Runtime HUD"
+                "name": "native_runtime_hud"
               },
-              "priority": 1000,
-              "input_source_mask": 1
-            }
-          }
-        ]
-      },
-      {
-        "uuid": "android-showcase-xr-origin",
-        "name": "XR Origin",
-        "priority": 0.0,
-        "visible": true,
-        "enabled": true,
-        "pickable": false,
-        "selectable": true,
-        "layer": 0.0,
-        "flags": 0.0,
-        "pose": {
-          "position": [0.0, -4.0, 1.6],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
-        },
-        "scale": [1.0, 1.0, 1.0],
-        "components": [
-          {
-            "source_id": "android-showcase-xr-origin-component",
-            "type": "XrOriginComponent",
-            "data": {
-              "enabled": true,
-              "near_clip": 0.1,
-              "far_clip": 100.0,
-              "reference_space": "local",
-              "reference_alignment": "initial_head_yaw",
-              "layer_mask": "0xffffffffffffffff"
+              "priority": 1000.0,
+              "input_source_mask": 1.0
             }
           }
         ]
@@ -559,7 +542,7 @@
             "editor_entities": {
               "camera": [
                 {
-                  "source_id": "4f263fe2-5b79-4286-9187-5b77a9a1d6ea",
+                  "source_id": "b2e1b42f-df74-44b6-a6b3-be438377e463",
                   "type": "CameraComponent",
                   "data": {
                     "enabled": true,
@@ -574,7 +557,7 @@
                   }
                 },
                 {
-                  "source_id": "caafb346-8bdd-4fd3-b965-ca2ea727c4f6",
+                  "source_id": "fb7ccd52-f693-4484-9a9e-69e2838f8035",
                   "type": "OrbitCameraController",
                   "data": {
                     "enabled": true,
@@ -702,7 +685,7 @@
       "editor_entities": {
         "camera": [
           {
-            "source_id": "4f263fe2-5b79-4286-9187-5b77a9a1d6ea",
+            "source_id": "b2e1b42f-df74-44b6-a6b3-be438377e463",
             "type": "CameraComponent",
             "data": {
               "enabled": true,
@@ -717,7 +700,7 @@
             }
           },
           {
-            "source_id": "caafb346-8bdd-4fd3-b965-ca2ea727c4f6",
+            "source_id": "fb7ccd52-f693-4484-9a9e-69e2838f8035",
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
