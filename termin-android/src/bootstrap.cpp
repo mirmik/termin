@@ -600,6 +600,32 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
     if (!g_state.render_device && !create_renderer_locked()) {
         return 0;
     }
+    auto* swapchain = g_state.render_device->swapchain();
+    const uint32_t surface_width =
+        static_cast<uint32_t>(g_state.surface_width);
+    const uint32_t surface_height =
+        static_cast<uint32_t>(g_state.surface_height);
+    if (swapchain->width() != surface_width ||
+        swapchain->height() != surface_height) {
+        android_log_info(
+            "renderer: retry stale surface extent swapchain=%ux%u surface=%ux%u",
+            swapchain->width(),
+            swapchain->height(),
+            surface_width,
+            surface_height
+        );
+        if (!resize_renderer_locked(surface_width, surface_height)) {
+            return 0;
+        }
+        swapchain = g_state.render_device->swapchain();
+        if (swapchain->width() != surface_width ||
+            swapchain->height() != surface_height) {
+            // SurfaceHolder can publish its new dimensions just before Vulkan
+            // surface capabilities catch up. Do not render a mismatched
+            // document/display pair; retry on the next Choreographer frame.
+            return 1;
+        }
+    }
     if (!ensure_player_session_locked()) {
         return 0;
     }
