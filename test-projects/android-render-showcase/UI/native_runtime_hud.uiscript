@@ -1,0 +1,38 @@
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: native_runtime_overlay
+  background_color: [0, 0, 0, 0]
+  children:
+    - type: termin.gui.Panel
+      name: dim_layer
+      anchor: fill
+      background_color: [0, 0, 0, 0]
+    - type: termin.gui.VStack
+      name: hud
+      anchor: top-left
+      offset: [20, 20]
+      spacing: 8
+      children:
+        - type: termin.gui.Label
+          name: title
+          text: Termin native UI
+          font_size: 22
+          color: [0.92, 0.96, 1, 1]
+        - type: termin.gui.Label
+          name: hint
+          text: Button consumes touch; drag outside orbits
+          font_size: 14
+          color: [0.72, 0.82, 0.95, 1]
+        - type: termin.gui.IconButton
+          name: action
+          icon: UI
+          tooltip: Native packaged button
+          size: 48
+          font_size: 16
+          background_color: [0.08, 0.22, 0.42, 0.94]
+          hover_color: [0.12, 0.34, 0.62, 1]
+          pressed_color: [0.04, 0.16, 0.30, 1]
+          active_color: [0.12, 0.48, 0.76, 1]
+          icon_color: [0.96, 0.98, 1, 1]
+          border_radius: 8

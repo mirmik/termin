@@ -418,6 +418,70 @@
         ]
       },
       {
+        "uuid": "android-showcase-native-ui",
+        "name": "Native Runtime HUD",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": false,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "android-showcase-native-ui-component",
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": {
+                "type": "uuid",
+                "kind": "ui_document",
+                "role": "ui_document",
+                "uuid": "android-showcase-native-runtime-hud",
+                "name": "Native Runtime HUD"
+              },
+              "priority": 1000,
+              "input_source_mask": 1
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "android-showcase-xr-origin",
+        "name": "XR Origin",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": false,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, -4.0, 1.6],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "android-showcase-xr-origin-component",
+            "type": "XrOriginComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "reference_space": "local",
+              "reference_alignment": "initial_head_yaw",
+              "layer_mask": "0xffffffffffffffff"
+            }
+          }
+        ]
+      },
+      {
         "uuid": "android-showcase-camera",
         "name": "Main Camera",
         "priority": 0.0,

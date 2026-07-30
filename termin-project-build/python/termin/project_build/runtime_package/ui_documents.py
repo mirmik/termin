@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from termin.project_build.runtime_package.models import RuntimePackageExportDiagnostic
 from termin.project_build.runtime_package.package_files import project_relative_path
@@ -65,6 +66,56 @@ def write_ui_documents(
                 "path": output_rel,
             }
         )
+
+
+def stage_ui_documents_for_scene_analysis(
+    package_dir: Path,
+    resources: list[dict[str, str]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> list[Any]:
+    from termin.gui_native import UiDocumentAsset
+
+    temporary_assets: list[Any] = []
+    for resource in resources:
+        if resource.get("type") != "ui_document":
+            continue
+        uuid_value = resource.get("uuid", "")
+        rel_path = resource.get("path", "")
+        if not uuid_value or not rel_path:
+            continue
+        if UiDocumentAsset.from_uuid(uuid_value).valid:
+            continue
+        try:
+            compiled = (package_dir / rel_path).read_text(encoding="utf-8")
+            temporary = UiDocumentAsset.declare_compiled_json(
+                compiled, uuid_value
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=rel_path,
+                    message=(
+                        "Runtime exporter could not stage native UI document "
+                        f"UUID '{uuid_value}' for scene analysis: {exc}"
+                    ),
+                )
+            )
+            continue
+        if not temporary.valid:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=rel_path,
+                    message=(
+                        "Runtime exporter could not stage native UI document "
+                        f"UUID '{uuid_value}' for scene analysis"
+                    ),
+                )
+            )
+            continue
+        temporary_assets.append(temporary)
+    return temporary_assets
 
 
 def _index_ui_sources(

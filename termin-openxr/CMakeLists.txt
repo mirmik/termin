@@ -37,6 +37,11 @@ else()
     find_package(termin_components_render REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_components_ui termin_components_ui::termin_components_ui)
+else()
+    find_package(termin_components_ui REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_graphics tgfx::termin_graphics2)
 else()
     find_package(termin_graphics REQUIRED)
@@ -149,6 +154,7 @@ target_link_libraries(termin_openxr
         termin_components_mesh::termin_components_mesh
         termin_inspect::termin_inspect
         termin_components_render::termin_components_render
+        termin_components_ui::termin_components_ui
         tgfx::termin_graphics2
         termin_render::termin_render
         termin_render_passes::termin_render_passes
