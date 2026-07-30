@@ -224,6 +224,10 @@ def test_explicit_component_publication_is_repeatable_after_rebootstrap():
             entity.add_component_by_name("RebootstrapProbeComponent")
             component = entity.get_python_component("RebootstrapProbeComponent")
             assert isinstance(component, RebootstrapProbeComponent)
+            component.value = 100 + iteration
+            serialized = entity.serialize()
+            component_data = serialized["components"][0]["data"]
+            assert component_data["value"] == 100 + iteration
             del component
             del entity
             gc.collect()
