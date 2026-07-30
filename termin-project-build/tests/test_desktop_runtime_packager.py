@@ -880,8 +880,11 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         result.package_dir / "shaders" / "vulkan" / "termin-engine-skybox.vert.slang"
     ).read_text(encoding="utf-8")
     assert "MaterialParams" in skybox_source
-    assert "u_view" in skybox_source
-    assert "u_projection" in skybox_source
+    assert "u_inv_view_projection" in skybox_source
+    assert "float4 near_h = mul(" in skybox_source
+    assert "float4 far_h = mul(" in skybox_source
+    assert "output.dir = far_world - near_world" in skybox_source
+    assert "u_view;" not in skybox_source
 
     shadow_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.slang"
