@@ -100,7 +100,119 @@ static void TestRetainedVisualSceneFactories()
             "Scene teardown did not invalidate item wrappers.");
 }
 
+static void TestRetainedPlotItems()
+{
+    var scene = new TcVisualScene2D();
+    using var otherScene = new TcVisualScene2D();
+    var descriptor = new PlotProjectionDescriptor2D(
+        new PlotRect2D(0, 0, 120, 100),
+        new PlotRect2D(10, 10, 100, 80),
+        new PlotRange2D(0, 10, 0, 10),
+        new PlotRect2D(10, 10, 100, 80));
+    using var projection = PlotProjectionRef2D.Create(scene, descriptor);
+    using var otherProjection =
+        PlotProjectionRef2D.Create(otherScene, descriptor);
+    var root = GroupItemRef2D.Create(scene);
+
+    var xTicks = RetainedPlotLayout2D.MakeAxisTicks(
+        0, 10, 100, 40);
+    var yTicks = RetainedPlotLayout2D.MakeAxisTicks(
+        0, 10, 80, 40);
+    var grid = PlotGridItemRef2D.Create(
+        scene,
+        projection,
+        xTicks.Select(tick => tick.Value).ToArray(),
+        yTicks.Select(tick => tick.Value).ToArray(),
+        parent: root);
+    var line = PlotLineSeriesItemRef2D.Create(
+        scene,
+        projection,
+        new[] { 0.0, 5.0, 10.0 },
+        new[] { 0.0, 5.0, 10.0 },
+        new[] { 0.0, 0.5, 1.0 },
+        parent: root);
+    var scatter = PlotScatterSeriesItemRef2D.Create(
+        scene,
+        projection,
+        new[] { 2.0, 8.0 },
+        new[] { 8.0, 2.0 },
+        parent: root);
+
+    if (root.ChildCount != 3 ||
+        line.Snapshot.PointCount != 3 ||
+        scatter.Snapshot.PointCount != 2 ||
+        grid.Snapshot.XTickCount != (nuint)xTicks.Length)
+        throw new InvalidOperationException(
+            "Retained plot item creation or topology failed.");
+
+    line.Append(new[] { 9.0 }, new[] { 1.0 }, new[] { 0.9 });
+    var lineData = line.CopyData();
+    if (lineData.X.Length != 4 ||
+        lineData.Scalar is null ||
+        lineData.Scalar[3] != 0.9)
+        throw new InvalidOperationException(
+            "Retained line data mutation/copy failed.");
+
+    var visual = projection.DataToVisual(new PlotPoint2D(5, 5));
+    var roundTrip = projection.VisualToData(visual);
+    if (Math.Abs(roundTrip.X - 5) > 1e-6 ||
+        Math.Abs(roundTrip.Y - 5) > 1e-6 ||
+        !line.TryNearest(visual.X, visual.Y, 1, out var nearest) ||
+        nearest.Index != 1)
+        throw new InvalidOperationException(
+            "Projection or native nearest-point query failed.");
+
+    line.Style = new PlotLineSeriesStyle2D(
+        new PlotColor2D(1, 0, 0),
+        thicknessPx: 3,
+        lineStyle: PlotLineStyle2D.Dash);
+    scatter.Style = new PlotScatterSeriesStyle2D(
+        new PlotColor2D(0, 1, 0),
+        diameterPx: 7);
+    grid.Style = new PlotGridStyle2D(0.2f, 0.2f, 0.2f, widthPx: 2);
+    if (line.Style.ThicknessPx != 3 ||
+        scatter.Style.DiameterPx != 7 ||
+        grid.Style.WidthPx != 2)
+        throw new InvalidOperationException(
+            "Retained plot style mutation failed.");
+
+    try
+    {
+        _ = PlotGridItemRef2D.Cast(line);
+        throw new InvalidOperationException(
+            "Wrong-type retained plot cast succeeded.");
+    }
+    catch (InvalidCastException)
+    {
+    }
+
+    try
+    {
+        line.Projection = otherProjection;
+        throw new InvalidOperationException(
+            "Cross-scene plot projection was accepted.");
+    }
+    catch (InvalidOperationException)
+    {
+    }
+
+    var fitted = RetainedPlotLayout2D.FitRange(
+        new PlotRange2D(0, 10, -5, 5));
+    if (Math.Abs(fitted.XMin + 0.5) > 1e-6 ||
+        xTicks.Length == 0 ||
+        string.IsNullOrEmpty(xTicks[0].Label))
+        throw new InvalidOperationException(
+            "Native retained plot layout utilities failed.");
+
+    var sceneOwned = line;
+    scene.Dispose();
+    if (sceneOwned.IsValid || projection.IsValid)
+        throw new InvalidOperationException(
+            "Scene teardown did not stale retained plot handles.");
+}
+
 TestRetainedVisualSceneFactories();
+TestRetainedPlotItems();
 
 // This test is deliberately GPU-independent. It verifies the detached values
 // at runtime and compiles every PlotView2D annotation operation used by a

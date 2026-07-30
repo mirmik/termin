@@ -151,7 +151,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
         SWIG_FLAGS "${_termin_csharp_swig_flags}"
         SWIG_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i"
+            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i;${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_retained.i"
     )
 
     swig_add_library(termin_csharp_native

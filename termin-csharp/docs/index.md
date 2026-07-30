@@ -33,6 +33,20 @@ all wrappers stale; wrong-type casts and stale operations fail explicitly.
 User-defined C#/Python item bodies and managed paint callbacks are not part of
 this surface.
 
+Retained chart bindings build on the same base references:
+
+- `PlotProjectionRef2D` owns an explicit generation-checked native projection;
+- `PlotGridItemRef2D`, `PlotLineSeriesItemRef2D` and
+  `PlotScatterSeriesItemRef2D` are non-owning typed views of scene-owned native
+  items;
+- large data replacement/append, nearest-point queries and GPU resources stay
+  native;
+- `RetainedPlotLayout2D` exposes native fit/tick/UTF-8 formatting and text
+  measurement through the active `GpuHost` font.
+
+These types are the parts consumed by the managed `Chart2D` composer; they do
+not introduce another renderer or a hidden native chart layout.
+
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 
 ```powershell
