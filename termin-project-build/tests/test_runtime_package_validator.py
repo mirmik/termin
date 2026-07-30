@@ -214,6 +214,129 @@ def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:
     assert validate_runtime_package(package_dir) == []
 
 
+def _add_ui_document(
+    package_dir: Path,
+    *,
+    type_name: str = "termin.gui.Label",
+) -> None:
+    ui_path = "ui/native-hud.ui-document.json"
+    _write_json(
+        package_dir / ui_path,
+        {
+            "ui_document_asset": 1,
+            "uuid": "native-hud",
+            "name": "Native HUD",
+            "source_identity": "UI/native-hud.uiscript",
+            "revision": 1,
+            "type_dependencies": [type_name],
+            "recipe": {
+                "uiscript": 2,
+                "root": {
+                    "type": type_name,
+                    "name": "root",
+                    "children": [],
+                },
+            },
+        },
+    )
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["resources"].append(
+        {
+            "type": "ui_document",
+            "uuid": "native-hud",
+            "path": ui_path,
+        }
+    )
+    _write_json(manifest_path, manifest)
+
+
+def test_validate_runtime_package_accepts_native_ui_factory_contract(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _add_ui_document(package_dir)
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_rejects_missing_native_ui_factory(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _add_ui_document(package_dir, type_name="termin.gui.MissingWidget")
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and "factory is not registered" in diagnostic.message
+        and "termin.gui.MissingWidget" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_rejects_python_ui_factory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import termin.gui_native
+
+    package_dir = _write_valid_package(tmp_path)
+    _add_ui_document(package_dir, type_name="project.PythonWidget")
+    native_info = termin.gui_native.widget_type_info
+
+    def widget_type_info(type_name: str):
+        if type_name == "project.PythonWidget":
+            return {
+                "registered": True,
+                "language": "python",
+                "uiscript": True,
+            }
+        return native_info(type_name)
+
+    monkeypatch.setattr(termin.gui_native, "widget_type_info", widget_type_info)
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and "requires a C++ widget factory" in diagnostic.message
+        and "project.PythonWidget" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_rejects_missing_component_factory(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / SCENE_PATH,
+        {
+            "uuid": "scene",
+            "entities": [
+                {
+                    "uuid": "entity",
+                    "components": [
+                        {"type": "MissingPackagedComponent", "data": {}},
+                    ],
+                    "children": [],
+                }
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.level == "error"
+        and "factory is not registered" in diagnostic.message
+        and "MissingPackagedComponent" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
 def test_validate_runtime_package_accepts_builtin_shader_contract(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_builtin_shader_contract(package_dir)

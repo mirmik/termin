@@ -75,6 +75,7 @@ from termin.project_build.runtime_package.standard_resources import (
 from termin.project_build.runtime_package.textures import write_textures as _write_textures
 from termin.project_build.runtime_package.sprites import write_sprites as _write_sprites
 from termin.project_build.runtime_package.ui_documents import (
+    stage_ui_documents_for_scene_analysis as _stage_ui_documents_for_scene_analysis,
     write_ui_documents as _write_ui_documents,
 )
 
@@ -211,14 +212,31 @@ def export_runtime_package(
     compiled_pipelines = _write_pipelines(
         project_root_path, output_dir_path, refs.pipelines, resources, diagnostics
     )
-    for identity, scene_data in scene_documents.items():
-        _collect_pipeline_shader_usages(
-            scene_data,
-            compiled_pipelines,
-            diagnostics,
-            shaders,
-            _packaged_scene_path(identity),
-        )
+    temporary_ui_assets = _stage_ui_documents_for_scene_analysis(
+        output_dir_path, resources, diagnostics
+    )
+    try:
+        for identity, scene_data in scene_documents.items():
+            _collect_pipeline_shader_usages(
+                scene_data,
+                compiled_pipelines,
+                diagnostics,
+                shaders,
+                _packaged_scene_path(identity),
+            )
+    finally:
+        for asset in reversed(temporary_ui_assets):
+            if not asset.remove():
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        level="error",
+                        path="ui",
+                        message=(
+                            "Runtime exporter failed to release a temporary "
+                            "native UI document used for scene analysis"
+                        ),
+                    )
+                )
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     _write_shaders(

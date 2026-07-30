@@ -13,7 +13,10 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
 from termin.project_build.runtime_package.sprites import write_sprites
-from termin.project_build.runtime_package.ui_documents import write_ui_documents
+from termin.project_build.runtime_package.ui_documents import (
+    stage_ui_documents_for_scene_analysis,
+    write_ui_documents,
+)
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -173,8 +176,20 @@ def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:
     assert payload["uuid"] == uuid_value
     assert payload["type_dependencies"] == ["termin.gui.Panel"]
     assert payload["recipe"]["uiscript"] == 2
+    from termin.gui_native import UiDocumentAsset
 
-
+    assert not UiDocumentAsset.from_uuid(uuid_value).valid
+    temporary = stage_ui_documents_for_scene_analysis(
+        package,
+        resources,
+        diagnostics,
+    )
+    assert diagnostics == []
+    assert len(temporary) == 1
+    assert temporary[0].valid
+    assert UiDocumentAsset.from_uuid(uuid_value).valid
+    assert temporary[0].remove()
+    assert not UiDocumentAsset.from_uuid(uuid_value).valid
 
 
 def _write_fake_player_runtime_distributions(site_packages: Path) -> None:

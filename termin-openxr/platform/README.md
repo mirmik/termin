@@ -31,11 +31,11 @@ Install and launch on a connected headset:
 Quest proximity sensor still has to keep the headset active; otherwise Android
 will pause/stop the activity immediately after launch.
 
-The smoke app does not use the Termin render engine yet. It is an Android
-`NativeActivity` that starts an OpenXR session with Vulkan
+The smoke app is an Android `NativeActivity` that starts an OpenXR session with Vulkan
 (`XR_KHR_vulkan_enable`), lets tgfx2 create the runtime-compatible Vulkan device,
 wraps OpenXR swapchain `VkImage`s as non-owning tgfx2 textures, creates a
-minimal `tc_scene` entity with a `MeshComponent` backed by
-`tc_primitive_unit_sphere()`, renders that sphere through tgfx2 command lists
-with each eye's `xrLocateViews` pose/FOV, and submits the projection layer
-through `xrEndFrame`.
+minimal fallback `tc_scene` when no package is supplied, or loads the packaged
+Termin scene and render engine when an asset root is present. The packaged path
+uses the common native component/pass bootstrap. Its stereo fallback pipeline
+composites `UIComponent` documents through `UIWidgetPass` after tonemapping and
+before presentation, then submits the projection layer through `xrEndFrame`.

@@ -23,7 +23,29 @@
         }
       },
       "output_dir": "dist/android"
+    },
+    "quest-openxr-debug": {
+      "target": {
+        "kind": "quest_openxr",
+        "abi": "arm64-v8a",
+        "ndk_api": 26
+      },
+      "configuration": "debug",
+      "content": {
+        "entry_scene": "Scenes/Main.scene",
+        "scenes": [
+          "Scenes/Main.scene"
+        ],
+        "modules": [],
+        "python": {
+          "requirements": []
+        },
+        "resources": {
+          "policy": "strict",
+          "include": []
+        }
+      },
+      "output_dir": "dist/quest-openxr"
     }
   }
 }
-

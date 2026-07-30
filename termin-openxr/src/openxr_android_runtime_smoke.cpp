@@ -23,6 +23,7 @@
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
 #include <tcbase/trent/json.h>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/lighting/light_component.hpp>
@@ -35,6 +36,7 @@
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/ui/ui_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <termin_collision/termin_collision.h>
@@ -298,8 +300,13 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         set_pass_int(p, "method", 0);
         adopt_scene_pass(ph, p);
     }
+    if (tc_pass *p = create_scene_pass(
+            "UIWidgetPass", "UIWidgets",
+            {{"input_res", "color_ldr"}, {"output_res", "color+widgets"}})) {
+        adopt_scene_pass(ph, p);
+    }
     if (tc_pass *p = create_scene_pass("PresentToScreenPass", "Present",
-                                       {{"input_res", "color_ldr"}, {"output_res", "OUTPUT"}})) {
+                                       {{"input_res", "color+widgets"}, {"output_res", "OUTPUT"}})) {
         adopt_scene_pass(ph, p);
     }
 
@@ -308,11 +315,16 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         "color_opaque",
         "color",
         "color_ldr",
+        "color+widgets",
     };
     for (const char *resource : color_resources) {
         termin::ResourceSpec spec;
         spec.resource = resource;
-        spec.format = (std::strcmp(resource, "color_ldr") == 0) ? "render_target" : "rgba16f";
+        spec.format =
+            (std::strcmp(resource, "color_ldr") == 0 ||
+             std::strcmp(resource, "color+widgets") == 0)
+            ? "render_target"
+            : "rgba16f";
         if (std::strcmp(resource, "empty") == 0) {
             spec.clear_color = std::array<double, 4>{0.015, 0.018, 0.024, 1.0};
             spec.clear_depth = 1.0f;
@@ -435,15 +447,7 @@ void register_openxr_scene_runtime() {
     }
     registered = true;
 
-    tc_inspect_kind_core_init();
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-    termin_collision_runtime_init();
-    tc::KindRegistryCpp::instance();
-    termin::MeshComponent::register_type();
-    termin::UIWidgetPass::register_type();
-    termin::XrOriginComponent::register_type();
-    termin::XrThumbstickLocomotionComponent::register_type();
+    termin::bootstrap::bootstrap_runtime();
 }
 
 struct OpenXRRuntimeScene {
@@ -563,8 +567,8 @@ struct OpenXRRuntimeScene {
         register_openxr_scene_runtime();
 
         const char *required_components[] = {
-            "MeshComponent",  "MeshRenderer",     "XrOriginComponent", "XrThumbstickLocomotionComponent",
-            "LightComponent", "UnknownComponent",
+            "MeshComponent",  "MeshRenderer",     "UIComponent",      "XrOriginComponent",
+            "XrThumbstickLocomotionComponent", "LightComponent", "UnknownComponent",
         };
         for (const char *name : required_components) {
             if (!tc_component_registry_has(name)) {

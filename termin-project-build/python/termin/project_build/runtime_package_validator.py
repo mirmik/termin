@@ -32,6 +32,11 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
             diagnostics,
             f"scenes[{identity}]",
         )
+        _validate_native_scene_component_contract(
+            scene,
+            diagnostics,
+            f"scenes[{identity}]",
+        )
     _validate_resource_graph(resource_index, diagnostics)
     _validate_target_requirements(manifest, resource_index, diagnostics)
     _validate_builtin_shader_contract(package_root, manifest, diagnostics)
@@ -283,6 +288,8 @@ def _validate_resources(
             spec = _validate_texture_resource(package_root, path, resolved_path, diagnostics)
         elif resource_type == "pipeline" and resolved_path is not None and isinstance(path, str):
             spec = _validate_pipeline_resource(package_root, path, resolved_path, diagnostics)
+        elif resource_type == "ui_document" and resolved_path is not None and isinstance(path, str):
+            spec = _validate_ui_document_resource(path, resolved_path, diagnostics)
 
         uuid = resource.get("uuid")
         if uuid is None:
@@ -331,6 +338,204 @@ def _validate_resources(
                     )
                 )
     return resource_index
+
+
+def _validate_ui_document_resource(
+    resource_path: str,
+    spec_path: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> dict[str, Any] | None:
+    spec = _read_json_file(spec_path, resource_path, diagnostics)
+    if spec is None:
+        return None
+    if spec.get("ui_document_asset") != 1:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Native UI document requires ui_document_asset schema version 1",
+            )
+        )
+
+    dependencies = spec.get("type_dependencies")
+    if (
+        not isinstance(dependencies, list)
+        or any(not isinstance(item, str) or item == "" for item in dependencies)
+        or len(set(dependencies)) != len(dependencies)
+    ):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{resource_path}:type_dependencies",
+                "Native UI document type_dependencies must be a unique list of non-empty strings",
+            )
+        )
+        return spec
+
+    recipe_dependencies = _ui_recipe_dependencies(spec.get("recipe"))
+    if recipe_dependencies is None:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{resource_path}:recipe",
+                "Native UI document recipe must be a widget object with recursively valid children",
+            )
+        )
+        return spec
+    if dependencies != recipe_dependencies:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                f"{resource_path}:type_dependencies",
+                "Native UI document type_dependencies do not match recipe widget types",
+            )
+        )
+
+    try:
+        from termin.gui_native import widget_type_info
+    except (ImportError, RuntimeError) as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                f"Native UI widget factory registry is unavailable: {exc}",
+            )
+        )
+        return spec
+
+    for type_name in dependencies:
+        context = f"{resource_path}:type_dependencies[{type_name}]"
+        try:
+            info = widget_type_info(type_name)
+        except RuntimeError as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Native UI widget factory registry query failed: {exc}",
+                )
+            )
+            continue
+        if not info["registered"]:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Native UI widget factory is not registered for '{type_name}'",
+                )
+            )
+        elif info["language"] != "cxx":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Packaged UI requires a C++ widget factory; '{type_name}' is {info['language']}",
+                )
+            )
+        elif not info["uiscript"]:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Native UI widget '{type_name}' has no UiScript factory contract",
+                )
+            )
+    return spec
+
+
+def _ui_recipe_dependencies(recipe: Any) -> list[str] | None:
+    if (
+        not isinstance(recipe, dict)
+        or recipe.get("uiscript") != 2
+        or "root" not in recipe
+    ):
+        return None
+    result: list[str] = []
+    seen: set[str] = set()
+
+    def visit(node: Any) -> bool:
+        if not isinstance(node, dict):
+            return False
+        type_name = node.get("type")
+        if not isinstance(type_name, str) or type_name == "":
+            return False
+        if type_name not in seen:
+            seen.add(type_name)
+            result.append(type_name)
+        children = node.get("children", [])
+        if not isinstance(children, list):
+            return False
+        return all(visit(child) for child in children)
+
+    return result if visit(recipe["root"]) else None
+
+
+def _validate_native_scene_component_contract(
+    scene: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    context: str,
+) -> None:
+    component_types: set[str] = set()
+
+    def visit_entity(entity: Any) -> None:
+        if not isinstance(entity, dict):
+            return
+        components = entity.get("components", [])
+        if isinstance(components, list):
+            for component in components:
+                if not isinstance(component, dict):
+                    continue
+                type_name = component.get("type")
+                if isinstance(type_name, str) and type_name:
+                    component_types.add(type_name)
+        children = entity.get("children", [])
+        if isinstance(children, list):
+            for child in children:
+                visit_entity(child)
+
+    entities = scene.get("entities", [])
+    if isinstance(entities, list):
+        for entity in entities:
+            visit_entity(entity)
+    if not component_types:
+        return
+
+    try:
+        from termin.bootstrap import bootstrap_runtime
+        from termin.scene import ComponentRegistry
+
+        bootstrap_runtime()
+        registry = ComponentRegistry.instance()
+    except (ImportError, RuntimeError) as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                context,
+                f"Native component factory registry is unavailable: {exc}",
+            )
+        )
+        return
+
+    for type_name in sorted(component_types):
+        component_context = f"{context}:components[{type_name}]"
+        if not registry.has(type_name):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    component_context,
+                    f"Runtime component factory is not registered for '{type_name}'",
+                )
+            )
+            continue
+        info = registry.get_info(type_name)
+        if info["kind"] != "cxx":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    component_context,
+                    f"Packaged scene requires a C++ component factory; '{type_name}' is {info['kind']}",
+                )
+            )
 
 
 def _validate_shader_program_resource(
