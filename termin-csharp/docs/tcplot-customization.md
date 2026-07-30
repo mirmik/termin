@@ -2,6 +2,12 @@
 
 Справочник по основным runtime-настройкам `Termin.Native.PlotView2DMulti` без пересборки нативной части. Методы ниже — обычные snake_case из SWIG-обёртки; styling-вызовы применяются ко всем панелям сразу (broadcast-семантика).
 
+> Эта setter-based поверхность является переходной. Целевая архитектура
+> описана в
+> [C# Retained Chart Composition](../../docs/architecture/2026-07-30-csharp-retained-chart-composition.md):
+> C# собирает chart из типизированных `GraphicItem`, а native сторона сохраняет
+> тяжёлую обработку данных и GPU rendering.
+
 ---
 
 ## Сводная таблица
@@ -194,5 +200,4 @@ native D3DImage bridge уже после уничтожения D3D11 device.
 - `margin_left/right/top/bottom = 76/15/44/52`.
 
 Любой из этих дефолтов перекрывается соответствующим `set_*` сразу после создания `PlotView2DMulti`.
-
 
