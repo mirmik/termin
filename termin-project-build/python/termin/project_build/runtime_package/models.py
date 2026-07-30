@@ -57,3 +57,4 @@ class ShaderSpec:
     features: int = 0
     surface_producer: dict[str, Any] | None = None
     surface_interface_source: str = ""
+    register_in_runtime: bool = True

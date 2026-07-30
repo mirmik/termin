@@ -223,9 +223,11 @@ UIWidgetPass::UIWidgetPass(
 }
 
 void UIWidgetPass::configure_font() {
-    if (font_path == configured_font_path_) {
+    if (font_configuration_attempted_ &&
+        font_path == configured_font_path_) {
         return;
     }
+    font_configuration_attempted_ = true;
     configured_font_path_ = font_path;
     if (font_path.empty()) {
         tc::Log::error(

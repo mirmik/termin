@@ -1,6 +1,7 @@
 #include "termin/android/bootstrap.h"
 
 #include <cstdarg>
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -138,6 +139,32 @@ void android_log_error(const char* fmt, ...) {
     va_start(args, fmt);
     __android_log_vprint(ANDROID_LOG_ERROR, kAndroidLogTag, fmt, args);
     va_end(args);
+}
+
+bool configure_ui_font_locked() {
+    const std::filesystem::path font_path =
+        std::filesystem::path(g_state.asset_root) /
+        "fonts" / "DroidSans.ttf";
+    if (!std::filesystem::is_regular_file(font_path)) {
+        android_log_error(
+            "initialize: packaged UI font not found at '%s'",
+            font_path.c_str());
+        tc_log_error(
+            "termin_android_initialize: packaged UI font not found at '%s'",
+            font_path.c_str());
+        return false;
+    }
+    if (setenv("TERMIN_UI_FONT", font_path.c_str(), 1) != 0) {
+        android_log_error(
+            "initialize: failed to configure TERMIN_UI_FONT='%s'",
+            font_path.c_str());
+        tc_log_error(
+            "termin_android_initialize: failed to configure TERMIN_UI_FONT='%s'",
+            font_path.c_str());
+        return false;
+    }
+    android_log_info("initialize: UI font='%s'", font_path.c_str());
+    return true;
 }
 #else
 void android_log_info(const char*, ...) {}
@@ -714,6 +741,12 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
     g_state.initialized = true;
     g_state.shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
     g_state.shader_artifact_root_explicit = false;
+#ifdef __ANDROID__
+    if (!configure_ui_font_locked()) {
+        g_state.initialized = false;
+        return 0;
+    }
+#endif
 
     android_log_info(
         "initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",

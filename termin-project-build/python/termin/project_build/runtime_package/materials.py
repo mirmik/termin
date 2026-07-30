@@ -351,6 +351,14 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
                 f"{surface_producer['contract_version']}'"
             )
         surface_interface_source = contract.interface_source
+    # ``shv_`` is the canonical identity namespace produced by the engine's
+    # shader-intent fingerprint functions.  Not every assembled shader in
+    # that namespace carries tc_shader variant metadata: pass-owned base
+    # shaders (notably ShadowEngineModular) are assembled directly from their
+    # pass contract.  They still have the same packaging semantics as regular
+    # variants: keep their compiled artifacts, but let the runtime pass or
+    # material planner reconstruct the registry object and its contract.
+    is_derived_pipeline_shader = shader.is_variant or shader.uuid.startswith("shv_")
     return ShaderSpec(
         uuid=shader.uuid,
         name=shader.name or shader.uuid,
@@ -365,6 +373,12 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
         features=int(shader.features),
         surface_producer=surface_producer,
         surface_interface_source=surface_interface_source,
+        # Pipeline variants are reconstructed from the material/pass contracts
+        # at runtime. Their packaged files are artifact-cache entries for that
+        # reconstruction, not independent registry resources. Registering them
+        # eagerly creates a non-variant shader with the canonical variant UUID
+        # and makes the planner reject it as an identity collision.
+        register_in_runtime=not is_derived_pipeline_shader,
     )
 
 

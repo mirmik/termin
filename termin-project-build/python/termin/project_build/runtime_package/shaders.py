@@ -427,13 +427,14 @@ def write_shader(
 
     shader_spec_path = shader_dir / f"{shader.uuid}.shader.json"
     write_json(shader_spec_path, shader_spec)
-    resources.append(
-        {
-            "type": "shader",
-            "uuid": shader.uuid,
-            "path": f"shaders/{shader.uuid}.shader.json",
-        }
-    )
+    if shader.register_in_runtime:
+        resources.append(
+            {
+                "type": "shader",
+                "uuid": shader.uuid,
+                "path": f"shaders/{shader.uuid}.shader.json",
+            }
+        )
 
 
 @dataclass(frozen=True)
