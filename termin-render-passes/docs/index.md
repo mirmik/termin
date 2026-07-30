@@ -26,6 +26,12 @@ documents in stable `(priority, identity)` order to
 `NativeDocumentPainter`. The pass owns painter GPU resources; UI components
 and their document assets remain CPU-only.
 
+If a document already carries host-published presentation metrics,
+`UIWidgetPass` preserves them in the painter submission. Documents without a
+platform source receive an explicit identity metric for the current render
+extent. Android publishes density, normalized font scale, safe insets, and
+surface extent through its Activity/bootstrap bridge before scene rendering.
+
 For distinct framegraph resources the pass copies input scene color to the
 output before opening the UI pass with load semantics. For an inplace alias it
 opens the existing target with load semantics directly. The Python

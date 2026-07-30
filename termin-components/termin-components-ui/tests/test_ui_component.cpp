@@ -135,6 +135,13 @@ TEST_CASE("UIComponent asset replacement and failed reload are transactional") {
     UIComponent component;
     REQUIRE(component.set_ui_layout_uuid(asset.uuid()));
     const TcDocument original = component.document();
+    const tc_ui_presentation_metrics presentation{
+        2.0f,
+        1.25f,
+        tc_ui_size{640.0f, 480.0f},
+        tc_ui_insets{0.0f, 24.0f, 0.0f, 16.0f},
+    };
+    REQUIRE(original.set_presentation_metrics(presentation));
     const tc_widget_handle original_root =
         tc_ui_document_root_at(original.handle(), 0);
 
@@ -155,6 +162,11 @@ TEST_CASE("UIComponent asset replacement and failed reload are transactional") {
     const tc_widget_handle replacement_root =
         tc_ui_document_root_at(original.handle(), 0);
     CHECK_FALSE(tc_widget_handle_eq(original_root, replacement_root));
+    tc_ui_presentation_metrics reloaded_presentation{};
+    REQUIRE(original.presentation_metrics(reloaded_presentation));
+    CHECK_EQ(reloaded_presentation.density_scale, 2.0f);
+    CHECK_EQ(reloaded_presentation.font_scale, 1.25f);
+    CHECK_EQ(reloaded_presentation.physical_safe_insets.top, 24.0f);
 
     component.on_removed_from_entity();
     CHECK_FALSE(component.has_document());

@@ -21,6 +21,15 @@ typedef struct termin_android_config {
     const char* native_lib_dir;
 } termin_android_config;
 
+typedef struct termin_android_presentation_metrics {
+    float density_scale;
+    float font_scale;
+    float safe_inset_left;
+    float safe_inset_top;
+    float safe_inset_right;
+    float safe_inset_bottom;
+} termin_android_presentation_metrics;
+
 TERMIN_ANDROID_API int termin_android_initialize(const termin_android_config* config);
 TERMIN_ANDROID_API void termin_android_shutdown(void);
 
@@ -30,6 +39,8 @@ TERMIN_ANDROID_API const char* termin_android_get_shader_artifact_root(void);
 TERMIN_ANDROID_API void termin_android_on_surface_created(ANativeWindow* window);
 TERMIN_ANDROID_API void termin_android_on_surface_changed(int32_t width, int32_t height);
 TERMIN_ANDROID_API void termin_android_on_surface_destroyed(void);
+TERMIN_ANDROID_API void termin_android_on_presentation_metrics_changed(
+    const termin_android_presentation_metrics* metrics);
 TERMIN_ANDROID_API void termin_android_on_pointer(
     uint64_t pointer_id,
     int32_t device,

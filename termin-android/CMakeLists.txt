@@ -77,6 +77,11 @@ else()
     find_package(termin_components_render REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_components_ui termin_components_ui::termin_components_ui)
+else()
+    find_package(termin_components_ui REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
 else()
     find_package(termin_render_passes REQUIRED)
@@ -140,6 +145,7 @@ target_link_libraries(termin_android
         termin_materials::termin_materials
         termin_components_mesh::termin_components_mesh
         termin_components_render::termin_components_render
+        termin_components_ui::termin_components_ui
         termin_render_passes::termin_render_passes
     PRIVATE
         ${ANDROID_LOG_LIB}

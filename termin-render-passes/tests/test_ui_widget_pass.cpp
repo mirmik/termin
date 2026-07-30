@@ -55,6 +55,13 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     back_entity.set_layer(0);
     UIComponent* back =
         make_component(back_entity, asset, 5, "ui-back");
+    REQUIRE(back->document().set_presentation_metrics(
+        tc_ui_presentation_metrics{
+            2.0f,
+            1.25f,
+            tc_ui_size{640.0f, 480.0f},
+            tc_ui_insets{0.0f, 24.0f, 0.0f, 16.0f},
+        }));
 
     Entity front_entity = scene.create_entity("Front");
     front_entity.set_layer(1);
@@ -80,6 +87,11 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
         collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 1u);
     CHECK(submissions[0].document == back->document());
+    CHECK_EQ(submissions[0].presentation_metrics.density_scale, 2.0f);
+    CHECK_EQ(submissions[0].presentation_metrics.font_scale, 1.25f);
+    CHECK_EQ(
+        submissions[0].presentation_metrics.physical_safe_insets.top,
+        24.0f);
 
     ctx.layer_mask = UINT64_MAX;
     submissions = collect_ui_document_submissions(ctx, false);
@@ -88,6 +100,9 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     CHECK_EQ(submissions[1].priority, 20);
     CHECK(submissions[0].document == back->document());
     CHECK(submissions[1].document == front->document());
+    CHECK_EQ(submissions[0].presentation_metrics.density_scale, 2.0f);
+    CHECK_FALSE(tc_ui_presentation_metrics_is_valid(
+        &submissions[1].presentation_metrics));
 
     const auto repeated =
         collect_ui_document_submissions(ctx, false);

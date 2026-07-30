@@ -1,6 +1,7 @@
 #include "termin/android/bootstrap.h"
 
 #include <cstdarg>
+#include <cmath>
 #include <cstdlib>
 #include <cstdint>
 #include <filesystem>
@@ -24,6 +25,7 @@
 #include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/ui/tc_scene_ui_document_capability.h>
 #include <termin_collision/termin_collision.h>
 
 extern "C" {
@@ -58,6 +60,8 @@ struct AndroidBootstrapState {
     ANativeWindow* window = nullptr;
     int32_t surface_width = 0;
     int32_t surface_height = 0;
+    termin_android_presentation_metrics presentation_metrics{};
+    bool has_presentation_metrics = false;
     bool initialized = false;
 #ifdef __ANDROID__
     struct QueuedPointerEvent {
@@ -191,6 +195,100 @@ void register_android_scene_extensions_locked() {
 bool create_renderer_locked();
 void destroy_renderer_locked();
 bool resize_renderer_locked(uint32_t width, uint32_t height);
+
+struct PresentationMetricsApplyContext {
+    tc_ui_presentation_metrics metrics{};
+    std::size_t applied_count = 0;
+    std::size_t failed_count = 0;
+};
+
+bool apply_presentation_metrics_to_component(
+    tc_component* component,
+    void* user_data
+) {
+    auto* context =
+        static_cast<PresentationMetricsApplyContext*>(user_data);
+    tc_scene_ui_document_snapshot snapshot{};
+    if (!tc_scene_ui_document_snapshot_get(component, &snapshot)) {
+        ++context->failed_count;
+        tc_log_error(
+            "termin_android_presentation: failed to snapshot UI component "
+            "type='%s' source_id='%s'",
+            tc_component_get_type_name(component),
+            tc_component_get_source_id(component));
+        return true;
+    }
+    if (!tc_ui_document_set_presentation_metrics(
+            snapshot.document, &context->metrics)) {
+        ++context->failed_count;
+        tc_log_error(
+            "termin_android_presentation: failed to apply metrics to UI "
+            "component type='%s' source_id='%s'",
+            tc_component_get_type_name(component),
+            tc_component_get_source_id(component));
+        return true;
+    }
+    ++context->applied_count;
+    return true;
+}
+
+bool apply_player_presentation_metrics_locked() {
+    if (!g_state.has_presentation_metrics ||
+        !g_state.player_scene.valid() ||
+        g_state.surface_width <= 0 ||
+        g_state.surface_height <= 0) {
+        return false;
+    }
+
+    const auto& platform = g_state.presentation_metrics;
+    PresentationMetricsApplyContext context{
+        .metrics = tc_ui_presentation_metrics{
+            platform.density_scale,
+            platform.font_scale,
+            tc_ui_size{
+                static_cast<float>(g_state.surface_width),
+                static_cast<float>(g_state.surface_height),
+            },
+            tc_ui_insets{
+                platform.safe_inset_left,
+                platform.safe_inset_top,
+                platform.safe_inset_right,
+                platform.safe_inset_bottom,
+            },
+        },
+    };
+    if (!tc_ui_presentation_metrics_is_valid(&context.metrics)) {
+        tc_log_error(
+            "termin_android_presentation: metrics are incompatible with "
+            "surface %dx%d density=%.3f font=%.3f "
+            "insets=[%.1f,%.1f,%.1f,%.1f]",
+            static_cast<int>(g_state.surface_width),
+            static_cast<int>(g_state.surface_height),
+            static_cast<double>(platform.density_scale),
+            static_cast<double>(platform.font_scale),
+            static_cast<double>(platform.safe_inset_left),
+            static_cast<double>(platform.safe_inset_top),
+            static_cast<double>(platform.safe_inset_right),
+            static_cast<double>(platform.safe_inset_bottom));
+        return false;
+    }
+
+    tc_scene_foreach_with_capability(
+        g_state.player_scene.handle(),
+        tc_scene_ui_document_capability_id(),
+        apply_presentation_metrics_to_component,
+        &context,
+        TC_SCENE_FILTER_NONE);
+    if (context.failed_count != 0) {
+        tc_log_error(
+            "termin_android_presentation: failed to update %zu UI "
+            "document(s); updated=%zu",
+            context.failed_count,
+            context.applied_count);
+        return false;
+    }
+    return true;
+}
 
 void destroy_player_session_locked() {
     termin::RenderingManager* manager = g_state.player_engine
@@ -505,6 +603,13 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
     if (!ensure_player_session_locked()) {
         return 0;
     }
+    if (!g_state.has_presentation_metrics) {
+        tc_log_error(
+            "termin_android_player: platform presentation metrics were not "
+            "published before rendering");
+        return 0;
+    }
+    (void)apply_player_presentation_metrics_locked();
 
     try {
         dispatch_pointer_events_locked();
@@ -773,6 +878,8 @@ extern "C" void termin_android_shutdown(void) {
     g_state.shader_artifact_root.clear();
     g_state.shader_artifact_root_explicit = false;
     g_state.native_lib_dir.clear();
+    g_state.presentation_metrics = {};
+    g_state.has_presentation_metrics = false;
     tgfx::set_builtin_shader_root(nullptr);
     g_state.initialized = false;
 #ifdef __ANDROID__
@@ -881,6 +988,86 @@ extern "C" void termin_android_on_surface_changed(int32_t width, int32_t height)
             static_cast<uint32_t>(height)
         );
     }
+    (void)apply_player_presentation_metrics_locked();
+#endif
+}
+
+extern "C" void termin_android_on_presentation_metrics_changed(
+    const termin_android_presentation_metrics* metrics
+) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    if (!metrics) {
+        android_log_error("presentation_metrics_changed: metrics is NULL");
+        tc_log_error(
+            "termin_android_on_presentation_metrics_changed: metrics is NULL");
+        return;
+    }
+    const bool valid =
+        std::isfinite(metrics->density_scale) &&
+        metrics->density_scale > 0.0f &&
+        std::isfinite(metrics->font_scale) &&
+        metrics->font_scale > 0.0f &&
+        std::isfinite(metrics->safe_inset_left) &&
+        metrics->safe_inset_left >= 0.0f &&
+        std::isfinite(metrics->safe_inset_top) &&
+        metrics->safe_inset_top >= 0.0f &&
+        std::isfinite(metrics->safe_inset_right) &&
+        metrics->safe_inset_right >= 0.0f &&
+        std::isfinite(metrics->safe_inset_bottom) &&
+        metrics->safe_inset_bottom >= 0.0f;
+    if (!valid) {
+        android_log_error(
+            "presentation_metrics_changed: invalid density=%.3f font=%.3f "
+            "insets=[%.1f,%.1f,%.1f,%.1f]",
+            static_cast<double>(metrics->density_scale),
+            static_cast<double>(metrics->font_scale),
+            static_cast<double>(metrics->safe_inset_left),
+            static_cast<double>(metrics->safe_inset_top),
+            static_cast<double>(metrics->safe_inset_right),
+            static_cast<double>(metrics->safe_inset_bottom));
+        tc_log_error(
+            "termin_android_on_presentation_metrics_changed: invalid "
+            "platform metrics");
+        return;
+    }
+
+    const bool changed =
+        !g_state.has_presentation_metrics ||
+        g_state.presentation_metrics.density_scale !=
+            metrics->density_scale ||
+        g_state.presentation_metrics.font_scale != metrics->font_scale ||
+        g_state.presentation_metrics.safe_inset_left !=
+            metrics->safe_inset_left ||
+        g_state.presentation_metrics.safe_inset_top !=
+            metrics->safe_inset_top ||
+        g_state.presentation_metrics.safe_inset_right !=
+            metrics->safe_inset_right ||
+        g_state.presentation_metrics.safe_inset_bottom !=
+            metrics->safe_inset_bottom;
+    g_state.presentation_metrics = *metrics;
+    g_state.has_presentation_metrics = true;
+    android_log_info(
+        "presentation_metrics_changed: density=%.3f font=%.3f "
+        "insets=[%.1f,%.1f,%.1f,%.1f] changed=%d",
+        static_cast<double>(metrics->density_scale),
+        static_cast<double>(metrics->font_scale),
+        static_cast<double>(metrics->safe_inset_left),
+        static_cast<double>(metrics->safe_inset_top),
+        static_cast<double>(metrics->safe_inset_right),
+        static_cast<double>(metrics->safe_inset_bottom),
+        changed ? 1 : 0);
+    tc_log_info(
+        "termin_android_on_presentation_metrics_changed: density=%.3f "
+        "font=%.3f insets=[%.1f,%.1f,%.1f,%.1f] changed=%d",
+        static_cast<double>(metrics->density_scale),
+        static_cast<double>(metrics->font_scale),
+        static_cast<double>(metrics->safe_inset_left),
+        static_cast<double>(metrics->safe_inset_top),
+        static_cast<double>(metrics->safe_inset_right),
+        static_cast<double>(metrics->safe_inset_bottom),
+        changed ? 1 : 0);
+#ifdef __ANDROID__
+    (void)apply_player_presentation_metrics_locked();
 #endif
 }
 

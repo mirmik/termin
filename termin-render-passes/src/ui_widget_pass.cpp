@@ -121,11 +121,22 @@ struct SubmissionCollector {
                 tc_component_get_source_id(component));
             return;
         }
-        submissions.push_back({
+        gui_native::UiDocumentSubmission submission{
             document,
             snapshot.priority,
             stable_component_identity(component),
-        });
+        };
+        if (document.has_presentation_metrics() &&
+            !document.presentation_metrics(
+                submission.presentation_metrics)) {
+            tc::Log::error(
+                "[UIWidgetPass] failed to read explicit presentation metrics "
+                "for component type='%s' source_id='%s'",
+                tc_component_get_type_name(component),
+                tc_component_get_source_id(component));
+            return;
+        }
+        submissions.push_back(submission);
     }
 };
 
@@ -300,13 +311,15 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
             width, height, output_res.c_str());
         return;
     }
-    const tc_ui_presentation_metrics identity =
-        tc_ui_presentation_metrics_identity(tc_ui_size{
-            static_cast<float>(width),
-            static_cast<float>(height),
-        });
     for (auto& submission : submissions) {
-        submission.presentation_metrics = identity;
+        if (!tc_ui_presentation_metrics_is_valid(
+                &submission.presentation_metrics)) {
+            submission.presentation_metrics =
+                tc_ui_presentation_metrics_identity(tc_ui_size{
+                    static_cast<float>(width),
+                    static_cast<float>(height),
+                });
+        }
     }
 
     ctx.ctx2->begin_pass(output, {}, nullptr, 1.0f, false);
