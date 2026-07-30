@@ -1,7 +1,39 @@
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+
+def _repository_source_paths(
+    repo_root: Path,
+    skipped_dirs: set[str],
+    scanned_suffixes: set[str],
+) -> Iterator[Path]:
+    for current_root, directory_names, file_names in os.walk(repo_root):
+        directory_names[:] = [
+            name for name in directory_names if name not in skipped_dirs
+        ]
+        current_path = Path(current_root)
+        for file_name in file_names:
+            path = current_path / file_name
+            if path.is_symlink() or not path.is_file():
+                continue
+            if path.name != "CMakeLists.txt" and path.suffix not in scanned_suffixes:
+                continue
+            yield path
+
+
+def test_repository_source_scan_skips_broken_symlinks(tmp_path: Path) -> None:
+    source = tmp_path / "source.py"
+    source.write_text("regular source", encoding="utf-8")
+    broken_link = tmp_path / "broken.py"
+    try:
+        broken_link.symlink_to(tmp_path / "missing.py")
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable: {exc}")
+
+    assert list(_repository_source_paths(tmp_path, set(), {".py"})) == [source]
 
 
 def test_owner_cleanup_revokes_python_kinds_without_resource_manager_catalogs() -> None:
@@ -277,23 +309,19 @@ def test_removed_visualization_namespace_is_not_used_by_live_code() -> None:
     }
 
     offenders: list[str] = []
-    for current_root, directory_names, file_names in os.walk(repo_root):
-        directory_names[:] = [
-            name for name in directory_names if name not in skipped_dirs
-        ]
-        current_path = Path(current_root)
-        for file_name in file_names:
-            path = current_path / file_name
-            relative = path.relative_to(repo_root)
-            if relative in allowed_paths:
-                continue
-            if path.name != "CMakeLists.txt" and path.suffix not in scanned_suffixes:
-                continue
-            try:
-                content = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue
-            if "termin.visualization" in content:
-                offenders.append(str(relative))
+    for path in _repository_source_paths(
+        repo_root,
+        skipped_dirs,
+        scanned_suffixes,
+    ):
+        relative = path.relative_to(repo_root)
+        if relative in allowed_paths:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "termin.visualization" in content:
+            offenders.append(str(relative))
 
     assert offenders == []
