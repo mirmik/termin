@@ -328,12 +328,12 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
 
     loaded_overlay = UiScriptLoader().load_string(
         """
-uiscript: 1
+uiscript: 2
 root:
-  type: Overlay
+  type: termin.gui.OverlayLayout
   name: test_overlay
   children:
-    - type: IconButton
+    - type: termin.gui.IconButton
       name: test_button
       icon: T
       size: 26
