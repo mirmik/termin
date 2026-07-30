@@ -47,6 +47,8 @@
 
 ## 2026-07
 
+- [Adaptive native UI layout](2026-07-31-adaptive-native-ui-layout-plan.md)
+- [Native UIComponent migration](2026-07-30-native-ui-component-migration.md)
 - [Texture encoding contract](2026-07-29-texture-encoding-contract-plan.md)
 - [Single application graphics domain](2026-07-16-single-graphics-domain-plan.md)
 - [Transactional Play/Stop](2026-07-16-transactional-play-stop-plan.md)
