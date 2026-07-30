@@ -131,8 +131,8 @@ routing, package enumeration, and deferred-pipeline integration.
 - compact or production-optimized G-buffer packing;
 - multiple shading models inside the standard G-buffer;
 - clearcoat, subsurface, anisotropy, hair, refraction, or decals;
-- compatibility-preserving reproduction of the current nonstandard
-  `u_diffuse_mul` and `u_subsurface` behavior;
+- expressing the current nonstandard `u_diffuse_mul` and `u_subsurface`
+  behavior through standard surface v1;
 - an automatic fallback after a declared surface variant fails to assemble;
 - a stable cross-SDK binary ABI for every current C++ material-pipeline type.
 
@@ -432,7 +432,10 @@ Semantic rules:
 
 `u_diffuse_mul`, `u_subsurface`, clearcoat, and other current or future
 material-specific controls are not fields of v1. `CookTorrancePBR` will be
-migrated toward the standard model. Appearance changes are accepted.
+migrated toward the standard model. Appearance changes are accepted. The
+previous artistic forward model remains available as the separate final-color
+shader `CookTorrancePBRSubsurface`; it deliberately does not claim
+compatibility with standard surface v1.
 
 If a future material needs semantics that v1 cannot express, it should use a
 new contract or remain forward-only. It must not grow undocumented spare
@@ -642,11 +645,14 @@ This document does not replace the detailed MRT architecture decision.
 3. `CookTorrancePBR` becomes the first standard surface producer.
 4. The standard forward consumer preserves the ability to render the migrated
    material in `Default`.
-5. `BlinnPhong`, normal-visualization, and other custom final-color shaders
+5. `CookTorrancePBRSubsurface` preserves the former wrapped-diffuse
+   `u_subsurface` and `u_diffuse_mul` look as an independent final-color
+   material; `NormalizedPBR` remains on that path.
+6. `BlinnPhong`, normal-visualization, and other custom final-color shaders
    remain forward-only until deliberately migrated.
-6. Declared surface incompatibility is a routing fact; declared compatibility
+7. Declared surface incompatibility is a routing fact; declared compatibility
    followed by failed assembly is an error.
-7. No automatic conversion between unrelated surface contracts is introduced.
+8. No automatic conversion between unrelated surface contracts is introduced.
 
 ## Verification
 

@@ -14,6 +14,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
+#include "termin/render/material_pipeline_shader_assembler.hpp"
 
 namespace tgfx {
 class IRenderDevice;
@@ -32,6 +33,9 @@ class RenderContext2;
 #include "core/tc_scene_pool.h"
 
 namespace termin {
+
+TERMIN_RENDER_PASSES_API
+MaterialPipelinePassContract color_material_pass_contract();
 
 struct ColorPassConfig {
     std::string input_res = "empty";

@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from termin.image import write_png_rgba8_file
+from termin.materials import SurfaceContractRegistry
 from termin.default_assets.render.material_asset import _parse_material_content, _save_material_file
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
@@ -12,6 +13,7 @@ from tgfx import TcTexture, TextureEncoding
 
 
 def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:
+    assert SurfaceContractRegistry.register_builtins()
     shader_path = stdlib_root() / "shaders" / f"{name}.shader"
     shader_asset = ShaderAsset.from_file(shader_path, name=name)
     assert shader_asset.program is not None
@@ -182,7 +184,7 @@ def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
 def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:
     DefaultResourceManager._reset_for_testing()
     rm = DefaultResourceManager.instance()
-    _register_stdlib_shader(rm, "CookTorrancePBR")
+    _register_stdlib_shader(rm, "CookTorrancePBRSubsurface")
 
     material, _uuid = _parse_material_content(
         (stdlib_root() / "materials" / "NormalizedPBR.material").read_text(encoding="utf-8"),
@@ -191,3 +193,6 @@ def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:
     )
 
     assert material.default_phase().uniforms["u_diffuse_mul"] == pytest.approx(3.14)
+    assert material.default_phase().shader.name.startswith(
+        "CookTorrancePBRSubsurface/"
+    )

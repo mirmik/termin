@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from termin.stdlib import iter_stdlib_files, stdlib_root, sync_stdlib
@@ -10,6 +11,24 @@ def test_stdlib_root_contains_standard_resources() -> None:
     assert (root / "shaders" / "BlinnPhong.shader").is_file()
     assert (root / "uiscript" / "editor_camera_ui.uiscript").is_file()
     assert root / "materials" / "BlinnPhong.material" in iter_stdlib_files()
+
+
+def test_stdlib_asset_uuids_are_unique() -> None:
+    root = stdlib_root()
+    assets_by_uuid: dict[str, Path] = {}
+
+    for path in iter_stdlib_files():
+        if path.suffix not in {".material", ".meta"}:
+            continue
+        uuid = json.loads(path.read_text(encoding="utf-8")).get("uuid")
+        if not uuid:
+            continue
+        assert uuid not in assets_by_uuid, (
+            f"duplicate stdlib asset UUID {uuid!r}: "
+            f"{assets_by_uuid[uuid].relative_to(root)} and "
+            f"{path.relative_to(root)}"
+        )
+        assets_by_uuid[uuid] = path
 
 
 def test_sync_stdlib_copies_resources_and_reports_noop(tmp_path: Path) -> None:
