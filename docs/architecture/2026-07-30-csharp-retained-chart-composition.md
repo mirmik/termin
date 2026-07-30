@@ -4,8 +4,9 @@
 
 Intent accepted. The projection contract, retained native grid and
 line/scatter series items, and value-only range/tick/text-measurement
-utilities are implemented. Typed C# wrappers and managed chart composition
-remain.
+utilities are implemented. The neutral built-in GraphicItem C ABI and typed
+C# visual-scene wrappers are implemented; tcplot-specific typed wrappers and
+managed chart composition remain.
 
 The existing retained visual-scene initiative delivered the common
 `tc_graphic_item` object model and a tcplot annotation vertical slice. It did
@@ -187,6 +188,11 @@ Factories are owned by the registered concrete type, not by a closed
 `TcVisualScene.create_*` enumeration. This direction is shared with the typed
 Widget/GraphicItem binding normalization work.
 
+The chart path creates existing native item bodies only. User-defined bodies
+owned by Python or C# are useful future extensibility, but their language holds
+and `GCHandle` ownership are a separate concern tracked by `#1107`; they do not
+block retained chart composition.
+
 ## Layout and measurement
 
 Chart layout is a managed composition concern, but measurement remains native
@@ -231,7 +237,9 @@ nearest-point queries remain native operations exposed through typed items.
 The migration is intentionally allowed to break the transitional API during
 active development. It must not preserve two permanent chart implementations.
 
-1. Complete neutral GraphicItem factories and full typed C# wrappers.
+1. Complete neutral GraphicItem factories and full typed C# wrappers for
+   existing native items. **Implemented for visual-scene built-ins; tcplot
+   wrappers follow in `#1100`.**
 2. Extract optimized native series/grid render bodies from `PlotEngine2D` into
    plot-specific `GraphicItem2D` classes without regressing the persistent-VBO
    path. **Implemented.**

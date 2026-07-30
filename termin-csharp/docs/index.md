@@ -21,13 +21,25 @@ Related documents:
 
 C# project: `Termin.Native`.
 
+`Termin.Native` exposes `TcVisualScene2D`, common non-owning
+`GraphicItemRef2D` references and typed factories for `GroupItemRef2D`,
+`RectItemRef2D`, `PathItemRef2D`, `TextItemRef2D`, `ImageItemRef2D` and
+`HitRegionItemRef2D`. Each factory creates an existing native item body,
+adopts it into the scene and returns a full generation-handle wrapper.
+
+Managed code owns topology, transforms and presentation policy. Item bodies,
+paint execution and backend resources remain native. Disposing a scene makes
+all wrappers stale; wrong-type casts and stale operations fail explicitly.
+User-defined C#/Python item bodies and managed paint callbacks are not part of
+this surface.
+
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 
 ```powershell
 .\build-sdk-csharp.ps1 --plot-d3d11 --no-sdl --no-vulkan --no-opengl
 ```
 
-That profile generates only the tcplot C# bridge plus `Termin.Wpf`, copies the minimal native runtime (`termin.dll`, `tcplot.dll`, `termin_base.dll`, `termin_mesh.dll`, `termin_graphics*.dll`), and packages only D3D11 shader artifacts required by plots. The default `full` profile keeps the broader scene/render/component bindings for development.
+That profile generates only the tcplot C# bridge plus `Termin.Wpf`, copies the minimal native runtime (`termin.dll`, `tcplot.dll`, `termin_visual_scene.dll`, `termin_base.dll`, `termin_mesh.dll`, `termin_graphics*.dll`), and packages only D3D11 shader artifacts required by plots. The default `full` profile keeps the broader scene/render/component bindings for development.
 Generated bindings carry an explicit profile marker. Direct `dotnet build`
 uses that marker when no profile is specified and rejects an explicitly
 requested profile that does not match the generated SWIG files. Switch

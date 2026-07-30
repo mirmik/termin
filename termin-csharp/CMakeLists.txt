@@ -85,6 +85,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     termin_csharp_require_package(termin_mesh tmesh::termin_mesh)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+    termin_csharp_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_csharp_require_package(tcplot tcplot::tcplot)
 
     if(TERMIN_CSHARP_PROFILE STREQUAL "full")
@@ -192,6 +193,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tgfx::termin_graphics
             tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     else()
@@ -206,6 +208,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             termin_components_kinematic::termin_components_kinematic
             termin_render::termin_render
             termin_render_passes::termin_render_passes
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     endif()
@@ -219,6 +222,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tmesh::termin_mesh
             tgfx::termin_graphics
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             tcplot::tcplot
         )
     else()
@@ -244,6 +248,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tgfx::termin_graphics
             tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2
+            termin_visual_scene::termin_visual_scene
             termin_materials::termin_materials
             termin_modules::termin_modules
             tmesh::termin_mesh

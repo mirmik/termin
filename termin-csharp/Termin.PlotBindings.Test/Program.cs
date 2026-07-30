@@ -1,5 +1,107 @@
 using Termin.Native;
 
+static void TestRetainedVisualSceneFactories()
+{
+    var scene = new TcVisualScene2D();
+    using var otherScene = new TcVisualScene2D();
+    var group = GroupItemRef2D.Create(scene);
+    var fill = new VisualFillPaint2D(
+        new VisualColor4f(0.2f, 0.3f, 0.4f));
+    var stroke = new VisualStrokePaint2D(
+        new VisualColor4f(1, 1, 1),
+        2,
+        dashPattern: new[] { 4.0f, 2.0f });
+    var rect = RectItemRef2D.Create(
+        scene,
+        new VisualRect2f(0, 0, 100, 50),
+        fill,
+        stroke,
+        group);
+
+    if (scene.Count != 2 || group.ChildCount != 1 ||
+        rect.Parent?.Handle != group.Handle)
+        throw new InvalidOperationException(
+            "Retained visual-scene topology is incorrect.");
+
+    rect.Transform = VisualAffine2f.Translation(10, 20);
+    rect.Visible = false;
+    rect.Enabled = false;
+    rect.Opacity = 0.5f;
+    rect.ZOrder = 7;
+    rect.SetClip(new VisualRect2f(0, 0, 80, 40));
+    if (rect.Transform.Tx != 10 || rect.Visible ||
+        rect.Enabled || rect.Opacity != 0.5f || rect.ZOrder != 7)
+        throw new InvalidOperationException(
+            "Common GraphicItemRef2D mutation failed.");
+
+    var triangle = new VisualPath2D(
+        new[]
+        {
+            VisualPathVerb2D.MoveTo,
+            VisualPathVerb2D.LineTo,
+            VisualPathVerb2D.LineTo,
+            VisualPathVerb2D.Close,
+        },
+        new[]
+        {
+            new VisualVec2f(0, 0),
+            new VisualVec2f(20, 0),
+            new VisualVec2f(10, 10),
+        });
+    var path = PathItemRef2D.Create(
+        scene, triangle, fill, stroke, group);
+    var text = TextItemRef2D.Create(
+        scene,
+        "axis",
+        "ui://default-font",
+        new VisualVec2f(0, 12),
+        12,
+        new VisualColor4f(1, 1, 1),
+        new VisualBounds2f(0, 0, 80, 20),
+        parent: group);
+    var image = ImageItemRef2D.Create(
+        scene,
+        "asset://plot-icon",
+        new VisualRect2f(0, 0, 16, 16),
+        new VisualRect2f(0, 0, 1, 1),
+        new VisualColor4f(1, 1, 1),
+        parent: group);
+    var hit = HitRegionItemRef2D.Create(
+        scene, triangle, parent: group);
+    if (!path.IsValid || !text.IsValid ||
+        !image.IsValid || !hit.IsValid)
+        throw new InvalidOperationException(
+            "A typed built-in factory returned a stale handle.");
+
+    try
+    {
+        _ = RectItemRef2D.Cast(path);
+        throw new InvalidOperationException(
+            "Wrong-type GraphicItem cast succeeded.");
+    }
+    catch (InvalidCastException)
+    {
+    }
+
+    var foreignParent = GroupItemRef2D.Create(otherScene);
+    if (rect.SetParent(foreignParent))
+        throw new InvalidOperationException(
+            "Cross-scene reparenting succeeded.");
+
+    var stale = rect;
+    if (!rect.Destroy() || stale.IsValid)
+        throw new InvalidOperationException(
+            "Explicit item destruction did not invalidate its wrapper.");
+
+    var sceneOwned = path;
+    scene.Dispose();
+    if (sceneOwned.IsValid)
+        throw new InvalidOperationException(
+            "Scene teardown did not invalidate item wrappers.");
+}
+
+TestRetainedVisualSceneFactories();
+
 // This test is deliberately GPU-independent. It verifies the detached values
 // at runtime and compiles every PlotView2D annotation operation used by a
 // managed host. Native interaction semantics are covered by tcplot tests.
