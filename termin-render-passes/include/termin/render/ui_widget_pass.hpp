@@ -1,19 +1,27 @@
 #pragma once
 
-#if defined(__ANDROID__)
+#include <memory>
+#include <vector>
 
+#include <termin/gui_native/native_document_painter.hpp>
 #include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
 
 namespace termin {
 
-// Native placeholder for targets that do not run Python-authored frame passes.
-// Desktop builds leave the UIWidgetPass registry name to the Python pass.
+struct ExecuteContext;
+
+TERMIN_RENDER_PASSES_API
+std::vector<gui_native::UiDocumentSubmission>
+collect_ui_document_submissions(
+    const ExecuteContext& ctx,
+    bool include_internal_entities);
+
 class TERMIN_RENDER_PASSES_API UIWidgetPass : public CxxFramePass {
 public:
     static void register_type();
-    std::string input_res = "color";
+    std::string input_res = "color+ui";
     std::string output_res = "color+widgets";
     bool include_internal_entities = false;
 
@@ -27,17 +35,20 @@ public:
     ))
 
     UIWidgetPass(
-        const std::string& input = "color",
+        const std::string& input = "color+ui",
         const std::string& output = "color+widgets"
     );
+    ~UIWidgetPass() override;
 
     std::set<const char*> compute_reads() const override;
     std::set<const char*> compute_writes() const override;
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
     void execute(ExecuteContext& ctx) override;
+    void destroy() override;
+
+private:
+    std::unique_ptr<gui_native::NativeDocumentPainter> painter_;
 };
 
 } // namespace termin
-
-#endif // defined(__ANDROID__)

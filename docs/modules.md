@@ -138,7 +138,14 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 
 Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials`, render components и debug/editor pass integrations.
 
-На 2026-06-20 сюда перенесены standard/scene/postprocess/debug passes: `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`, `ColliderGizmoPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
+На 2026-07-30 сюда перенесены standard/scene/postprocess/debug passes:
+`PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`,
+`ColliderGizmoPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
+`GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
+`SkyBoxPass`, `IdPass` и единый native `UIWidgetPass` для desktop, Android и
+OpenXR. Модуль также владеет picking RGB/id cache helper, shadow camera
+helpers, shader skinning injection, material UBO apply helper и Python API
+`termin.render_passes`.
 
 `SolidPrimitiveRenderer` сейчас живет в editor-private native surface `termin.editor._editor_native`; публичные render-pass helpers импортируются из `termin.render_passes`.
 

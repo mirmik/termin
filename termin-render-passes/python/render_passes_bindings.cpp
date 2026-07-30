@@ -27,6 +27,7 @@ extern "C" {
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
+#include <termin/render/ui_widget_pass.hpp>
 #include <termin/render/world2d_pass.hpp>
 
 namespace nb = nanobind;
@@ -517,6 +518,41 @@ void bind_render_passes(nb::module_& m) {
     world2d_pass.attr("node_outputs") = nb::make_tuple(
         nb::make_tuple("output_res", "fbo"));
     world2d_pass.attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("input_res", "output_res"));
+
+    auto ui_widget_pass =
+        nb::class_<UIWidgetPass, CxxFramePass>(m, "UIWidgetPass")
+        .def("__init__", [](UIWidgetPass* self,
+                            std::string input_res,
+                            std::string output_res,
+                            std::string pass_name,
+                            bool include_internal_entities) {
+            new (self) UIWidgetPass(input_res, output_res);
+            self->pass_name_set(pass_name);
+            self->include_internal_entities = include_internal_entities;
+            init_pass_from_python(self, "UIWidgetPass");
+        },
+            nb::arg("input_res") = "color+ui",
+            nb::arg("output_res") = "color+widgets",
+            nb::arg("pass_name") = "UIWidgets",
+            nb::arg("include_internal_entities") = false)
+        .def_rw("input_res", &UIWidgetPass::input_res)
+        .def_rw("output_res", &UIWidgetPass::output_res)
+        .def_rw(
+            "include_internal_entities",
+            &UIWidgetPass::include_internal_entities)
+        .def("compute_reads", &UIWidgetPass::compute_reads)
+        .def("compute_writes", &UIWidgetPass::compute_writes)
+        .def("get_inplace_aliases", &UIWidgetPass::get_inplace_aliases)
+        .def_prop_ro("reads", &UIWidgetPass::compute_reads)
+        .def_prop_ro("writes", &UIWidgetPass::compute_writes)
+        .def("destroy", &UIWidgetPass::destroy);
+    ui_widget_pass.attr("category") = "UI";
+    ui_widget_pass.attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"));
+    ui_widget_pass.attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo"));
+    ui_widget_pass.attr("node_inplace_pairs") = nb::make_tuple(
         nb::make_tuple("input_res", "output_res"));
 
     nb::class_<ShadowMapResult>(m, "ShadowMapResult")
