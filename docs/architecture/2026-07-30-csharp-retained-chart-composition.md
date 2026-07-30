@@ -5,8 +5,9 @@
 Intent accepted. The projection contract, retained native grid and
 line/scatter series items, and value-only range/tick/text-measurement
 utilities are implemented. The neutral built-in GraphicItem C ABI and typed
-C# visual-scene wrappers are implemented; tcplot-specific typed wrappers and
-managed chart composition remain.
+C# visual-scene wrappers are implemented. Typed C# wrappers for projection,
+grid and line/scatter series plus the native range/tick/text-measurement
+boundary are implemented; managed chart composition remains.
 
 The existing retained visual-scene initiative delivered the common
 `tc_graphic_item` object model and a tcplot annotation vertical slice. It did
@@ -238,13 +239,13 @@ The migration is intentionally allowed to break the transitional API during
 active development. It must not preserve two permanent chart implementations.
 
 1. Complete neutral GraphicItem factories and full typed C# wrappers for
-   existing native items. **Implemented for visual-scene built-ins; tcplot
-   wrappers follow in `#1100`.**
+   existing native items. **Implemented for visual-scene built-ins and
+   tcplot retained projection/grid/series parts.**
 2. Extract optimized native series/grid render bodies from `PlotEngine2D` into
    plot-specific `GraphicItem2D` classes without regressing the persistent-VBO
    path. **Implemented.**
 3. Expose native plot projection, tick and measurement utilities needed by a
-   managed composer.
+   managed composer. **Implemented.**
 4. Implement a C# single-panel `Chart2D` composition over one
    `TcVisualScene`.
 5. Add legends, annotations and multi-panel/shared-axis composition using the
