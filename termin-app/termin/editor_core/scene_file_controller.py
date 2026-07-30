@@ -20,6 +20,7 @@ from termin.engine import (
 )
 
 SceneMode = engine_scene.SceneMode
+SceneSaveCompletion = Callable[[bool], None]
 
 
 class _SceneLoadTrace:
@@ -142,26 +143,42 @@ class SceneFileController:
         self._observe_scene_events(self._get_scene())
         self._update_window_title()
 
-    def save_scene(self) -> None:
+    def save_scene(
+        self,
+        on_complete: SceneSaveCompletion | None = None,
+    ) -> None:
         scene_name = self._get_editor_scene_name()
         scene_path = self._scene_manager.get_scene_path(scene_name) if scene_name else None
         if scene_path is not None:
-            self.save_scene_to_file(scene_path)
+            saved = self.save_scene_to_file(scene_path)
+            if on_complete is not None:
+                on_complete(saved)
         else:
-            self.save_scene_as()
+            self.save_scene_as(on_complete)
 
-    def save_scene_as(self) -> None:
+    def save_scene_as(
+        self,
+        on_complete: SceneSaveCompletion | None = None,
+    ) -> None:
         dialogs = self._get_dialog_service()
         if dialogs is None:
             log.error("Save Scene As requested without a dialog service")
+            if on_complete is not None:
+                on_complete(False)
             return
         project_path = self._get_project_path()
         directory = project_path or str(Path.home())
+
+        def handle_result(path: str | None) -> None:
+            saved = self.save_scene_to_file(path) if path else False
+            if on_complete is not None:
+                on_complete(saved)
+
         dialogs.show_save_file(
             title="Save Scene As",
             directory=directory,
             filter_string="Scene Files (*.scene);;All Files (*)",
-            on_result=lambda path: self.save_scene_to_file(path) if path else None,
+            on_result=handle_result,
         )
 
     def load_scene(self) -> None:
@@ -188,14 +205,15 @@ class SceneFileController:
         self._observe_scene_events(self._get_scene())
         self._update_window_title()
 
-    def save_scene_to_file(self, path: str) -> None:
+    def save_scene_to_file(self, path: str) -> bool:
         if not path:
-            return
+            return False
         if not self.validate_scene_path(path):
-            return
+            return False
         scene_name = self._get_editor_scene_name()
         if scene_name is None:
-            return
+            log.error("Failed to save scene: no editor scene is active")
+            return False
         try:
             prepared = self._prepare_scene_for_save(scene_name)
             if prepared is False:
@@ -210,8 +228,10 @@ class SceneFileController:
             ProjectSettingsManager.instance().set_last_scene(path)
             log.info(f"Saved: {path}")
             self._update_window_title()
+            return True
         except Exception as e:
             log.error(f"Failed to save scene: {e}")
+            return False
 
     def load_scene_from_file(self, path: str) -> None:
         if not path:

@@ -49,9 +49,14 @@ def _controller(
     logs: list[str],
     saves: list[bool],
     toolchain_settings=None,
+    save_scene=None,
 ) -> ProjectBuildController:
+    def save_success(on_complete) -> None:
+        saves.append(True)
+        on_complete(True)
+
     return ProjectBuildController(
-        save_scene=lambda: saves.append(True),
+        save_scene=save_scene or save_success,
         on_output=logs.append,
         toolchain_settings=toolchain_settings or ToolchainContext,
     )
@@ -108,6 +113,86 @@ def test_build_selected_profile_uses_canonical_result_api(monkeypatch, tmp_path)
     calls[0][1]["log_callback"]("streamed output")
     assert "streamed output" in logs
     assert f"Build complete: {result.dist_dir}" in logs
+
+
+def test_build_waits_for_asynchronous_scene_save(monkeypatch, tmp_path) -> None:
+    profile = _profile(tmp_path)
+    completion_callbacks = []
+    build_calls = []
+    result = SimpleNamespace(
+        dist_dir=profile.project_root / "dist",
+        runtime_result=SimpleNamespace(launcher_path=profile.project_root / "game"),
+        diagnostics=[],
+    )
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda *_args, **_kwargs: build_calls.append(True) or result,
+    )
+    controller = _controller(
+        [],
+        [],
+        save_scene=completion_callbacks.append,
+    )
+
+    controller.execute(BuildProfileAction.BUILD, profile)
+
+    assert build_calls == []
+    assert len(completion_callbacks) == 1
+    completion_callbacks[0](True)
+    assert build_calls == [True]
+
+
+@pytest.mark.parametrize(
+    ("action", "label"),
+    [
+        (BuildProfileAction.BUILD, "Build"),
+        (BuildProfileAction.RUN, "Run"),
+    ],
+)
+def test_build_and_run_abort_when_scene_save_is_cancelled(
+    monkeypatch,
+    tmp_path,
+    action,
+    label,
+) -> None:
+    profile = _profile(tmp_path)
+    logs: list[str] = []
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda *_args, **_kwargs: pytest.fail("cancelled save started a build"),
+    )
+    controller = _controller(
+        logs,
+        [],
+        save_scene=lambda on_complete: on_complete(False),
+    )
+
+    controller.execute(action, profile)
+
+    assert logs[-1] == f"{label} aborted: the current scene was not saved"
+
+
+def test_build_aborts_when_scene_save_request_fails(monkeypatch, tmp_path) -> None:
+    profile = _profile(tmp_path)
+    logs: list[str] = []
+    monkeypatch.setattr(
+        project_build,
+        "build_profile_result",
+        lambda *_args, **_kwargs: pytest.fail("failed save started a build"),
+    )
+
+    def fail_save(_on_complete) -> None:
+        raise RuntimeError("serialization failed")
+
+    controller = _controller(logs, [], save_scene=fail_save)
+
+    controller.execute(BuildProfileAction.BUILD, profile)
+
+    assert logs[-1] == (
+        "Build aborted: scene save failed: serialization failed"
+    )
 
 
 def test_run_selected_desktop_profile_builds_then_launches(monkeypatch, tmp_path) -> None:

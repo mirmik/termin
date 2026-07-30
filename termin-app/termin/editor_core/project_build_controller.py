@@ -20,6 +20,7 @@ from termin.project_build import (
 
 
 _logger = logging.getLogger(__name__)
+SceneSaveRequest = Callable[[Callable[[bool], None]], None]
 
 
 class ProjectBuildController:
@@ -28,7 +29,7 @@ class ProjectBuildController:
     def __init__(
         self,
         *,
-        save_scene: Callable[[], None],
+        save_scene: SceneSaveRequest,
         on_output: Callable[[str], None] | None = None,
         toolchain_settings: Callable[[], ToolchainContext] | None = None,
     ) -> None:
@@ -71,13 +72,12 @@ class ProjectBuildController:
 
     def execute(self, action: BuildProfileAction, profile: BuildProfile) -> None:
         self._emit(f"{action.value.replace('_', ' ').title()} profile: {profile.name}")
+        if action in (BuildProfileAction.BUILD, BuildProfileAction.RUN):
+            self._request_scene_save(action, profile)
+            return
         try:
             if action == BuildProfileAction.DRY_RUN:
                 self._dry_run(profile)
-            elif action == BuildProfileAction.BUILD:
-                self._build(profile)
-            elif action == BuildProfileAction.RUN:
-                self._run(profile)
             elif action == BuildProfileAction.INSTALL:
                 self._install(profile)
             elif action == BuildProfileAction.LAUNCH:
@@ -91,6 +91,48 @@ class ProjectBuildController:
                 profile.name,
             )
             raise
+
+    def _request_scene_save(
+        self,
+        action: BuildProfileAction,
+        profile: BuildProfile,
+    ) -> None:
+        def continue_after_save(saved: bool) -> None:
+            if not saved:
+                message = (
+                    f"{action.value.replace('_', ' ').title()} aborted: "
+                    "the current scene was not saved"
+                )
+                _logger.error(message)
+                self._emit(message)
+                return
+            try:
+                if action == BuildProfileAction.BUILD:
+                    self._build(profile)
+                else:
+                    self._run(profile)
+            except Exception as error:
+                _logger.exception(
+                    "Build profile action '%s' failed for '%s'",
+                    action.value,
+                    profile.name,
+                )
+                self._emit(
+                    f"{action.value.replace('_', ' ').title()} failed: {error}"
+                )
+
+        try:
+            self._save_scene(continue_after_save)
+        except Exception as error:
+            _logger.exception(
+                "Scene save request failed before build profile action '%s' for '%s'",
+                action.value,
+                profile.name,
+            )
+            self._emit(
+                f"{action.value.replace('_', ' ').title()} aborted: "
+                f"scene save failed: {error}"
+            )
 
     def _dry_run(self, profile: BuildProfile) -> None:
         report = self._inspect(profile)
@@ -106,7 +148,6 @@ class ProjectBuildController:
     def _build(self, profile: BuildProfile):
         from termin.project_build import build_profile_result
 
-        self._save_scene()
         result = build_profile_result(
             profile,
             user_settings=self._toolchain_settings(),
