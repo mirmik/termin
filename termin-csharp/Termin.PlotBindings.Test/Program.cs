@@ -211,6 +211,74 @@ static void TestRetainedPlotItems()
             "Scene teardown did not stale retained plot handles.");
 }
 
+static void TestManagedChartComposition(GpuHost host)
+{
+    using var chart = new Chart2D(
+        host,
+        800,
+        500,
+        new PlotRange2D(0, 10, -1, 1));
+    chart.TitleText = "Retained chart";
+    chart.XAxisText = "time";
+    chart.YAxisText = "value";
+
+    var line = chart.AddLine(
+        new[] { 0.0, 5.0, 10.0 },
+        new[] { 0.0, 1.0, 0.0 });
+    var scatter = chart.AddScatter(
+        new[] { 2.5, 7.5 },
+        new[] { -0.5, 0.5 });
+    var lineHandle = line.Handle;
+    var scatterHandle = scatter.Handle;
+    var projectionHandle = chart.Projection.Handle;
+
+    chart.Resize(1000, 600, 1.25f);
+    chart.PanBy(2, 0.25);
+    chart.ZoomAt(2, 7, 0.25);
+    chart.ApplyTheme(new Chart2DTheme
+    {
+        BackgroundColor = new VisualColor4f(0.02f, 0.03f, 0.05f),
+        PlotBackgroundColor = new VisualColor4f(0.06f, 0.08f, 0.12f),
+        AxisColor = new VisualColor4f(0.8f, 0.82f, 0.9f),
+        GridStyle = new PlotGridStyle2D(0.3f, 0.4f, 0.55f, 0.5f),
+    });
+
+    var currentGrid = chart.Grid.Item;
+    if (line.Handle != lineHandle ||
+        scatter.Handle != scatterHandle ||
+        !chart.Projection.Handle.Equals(projectionHandle) ||
+        !line.IsValid || !scatter.IsValid ||
+        currentGrid is null ||
+        !currentGrid.Snapshot.Projection.Equals(projectionHandle) ||
+        chart.XTicks.Count == 0 || chart.YTicks.Count == 0)
+        throw new InvalidOperationException(
+            "Compact chart updates did not preserve retained native parts.");
+
+    var oldPlotBackground = chart.PlotBackground.Item ??
+        throw new InvalidOperationException("Default plot background is absent.");
+    var replacement = RectItemRef2D.Create(
+        chart.Scene,
+        new VisualRect2f(0, 0, 1, 1),
+        new VisualFillPaint2D(new VisualColor4f(0.1f, 0.14f, 0.2f)));
+    chart.PlotBackground.Replace(replacement);
+    if (oldPlotBackground.IsValid ||
+        chart.PlotBackground.Item?.Handle != replacement.Handle ||
+        replacement.Parent?.Handle != chart.PlotArea.Handle)
+        throw new InvalidOperationException(
+            "A standard managed chart part was not replaced correctly.");
+
+    chart.Title.Remove();
+    chart.Resize(900, 550);
+    if (chart.Title.Item is not null || !line.IsValid)
+        throw new InvalidOperationException(
+            "Removing a standard chart part broke later layout.");
+
+    if (!chart.RemoveSeries(scatter) || scatter.IsValid ||
+        chart.Scatters.Count != 0)
+        throw new InvalidOperationException(
+            "Managed series removal did not destroy its native item.");
+}
+
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
 
@@ -252,6 +320,7 @@ if (OperatingSystem.IsWindows())
         throw new FileNotFoundException("SDK test font is missing", fontPath);
 
     using var host = new GpuHost(fontPath, BackendType.D3D11);
+    TestManagedChartComposition(host);
     using var view = new PlotView2D(host);
     using var otherView = new PlotView2D(host);
     view.set_view(0.0, 10.0, 0.0, 10.0);
