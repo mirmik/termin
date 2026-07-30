@@ -20,35 +20,6 @@ from termin.project import create_project
 log = logging.getLogger(__name__)
 
 
-def _ask_directory() -> str:
-    """Open a native directory picker."""
-    import tkinter as tk
-    from tkinter import filedialog
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    path = filedialog.askdirectory(title="Select project location")
-    root.destroy()
-    return path or ""
-
-
-def _ask_open_project() -> str:
-    """Open a native file picker for .terminproj files."""
-    import tkinter as tk
-    from tkinter import filedialog
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    path = filedialog.askopenfilename(
-        title="Open Termin Project",
-        filetypes=[("Termin Project", "*.terminproj"), ("All files", "*.*")],
-    )
-    root.destroy()
-    return path or ""
-
-
 def _find_editor_executable() -> str | None:
     """Find the termin_editor executable next to this launcher."""
     candidate_names = (
@@ -171,8 +142,6 @@ def _create_launcher_controller() -> LauncherController:
     return LauncherController(
         RecentProjects(),
         LauncherServices(
-            choose_directory=_ask_directory,
-            choose_project_file=_ask_open_project,
             create_project=create_project,
             launch_editor=_dispatch_editor,
             report_error=log.error,

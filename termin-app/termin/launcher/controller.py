@@ -38,8 +38,6 @@ class RecentProjectStore(Protocol):
 
 @dataclass(frozen=True)
 class LauncherServices:
-    choose_directory: Callable[[], str]
-    choose_project_file: Callable[[], str]
     create_project: Callable[[str, str], str]
     launch_editor: Callable[[str], LaunchResult]
     report_error: Callable[[str], None]
@@ -107,27 +105,6 @@ class LauncherController:
     def set_new_project_location(self, location: str) -> None:
         self.state.new_project_location = location
 
-    def choose_new_project_location(self) -> str | None:
-        try:
-            chosen = self._services.choose_directory()
-        except Exception as exc:
-            self._report_error(f"Failed to choose project location: {exc}")
-            return None
-        if not chosen:
-            return None
-        self.state.new_project_location = chosen
-        return chosen
-
-    def open_existing_project(self) -> bool:
-        try:
-            project_path = self._services.choose_project_file()
-        except Exception as exc:
-            self._report_error(f"Failed to choose project file: {exc}")
-            return False
-        if not project_path:
-            return False
-        return self.open_project(project_path)
-
     def open_selected_project(self) -> bool:
         project_path = self.state.selected_project_path
         if project_path is None:
@@ -181,3 +158,7 @@ class LauncherController:
     def _report_error(self, message: str) -> None:
         self.state.last_error = message
         self._services.report_error(message)
+
+    def report_error(self, message: str) -> None:
+        """Expose host-side failures through the launcher's regular error channel."""
+        self._report_error(message)

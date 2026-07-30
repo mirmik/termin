@@ -29,8 +29,6 @@ class MemoryRecentProjects:
 
 def make_controller(
     *,
-    choose_directory=lambda: "",
-    choose_project_file=lambda: "",
     create_project=lambda name, location: str(Path(location) / f"{name}.terminproj"),
     launch_editor=lambda _path: LaunchResult(started=True),
 ) -> LauncherController:
@@ -42,8 +40,6 @@ def make_controller(
             ]
         ),
         LauncherServices(
-            choose_directory=choose_directory,
-            choose_project_file=choose_project_file,
             create_project=create_project,
             launch_editor=launch_editor,
             report_error=lambda _message: None,
@@ -71,12 +67,15 @@ def test_native_launcher_main_projection_has_stable_actions_and_selection() -> N
     tc_ui_document_destroy(document)
 
 
-def test_native_launcher_activation_and_all_main_actions_use_controller() -> None:
+def test_native_launcher_activation_and_all_main_actions_use_controller(
+    tmp_path: Path,
+) -> None:
     launched: list[str] = []
     controller = make_controller(
-        choose_project_file=lambda: "/external/Game.terminproj",
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
     )
+    project = tmp_path / "Game.terminproj"
+    project.write_text("", encoding="utf-8")
     document = tc_ui_document_create()
     projection = NativeLauncherProjection(document, controller)
 
@@ -86,9 +85,20 @@ def test_native_launcher_activation_and_all_main_actions_use_controller() -> Non
     projection.widgets["recent_list"].select(1)
     projection._open_selected()
     projection._open_existing()
+    assert projection.active_file_dialog_count == 1
+    dialog = next(iter(projection._file_dialogs.values()))
+    assert dialog.model.navigate(str(tmp_path))
+    project_index = next(
+        index
+        for index, entry in enumerate(dialog.model.entries)
+        if entry.path == str(project)
+    )
+    assert dialog.model.select(project_index)
+    assert dialog.activate("accept")
+    assert projection.active_file_dialog_count == 0
     assert launched[-2:] == [
         "/projects/Second/Second.terminproj",
-        "/external/Game.terminproj",
+        str(project),
     ]
 
     projection.widgets["recent_list"].select(0)
@@ -99,10 +109,11 @@ def test_native_launcher_activation_and_all_main_actions_use_controller() -> Non
     tc_ui_document_destroy(document)
 
 
-def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> None:
+def test_native_launcher_new_project_form_preserves_state_and_shows_errors(
+    tmp_path: Path,
+) -> None:
     launched: list[str] = []
     controller = make_controller(
-        choose_directory=lambda: "/workspace",
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
     )
     document = tc_ui_document_create()
@@ -116,13 +127,45 @@ def test_native_launcher_new_project_form_preserves_state_and_shows_errors() -> 
     assert "required" in projection.widgets["error"].text
 
     projection.widgets["name"].text = "Demo"
+    controller.set_new_project_location(str(tmp_path))
     projection._choose_location()
+    assert projection.active_file_dialog_count == 1
+    dialog = next(iter(projection._file_dialogs.values()))
+    assert dialog.model.current_directory == str(tmp_path)
+    assert dialog.activate("accept")
+    assert projection.active_file_dialog_count == 0
     projection._create_project()
-    assert launched == [str(Path("/workspace") / "Demo.terminproj")]
+    assert launched == [str(tmp_path / "Demo.terminproj")]
 
     projection._show_main()
     assert projection.root.stable_id == "launcher.main"
     projection.close()
+    tc_ui_document_destroy(document)
+
+
+def test_native_launcher_file_dialog_cancel_and_projection_close_release_overlays(
+    tmp_path: Path,
+) -> None:
+    launched: list[str] = []
+    controller = make_controller(
+        launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
+    )
+    document = tc_ui_document_create()
+    projection = NativeLauncherProjection(document, controller)
+
+    projection._open_existing()
+    dialog = next(iter(projection._file_dialogs.values()))
+    assert dialog.activate("cancel")
+    assert projection.active_file_dialog_count == 0
+    assert launched == []
+
+    projection._show_new_project()
+    controller.set_new_project_location(str(tmp_path))
+    projection._choose_location()
+    assert projection.active_file_dialog_count == 1
+    projection.close()
+    assert projection.active_file_dialog_count == 0
+    assert document.overlay_count == 0
     tc_ui_document_destroy(document)
 
 

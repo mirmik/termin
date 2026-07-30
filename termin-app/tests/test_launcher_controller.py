@@ -31,8 +31,6 @@ class FakeRecentProjects:
 
 @dataclass
 class ServiceCalls:
-    chosen_directory: str = ""
-    chosen_project: str = ""
     created_project: str = "/projects/New/New.terminproj"
     launch_result: LaunchResult = LaunchResult(started=True, should_quit=True)
     create_calls: list[tuple[str, str]] = field(default_factory=list)
@@ -41,8 +39,6 @@ class ServiceCalls:
 
     def services(self) -> LauncherServices:
         return LauncherServices(
-            choose_directory=lambda: self.chosen_directory,
-            choose_project_file=lambda: self.chosen_project,
             create_project=self.create,
             launch_editor=self.launch,
             report_error=self.errors.append,
@@ -81,13 +77,12 @@ def test_initial_state_and_selection_dependent_actions() -> None:
     assert controller.state.should_quit is True
 
 
-def test_screen_and_directory_picker_state() -> None:
-    controller, _recent, calls = make_controller()
-    calls.chosen_directory = "/work/projects"
+def test_screen_and_new_project_location_state() -> None:
+    controller, _recent, _calls = make_controller()
 
     controller.show_new_project_screen()
     assert controller.state.screen is LauncherScreen.NEW_PROJECT
-    assert controller.choose_new_project_location() == "/work/projects"
+    controller.set_new_project_location("/work/projects")
     assert controller.state.new_project_location == "/work/projects"
 
     controller.show_main_screen()
@@ -119,8 +114,6 @@ def test_project_creation_service_error_is_exposed() -> None:
     controller = LauncherController(
         FakeRecentProjects([]),
         LauncherServices(
-            choose_directory=services.choose_directory,
-            choose_project_file=services.choose_project_file,
             create_project=fail_create,
             launch_editor=services.launch_editor,
             report_error=services.report_error,
@@ -144,13 +137,13 @@ def test_remove_selected_project_refreshes_state() -> None:
     assert controller.state.selected_project_path is None
 
 
-def test_open_existing_and_failed_launch_dispatch() -> None:
+def test_failed_launch_dispatch() -> None:
     controller, recent, calls = make_controller()
-    calls.chosen_project = "/projects/Broken/Broken.terminproj"
+    project_path = "/projects/Broken/Broken.terminproj"
     calls.launch_result = LaunchResult(started=False, error="editor unavailable")
 
-    assert controller.open_existing_project() is False
-    assert calls.launch_calls == [calls.chosen_project]
+    assert controller.open_project(project_path) is False
+    assert calls.launch_calls == [project_path]
     assert recent.added == []
     assert controller.state.should_quit is False
     assert controller.state.last_error == "editor unavailable"
