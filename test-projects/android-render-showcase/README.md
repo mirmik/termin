@@ -24,9 +24,6 @@ part of this path.
 ./sdk/bin/termin_builder profile android-debug \
   --project test-projects/android-render-showcase
 
-./sdk/bin/termin_builder profile quest-openxr-debug \
-  --project test-projects/android-render-showcase
-
 ./sdk/bin/termin_builder build android-debug \
   --dry-run \
   --project test-projects/android-render-showcase
@@ -44,17 +41,6 @@ the portable profile.
 ```
 
 The debug APK is written below `dist/android/apk`.
-
-For a Quest/OpenXR SDK slice, build the second profile:
-
-```bash
-./sdk/bin/termin_builder build quest-openxr-debug \
-  --project test-projects/android-render-showcase
-```
-
-The OpenXR runtime uses the same packaged `UIComponent`, native UI document,
-and `UIWidgetPass`; its stereo fallback pipeline composites UI after tonemapping
-and before presentation.
 
 ## Install and run
 
@@ -81,10 +67,6 @@ artifact:
    for at least 120 frames. The label/button/overlay remain visible and logcat
    contains no missing component, pass, widget factory, UI asset, shader, or
    Vulkan errors.
-4. `quest-native-ui-stereo`: launch `quest-openxr-debug`, confirm the HUD is
-   composited in both eyes and the scene starts from `XR Origin`. Confirm
-   `[OpenXR scene]` reports a pipeline containing `UIWidgets` and there are no
-   missing native-factory diagnostics.
 
 Suggested capture:
 
@@ -93,15 +75,5 @@ adb logcat -c
 adb shell am start -W \
   -n org.termin.testprojects.androidshowcase/org.termin.android.TerminActivity
 adb logcat -d -v threadtime \
-  TerminAndroid:I TerminTcLog:I TerminOpenXR:I TerminOpenXRActivity:I '*:S'
+  TerminAndroid:I TerminTcLog:I '*:S'
 ```
-
-Host gate record, 2026-07-30:
-
-- native SDK build: passed;
-- runtime package export and closure validation: passed, including native
-  `UIComponent`, `XrOriginComponent`, and all HUD widget factories;
-- `tcgui` imported during export/validation: no;
-- Android/Quest build: not run because this host has no installed Termin
-  Android SDK slice or Gradle;
-- device scenarios: not run because `adb devices -l` returned no devices.
