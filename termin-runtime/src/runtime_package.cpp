@@ -26,6 +26,7 @@
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
+#include <termin/gui_native/ui_document_asset.hpp>
 #include <termin/image/image_decode.hpp>
 #include <termin/render/render_pipeline.hpp>
 #include <termin/render/sprite_asset.hpp>
@@ -46,6 +47,7 @@ struct RuntimePackageResourceKeepalive {
     std::vector<TcFoliageData> foliage_data;
     std::vector<TcSpriteAsset> sprites;
     std::vector<TcPipelineTemplate> pipeline_templates;
+    std::vector<gui_native::TcUiDocumentAsset> ui_documents;
 };
 
 namespace {
@@ -1643,7 +1645,8 @@ bool load_resource(
     }
 
     const std::filesystem::path spec_path = package_path(root, rel_path);
-    const nos::trent spec = nos::json::parse(read_text_file(spec_path));
+    const std::string spec_text = read_text_file(spec_path);
+    const nos::trent spec = nos::json::parse(spec_text);
     if (type == "shader") {
         return load_shader_resource(root, spec_path, spec, keepalive, error);
     }
@@ -1661,6 +1664,25 @@ bool load_resource(
     }
     if (type == "sprite_asset") {
         return load_sprite_asset_resource(entry, spec, keepalive, error);
+    }
+    if (type == "ui_document") {
+        const std::string uuid = string_field(entry, "uuid");
+        if (uuid.empty()) {
+            error = "ui_document resource requires a UUID";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        gui_native::TcUiDocumentAsset asset =
+            gui_native::TcUiDocumentAsset::declare_compiled_json(
+                spec_text, uuid);
+        if (!asset.valid()) {
+            error =
+                "failed to register native UI document '" + uuid + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        keepalive.ui_documents.push_back(asset);
+        return true;
     }
 
     error = "unsupported resource type '" + type + "'";
@@ -1819,9 +1841,9 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
         ensure_runtime_builtin_textures();
-        constexpr std::array<const char*, 8> resource_order = {
+        constexpr std::array<const char*, 9> resource_order = {
             "shader", "shader_program", "mesh", "texture", "sprite_asset",
-            "material", "pipeline", "foliage_data"
+            "material", "pipeline", "foliage_data", "ui_document"
         };
         const auto& resource_list = resources->as_list();
         auto load_entry = [&](const nos::trent& resource) -> bool {

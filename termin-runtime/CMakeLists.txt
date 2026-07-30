@@ -62,6 +62,13 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_bootstrap REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(
+        termin_gui_native
+        termin_gui_native::termin_gui_native)
+else()
+    find_package(termin_gui_native REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -101,6 +108,7 @@ target_link_libraries(termin_runtime
         termin_components_render::termin_components_render
         termin_components_foliage::termin_components_foliage
         termin_bootstrap::termin_bootstrap
+        termin_gui_native::termin_gui_native
     PRIVATE
         termin_image::termin_image
 )
