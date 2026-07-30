@@ -380,9 +380,10 @@ The entity pool now maintains the target invariant:
 world affine == parent world affine * local TRS affine
 ```
 
-Scene transforms do not expose a `global_pose()` TRS view. Exact consumers use
-`GeneralTransform3::global_affine()` or `linear_basis()`; logical consumers
-read `global_position` and `global_rotation` independently.
+Scene transforms expose `global_pose()` only as a logical rigid `Pose3` view.
+Exact consumers use `GeneralTransform3::global_affine()` or `linear_basis()`;
+logical consumers may read `global_pose()` or its independent
+`global_position` and `global_rotation` channels.
 
 ## Selected cache layout
 
@@ -475,11 +476,15 @@ The implemented facade also makes scale policy visible:
 
 - `decomposed_global_scale()` returns a value only for decomposed states;
 - `basis_axis_lengths()` is the explicitly named column-length
-  approximation.
+  approximation;
+- `lossy_scale()` is its conventional alias and `lossy_global_pose()` pairs
+  those lengths with exact global position and logical global orientation.
 
 `set_global_position()` uses the exact parent affine inverse.
-`set_global_orientation()` changes the logical quaternion channel. There is no
-whole-world-TRS setter: callers edit the independent world channels or use the
+`set_global_orientation()` changes the logical quaternion channel.
+`set_global_pose(const Pose3&)` is a convenience operation over those two
+logical channels and preserves authored local scale. There is no
+whole-world-TRS setter: scale-aware callers use the explicit graded APIs or the
 transactional exact-affine reparenting operation.
 
 `world_matrix()`, `inverse_world_matrix()`, point transforms and vector
@@ -508,10 +513,13 @@ requires finite strictly positive scale and synchronizes position and logical
 orientation without overwriting authored scale. It rejects affine ancestry,
 reflections and singular scale with an error log.
 
-FEM rigid bodies require an exact rigid world pose. Collision attachment
-accepts decomposed world transforms, but rejects the `AxisScaled` plus rotated
-local-collider combination because that composition would require shear.
-Collider offsets and FEM joint anchors use exact point transformation.
+FEM rigid bodies require an exact rigid world pose. Collision attachment uses
+an explicitly lossy projection for its TRS-only narrow phase: exact global
+position, logical global orientation and affine basis-column lengths. It
+therefore accepts non-singular affine ancestry and rotated local colliders
+while deliberately discarding shear; singular, non-finite and reflected
+world transforms are rejected. Collider offsets and FEM joint anchors use
+exact point transformation.
 
 Rendering, bounds, mesh queries, foliage, voxelization, navmesh geometry and
 skeleton matrices now consume exact model matrices or exact affine operations.
@@ -576,13 +584,14 @@ After all in-tree consumers were migrated:
 
 - `GeneralPose3` multiplication and `inverse()` were replaced by
   `compose_trs_projected()` and `inverse_trs_projected()`;
-- scene `global_pose()`, `set_global_pose()` and `relocate_global()` were
-  removed;
+- the lossy scene `GeneralPose3 global_pose()` and whole-world-TRS setters were
+  removed; `Pose3 global_pose()` and `set_global_pose(const Pose3&)` remain as
+  explicitly scale-free logical-pose conveniences;
 - unconditional `global_scale()` was removed;
 - exact scene access now consists of affine/basis operations and independent
   logical position/orientation channels;
-- deliberately lossy access remains only behind policy-named APIs such as
-  `basis_axis_lengths()`.
+- deliberately lossy access remains only behind policy-named APIs:
+  `basis_axis_lengths()` / `lossy_scale()` and `lossy_global_pose()`.
 
 The C entity-pool API follows the same contract:
 `tc_entity_pool_try_get_decomposed_global_scale()` is the only decomposed scale

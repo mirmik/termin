@@ -43,13 +43,23 @@ struct ENTITY_API GeneralTransform3 {
     void set_local_scale(const Vec3& s);
     Vec3 global_position() const;
     Quat global_rotation() const;
+    // Logical world pose. Scale and shear remain available only through the
+    // explicit graded transform APIs below.
+    Pose3 global_pose() const;
     void set_global_position(const Vec3& p);
     void set_global_orientation(const Quat& q);
+    // Updates logical world position/orientation while preserving authored
+    // local scale.
+    void set_global_pose(const Pose3& pose);
     TransformKind kind() const;
     Basis3d linear_basis() const;
     Affine3d global_affine() const;
     std::optional<Vec3> decomposed_global_scale() const;
     Vec3 basis_axis_lengths() const;
+    // Unity-style lossy world scale: lengths of the exact world-basis columns.
+    Vec3 lossy_scale() const;
+    // Logical world rotation/position paired with lossy_scale().
+    GeneralPose3 lossy_global_pose() const;
     std::optional<Pose3> try_rigid_pose() const;
     void relocate(const GeneralPose3& pose);
     void relocate(const Pose3& pose);
