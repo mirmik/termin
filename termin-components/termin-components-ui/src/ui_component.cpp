@@ -280,6 +280,7 @@ void UIComponent::bind_document_services() {
     current.set_cursor_changed_callback(
         &UIComponent::cursor_changed,
         this);
+    input_presentation_revision_ = current.presentation_revision();
     sync_platform_state();
 }
 
@@ -341,9 +342,44 @@ bool UIComponent::dispatch_ui_pointer(const tc_ui_pointer_event& event) {
     return handled;
 }
 
+void UIComponent::synchronize_presentation_revision() {
+    const gui_native::TcDocument current = document();
+    if (!current.valid()) {
+        input_presentation_revision_ = 0;
+        touch_capture_.reset();
+        return;
+    }
+    const std::uint64_t revision = current.presentation_revision();
+    if (revision != input_presentation_revision_) {
+        touch_capture_.reset();
+        input_presentation_revision_ = revision;
+    }
+}
+
+bool UIComponent::physical_to_logical(
+    float physical_x,
+    float physical_y,
+    tc_ui_point& logical
+) {
+    const gui_native::TcDocument current = document();
+    synchronize_presentation_revision();
+    tc_ui_presentation_metrics metrics{};
+    if (!current.valid() || !current.presentation_metrics(metrics)) {
+        tc::Log::error(
+            "[UIComponent] cannot dispatch pointer input before presentation "
+            "metrics are published");
+        return false;
+    }
+    return tc_ui_presentation_metrics_physical_to_logical_point(
+        &metrics,
+        tc_ui_point{physical_x, physical_y},
+        &logical);
+}
+
 void UIComponent::on_pointer(tc_pointer_event* event) {
     if (!event || !has_document()) return;
     update_platform_services(event->platform_services);
+    synchronize_presentation_revision();
 
     const bool is_touch = event->device == TC_POINTER_DEVICE_TOUCH;
     if (is_touch && touch_capture_ &&
@@ -354,8 +390,15 @@ void UIComponent::on_pointer(tc_pointer_event* event) {
 
     tc_ui_pointer_event ui_event{};
     ui_event.type = ui_pointer_phase(event->phase);
-    ui_event.x = static_cast<float>(event->x);
-    ui_event.y = static_cast<float>(event->y);
+    tc_ui_point logical{};
+    if (!physical_to_logical(
+            static_cast<float>(event->x),
+            static_cast<float>(event->y),
+            logical)) {
+        return;
+    }
+    ui_event.x = logical.x;
+    ui_event.y = logical.y;
     ui_event.button = TC_MOUSE_BUTTON_LEFT;
     ui_event.click_count = event->phase == TC_POINTER_DOWN ? 1u : 0u;
     ui_event.cancel_reason = TC_UI_POINTER_CANCEL_EXPLICIT;
@@ -383,8 +426,15 @@ void UIComponent::on_mouse_button(tc_mouse_button_event* event) {
     ui_event.type = event->action == TC_ACTION_RELEASE
         ? TC_UI_POINTER_UP
         : TC_UI_POINTER_DOWN;
-    ui_event.x = static_cast<float>(event->x);
-    ui_event.y = static_cast<float>(event->y);
+    tc_ui_point logical{};
+    if (!physical_to_logical(
+            static_cast<float>(event->x),
+            static_cast<float>(event->y),
+            logical)) {
+        return;
+    }
+    ui_event.x = logical.x;
+    ui_event.y = logical.y;
     ui_event.button = event->button;
     ui_event.click_count = event->click_count;
     ui_event.modifiers = event->mods;
@@ -397,8 +447,15 @@ void UIComponent::on_mouse_move(tc_mouse_move_event* event) {
     update_platform_services(event->platform_services);
     tc_ui_pointer_event ui_event{};
     ui_event.type = TC_UI_POINTER_MOVE;
-    ui_event.x = static_cast<float>(event->x);
-    ui_event.y = static_cast<float>(event->y);
+    tc_ui_point logical{};
+    if (!physical_to_logical(
+            static_cast<float>(event->x),
+            static_cast<float>(event->y),
+            logical)) {
+        return;
+    }
+    ui_event.x = logical.x;
+    ui_event.y = logical.y;
     event->handled =
         event->handled || dispatch_ui_pointer(ui_event);
 }
@@ -408,8 +465,15 @@ void UIComponent::on_scroll(tc_scroll_event* event) {
     update_platform_services(event->platform_services);
     tc_ui_pointer_event ui_event{};
     ui_event.type = TC_UI_POINTER_WHEEL;
-    ui_event.x = static_cast<float>(event->x);
-    ui_event.y = static_cast<float>(event->y);
+    tc_ui_point logical{};
+    if (!physical_to_logical(
+            static_cast<float>(event->x),
+            static_cast<float>(event->y),
+            logical)) {
+        return;
+    }
+    ui_event.x = logical.x;
+    ui_event.y = logical.y;
     ui_event.wheel_x = static_cast<float>(event->xoffset);
     ui_event.wheel_y = static_cast<float>(event->yoffset);
     ui_event.modifiers = event->mods;

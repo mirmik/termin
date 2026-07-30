@@ -241,6 +241,12 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     UIComponent component;
     REQUIRE(component.set_ui_layout_uuid(asset.uuid()));
     const TcDocument document = component.document();
+    REQUIRE(document.set_presentation_metrics(tc_ui_presentation_metrics{
+        2.0f,
+        1.0f,
+        tc_ui_size{400.0f, 200.0f},
+        tc_ui_insets{},
+    }));
     document.layout_roots({0.0f, 0.0f, 200.0f, 100.0f});
 
     tc_widget* root = tc_ui_document_resolve_widget(
@@ -266,17 +272,19 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     tc_pointer_event_init_source(
         &down, TC_VIEWPORT_HANDLE_INVALID,
         17, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
-        x, y, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
+        x * 2.0, y * 2.0, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
     down.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &down);
     REQUIRE(down.handled);
+    CHECK_EQ(down.x, x * 2.0);
+    CHECK_EQ(down.y, y * 2.0);
     CHECK_FALSE(tc_widget_handle_is_invalid(document.pointer_capture()));
 
     tc_pointer_event secondary;
     tc_pointer_event_init_source(
         &secondary, TC_VIEWPORT_HANDLE_INVALID,
         18, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
-        x, y, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
+        x * 2.0, y * 2.0, 0.0, 0.0, 1.0f, TC_INPUT_SOURCE_RUNTIME);
     secondary.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &secondary);
     CHECK_FALSE(secondary.handled);
@@ -289,6 +297,17 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     primary_move.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &primary_move);
     CHECK(primary_move.handled);
+
+    REQUIRE(document.set_presentation_metrics(tc_ui_presentation_metrics{
+        1.5f,
+        1.0f,
+        tc_ui_size{400.0f, 200.0f},
+        tc_ui_insets{},
+    }));
+    CHECK(tc_widget_handle_is_invalid(document.pointer_capture()));
+    primary_move.handled = false;
+    tc_component_on_pointer(component.tc_component_ptr(), &primary_move);
+    CHECK_FALSE(primary_move.handled);
 
     tc_input_focus_event focus_lost;
     tc_input_focus_event_init_source(

@@ -281,7 +281,7 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
         ctx.ctx2->blit(input, output);
     }
 
-    const auto submissions = collect_ui_document_submissions(
+    auto submissions = collect_ui_document_submissions(
         ctx, include_internal_entities);
     if (submissions.empty()) {
         return;
@@ -299,6 +299,14 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
             "[UIWidgetPass] invalid render extent %dx%d for output '%s'",
             width, height, output_res.c_str());
         return;
+    }
+    const tc_ui_presentation_metrics identity =
+        tc_ui_presentation_metrics_identity(tc_ui_size{
+            static_cast<float>(width),
+            static_cast<float>(height),
+        });
+    for (auto& submission : submissions) {
+        submission.presentation_metrics = identity;
     }
 
     ctx.ctx2->begin_pass(output, {}, nullptr, 1.0f, false);
