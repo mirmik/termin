@@ -213,11 +213,15 @@ authoring form:
 ```text
 @surface contract=termin.surface.standard-pbr version=1
          type=TerminStandardSurfaceV1 entry=evaluate_surface
+@surfaceInput world_pos float3
+@surfaceInput normal_world float3
 ```
 
-This may be serialized on one line in the actual parser. The contract id and
+`@surface` is serialized on one line in the actual parser. The contract id and
 version are normative. `type` and `entry` are validated against the registered
-descriptor and generated source.
+descriptor and evaluator source. Repeatable `@surfaceInput` directives declare
+the producer's vertex-to-fragment semantic requirements explicitly; the pass
+does not infer or supply them from source text.
 
 The parsed phase carries a material fragment program separate from the final
 executable shader contract:
