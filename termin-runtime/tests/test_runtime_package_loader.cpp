@@ -21,6 +21,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
+#include <termin/gui_native/ui_document_asset.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
@@ -653,6 +654,56 @@ TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the sce
     CHECK_EQ(tc_scene_pipeline_template_count(result.scene.handle()), 1u);
     CHECK(tc_pipeline_template_handle_eq(
         tc_scene_pipeline_template_at(result.scene.handle(), 0), loaded));
+}
+
+TEST_CASE("RuntimePackageLoader registers native UI documents before the scene") {
+    const std::filesystem::path root = make_package_root();
+    std::filesystem::create_directories(root / "ui");
+    constexpr const char* ui_uuid = "runtime-native-ui";
+    const std::string source = R"(
+uiscript: 2
+root:
+  type: termin.gui.Panel
+  name: runtime_root
+  background_color: [0.1, 0.2, 0.3, 1]
+)";
+    const std::string compiled =
+        termin::gui_native::TcUiDocumentAsset::compile_source_json(
+            ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
+    write_text(root / "ui" / "runtime.ui-document.json", compiled);
+    write_text(root / "manifest.json", R"({
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": [
+    {"type": "ui_document", "uuid": "runtime-native-ui", "name": "Runtime UI", "path": "ui/runtime.ui-document.json"}
+  ]
+}
+)");
+    write_text(root / "scene.json", R"({
+  "uuid": "runtime-native-ui-scene",
+  "entities": []
+}
+)");
+
+    termin::gui_native::TcUiDocumentAsset::clear_registry_for_tests();
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+
+    REQUIRE(result.ok);
+    REQUIRE(result.resources != nullptr);
+    const auto asset =
+        termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid);
+    REQUIRE(asset.valid());
+    const auto recipe = asset.resolve();
+    REQUIRE(recipe != nullptr);
+    CHECK_EQ(recipe->source_identity(), "UI/runtime.uiscript");
+    CHECK_EQ(recipe->type_dependencies().size(), 1u);
+    auto document = asset.instantiate();
+    CHECK_EQ(document.root().type_name, "termin.gui.Panel");
+    termin::gui_native::TcUiDocumentAsset::clear_registry_for_tests();
 }
 
 TEST_CASE("RuntimePackageLoader requires an explicit supported shader language") {

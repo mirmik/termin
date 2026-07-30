@@ -74,6 +74,9 @@ from termin.project_build.runtime_package.standard_resources import (
 )
 from termin.project_build.runtime_package.textures import write_textures as _write_textures
 from termin.project_build.runtime_package.sprites import write_sprites as _write_sprites
+from termin.project_build.runtime_package.ui_documents import (
+    write_ui_documents as _write_ui_documents,
+)
 
 
 DEFAULT_RESOURCE_POLICY = "strict"
@@ -137,6 +140,7 @@ def export_runtime_package(
             refs.textures.update(scene_refs.textures)
             refs.pipelines.update(scene_refs.pipelines)
             refs.sprites.update(scene_refs.sprites)
+            refs.ui_documents.update(scene_refs.ui_documents)
     if refs is None:
         raise ValueError("Runtime package must contain at least one scene root")
     _collect_project_material_refs(project_root_path, refs, diagnostics)
@@ -193,6 +197,13 @@ def export_runtime_package(
         output_dir_path,
         refs.sprites,
         refs.textures,
+        resources,
+        diagnostics,
+    )
+    _write_ui_documents(
+        project_root_path,
+        output_dir_path,
+        refs.ui_documents,
         resources,
         diagnostics,
     )

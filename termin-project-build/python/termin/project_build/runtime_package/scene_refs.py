@@ -133,6 +133,11 @@ def collect_typed_ref(
     sprite_reason = resource_ref_match_reason(value, field_name, "sprite_asset")
     if sprite_reason is not None:
         refs.sprites[uuid_value] = name
+    ui_document_reason = resource_ref_match_reason(
+        value, field_name, "ui_document"
+    )
+    if ui_document_reason is not None:
+        refs.ui_documents[uuid_value] = name
 
 
 def collect_pipeline_refs(
@@ -227,6 +232,8 @@ def resource_ref_match_reason(
         canonical_kind = "tc_material"
     elif resource_type == "sprite_asset":
         canonical_kind = "sprite_asset"
+    elif resource_type == "ui_document":
+        canonical_kind = "ui_document"
     else:
         raise ValueError(f"Unsupported runtime resource ref type: {resource_type}")
 

@@ -13,6 +13,7 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
 from termin.project_build.runtime_package.sprites import write_sprites
+from termin.project_build.runtime_package.ui_documents import write_ui_documents
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -115,6 +116,63 @@ def test_sprite_asset_ref_and_texture_are_exported_together(tmp_path: Path) -> N
         )
     )
     assert packaged["texture"]["uuid"] == texture_uuid
+
+
+def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:
+    project = tmp_path / "UiGame"
+    package = tmp_path / "package"
+    uuid_value = "native-ui-uuid"
+    source = project / "UI" / "hud.uiscript"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "uiscript: 2\n"
+        "root:\n"
+        "  type: termin.gui.Panel\n"
+        "  name: hud\n"
+        "  background_color: [0.1, 0.2, 0.3, 1]\n",
+        encoding="utf-8",
+    )
+    _write_json(Path(f"{source}.meta"), {"uuid": uuid_value})
+    refs = collect_runtime_refs(
+        {
+            "ui_layout": {
+                "type": "uuid",
+                "kind": "ui_document",
+                "uuid": uuid_value,
+                "name": "hud",
+            }
+        }
+    )
+    assert refs.ui_documents == {uuid_value: "hud"}
+
+    resources: list[dict[str, str]] = []
+    diagnostics = []
+    write_ui_documents(
+        project,
+        package,
+        refs.ui_documents,
+        resources,
+        diagnostics,
+    )
+
+    assert diagnostics == []
+    assert resources == [
+        {
+            "type": "ui_document",
+            "uuid": uuid_value,
+            "name": "hud",
+            "path": f"ui/{uuid_value}.ui-document.json",
+        }
+    ]
+    payload = json.loads(
+        (package / "ui" / f"{uuid_value}.ui-document.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["ui_document_asset"] == 1
+    assert payload["uuid"] == uuid_value
+    assert payload["type_dependencies"] == ["termin.gui.Panel"]
+    assert payload["recipe"]["uiscript"] == 2
 
 
 
