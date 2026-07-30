@@ -92,6 +92,14 @@ public:
     ) override {
         tc_ui_painter_fill_rect(
             painter,
+            tc_ui_rect{
+                0.0f,
+                0.0f,
+                static_cast<float>(kWidth),
+                static_cast<float>(kHeight)},
+            tc_ui_color{0.0f, 0.0f, 0.0f, 0.0f});
+        tc_ui_painter_fill_rect(
+            painter,
             tc_ui_rect{0.0f, 0.0f, 12.0f, 12.0f},
             tc_ui_color{0.9f, 0.05f, 0.05f, 1.0f});
     }
