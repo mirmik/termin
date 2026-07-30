@@ -81,7 +81,6 @@ termin::MaterialPipelinePassContract line_material_fragment_contract()
     contract.debug_name = "custom_line_material_fragment";
     contract.required_material_fragment_input =
         termin::material_pipeline_standard_material_fragment_interface();
-    contract.uses_material_fragment = true;
     return contract;
 }
 
@@ -90,7 +89,6 @@ termin::MaterialPipelinePassContract line_auxiliary_contract()
     termin::MaterialPipelinePassContract contract;
     contract.debug_name = "custom_line_auxiliary";
     contract.required_material_fragment_input = termin::MaterialFragmentInterface{};
-    contract.uses_material_fragment = true;
     return contract;
 }
 

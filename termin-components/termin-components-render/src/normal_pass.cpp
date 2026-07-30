@@ -77,7 +77,6 @@ MaterialPipelinePassContract normal_material_pass_contract()
     MaterialPipelinePassContract contract;
     contract.debug_name = "normal";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
-    contract.uses_material_fragment = true;
     contract.vertex_output_adapter = normal_vertex_output_adapter();
     contract.static_vertex_transform =
         material_pipeline_make_static_mesh_vertex_transform_provider(

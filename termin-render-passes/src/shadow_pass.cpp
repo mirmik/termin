@@ -160,7 +160,6 @@ MaterialPipelinePassContract shadow_material_pass_contract()
     MaterialPipelinePassContract contract;
     contract.debug_name = "shadow";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
-    contract.uses_material_fragment = true;
     contract.vertex_output_adapter = shadow_vertex_output_adapter();
 
     contract.static_vertex_transform =

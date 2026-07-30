@@ -47,7 +47,7 @@ its fields or shading model to an engine enum.
 The first prototype adds a separate deferred pipeline alongside the existing
 `Default` pipeline. It does not replace or silently alter `Default`.
 
-## Current state
+## Baseline before implementation
 
 Termin does not currently have a real surface-shader concept.
 
@@ -81,7 +81,28 @@ The existing extension points are nevertheless useful:
   invalidation;
 - pass-aware shader usage collection feeds offline package builds.
 
-The missing boundary is fragment producer/consumer composition.
+The missing boundary was fragment producer/consumer composition.
+
+## Implemented foundation
+
+Cards #1013, #1014, and #1018 establish the composition boundary:
+
+- exact versioned surface contracts are owner-aware registry entries;
+- `.shader` phases publish evaluator-only producer metadata on `tc_shader`;
+- a pass selects `FinalColor`, `SurfaceConsumer`, or `PassOwned` explicitly;
+- `SurfaceConsumer` concatenates registered interface, evaluator, and consumer
+  sources into one executable Slang fragment program;
+- producer and consumer fragment inputs are validated against the selected
+  vertex transform before shader creation;
+- material, transform, adapter, consumer, and pass resources are merged into
+  the executable shader contract;
+- variant identity includes producer, interface, consumer, transform, adapter,
+  resources, and composition mode;
+- a producer cannot pass through the final-color planning fast path or compile
+  directly as a GPU program.
+
+The later prototype cards still own standard consumers, G-buffer passes,
+routing, package enumeration, and deferred-pipeline integration.
 
 ## Goals
 
@@ -277,6 +298,8 @@ struct MaterialSurfaceConsumerContract {
     SurfaceContractKey accepted_surface;
     std::string consumer_source;
     std::string fragment_entry;
+    std::string source_identity;
+    MaterialFragmentInterface required_fragment_input;
     std::vector<MaterialPipelineResourceDecl> resources;
 };
 ```
