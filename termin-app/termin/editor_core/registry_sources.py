@@ -814,6 +814,7 @@ def build_resource_manager_pages(resource_manager, project_file_watcher=None) ->
         ("voxel_grid", "Voxel Grids"),
         ("navmesh", "NavMeshes"),
         ("skeleton", "Skeletons"),
+        ("ui", "UI Documents"),
         ("pipeline", "Pipelines"),
     ):
         source = ResourceAssetSource(resource_manager, type_id)

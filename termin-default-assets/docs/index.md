@@ -43,8 +43,11 @@ Current adapters:
   plugins; runtime references use canonical `termin.audio.TcAudioClip` handles.
 - `termin.default_assets.render`: texture, GLSL, material, shader, pipeline
   and scene-pipeline asset adapters/plugins plus render asset helper modules.
-- `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and UI import/runtime
-  plugins for `.uiscript` layouts backed by `tcgui`.
+- `termin.default_assets.ui`: `.uiscript` project-file indexing and
+  transactional reload backed by native `UiDocumentAsset` recipes. The
+  `UiDocumentSourceAsset` Python object stores only project metadata; parsing,
+  instances and widget trees remain native. `UIAsset`/`UIHandle` are legacy
+  compatibility types scheduled for removal after the packaged-runtime gate.
 
 Compatibility paths:
 

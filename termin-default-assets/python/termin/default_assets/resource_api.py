@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from termin.default_assets.render.pipeline_asset import PipelineAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.render.texture_asset import TextureAsset
-    from termin.default_assets.ui.handle import UIHandle
     from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
@@ -645,13 +644,10 @@ class DefaultAssetResourceMixin:
     def get_ui_asset(self, name: str):
         return self._ui_registry.get_asset(name)
 
-    def get_ui_handle(self, name: str) -> Optional["UIHandle"]:
-        from termin.default_assets.ui.handle import UIHandle
-
+    def get_ui_document(self, name: str):
+        """Return the canonical native UI document asset handle."""
         asset = self._ui_registry.get_asset(name)
-        if asset is not None:
-            return UIHandle.from_asset(asset)
-        return None
+        return None if asset is None else asset.resource
 
     def list_ui_names(self) -> list[str]:
         return self._ui_registry.list_names()
@@ -660,7 +656,9 @@ class DefaultAssetResourceMixin:
         return self._ui_registry.get_asset_by_uuid(uuid)
 
     def unregister_ui(self, name: str) -> None:
-        self._ui_registry.unregister(name)
+        asset = self._ui_registry.unregister(name)
+        if asset is not None:
+            asset.remove_native()
 
     # --------- Textures ---------
     def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:

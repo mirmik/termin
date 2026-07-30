@@ -81,6 +81,7 @@ def test_resource_manager_pages_contain_only_asset_owned_catalogs():
         "voxel_grid",
         "navmesh",
         "skeleton",
+        "ui",
         "pipeline",
     ]
 

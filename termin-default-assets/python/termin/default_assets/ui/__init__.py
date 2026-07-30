@@ -1,5 +1,6 @@
 """Default UI asset adapters."""
 
+from .document_asset import UiDocumentSourceAsset
 from .asset import UIAsset
 from .handle import UIHandle
 from .asset_plugin import (
@@ -16,6 +17,7 @@ from .asset_plugin import (
 __all__ = [
     "UIAsset",
     "UIHandle",
+    "UiDocumentSourceAsset",
     "UIAssetPlugin",
     "UIImportPlugin",
     "UIRuntimePlugin",

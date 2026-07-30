@@ -173,6 +173,46 @@ def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
     assert isinstance(manager.get_handle_accessors("mesh_handle"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("tc_texture"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("texture_handle"), HandleAccessors)
+    assert isinstance(manager.get_handle_accessors("ui_document"), HandleAccessors)
+
+
+def test_ui_document_accessors_expose_native_handle_and_uuid(tmp_path) -> None:
+    from termin_assets import PreLoadResult
+    from termin.gui_native import UiDocumentAsset
+
+    UiDocumentAsset.clear_registry_for_tests()
+    path = tmp_path / "hud.uiscript"
+    path.write_text(
+        """uiscript: 2
+root:
+  type: termin.gui.IconButton
+  name: action
+  icon: H
+  tooltip: HUD
+""",
+        encoding="utf-8",
+    )
+    manager = DefaultResourceManager()
+    registration = manager.register_file(
+        PreLoadResult(
+            resource_type="ui",
+            path=str(path),
+            uuid="native-ui-hud",
+            spec_data={"uuid": "native-ui-hud"},
+        )
+    )
+
+    assert registration is not None
+    accessors = manager.get_handle_accessors("ui_document")
+    assert accessors.list_items() == [("hud", "native-ui-hud")]
+    handle = accessors.get_by_name("hud")
+    assert isinstance(handle, UiDocumentAsset)
+    assert handle.valid
+    assert handle.uuid == "native-ui-hud"
+    assert manager.get_handle_by_uuid("ui_document", "native-ui-hud").valid
+
+    manager.clear_runtime_state()
+    assert not UiDocumentAsset.from_uuid("native-ui-hud").valid
 
 
 def test_handle_accessors_enumerate_duplicate_names_by_uuid() -> None:
