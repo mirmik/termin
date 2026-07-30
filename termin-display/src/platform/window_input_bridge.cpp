@@ -4,37 +4,71 @@
 #include "termin/platform/backend_window.hpp"
 #include <tcbase/tc_log.h>
 
-#include <string_view>
+#include <algorithm>
+#include <cstring>
+#include <string>
 
 namespace termin {
 
 namespace {
 
-bool decode_utf8(std::string_view text, size_t& offset, uint32_t& codepoint) {
-    if (offset >= text.size()) return false;
-    const auto lead = static_cast<unsigned char>(text[offset++]);
-    if (lead < 0x80) {
-        codepoint = lead;
-        return true;
+BackendWindow* platform_window(void* userdata) {
+    return static_cast<BackendWindow*>(userdata);
+}
+
+size_t platform_clipboard_text(
+    void* userdata,
+    char* buffer,
+    size_t capacity
+) {
+    BackendWindow* window = platform_window(userdata);
+    if (!window) return 0;
+    const std::string text = window->clipboard_text();
+    if (buffer && capacity > 0) {
+        const size_t copied = std::min(text.size(), capacity - 1);
+        std::memcpy(buffer, text.data(), copied);
+        buffer[copied] = '\0';
     }
-    int continuation_count = 0;
-    uint32_t value = 0;
-    if ((lead & 0xe0) == 0xc0) { continuation_count = 1; value = lead & 0x1f; }
-    else if ((lead & 0xf0) == 0xe0) { continuation_count = 2; value = lead & 0x0f; }
-    else if ((lead & 0xf8) == 0xf0) { continuation_count = 3; value = lead & 0x07; }
-    else return false;
-    if (offset + static_cast<size_t>(continuation_count) > text.size()) return false;
-    for (int index = 0; index < continuation_count; ++index) {
-        const auto byte = static_cast<unsigned char>(text[offset++]);
-        if ((byte & 0xc0) != 0x80) return false;
-        value = (value << 6) | (byte & 0x3f);
+    return text.size();
+}
+
+bool platform_set_clipboard_text(
+    void* userdata,
+    const char* text_utf8,
+    size_t byte_length
+) {
+    BackendWindow* window = platform_window(userdata);
+    if (!window || (!text_utf8 && byte_length != 0)) return false;
+    return window->set_clipboard_text(
+        std::string(text_utf8 ? text_utf8 : "", byte_length));
+}
+
+WindowCursor platform_cursor(tc_input_cursor cursor) {
+    switch (cursor) {
+        case TC_INPUT_CURSOR_TEXT: return WindowCursor::Text;
+        case TC_INPUT_CURSOR_HAND: return WindowCursor::Hand;
+        case TC_INPUT_CURSOR_CROSSHAIR: return WindowCursor::Crosshair;
+        case TC_INPUT_CURSOR_MOVE: return WindowCursor::Move;
+        case TC_INPUT_CURSOR_RESIZE_HORIZONTAL:
+            return WindowCursor::ResizeHorizontal;
+        case TC_INPUT_CURSOR_RESIZE_VERTICAL:
+            return WindowCursor::ResizeVertical;
+        case TC_INPUT_CURSOR_RESIZE_NWSE: return WindowCursor::ResizeNWSE;
+        case TC_INPUT_CURSOR_RESIZE_NESW: return WindowCursor::ResizeNESW;
+        case TC_INPUT_CURSOR_DEFAULT:
+        default:
+            return WindowCursor::Default;
     }
-    if ((continuation_count == 1 && value < 0x80) ||
-        (continuation_count == 2 && value < 0x800) ||
-        (continuation_count == 3 && value < 0x10000) ||
-        value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) return false;
-    codepoint = value;
-    return true;
+}
+
+void platform_set_cursor(void* userdata, tc_input_cursor cursor) {
+    BackendWindow* window = platform_window(userdata);
+    if (window) window->set_cursor(platform_cursor(cursor));
+}
+
+void platform_set_text_input_enabled(void* userdata, bool enabled) {
+    BackendWindow* window = platform_window(userdata);
+    if (window) window->set_text_input_enabled(enabled);
 }
 
 } // namespace
@@ -86,16 +120,14 @@ void dispatch_window_input_event(tc_display_handle display, const WindowEvent& e
         case WindowEventType::TextInput: {
             size_t length = 0;
             while (length < event.text.utf8.size() && event.text.utf8[length] != '\0') ++length;
-            const std::string_view text(event.text.utf8.data(), length);
-            size_t offset = 0;
-            while (offset < text.size()) {
-                uint32_t codepoint = 0;
-                if (!decode_utf8(text, offset, codepoint)) {
-                    tc_log_error("[window_input_bridge] invalid UTF-8 text event");
-                    return;
-                }
-                tc_display_dispatch_text(display, codepoint);
-            }
+            const std::string text(event.text.utf8.data(), length);
+            tc_display_dispatch_text_utf8(display, text.c_str());
+            break;
+        }
+
+        case WindowEventType::PointerCaptureLost:
+        case WindowEventType::FocusLost: {
+            tc_display_dispatch_focus_lost(display);
             break;
         }
 
@@ -110,6 +142,17 @@ void attach_window_input_display(
     if (!tc_display_handle_valid(display)) {
         window.set_event_handler({});
         return;
+    }
+    const tc_input_platform_services services = {
+        .userdata = &window,
+        .clipboard_text = platform_clipboard_text,
+        .set_clipboard_text = platform_set_clipboard_text,
+        .set_cursor = platform_set_cursor,
+        .set_text_input_enabled = platform_set_text_input_enabled,
+    };
+    if (!tc_display_set_input_platform_services(display, &services)) {
+        tc_log_error(
+            "[window_input_bridge] failed to install input platform services");
     }
     window.set_event_handler(
         [display](const WindowEvent& event) {

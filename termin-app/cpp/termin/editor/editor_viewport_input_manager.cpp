@@ -12,6 +12,8 @@
 namespace termin {
 
 // Vtable callback wrappers
+static void editor_on_text(tc_input_manager* m, const char* text_utf8);
+
 static void editor_on_mouse_button(tc_input_manager* m, int button, int action, int mods,
                                    uint32_t click_count) {
     if (m && m->userdata) {
@@ -39,8 +41,45 @@ static void editor_on_key(tc_input_manager* m, int key, int scancode, int action
 }
 
 static void editor_on_char(tc_input_manager* m, uint32_t codepoint) {
-    (void)m;
-    (void)codepoint;
+    char text[5] = {};
+    if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+        tc_log_error(
+            "[EditorViewportInputManager] invalid Unicode surrogate");
+        return;
+    } else if (codepoint <= 0x7f) {
+        text[0] = static_cast<char>(codepoint);
+    } else if (codepoint <= 0x7ff) {
+        text[0] = static_cast<char>(0xc0 | (codepoint >> 6));
+        text[1] = static_cast<char>(0x80 | (codepoint & 0x3f));
+    } else if (codepoint <= 0xffff) {
+        text[0] = static_cast<char>(0xe0 | (codepoint >> 12));
+        text[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f));
+        text[2] = static_cast<char>(0x80 | (codepoint & 0x3f));
+    } else if (codepoint <= 0x10ffff) {
+        text[0] = static_cast<char>(0xf0 | (codepoint >> 18));
+        text[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f));
+        text[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f));
+        text[3] = static_cast<char>(0x80 | (codepoint & 0x3f));
+    } else {
+        tc_log_error(
+            "[EditorViewportInputManager] invalid Unicode codepoint");
+        return;
+    }
+    editor_on_text(m, text);
+}
+
+static void editor_on_text(tc_input_manager* m, const char* text_utf8) {
+    if (m && m->userdata) {
+        static_cast<EditorViewportInputManager*>(m->userdata)
+            ->on_text(text_utf8);
+    }
+}
+
+static void editor_on_focus_lost(tc_input_manager* m) {
+    if (m && m->userdata) {
+        static_cast<EditorViewportInputManager*>(m->userdata)
+            ->on_focus_lost();
+    }
 }
 
 static void editor_destroy(tc_input_manager* m) {
@@ -55,6 +94,8 @@ tc_input_manager_vtable EditorViewportInputManager::_vtable = {
     .on_key = editor_on_key,
     .on_char = editor_on_char,
     .destroy = editor_destroy,
+    .on_text = editor_on_text,
+    .on_focus_lost = editor_on_focus_lost,
 };
 
 // ============================================================================
@@ -94,6 +135,7 @@ bool EditorViewportInputManager::rebind(tc_viewport_handle viewport, tc_display_
 }
 
 void EditorViewportInputManager::detach() {
+    on_focus_lost();
     if (tc_viewport_alive(_viewport) && tc_viewport_get_input_manager(_viewport) == &_tc_im)
         tc_viewport_set_input_manager(_viewport, nullptr);
     _viewport = TC_VIEWPORT_HANDLE_INVALID;
@@ -116,6 +158,7 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
     // explicitly opted into editor input via input_source_mask.
     MouseButtonEvent event(MouseButtonEventInit{
         _viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR, click_count});
+    event.platform_services = &_tc_im.platform_services;
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -142,6 +185,7 @@ void EditorViewportInputManager::on_mouse_move(double x, double y) {
     _has_cursor = true;
 
     MouseMoveEvent event(_viewport, x, y, dx, dy, TC_INPUT_SOURCE_EDITOR);
+    event.platform_services = &_tc_im.platform_services;
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -164,6 +208,7 @@ void EditorViewportInputManager::on_scroll(double xoffset, double yoffset, int m
     int actual_mods = mods != 0 ? mods : _current_mods;
 
     ScrollEvent event(_viewport, x, y, xoffset, yoffset, actual_mods, TC_INPUT_SOURCE_EDITOR);
+    event.platform_services = &_tc_im.platform_services;
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -181,6 +226,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
 
     _current_mods = mods;
     KeyEvent event(_viewport, key, scancode, action, mods, TC_INPUT_SOURCE_EDITOR);
+    event.platform_services = &_tc_im.platform_services;
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -208,6 +254,30 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     } else if (!sys) {
         tc_log(TC_LOG_WARN, "EditorViewportInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
     }
+}
+
+void EditorViewportInputManager::on_text(const char* text_utf8) {
+    if (!tc_viewport_alive(_viewport) || !text_utf8 || !text_utf8[0]) return;
+    tc_text_event event;
+    tc_text_event_init_source(
+        &event, _viewport, text_utf8, TC_INPUT_SOURCE_EDITOR);
+    event.platform_services = &_tc_im.platform_services;
+    _dispatch_to_internal_entities(&event);
+    if (!event.handled) {
+        _dispatch_to_editor_components(&event);
+    }
+}
+
+void EditorViewportInputManager::on_focus_lost() {
+    if (!tc_viewport_alive(_viewport)) return;
+    tc_input_focus_event event;
+    tc_input_focus_event_init_source(
+        &event, _viewport, TC_INPUT_SOURCE_EDITOR);
+    event.platform_services = &_tc_im.platform_services;
+    _dispatch_to_internal_entities(&event);
+    _dispatch_to_editor_components(&event);
+    _has_cursor = false;
+    _current_mods = 0;
 }
 
 // ============================================================================
@@ -274,6 +344,38 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev
         TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
+void EditorViewportInputManager::_dispatch_to_editor_components(tc_text_event* ev) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
+    if (!tc_scene_handle_valid(scene)) return;
+    tc_scene_foreach_input_handler(scene,
+        [](tc_component* c, void* ud) -> bool {
+            auto* ev = static_cast<tc_text_event*>(ud);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_text(c, ev);
+            }
+            return !ev->handled;
+        },
+        ev,
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+}
+
+void EditorViewportInputManager::_dispatch_to_editor_components(
+    tc_input_focus_event* ev
+) {
+    tc_scene_handle scene = tc_viewport_get_scene(_viewport);
+    if (!tc_scene_handle_valid(scene)) return;
+    tc_scene_foreach_input_handler(scene,
+        [](tc_component* c, void* ud) -> bool {
+            auto* ev = static_cast<tc_input_focus_event*>(ud);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_focus_lost(c, ev);
+            }
+            return true;
+        },
+        ev,
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+}
+
 // ============================================================================
 // Dispatch helpers - Internal entities
 // ============================================================================
@@ -327,6 +429,34 @@ void EditorViewportInputManager::_dispatch_to_internal_entities(tc_key_event* ev
                 tc_component_on_key(c, ev);
             }
             return !ev->handled;
+        }, ev);
+}
+
+void EditorViewportInputManager::_dispatch_to_internal_entities(tc_text_event* ev) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
+    if (!tc_entity_handle_valid(ent)) return;
+    tc_entity_foreach_input_handler_subtree(ent,
+        [](tc_component* c, void* ud) -> bool {
+            auto* ev = static_cast<tc_text_event*>(ud);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_text(c, ev);
+            }
+            return !ev->handled;
+        }, ev);
+}
+
+void EditorViewportInputManager::_dispatch_to_internal_entities(
+    tc_input_focus_event* ev
+) {
+    tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
+    if (!tc_entity_handle_valid(ent)) return;
+    tc_entity_foreach_input_handler_subtree(ent,
+        [](tc_component* c, void* ud) -> bool {
+            auto* ev = static_cast<tc_input_focus_event*>(ud);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_focus_lost(c, ev);
+            }
+            return true;
         }, ev);
 }
 

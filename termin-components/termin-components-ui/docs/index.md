@@ -26,3 +26,28 @@ frame synchronization.
 `termin.ui_components.UIComponent` is a thin nanobind projection of the same
 C++ component and native document/asset handles. It does not import or expose
 `tcgui` objects.
+
+## Input contract
+
+Display input is routed to the selected viewport in viewport-local pixel
+coordinates and then through the scene input-capability priority order.
+`UIComponent` defaults to priority `1000`, propagates the native document's
+handled result, and therefore stops lower-priority camera/game handlers when a
+widget consumes the event.
+
+The native path supports mouse button/move, wheel, key, committed UTF-8 text,
+device-neutral pointer down/move/up/cancel, focus loss, cursor intent,
+clipboard access, and platform text-input activation. Platform callbacks are
+borrowed from the attached display endpoint; hosts cancel focus and detach the
+services before destroying their window. The component does not own an SDL,
+Android, or window object.
+
+The document model currently owns one pointer interaction. For touch input,
+`UIComponent` claims the first contact whose DOWN is handled, keeps that
+pointer identity through UP/CANCEL, and ignores additional contacts until the
+claimed stream ends. Focus/capture loss and component teardown cancel the
+interaction and clear document focus deterministically.
+
+Committed UTF-8 text is part of the common input ABI. IME preedit/composition,
+selection ranges, grapheme-aware editing, and simultaneous multi-touch widget
+gestures remain outside this contract and are tracked by #863.

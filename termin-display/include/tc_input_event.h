@@ -3,6 +3,7 @@
 #define TC_INPUT_EVENT_H
 
 #include <tcbase/tc_types.h>
+#include "core/tc_input_platform_services.h"
 #include "core/tc_input_source.h"
 #include "render/tc_viewport_pool.h"
 #include <stdint.h>
@@ -99,6 +100,7 @@ typedef struct tc_mouse_button_event {
     int mods;       // Shift=1, Ctrl=2, Alt=4, Super=8
     uint32_t click_count; // Host-supplied sequence count (1=single, 2=double).
     uint32_t source; // tc_input_source flag identifying the dispatch origin.
+    const tc_input_platform_services* platform_services;
     bool handled;   // Set by a handler to stop further input propagation.
 } tc_mouse_button_event;
 
@@ -110,6 +112,7 @@ typedef struct tc_mouse_move_event {
     double dx;
     double dy;
     uint32_t source;
+    const tc_input_platform_services* platform_services;
     bool handled;
 } tc_mouse_move_event;
 
@@ -122,6 +125,7 @@ typedef struct tc_scroll_event {
     double yoffset;
     int mods;
     uint32_t source;
+    const tc_input_platform_services* platform_services;
     bool handled;
 } tc_scroll_event;
 
@@ -133,6 +137,7 @@ typedef struct tc_key_event {
     int action;     // 0=release, 1=press, 2=repeat
     int mods;
     uint32_t source;
+    const tc_input_platform_services* platform_services;
     bool handled;
 } tc_key_event;
 
@@ -148,8 +153,23 @@ typedef struct tc_pointer_event {
     double dy;
     float pressure;
     uint32_t source;
+    const tc_input_platform_services* platform_services;
     bool handled;
 } tc_pointer_event;
+
+typedef struct tc_text_event {
+    tc_viewport_handle viewport;
+    const char* text_utf8;
+    uint32_t source;
+    const tc_input_platform_services* platform_services;
+    bool handled;
+} tc_text_event;
+
+typedef struct tc_input_focus_event {
+    tc_viewport_handle viewport;
+    uint32_t source;
+    const tc_input_platform_services* platform_services;
+} tc_input_focus_event;
 
 typedef struct tc_mouse_button_event_init_info {
     tc_viewport_handle viewport;
@@ -188,6 +208,7 @@ static inline void tc_mouse_button_event_init_source(
     e->mods = info->mods;
     e->click_count = info->click_count;
     e->source = info->source;
+    e->platform_services = NULL;
     e->handled = false;
 }
 
@@ -223,6 +244,7 @@ static inline void tc_mouse_move_event_init_source(
     e->dx = dx;
     e->dy = dy;
     e->source = source;
+    e->platform_services = NULL;
     e->handled = false;
 }
 
@@ -246,6 +268,7 @@ static inline void tc_scroll_event_init_source(
     e->yoffset = info->yoffset;
     e->mods = info->mods;
     e->source = info->source;
+    e->platform_services = NULL;
     e->handled = false;
 }
 
@@ -281,6 +304,7 @@ static inline void tc_key_event_init_source(
     e->action = action;
     e->mods = mods;
     e->source = source;
+    e->platform_services = NULL;
     e->handled = false;
 }
 
@@ -316,7 +340,31 @@ static inline void tc_pointer_event_init_source(
     e->dy = dy;
     e->pressure = pressure;
     e->source = source;
+    e->platform_services = NULL;
     e->handled = false;
+}
+
+static inline void tc_text_event_init_source(
+    tc_text_event* e,
+    tc_viewport_handle viewport,
+    const char* text_utf8,
+    uint32_t source
+) {
+    e->viewport = viewport;
+    e->text_utf8 = text_utf8;
+    e->source = source;
+    e->platform_services = NULL;
+    e->handled = false;
+}
+
+static inline void tc_input_focus_event_init_source(
+    tc_input_focus_event* e,
+    tc_viewport_handle viewport,
+    uint32_t source
+) {
+    e->viewport = viewport;
+    e->source = source;
+    e->platform_services = NULL;
 }
 
 static inline void tc_pointer_event_init(

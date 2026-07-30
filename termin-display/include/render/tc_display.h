@@ -3,6 +3,7 @@
 #define TC_DISPLAY_H
 
 #include "tc_types.h"
+#include "core/tc_input_platform_services.h"
 #include "render/termin_display_api.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_display_pool.h"
@@ -83,6 +84,14 @@ TERMIN_DISPLAY_API bool tc_display_dispatch_wheel(
 TERMIN_DISPLAY_API bool tc_display_dispatch_key(
     tc_display_handle display, int key, int scancode, int action, int mods);
 TERMIN_DISPLAY_API bool tc_display_dispatch_text(tc_display_handle display, uint32_t codepoint);
+TERMIN_DISPLAY_API bool tc_display_dispatch_text_utf8(
+    tc_display_handle display,
+    const char* text_utf8);
+TERMIN_DISPLAY_API bool tc_display_dispatch_focus_lost(
+    tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_display_set_input_platform_services(
+    tc_display_handle display,
+    const tc_input_platform_services* services);
 
 // Get display size in pixels (delegates to surface)
 TERMIN_DISPLAY_API void tc_display_get_size(tc_display_handle display, int* width, int* height);

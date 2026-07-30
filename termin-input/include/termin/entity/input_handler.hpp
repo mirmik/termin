@@ -9,6 +9,8 @@ struct tc_mouse_move_event;
 struct tc_scroll_event;
 struct tc_key_event;
 struct tc_pointer_event;
+struct tc_text_event;
+struct tc_input_focus_event;
 
 namespace termin {
 
@@ -24,6 +26,8 @@ public:
     virtual void on_mouse_move(tc_mouse_move_event* event) {}
     virtual void on_scroll(tc_scroll_event* event) {}
     virtual void on_key(tc_key_event* event) {}
+    virtual void on_text(tc_text_event* event) {}
+    virtual void on_focus_lost(tc_input_focus_event* event) {}
 
 
 protected:
@@ -51,6 +55,10 @@ private:
     static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);
     static void _cb_on_scroll(tc_component* c, tc_scroll_event* event);
     static void _cb_on_key(tc_component* c, tc_key_event* event);
+    static void _cb_on_text(tc_component* c, tc_text_event* event);
+    static void _cb_on_focus_lost(
+        tc_component* c,
+        tc_input_focus_event* event);
 };
 
 } // namespace termin

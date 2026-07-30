@@ -326,6 +326,7 @@ Component packages attach domain behavior/data to scene/entity objects:
 - [termin-components-skeleton](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-skeleton/docs/index.md)
 - [termin-components-animation](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-animation/docs/index.md)
 - [termin-components-tween](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-tween/docs/index.md)
+- [termin-components-ui](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-ui/docs/index.md)
 - [termin-components-voxels](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-voxels/docs/index.md)
 
 ## Language Bindings

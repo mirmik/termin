@@ -10,6 +10,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <string>
 
 namespace {
 
@@ -27,6 +28,8 @@ struct CountingInput {
     double last_x = 0.0;
     double last_y = 0.0;
     uint32_t last_codepoint = 0;
+    std::string last_text;
+    int focus_lost = 0;
     int last_key = -1;
     int last_scancode = -1;
     int last_key_action = -1;
@@ -73,6 +76,18 @@ void count_text(tc_input_manager* self, uint32_t codepoint)
     input->last_codepoint = codepoint;
 }
 
+void count_text_utf8(tc_input_manager* self, const char* text_utf8)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->last_text = text_utf8 ? text_utf8 : "";
+}
+
+void count_focus_lost(tc_input_manager* self)
+{
+    auto* input = reinterpret_cast<CountingInput*>(self->userdata);
+    input->focus_lost += 1;
+}
+
 void count_key(tc_input_manager* self, int key, int scancode, int action, int)
 {
     auto* input = reinterpret_cast<CountingInput*>(self->userdata);
@@ -117,6 +132,8 @@ const tc_input_manager_vtable counting_input_vtable = {
     .on_mouse_move = count_mouse_move,
     .on_key = count_key,
     .on_char = count_text,
+    .on_text = count_text_utf8,
+    .on_focus_lost = count_focus_lost,
 };
 
 void init_counting_input(CountingInput* input)
@@ -127,6 +144,8 @@ void init_counting_input(CountingInput* input)
     input->last_x = 0.0;
     input->last_y = 0.0;
     input->last_codepoint = 0;
+    input->last_text.clear();
+    input->focus_lost = 0;
     input->last_key = -1;
     input->last_scancode = -1;
     input->last_key_action = -1;
@@ -239,8 +258,10 @@ int main()
     pointer_event.pointer.logical_position = {12.5f, 25.0f};
     pointer_event.pointer.framebuffer_position = {75.0f, 50.0f};
     termin::dispatch_window_input_event(display, pointer_event);
-    if (right_input.last_x != 75.0 || right_input.last_y != 50.0) {
-        std::fprintf(stderr, "window bridge used logical instead of framebuffer coordinates\n");
+    if (right_input.last_x != 25.0 || right_input.last_y != 50.0) {
+        std::fprintf(
+            stderr,
+            "window bridge did not route framebuffer coordinates in viewport-local space\n");
         return 1;
     }
 
@@ -268,8 +289,16 @@ int main()
     text_event.text.utf8[0] = static_cast<char>(0xd0);
     text_event.text.utf8[1] = static_cast<char>(0x96);
     termin::dispatch_window_input_event(display, text_event);
-    if (left_input.last_codepoint != 0x416) {
-        std::fprintf(stderr, "window bridge did not decode UTF-8 text input\n");
+    if (left_input.last_text != "\xd0\x96") {
+        std::fprintf(stderr, "window bridge did not preserve committed UTF-8 text\n");
+        return 1;
+    }
+
+    termin::WindowEvent focus_event;
+    focus_event.type = termin::WindowEventType::FocusLost;
+    termin::dispatch_window_input_event(display, focus_event);
+    if (left_input.focus_lost != 1 || right_input.focus_lost != 1) {
+        std::fprintf(stderr, "window focus loss was not broadcast to viewport inputs\n");
         return 1;
     }
 #endif

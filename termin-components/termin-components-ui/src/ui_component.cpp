@@ -6,10 +6,14 @@
 #include <termin/ui/tc_scene_ui_document_capability.h>
 
 extern "C" {
+#include <core/tc_input_platform_services.h>
 #include <core/tc_input_source.h>
 #include <core/tc_input_capability.h>
+#include <tc_input_event.h>
 #include <tc_value.h>
 }
+
+#include <vector>
 
 namespace termin {
 namespace {
@@ -41,6 +45,38 @@ bool get_ui_snapshot(
 const tc_scene_ui_document_vtable kUiDocumentVtable = {
     .get_snapshot = get_ui_snapshot,
 };
+
+tc_ui_pointer_event_type ui_pointer_phase(int phase) {
+    switch (phase) {
+        case TC_POINTER_DOWN: return TC_UI_POINTER_DOWN;
+        case TC_POINTER_UP: return TC_UI_POINTER_UP;
+        case TC_POINTER_CANCEL: return TC_UI_POINTER_CANCEL;
+        case TC_POINTER_MOVE:
+        default:
+            return TC_UI_POINTER_MOVE;
+    }
+}
+
+tc_input_cursor input_cursor(tc_ui_cursor_intent cursor) {
+    switch (cursor) {
+        case TC_UI_CURSOR_TEXT: return TC_INPUT_CURSOR_TEXT;
+        case TC_UI_CURSOR_HAND: return TC_INPUT_CURSOR_HAND;
+        case TC_UI_CURSOR_CROSSHAIR: return TC_INPUT_CURSOR_CROSSHAIR;
+        case TC_UI_CURSOR_MOVE: return TC_INPUT_CURSOR_MOVE;
+        case TC_UI_CURSOR_RESIZE_HORIZONTAL:
+            return TC_INPUT_CURSOR_RESIZE_HORIZONTAL;
+        case TC_UI_CURSOR_RESIZE_VERTICAL:
+            return TC_INPUT_CURSOR_RESIZE_VERTICAL;
+        case TC_UI_CURSOR_RESIZE_NWSE:
+            return TC_INPUT_CURSOR_RESIZE_NWSE;
+        case TC_UI_CURSOR_RESIZE_NESW:
+            return TC_INPUT_CURSOR_RESIZE_NESW;
+        case TC_UI_CURSOR_INHERIT:
+        case TC_UI_CURSOR_DEFAULT:
+        default:
+            return TC_INPUT_CURSOR_DEFAULT;
+    }
+}
 
 } // namespace
 
@@ -124,6 +160,7 @@ bool UIComponent::set_ui_layout_uuid(const std::string& uuid) {
         gui_native::LoadedUiScript replacement = asset.instantiate();
         ui_layout_ = asset;
         loaded_ = std::move(replacement);
+        bind_document_services();
     } catch (const std::exception& error) {
         tc::Log::error(
             "[UIComponent] failed to instantiate UI asset '%s': %s",
@@ -175,6 +212,7 @@ bool UIComponent::reload_document() {
         gui_native::LoadedUiScript replacement =
             asset.reload_instance(*loaded_);
         loaded_ = std::move(replacement);
+        bind_document_services();
         return true;
     } catch (const std::exception& error) {
         tc::Log::error(
@@ -185,6 +223,7 @@ bool UIComponent::reload_document() {
 }
 
 void UIComponent::clear_document() {
+    cancel_interaction(TC_UI_POINTER_CANCEL_EXPLICIT, true);
     loaded_.reset();
 }
 
@@ -214,6 +253,7 @@ void UIComponent::on_added_to_entity() {
     if (!loaded_ && ui_layout_.valid()) {
         try {
             loaded_.emplace(ui_layout_.instantiate());
+            bind_document_services();
         } catch (const std::exception& error) {
             tc::Log::error(
                 "[UIComponent] failed to restore UI asset '%s' on attach: %s",
@@ -228,6 +268,232 @@ void UIComponent::on_removed_from_entity() {
 
 void UIComponent::on_destroy() {
     clear_document();
+}
+
+void UIComponent::bind_document_services() {
+    const gui_native::TcDocument current = document();
+    if (!current.valid()) return;
+    current.set_clipboard(
+        &UIComponent::clipboard_get_text,
+        &UIComponent::clipboard_set_text,
+        this);
+    current.set_cursor_changed_callback(
+        &UIComponent::cursor_changed,
+        this);
+    sync_platform_state();
+}
+
+void UIComponent::update_platform_services(
+    const tc_input_platform_services* services
+) {
+    platform_services_ = services
+        ? *services
+        : tc_input_platform_services{};
+}
+
+void UIComponent::sync_platform_state() {
+    const gui_native::TcDocument current = document();
+    const bool wants_text =
+        current.valid() &&
+        !tc_widget_handle_is_invalid(current.focused_widget());
+    if (platform_services_.set_text_input_enabled &&
+        wants_text != text_input_enabled_) {
+        platform_services_.set_text_input_enabled(
+            platform_services_.userdata,
+            wants_text);
+    }
+    text_input_enabled_ = wants_text;
+
+    if (platform_services_.set_cursor) {
+        const tc_ui_cursor_intent cursor = current.valid()
+            ? current.cursor_intent()
+            : TC_UI_CURSOR_DEFAULT;
+        platform_services_.set_cursor(
+            platform_services_.userdata,
+            input_cursor(cursor));
+    }
+}
+
+void UIComponent::cancel_interaction(
+    tc_ui_pointer_cancel_reason reason,
+    bool clear_focus
+) {
+    const gui_native::TcDocument current = document();
+    if (current.valid()) {
+        current.cancel_pointer_interaction(reason);
+        if (clear_focus) {
+            const tc_widget_handle focused = current.focused_widget();
+            if (!tc_widget_handle_is_invalid(focused)) {
+                tc_ui_document_clear_focus(current.handle(), focused);
+            }
+        }
+    }
+    touch_capture_.reset();
+    sync_platform_state();
+}
+
+bool UIComponent::dispatch_ui_pointer(const tc_ui_pointer_event& event) {
+    const gui_native::TcDocument current = document();
+    if (!current.valid()) return false;
+    const bool handled =
+        current.dispatch_pointer_event(event) == TC_UI_EVENT_HANDLED;
+    sync_platform_state();
+    return handled;
+}
+
+void UIComponent::on_pointer(tc_pointer_event* event) {
+    if (!event || !has_document()) return;
+    update_platform_services(event->platform_services);
+
+    const bool is_touch = event->device == TC_POINTER_DEVICE_TOUCH;
+    if (is_touch && touch_capture_ &&
+        (touch_capture_->pointer_id != event->pointer_id ||
+         touch_capture_->device != event->device)) {
+        return;
+    }
+
+    tc_ui_pointer_event ui_event{};
+    ui_event.type = ui_pointer_phase(event->phase);
+    ui_event.x = static_cast<float>(event->x);
+    ui_event.y = static_cast<float>(event->y);
+    ui_event.button = TC_MOUSE_BUTTON_LEFT;
+    ui_event.click_count = event->phase == TC_POINTER_DOWN ? 1u : 0u;
+    ui_event.cancel_reason = TC_UI_POINTER_CANCEL_EXPLICIT;
+
+    const bool handled = dispatch_ui_pointer(ui_event);
+    if (is_touch && event->phase == TC_POINTER_DOWN && handled) {
+        touch_capture_ = TouchCapture{event->pointer_id, event->device};
+    }
+    const bool claimed =
+        is_touch && touch_capture_ &&
+        touch_capture_->pointer_id == event->pointer_id &&
+        touch_capture_->device == event->device;
+    event->handled = event->handled || handled || claimed;
+    if (claimed &&
+        (event->phase == TC_POINTER_UP ||
+         event->phase == TC_POINTER_CANCEL)) {
+        touch_capture_.reset();
+    }
+}
+
+void UIComponent::on_mouse_button(tc_mouse_button_event* event) {
+    if (!event || !has_document()) return;
+    update_platform_services(event->platform_services);
+    tc_ui_pointer_event ui_event{};
+    ui_event.type = event->action == TC_ACTION_RELEASE
+        ? TC_UI_POINTER_UP
+        : TC_UI_POINTER_DOWN;
+    ui_event.x = static_cast<float>(event->x);
+    ui_event.y = static_cast<float>(event->y);
+    ui_event.button = event->button;
+    ui_event.click_count = event->click_count;
+    ui_event.modifiers = event->mods;
+    event->handled =
+        event->handled || dispatch_ui_pointer(ui_event);
+}
+
+void UIComponent::on_mouse_move(tc_mouse_move_event* event) {
+    if (!event || !has_document()) return;
+    update_platform_services(event->platform_services);
+    tc_ui_pointer_event ui_event{};
+    ui_event.type = TC_UI_POINTER_MOVE;
+    ui_event.x = static_cast<float>(event->x);
+    ui_event.y = static_cast<float>(event->y);
+    event->handled =
+        event->handled || dispatch_ui_pointer(ui_event);
+}
+
+void UIComponent::on_scroll(tc_scroll_event* event) {
+    if (!event || !has_document()) return;
+    update_platform_services(event->platform_services);
+    tc_ui_pointer_event ui_event{};
+    ui_event.type = TC_UI_POINTER_WHEEL;
+    ui_event.x = static_cast<float>(event->x);
+    ui_event.y = static_cast<float>(event->y);
+    ui_event.wheel_x = static_cast<float>(event->xoffset);
+    ui_event.wheel_y = static_cast<float>(event->yoffset);
+    ui_event.modifiers = event->mods;
+    event->handled =
+        event->handled || dispatch_ui_pointer(ui_event);
+}
+
+void UIComponent::on_key(tc_key_event* event) {
+    if (!event || !has_document()) return;
+    update_platform_services(event->platform_services);
+    tc_ui_key_event ui_event{};
+    ui_event.type = event->action == TC_ACTION_RELEASE
+        ? TC_UI_KEY_UP
+        : TC_UI_KEY_DOWN;
+    ui_event.key = event->key;
+    ui_event.scancode = event->scancode;
+    ui_event.modifiers = event->mods;
+    ui_event.repeat = event->action == TC_ACTION_REPEAT;
+    event->handled =
+        event->handled ||
+        document().dispatch_key_event(ui_event) == TC_UI_EVENT_HANDLED;
+    sync_platform_state();
+}
+
+void UIComponent::on_text(tc_text_event* event) {
+    if (!event || !event->text_utf8 || !has_document()) return;
+    update_platform_services(event->platform_services);
+    const tc_ui_text_event ui_event{event->text_utf8};
+    event->handled =
+        event->handled ||
+        document().dispatch_text_event(ui_event) == TC_UI_EVENT_HANDLED;
+    sync_platform_state();
+}
+
+void UIComponent::on_focus_lost(tc_input_focus_event* event) {
+    if (event) update_platform_services(event->platform_services);
+    cancel_interaction(TC_UI_POINTER_CANCEL_WINDOW_FOCUS_LOST, true);
+}
+
+const char* UIComponent::clipboard_get_text(void* user_data) {
+    UIComponent* self = static_cast<UIComponent*>(user_data);
+    if (!self) return "";
+    const auto callback = self->platform_services_.clipboard_text;
+    if (!callback) return self->clipboard_cache_.c_str();
+    const size_t required = callback(
+        self->platform_services_.userdata, nullptr, 0);
+    std::vector<char> buffer(required + 1, '\0');
+    const size_t actual = callback(
+        self->platform_services_.userdata,
+        buffer.data(),
+        buffer.size());
+    if (actual > required) {
+        tc::Log::error(
+            "[UIComponent] clipboard grew during synchronous read");
+        return self->clipboard_cache_.c_str();
+    }
+    self->clipboard_cache_.assign(buffer.data(), actual);
+    return self->clipboard_cache_.c_str();
+}
+
+bool UIComponent::clipboard_set_text(
+    void* user_data,
+    const char* text,
+    size_t byte_length
+) {
+    UIComponent* self = static_cast<UIComponent*>(user_data);
+    if (!self || (!text && byte_length != 0)) return false;
+    self->clipboard_cache_.assign(text ? text : "", byte_length);
+    const auto callback = self->platform_services_.set_clipboard_text;
+    return !callback || callback(
+        self->platform_services_.userdata,
+        self->clipboard_cache_.data(),
+        self->clipboard_cache_.size());
+}
+
+void UIComponent::cursor_changed(
+    void* user_data,
+    tc_ui_cursor_intent cursor
+) {
+    UIComponent* self = static_cast<UIComponent*>(user_data);
+    if (!self || !self->platform_services_.set_cursor) return;
+    self->platform_services_.set_cursor(
+        self->platform_services_.userdata,
+        input_cursor(cursor));
 }
 
 } // namespace termin

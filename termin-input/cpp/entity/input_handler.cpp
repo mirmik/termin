@@ -62,12 +62,35 @@ void InputHandler::_cb_on_key(tc_component* c, tc_key_event* event) {
     handler->on_key(event);
 }
 
+void InputHandler::_cb_on_text(tc_component* c, tc_text_event* event) {
+    if (!c || c->kind != TC_CXX_COMPONENT) return;
+    CxxComponent* comp = CxxComponent::from_tc(c);
+    InputHandler* handler = comp
+        ? dynamic_cast<InputHandler*>(comp)
+        : nullptr;
+    if (handler) handler->on_text(event);
+}
+
+void InputHandler::_cb_on_focus_lost(
+    tc_component* c,
+    tc_input_focus_event* event
+) {
+    if (!c || c->kind != TC_CXX_COMPONENT) return;
+    CxxComponent* comp = CxxComponent::from_tc(c);
+    InputHandler* handler = comp
+        ? dynamic_cast<InputHandler*>(comp)
+        : nullptr;
+    if (handler) handler->on_focus_lost(event);
+}
+
 const tc_input_vtable InputHandler::cxx_input_vtable = {
     &InputHandler::_cb_on_pointer,
     &InputHandler::_cb_on_mouse_button,
     &InputHandler::_cb_on_mouse_move,
     &InputHandler::_cb_on_scroll,
-    &InputHandler::_cb_on_key
+    &InputHandler::_cb_on_key,
+    &InputHandler::_cb_on_text,
+    &InputHandler::_cb_on_focus_lost,
 };
 
 } // namespace termin

@@ -40,6 +40,7 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         x = 0; y = 0;
         button = 0; action = 0; mods = 0; click_count = 1;
         source = TC_INPUT_SOURCE_RUNTIME;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -53,6 +54,7 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         x = init.x; y = init.y;
         button = init.button; action = init.action; mods = init.mods; click_count = init.click_count;
         source = init.source;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -61,6 +63,7 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         x = e.x; y = e.y;
         button = e.button; action = e.action; mods = e.mods; click_count = e.click_count;
         source = e.source;
+        platform_services = e.platform_services;
         handled = e.handled;
     }
 };
@@ -75,6 +78,7 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         x = 0; y = 0;
         dx = 0; dy = 0;
         source = TC_INPUT_SOURCE_RUNTIME;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -84,6 +88,7 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         x = x_; y = y_;
         dx = dx_; dy = dy_;
         source = source_;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -92,6 +97,7 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         x = e.x; y = e.y;
         dx = e.dx; dy = e.dy;
         source = e.source;
+        platform_services = e.platform_services;
         handled = e.handled;
     }
 };
@@ -106,6 +112,7 @@ struct ScrollEvent : public tc_scroll_event {
         x = 0; y = 0;
         xoffset = 0; yoffset = 0; mods = 0;
         source = TC_INPUT_SOURCE_RUNTIME;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -115,6 +122,7 @@ struct ScrollEvent : public tc_scroll_event {
         x = x_; y = y_;
         xoffset = xoff; yoffset = yoff; mods = m;
         source = source_;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -123,6 +131,7 @@ struct ScrollEvent : public tc_scroll_event {
         x = e.x; y = e.y;
         xoffset = e.xoffset; yoffset = e.yoffset; mods = e.mods;
         source = e.source;
+        platform_services = e.platform_services;
         handled = e.handled;
     }
 };
@@ -137,6 +146,7 @@ struct KeyEvent : public tc_key_event {
         key = 0; scancode = 0;
         action = 0; mods = 0;
         source = TC_INPUT_SOURCE_RUNTIME;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -146,6 +156,7 @@ struct KeyEvent : public tc_key_event {
         key = k; scancode = sc;
         action = act; mods = m;
         source = source_;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -154,6 +165,7 @@ struct KeyEvent : public tc_key_event {
         key = e.key; scancode = e.scancode;
         action = e.action; mods = e.mods;
         source = e.source;
+        platform_services = e.platform_services;
         handled = e.handled;
     }
 };
@@ -173,6 +185,7 @@ struct PointerEvent : public tc_pointer_event {
         dy = 0.0;
         pressure = 0.0f;
         source = TC_INPUT_SOURCE_RUNTIME;
+        platform_services = nullptr;
         handled = false;
     }
 
@@ -204,6 +217,7 @@ struct PointerEvent : public tc_pointer_event {
         dy = e.dy;
         pressure = e.pressure;
         source = e.source;
+        platform_services = e.platform_services;
         handled = e.handled;
     }
 };

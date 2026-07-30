@@ -42,6 +42,8 @@ public:
     void on_mouse_move(double x, double y);
     void on_scroll(double xoffset, double yoffset, int mods);
     void on_key(int key, int scancode, int action, int mods);
+    void on_text(const char* text_utf8);
+    void on_focus_lost();
 
 private:
     // Dispatch to scene components opted into editor input source.
@@ -49,12 +51,16 @@ private:
     void _dispatch_to_editor_components(tc_mouse_move_event* ev);
     void _dispatch_to_editor_components(tc_scroll_event* ev);
     void _dispatch_to_editor_components(tc_key_event* ev);
+    void _dispatch_to_editor_components(tc_text_event* ev);
+    void _dispatch_to_editor_components(tc_input_focus_event* ev);
 
     // Dispatch to viewport's internal entities
     void _dispatch_to_internal_entities(tc_mouse_button_event* ev);
     void _dispatch_to_internal_entities(tc_mouse_move_event* ev);
     void _dispatch_to_internal_entities(tc_scroll_event* ev);
     void _dispatch_to_internal_entities(tc_key_event* ev);
+    void _dispatch_to_internal_entities(tc_text_event* ev);
+    void _dispatch_to_internal_entities(tc_input_focus_event* ev);
 };
 
 } // namespace termin

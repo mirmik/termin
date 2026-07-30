@@ -202,9 +202,9 @@ Clipboard, cursor и text-input activation идут через platform services
 заимствованные у display/input manager. `UIComponent` не обращается к SDL или
 Android API напрямую.
 
-Текущий `tc_input_vtable` не несёт committed text и IME composition. Pointer,
-wheel и key routing можно завершить независимо; полная поддержка
-`TextInput`/`TextArea` требует расширения общего input ABI и связана с #863.
+Общий `tc_input_vtable` теперь несёт committed UTF-8 text и focus loss.
+Предредактирование/композиция IME, selection ranges и grapheme-aware editing
+в ABI пока не представлены и остаются отдельной задачей #863.
 
 ## Этапы
 
@@ -296,8 +296,9 @@ document через официальный multilingual native contract.
 - focus cleanup при component/scene/display teardown;
 - clipboard/cursor/text-input platform services.
 
-Отдельный подпункт расширяет common input ABI для committed text и затем IME.
-До него pointer-driven HUD считается поддержанным, но текстовые редакторы не
+Common input ABI поддерживает committed UTF-8 text. Полноценный IME с
+preedit/composition остаётся отдельным этапом #863; до него pointer-driven HUD
+и обычный committed text поддерживаются, но сложные текстовые редакторы не
 объявляются полностью готовыми.
 
 ### 7. Editor workflow и asset migration
