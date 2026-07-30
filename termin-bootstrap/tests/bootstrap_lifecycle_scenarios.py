@@ -185,6 +185,7 @@ def player_bootstrap_registers_builtin_component_types() -> None:
             "MeshRenderer",
             "FoliageLayerComponent",
             "SkeletonController",
+            "UIComponent",
         }
         missing = {name for name in required if not components.has(name)}
         assert not missing
@@ -194,7 +195,11 @@ def player_bootstrap_registers_builtin_component_types() -> None:
         assert "fov_x_degrees" in {field.path for field in inspect.fields("CameraComponent")}
         assert "material" in {field.path for field in inspect.fields("MeshRenderer")}
         assert "foliage" in {field.path for field in inspect.fields("FoliageLayerComponent")}
+        ui_fields = {field.path: field for field in inspect.fields("UIComponent")}
+        assert ui_fields["ui_layout"].kind == "ui_document"
+        assert {"priority", "input_source_mask"} <= set(ui_fields)
         assert "foliage_data_handle" in set(KindRegistry.instance().kinds())
+        assert "ui_document" in set(KindRegistry.instance().kinds())
     finally:
         termin.bootstrap.shutdown_player()
 

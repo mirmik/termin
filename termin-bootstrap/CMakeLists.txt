@@ -103,6 +103,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_foliage REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_ui termin_components_ui::termin_components_ui)
+else()
+    find_package(termin_components_ui REQUIRED)
+endif()
 
 set(TERMIN_BOOTSTRAP_HAS_ANIMATION OFF)
 if(TARGET termin_animation::termin_animation)
@@ -218,6 +223,7 @@ target_link_libraries(termin_bootstrap
         termin_components_skeleton::termin_components_skeleton
         termin_components_render::termin_components_render
         termin_components_foliage::termin_components_foliage
+        termin_components_ui::termin_components_ui
 )
 
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)

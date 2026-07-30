@@ -40,6 +40,7 @@ setup(
         "termin-voxels",
         "termin-navmesh",
         "termin-default-assets",
+        "termin-components-ui",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
