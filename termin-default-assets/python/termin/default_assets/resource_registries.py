@@ -317,21 +317,24 @@ class DefaultAssetRegistryFactoryMixin:
         )
 
     def _create_ui_registry(self):
-        """Create AssetRegistry for UI layouts."""
+        """Create AssetRegistry for native UI document sources."""
         from termin_assets import AssetRegistry
+        from termin.gui_native import UiDocumentAsset
 
         def data_from_asset(asset):
-            from termin.default_assets.ui.handle import UIHandle
-            return UIHandle.from_asset(asset)
+            return asset.resource
 
-        def data_to_asset(handle):
-            if handle is not None:
-                return handle.get_asset()
+        def data_to_asset(document):
+            if not isinstance(document, UiDocumentAsset) or not document.valid:
+                return None
+            for asset in self._ui_registry.iter_assets():
+                if asset.uuid == document.uuid:
+                    return asset
             return None
 
         def get_asset_class():
-            from termin.default_assets.ui.asset import UIAsset
-            return UIAsset
+            from termin.default_assets.ui.document_asset import UiDocumentSourceAsset
+            return UiDocumentSourceAsset
 
         return AssetRegistry(
             asset_class=get_asset_class,

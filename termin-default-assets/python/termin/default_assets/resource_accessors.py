@@ -88,6 +88,15 @@ class DefaultResourceAccessorsMixin:
                 find_uuid=self._find_texture_uuid_by_name,
                 iter_items=lambda: self._runtime_handle_items("texture"),
             )
+        if kind == "ui_document":
+            return HandleAccessors(
+                list_names=self.list_ui_names,
+                get_by_name=self._get_ui_document,
+                find_name=self._find_ui_document_name,
+                find_uuid=self._find_ui_uuid_by_name,
+                iter_items=lambda: self._runtime_handle_items("ui"),
+                create_item=lambda: self._create_external_asset("ui"),
+            )
         if kind == "ui_handle":
             return HandleAccessors(
                 list_names=self.list_ui_names,
@@ -239,6 +248,20 @@ class DefaultResourceAccessorsMixin:
                 return asset.name
         return None
 
+    def _get_ui_document(self, name: str):
+        """Get a native UI document asset handle by project name."""
+        asset = self._ui_registry.get_asset(name)
+        return None if asset is None else asset.resource
+
+    def _find_ui_document_name(self, handle: Any) -> Optional[str]:
+        """Find a project name for a native UI document asset handle."""
+        from termin.gui_native import UiDocumentAsset
+
+        if isinstance(handle, UiDocumentAsset) and handle.valid:
+            asset = self._ui_registry.get_asset_by_uuid(handle.uuid)
+            return None if asset is None else asset.name
+        return None
+
     def _list_tc_mesh_names(self) -> list[str]:
         """Get list of all mesh names from assets."""
         return list(self._mesh_assets.keys())
@@ -354,6 +377,12 @@ class DefaultResourceAccessorsMixin:
                     return texture
                 return asset.texture_data
             return None
+
+        if kind == "ui_document":
+            from termin.gui_native import UiDocumentAsset
+
+            handle = UiDocumentAsset.from_uuid(uuid)
+            return handle if handle.valid else None
 
         return None
 

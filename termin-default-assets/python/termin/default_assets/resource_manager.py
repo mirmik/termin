@@ -78,7 +78,15 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         uuid: str | None = None,
     ):
         """Remove a runtime asset from its canonical registry."""
-        return super().unregister_runtime_asset(type_id, name, uuid=uuid)
+        asset = super().unregister_runtime_asset(type_id, name, uuid=uuid)
+        if type_id == "ui" and asset is not None and not asset.remove_native():
+            from tcbase import log
+
+            log.error(
+                f"[DefaultResourceManager] Failed to remove native UI document "
+                f"'{asset.name}' ({asset.uuid})"
+            )
+        return asset
 
     def unregister_runtime_asset_by_uuid(self, type_id: str, uuid: str):
         """Remove canonical UUID membership."""
@@ -150,6 +158,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     def clear_runtime_state(self) -> None:
         """Drop runtime asset registries."""
         self._destroy_cached_pipelines()
+        self._destroy_native_ui_documents()
 
         for registry in list(self._runtime_asset_registries.values()):
             registry.clear()
@@ -161,6 +170,16 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             # Pipeline assets own strong canonical handles, not mutable
             # execution instances. Dropping the handle releases the resource.
             asset.unload()
+
+    def _destroy_native_ui_documents(self) -> None:
+        for asset in tuple(self._ui_registry.iter_assets()):
+            if not asset.remove_native():
+                from tcbase import log
+
+                log.error(
+                    f"[DefaultResourceManager] Failed to remove native UI document "
+                    f"'{asset.name}' ({asset.uuid}) during shutdown"
+                )
 
     @classmethod
     def shutdown_instance(cls) -> None:
