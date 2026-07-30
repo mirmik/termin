@@ -85,7 +85,8 @@ The missing boundary was fragment producer/consumer composition.
 
 ## Implemented foundation
 
-Cards #1013, #1014, and #1018 establish the composition boundary:
+Cards #1013, #1014, #1018, and #1016 establish and verify the composition
+boundary:
 
 - exact versioned surface contracts are owner-aware registry entries;
 - `.shader` phases publish evaluator-only producer metadata on `tc_shader`;
@@ -100,6 +101,10 @@ Cards #1013, #1014, and #1018 establish the composition boundary:
   resources, and composition mode;
 - a producer cannot pass through the final-color planning fast path or compile
   directly as a GPU program.
+- a separately built test plugin registers a project-owned surface with a
+  custom field through public APIs, composes and compiles its final variant,
+  then revokes the owner while the standard contract remains intact; future
+  planning rejects the removed contract without reading stale registry data.
 
 The later prototype cards still own standard consumers, G-buffer passes,
 routing, package enumeration, and deferred-pipeline integration.
