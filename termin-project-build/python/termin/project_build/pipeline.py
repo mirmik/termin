@@ -10,6 +10,7 @@ from typing import Callable, Generic, TypeVar
 from termin.project_build.build_context import BuildContext
 from termin.project_build.common import (
     cleanup_project_build_runtime_state,
+    initialize_project_build_runtime_state,
     preload_project_resources,
 )
 from termin.project_build.diagnostics import DiagnosticLike, format_diagnostics
@@ -75,6 +76,7 @@ TargetPackageStep = Callable[
 ]
 RuntimePackageExporter = Callable[..., RuntimePackageExportResult]
 RuntimePackageValidator = Callable[[Path], list[DiagnosticLike]]
+RuntimeStateInitializer = Callable[[str], None]
 RuntimeStateCleanup = Callable[[str], None]
 
 
@@ -92,6 +94,7 @@ def run_project_build_pipeline(
     target_platform: tuple[str, str] | None = None,
     export_package: RuntimePackageExporter = export_runtime_package,
     validate_package: RuntimePackageValidator = validate_runtime_package,
+    initialize_runtime_state: RuntimeStateInitializer = initialize_project_build_runtime_state,
     cleanup_runtime_state: RuntimeStateCleanup = cleanup_project_build_runtime_state,
 ) -> ProjectBuildPipelineResult[PreflightPayloadT, TargetPayloadT]:
     project_preflight_result = preflight_project_build_context(
@@ -102,6 +105,7 @@ def run_project_build_pipeline(
     try:
         prepare_output(context)
 
+        initialize_runtime_state(preload_log_tag)
         preload_project_resources(context.project_root, preload_log_tag)
 
         export_kwargs = dict(

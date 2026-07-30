@@ -73,6 +73,52 @@ void write_text(const std::filesystem::path& path, const std::string& text) {
     REQUIRE(static_cast<bool>(out));
 }
 
+std::string shader_fragment_source() {
+    return R"(
+#version 330 core
+uniform sampler2D u_albedo_texture;
+uniform sampler2D u_normal_texture;
+layout(std140) uniform Material {
+    vec4 u_color;
+    float u_roughness;
+    vec3 u_emissive;
+    int u_enabled;
+};
+out vec4 FragColor;
+void main() {
+    FragColor = u_color;
+}
+)";
+}
+
+std::string json_string(const std::string& value) {
+    std::string result = "\"";
+    for (const char character : value) {
+        switch (character) {
+        case '\\':
+            result += "\\\\";
+            break;
+        case '"':
+            result += "\\\"";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        default:
+            result += character;
+            break;
+        }
+    }
+    result += '"';
+    return result;
+}
+
 std::string shader_spec() {
     std::ostringstream out;
     out
@@ -81,7 +127,21 @@ std::string shader_spec() {
         << "  \"name\": \"RuntimeLoaderTestShader\",\n"
         << "  \"language\": \"glsl\",\n"
         << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
-        << "  \"features\": 1\n"
+        << "  \"features\": 1,\n"
+        << "  \"surface_producer\": {\n"
+        << "    \"schema_version\": 1,\n"
+        << "    \"contract_id\": \"termin.surface.standard-pbr\",\n"
+        << "    \"contract_version\": 1,\n"
+        << "    \"surface_type_name\": \"TerminStandardSurfaceV1\",\n"
+        << "    \"evaluator_entry\": \"main\",\n"
+        << "    \"evaluator_source\": " << json_string(shader_fragment_source()) << ",\n"
+        << "    \"source_identity\": \"runtime-loader-test-surface\",\n"
+        << "    \"fragment_inputs\": [{\"semantic\": \"world_pos\", \"type\": 3}],\n"
+        << "    \"resources\": [{\"name\": \"material\", \"kind\": 1, "
+           "\"scope\": 3, \"stage_mask\": 2, \"size\": 16, "
+           "\"element_stride\": 0, \"fields\": [{\"name\": \"u_color\", "
+           "\"type\": \"Color\", \"offset\": 0, \"size\": 16}]}]\n"
+        << "  }\n"
         << "}\n";
     return out.str();
 }
@@ -353,21 +413,7 @@ void write_test_package(const std::filesystem::path& root) {
     write_text(root / "scene.json", scene_json());
     write_text(root / "shaders" / "test.shader.json", shader_spec());
     write_text(root / "shaders" / "test.shader-program.json", shader_program_spec());
-    write_text(root / "shaders" / "test.frag", R"(
-#version 330 core
-uniform sampler2D u_albedo_texture;
-uniform sampler2D u_normal_texture;
-layout(std140) uniform Material {
-    vec4 u_color;
-    float u_roughness;
-    vec3 u_emissive;
-    int u_enabled;
-};
-out vec4 FragColor;
-void main() {
-    FragColor = u_color;
-}
-)");
+    write_text(root / "shaders" / "test.frag", shader_fragment_source());
     write_text(root / "materials" / "test.tmat.json", material_spec());
     write_text(root / "meshes" / "test.tmesh.json", mesh_spec());
 }
@@ -494,6 +540,19 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     termin::TcShader shader = termin::TcShader::from_uuid(kShaderUuid);
     REQUIRE(shader.is_valid());
     CHECK(shader.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO));
+    REQUIRE(shader.has_surface_producer());
+    tc_shader_surface_producer_view producer{};
+    REQUIRE(tc_shader_get_surface_producer_view(shader.get(), &producer));
+    CHECK_EQ(
+        std::string(producer.contract_id),
+        std::string("termin.surface.standard-pbr"));
+    CHECK_EQ(producer.contract_version, 1u);
+    REQUIRE_EQ(producer.fragment_input_count, 1u);
+    CHECK_EQ(std::string(producer.fragment_inputs[0].semantic), std::string("world_pos"));
+    REQUIRE_EQ(producer.resource_count, 1u);
+    CHECK_EQ(std::string(producer.resources[0].name), std::string("material"));
+    REQUIRE_EQ(producer.resources[0].field_count, 1u);
+    CHECK_EQ(std::string(producer.resources[0].fields[0].name), std::string("u_color"));
 
     tc_uniform_value* color = require_uniform(phase, "u_color", TC_UNIFORM_VEC4);
     CHECK(std::fabs(color->data.v4[0] - 0.25f) < 0.0001f);

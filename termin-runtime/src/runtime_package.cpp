@@ -777,6 +777,149 @@ bool apply_material_textures(
     return true;
 }
 
+template <std::size_t N>
+void copy_shader_metadata_text(char (&destination)[N], const std::string& source) {
+    std::snprintf(destination, N, "%s", source.c_str());
+}
+
+bool restore_shader_surface_producer(
+    const nos::trent& spec,
+    tc_shader* shader,
+    std::string& error
+) {
+    const nos::trent* producer = dict_get(spec, "surface_producer");
+    if (!producer) {
+        return true;
+    }
+    if (!producer->is_dict()) {
+        error = "surface_producer must be an object";
+        return false;
+    }
+
+    const std::string contract_id = string_field(*producer, "contract_id");
+    const uint32_t contract_version = uint32_field(*producer, "contract_version");
+    const std::string surface_type_name = string_field(*producer, "surface_type_name");
+    const std::string evaluator_entry = string_field(*producer, "evaluator_entry");
+    const std::string evaluator_source = string_field(*producer, "evaluator_source");
+    const std::string source_identity = string_field(*producer, "source_identity");
+    if (contract_id.empty() || contract_version == 0 || surface_type_name.empty()
+        || evaluator_entry.empty() || evaluator_source.empty() || source_identity.empty()) {
+        error = "surface_producer is missing required contract metadata";
+        return false;
+    }
+
+    std::vector<tc_shader_fragment_input> fragment_inputs;
+    if (const nos::trent* inputs = dict_get(*producer, "fragment_inputs")) {
+        if (!inputs->is_list()) {
+            error = "surface_producer.fragment_inputs must be a list";
+            return false;
+        }
+        fragment_inputs.reserve(inputs->as_list().size());
+        for (const nos::trent& item : inputs->as_list()) {
+            if (!item.is_dict()) {
+                error = "surface_producer fragment input must be an object";
+                return false;
+            }
+            const std::string semantic = string_field(item, "semantic");
+            const uint32_t type = uint32_field(item, "type");
+            if (semantic.empty() || type == 0) {
+                error = "surface_producer fragment input is incomplete";
+                return false;
+            }
+            tc_shader_fragment_input input{};
+            copy_shader_metadata_text(input.semantic, semantic);
+            input.type = type;
+            fragment_inputs.push_back(input);
+        }
+    }
+
+    std::vector<tc_shader_resource_requirement> resources;
+    std::vector<std::vector<tc_shader_resource_field>> resource_fields;
+    if (const nos::trent* resource_list = dict_get(*producer, "resources")) {
+        if (!resource_list->is_list()) {
+            error = "surface_producer.resources must be a list";
+            return false;
+        }
+        resources.reserve(resource_list->as_list().size());
+        resource_fields.reserve(resource_list->as_list().size());
+        for (const nos::trent& item : resource_list->as_list()) {
+            if (!item.is_dict()) {
+                error = "surface_producer resource must be an object";
+                return false;
+            }
+            const std::string name = string_field(item, "name");
+            const uint32_t kind = uint32_field(item, "kind");
+            const uint32_t scope = uint32_field(item, "scope");
+            const uint32_t stage_mask = uint32_field(item, "stage_mask");
+            if (name.empty() || kind == 0 || scope == 0 || stage_mask == 0) {
+                error = "surface_producer resource is incomplete";
+                return false;
+            }
+
+            resource_fields.emplace_back();
+            std::vector<tc_shader_resource_field>& fields = resource_fields.back();
+            if (const nos::trent* field_list = dict_get(item, "fields")) {
+                if (!field_list->is_list()) {
+                    error = "surface_producer resource fields must be a list";
+                    return false;
+                }
+                fields.reserve(field_list->as_list().size());
+                for (const nos::trent& field_item : field_list->as_list()) {
+                    if (!field_item.is_dict()) {
+                        error = "surface_producer resource field must be an object";
+                        return false;
+                    }
+                    const std::string field_name = string_field(field_item, "name");
+                    const std::string field_type = string_field(field_item, "type");
+                    if (field_name.empty() || field_type.empty()) {
+                        error = "surface_producer resource field is incomplete";
+                        return false;
+                    }
+                    tc_shader_resource_field field{};
+                    copy_shader_metadata_text(field.name, field_name);
+                    copy_shader_metadata_text(field.type, field_type);
+                    field.offset = uint32_field(field_item, "offset");
+                    field.size = uint32_field(field_item, "size");
+                    fields.push_back(field);
+                }
+            }
+
+            tc_shader_resource_requirement requirement{};
+            copy_shader_metadata_text(requirement.name, name);
+            requirement.kind = kind;
+            requirement.scope = scope;
+            requirement.stage_mask = stage_mask;
+            requirement.size = uint32_field(item, "size");
+            requirement.element_stride = uint32_field(item, "element_stride");
+            requirement.fields = fields.empty() ? nullptr : fields.data();
+            requirement.field_count = static_cast<uint32_t>(fields.size());
+            resources.push_back(requirement);
+        }
+    }
+
+    const tc_shader_surface_producer_desc descriptor{
+        uint32_field(
+            *producer,
+            "schema_version",
+            TC_SHADER_SURFACE_PRODUCER_SCHEMA_VERSION),
+        contract_id.c_str(),
+        contract_version,
+        surface_type_name.c_str(),
+        evaluator_entry.c_str(),
+        evaluator_source.c_str(),
+        source_identity.c_str(),
+        fragment_inputs.data(),
+        static_cast<uint32_t>(fragment_inputs.size()),
+        resources.data(),
+        static_cast<uint32_t>(resources.size()),
+    };
+    if (!tc_shader_set_surface_producer(shader, &descriptor)) {
+        error = "failed to restore surface_producer metadata";
+        return false;
+    }
+    return true;
+}
+
 bool load_shader_resource(
     const std::filesystem::path& root,
     const std::filesystem::path& spec_path,
@@ -851,6 +994,11 @@ bool load_shader_resource(
     shader.set_features(uint32_field(spec, "features", 0));
     set_shader_features_from_glsl(raw, fragment_source);
     set_shader_material_ubo_layout_from_glsl(raw, fragment_source);
+    if (!restore_shader_surface_producer(spec, raw, error)) {
+        error = "shader '" + uuid + "': " + error;
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
     keepalive.shaders.push_back(std::move(shader));
     return true;
 }

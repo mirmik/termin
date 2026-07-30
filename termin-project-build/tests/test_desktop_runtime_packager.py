@@ -1066,12 +1066,21 @@ def test_export_runtime_package_compiles_default_pipeline_shadow_variants(
         shader_targets=("vulkan",),
     )
 
-    shadow_specs = list((result.package_dir / "shaders").glob("shv_*.shader.json"))
-    shadow_vertex_artifacts = list(
-        (result.package_dir / "shaders" / "vulkan").glob("shv_*.vert.spv")
-    )
+    shader_specs = [
+        (path, json.loads(path.read_text(encoding="utf-8")))
+        for path in (result.package_dir / "shaders").glob("shv_*.shader.json")
+    ]
+    shadow_specs = [
+        (path, document)
+        for path, document in shader_specs
+        if document.get("name") == "ShadowEngineModular"
+    ]
     assert len(shadow_specs) == 1
-    assert len(shadow_vertex_artifacts) == 1
+    _shadow_spec_path, shadow_spec = shadow_specs[0]
+    shadow_vertex_artifact = (
+        result.package_dir / shadow_spec["artifacts"]["vulkan"]["vertex"]
+    )
+    assert shadow_vertex_artifact.is_file()
     material_spec = json.loads(
         (
             result.package_dir

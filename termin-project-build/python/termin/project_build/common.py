@@ -8,6 +8,43 @@ import gc
 from pathlib import Path
 
 
+def find_project_or_standard_shader(project_root: Path, shader_name: str) -> Path:
+    """Resolve project-deployed stdlib overrides before the SDK fallback."""
+    matches = sorted(
+        path
+        for path in project_root.rglob(f"{shader_name}.shader")
+        if not any(
+            part in {".git", "__pycache__", "build", "dist"}
+            for part in path.relative_to(project_root).parts
+        )
+    )
+    if matches:
+        return matches[0]
+
+    from termin.stdlib import stdlib_root
+
+    standard_path = stdlib_root() / "shaders" / f"{shader_name}.shader"
+    if standard_path.is_file():
+        return standard_path
+    raise FileNotFoundError(f"shader asset '{shader_name}' was not found")
+
+
+def initialize_project_build_runtime_state(log_prefix: str) -> None:
+    """Initialize process runtime registries required while loading build assets."""
+    try:
+        from termin.bootstrap import bootstrap_runtime
+
+        bootstrap_runtime()
+    except Exception:
+        from tcbase import log
+
+        log.error(
+            f"{log_prefix} Failed to initialize project build runtime state",
+            exc_info=True,
+        )
+        raise
+
+
 def preload_project_resources(project_root: Path, log_prefix: str) -> None:
     """Load project resources into runtime registries for non-editor builds."""
     try:
@@ -40,6 +77,7 @@ def preload_project_resources(project_root: Path, log_prefix: str) -> None:
 
         _register_standard_shaders_for_project_materials(
             resource_manager,
+            project_root,
             [Path(path) for _priority, path in pending if Path(path).suffix == ".material"],
             log_prefix,
         )
@@ -52,14 +90,13 @@ def preload_project_resources(project_root: Path, log_prefix: str) -> None:
 
 def _register_standard_shaders_for_project_materials(
     resource_manager,
+    project_root: Path,
     material_paths: list[Path],
     log_prefix: str,
 ) -> None:
     """Make stdlib shader assets available before material preloaders run."""
     from tcbase import log
     from termin.default_assets.render.shader_asset import ShaderAsset
-    from termin.stdlib import stdlib_root
-
     for material_path in material_paths:
         try:
             document = json.loads(material_path.read_text(encoding="utf-8"))
@@ -69,9 +106,10 @@ def _register_standard_shaders_for_project_materials(
             if resource_manager.get_shader_asset(shader_name) is not None:
                 continue
 
-            shader_path = stdlib_root() / "shaders" / f"{shader_name}.shader"
-            if not shader_path.is_file():
-                continue
+            shader_path = find_project_or_standard_shader(
+                project_root,
+                shader_name,
+            )
             shader_asset = ShaderAsset.from_file(shader_path, name=shader_name)
             resource_manager.register_shader_asset(
                 shader_name,

@@ -9,6 +9,15 @@ from tcbase import log
 from .editor_log_model import EditorLogModel
 
 
+class _EditorPythonLogFilter(logging.Filter):
+    """Keep verbose editor diagnostics without importing dependency noise."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == "watchdog" or record.name.startswith("watchdog."):
+            return record.levelno >= logging.WARNING
+        return True
+
+
 class _TcLogHandler(logging.Handler):
     """Forward standard Python records through the canonical C logger."""
 
@@ -58,6 +67,7 @@ class EditorLogCapture:
         self._previous_python_level = self._python_logger.level
         self._handler = _TcLogHandler()
         self._handler.setLevel(logging.DEBUG)
+        self._handler.addFilter(_EditorPythonLogFilter())
         self._handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
         self._closed = False
 

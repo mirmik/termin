@@ -55,3 +55,23 @@ def test_editor_log_capture_reports_overflow_and_stops_cleanly() -> None:
     log.info("after close")
     assert not capture.drain()
     assert model.text == text_after_close
+
+
+def test_editor_log_capture_suppresses_watchdog_debug_noise() -> None:
+    model = EditorLogModel()
+    root_logger = logging.getLogger()
+    watchdog_logger = logging.getLogger("watchdog.observers.inotify_buffer")
+    previous_watchdog_level = watchdog_logger.level
+    capture = EditorLogCapture(model, capacity=8, python_logger=root_logger)
+    try:
+        watchdog_logger.setLevel(logging.DEBUG)
+        watchdog_logger.debug("in-event noise")
+        watchdog_logger.warning("observer warning")
+
+        assert capture.drain()
+        assert model.text.splitlines() == [
+            "[WARN] watchdog.observers.inotify_buffer: observer warning",
+        ]
+    finally:
+        watchdog_logger.setLevel(previous_watchdog_level)
+        capture.close()

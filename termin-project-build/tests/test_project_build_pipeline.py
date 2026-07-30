@@ -109,9 +109,17 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
         shader_targets=("vulkan", "opengl", "d3d11"),
         export_package=export_package,
         validate_package=validate_package,
+        initialize_runtime_state=lambda log_tag: events.append(f"initialize:{log_tag}"),
     )
 
-    assert events == ["target_preflight", "prepare", "export", "validate", "package"]
+    assert events == [
+        "target_preflight",
+        "prepare",
+        "initialize:[PipelineTest]",
+        "export",
+        "validate",
+        "package",
+    ]
     assert result.target_preflight_result.payload == "target-env"
     assert result.target_package_result.payload == "target-artifact"
     assert result.diagnostics == [
@@ -167,10 +175,17 @@ def test_project_build_pipeline_cleans_runtime_state_after_target_packaging(tmp_
         package_target=package_target,
         export_package=export_package,
         validate_package=lambda _package_dir: [],
+        initialize_runtime_state=lambda log_tag: events.append(f"initialize:{log_tag}"),
         cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
     )
 
-    assert events == ["prepare", "export", "package", "cleanup:[PipelineTest]"]
+    assert events == [
+        "prepare",
+        "initialize:[PipelineTest]",
+        "export",
+        "package",
+        "cleanup:[PipelineTest]",
+    ]
 
 
 def test_project_build_pipeline_stops_before_output_prepare_when_project_preflight_fails(
@@ -245,10 +260,16 @@ def test_project_build_pipeline_cleans_runtime_state_when_validation_fails(tmp_p
             ),
             export_package=export_package,
             validate_package=lambda _package_dir: [validation_diagnostic],
+            initialize_runtime_state=lambda log_tag: events.append(f"initialize:{log_tag}"),
             cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
         )
 
-    assert events == ["prepare", "export", "cleanup:[PipelineTest]"]
+    assert events == [
+        "prepare",
+        "initialize:[PipelineTest]",
+        "export",
+        "cleanup:[PipelineTest]",
+    ]
 
 
 def test_project_build_pipeline_stops_before_target_packaging_when_validation_fails(
@@ -299,9 +320,10 @@ def test_project_build_pipeline_stops_before_target_packaging_when_validation_fa
             ),
             export_package=export_package,
             validate_package=lambda _package_dir: [validation_diagnostic],
+            initialize_runtime_state=lambda log_tag: events.append(f"initialize:{log_tag}"),
         )
 
-    assert events == ["prepare", "export"]
+    assert events == ["prepare", "initialize:[PipelineTest]", "export"]
     assert exc_info.value.package_result is not None
     assert exc_info.value.diagnostics == [validation_diagnostic]
 
@@ -352,9 +374,15 @@ def test_project_build_pipeline_fails_when_target_packaging_reports_error(tmp_pa
             ),
             export_package=export_package,
             validate_package=lambda _package_dir: [],
+            initialize_runtime_state=lambda log_tag: events.append(f"initialize:{log_tag}"),
             cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
         )
 
-    assert events == ["prepare", "export", "cleanup:[PipelineTest]"]
+    assert events == [
+        "prepare",
+        "initialize:[PipelineTest]",
+        "export",
+        "cleanup:[PipelineTest]",
+    ]
     assert exc_info.value.package_result is not None
     assert exc_info.value.diagnostics == [target_error]
