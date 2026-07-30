@@ -23,10 +23,12 @@ public:
     static void register_type();
     std::string input_res = "color+ui";
     std::string output_res = "color+widgets";
+    std::string font_path;
     bool include_internal_entities = false;
 
     INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(UIWidgetPass, font_path, "Font Path", "string")
     INSPECT_FIELD(UIWidgetPass, include_internal_entities, "Include Internal Entities", "bool")
     INSPECT_TYPE_METADATA(UIWidgetPass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}},
@@ -48,7 +50,10 @@ public:
     void destroy() override;
 
 private:
+    void configure_font();
+
     std::unique_ptr<gui_native::NativeDocumentPainter> painter_;
+    std::string configured_font_path_;
 };
 
 } // namespace termin

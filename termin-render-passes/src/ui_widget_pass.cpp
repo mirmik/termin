@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
@@ -15,6 +17,20 @@
 
 namespace termin {
 namespace {
+
+std::string default_ui_font_path() {
+    if (const char* configured = std::getenv("TERMIN_UI_FONT");
+        configured && configured[0] != '\0') {
+        return configured;
+    }
+    if (const char* sdk_root = std::getenv("TERMIN_SDK");
+        sdk_root && sdk_root[0] != '\0') {
+        return (
+            std::filesystem::path(sdk_root) /
+            "share" / "termin" / "fonts" / "DroidSans.ttf").string();
+    }
+    return {};
+}
 
 constexpr std::uint64_t kFnvOffset = UINT64_C(14695981039346656037);
 constexpr std::uint64_t kFnvPrime = UINT64_C(1099511628211);
@@ -200,8 +216,28 @@ UIWidgetPass::UIWidgetPass(
 ) : input_res(input),
     output_res(output),
     painter_(std::make_unique<gui_native::NativeDocumentPainter>()) {
+    font_path = default_ui_font_path();
+    configure_font();
     pass_name_set("UIWidgets");
     link_to_type_registry("UIWidgetPass");
+}
+
+void UIWidgetPass::configure_font() {
+    if (font_path == configured_font_path_) {
+        return;
+    }
+    configured_font_path_ = font_path;
+    if (font_path.empty()) {
+        tc::Log::error(
+            "[UIWidgetPass] native UI font is not configured; set "
+            "TERMIN_UI_FONT or TERMIN_SDK");
+        return;
+    }
+    if (!painter_->set_default_font_path(font_path, 14)) {
+        tc::Log::error(
+            "[UIWidgetPass] failed to configure native UI font '%s'",
+            font_path.c_str());
+    }
 }
 
 UIWidgetPass::~UIWidgetPass() = default;
@@ -224,6 +260,7 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
         tc::Log::error("[UIWidgetPass] ctx.ctx2 is null");
         return;
     }
+    configure_font();
 
     auto in_it = ctx.tex2_reads.find(input_res);
     auto out_it = ctx.tex2_writes.find(output_res);
@@ -307,6 +344,7 @@ void UIWidgetPass::register_type() {
     auto& inspect = descriptor.inspect();
     _register_inspect_input_res(inspect);
     _register_inspect_output_res(inspect);
+    _register_inspect_font_path(inspect);
     _register_inspect_include_internal_entities(inspect);
     _register_inspect_metadata_graph(inspect);
     (void)descriptor.commit();
