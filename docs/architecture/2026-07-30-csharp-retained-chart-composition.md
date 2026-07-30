@@ -2,8 +2,9 @@
 
 ## Status
 
-Intent accepted. This document defines the target architecture and migration
-direction. The implementation is not complete.
+Intent accepted. The projection contract, retained native grid item and
+value-only range/tick/text-measurement utilities are implemented. Native
+series items, typed C# wrappers and managed chart composition remain.
 
 The existing retained visual-scene initiative delivered the common
 `tc_graphic_item` object model and a tcplot annotation vertical slice. It did
@@ -131,6 +132,13 @@ State propagation must be explicit and deterministic. A generic observer,
 implicit cross-thread synchronization or managed callback from the renderer is
 not part of the contract.
 
+`PlotGridItem2D` is the first consumer of this contract. It is an ordinary
+tcplot-owned `NativeGraphicItem2D`, adopted and destroyed by its
+`TcVisualScene`. It owns copied major tick values and style, snapshots the
+projection during native paint, filters ticks to the current range and emits
+one backend-neutral path. Its C API accepts only scene/projection/item handles
+and detached arrays or values.
+
 ## Typed language surface
 
 Every chart part exposed to C# has a typed handle-only wrapper:
@@ -156,6 +164,14 @@ where native resources determine the answer. The managed composer may request:
 - tick values and formatted labels for a numeric range;
 - preferred extents of axis tick/label items;
 - local bounds of any retained item.
+
+The native value boundary is now represented by `fit_plot_range2d()`,
+`make_plot_ticks2d()` and `measure_plot_text2d()`. Logical tick spacing and font
+size are converted with `pixel_scale`; results own their values and strings.
+Ticks must be recomputed after range, plot-area extent or pixel-scale changes.
+Text metrics must be recomputed after text, font, logical size or pixel-scale
+changes. The legacy `PlotEngine2D` consumes the same helpers so it remains a
+useful parity reference during migration.
 
 The managed side uses these results to set transforms, clips and sizes on the
 scene tree. There is no ABI method such as `set_panel_margins` whose only
