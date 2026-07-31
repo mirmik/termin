@@ -256,6 +256,33 @@ def test_validate_runtime_package_accepts_native_ui_factory_contract(
 ) -> None:
     package_dir = _write_valid_package(tmp_path)
     _add_ui_document(package_dir)
+    ui_path = package_dir / "ui/native-hud.ui-document.json"
+    payload = json.loads(ui_path.read_text(encoding="utf-8"))
+    payload["type_dependencies"] = [
+        "termin.gui.ScrollArea",
+        "termin.gui.GridLayout",
+        "termin.gui.Panel",
+    ]
+    payload["recipe"]["root"] = {
+        "type": "termin.gui.ScrollArea",
+        "name": "root",
+        "children": [
+            {
+                "type": "termin.gui.GridLayout",
+                "columns": [{"policy": "stretch"}],
+                "rows": [{"policy": "stretch"}],
+                "children": [
+                    {
+                        "type": "termin.gui.Panel",
+                        "row": 0,
+                        "column": 0,
+                        "children": [],
+                    }
+                ],
+            }
+        ],
+    }
+    _write_json(ui_path, payload)
 
     assert validate_runtime_package(package_dir) == []
 

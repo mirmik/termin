@@ -130,9 +130,20 @@ def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:
     source.write_text(
         "uiscript: 2\n"
         "root:\n"
-        "  type: termin.gui.Panel\n"
+        "  type: termin.gui.ScrollArea\n"
         "  name: hud\n"
-        "  background_color: [0.1, 0.2, 0.3, 1]\n",
+        "  horizontal_scroll: false\n"
+        "  children:\n"
+        "    - type: termin.gui.GridLayout\n"
+        "      columns:\n"
+        "        - policy: stretch\n"
+        "      rows:\n"
+        "        - policy: stretch\n"
+        "      children:\n"
+        "        - type: termin.gui.Panel\n"
+        "          row: 0\n"
+        "          column: 0\n"
+        "          background_color: [0.1, 0.2, 0.3, 1]\n",
         encoding="utf-8",
     )
     _write_json(Path(f"{source}.meta"), {"uuid": uuid_value})
@@ -174,7 +185,11 @@ def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:
     )
     assert payload["ui_document_asset"] == 1
     assert payload["uuid"] == uuid_value
-    assert payload["type_dependencies"] == ["termin.gui.Panel"]
+    assert payload["type_dependencies"] == [
+        "termin.gui.ScrollArea",
+        "termin.gui.GridLayout",
+        "termin.gui.Panel",
+    ]
     assert payload["recipe"]["uiscript"] == 2
     from termin.gui_native import UiDocumentAsset
 
