@@ -178,13 +178,15 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
         u32(len(encoded))
         payload.extend(encoded)
 
-    u32(1)  # binary version
-    u32(1)  # descriptor version
+    u32(2)  # binary version
+    u32(2)  # descriptor version
     text("Compiled Pipeline")
     u32(1)  # passes
     u32(1)  # resources
     u32(1)  # dependencies
     u32(1)  # targets
+    u32(0)  # resource views
+    u32(0)  # FBO compositions
     text("ColorPass")
     text("color")
     text('{"phase_mark":"opaque"}')
@@ -1188,3 +1190,76 @@ def test_validate_runtime_package_reports_required_shader_target_missing(tmp_pat
             "runtime backend order ['vulkan', 'opengl']",
         )
     ]
+
+
+def test_validate_runtime_package_checks_pipeline_pass_variant_contract(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir, "shv_surface_forward")
+    shader_path = package_dir / "shaders" / "shv_surface_forward.shader.json"
+    shader_spec = json.loads(shader_path.read_text(encoding="utf-8"))
+    shader_spec["artifact_role"] = "pipeline_variant"
+    shader_spec["source_identity"] = "sha256:composed-v1"
+    _write_json(shader_path, shader_spec)
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["target_requirements"] = {"backends": ["vulkan", "opengl"]}
+    manifest["pipeline_shader_requirements"] = [
+        {
+            "scene": SCENE_PATH,
+            "pipeline": "DeferredPrototype",
+            "variants": [
+                {
+                    "uuid": "shv_surface_forward",
+                    "name": "Surface_GBuffer",
+                    "path": "shaders/shv_surface_forward.shader.json",
+                    "source_identity": "sha256:composed-v1",
+                }
+            ],
+        }
+    ]
+    _write_json(manifest_path, manifest)
+
+    assert validate_runtime_package(package_dir) == []
+
+    shader_spec["source_identity"] = "sha256:composed-v2"
+    _write_json(shader_path, shader_spec)
+    diagnostics = validate_runtime_package(package_dir)
+    assert any(
+        diagnostic.path == "pipeline_shader_requirements[0].variants[0]"
+        and "stale composed-source identity" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_reports_missing_pipeline_pass_variant(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["pipeline_shader_requirements"] = [
+        {
+            "scene": SCENE_PATH,
+            "pipeline": "Default",
+            "variants": [
+                {
+                    "uuid": "shv_missing_forward",
+                    "name": "Surface_Forward",
+                    "path": "shaders/shv_missing_forward.shader.json",
+                    "source_identity": "sha256:missing",
+                }
+            ],
+        }
+    ]
+    _write_json(manifest_path, manifest)
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path == "pipeline_shader_requirements[0].variants[0]"
+        and "Pipeline 'Default' requires missing executable pass variant"
+        in diagnostic.message
+        for diagnostic in diagnostics
+    )

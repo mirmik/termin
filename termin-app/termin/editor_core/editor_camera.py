@@ -19,6 +19,7 @@ from termin.input import INPUT_SOURCE_EDITOR, INPUT_SOURCE_RUNTIME
 from termin.input._input_native import set_input_source_mask
 from termin.render_components import OrbitCameraController
 from termin.render_components.camera import CameraComponent
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
@@ -66,7 +67,6 @@ class EditorCameraManager:
         self._scene = scene
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
-        print(f"[DEBUG] EditorCameraManager.attach_to_scene: camera={self.camera}, camera.entity={self.camera.entity if self.camera else None}", flush=True)
 
     def detach_from_scene(self) -> None:
         """
@@ -100,7 +100,6 @@ class EditorCameraManager:
                         self.camera = camera
                         self._ensure_camera_controller(child.entity)
                         self._enable_editor_input_sources(child.entity)
-                        print(f"[DEBUG] _ensure_editor_camera: FOUND existing camera={camera}", flush=True)
                         return
 
         # Create camera in standalone pool (not in scene)
@@ -108,7 +107,6 @@ class EditorCameraManager:
         camera_entity.add_component_by_name("CameraComponent")
         camera_entity.add_component_by_name("OrbitCameraController")
         camera = camera_entity.get_component_by_type("CameraComponent")
-        print(f"[DEBUG] _ensure_editor_camera: CREATED new camera={camera}, entity={camera_entity}", flush=True)
 
         self._ensure_camera_controller(camera_entity)
 
@@ -199,15 +197,15 @@ class EditorCameraManager:
         result = {}
         for ent in entities:
             # Serialize only components (not the entity itself)
-            import traceback
             components_data = []
             for ref in ent.tc_components:
-                print(f"[DEBUG] serializing {ref.type_name} on '{ent.name}'", flush=True)
                 try:
                     comp_data = ref.serialize()
                 except Exception as e:
-                    print(f"[DEBUG] FAILED {ref.type_name}: {e}", flush=True)
-                    traceback.print_exc()
+                    log.exception(
+                        f"[EditorCameraManager] failed to serialize "
+                        f"{ref.type_name} on '{ent.name}': {e}"
+                    )
                     continue
                 if comp_data:
                     components_data.append(comp_data)
@@ -268,28 +266,71 @@ class EditorCameraManager:
         # on the tcgui-only ``editor_ui`` child. Its state is frontend-neutral,
         # so migrate those persisted fields onto the camera component owner.
         legacy_overlay_components = data.get("editor_ui", [])
-        camera_components = data.setdefault("camera", [])
+        if not isinstance(legacy_overlay_components, list):
+            log.error(
+                "[EditorCameraManager] ignored malformed legacy editor_ui state"
+            )
+            legacy_overlay_components = []
+        raw_camera_components = data.get("camera", [])
+        if not isinstance(raw_camera_components, list):
+            log.error("[EditorCameraManager] ignored malformed camera state")
+            raw_camera_components = []
+        camera_components = list(raw_camera_components)
         if not any(
-            item.get("type") == "EditorCameraUIController"
+            isinstance(item, dict)
+            and item.get("type") == "EditorCameraUIController"
             for item in camera_components
         ):
             for item in legacy_overlay_components:
-                if item.get("type") == "EditorCameraUIController":
+                if (
+                    isinstance(item, dict)
+                    and item.get("type") == "EditorCameraUIController"
+                ):
                     camera_components.append(item)
                     break
 
         for ent in entities:
-            components_data = data.get(ent.name)
+            components_data = (
+                camera_components if ent.name == "camera" else data.get(ent.name)
+            )
             if not components_data:
                 continue
 
+            if not isinstance(components_data, list):
+                log.error(
+                    f"[EditorCameraManager] ignored malformed component list "
+                    f"for editor entity '{ent.name}'"
+                )
+                continue
+
             for comp_data in components_data:
+                if not isinstance(comp_data, dict):
+                    log.error(
+                        f"[EditorCameraManager] ignored malformed component "
+                        f"state for editor entity '{ent.name}'"
+                    )
+                    continue
                 comp_type = comp_data.get("type")
                 comp_data_inner = comp_data.get("data", {})
+                if not isinstance(comp_type, str) or not comp_type:
+                    log.error(
+                        f"[EditorCameraManager] ignored editor component state "
+                        f"without a type on '{ent.name}'"
+                    )
+                    continue
+                if not isinstance(comp_data_inner, dict):
+                    log.error(
+                        f"[EditorCameraManager] ignored malformed data for "
+                        f"editor component '{comp_type}' on '{ent.name}'"
+                    )
+                    continue
 
                 # Find matching component by type
                 ref = ent.get_tc_component(comp_type)
                 if ref:
+                    source_id = comp_data.get("source_id")
+                    if isinstance(source_id, str) and source_id:
+                        ref.source_id = source_id
                     ref.deserialize_data(comp_data_inner, scene_ref)
 
     def recreate_in_scene(self, new_scene: "Scene") -> None:

@@ -275,11 +275,16 @@ def write_shader(
     compiler: Path | None,
     requested_targets: tuple[str, ...] | None,
     fxc: Path | None = None,
-) -> None:
-    targets = shader_targets_for_language(
-        shader.language,
-        requested_targets,
-        f"Shader '{shader.uuid}'",
+) -> dict[str, Any]:
+    compile_artifacts = shader.artifact_role != "surface_producer"
+    targets = (
+        shader_targets_for_language(
+            shader.language,
+            requested_targets,
+            f"Shader '{shader.uuid}'",
+        )
+        if compile_artifacts
+        else ()
     )
 
     shader_dir = package_dir / "shaders"
@@ -305,7 +310,7 @@ def write_shader(
     if fragment_source_path != vertex_source_path:
         fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     fragment_compile_source_path = fragment_source_path
-    if shader.surface_interface_source:
+    if compile_artifacts and shader.surface_interface_source:
         fragment_compile_source_path = (
             vulkan_dir / f"{shader.uuid}.frag.compile.{source_ext}"
         )
@@ -319,7 +324,12 @@ def write_shader(
         geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.{source_ext}"
         geometry_source_path.write_text(shader.geometry_source, encoding="utf-8")
 
-    if compiler is None and shader.allow_precompiled_default and targets == ("vulkan",):
+    if (
+        compile_artifacts
+        and compiler is None
+        and shader.allow_precompiled_default
+        and targets == ("vulkan",)
+    ):
         copy_default_spirv(vulkan_dir / f"{shader.uuid}.vert.spv", "termin-android-scene-color.vert.spv")
         copy_default_spirv(vulkan_dir / f"{shader.uuid}.frag.spv", "termin-android-scene-color.frag.spv")
         diagnostics.append(
@@ -329,7 +339,7 @@ def write_shader(
                 message="Runtime exporter reused built-in default SPIR-V artifacts",
             )
         )
-    else:
+    elif compile_artifacts:
         if compiler is None:
             raise FileNotFoundError(
                 "Shader compiler 'termin_shaderc' was not found. "
@@ -404,16 +414,24 @@ def write_shader(
         "fragment_entry": shader.fragment_entry,
         "source_path": shader.source_path,
         "features": int(shader.features),
-        "artifacts": {
+        "artifact_role": shader.artifact_role,
+        "source_identity": shader.source_identity,
+    }
+    if compile_artifacts:
+        shader_spec["artifacts"] = {
             target: {
                 "vertex": artifact_path_text(shader.uuid, target, "vertex", "vert"),
                 "fragment": artifact_path_text(shader.uuid, target, "fragment", "frag"),
             }
             for target in targets
-        },
-    }
+        }
     if shader.surface_producer is not None:
         shader_spec["surface_producer"] = shader.surface_producer
+        shader_spec["surface_contract"] = {
+            "id": shader.surface_producer["contract_id"],
+            "version": shader.surface_producer["contract_version"],
+            "interface_source_identity": shader.surface_interface_identity,
+        }
     if geometry_source_path is not None:
         shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.{source_ext}"
         shader_spec["geometry_entry"] = shader.geometry_entry
@@ -435,6 +453,7 @@ def write_shader(
                 "path": f"shaders/{shader.uuid}.shader.json",
             }
         )
+    return shader_spec
 
 
 @dataclass(frozen=True)

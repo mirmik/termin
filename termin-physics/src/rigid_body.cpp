@@ -26,6 +26,28 @@ RigidBody RigidBody::create_sphere(double radius, double m, const Pose3 &p,
   return body;
 }
 
+RigidBody RigidBody::create_with_mass_properties(
+    const MassProperties &properties, const Pose3 &shape_pose, bool stat) {
+  RigidBody body;
+  body.mass = properties.mass;
+  body.inertia = properties.principal_moments;
+  body.inertia_frame_local = properties.inertia_frame_local;
+  body.is_static = stat;
+  body.set_shape_pose(shape_pose);
+  return body;
+}
+
+Pose3 RigidBody::shape_pose() const {
+  return Pose3(
+      pose.ang,
+      pose.lin - pose.ang.rotate(inertia_frame_local.lin));
+}
+
+void RigidBody::set_shape_pose(const Pose3 &shape_pose_value) {
+  pose.ang = shape_pose_value.ang;
+  pose.lin = shape_pose_value.transform_point(inertia_frame_local.lin);
+}
+
 double RigidBody::inv_mass() const {
   return (is_static || is_kinematic || mass < 1e-10) ? 0.0 : 1.0 / mass;
 }
@@ -44,7 +66,7 @@ void RigidBody::world_inertia_inv(double *Iinv) const {
     return;
   }
   double R[9];
-  pose.rotation_matrix(R);
+  (pose.ang * inertia_frame_local.ang).to_matrix(R);
   Vec3 d = inv_inertia();
   for (int i = 0; i < 3; ++i)
     for (int j = 0; j < 3; ++j)
@@ -98,7 +120,7 @@ void RigidBody::integrate_forces(double dt, const Vec3 &gravity) {
   }
   linear_velocity += (gravity + force * inv_mass()) * dt;
   double R[9];
-  pose.rotation_matrix(R);
+  (pose.ang * inertia_frame_local.ang).to_matrix(R);
   Vec3 wb(R[0] * angular_velocity.x + R[3] * angular_velocity.y +
               R[6] * angular_velocity.z,
           R[1] * angular_velocity.x + R[4] * angular_velocity.y +

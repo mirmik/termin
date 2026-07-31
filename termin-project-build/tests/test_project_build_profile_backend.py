@@ -1,5 +1,8 @@
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -76,6 +79,50 @@ def _package_result(tmp_path: Path) -> SimpleNamespace:
     manifest_path = package_dir / "manifest.json"
     _write_json(manifest_path, {"resources": []})
     return SimpleNamespace(package_dir=package_dir, manifest_path=manifest_path)
+
+
+def _installed_termin_builder() -> Path:
+    executable_name = "termin_builder.exe" if os.name == "nt" else "termin_builder"
+    executable = Path(sys.executable).with_name(executable_name)
+    assert executable.is_file(), f"installed termin_builder is missing: {executable}"
+    return executable
+
+
+def test_installed_builder_routes_capabilities_and_rejects_unknown_commands(
+    tmp_path: Path,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+    builder = _installed_termin_builder()
+
+    capabilities = subprocess.run(
+        [
+            str(builder),
+            "capabilities",
+            "dev",
+            "--project",
+            str(project),
+            "--json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert capabilities.returncode in (0, 2), capabilities.stderr
+    report = json.loads(capabilities.stdout)
+    assert report["profile"] == "dev"
+    assert report["target"] == "desktop"
+
+    unknown = subprocess.run(
+        [str(builder), "not-a-command", "--project", str(project)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert unknown.returncode == 2
+    assert "unknown command: not-a-command" in unknown.stderr
 
 
 def _allow_routing_without_local_preflight(

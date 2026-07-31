@@ -39,6 +39,7 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
         )
     _validate_resource_graph(resource_index, diagnostics)
     _validate_target_requirements(manifest, resource_index, diagnostics)
+    _validate_pipeline_shader_requirements(package_root, manifest, diagnostics)
     _validate_builtin_shader_contract(package_root, manifest, diagnostics)
     return diagnostics
 
@@ -662,7 +663,56 @@ def _validate_shader_resource(
             )
         )
 
+    artifact_role = shader_spec.get("artifact_role", "executable")
+    if artifact_role not in {"executable", "pipeline_variant", "surface_producer"}:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime shader spec has unsupported artifact_role",
+            )
+        )
+
     artifacts = shader_spec.get("artifacts")
+    if artifact_role == "surface_producer":
+        if artifacts not in (None, {}):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    "Evaluator-only surface producer must not declare compiled GPU artifacts",
+                )
+            )
+        if not isinstance(shader_spec.get("surface_producer"), dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    "Evaluator-only surface producer must contain surface_producer metadata",
+                )
+            )
+        contract = shader_spec.get("surface_contract")
+        if (
+            not isinstance(contract, dict)
+            or not isinstance(contract.get("id"), str)
+            or not contract.get("id")
+            or not isinstance(contract.get("version"), int)
+            or contract.get("version", 0) <= 0
+            or not isinstance(contract.get("interface_source_identity"), str)
+            or not contract.get("interface_source_identity")
+        ):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    "Evaluator-only surface producer must identify its exact surface contract interface",
+                )
+            )
+        _validate_shader_stage_sources(
+            package_root, resource_path, shader_spec, diagnostics
+        )
+        return shader_spec
+
     if not isinstance(artifacts, dict) or not artifacts:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -963,9 +1013,9 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         raise ValueError("descriptor magic must be TPLT")
     binary_version = u32()
     descriptor_version = u32()
-    if binary_version != 1:
+    if binary_version != 2:
         raise ValueError(f"unsupported binary version {binary_version}")
-    if descriptor_version != 1:
+    if descriptor_version != 2:
         raise ValueError(f"unsupported descriptor version {descriptor_version}")
     name = text()
     if not name:
@@ -975,7 +1025,15 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
     resource_count = u32()
     dependency_count = u32()
     target_count = u32()
-    if pass_count > 65536 or resource_count > 65536 or target_count > 65536:
+    resource_view_count = u32()
+    fbo_composition_count = u32()
+    if (
+        pass_count > 65536
+        or resource_count > 65536
+        or target_count > 65536
+        or resource_view_count > 65536
+        or fbo_composition_count > 65536
+    ):
         raise ValueError("descriptor array count exceeds the size limit")
     if dependency_count > 262144:
         raise ValueError("descriptor dependency count exceeds the size limit")
@@ -1046,8 +1104,6 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         access = u32()
         if pass_index >= pass_count:
             raise ValueError(f"dependency {index} references missing pass {pass_index}")
-        if resource_name not in resource_names:
-            raise ValueError(f"dependency {index} references missing resource '{resource_name}'")
         if access not in (1, 2, 3):
             raise ValueError(f"dependency {index} has invalid access {access}")
         dependencies.append(
@@ -1064,6 +1120,68 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
                 "height": i32(),
             }
         )
+
+    resource_views: list[dict[str, Any]] = []
+    view_names: set[str] = set()
+    for index in range(resource_view_count):
+        view_name = text()
+        parent = text()
+        attachment = u32()
+        if not view_name or not parent or attachment not in (1, 2):
+            raise ValueError(f"resource view {index} is invalid")
+        if view_name in resource_names or view_name in view_names:
+            raise ValueError(f"resource view '{view_name}' is duplicated")
+        if parent not in resource_names:
+            raise ValueError(
+                f"resource view '{view_name}' references missing parent '{parent}'"
+            )
+        view_names.add(view_name)
+        resource_views.append(
+            {"name": view_name, "parent": parent, "attachment": attachment}
+        )
+
+    fbo_compositions: list[dict[str, Any]] = []
+    composition_names: set[str] = set()
+    for index in range(fbo_composition_count):
+        composition_name = text()
+        color = text()
+        depth = text()
+        if not composition_name or (not color and not depth):
+            raise ValueError(f"FBO composition {index} is invalid")
+        if (
+            composition_name in resource_names
+            or composition_name in view_names
+            or composition_name in composition_names
+        ):
+            raise ValueError(f"FBO composition '{composition_name}' is duplicated")
+        for attachment_name, expected_kind in ((color, 1), (depth, 2)):
+            if not attachment_name:
+                continue
+            if attachment_name in resource_names:
+                continue
+            view = next(
+                (item for item in resource_views if item["name"] == attachment_name),
+                None,
+            )
+            if view is None:
+                raise ValueError(
+                    f"FBO composition '{composition_name}' references missing attachment '{attachment_name}'"
+                )
+            if view["attachment"] != expected_kind:
+                raise ValueError(
+                    f"FBO composition '{composition_name}' uses view '{attachment_name}' for the wrong attachment kind"
+                )
+        composition_names.add(composition_name)
+        fbo_compositions.append(
+            {"name": composition_name, "color": color, "depth": depth}
+        )
+
+    dependency_resources = resource_names | view_names | composition_names
+    for index, dependency in enumerate(dependencies):
+        if dependency["resource"] not in dependency_resources:
+            raise ValueError(
+                f"dependency {index} references missing resource '{dependency['resource']}'"
+            )
     if offset != len(payload):
         raise ValueError("descriptor contains trailing data")
     return {
@@ -1074,6 +1192,8 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         "resources": resources,
         "dependencies": dependencies,
         "targets": targets,
+        "resource_views": resource_views,
+        "fbo_compositions": fbo_compositions,
     }
 
 
@@ -1890,6 +2010,167 @@ def _builtin_shader_artifact_path(uuid_value: str, backend: str, stage: str) -> 
     return f"shaders/{backend}/{uuid_value}.{stage_suffix}.{extension}"
 
 
+def _validate_pipeline_shader_requirements(
+    package_root: Path,
+    manifest: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    requirements = manifest.get("pipeline_shader_requirements", [])
+    if not isinstance(requirements, list):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "manifest.json:pipeline_shader_requirements",
+                "Pipeline shader requirements must be a list",
+            )
+        )
+        return
+
+    target_requirements = manifest.get("target_requirements", {})
+    required_backends = (
+        target_requirements.get("backends", [])
+        if isinstance(target_requirements, dict)
+        else []
+    )
+    valid_required_backends = (
+        required_backends
+        if isinstance(required_backends, list)
+        and all(
+            isinstance(item, str)
+            and item in {"vulkan", "opengl", "d3d11"}
+            for item in required_backends
+        )
+        else []
+    )
+
+    for requirement_index, requirement in enumerate(requirements):
+        context = f"pipeline_shader_requirements[{requirement_index}]"
+        if not isinstance(requirement, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, "Pipeline shader requirement must be an object"
+                )
+            )
+            continue
+        pipeline_name = requirement.get("pipeline")
+        scene_path = requirement.get("scene")
+        variants = requirement.get("variants")
+        if not isinstance(pipeline_name, str) or not pipeline_name:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", context, "Pipeline shader requirement has no pipeline name"
+                )
+            )
+            continue
+        if not isinstance(scene_path, str) or not scene_path:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Pipeline '{pipeline_name}' shader requirement has no scene context",
+                )
+            )
+        if not isinstance(variants, list) or not variants:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    f"Pipeline '{pipeline_name}' must declare its executable pass variants",
+                )
+            )
+            continue
+
+        for variant_index, variant in enumerate(variants):
+            variant_context = f"{context}.variants[{variant_index}]"
+            if not isinstance(variant, dict):
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant must be an object",
+                    )
+                )
+                continue
+            shader_uuid = variant.get("uuid")
+            shader_path = variant.get("path")
+            source_identity = variant.get("source_identity")
+            if not isinstance(shader_uuid, str) or not shader_uuid:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant has no shader UUID",
+                    )
+                )
+                continue
+            if not isinstance(shader_path, str) or not shader_path:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant '{shader_uuid}' has no spec path",
+                    )
+                )
+                continue
+            resolved = _validate_relative_existing_path(
+                package_root, shader_path, variant_context, diagnostics
+            )
+            if resolved is None:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' requires missing executable pass variant '{shader_uuid}'",
+                    )
+                )
+                continue
+            spec = _validate_shader_resource(
+                package_root, shader_path, resolved, diagnostics
+            )
+            if not isinstance(spec, dict):
+                continue
+            if spec.get("uuid") != shader_uuid:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant UUID does not match its shader spec",
+                    )
+                )
+            if spec.get("artifact_role") == "surface_producer":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' requires executable pass variant '{shader_uuid}', not an evaluator-only producer",
+                    )
+                )
+            if (
+                not isinstance(source_identity, str)
+                or not source_identity
+                or spec.get("source_identity") != source_identity
+            ):
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant '{shader_uuid}' has stale composed-source identity",
+                    )
+                )
+            artifacts = spec.get("artifacts")
+            if valid_required_backends and (
+                not isinstance(artifacts, dict)
+                or set(artifacts) != set(valid_required_backends)
+            ):
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        variant_context,
+                        f"Pipeline '{pipeline_name}' pass variant '{shader_uuid}' does not cover required backends {valid_required_backends}",
+                    )
+                )
+
+
 def _validate_required_backends(
     backends: list[Any],
     resource_index: dict[str, dict[str, Any]],
@@ -1922,6 +2203,8 @@ def _validate_required_backends(
             continue
         spec = resource.get("spec")
         if not isinstance(spec, dict):
+            continue
+        if spec.get("artifact_role") == "surface_producer":
             continue
         artifacts = spec.get("artifacts")
         if not isinstance(artifacts, dict):

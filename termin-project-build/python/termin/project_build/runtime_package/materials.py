@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -335,6 +337,7 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
         raise ValueError(f"Shader '{shader.uuid}' has no fragment source")
     surface_producer = shader.surface_producer if shader.has_surface_producer else None
     surface_interface_source = ""
+    surface_interface_identity = ""
     if surface_producer is not None:
         from termin.materials import SurfaceContractKey, SurfaceContractRegistry
 
@@ -351,6 +354,7 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
                 f"{surface_producer['contract_version']}'"
             )
         surface_interface_source = contract.interface_source
+        surface_interface_identity = contract.source_identity
     # ``shv_`` is the canonical identity namespace produced by the engine's
     # shader-intent fingerprint functions.  Not every assembled shader in
     # that namespace carries tc_shader variant metadata: pass-owned base
@@ -359,6 +363,12 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
     # variants: keep their compiled artifacts, but let the runtime pass or
     # material planner reconstruct the registry object and its contract.
     is_derived_pipeline_shader = shader.is_variant or shader.uuid.startswith("shv_")
+    if is_derived_pipeline_shader:
+        artifact_role = "pipeline_variant"
+    elif surface_producer is not None:
+        artifact_role = "surface_producer"
+    else:
+        artifact_role = "executable"
     return ShaderSpec(
         uuid=shader.uuid,
         name=shader.name or shader.uuid,
@@ -378,8 +388,39 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
         # reconstruction, not independent registry resources. Registering them
         # eagerly creates a non-variant shader with the canonical variant UUID
         # and makes the planner reject it as an identity collision.
+        surface_interface_identity=surface_interface_identity,
+        source_identity=_shader_source_identity(
+            shader,
+            surface_interface_identity=surface_interface_identity,
+        ),
+        artifact_role=artifact_role,
         register_in_runtime=not is_derived_pipeline_shader,
     )
+
+
+def _shader_source_identity(
+    shader: Any,
+    *,
+    surface_interface_identity: str,
+) -> str:
+    """Hash the exact stage inputs and semantic source dependencies."""
+    payload = {
+        "language": shader_language(shader),
+        "vertex_entry": shader.vertex_entry,
+        "fragment_entry": shader.fragment_entry,
+        "geometry_entry": shader.geometry_entry,
+        "vertex_source": shader.vertex_source,
+        "fragment_source": shader.fragment_source,
+        "geometry_source": shader.geometry_source,
+        "surface_interface_identity": surface_interface_identity,
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def shader_language(shader: Any) -> str:
