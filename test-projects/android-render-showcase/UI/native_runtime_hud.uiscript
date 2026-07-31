@@ -2,6 +2,7 @@ uiscript: 2
 root:
   type: termin.gui.OverlayLayout
   name: native_runtime_overlay
+  safe_area: respect
   background_color: [0, 0, 0, 0]
   children:
     - type: termin.gui.Panel
@@ -11,8 +12,20 @@ root:
     - type: termin.gui.VStack
       name: hud
       anchor: top-left
-      offset: [20, 20]
+      offset: [12, 12]
+      layout:
+        width: 300
+        max_width: 300
+      padding: [12, 10, 12, 10]
       spacing: 8
+      variants:
+        - when: {width_class: medium}
+          set: {layout: {width: 420, max_width: 420}, padding: [14, 12, 14, 12]}
+        - when: {width_class: expanded}
+          set: {layout: {width: 520, max_width: 520}, padding: [16, 14, 16, 14]}
+        - when: {orientation: landscape}
+          priority: 10
+          set: {orientation: horizontal, spacing: 12, layout: {width: 560, max_width: 560}}
       children:
         - type: termin.gui.Label
           name: title
@@ -23,6 +36,15 @@ root:
           name: hint
           text: Button consumes touch; drag outside orbits
           font_size: 14
+          wrap: word
+          overflow: ellipsis
+          max_lines: 2
+          layout:
+            width: 250
+            max_width: 250
+          variants:
+            - when: {orientation: landscape}
+              set: {layout: {width: 300, max_width: 300}}
           color: [0.72, 0.82, 0.95, 1]
         - type: termin.gui.IconButton
           name: action
@@ -30,6 +52,8 @@ root:
           tooltip: Native packaged button
           size: 48
           font_size: 16
+          layout:
+            minimum_touch_target: [48, 48]
           background_color: [0.08, 0.22, 0.42, 0.94]
           hover_color: [0.12, 0.34, 0.62, 1]
           pressed_color: [0.04, 0.16, 0.30, 1]

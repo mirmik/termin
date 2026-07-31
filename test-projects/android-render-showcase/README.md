@@ -8,8 +8,12 @@ and the packaged native scene-UI contract.
 `UI/native_runtime_hud.uiscript` is compiled into a `ui_document` package
 resource. `Native Runtime HUD/UIComponent` instantiates it, while the default
 pipeline paints it through `UIWidgetPass`. The document deliberately contains
-an overlay, labels, and an `IconButton`. No `tcgui` or Python scene-UI module is
-part of this path.
+an overlay, wrapped labels, and an `IconButton`. Layout values are logical UI
+units. The root respects Android safe insets, the button has a 48-by-48 minimum
+touch target, and responsive variants widen/reflow the HUD at medium/expanded
+widths and switch it to a horizontal row in landscape. No `tcgui`, Python
+scene-UI module, platform-name selector, or project-local density calculation
+is part of this path.
 
 ## Open in the editor
 
@@ -40,7 +44,9 @@ the portable profile.
   --project test-projects/android-render-showcase
 ```
 
-The debug APK is written below `dist/android/apk`.
+The debug APK is written below `dist/android/apk`. The packaged UI dependency
+list should contain only native widget types used by
+`UI/native_runtime_hud.uiscript`.
 
 ## Install and run
 
@@ -52,28 +58,58 @@ adb shell am start -W \
   -n org.termin.testprojects.androidshowcase/org.termin.android.TerminActivity
 ```
 
-## Native UI device gates
+## Native UI emulator/device gates
 
-Run these named scenarios and retain the filtered logcat output with the build
+Use a named arm64 target (`adb devices -l`) and record its serial, logical
+resolution, density, font scale, and safe inset/navigation mode. Run these
+named scenarios and retain both screenshots and filtered logcat with the build
 artifact:
 
-1. `android-native-ui-input`: launch in portrait, tap the blue `UI` button, then
-   drag over it. The button handles the pointer stream and the orbit camera does
-   not move. Drag in uncovered scene space; the camera must orbit.
-2. `android-native-ui-resize`: rotate portrait → landscape → portrait. The HUD
-   remains 20 px from the top-left corner and neither labels nor button retain
-   stale pre-rotation bounds.
-3. `android-native-ui-runtime-closure`: keep the application in the foreground
+1. `android-native-ui-portrait`: launch in portrait. The HUD starts 12 logical
+   units inside the safe rect, the two-line hint is readable without clipping,
+   and the blue `UI` button is at least 48 logical units on both axes. Save
+   `android-native-ui-portrait.png`.
+2. `android-native-ui-landscape`: rotate to landscape. The same retained
+   title/hint/button handles form one horizontal row, remain inside display
+   cutout and system-bar insets, and do not unexpectedly cover the center of
+   the scene. Save `android-native-ui-landscape.png`.
+3. `android-native-ui-input`: tap the blue `UI` button, then drag over it. The
+   button handles the pointer stream and the orbit camera does not move. Drag
+   in uncovered scene space; the camera must orbit.
+4. `android-native-ui-resize`: rotate portrait → landscape → portrait. The HUD
+   returns to its original geometry and button active state without stale
+   pre-rotation bounds or rematerialization.
+5. `android-native-ui-runtime-closure`: keep the application in the foreground
    for at least 120 frames. The label/button/overlay remain visible and logcat
    contains no missing component, pass, widget factory, UI asset, shader, or
    Vulkan errors.
+
+Reference captures from the `SM-A546E` arm64 device gate (1080 by 2340
+physical pixels, density 2.812, font scale 1.1) are retained in
+[`docs/android-native-ui-portrait.png`](docs/android-native-ui-portrait.png)
+and
+[`docs/android-native-ui-landscape.png`](docs/android-native-ui-landscape.png).
+They demonstrate the compact portrait stack and the landscape row after safe
+insets have been applied.
 
 Suggested capture:
 
 ```bash
 adb logcat -c
+adb devices -l
+adb shell wm size
+adb shell wm density
+adb shell settings get system font_scale
 adb shell am start -W \
   -n org.termin.testprojects.androidshowcase/org.termin.android.TerminActivity
+adb exec-out screencap -p > android-native-ui-portrait.png
+adb shell settings put system user_rotation 1
+adb exec-out screencap -p > android-native-ui-landscape.png
+adb shell settings put system user_rotation 0
 adb logcat -d -v threadtime \
   TerminAndroid:I TerminTcLog:I '*:S'
 ```
+
+If automatic rotation is enabled, use the emulator/device rotation control
+instead of changing `user_rotation`. Restore the original rotation setting
+after the capture.
