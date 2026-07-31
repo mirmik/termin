@@ -58,6 +58,20 @@ adb shell am start -W \
   -n org.termin.testprojects.androidshowcase/org.termin.android.TerminActivity
 ```
 
+To enable the native frame profiler explicitly for a development smoke, pass
+the activity extra and inspect the periodic completed-frame report:
+
+```bash
+adb shell am force-stop org.termin.testprojects.androidshowcase
+adb shell am start -W \
+  --ez termin.profiler true \
+  -n org.termin.testprojects.androidshowcase/org.termin.android.TerminActivity
+adb logcat -d -s TerminAndroid:I | grep 'profiler: completed='
+```
+
+Without the extra, packaged applications keep native profiling disabled. The
+extra is ignored by non-debug variants.
+
 ## Native UI emulator/device gates
 
 Use a named arm64 target (`adb devices -l`) and record its serial, logical

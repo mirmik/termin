@@ -30,7 +30,8 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     jclass,
     jstring app_data_dir,
     jstring asset_root,
-    jstring native_lib_dir
+    jstring native_lib_dir,
+    jboolean enable_profiler
 ) {
     const char* app_data_dir_chars = jstring_chars(env, app_data_dir);
     const char* asset_root_chars = jstring_chars(env, asset_root);
@@ -48,6 +49,7 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     config.app_data_dir = app_data_dir_chars;
     config.asset_root = asset_root_chars;
     config.native_lib_dir = native_lib_dir_chars;
+    config.enable_profiler = enable_profiler == JNI_TRUE ? 1 : 0;
 
     if (!termin_android_initialize(&config)) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "termin_android_initialize failed");

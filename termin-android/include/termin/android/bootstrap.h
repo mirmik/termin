@@ -19,6 +19,9 @@ typedef struct termin_android_config {
     const char* app_data_dir;
     const char* asset_root;
     const char* native_lib_dir;
+    // Explicit development gate for the process-global native profiler.
+    // Ordinary packaged applications leave this disabled.
+    int32_t enable_profiler;
 } termin_android_config;
 
 typedef struct termin_android_presentation_metrics {
