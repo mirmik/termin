@@ -73,6 +73,20 @@ UI-neutral models и операции остаются в `editor_core`, нап�
 `project_session_controller.py`, `menu_bar_model.py` и
 `framegraph_debugger_service.py`.
 
+## Состояние редактора в сцене
+
+Сериализуемое editor-only состояние хранится в верхнеуровневой секции
+`editor` файла `.scene`. Состояние editor camera имеет единственный
+канонический путь `editor.camera`; `scene.metadata` не используется как его
+вторая копия.
+
+Старый путь `scene.metadata.termin.editor.entities_data` поддерживается только
+для однократного чтения: при присоединении сцены данные извлекаются и удаляются
+из metadata. Между переключениями сцен несохранённое состояние камер держит
+`EditorSceneAttachment`, адресуя его поколенческим handle сцены. Это не
+возвращает служебные editor entities в пользовательскую metadata и не смешивает
+сцены при повторном использовании slot-а.
+
 ## Как расширять редактор
 
 ### Новая scene-операция

@@ -4,7 +4,7 @@ EditorSceneAttachment — manages editor connection to a scene.
 Handles:
 - Creating/destroying EditorEntities in the scene
 - Creating/removing editor viewport
-- Saving/restoring editor state (camera position, UI state)
+- Caching editor state while switching live scenes
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class EditorSceneAttachment:
 
     Lifecycle:
     - attach(scene): Create EditorEntities, viewport
-    - detach(): Save state, remove EditorEntities, cleanup
+    - detach(): Cache state, remove EditorEntities, cleanup
 
     Properties:
     - scene: Currently attached scene (or None)
@@ -68,6 +68,7 @@ class EditorSceneAttachment:
         self._viewport: "Viewport | None" = None
         self._pipeline: "RenderPipeline | None" = None
         self._render_target = None
+        self._camera_state_by_scene: dict[tuple[int, int], dict] = {}
 
     # --- Properties ---
 
@@ -120,7 +121,7 @@ class EditorSceneAttachment:
 
         Args:
             scene: Scene to attach to.
-            restore_state: If True, restore editor state from scene.editor_entities_data.
+            restore_state: If True, restore cached or legacy editor state.
             transfer_camera_state: If True, transfer camera state from previous scene
                                    (ignores restore_state).
         """
@@ -140,13 +141,20 @@ class EditorSceneAttachment:
         )
         self._camera_manager.attach_to_scene(scene)
 
-        # Restore state
+        legacy_camera_data = self._take_legacy_camera_data(scene)
+
+        # Restore state. Transferred state wins over a per-scene live-session
+        # cache, which in turn wins over legacy serialized scene metadata.
         if transfer_camera_state and old_camera_data is not None:
-            # Transfer from previous scene
             self._camera_manager.set_camera_data(old_camera_data)
-        elif restore_state and scene.get_metadata_value("termin.editor.entities_data") is not None:
-            # Restore from scene's stored data
-            self._camera_manager.set_camera_data(scene.get_metadata_value("termin.editor.entities_data"))
+        elif restore_state:
+            cached_camera_data = self._camera_state_by_scene.get(
+                self._scene_identity(scene)
+            )
+            if cached_camera_data is not None:
+                self._camera_manager.set_camera_data(cached_camera_data)
+            elif isinstance(legacy_camera_data, dict):
+                self._camera_manager.set_camera_data(legacy_camera_data)
 
         # Remove any existing viewports from this display
         self._remove_display_viewports()
@@ -199,18 +207,18 @@ class EditorSceneAttachment:
         """
         Detach editor from current scene.
 
-        Saves state to scene.editor_entities_data, removes EditorEntities,
-        and cleans up viewport.
+        Caches state in the attachment session, removes EditorEntities, and
+        cleans up the viewport. Editor-only state is never written into scene
+        metadata.
 
         Args:
-            save_state: If True, save editor state to scene.editor_entities_data.
+            save_state: If True, retain state for a later live-scene reattach.
         """
         if self._attached_scene is None:
             return
 
-        # Save state to scene
-        if save_state and self._camera_manager is not None:
-            self._attached_scene.set_metadata_value("termin.editor.entities_data", self._camera_manager.get_camera_data())
+        if save_state:
+            self.save_state()
 
         # Remove viewport
         if self._viewport is not None:
@@ -264,10 +272,14 @@ class EditorSceneAttachment:
     # --- State management ---
 
     def save_state(self) -> None:
-        """Save current editor state to scene metadata."""
+        """Cache current editor state without mutating serialized scene data."""
         if self._attached_scene is None or self._camera_manager is None:
             return
-        self._attached_scene.set_metadata_value("termin.editor.entities_data", self._camera_manager.get_camera_data())
+        camera_data = self._camera_manager.get_camera_data()
+        if camera_data is not None:
+            self._camera_state_by_scene[
+                self._scene_identity(self._attached_scene)
+            ] = camera_data
 
     def get_camera_data(self) -> dict | None:
         """Get current camera data for serialization."""
@@ -280,6 +292,22 @@ class EditorSceneAttachment:
         if self._camera_manager is None:
             return
         self._camera_manager.set_camera_data(data)
+
+    @staticmethod
+    def _scene_identity(scene: "Scene") -> tuple[int, int]:
+        handle = scene.scene_handle()
+        return int(handle.index), int(handle.generation)
+
+    @staticmethod
+    def _take_legacy_camera_data(scene: "Scene") -> dict | None:
+        data = scene.get_metadata_value("termin.editor.entities_data")
+        if data is None:
+            return None
+        # The canonical persisted location is top-level editor.camera. Remove
+        # the old scene metadata as soon as the scene enters an editor session
+        # so the next save emits only the canonical representation.
+        scene.clear_metadata_value("termin.editor.entities_data")
+        return data if isinstance(data, dict) else None
 
     # --- Internal helpers ---
 
