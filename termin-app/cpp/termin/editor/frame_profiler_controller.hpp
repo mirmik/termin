@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "termin/editor/frame_profiler_source.hpp"
 
@@ -49,6 +50,9 @@ public:
   bool activate(gui_native::CommandId command);
   bool select_frame(std::int64_t frame_number);
   void show_section_details(gui_native::TreeTableNodeId node);
+  bool connect_remote(std::uint16_t port, std::string authentication_token);
+  bool disconnect_remote();
+  bool using_remote_source() const { return local_source_ != nullptr; }
 
 private:
   void refresh_models();
@@ -61,6 +65,7 @@ private:
   bool select_adjacent_hitch(int direction);
 
   std::unique_ptr<IFrameProfilerSource> source_;
+  std::unique_ptr<IFrameProfilerSource> local_source_;
   std::shared_ptr<const FrameProfilerSnapshot> snapshot_;
   double hitch_ratio_ = 0.0;
   bool follow_latest_ = true;

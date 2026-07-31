@@ -16,6 +16,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 add_library(termin_profiler_remote SHARED
+    src/client.cpp
     src/target_service.cpp
     src/wire_codec.cpp
 )

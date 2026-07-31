@@ -318,6 +318,7 @@ if(BUILD_TESTS)
         termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_profiler_controller.cpp
         termin/editor/frame_profiler_source.cpp
+        termin/editor/remote_frame_profiler_source.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
@@ -347,6 +348,7 @@ if(BUILD_TESTS)
         termin_scene::termin_scene
         termin_input::termin_input
         termin_engine::termin_engine
+        termin_profiler_remote::termin_profiler_remote
         termin_gui_native::termin_gui_native
         termin_components_render::termin_components_render
         termin_components_collision::termin_components_collision
