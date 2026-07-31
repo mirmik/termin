@@ -82,6 +82,19 @@ void check_contract_resource(
 
 } // namespace
 
+TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
+    const std::string source = read_text(
+        repo_root_from_test_file()
+        / "termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+
+    CHECK(source.find("float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4]")
+          != std::string::npos);
+    CHECK(source.find("float4x4 u_light_space_matrix[MAX_SHADOW_MAPS]")
+          == std::string::npos);
+    CHECK(source.find("dot(shadow_block.u_light_space_matrix[row + 0], world)")
+          != std::string::npos);
+}
+
 TEST_CASE("built-in fragment shader registration reads source file from resource root") {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path root =
