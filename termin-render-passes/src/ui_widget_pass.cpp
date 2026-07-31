@@ -90,6 +90,46 @@ bool layer_is_visible(tc_entity_handle owner, std::uint64_t layer_mask) {
         (layer_mask & (UINT64_C(1) << layer)) != 0u;
 }
 
+bool synchronize_render_extent(
+    gui_native::UiDocumentSubmission& submission,
+    int width,
+    int height
+) {
+    if (!tc_ui_presentation_metrics_is_valid(
+            &submission.presentation_metrics)) {
+        submission.presentation_metrics =
+            tc_ui_presentation_metrics_identity(tc_ui_size{
+                static_cast<float>(width),
+                static_cast<float>(height),
+            });
+        return true;
+    }
+
+    submission.presentation_metrics.physical_extent = tc_ui_size{
+        static_cast<float>(width),
+        static_cast<float>(height),
+    };
+    if (tc_ui_presentation_metrics_is_valid(
+            &submission.presentation_metrics)) {
+        return true;
+    }
+
+    tc::Log::error(
+        "[UIWidgetPass] presentation policy is incompatible with render "
+        "extent %dx%d identity=%llu density=%.3f font=%.3f "
+        "safe_insets=[%.3f,%.3f,%.3f,%.3f]",
+        width,
+        height,
+        static_cast<unsigned long long>(submission.stable_identity),
+        submission.presentation_metrics.density_scale,
+        submission.presentation_metrics.font_scale,
+        submission.presentation_metrics.physical_safe_insets.left,
+        submission.presentation_metrics.physical_safe_insets.top,
+        submission.presentation_metrics.physical_safe_insets.right,
+        submission.presentation_metrics.physical_safe_insets.bottom);
+    return false;
+}
+
 struct SubmissionCollector {
     std::uint64_t layer_mask = UINT64_MAX;
     std::unordered_set<const tc_component*> seen;
@@ -311,15 +351,17 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
             width, height, output_res.c_str());
         return;
     }
-    for (auto& submission : submissions) {
-        if (!tc_ui_presentation_metrics_is_valid(
-                &submission.presentation_metrics)) {
-            submission.presentation_metrics =
-                tc_ui_presentation_metrics_identity(tc_ui_size{
-                    static_cast<float>(width),
-                    static_cast<float>(height),
-                });
-        }
+    submissions.erase(
+        std::remove_if(
+            submissions.begin(),
+            submissions.end(),
+            [width, height](auto& submission) {
+                return !synchronize_render_extent(
+                    submission, width, height);
+            }),
+        submissions.end());
+    if (submissions.empty()) {
+        return;
     }
 
     ctx.ctx2->begin_pass(output, {}, nullptr, 1.0f, false);

@@ -27,10 +27,15 @@ documents in stable `(priority, identity)` order to
 and their document assets remain CPU-only.
 
 If a document already carries host-published presentation metrics,
-`UIWidgetPass` preserves them in the painter submission. Documents without a
-platform source receive an explicit identity metric for the current render
-extent. Android publishes density, normalized font scale, safe insets, and
-surface extent through its Activity/bootstrap bridge before scene rendering.
+`UIWidgetPass` preserves its density scale, font scale, and physical safe
+insets. The pass always binds the physical extent to its current render target,
+because that extent belongs to the active presentation and may change when an
+editor viewport or window is resized. Documents without a platform source
+receive identity density/font policy and the same current render extent.
+Android publishes density, normalized font scale, safe insets, and the latest
+surface extent through its Activity/bootstrap bridge before scene rendering;
+the frame pass verifies that the preserved safe-area policy is valid for the
+actual target extent.
 
 For distinct framegraph resources the pass copies input scene color to the
 output before opening the UI pass with load semantics. For an inplace alias it
