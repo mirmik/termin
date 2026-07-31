@@ -732,7 +732,7 @@ void ColorPass::execute_with_data(
         int   u_shadow_map_count;       // 4
         int   _pad0[3];                 // 12
         // mat4[16] = 64 * 16 = 1024
-        float u_light_space_matrix[SHADOW_UBO_MAX][16];
+        float u_light_space_matrix[SHADOW_UBO_MAX][4][4];
         // int[16] with std140 vec4 alignment (4 bytes + 12 pad per element)
         int   u_shadow_light_index[SHADOW_UBO_MAX][4];
         int   u_shadow_cascade_index[SHADOW_UBO_MAX][4];
@@ -750,9 +750,13 @@ void ColorPass::execute_with_data(
         sb.u_shadow_map_count = sm_count;
         for (int i = 0; i < sm_count; ++i) {
             const ShadowMapArrayEntry& e = data.shadow_maps[i];
-            std::memcpy(sb.u_light_space_matrix[i],
-                        e.light_space_matrix.data,
-                        sizeof(sb.u_light_space_matrix[i]));
+            // Mat44f is column-major; the shader consumes four explicit rows.
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    sb.u_light_space_matrix[i][row][col] =
+                        e.light_space_matrix(col, row);
+                }
+            }
             sb.u_shadow_light_index[i][0]   = e.light_index;
             sb.u_shadow_cascade_index[i][0] = e.cascade_index;
             sb.u_shadow_split_near[i][0]    = e.cascade_split_near;
