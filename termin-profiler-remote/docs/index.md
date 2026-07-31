@@ -12,3 +12,14 @@ unknown message types are rejected.
 
 See [the architecture decision](../../docs/analysis/2026-07-30-remote-profiler-network-android.md)
 for transport ownership, backpressure and Android connection policy.
+
+`RemoteProfilerTarget` is the bounded target-side service. Its lifecycle and
+`pump_frame_thread()` run on the profiler frame thread; the owned I/O thread
+owns all sockets and communicates through fixed-capacity SPSC queues. A full
+outbound queue rejects one complete newest batch and reports the accumulated
+loss before the next successfully queued batch. A stopped service clears its
+capture and both queues, so restart begins from a deterministic idle state.
+
+The listener accepts only `127.0.0.1` and requires a per-launch token in the
+`ClientHello`. Android clients are expected to reach it through an explicit
+ADB port forward; the service never exposes a device-network listener.
