@@ -10,18 +10,25 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_base REQUIRED)
 endif()
+find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
-add_library(termin_profiler_remote SHARED src/wire_codec.cpp)
+add_library(termin_profiler_remote SHARED
+    src/target_service.cpp
+    src/wire_codec.cpp
+)
 add_library(termin_profiler_remote::termin_profiler_remote ALIAS termin_profiler_remote)
 target_compile_definitions(termin_profiler_remote PRIVATE TERMIN_PROFILER_REMOTE_EXPORTS)
 target_include_directories(termin_profiler_remote PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(termin_profiler_remote PRIVATE tcbase::termin_base)
+target_link_libraries(termin_profiler_remote PRIVATE tcbase::termin_base Threads::Threads)
+if(WIN32)
+    target_link_libraries(termin_profiler_remote PRIVATE ws2_32)
+endif()
 termin_set_rpath_lib(termin_profiler_remote)
 
 if(MSVC)
@@ -41,6 +48,20 @@ if(TERMIN_BUILD_TESTS)
     termin_set_rpath_test(termin_profiler_remote_wire_codec_test)
     add_test(NAME termin_profiler_remote_wire_codec_test
         COMMAND termin_profiler_remote_wire_codec_test)
+
+    add_executable(termin_profiler_remote_target_service_test
+        tests/test_target_service.cpp
+    )
+    target_include_directories(termin_profiler_remote_target_service_test PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_profiler_remote_target_service_test PRIVATE
+        termin_profiler_remote
+        tcbase::termin_base
+    )
+    termin_set_rpath_test(termin_profiler_remote_target_service_test)
+    add_test(NAME termin_profiler_remote_target_service_test
+        COMMAND termin_profiler_remote_target_service_test)
     termin_label_tests_in_directory("termin-profiler-remote")
 endif()
 
