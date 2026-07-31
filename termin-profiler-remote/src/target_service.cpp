@@ -483,6 +483,7 @@ public:
         dropped_batches.load(std::memory_order_relaxed),
         dropped_frames.load(std::memory_order_relaxed),
         rejected_clients.load(std::memory_order_relaxed),
+        transmitted_bytes.load(std::memory_order_relaxed),
     };
   }
 
@@ -632,7 +633,11 @@ private:
           encoded.detail.c_str());
       return false;
     }
-    return send_bytes(socket, *encoded.value, running);
+    const bool sent = send_bytes(socket, *encoded.value, running);
+    if (sent)
+      transmitted_bytes.fetch_add(encoded.value->size(),
+                                  std::memory_order_relaxed);
+    return sent;
   }
 
   bool handshake(Socket socket, std::uint64_t &sequence,
@@ -839,6 +844,7 @@ private:
   std::atomic<std::uint64_t> dropped_batches{0};
   std::atomic<std::uint64_t> dropped_frames{0};
   std::atomic<std::uint64_t> rejected_clients{0};
+  std::atomic<std::uint64_t> transmitted_bytes{0};
   std::unordered_map<std::string, std::uint32_t> name_ids;
   std::vector<std::string> names_by_id;
   std::uint32_t next_name_id = 1;

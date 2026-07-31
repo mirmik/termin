@@ -34,6 +34,7 @@ struct TargetServiceStatus {
   std::uint64_t dropped_batches = 0;
   std::uint64_t dropped_frames = 0;
   std::uint64_t rejected_clients = 0;
+  std::uint64_t transmitted_bytes = 0;
 };
 
 // Construction, start(), stop(), destruction and pump_frame_thread() belong to

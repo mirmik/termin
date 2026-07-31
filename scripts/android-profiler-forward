@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+serial=""
+package="org.termin.android"
+host_port="46051"
+device_port="46051"
+token=""
+launch=1
+
+usage() {
+    echo "Usage: $0 [--serial SERIAL] [--package ID] [--host-port PORT] [--device-port PORT] [--token TOKEN] [--no-launch]"
+    echo
+    echo "Creates an adb TCP forward to the APK's loopback-only remote profiler."
+    echo "When launching, the APK must be a debuggable build. A random token is"
+    echo "generated unless --token is supplied."
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --serial)
+            serial="$2"
+            shift
+            ;;
+        --serial=*) serial="${1#--serial=}" ;;
+        --package)
+            package="$2"
+            shift
+            ;;
+        --package=*) package="${1#--package=}" ;;
+        --host-port)
+            host_port="$2"
+            shift
+            ;;
+        --host-port=*) host_port="${1#--host-port=}" ;;
+        --device-port)
+            device_port="$2"
+            shift
+            ;;
+        --device-port=*) device_port="${1#--device-port=}" ;;
+        --token)
+            token="$2"
+            shift
+            ;;
+        --token=*) token="${1#--token=}" ;;
+        --no-launch) launch=0 ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+validate_port() {
+    local name="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[0-9]+$ ]] || (( value < 1 || value > 65535 )); then
+        echo "$name must be an integer in 1..65535: $value" >&2
+        exit 2
+    fi
+}
+
+validate_port "host port" "$host_port"
+validate_port "device port" "$device_port"
+
+if [[ -z "$serial" ]]; then
+    mapfile -t devices < <(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+    if (( ${#devices[@]} != 1 )); then
+        echo "Expected exactly one connected adb device, found ${#devices[@]}; pass --serial." >&2
+        exit 1
+    fi
+    serial="${devices[0]}"
+fi
+
+adb -s "$serial" get-state >/dev/null
+adb -s "$serial" forward "tcp:$host_port" "tcp:$device_port"
+
+if [[ -z "$token" ]]; then
+    token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+fi
+
+if (( launch )); then
+    adb -s "$serial" shell am force-stop "$package"
+    adb -s "$serial" shell am start \
+        -n "$package/org.termin.android.TerminActivity" \
+        --ez termin.profiler.remote true \
+        --ei termin.profiler.port "$device_port" \
+        --es termin.profiler.token "$token"
+fi
+
+echo
+echo "Android remote profiler ADB route is configured:"
+echo "  device serial: $serial"
+echo "  editor host:   127.0.0.1"
+echo "  editor port:   $host_port"
+echo "  token:         $token"
+echo "  remove forward: adb -s $serial forward --remove tcp:$host_port"
