@@ -142,6 +142,28 @@ def test_material_inspector_file_texture_and_name_edits():
     assert material.texture_assignments == [("albedo", resources.texture)]
 
 
+def test_material_inspector_edits_unconstrained_texture_property():
+    material = _Material()
+    resources = _Resources()
+    program = _Program()
+    program.properties = [
+        {
+            **property_data,
+            "expected_encoding": None,
+        }
+        if property_data["name"] == "albedo"
+        else property_data
+        for property_data in _Program.properties
+    ]
+    resources.get_shader = lambda name: program if name == "lit" else None
+    controller = MaterialInspectorController(resources)
+    controller.set_target(material)
+
+    controller.set_texture("albedo", "file", "brick")
+
+    assert material.texture_assignments == [("albedo", resources.texture)]
+
+
 def test_material_vector_padding_and_validation():
     assert material_vector(None, 3) == (0.0, 0.0, 0.0)
     assert material_vector((0.25, 0.5, 0.75), 4, color=True) == (

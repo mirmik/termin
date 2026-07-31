@@ -4,7 +4,11 @@ import pytest
 
 from termin.image import write_png_rgba8_file
 from termin.materials import SurfaceContractRegistry
-from termin.default_assets.render.material_asset import _parse_material_content, _save_material_file
+from termin.default_assets.render.material_asset import (
+    _apply_canonical_texture_defaults,
+    _parse_material_content,
+    _save_material_file,
+)
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.render.texture_asset import TextureAsset
@@ -18,6 +22,37 @@ def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:
     shader_asset = ShaderAsset.from_file(shader_path, name=name)
     assert shader_asset.program is not None
     rm.register_shader_asset(name, shader_asset, source_path=str(shader_path))
+
+
+def test_unconstrained_texture_default_keeps_its_native_encoding() -> None:
+    class PhaseProbe:
+        def __init__(self) -> None:
+            self.declarations = []
+            self.textures = {}
+
+        def declare_texture(self, name, expected_encoding) -> None:
+            self.declarations.append((name, expected_encoding))
+
+        def set_texture(self, name, texture) -> bool:
+            self.textures[name] = texture
+            return True
+
+    phase = PhaseProbe()
+
+    _apply_canonical_texture_defaults(
+        phase,
+        [
+            {
+                "name": "u_input",
+                "property_type": "Texture",
+                "default": "white",
+                "expected_encoding": None,
+            }
+        ],
+    )
+
+    assert phase.declarations == [("u_input", None)]
+    assert phase.textures["u_input"].encoding == TextureEncoding.LINEAR
 
 
 def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(tmp_path) -> None:

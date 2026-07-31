@@ -700,10 +700,6 @@ def test_validate_runtime_package_rejects_incompatible_shader_program_schema(tmp
     ("properties", "message"),
     [
         (
-            [{"name": "u_albedo", "property_type": "Texture"}],
-            "Shader program texture property expected_encoding must be 'srgb' or 'linear'",
-        ),
-        (
             [
                 {
                     "name": "u_albedo",
@@ -781,6 +777,42 @@ def test_validate_runtime_package_checks_shader_property_encoding_contract(
     diagnostics = validate_runtime_package(package_dir)
 
     assert any(diagnostic.message == message for diagnostic in diagnostics)
+
+
+def test_validate_runtime_package_accepts_unconstrained_texture_property(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    _write_shader_program_resource(package_dir)
+    program_path = package_dir / "shaders" / "program-uuid.shader-program.json"
+    program = json.loads(program_path.read_text(encoding="utf-8"))
+    program["properties"] = [
+        {"name": "u_input", "property_type": "Texture", "default": "white"}
+    ]
+    _write_json(program_path, program)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                },
+                {
+                    "type": "shader_program",
+                    "uuid": "program-uuid",
+                    "path": "shaders/program-uuid.shader-program.json",
+                },
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert not [diagnostic for diagnostic in diagnostics if diagnostic.level == "error"]
 
 
 def test_validate_runtime_package_reports_missing_shader_artifact(tmp_path: Path) -> None:

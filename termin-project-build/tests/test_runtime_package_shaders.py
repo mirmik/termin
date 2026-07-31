@@ -39,6 +39,14 @@ def test_shader_program_spec_preserves_expected_texture_encoding() -> None:
                 "range_min": None,
                 "range_max": None,
             },
+            {
+                "name": "u_input",
+                "property_type": "Texture",
+                "expected_encoding": None,
+                "default": "white",
+                "range_min": None,
+                "range_max": None,
+            },
         ],
         phases=[
             {
@@ -54,3 +62,4 @@ def test_shader_program_spec_preserves_expected_texture_encoding() -> None:
 
     assert spec["properties"][0]["expected_encoding"] == "srgb"
     assert spec["properties"][1]["expected_encoding"] == "linear"
+    assert "expected_encoding" not in spec["properties"][2]

@@ -259,7 +259,7 @@ def test_shader_asset_round_trips_and_applies_matrix_defaults(tmp_path: Path) ->
     assert uniforms["u_texel_size"] == (0.25, 0.5)
 
 
-def test_shader_update_rejects_incompatible_texture_schema_transactionally(
+def test_shader_update_reselects_encoding_aware_symbolic_default(
     tmp_path: Path,
 ) -> None:
     from termin.default_assets.render.material_asset import MaterialAsset
@@ -312,7 +312,8 @@ def test_shader_update_rejects_incompatible_texture_schema_transactionally(
     )
 
     assert material.phase_count == previous_phase_count
-    assert material.textures["u_albedo"].uuid == previous_texture_uuid
+    assert material.textures["u_albedo"].uuid != previous_texture_uuid
+    assert material.textures["u_albedo"].name == "__white_1x1__"
     assert material.shader_program_uuid != previous_program_uuid
     assert material.shader_program_uuid == "hot-reload-linear"
     assert material.shader_program_version == linear_asset.program.version
