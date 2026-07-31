@@ -11,6 +11,7 @@ from termin.project_build.desktop_runtime_packager import package_desktop_runtim
 from termin.project_build.pipeline import ProjectBuildPipelineError
 import termin.project_build.desktop_build as desktop_build
 import termin.project_build.runtime_package.shaders as runtime_shaders
+from termin.project_build.runtime_package_validator import validate_runtime_package
 
 from desktop_runtime_packager_test_support import (
     write_fake_distribution as _write_fake_distribution,
@@ -1344,6 +1345,23 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
     assert "DefaultLineShader" in shader_names
     assert "DefaultLineShader_LineTubeBody" in shader_names
     assert "DefaultLineShader_LineTubeCap" in shader_names
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    requirements = manifest["pipeline_shader_requirements"]
+    assert len(requirements) == 1
+    assert requirements[0]["pipeline"] == "LinePipeline"
+    assert requirements[0]["pipeline_uuid"] == pipeline_uuid
+    assert {
+        variant["name"] for variant in requirements[0]["variants"]
+    } >= {
+        "DefaultLineShader",
+        "DefaultLineShader_LineTubeBody",
+        "DefaultLineShader_LineTubeCap",
+    }
+    assert all(
+        variant["source_identity"].startswith("sha256:")
+        for variant in requirements[0]["variants"]
+    )
+    assert validate_runtime_package(result.package_dir) == []
     assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"]
 
 
