@@ -45,6 +45,20 @@ native очередь. Модуль не создаёт потоков, не н�
 не интегрируется автоматически в приложения Termin. Host-specific wakeup и
 выбор фазы обслуживания остаются ответственностью embedding application.
 
+### termin-profiler-remote
+
+Source of truth: [remote profiler architecture](analysis/2026-07-30-remote-profiler-network-android.md)
+
+Опциональный нативный слой удалённого профайлера над `termin-base`. Владеет
+версионированным endian-independent wire protocol, общими жёсткими лимитами и
+target-side транспортом. Codec не знает о сокетах, editor, Android host и
+process-global profiler singleton; эти зависимости появляются только в
+отдельных service/host adapters.
+
+Editor-side источник и UI остаются в `termin-app`, а включение listener и его
+security policy принадлежат конкретному host. `termin-runtime` не получает
+обязательный diagnostics server.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)
