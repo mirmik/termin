@@ -17,6 +17,88 @@ extern "C" {
 
 namespace termin {
 
+EngineHostFrameScope::EngineHostFrameScope(
+    const EngineHostFrameCadence& cadence
+) noexcept {
+    if (!tc_profiler_frame_capture_enabled()) {
+        return;
+    }
+    if (!std::isfinite(cadence.start_time_ms) || cadence.start_time_ms < 0.0 ||
+        !std::isfinite(cadence.interval_ms) || cadence.interval_ms < 0.0 ||
+        !std::isfinite(cadence.target_interval_ms) || cadence.target_interval_ms < 0.0 ||
+        !std::isfinite(cadence.deadline_lateness_ms) || cadence.deadline_lateness_ms < 0.0 ||
+        cadence.missed_intervals < 0) {
+        tc_log(TC_LOG_ERROR, "[EngineHostFrameScope] Refusing invalid frame cadence");
+        return;
+    }
+    if (tc_profiler_current_frame() != nullptr) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineHostFrameScope] Refusing nested host frame scope"
+        );
+        return;
+    }
+
+    const tc_profiler_frame_info frame_info{
+        cadence.start_time_ms,
+        cadence.interval_ms,
+        cadence.target_interval_ms,
+        cadence.deadline_lateness_ms,
+        cadence.missed_intervals,
+    };
+    tc_profiler_begin_frame_with_info(&frame_info);
+    const tc_frame_profile* current = tc_profiler_current_frame();
+    if (!current) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineHostFrameScope] Profiler did not open the requested frame"
+        );
+        return;
+    }
+    _frame_number = current->frame_number;
+}
+
+EngineHostFrameScope::~EngineHostFrameScope() {
+    finish();
+}
+
+EngineHostFrameScope::EngineHostFrameScope(EngineHostFrameScope&& other) noexcept
+    : _frame_number(std::exchange(other._frame_number, -1)) {}
+
+EngineHostFrameScope& EngineHostFrameScope::operator=(
+    EngineHostFrameScope&& other
+) noexcept {
+    if (this != &other) {
+        finish();
+        _frame_number = std::exchange(other._frame_number, -1);
+    }
+    return *this;
+}
+
+void EngineHostFrameScope::finish() noexcept {
+    if (_frame_number < 0) {
+        return;
+    }
+    const tc_frame_profile* current = tc_profiler_current_frame();
+    if (!current) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineHostFrameScope] Owned profiler frame %d was ended outside its host scope",
+            _frame_number
+        );
+    } else if (current->frame_number != _frame_number) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineHostFrameScope] Refusing to close foreign profiler frame %d; expected %d",
+            current->frame_number,
+            _frame_number
+        );
+    } else {
+        tc_profiler_end_frame();
+    }
+    _frame_number = -1;
+}
+
 namespace engine_detail {
 
 struct EngineLoopState {
@@ -298,44 +380,39 @@ void EngineCore::run() {
         last_time = frame_start;
         has_previous_frame = true;
 
-        const bool capture_frame = tc_profiler_frame_capture_enabled();
-        if (capture_frame) {
-            const tc_profiler_frame_info frame_info{
+        {
+            EngineHostFrameScope frame_scope(EngineHostFrameCadence{
                 cadence.start_time_ms,
                 cadence.interval_ms,
                 cadence.target_interval_ms,
                 cadence.deadline_lateness_ms,
                 cadence.missed_intervals,
-            };
-            tc_profiler_begin_frame_with_info(&frame_info);
+            });
+            const bool profile = tc_profiler_enabled();
+
+            // Always wrap the UI callback in a section so the sub-sections
+            // the callback opens (Events, Render Compose, …) are nested
+            // under a single root instead of bubbling up as siblings of
+            // SceneManager Render. When profile_ui is off the wrap is
+            // *muted* — the section and everything inside it doesn't
+            // record; callees don't need to know about the flag.
+            if (profile) {
+                if (_profile_ui) tc_profiler_begin_section("UI");
+                else             tc_profiler_begin_section_muted("UI");
+            }
+            if (loop_client.poll_events) loop_client.poll_events();
+            if (profile) tc_profiler_end_section();
+
+            // Check if should continue
+            if (loop_client.should_continue && !loop_client.should_continue()) {
+                _loop_state->running.store(false);
+                break;
+            }
+
+            // Tick and render — opens its own sections inside the frame
+            // scope owned by this block.
+            tick_and_render(dt);
         }
-        const bool profile = tc_profiler_enabled();
-
-        // Always wrap the UI callback in a section so the sub-sections
-        // the callback opens (Events, Render Compose, …) are nested
-        // under a single root instead of bubbling up as siblings of
-        // SceneManager Render. When profile_ui is off the wrap is
-        // *muted* — the section and everything inside it doesn't
-        // record; callees don't need to know about the flag.
-        if (profile) {
-            if (_profile_ui) tc_profiler_begin_section("UI");
-            else             tc_profiler_begin_section_muted("UI");
-        }
-        if (loop_client.poll_events) loop_client.poll_events();
-        if (profile) tc_profiler_end_section();
-
-        // Check if should continue
-        if (loop_client.should_continue && !loop_client.should_continue()) {
-            if (capture_frame) tc_profiler_end_frame();
-            _loop_state->running.store(false);
-            break;
-        }
-
-        // Tick and render — opens its own sections inside the frame
-        // scope owned by this function.
-        tick_and_render(dt);
-
-        if (capture_frame) tc_profiler_end_frame();
 
         if (active_target_fps > 0.0) {
             // Frame limiting with sleep_until for stable pacing. Keep the

@@ -2,6 +2,7 @@ package org.termin.android;
 
 import android.app.Activity;
 import android.content.res.Configuration;
+import android.content.pm.ApplicationInfo;
 import android.graphics.PixelFormat;
 import android.graphics.Insets;
 import android.os.Bundle;
@@ -65,7 +66,9 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         nativeInitialize(
                 getFilesDir().getAbsolutePath(),
                 getFilesDir().getAbsolutePath(),
-                getApplicationInfo().nativeLibraryDir
+                getApplicationInfo().nativeLibraryDir,
+                (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                        && getIntent().getBooleanExtra("termin.profiler", false)
         );
 
         surfaceView = new SurfaceView(this);
@@ -133,7 +136,11 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         nativeSurfaceDestroyed();
     }
 
-    private static native void nativeInitialize(String appDataDir, String assetRoot, String nativeLibDir);
+    private static native void nativeInitialize(
+            String appDataDir,
+            String assetRoot,
+            String nativeLibDir,
+            boolean enableProfiler);
     private static native void nativeShutdown();
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);

@@ -36,6 +36,7 @@ extern "C" {
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_input_manager.h"
 #include "tc_input_event.h"
+#include "tc_profiler.h"
 }
 
 #ifdef __ANDROID__
@@ -63,6 +64,7 @@ struct AndroidBootstrapState {
     termin_android_presentation_metrics presentation_metrics{};
     bool has_presentation_metrics = false;
     bool initialized = false;
+    bool profiler_enabled = false;
 #ifdef __ANDROID__
     struct QueuedPointerEvent {
         uint64_t pointer_id = 0;
@@ -579,17 +581,27 @@ bool ensure_player_session_locked() {
     return true;
 }
 
-double frame_delta_seconds_locked(int64_t frame_time_nanos) {
+struct AndroidFrameTiming {
+    termin::EngineHostFrameCadence cadence;
+    double delta_seconds = 0.0;
+};
+
+AndroidFrameTiming observe_frame_timing_locked(int64_t frame_time_nanos) {
+    AndroidFrameTiming timing;
+    timing.cadence.start_time_ms =
+        static_cast<double>(frame_time_nanos) / 1'000'000.0;
     if (g_state.last_frame_time_nanos == 0) {
         g_state.last_frame_time_nanos = frame_time_nanos;
-        return 0.0;
+        return timing;
     }
     const int64_t elapsed = frame_time_nanos - g_state.last_frame_time_nanos;
     g_state.last_frame_time_nanos = frame_time_nanos;
     if (elapsed <= 0) {
         throw std::runtime_error("non-monotonic Choreographer frame timestamp");
     }
-    return static_cast<double>(elapsed) / 1'000'000'000.0;
+    timing.cadence.interval_ms = static_cast<double>(elapsed) / 1'000'000.0;
+    timing.delta_seconds = static_cast<double>(elapsed) / 1'000'000'000.0;
+    return timing;
 }
 
 int render_player_frame_locked(int64_t frame_time_nanos) {
@@ -600,47 +612,50 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
     if (!g_state.render_device && !create_renderer_locked()) {
         return 0;
     }
-    auto* swapchain = g_state.render_device->swapchain();
-    const uint32_t surface_width =
-        static_cast<uint32_t>(g_state.surface_width);
-    const uint32_t surface_height =
-        static_cast<uint32_t>(g_state.surface_height);
-    if (swapchain->width() != surface_width ||
-        swapchain->height() != surface_height) {
-        android_log_info(
-            "renderer: retry stale surface extent swapchain=%ux%u surface=%ux%u",
-            swapchain->width(),
-            swapchain->height(),
-            surface_width,
-            surface_height
-        );
-        if (!resize_renderer_locked(surface_width, surface_height)) {
-            return 0;
-        }
-        swapchain = g_state.render_device->swapchain();
-        if (swapchain->width() != surface_width ||
-            swapchain->height() != surface_height) {
-            // SurfaceHolder can publish its new dimensions just before Vulkan
-            // surface capabilities catch up. Do not render a mismatched
-            // document/display pair; retry on the next Choreographer frame.
-            return 1;
-        }
-    }
     if (!ensure_player_session_locked()) {
         return 0;
     }
-    if (!g_state.has_presentation_metrics) {
-        tc_log_error(
-            "termin_android_player: platform presentation metrics were not "
-            "published before rendering");
-        return 0;
-    }
-    (void)apply_player_presentation_metrics_locked();
 
     try {
+        const AndroidFrameTiming timing = observe_frame_timing_locked(frame_time_nanos);
+        termin::EngineHostFrameScope frame_scope(timing.cadence);
+
+        auto* swapchain = g_state.render_device->swapchain();
+        const uint32_t surface_width =
+            static_cast<uint32_t>(g_state.surface_width);
+        const uint32_t surface_height =
+            static_cast<uint32_t>(g_state.surface_height);
+        if (swapchain->width() != surface_width ||
+            swapchain->height() != surface_height) {
+            android_log_info(
+                "renderer: retry stale surface extent swapchain=%ux%u surface=%ux%u",
+                swapchain->width(),
+                swapchain->height(),
+                surface_width,
+                surface_height
+            );
+            if (!resize_renderer_locked(surface_width, surface_height)) {
+                return 0;
+            }
+            swapchain = g_state.render_device->swapchain();
+            if (swapchain->width() != surface_width ||
+                swapchain->height() != surface_height) {
+                // SurfaceHolder can publish its new dimensions just before Vulkan
+                // surface capabilities catch up. Do not render a mismatched
+                // document/display pair; retry on the next Choreographer frame.
+                return 1;
+            }
+        }
+        if (!g_state.has_presentation_metrics) {
+            tc_log_error(
+                "termin_android_player: platform presentation metrics were not "
+                "published before rendering");
+            return 0;
+        }
+        (void)apply_player_presentation_metrics_locked();
+
         dispatch_pointer_events_locked();
-        const double dt = frame_delta_seconds_locked(frame_time_nanos);
-        const bool rendered = g_state.player_engine->tick_and_render(dt);
+        const bool rendered = g_state.player_engine->tick_and_render(timing.delta_seconds);
         if (!rendered) {
             return 1;
         }
@@ -665,6 +680,24 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
                 "player: rendered topology frame=%u recreate=%d",
                 g_state.player_frame,
                 recreate ? 1 : 0
+            );
+        }
+        if (g_state.profiler_enabled &&
+            (g_state.player_frame <= 2 || g_state.player_frame % 60 == 0)) {
+            // The current scope is still open, so this reports the most
+            // recently completed frame. On player frame 2 that is the first
+            // frame after a lifecycle reset and its interval must be zero.
+            const int history_count = tc_profiler_history_count();
+            const tc_frame_profile* completed = history_count > 0
+                ? tc_profiler_history_at(history_count - 1)
+                : nullptr;
+            android_log_info(
+                "profiler: completed=%d latest_frame=%d sections=%d interval_ms=%.3f active_ms=%.3f",
+                history_count,
+                completed ? completed->frame_number : -1,
+                completed ? completed->section_count : 0,
+                completed ? completed->interval_ms : 0.0,
+                completed ? completed->active_ms : 0.0
             );
         }
         if (recreate && !resize_renderer_locked(
@@ -869,6 +902,8 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
     g_state.app_data_dir = config->app_data_dir ? config->app_data_dir : "";
     g_state.asset_root = config->asset_root ? config->asset_root : "";
     g_state.native_lib_dir = config->native_lib_dir ? config->native_lib_dir : "";
+    g_state.profiler_enabled = config->enable_profiler != 0;
+    tc_profiler_set_enabled(g_state.profiler_enabled);
     g_state.initialized = true;
     g_state.shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
     g_state.shader_artifact_root_explicit = false;
@@ -880,11 +915,12 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
 #endif
 
     android_log_info(
-        "initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",
+        "initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s', profiler=%d",
         g_state.app_data_dir.c_str(),
         g_state.asset_root.c_str(),
         g_state.shader_artifact_root.c_str(),
-        g_state.native_lib_dir.c_str()
+        g_state.native_lib_dir.c_str(),
+        g_state.profiler_enabled ? 1 : 0
     );
     tc_log_info(
         "termin_android_initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",
@@ -906,6 +942,9 @@ extern "C" void termin_android_shutdown(void) {
     g_state.native_lib_dir.clear();
     g_state.presentation_metrics = {};
     g_state.has_presentation_metrics = false;
+    tc_profiler_set_enabled(false);
+    tc_profiler_clear_history();
+    g_state.profiler_enabled = false;
     tgfx::set_builtin_shader_root(nullptr);
     g_state.initialized = false;
 #ifdef __ANDROID__

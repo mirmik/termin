@@ -28,6 +28,43 @@ struct TERMIN_ENGINE_API EngineLoopClient {
     std::function<void()> on_shutdown;
 };
 
+// Cadence observed by a frontend that owns the application frame loop.
+// start_time_ms must use a monotonic clock. A zero interval means that the
+// host intentionally reset cadence (for example after a surface/lifecycle
+// gap), so the first resumed frame is not classified as a hitch.
+struct TERMIN_ENGINE_API EngineHostFrameCadence {
+    double start_time_ms = 0.0;
+    double interval_ms = 0.0;
+    double target_interval_ms = 0.0;
+    double deadline_lateness_ms = 0.0;
+    int missed_intervals = 0;
+};
+
+// Move-only owner of one native profiler frame. Externally-driven frontends
+// use this around all host work that belongs to a frame, including input and
+// presentation. EngineCore::run() uses the same primitive internally.
+//
+// The scope is inert when no capture subscriber is active. Nested scopes are
+// rejected and logged; a scope never closes a frame opened by another owner.
+class TERMIN_ENGINE_API EngineHostFrameScope {
+public:
+    explicit EngineHostFrameScope(const EngineHostFrameCadence& cadence) noexcept;
+    ~EngineHostFrameScope();
+
+    EngineHostFrameScope(const EngineHostFrameScope&) = delete;
+    EngineHostFrameScope& operator=(const EngineHostFrameScope&) = delete;
+    EngineHostFrameScope(EngineHostFrameScope&& other) noexcept;
+    EngineHostFrameScope& operator=(EngineHostFrameScope&& other) noexcept;
+
+    bool active() const noexcept { return _frame_number >= 0; }
+    explicit operator bool() const noexcept { return active(); }
+
+private:
+    void finish() noexcept;
+
+    int _frame_number = -1;
+};
+
 // Move-only lifetime handle for an attached EngineLoopClient. Destruction or
 // detach() removes the whole client. The weak state reference makes a handle
 // harmless when it outlives its EngineCore.
