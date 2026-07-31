@@ -19,8 +19,7 @@ class ENTITY_API ComponentTypeDescriptorBuilder {
     tc::InspectFacetBuilder _inspect;
     std::string _type_name;
     std::string _owner;
-    tc_component_factory _factory = nullptr;
-    void* _factory_userdata = nullptr;
+    tc_runtime_owned_factory _factory{};
     tc_component_kind _kind = TC_CXX_COMPONENT;
     bool _abstract = false;
     bool _valid = true;
@@ -34,8 +33,7 @@ public:
         const char* type_name,
         const char* owner,
         const char* parent,
-        tc_component_factory factory,
-        void* factory_userdata,
+        tc_runtime_owned_factory factory,
         tc_component_kind kind,
         bool is_abstract = false,
         bool allow_same_owner_replacement = false);
@@ -51,6 +49,10 @@ public:
     ComponentTypeDescriptorBuilder& category(std::string value);
     ComponentTypeDescriptorBuilder& require(std::string type_name);
     ComponentTypeDescriptorBuilder& capability(tc_component_cap_id cap_id);
+    ComponentTypeDescriptorBuilder& runtime_binding(
+        const char* binding_id,
+        void* payload,
+        tc_runtime_type_facet_destroy_fn destroy = nullptr);
     bool commit();
 
     template<typename T>
@@ -65,7 +67,7 @@ public:
         const char* owner,
         const char* parent = nullptr) {
         return ComponentTypeDescriptorBuilder(
-            type_name, owner, parent, nullptr, nullptr, TC_CXX_COMPONENT, true);
+            type_name, owner, parent, tc_runtime_owned_factory{}, TC_CXX_COMPONENT, true);
     }
 };
 
@@ -128,11 +130,13 @@ struct CxxComponentFactoryData {
     static bool has_fixed_update;
     static bool initialized;
 
-    static tc_component* create(void* /*userdata*/) {
+    static bool create(void*, const void*, void* out_result) {
+        if (!out_result) return false;
         T* comp = new T();
         comp->set_has_update(has_update);
         comp->set_has_fixed_update(has_fixed_update);
-        return comp->c_component();
+        *static_cast<tc_component**>(out_result) = comp->c_component();
+        return true;
     }
 };
 
@@ -155,8 +159,10 @@ ComponentTypeDescriptorBuilder ComponentTypeDescriptorBuilder::native(
         type_name,
         owner,
         parent,
-        &CxxComponentFactoryData<T>::create,
-        nullptr,
+        tc_runtime_owned_factory_make(
+            &CxxComponentFactoryData<T>::create,
+            nullptr,
+            nullptr),
         TC_CXX_COMPONENT,
         false);
 }

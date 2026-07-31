@@ -1,52 +1,63 @@
 #include <termin/entity/component_registry_python.hpp>
 #include "core/tc_component.h"
 
-#include <memory>
 #include <cstring>
-#include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
-#include <tcbase/tc_string.h>
 #include <inspect/tc_inspect_python.hpp>
 
 namespace termin {
 
 namespace nb = nanobind;
 
-// Storage for Python classes (for get_class and factory)
-static std::unordered_map<std::string, std::shared_ptr<nb::object>>& python_classes() {
-    static std::unordered_map<std::string, std::shared_ptr<nb::object>> classes;
-    return classes;
+constexpr const char* kPythonClassProjectionBinding =
+    "termin.python.component_class_projection";
+
+struct PythonComponentFactoryContext {
+    nb::object cls;
+    std::string type_name;
+};
+
+static void destroy_python_component_factory_context(void* context) {
+    if (!context) return;
+    nb::gil_scoped_acquire gil;
+    delete static_cast<PythonComponentFactoryContext*>(context);
 }
 
 // Python component factory trampoline
-static tc_component* python_component_factory(void* userdata) {
-    const char* type_name = static_cast<const char*>(userdata);
-
-    auto& py_classes = python_classes();
-    auto it = py_classes.find(type_name);
-    if (it == py_classes.end()) {
-        tc::Log::error("python_component_factory: class not found for type %s", type_name);
-        return nullptr;
+static bool python_component_factory(
+    void* context,
+    const void*,
+    void* out_result) {
+    auto* factory = static_cast<PythonComponentFactoryContext*>(context);
+    if (!factory || !out_result) {
+        tc::Log::error("python_component_factory: invalid owned factory context");
+        return false;
     }
-
+    *static_cast<tc_component**>(out_result) = nullptr;
     try {
-        nb::object py_obj = (*(it->second))();
+        nb::object py_obj = factory->cls();
         uintptr_t ptr = nb::cast<uintptr_t>(py_obj.attr("c_component_ptr")());
         tc_component* tc = reinterpret_cast<tc_component*>(ptr);
         if (!tc) {
-            tc::Log::error("python_component_factory: %s returned null c_component_ptr", type_name);
-            return nullptr;
+            tc::Log::error(
+                "python_component_factory: %s returned null c_component_ptr",
+                factory->type_name.c_str());
+            return false;
         }
         Py_INCREF(py_obj.ptr());
         tc->factory_retained = true;
-        return tc;
+        *static_cast<tc_component**>(out_result) = tc;
+        return true;
     } catch (const nb::python_error& e) {
-        tc::Log::error(e, "python_component_factory: failed to create %s", type_name);
+        tc::Log::error(
+            e,
+            "python_component_factory: failed to create %s",
+            factory->type_name.c_str());
         PyErr_Clear();
     }
 
-    return nullptr;
+    return false;
 }
 
 bool ComponentRegistryPython::register_python(
@@ -83,18 +94,19 @@ bool ComponentRegistryPython::register_python(
         return false;
     }
 
-    // Factory userdata must outlive registry entries, but reload cycles must
-    // not allocate a fresh duplicate string for the same component name.
-    const char* interned_name = tc_intern_string(name.c_str());
-    if (!interned_name) {
-        tc::Log::error("[ComponentRegistry] failed to intern Python component name %s", name.c_str());
-        return false;
-    }
+    auto* factory_context = new PythonComponentFactoryContext{
+        std::move(cls), name};
+    tc_runtime_owned_factory factory = tc_runtime_owned_factory_make(
+        python_component_factory,
+        factory_context,
+        destroy_python_component_factory_context);
 
     ComponentTypeDescriptorBuilder descriptor(
-        name.c_str(), owner.c_str(), parent, python_component_factory,
-        const_cast<char*>(interned_name), TC_PYTHON_COMPONENT, false,
+        name.c_str(), owner.c_str(), parent, factory,
+        TC_PYTHON_COMPONENT, false,
         allow_same_owner_replacement);
+    descriptor.runtime_binding(
+        kPythonClassProjectionBinding, factory_context, nullptr);
     descriptor.category(category).display_name(display_name);
     for (nb::handle item : requirements) {
         descriptor.require(nb::cast<std::string>(item));
@@ -108,15 +120,19 @@ bool ComponentRegistryPython::register_python(
     tc_value_free(&metadata_value);
     if (!metadata_ok) return false;
     descriptor.set_inspect(std::move(inspect));
-    if (!descriptor.commit()) return false;
-
-    python_classes()[name] = std::make_shared<nb::object>(std::move(cls));
-    return true;
+    return descriptor.commit();
 }
 
-void ComponentRegistryPython::unregister_python(const std::string& name) {
-    python_classes().erase(name);
-    tc_component_registry_unregister(name.c_str());
+bool ComponentRegistryPython::unregister_python(const std::string& name) {
+    if (!tc_component_registry_has(name.c_str())) return true;
+    if (tc_component_registry_get_kind(name.c_str()) != TC_PYTHON_COMPONENT) {
+        tc::Log::error(
+            "[ComponentRegistry] refusing Python unregister for native component %s",
+            name.c_str());
+        return false;
+    }
+    return tc_runtime_type_registry_unregister_type_with_context(
+        name.c_str(), nullptr);
 }
 
 tc_component* ComponentRegistryPython::create_tc_component(const std::string& name) {
@@ -124,10 +140,10 @@ tc_component* ComponentRegistryPython::create_tc_component(const std::string& na
 }
 
 nb::object ComponentRegistryPython::get_class(const std::string& name) {
-    auto& py_classes = python_classes();
-    auto py_it = py_classes.find(name);
-    if (py_it != py_classes.end()) {
-        return *(py_it->second);
+    void* context = tc_runtime_type_registry_get_binding(
+        name.c_str(), kPythonClassProjectionBinding);
+    if (context) {
+        return static_cast<PythonComponentFactoryContext*>(context)->cls;
     }
     return nb::none();
 }
@@ -147,12 +163,24 @@ bool ComponentRegistryPython::bind_class_projection(
             name.c_str());
         return false;
     }
-    python_classes()[name] = std::make_shared<nb::object>(std::move(cls));
-    return true;
+    auto* projection = new PythonComponentFactoryContext{
+        std::move(cls), name};
+    return tc_runtime_type_registry_set_binding(
+        name.c_str(),
+        kPythonClassProjectionBinding,
+        projection,
+        destroy_python_component_factory_context);
 }
 
 void ComponentRegistryPython::clear_class_projections() {
-    python_classes().clear();
+    size_t count = tc_component_registry_type_count();
+    for (size_t i = 0; i < count; ++i) {
+        const char* name = tc_component_registry_type_at(i);
+        if (name && tc_component_registry_get_kind(name) == TC_CXX_COMPONENT) {
+            tc_runtime_type_registry_remove_binding(
+                name, kPythonClassProjectionBinding);
+        }
+    }
 }
 
 std::vector<std::string> ComponentRegistryPython::list_python() {

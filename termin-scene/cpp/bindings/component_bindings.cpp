@@ -113,7 +113,7 @@ void bind_component_registry(nb::module_& m) {
         nb::arg("category") = "", nb::arg("display_name") = "",
         nb::arg("requirements") = nb::list(), nb::arg("capabilities") = nb::list())
         .def("unregister_python", [](ComponentRegistry&, const std::string& name) {
-            ComponentRegistryPython::unregister_python(name);
+            return ComponentRegistryPython::unregister_python(name);
         }, nb::arg("name"))
         .def("get_class", [](ComponentRegistry&, const std::string& name) {
             return ComponentRegistryPython::get_class(name);

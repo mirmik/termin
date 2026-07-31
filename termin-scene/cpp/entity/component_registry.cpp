@@ -20,8 +20,7 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
     const char* type_name,
     const char* owner,
     const char* parent,
-    tc_component_factory factory,
-    void* factory_userdata,
+    tc_runtime_owned_factory factory,
     tc_component_kind kind,
     bool is_abstract,
     bool allow_same_owner_replacement)
@@ -29,7 +28,6 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
       _type_name(type_name ? type_name : ""),
       _owner(owner ? owner : ""),
       _factory(factory),
-      _factory_userdata(factory_userdata),
       _kind(kind),
       _abstract(is_abstract) {
     if (_type_name.empty() || _owner.empty()) {
@@ -49,6 +47,7 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
 
 ComponentTypeDescriptorBuilder::~ComponentTypeDescriptorBuilder() {
     tc_runtime_type_descriptor_destroy(_descriptor);
+    tc_runtime_owned_factory_reset(&_factory);
 }
 
 ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
@@ -57,8 +56,7 @@ ComponentTypeDescriptorBuilder::ComponentTypeDescriptorBuilder(
       _inspect(std::move(other._inspect)),
       _type_name(std::move(other._type_name)),
       _owner(std::move(other._owner)),
-      _factory(other._factory),
-      _factory_userdata(other._factory_userdata),
+      _factory(tc_runtime_owned_factory_take(&other._factory)),
       _kind(other._kind),
       _abstract(other._abstract),
       _valid(other._valid),
@@ -73,13 +71,13 @@ ComponentTypeDescriptorBuilder& ComponentTypeDescriptorBuilder::operator=(
     ComponentTypeDescriptorBuilder&& other) noexcept {
     if (this == &other) return *this;
     tc_runtime_type_descriptor_destroy(_descriptor);
+    tc_runtime_owned_factory_reset(&_factory);
     _descriptor = other._descriptor;
     other._descriptor = nullptr;
     _inspect = std::move(other._inspect);
     _type_name = std::move(other._type_name);
     _owner = std::move(other._owner);
-    _factory = other._factory;
-    _factory_userdata = other._factory_userdata;
+    _factory = tc_runtime_owned_factory_take(&other._factory);
     _kind = other._kind;
     _abstract = other._abstract;
     _valid = other._valid;
@@ -111,6 +109,18 @@ ComponentTypeDescriptorBuilder& ComponentTypeDescriptorBuilder::capability(tc_co
     return *this;
 }
 
+ComponentTypeDescriptorBuilder& ComponentTypeDescriptorBuilder::runtime_binding(
+    const char* binding_id,
+    void* payload,
+    tc_runtime_type_facet_destroy_fn destroy
+) {
+    if (!_descriptor || !tc_runtime_type_descriptor_add_binding(
+            _descriptor, binding_id, payload, destroy)) {
+        _valid = false;
+    }
+    return *this;
+}
+
 bool ComponentTypeDescriptorBuilder::commit() {
     if (!_valid || !_descriptor || !_inspect.valid()) {
         tc::Log::error("[ComponentTypeDescriptor] invalid descriptor for %s", _type_name.c_str());
@@ -120,7 +130,7 @@ bool ComponentTypeDescriptorBuilder::commit() {
     requirements.reserve(_requirements.size());
     for (const std::string& requirement : _requirements) requirements.push_back(requirement.c_str());
     if (!tc_component_type_descriptor_add_facet(
-            _descriptor, _factory, _factory_userdata, _kind, _abstract,
+            _descriptor, &_factory, _kind, _abstract,
             _display_name.c_str(), _category.c_str(),
             requirements.data(), requirements.size(),
             _capabilities.data(), _capabilities.size()) ||

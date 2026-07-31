@@ -25,7 +25,7 @@ public:
         nb::list capabilities);
 
     // Unregister a Python component class and release the stored Python class object
-    static void unregister_python(const std::string& name);
+    static bool unregister_python(const std::string& name);
 
     // Create tc_component* for any component type (C++ or Python)
     static tc_component* create_tc_component(const std::string& name);
