@@ -79,7 +79,7 @@ void PhysicsWorld::sync_collider_poses() {
     if (i < bodies_.size()) {
       if (auto *p = dynamic_cast<colliders::ColliderPrimitive *>(c);
           p && dynamic_cast<colliders::AttachedCollider *>(c) == nullptr) {
-        const Pose3 &pose = bodies_[i].pose;
+        const Pose3 pose = bodies_[i].shape_pose();
         p->transform = GeneralPose3(pose.ang, pose.lin, p->transform.scale);
       }
       if (collision_world_)

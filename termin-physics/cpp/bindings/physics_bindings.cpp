@@ -3,6 +3,7 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <stdexcept>
 
 #include <termin/geom/geom.hpp>
 #include <termin/physics/physics.hpp>
@@ -16,6 +17,26 @@ NB_MODULE(_physics_native, m) {
     m.doc() = "Native C++ physics module for termin";
 
     nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.colliders._colliders_native");
+
+    nb::class_<MassProperties>(m, "MassProperties")
+        .def(nb::init<>())
+        .def_rw("mass", &MassProperties::mass)
+        .def_rw("principal_moments", &MassProperties::principal_moments)
+        .def_rw("inertia_frame_local", &MassProperties::inertia_frame_local);
+
+    m.def("compute_mass_properties", [](
+              const colliders::ColliderPrimitive& collider,
+              const Vec3& entity_scale,
+              double mass) {
+        MassProperties properties;
+        std::string diagnostic;
+        if (!try_compute_mass_properties(
+                collider, entity_scale, mass, properties, diagnostic)) {
+            throw std::invalid_argument(diagnostic);
+        }
+        return properties;
+    }, nb::arg("collider"), nb::arg("entity_scale"), nb::arg("mass"));
 
     nb::class_<RigidBody>(m, "RigidBody")
         .def(nb::init<>())
@@ -24,6 +45,7 @@ NB_MODULE(_physics_native, m) {
         .def_rw("angular_velocity", &RigidBody::angular_velocity)
         .def_rw("mass", &RigidBody::mass)
         .def_rw("inertia", &RigidBody::inertia)
+        .def_rw("inertia_frame_local", &RigidBody::inertia_frame_local)
         .def_rw("force", &RigidBody::force)
         .def_rw("torque", &RigidBody::torque)
         .def_rw("is_static", &RigidBody::is_static)
@@ -33,6 +55,8 @@ NB_MODULE(_physics_native, m) {
         .def("inv_mass", &RigidBody::inv_mass)
         .def("inv_inertia", &RigidBody::inv_inertia)
         .def("position", &RigidBody::position)
+        .def("shape_pose", &RigidBody::shape_pose)
+        .def("set_shape_pose", &RigidBody::set_shape_pose)
         .def("point_velocity", &RigidBody::point_velocity)
         .def("add_force", &RigidBody::add_force)
         .def("add_torque", &RigidBody::add_torque)
@@ -53,7 +77,15 @@ NB_MODULE(_physics_native, m) {
             return RigidBody::create_sphere(
                 radius, mass, pose.value_or(Pose3{}), is_static);
         }, nb::arg("radius"), nb::arg("mass"),
-           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false);
+           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false)
+        .def_static("create_with_mass_properties", [](
+                const MassProperties& properties,
+                std::optional<Pose3> shape_pose,
+                bool is_static) {
+            return RigidBody::create_with_mass_properties(
+                properties, shape_pose.value_or(Pose3{}), is_static);
+        }, nb::arg("properties"), nb::arg("shape_pose").none() = nb::none(),
+           nb::arg("is_static") = false);
 
     nb::class_<Contact>(m, "Contact")
         .def(nb::init<>())

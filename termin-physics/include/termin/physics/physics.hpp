@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include <termin/physics/contact_solver.hpp>
+#include <termin/physics/mass_properties.hpp>
 #include <termin/physics/physics_world.hpp>
 #include <termin/physics/rigid_body.hpp>
 #include <termin/physics/termin_physics_api.hpp>
