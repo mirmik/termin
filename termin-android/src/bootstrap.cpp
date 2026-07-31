@@ -27,6 +27,7 @@
 #include <termin/profiler_remote/target_service.hpp>
 #include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/ui/tc_scene_ui_document_capability.h>
 #include <termin_collision/termin_collision.h>
@@ -506,7 +507,9 @@ bool ensure_player_session_locked() {
 
     tgfx::set_builtin_shader_root(nullptr);
     termin::runtime::RuntimePackageLoader loader;
-    g_state.player_package = loader.load(g_state.asset_root);
+    termin::runtime::RuntimePackageLoadOptions load_options;
+    load_options.scene_extensions = termin::default_scene_extension_ids();
+    g_state.player_package = loader.load(g_state.asset_root, load_options);
     if (!g_state.player_package.ok || !g_state.player_package.scene.valid()) {
         tc_log_error(
             "termin_android_player: runtime package load failed: %s",
