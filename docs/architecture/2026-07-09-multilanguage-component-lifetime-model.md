@@ -92,12 +92,34 @@ runtime type link следуют тем же правилам, что у compone
 ## О фабриках и inspect. 
 
 Полезна возможность создания класса, исходный код которого расположен в другом
-языке. Для этого `tc_component` имеет фабрики, вынесенные в runtime языков, а
-`TcEntity` — методы `add_component`, `get_component`, работающие через
-нейтральный `TcComponent`. Эту практику следует распространить на `tc_pass`,
-`tc_widget` и `tc_graphic_item`, а общую часть фабрик сделать
-инфраструктурной единицей. То же касается поддержки inspect-системы всеми
-четырьмя категориями.
+языке. Общая инфраструктурная единица для этого —
+`tc_runtime_owned_factory`: один C ABI callback получает opaque context,
+необязательный domain request и domain result; рядом хранится destructor
+context. Component, frame-pass и widget facets используют ровно этот ownership
+protocol, хотя формы request/result у них различаются.
+
+Runtime type descriptor принимает фабрику целиком. Поэтому staged descriptor
+либо публикуется вместе с callable и его сильными языковыми ссылками, либо при
+failed commit уничтожает context. Revoke, owner unload, shutdown и успешная
+same-owner replacement освобождают старый context ровно один раз. Replacement
+сначала вызывает prepare-unload старого descriptor; отказ сохраняет старую
+фабрику и уничтожает только входящий staged context.
+
+Python component и frame-pass contexts непосредственно содержат сильную ссылку
+на class. Runtime create вызывает этот class через context facet, а не ищет его
+по имени в process-static map. Python widget callable и state hooks находятся в
+таком же context. Живой instance после создания владеет своим Python object
+отдельно от фабрики, поэтому удаление descriptor не отбирает body у экземпляра:
+prepare-unload обязан сначала деградировать либо удалить такие экземпляры.
+
+Python-проекции уже зарегистрированных native типов не являются фабриками.
+Они хранятся в record-owned runtime binding slots и уничтожаются вместе с
+descriptor; это сохраняет editor lookup без отдельного process-static каталога.
+Декларативные Python-каталоги допустимы только как вход повторной публикации при
+bootstrap/reload и не участвуют в runtime create.
+
+`TcEntity` и pipeline/UI document работают с нейтральными C instances. Inspect
+остаётся отдельным subsystem facet того же атомарно публикуемого descriptor.
 
 ## Общее направление.
 

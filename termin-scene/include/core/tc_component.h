@@ -321,8 +321,6 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 // Component Registry
 // ============================================================================
 
-// Component factory: takes userdata, returns tc_component*
-typedef tc_component* (*tc_component_factory)(void* userdata);
 typedef bool (*tc_component_prepare_unload_fn)(
     const char* type_name,
     void* context,
@@ -331,8 +329,7 @@ typedef bool (*tc_component_prepare_unload_fn)(
 
 TC_API bool tc_component_type_descriptor_add_facet(
     tc_runtime_type_descriptor* descriptor,
-    tc_component_factory factory,
-    void* factory_userdata,
+    tc_runtime_owned_factory* factory,
     tc_component_kind kind,
     bool is_abstract,
     const char* display_name,

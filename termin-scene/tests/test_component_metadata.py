@@ -1,3 +1,6 @@
+import gc
+import weakref
+
 import pytest
 
 
@@ -170,3 +173,33 @@ def test_cross_owner_python_component_collision_preserves_existing_registration(
         assert info["display_name"] == "First Display Name"
     finally:
         registry.unregister_python(type_name)
+
+
+def test_python_component_descriptor_owns_and_releases_factory_class() -> None:
+    from termin.scene import ComponentRegistry
+
+    registry = ComponentRegistry.instance()
+    type_name = "OwnedFactoryLifetimeComponent"
+    cls = type(type_name, (), {})
+    class_ref = weakref.ref(cls)
+    try:
+        assert registry.register_python(
+            type_name,
+            cls,
+            "component-owned-factory-lifetime-test",
+            None,
+            {},
+            {},
+            "Tests",
+            "Owned factory lifetime",
+            [],
+            [],
+        )
+        assert registry.get_class(type_name) is cls
+        assert registry.unregister_python(type_name)
+    finally:
+        registry.unregister_python(type_name)
+
+    del cls
+    gc.collect()
+    assert class_ref() is None

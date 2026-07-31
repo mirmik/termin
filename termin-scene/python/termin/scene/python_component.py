@@ -82,7 +82,10 @@ def shutdown_python_components() -> None:
         component_registry = ComponentRegistry.instance()
         for type_name in component_names:
             try:
-                component_registry.unregister_python(type_name)
+                if not component_registry.unregister_python(type_name):
+                    log.error(
+                        f"[PythonComponent] descriptor refused unregister {type_name}"
+                    )
             except Exception:
                 log.error(
                     f"[PythonComponent] failed to unregister descriptor {type_name}",
