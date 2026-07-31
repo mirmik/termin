@@ -599,6 +599,7 @@ class PythonComponent:
     def serialize(self) -> Dict[str, Any]:
         """Serialize component with type info."""
         return {
+            "source_id": self.source_id,
             "type": self.type_name(),
             "data": self.serialize_data()
         }

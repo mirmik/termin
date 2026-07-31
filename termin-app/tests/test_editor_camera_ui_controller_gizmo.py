@@ -133,8 +133,11 @@ def test_camera_state_migrates_legacy_overlay_controller_fields() -> None:
     restored = []
 
     class ComponentRef:
+        def __init__(self) -> None:
+            self.source_id = "generated-controller-id"
+
         def deserialize_data(self, data, scene) -> None:
-            restored.append((data, scene))
+            restored.append((self.source_id, data, scene))
 
     class TestEntity:
         def __init__(self, name: str, children=()) -> None:
@@ -163,4 +166,79 @@ def test_camera_state_migrates_legacy_overlay_controller_fields() -> None:
 
     manager._deserialize_editor_entities_components(old_state)
 
-    assert restored == [({"ortho_enabled": True}, "scene")]
+    assert restored == [
+        ("generated-controller-id", {"ortho_enabled": True}, "scene")
+    ]
+
+
+def test_camera_state_restores_component_envelope_identity() -> None:
+    restored = []
+
+    class ComponentRef:
+        source_id = "generated-camera-id"
+
+        def deserialize_data(self, data, scene) -> None:
+            restored.append((self.source_id, data, scene))
+
+    component = ComponentRef()
+
+    class TestEntity:
+        name = "camera"
+        transform = SimpleNamespace(children=[])
+
+        def get_tc_component(self, component_type: str):
+            return component if component_type == "CameraComponent" else None
+
+    manager = EditorCameraManager()
+    manager.editor_entities = TestEntity()
+    manager._scene = "scene"
+    manager._deserialize_editor_entities_components(
+        {
+            "camera": [
+                {
+                    "source_id": "stable-camera-id",
+                    "type": "CameraComponent",
+                    "data": {"near_clip": 0.25},
+                }
+            ]
+        }
+    )
+
+    assert restored == [("stable-camera-id", {"near_clip": 0.25}, "scene")]
+
+
+def test_editor_camera_components_keep_source_identity_across_recreation() -> None:
+    from termin.scene import TcScene
+
+    bootstrap_editor()
+    scene = TcScene.create("editor-camera-identity")
+    manager = EditorCameraManager()
+    try:
+        register_editor_builtin_resources(_ResourceManager())
+        manager.attach_to_scene(scene)
+        initial = manager.get_camera_data()
+        assert initial is not None
+        initial_components = initial["editor_entities"]["camera"]
+        initial_ids = {
+            component["type"]: component["source_id"]
+            for component in initial_components
+        }
+        assert initial_ids["CameraComponent"]
+        assert initial_ids["OrbitCameraController"]
+        assert initial_ids["EditorCameraUIController"]
+
+        manager.detach_from_scene()
+        manager.attach_to_scene(scene)
+        manager.set_camera_data(initial)
+        restored = manager.get_camera_data()
+        assert restored is not None
+        restored_ids = {
+            component["type"]: component["source_id"]
+            for component in restored["editor_entities"]["camera"]
+        }
+
+        assert restored_ids == initial_ids
+    finally:
+        manager.detach_from_scene()
+        scene.destroy()
+        shutdown_editor()
