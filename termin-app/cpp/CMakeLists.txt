@@ -317,6 +317,7 @@ if(BUILD_TESTS)
         termin/editor/editor_interaction_system.cpp
         termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_profiler_controller.cpp
+        termin/editor/frame_profiler_source.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
