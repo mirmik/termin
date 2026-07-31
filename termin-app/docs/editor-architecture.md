@@ -122,9 +122,17 @@ capture/detail/clear/include-UI команд определяется тольк
 ветвлений local/remote в presentation-коде.
 
 Локальная реализация копирует зарегистрированный `tc_profiler_capture` в этот
-контракт не чаще controller refresh cadence. Будущий сетевой receiver обязан
-публиковать тот же immutable snapshot и самостоятельно менять capabilities при
-изменении доступности удалённых controls.
+контракт не чаще controller refresh cadence. `RemoteFrameProfilerSource`
+принимает тот же versioned wire protocol как из записанного replay, так и из
+loopback TCP receiver. Он проверяет session/sequence, собирает bounded history,
+проецирует producer/transport/receiver gaps и меняет состояние capture только
+после `Status`-подтверждения target. Сетевой поток публикует immutable snapshot;
+UI-модели по-прежнему обновляются только editor thread.
+
+В окне Frame Profiler есть явные поля ADB loopback port/token, действия
+`Connect` и `Use local`. Переключение источника не уничтожает локальный capture,
+а disconnect удалённой session оставляет её последний bounded frame set для
+анализа.
 
 ## SDK и тестовое окружение
 

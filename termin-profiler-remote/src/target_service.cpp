@@ -779,8 +779,11 @@ private:
       }
       auto decoded = receive_message(socket, running);
       if (!decoded) {
-        tc_log_error("remote profiler target: malformed client message: %s",
-                     decoded.detail.c_str());
+        if (decoded.detail !=
+            "connection closed while receiving envelope") {
+          tc_log_error("remote profiler target: malformed client message: %s",
+                       decoded.detail.c_str());
+        }
         return;
       }
       if (!std::holds_alternative<Control>(decoded.value->message)) {

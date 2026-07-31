@@ -39,6 +39,10 @@ class NativeFrameProfiler:
     window_manager: EditorWindowRegistry
     controller: FrameProfilerController
     root: WidgetRef
+    remote_port: object
+    remote_token: object
+    connect_remote_button: object
+    use_local_button: object
     toolbar: object
     timeline: object
     section_table: object
@@ -142,6 +146,23 @@ def _build_native_frame_profiler(
     if not document.add_root(root.handle):
         raise RuntimeError("failed to add native frame profiler root")
 
+    connection = document.create_hstack("frame-profiler-connection")
+    connection.set_layout_spacing(4.0)
+    remote_label = document.create_status_bar("ADB loopback port")
+    connection.add_fixed_child(_ref(document, remote_label), 122.0)
+    remote_port = document.create_text_input("46051")
+    connection.add_fixed_child(_ref(document, remote_port), 78.0)
+    token_label = document.create_status_bar("Token")
+    connection.add_fixed_child(_ref(document, token_label), 44.0)
+    remote_token = document.create_text_input()
+    remote_token.placeholder = "per-launch token"
+    connection.add_stretch_child(_ref(document, remote_token))
+    connect_remote_button = document.create_button("Connect")
+    connection.add_fixed_child(_ref(document, connect_remote_button), 82.0)
+    use_local_button = document.create_button("Use local")
+    connection.add_fixed_child(_ref(document, use_local_button), 88.0)
+    root.add_fixed_child(connection, 32.0)
+
     toolbar = document.create_tool_bar(controller.command_model)
     root.add_fixed_child(_ref(document, toolbar), 30.0)
     summary = document.create_rich_text_view(controller.summary_model)
@@ -187,6 +208,10 @@ def _build_native_frame_profiler(
         window_manager=window_manager,
         controller=controller,
         root=root,
+        remote_port=remote_port,
+        remote_token=remote_token,
+        connect_remote_button=connect_remote_button,
+        use_local_button=use_local_button,
         toolbar=toolbar,
         timeline=timeline,
         section_table=section_table,
@@ -214,9 +239,29 @@ def _build_native_frame_profiler(
             owner.controller.show_section_details(node)
             owner.request_render()
 
+    def connect_remote() -> None:
+        owner = weak_profiler()
+        if owner is None:
+            return
+        try:
+            port = int(owner.remote_port.text)
+        except ValueError:
+            return
+        if owner.controller.connect_remote(port, owner.remote_token.text):
+            owner.request_render()
+
+    def use_local() -> None:
+        owner = weak_profiler()
+        if owner is not None and owner.controller.disconnect_remote():
+            owner.request_render()
+
     toolbar.connect_activated(activated)
     timeline.connect_selection_changed(selected)
     section_table.connect_selection_changed(section_selected)
+    remote_port.connect_submitted(lambda _text: connect_remote())
+    remote_token.connect_submitted(lambda _text: connect_remote())
+    connect_remote_button.connect_clicked(connect_remote)
+    use_local_button.connect_clicked(use_local)
     return profiler
 
 

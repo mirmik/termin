@@ -35,6 +35,8 @@ class FakeNativeController:
         self.activations = []
         self.frame_selections = []
         self.section_selections = []
+        self.remote_connections = []
+        self.remote_disconnects = 0
 
     def start_capture(self) -> None:
         self.capturing = True
@@ -73,6 +75,14 @@ class FakeNativeController:
     def show_section_details(self, node: int) -> None:
         self.section_selections.append(node)
 
+    def connect_remote(self, port: int, token: str) -> bool:
+        self.remote_connections.append((port, token))
+        return bool(token)
+
+    def disconnect_remote(self) -> bool:
+        self.remote_disconnects += 1
+        return True
+
 
 class FakeWindow:
     def __init__(self, on_close) -> None:
@@ -106,6 +116,17 @@ class FakeMenuRoute:
 
     def connect_activated(self, callback) -> None:
         self.callback = callback
+
+
+def click_button(button) -> None:
+    button.widget.bounds = Rect(0.0, 0.0, 100.0, 28.0)
+    pointer = PointerEvent()
+    pointer.x = 4.0
+    pointer.y = 4.0
+    pointer.type = PointerEventType.Down
+    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
+    pointer.type = PointerEventType.Up
+    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
 
 
 def test_native_frame_profiler_hosts_controller_owned_models():
@@ -147,6 +168,24 @@ def test_native_frame_profiler_clear_only_delegates_to_native_controller():
     profiler = build_native_frame_profiler(object(), controller)
     profiler.clear()
     assert controller.timeline_model.samples == []
+
+
+def test_native_frame_profiler_routes_remote_connection_controls():
+    controller = FakeNativeController()
+    manager = FakeWindowManager()
+    profiler = build_native_frame_profiler(manager, controller)
+    profiler.show()
+    window = manager.created[0][-1]
+    before = window.render_requests
+
+    profiler.remote_port.text = "47123"
+    profiler.remote_token.text = "session-token"
+    click_button(profiler.connect_remote_button)
+    assert controller.remote_connections == [(47123, "session-token")]
+    assert window.render_requests == before + 1
+
+    click_button(profiler.use_local_button)
+    assert controller.remote_disconnects == 1
 
 
 def test_enabling_follow_does_not_feed_programmatic_selection_back_to_controller():

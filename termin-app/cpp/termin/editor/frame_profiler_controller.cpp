@@ -1,4 +1,5 @@
 #include "termin/editor/frame_profiler_controller.hpp"
+#include "termin/editor/remote_frame_profiler_source.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -225,10 +226,55 @@ void FrameProfilerController::close() {
   if (!source_)
     return;
   source_->close();
+  if (local_source_)
+    local_source_->close();
   snapshot_ = source_->snapshot();
   update_capability_commands();
   update_capture_command();
   update_profiling_command();
+}
+
+bool FrameProfilerController::connect_remote(
+    std::uint16_t port, std::string authentication_token) {
+  if (port == 0 || authentication_token.empty())
+    return false;
+  auto remote = std::make_unique<RemoteFrameProfilerSource>(capacity());
+  profiler_remote::ClientConfig config;
+  config.port = port;
+  config.authentication_token = std::move(authentication_token);
+  if (!remote->connect(std::move(config)))
+    return false;
+  if (!local_source_)
+    local_source_ = std::move(source_);
+  else
+    source_->close();
+  local_source_->pause_capture();
+  source_ = std::move(remote);
+  snapshot_ = source_->snapshot();
+  observed_revision_ = 0;
+  observed_source_id_.clear();
+  observed_session_id_.clear();
+  selected_frame_number_ = -1;
+  follow_latest_ = true;
+  commands_->set_checked(follow_command_, true);
+  refresh_models();
+  return true;
+}
+
+bool FrameProfilerController::disconnect_remote() {
+  if (!local_source_)
+    return false;
+  source_->close();
+  source_ = std::move(local_source_);
+  snapshot_ = source_->snapshot();
+  observed_revision_ = 0;
+  observed_source_id_.clear();
+  observed_session_id_.clear();
+  selected_frame_number_ = -1;
+  follow_latest_ = true;
+  commands_->set_checked(follow_command_, true);
+  refresh_models();
+  return true;
 }
 
 bool FrameProfilerController::update() {
@@ -377,6 +423,7 @@ void FrameProfilerController::refresh_summary() {
       std::to_string(snapshot_->status.overwritten_frames) +
       " | transport drops: " +
       std::to_string(snapshot_->status.dropped_frames) +
+      " | " + snapshot_->status.detail +
       " | Mouse wheel: scroll history | Ctrl+wheel: zoom timeline | Arrow "
       "keys: select frame");
 }

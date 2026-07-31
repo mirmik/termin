@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <termin/profiler_remote/bounded_spsc_queue.hpp>
+#include <termin/profiler_remote/client.hpp>
 #include <termin/profiler_remote/target_service.hpp>
 
 extern "C" {
@@ -198,6 +199,28 @@ TEST_CASE(
   REQUIRE(queue.try_pop(value));
   CHECK_EQ(value, 20);
   CHECK_FALSE(queue.try_pop(value));
+}
+
+TEST_CASE("Client command handoff is bounded and a stopped worker restarts") {
+  ClientConfig config;
+  config.port = 9;
+  config.authentication_token = "client-test-token";
+  config.command_queue_capacity = 1;
+  config.reconnect = false;
+  RemoteProfilerClient client(std::move(config), [](const DecodedMessage &) {});
+  REQUIRE(client.start());
+  Control first;
+  first.request_id = 1;
+  CHECK(client.send_control(first));
+  Control overflow;
+  overflow.request_id = 2;
+  CHECK_FALSE(client.send_control(overflow));
+  CHECK_EQ(client.status().rejected_commands, 1);
+  REQUIRE(wait_until([&] { return !client.status().running; }));
+  REQUIRE(client.start());
+  REQUIRE(wait_until([&] { return !client.status().running; }));
+  CHECK_EQ(client.status().connection_attempts, 2);
+  client.stop();
 }
 
 TEST_CASE("Bounded SPSC queue transfers values concurrently without loss") {

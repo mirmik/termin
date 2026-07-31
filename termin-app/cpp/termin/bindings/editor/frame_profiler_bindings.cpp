@@ -28,6 +28,7 @@ void bind_frame_profiler(nb::module_& m) {
         .def_prop_ro("hitch_ratio", &FrameProfilerController::hitch_ratio)
         .def_prop_ro("capturing", &FrameProfilerController::capturing)
         .def_prop_ro("profiling", &FrameProfilerController::profiling)
+        .def_prop_ro("using_remote_source", &FrameProfilerController::using_remote_source)
         .def_prop_ro("follow_latest", &FrameProfilerController::follow_latest)
         .def_prop_ro("selected_frame_number", &FrameProfilerController::selected_frame_number)
         .def("start_capture", &FrameProfilerController::start_capture)
@@ -41,7 +42,10 @@ void bind_frame_profiler(nb::module_& m) {
         .def("select_frame", &FrameProfilerController::select_frame,
              nb::arg("frame_number"))
         .def("show_section_details", &FrameProfilerController::show_section_details,
-             nb::arg("node"));
+             nb::arg("node"))
+        .def("connect_remote", &FrameProfilerController::connect_remote,
+             nb::arg("port"), nb::arg("authentication_token"))
+        .def("disconnect_remote", &FrameProfilerController::disconnect_remote);
 }
 
 } // namespace termin
