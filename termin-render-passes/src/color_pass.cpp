@@ -479,9 +479,18 @@ bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
                 tasks)) {
             continue;
         }
-        const RenderTask& task = tasks.at(0);
-        for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
-            (*data->emit)(TcShader(task.shader_usages[i]));
+        // Runtime packages need every executable shader which the pass can
+        // bind. A task's broader usage list may contain both several draw
+        // variants (for example, line body and cap) and evaluator-only planner
+        // inputs. Exporting the latter as pipeline requirements would
+        // incorrectly treat authoring dependencies as GPU entry points.
+        for (const RenderTask& task : tasks) {
+            for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+                tc_shader* shader = tc_shader_get(task.shader_usages[i]);
+                if (tc_shader_is_executable(shader)) {
+                    (*data->emit)(TcShader(task.shader_usages[i]));
+                }
+            }
         }
     }
 
