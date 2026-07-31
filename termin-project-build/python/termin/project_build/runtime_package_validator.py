@@ -597,7 +597,7 @@ def _validate_shader_program_resource(
                 continue
             expected_encoding = prop.get("expected_encoding")
             if property_type in {"Texture", "Texture2D"}:
-                if expected_encoding not in {"srgb", "linear"}:
+                if expected_encoding not in {None, "srgb", "linear"}:
                     diagnostics.append(
                         RuntimePackageExportDiagnostic(
                             "error",
@@ -616,7 +616,7 @@ def _validate_shader_program_resource(
                             "'white' or 'normal'",
                         )
                     )
-                elif default == "normal" and expected_encoding != "linear":
+                elif default == "normal" and expected_encoding == "srgb":
                     diagnostics.append(
                         RuntimePackageExportDiagnostic(
                             "error",
@@ -1457,24 +1457,25 @@ def _validate_material_graph(
         if isinstance(program_resource, dict)
         else None
     )
-    texture_contract: dict[str, str] = {}
+    texture_contract: dict[str, str | None] = {}
     if isinstance(program_spec, dict):
         properties = program_spec.get("properties")
         if isinstance(properties, list):
             texture_contract = {
-                prop["name"]: prop["expected_encoding"]
+                prop["name"]: prop.get("expected_encoding")
                 for prop in properties
                 if isinstance(prop, dict)
                 and prop.get("property_type") in {"Texture", "Texture2D"}
                 and isinstance(prop.get("name"), str)
-                and prop.get("expected_encoding") in {"srgb", "linear"}
+                and prop.get("expected_encoding") in {None, "srgb", "linear"}
             }
     for slot_name, reference in textures.items():
         if not isinstance(slot_name, str) or not isinstance(reference, dict):
             continue
+        slot_declared = slot_name in texture_contract
         expected_encoding = texture_contract.get(slot_name)
         context = f"{resource_path}:textures.{slot_name}"
-        if isinstance(program_spec, dict) and expected_encoding is None:
+        if isinstance(program_spec, dict) and not slot_declared:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",

@@ -20,6 +20,7 @@ extern "C" {
 #include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx/resources/tc_texture_registry.h>
 }
 
 namespace {
@@ -372,6 +373,64 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     CHECK(collection.items[1].geometry_id == 1);
 
     tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("MeshRenderer override data treats builtin textures as symbolic defaults") {
+    tc_material_init();
+    tc_texture_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-symbolic-default-material",
+        "mesh-renderer-symbolic-default-material");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    tc_material_phase* phase = tc_material_add_phase(
+        material, tc_shader_handle_invalid(), "opaque", 0);
+    REQUIRE(phase != nullptr);
+    REQUIRE(tc_material_phase_declare_texture(
+        phase, "u_albedo", TC_TEXTURE_ENCODING_SRGB));
+    REQUIRE(tc_material_phase_set_texture(
+        phase, "u_albedo", tc_texture_get_white_1x1_srgb()));
+
+    termin::MeshRenderer renderer;
+    renderer.set_material(termin::TcMaterial(material_handle));
+    renderer.set_override_material(true);
+
+    tc_value serialized = renderer.get_override_data();
+    tc_value* serialized_phases = tc_value_dict_get(&serialized, "phases_textures");
+    REQUIRE(serialized_phases != nullptr);
+    REQUIRE(serialized_phases->type == TC_VALUE_LIST);
+    tc_value* serialized_phase = tc_value_list_get(serialized_phases, 0);
+    REQUIRE(serialized_phase != nullptr);
+    CHECK_EQ(tc_value_dict_size(serialized_phase), 0u);
+    tc_value_free(&serialized);
+
+    tc_value legacy = tc_value_dict_new();
+    tc_value legacy_phases = tc_value_list_new();
+    tc_value legacy_phase = tc_value_dict_new();
+    tc_value legacy_texture = tc_value_dict_new();
+    tc_value_dict_set(
+        &legacy_texture, "uuid", tc_value_string("__white_1x1__"));
+    tc_value_dict_set(
+        &legacy_texture, "name", tc_value_string("__white_1x1__"));
+    tc_value_dict_set(&legacy_phase, "u_albedo", legacy_texture);
+    tc_value_list_push(&legacy_phases, legacy_phase);
+    tc_value_dict_set(&legacy, "phases_textures", legacy_phases);
+    renderer.set_override_data(&legacy);
+    tc_value_free(&legacy);
+
+    termin::TcMaterial overridden = renderer.get_overridden_material();
+    REQUIRE(overridden.is_valid());
+    tc_material_texture* binding = tc_material_phase_find_texture(
+        overridden.default_phase(), "u_albedo");
+    REQUIRE(binding != nullptr);
+    const tc_texture* texture = tc_texture_get(binding->texture);
+    REQUIRE(texture != nullptr);
+    CHECK_EQ(texture->encoding, TC_TEXTURE_ENCODING_SRGB);
+
+    tc_texture_shutdown();
     tc_material_shutdown();
 }
 

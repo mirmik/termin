@@ -646,6 +646,21 @@ bool material_texture_slot_encoding(
     return false;
 }
 
+bool material_has_texture_slot(
+    const TcMaterial& material,
+    const std::string& name
+) {
+    tc_material* raw = material.get();
+    if (!raw) return false;
+    for (size_t phase_index = 0; phase_index < raw->phase_count; ++phase_index) {
+        if (tc_material_phase_find_texture(
+                &raw->phases[phase_index], name.c_str())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool configure_material_texture_slots(
     TcMaterial& material,
     const TcShaderProgram& program,
@@ -669,21 +684,17 @@ bool configure_material_texture_slots(
             std::strcmp(property.property_type, "Texture") == 0
             || std::strcmp(property.property_type, "Texture2D") == 0;
         if (!is_texture) continue;
-        if (!property.has_expected_encoding) {
-            error = "material '" + material_uuid + "' texture slot '"
-                + property.name + "' has no encoding contract";
-            tc_log_error("RuntimePackageLoader: %s", error.c_str());
-            return false;
-        }
-        const auto expected =
-            static_cast<tc_texture_encoding>(property.expected_encoding);
         for (size_t phase_index = 0;
              phase_index < raw_material->phase_count;
              ++phase_index) {
-            if (!tc_material_phase_declare_texture(
+            const bool declared = property.has_expected_encoding
+                ? tc_material_phase_declare_texture(
                     &raw_material->phases[phase_index],
                     property.name,
-                    expected)) {
+                    static_cast<tc_texture_encoding>(property.expected_encoding))
+                : tc_material_phase_declare_texture_slot(
+                    &raw_material->phases[phase_index], property.name);
+            if (!declared) {
                 error = "material '" + material_uuid
                     + "' failed to declare texture slot '" + property.name + "'";
                 tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -701,8 +712,9 @@ bool configure_material_texture_slots(
             std::strcmp(property.property_type, "Texture") == 0
             || std::strcmp(property.property_type, "Texture2D") == 0;
         if (!is_texture) continue;
-        const auto expected =
-            static_cast<tc_texture_encoding>(property.expected_encoding);
+        const auto expected = property.has_expected_encoding
+            ? static_cast<tc_texture_encoding>(property.expected_encoding)
+            : TC_TEXTURE_ENCODING_LINEAR;
         const std::string default_name =
             property.has_default && property.default_text[0] != '\0'
             ? property.default_text : "white";
@@ -754,12 +766,13 @@ bool apply_material_textures(
             return false;
         }
         tc_texture_encoding expected_encoding = TC_TEXTURE_ENCODING_LINEAR;
-        if (!material_texture_slot_encoding(material, name, expected_encoding)) {
+        if (!material_has_texture_slot(material, name)) {
             error = "material '" + material_uuid
                 + "' texture slot '" + name + "' is not in shader schema";
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
+        (void)material_texture_slot_encoding(material, name, expected_encoding);
         TcTexture texture = runtime_material_texture_from_spec(
             item.second, material_uuid, expected_encoding);
         if (!texture.is_valid()) {
@@ -1131,9 +1144,9 @@ bool load_shader_program_resource(
         const nos::trent* expected_encoding = dict_get(item, "expected_encoding");
         const bool is_texture =
             property_types.back() == "Texture" || property_types.back() == "Texture2D";
-        if (is_texture) {
-            if (!expected_encoding || !expected_encoding->is_string()) {
-                error = "shader program texture property requires expected_encoding";
+        if (is_texture && expected_encoding) {
+            if (!expected_encoding->is_string()) {
+                error = "shader program property expected_encoding must be 'srgb' or 'linear'";
                 tc_log_error("RuntimePackageLoader: %s", error.c_str());
                 return false;
             }

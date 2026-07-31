@@ -204,17 +204,21 @@ class MaterialInspectorController:
         material = self._require_material()
         prop = self._property(name)
         expected_encoding = prop.get("expected_encoding")
-        if expected_encoding not in ("srgb", "linear"):
-            _logger.error("Material texture property '%s' has no encoding contract", name)
-            raise ValueError(f"texture property '{name}' has no encoding contract")
-        if default_kind == "normal" and expected_encoding != "linear":
+        if expected_encoding not in (None, "srgb", "linear"):
+            _logger.error(
+                "Material texture property '%s' has invalid encoding contract '%s'",
+                name,
+                expected_encoding,
+            )
+            raise ValueError(f"texture property '{name}' has invalid encoding contract")
+        if default_kind == "normal" and expected_encoding == "srgb":
             _logger.error("Material texture property '%s' cannot use an sRGB normal default", name)
             raise ValueError(f"texture property '{name}' cannot use normal default")
         texture = self._resolve_texture(
             tag,
             texture_name,
             default_kind,
-            expected_encoding,
+            expected_encoding or "linear",
         )
         if texture is None or not texture.is_valid:
             _logger.error(

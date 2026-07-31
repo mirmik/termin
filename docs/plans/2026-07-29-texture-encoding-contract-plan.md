@@ -77,10 +77,9 @@ Normal map, albedo, roughness и другие назначения не явля
 Upload не перекодирует байты на CPU. Кодировка выбирает native image format и
 тем самым поведение sampling.
 
-### Строгий material contract
+### Опциональный material contract
 
-Каждое каноническое material-свойство типа `Texture2D` объявляет ожидаемую
-кодировку:
+Material-свойство типа `Texture2D` может объявить ожидаемую кодировку:
 
 ```glsl
 @property Texture2D u_albedo_texture = "white" encoding(srgb)
@@ -89,18 +88,20 @@ Upload не перекодирует байты на CPU. Кодировка в�
 
 Правила:
 
-- `encoding(srgb|linear)` обязателен для material `Texture2D`;
-- отсутствие или неизвестное значение является ошибкой парсинга;
+- `encoding(srgb|linear)` является опциональным контрактом material `Texture2D`;
+- неизвестное значение является ошибкой парсинга;
+- без annotation материал принимает текстуру в исходной кодировке без
+  дополнительного ограничения;
 - annotation запрещена для свойств других типов;
 - transient/framegraph samplers не становятся material properties и не
   получают этот контракт;
-- назначение текстуры с другой кодировкой отклоняется с диагностикой;
-- при неуспешной замене материал сохраняет прежний корректный binding;
+- при явном контракте назначение текстуры с другой кодировкой принимается, но
+  сопровождается диагностикой;
 - проверка одинакова в editor, asset load, runtime package, hot reload и
   публичном material API.
 
-Низкоуровневый материал, созданный вручную без property schema, может остаться
-непроверяемым. Канонический asset/material path должен быть строгим.
+Низкоуровневый материал, созданный вручную без property schema, и каноническое
+свойство без `encoding(...)` остаются непроверяемыми по кодировке.
 
 ### Символические defaults
 
@@ -310,7 +311,7 @@ image/texture/sampler glTF сохраняется: если sampler являет
 ### Этап 3. Shader declaration contract
 
 - добавить `encoding(...)` в parser/schema/bindings/package;
-- сделать annotation обязательной для material textures;
+- сделать annotation опциональным ограничением для material textures;
 - мигрировать штатные shaders и symbolic defaults.
 
 ### Этап 4. Material validation
@@ -348,8 +349,8 @@ image/texture/sampler glTF сохраняется: если sampler являет
 
 Также обязательны тесты:
 
-- parser принимает только `encoding(srgb|linear)` у texture property и требует
-  annotation;
+- parser принимает отсутствие annotation либо `encoding(srgb|linear)` у
+  texture property;
 - одинаковые pixels с разным encoding имеют разные identities/native handles;
 - изменение encoding в inspector сохраняет остальные import settings,
   увеличивает version и пересоздаёт texture;

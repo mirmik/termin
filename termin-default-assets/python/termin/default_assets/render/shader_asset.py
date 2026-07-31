@@ -72,7 +72,18 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         raise ValueError("Program has no phases")
 
     old_uniforms = dict(material.uniforms)
-    old_textures = dict(material.textures)
+    builtin_defaults = {
+        "__white_1x1__",
+        "__white_srgb_1x1__",
+        "__normal_1x1__",
+    }
+    old_textures = {
+        name: texture
+        for name, texture in material.textures.items()
+        if texture is not None
+        and texture.is_valid
+        and texture.name not in builtin_defaults
+    }
     _validate_canonical_texture_defaults(program.properties)
     material.clear_phases()
     material.shader_name = shader_name or program.name

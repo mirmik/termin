@@ -11,6 +11,21 @@ namespace termin {
 
 namespace {
 
+bool is_builtin_symbolic_texture(const char* uuid, const char* name) {
+    const char* values[] = {
+        "__white_1x1__",
+        "__white_srgb_1x1__",
+        "__normal_1x1__",
+    };
+    for (const char* value : values) {
+        if ((uuid && std::strcmp(uuid, value) == 0)
+            || (name && std::strcmp(name, value) == 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 tc_value make_mesh_renderer_inspector_layout_field(
     const char* path,
     const char* widget = nullptr,
@@ -497,6 +512,9 @@ void MeshRenderer::apply_pending_override_data() {
                     tc_value* name_val = tc_value_dict_get(val, "name");
                     std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
                         ? name_val->data.s : "";
+                    if (is_builtin_symbolic_texture(uuid.c_str(), name.c_str())) {
+                        continue;
+                    }
                     if (tc_texture_handle_is_invalid(tex_h) && !name.empty()) {
                         tex_h = tc_texture_find(name.c_str());
                     }
@@ -746,6 +764,10 @@ tc_value MeshRenderer::get_override_data() const {
 
                     tc_texture* tex = tc_texture_get(tex_binding.texture);
                     if (!tex) continue;
+                    if (is_builtin_symbolic_texture(
+                            tex->header.uuid, tex->header.name)) {
+                        continue;
+                    }
 
                     tc_value tex_value = tc_value_dict_new();
                     tc_value_dict_set(&tex_value, "uuid", tc_value_string(tex->header.uuid));

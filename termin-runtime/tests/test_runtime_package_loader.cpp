@@ -805,9 +805,9 @@ TEST_CASE("RuntimePackageLoader rejects incompatible shader program schema") {
     CHECK(result.message.find("requires schema_version 1") != std::string::npos);
 }
 
-TEST_CASE("RuntimePackageLoader validates shader texture property encoding") {
+TEST_CASE("RuntimePackageLoader accepts shader texture property without encoding constraint") {
     const std::filesystem::path root = make_package_root();
-    write_test_package(root);
+    write_test_package_with_texture(root);
 
     write_text(
         root / "shaders" / "test.shader-program.json",
@@ -815,10 +815,30 @@ TEST_CASE("RuntimePackageLoader validates shader texture property encoding") {
             shader_program_spec(),
             ", \"expected_encoding\": \"srgb\"",
             ""));
-    termin::runtime::RuntimePackageLoadResult missing =
+    termin::runtime::RuntimePackageLoadResult result =
         termin::runtime::load_runtime_package(root.string());
-    CHECK_FALSE(missing.ok);
-    CHECK(missing.message.find("requires expected_encoding") != std::string::npos);
+    REQUIRE(result.ok);
+
+    termin::TcShaderProgram program =
+        termin::TcShaderProgram::find(kProgramUuid);
+    REQUIRE(program.is_valid());
+    REQUIRE(program.get()->property_count > 1);
+    CHECK(program.get()->properties[1].has_expected_encoding == 0);
+
+    termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
+    REQUIRE(material.is_valid());
+    tc_material_texture* slot =
+        require_texture(material.default_phase(), "u_albedo_texture");
+    CHECK(slot->is_declared != 0);
+    CHECK(slot->has_expected_encoding == 0);
+    tc_texture* texture = tc_texture_get(slot->texture);
+    REQUIRE(texture != nullptr);
+    CHECK(texture->encoding == TC_TEXTURE_ENCODING_SRGB);
+}
+
+TEST_CASE("RuntimePackageLoader rejects invalid shader texture property encoding") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
 
     write_text(
         root / "shaders" / "test.shader-program.json",

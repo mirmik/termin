@@ -349,16 +349,17 @@ def _canonical_texture_properties(properties: list[dict]) -> dict[str, dict]:
 def _validate_canonical_texture_defaults(properties: list[dict]) -> None:
     for prop in _canonical_texture_properties(properties).values():
         expected_encoding = prop.get("expected_encoding")
-        if expected_encoding not in ("srgb", "linear"):
+        if expected_encoding not in (None, "srgb", "linear"):
             raise ValueError(
-                f"Texture property '{prop['name']}' has no valid expected encoding"
+                f"Texture property '{prop['name']}' has invalid expected encoding "
+                f"'{expected_encoding}'"
             )
         default = prop.get("default")
         if default not in (None, "white", "normal"):
             raise ValueError(
                 f"Texture property '{prop['name']}' has unsupported default '{default}'"
             )
-        if default == "normal" and expected_encoding != "linear":
+        if default == "normal" and expected_encoding == "srgb":
             raise ValueError(
                 f"Texture property '{prop['name']}' cannot use normal default with "
                 f"{expected_encoding} encoding"
@@ -368,7 +369,8 @@ def _validate_canonical_texture_defaults(properties: list[dict]) -> None:
 def _declare_canonical_texture_slots(phase, properties: list[dict]) -> None:
     _validate_canonical_texture_defaults(properties)
     for prop in _canonical_texture_properties(properties).values():
-        phase.declare_texture(prop["name"], prop["expected_encoding"])
+        expected_encoding = prop.get("expected_encoding")
+        phase.declare_texture(prop["name"], expected_encoding)
 
 
 def _apply_canonical_texture_defaults(phase, properties: list[dict]) -> None:
@@ -379,7 +381,7 @@ def _apply_canonical_texture_defaults(phase, properties: list[dict]) -> None:
         texture = (
             get_normal_texture_handle()
             if prop.get("default") == "normal"
-            else get_white_texture_handle(prop["expected_encoding"])
+            else get_white_texture_handle(prop.get("expected_encoding") or "linear")
         )
         if texture is not None and texture.is_valid:
             if not phase.set_texture(prop["name"], texture):
