@@ -174,6 +174,7 @@ def export_runtime_package(
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
     shader_programs: dict[str, dict[str, Any]] = {}
+    pipeline_shader_requirements: list[dict[str, Any]] = []
     _write_meshes(
         project_root_path,
         output_dir_path,
@@ -222,6 +223,7 @@ def export_runtime_package(
                 compiled_pipelines,
                 diagnostics,
                 shaders,
+                pipeline_shader_requirements,
                 _packaged_scene_path(identity),
             )
     finally:
@@ -263,6 +265,7 @@ def export_runtime_package(
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "entry_scene": entry_identity,
         "builtin_shader_contract": builtin_shader_contract,
+        "pipeline_shader_requirements": pipeline_shader_requirements,
         "resources": resources,
         "scenes": [
             {
@@ -322,6 +325,7 @@ def _collect_pipeline_shader_usages(
     pipelines: list[_CompiledPipelineExport],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
+    pipeline_shader_requirements: list[dict[str, Any]],
     scene_path: str,
 ) -> None:
     builtin_pipeline_names = _builtin_pipeline_names(scene_data)
@@ -370,8 +374,17 @@ def _collect_pipeline_shader_usages(
                 if pipeline is None:
                     raise ValueError("compiled pipeline template could not be instantiated")
                 try:
-                    for shader in collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline):
-                        shaders[shader.uuid] = _shader_to_spec(shader)
+                    _record_pipeline_shader_usages(
+                        collect_shader_usages_for_pipeline(
+                            scene.scene_handle(), pipeline
+                        ),
+                        shaders,
+                        diagnostics,
+                        pipeline_shader_requirements,
+                        scene_path=scene_path,
+                        pipeline_name=compiled.name,
+                        pipeline_uuid=compiled.uuid,
+                    )
                 finally:
                     pipeline.destroy()
             except Exception as exc:
@@ -391,11 +404,17 @@ def _collect_pipeline_shader_usages(
                         raise ValueError(
                             f"built-in pipeline '{pipeline_name}' could not be instantiated"
                         )
-                    for shader in collect_shader_usages_for_pipeline(
-                        scene.scene_handle(),
-                        pipeline,
-                    ):
-                        shaders[shader.uuid] = _shader_to_spec(shader)
+                    _record_pipeline_shader_usages(
+                        collect_shader_usages_for_pipeline(
+                            scene.scene_handle(), pipeline
+                        ),
+                        shaders,
+                        diagnostics,
+                        pipeline_shader_requirements,
+                        scene_path=scene_path,
+                        pipeline_name=pipeline_name,
+                        pipeline_uuid=None,
+                    )
                 except Exception as exc:
                     diagnostics.append(
                         RuntimePackageExportDiagnostic(
@@ -416,6 +435,55 @@ def _collect_pipeline_shader_usages(
             engine.shutdown()
 
 
+def _record_pipeline_shader_usages(
+    collected_shaders: Iterable[Any],
+    shaders: dict[str, _ShaderSpec],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    requirements: list[dict[str, Any]],
+    *,
+    scene_path: str,
+    pipeline_name: str,
+    pipeline_uuid: str | None,
+) -> None:
+    variants: list[dict[str, str]] = []
+    for shader in collected_shaders:
+        spec = _shader_to_spec(shader)
+        if spec.artifact_role == "surface_producer":
+            producer = spec.surface_producer or {}
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=scene_path,
+                    message=(
+                        f"Pipeline '{pipeline_name}' returned evaluator-only surface "
+                        f"producer '{spec.name}' for contract "
+                        f"'{producer.get('contract_id', '<unknown>')}@"
+                        f"{producer.get('contract_version', '<unknown>')}' instead of "
+                        "an executable pass variant"
+                    ),
+                )
+            )
+            continue
+        shaders[spec.uuid] = spec
+        variants.append(
+            {
+                "uuid": spec.uuid,
+                "name": spec.name,
+                "path": f"shaders/{spec.uuid}.shader.json",
+                "source_identity": spec.source_identity,
+            }
+        )
+    if variants:
+        requirement: dict[str, Any] = {
+            "scene": scene_path,
+            "pipeline": pipeline_name,
+            "variants": sorted(variants, key=lambda item: item["uuid"]),
+        }
+        if pipeline_uuid is not None:
+            requirement["pipeline_uuid"] = pipeline_uuid
+        requirements.append(requirement)
+
+
 def _builtin_pipeline_names(scene_data: dict[str, Any]) -> set[str]:
     scene = scene_data.get("scene", scene_data)
     if not isinstance(scene, dict):
@@ -434,8 +502,18 @@ def _builtin_pipeline_names(scene_data: dict[str, Any]) -> set[str]:
     for render_target in render_targets:
         if not isinstance(render_target, dict):
             continue
+        if render_target.get("enabled", True) is False:
+            continue
         pipeline_name = render_target.get("pipeline_name")
-        if pipeline_name == "Default":
+        pipeline_uuid = render_target.get("pipeline_uuid")
+        if (
+            isinstance(pipeline_name, str)
+            and pipeline_name
+            and (
+                not isinstance(pipeline_uuid, str)
+                or not pipeline_uuid
+            )
+        ):
             names.add(pipeline_name)
     return names
 

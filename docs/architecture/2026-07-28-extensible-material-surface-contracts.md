@@ -400,6 +400,15 @@ The existing usage collector already walks pipeline passes and render items.
 It should enumerate final variants only; producer handles are dependencies, not
 standalone GPU artifacts.
 
+Runtime packages make this distinction explicit. Authoring shaders with a
+surface producer use `artifact_role: surface_producer`: their evaluator and
+exact contract/interface identities are serialized for runtime planning, but
+they have no `artifacts` table and are never submitted to `termin_shaderc`.
+Executable pass results retain normal backend artifacts. The manifest's
+`pipeline_shader_requirements` table binds every collected result to its scene
+and pipeline, including the composed-source identity; package validation checks
+that each required spec, backend and stage exists before the runtime starts.
+
 ## Standard PBR surface v1
 
 The first built-in interface is intentionally small and close to the common
