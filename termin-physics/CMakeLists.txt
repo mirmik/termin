@@ -37,6 +37,7 @@ endif()
 
 set(TERMIN_PHYSICS_SOURCES
     src/termin_physics_version.cpp
+    src/mass_properties.cpp
     src/rigid_body.cpp
     src/physics_world.cpp
 )
@@ -80,6 +81,20 @@ if(TERMIN_BUILD_PYTHON)
     endif()
 endif()
 
+if(TERMIN_PHYSICS_BUILD_TESTS)
+    enable_testing()
+    add_executable(termin_physics_tests
+        tests/main.cpp
+        tests/test_mass_properties.cpp
+    )
+    target_include_directories(termin_physics_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_physics_tests PRIVATE termin_physics)
+    add_test(NAME termin_physics_tests COMMAND termin_physics_tests)
+endif()
+
 include(GNUInstallDirs)
 
 install(TARGETS termin_physics
@@ -118,3 +133,7 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_physicsConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_physics
 )
+
+if(COMMAND termin_label_tests_in_directory)
+    termin_label_tests_in_directory("termin-physics")
+endif()

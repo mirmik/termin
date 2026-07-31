@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from termin.scene import PythonComponent
-from termin.physics._physics_native import PhysicsWorld, RigidBody
+from termin.physics._physics_native import (
+    PhysicsWorld,
+    RigidBody,
+    compute_mass_properties,
+)
 from termin.geombase import Pose3, Vec3
 from termin.inspect import InspectField
 from tcbase import log
@@ -177,7 +181,10 @@ class RigidBodyComponent(PythonComponent):
         cpp_pose, scale = pose_and_scale
         self._half_extents = self._compute_half_extents(scale)
 
-        body = self._create_body(cpp_pose)
+        body = self._create_body(cpp_pose, scale)
+        if body is None:
+            self._physics_world = None
+            return
         self._body_index = world.add_body(body)
         self._ensure_collider_registered()
 
@@ -203,32 +210,46 @@ class RigidBodyComponent(PythonComponent):
         self._registered_collider = collider
         return True
 
-    def _create_body(self, pose: Pose3) -> RigidBody:
+    def _create_body(self, pose: Pose3, scale: Vec3) -> RigidBody | None:
         from termin.colliders.collider_component import ColliderComponent
-        from termin.colliders import SphereCollider
 
         collider_comp = (
             self.entity.get_component(ColliderComponent)
             if self.entity is not None
             else None
         )
-        if collider_comp is not None and isinstance(
-            collider_comp.collider,
-            SphereCollider,
-        ):
-            return RigidBody.create_sphere(
-                self._half_extents.x,
+        if collider_comp is None:
+            sx, sy, sz = self._half_extents * 2.0
+            return RigidBody.create_box(
+                sx,
+                sy,
+                sz,
                 self.mass,
                 pose,
                 self.is_static,
             )
+        if collider_comp.collider is None:
+            log.error(
+                f"RigidBodyComponent on '{self.entity.name}' cannot compute mass "
+                "properties because its collider geometry is unavailable"
+            )
+            return None
 
-        sx, sy, sz = self._half_extents * 2.0
-        return RigidBody.create_box(
-            sx,
-            sy,
-            sz,
-            self.mass,
+        try:
+            properties = compute_mass_properties(
+                collider_comp.collider,
+                scale,
+                self.mass,
+            )
+        except (RuntimeError, ValueError) as error:
+            log.error(
+                f"RigidBodyComponent on '{self.entity.name}' rejected "
+                f"{collider_comp.collider_type} mass properties: {error}"
+            )
+            return None
+
+        return RigidBody.create_with_mass_properties(
+            properties,
             pose,
             self.is_static,
         )
@@ -238,7 +259,7 @@ class RigidBodyComponent(PythonComponent):
             return
 
         cpp_body = self._physics_world.get_body(self._body_index)
-        cpp_pose = cpp_body.pose
+        cpp_pose = cpp_body.shape_pose()
 
         self.entity.transform.set_global_position(cpp_pose.lin)
         self.entity.transform.set_global_orientation(cpp_pose.ang)
@@ -253,7 +274,7 @@ class RigidBodyComponent(PythonComponent):
         py_pose, _ = pose_and_scale
         cpp_body = self._physics_world.get_body(self._body_index)
 
-        cpp_body.pose = py_pose
+        cpp_body.set_shape_pose(py_pose)
 
         cpp_body.linear_velocity = Vec3(0, 0, 0)
         cpp_body.angular_velocity = Vec3(0, 0, 0)

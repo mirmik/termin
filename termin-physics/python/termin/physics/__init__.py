@@ -11,13 +11,17 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("termin_physics")
 
 from termin.physics._physics_native import (
+    MassProperties,
     RigidBody,
     PhysicsWorld,
     Contact,
+    compute_mass_properties,
 )
 
 __all__ = [
+    "MassProperties",
     "RigidBody",
     "PhysicsWorld",
     "Contact",
+    "compute_mass_properties",
 ]

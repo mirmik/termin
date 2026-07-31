@@ -30,6 +30,9 @@ def test_rigid_body_accepts_decomposed_scale_and_rejects_affine_world(
             lin=Vec3(7.0, 8.0, 9.0),
         )
 
+        def shape_pose(self):
+            return self.pose
+
     class FakeWorld:
         def get_body(self, index):
             assert index == 0
