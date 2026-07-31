@@ -27,6 +27,8 @@ namespace {
 
 constexpr std::uint32_t kWidth = 48;
 constexpr std::uint32_t kHeight = 32;
+constexpr std::uint32_t kResizedWidth = 40;
+constexpr std::uint32_t kResizedHeight = 28;
 
 bool existing_file(const std::filesystem::path& path) {
     std::error_code error;
@@ -176,7 +178,11 @@ bool render_and_check(
     termin::UIWidgetPass& pass,
     termin::TcSceneRef scene,
     tgfx::TextureHandle input,
-    tgfx::TextureHandle output
+    tgfx::TextureHandle output,
+    std::uint32_t width,
+    std::uint32_t height,
+    std::uint32_t outside_x,
+    std::uint32_t outside_y
 ) {
     const float green[]{0.05f, 0.8f, 0.1f, 1.0f};
     render_context.begin_frame();
@@ -186,7 +192,12 @@ bool render_and_check(
     termin::ExecuteContext ctx;
     ctx.ctx2 = &render_context;
     ctx.scene = scene;
-    ctx.render_rect = {0, 0, kWidth, kHeight};
+    ctx.render_rect = {
+        0,
+        0,
+        static_cast<int>(width),
+        static_cast<int>(height),
+    };
     ctx.tex2_reads.emplace(pass.input_res, input);
     ctx.tex2_writes.emplace(pass.output_res, output);
     pass.execute(ctx);
@@ -196,7 +207,7 @@ bool render_and_check(
     float inside[4]{};
     float outside[4]{};
     return device.read_pixel_rgba8(output, 4, 4, inside) &&
-        device.read_pixel_rgba8(output, 30, 20, outside) &&
+        device.read_pixel_rgba8(output, outside_x, outside_y, outside) &&
         looks_red(inside) && looks_green(outside);
 }
 
@@ -246,21 +257,53 @@ int main(int argc, char** argv) {
     tgfx::RenderContext2 render_context(*device, cache);
     termin::UIWidgetPass pass("input", "output");
     const bool distinct_ok = render_and_check(
-        *device, render_context, pass, scene, input, output);
+        *device, render_context, pass, scene, input, output,
+        kWidth, kHeight, 30, 20);
+
+    const tc_ui_presentation_metrics platform_metrics{
+        2.0f,
+        1.25f,
+        tc_ui_size{
+            static_cast<float>(kWidth),
+            static_cast<float>(kHeight),
+        },
+        tc_ui_insets{1.0f, 2.0f, 3.0f, 4.0f},
+    };
+    if (!document.document.set_presentation_metrics(platform_metrics)) {
+        std::fprintf(stderr, "Failed to publish probe presentation metrics\n");
+        return 1;
+    }
+    const std::uint64_t revision_before_resize =
+        document.document.presentation_revision();
     const bool inplace_ok = render_and_check(
-        *device, render_context, pass, scene, input, input);
+        *device, render_context, pass, scene, input, input,
+        kResizedWidth, kResizedHeight, 30, 26);
+    tc_ui_presentation_metrics resized_metrics{};
+    const bool resized_metrics_ok =
+        document.document.presentation_metrics(resized_metrics) &&
+        resized_metrics.physical_extent.width == kResizedWidth &&
+        resized_metrics.physical_extent.height == kResizedHeight &&
+        resized_metrics.density_scale == platform_metrics.density_scale &&
+        resized_metrics.font_scale == platform_metrics.font_scale &&
+        resized_metrics.physical_safe_insets.left == 1.0f &&
+        resized_metrics.physical_safe_insets.top == 2.0f &&
+        resized_metrics.physical_safe_insets.right == 3.0f &&
+        resized_metrics.physical_safe_insets.bottom == 4.0f &&
+        document.document.presentation_revision() > revision_before_resize;
 
     pass.destroy();
     scene.destroy();
     device->destroy(output);
     device->destroy(input);
 
-    if (!distinct_ok || !inplace_ok) {
+    if (!distinct_ok || !inplace_ok || !resized_metrics_ok) {
         std::fprintf(
             stderr,
-            "UIWidgetPass target-load smoke failed: distinct=%d inplace=%d\n",
+            "UIWidgetPass resize smoke failed: distinct=%d inplace=%d "
+            "metrics=%d\n",
             distinct_ok,
-            inplace_ok);
+            inplace_ok,
+            resized_metrics_ok);
         return 1;
     }
     return 0;
