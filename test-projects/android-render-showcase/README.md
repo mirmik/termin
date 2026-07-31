@@ -126,4 +126,8 @@ adb logcat -d -v threadtime \
 
 If automatic rotation is enabled, use the emulator/device rotation control
 instead of changing `user_rotation`. Restore the original rotation setting
-after the capture.
+after the capture. Some devices (including OnePlus 5 on Android 10) retain the
+application-requested orientation when only the setting is changed. For those,
+use the WindowManager override documented in the
+[adaptive UI regression matrix](../../docs/adaptive-ui-regression-matrix.md),
+then restore free rotation immediately after the gate.
