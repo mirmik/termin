@@ -10,6 +10,7 @@
 #include <string.h>
 
 static tc_pool g_navmesh_pool;
+static tc_pool_generation_epoch g_navmesh_generation_epoch;
 static tc_resource_map* g_uuid_to_index = NULL;
 static uint64_t g_next_uuid = 1;
 static bool g_initialized = false;
@@ -54,7 +55,11 @@ static void navmesh_init_slot(tc_navmesh* navmesh, tc_handle h, const char* uuid
 
 void tc_navmesh_init(void) {
     if (g_initialized) return;
-    if (!tc_pool_init(&g_navmesh_pool, sizeof(tc_navmesh), 32)) {
+    if (!tc_pool_init_rebootstrap(
+            &g_navmesh_pool,
+            sizeof(tc_navmesh),
+            32,
+            &g_navmesh_generation_epoch)) {
         tc_log(TC_LOG_ERROR, "tc_navmesh_init: failed to init pool");
         return;
     }

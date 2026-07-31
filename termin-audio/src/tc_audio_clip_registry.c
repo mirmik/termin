@@ -13,9 +13,9 @@
 #include <tcbase/tc_string.h>
 
 static tc_pool g_audio_clip_pool;
+static tc_pool_generation_epoch g_audio_clip_generation_epoch;
 static tc_resource_map* g_audio_clip_uuid_map = NULL;
 static uint64_t g_audio_clip_next_uuid = 1;
-static uint32_t g_audio_clip_generation_floor = 1;
 static bool g_audio_clip_initialized = false;
 
 static void audio_clip_free_pcm(tc_audio_clip* clip) {
@@ -29,39 +29,15 @@ static void audio_clip_free_pcm(tc_audio_clip* clip) {
     clip->header.is_loaded = 0;
 }
 
-static void audio_clip_advance_generation_floor(void) {
-    uint32_t max_generation = g_audio_clip_generation_floor;
-    for (uint32_t i = 0; i < g_audio_clip_pool.capacity; ++i) {
-        if (g_audio_clip_pool.generations[i] > max_generation) {
-            max_generation = g_audio_clip_pool.generations[i];
-        }
-    }
-    g_audio_clip_generation_floor = max_generation + 1;
-    if (g_audio_clip_generation_floor == 0) {
-        g_audio_clip_generation_floor = 1;
-    }
-}
-
-static tc_audio_clip_handle audio_clip_allocate(void) {
-    tc_audio_clip_handle handle = tc_pool_alloc(&g_audio_clip_pool);
-    if (tc_audio_clip_handle_is_invalid(handle)) {
-        return handle;
-    }
-    if (handle.generation < g_audio_clip_generation_floor) {
-        g_audio_clip_pool.generations[handle.index] = g_audio_clip_generation_floor;
-        handle.generation = g_audio_clip_generation_floor;
-    }
-    return handle;
-}
-
 void tc_audio_clip_registry_init(void) {
     if (g_audio_clip_initialized) return;
-    if (!tc_pool_init(&g_audio_clip_pool, sizeof(tc_audio_clip), 32)) {
+    if (!tc_pool_init_rebootstrap(
+            &g_audio_clip_pool,
+            sizeof(tc_audio_clip),
+            32,
+            &g_audio_clip_generation_epoch)) {
         tc_log_error("tc_audio_clip_registry_init: failed to initialize clip pool");
         return;
-    }
-    for (uint32_t i = 0; i < g_audio_clip_pool.capacity; ++i) {
-        g_audio_clip_pool.generations[i] = g_audio_clip_generation_floor;
     }
     g_audio_clip_uuid_map = tc_resource_map_new(NULL);
     if (!g_audio_clip_uuid_map) {
@@ -80,7 +56,6 @@ void tc_audio_clip_registry_shutdown(void) {
             audio_clip_free_pcm((tc_audio_clip*)tc_pool_get_unchecked(&g_audio_clip_pool, i));
         }
     }
-    audio_clip_advance_generation_floor();
     tc_resource_map_free(g_audio_clip_uuid_map);
     g_audio_clip_uuid_map = NULL;
     tc_pool_free(&g_audio_clip_pool);
@@ -108,7 +83,7 @@ tc_audio_clip_handle tc_audio_clip_create(const char* uuid) {
         return tc_audio_clip_handle_invalid();
     }
 
-    tc_audio_clip_handle handle = audio_clip_allocate();
+    tc_audio_clip_handle handle = tc_pool_alloc(&g_audio_clip_pool);
     if (tc_audio_clip_handle_is_invalid(handle)) {
         tc_log_error("tc_audio_clip_create: pool allocation failed");
         return handle;
@@ -388,4 +363,3 @@ uint64_t tc_audio_clip_duration_ms(tc_audio_clip_handle handle) {
     if (!clip || clip->sample_rate == 0) return 0;
     return (clip->frame_count * 1000u) / clip->sample_rate;
 }
-

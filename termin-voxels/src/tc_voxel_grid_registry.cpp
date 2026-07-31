@@ -12,6 +12,7 @@
 #include <cstdlib>
 
 static tc_pool g_voxel_grid_pool;
+static tc_pool_generation_epoch g_voxel_grid_generation_epoch;
 static tc_resource_map* g_uuid_to_index = nullptr;
 static uint64_t g_next_uuid = 1;
 static bool g_initialized = false;
@@ -48,7 +49,11 @@ static void voxel_grid_init_slot(tc_voxel_grid* grid, tc_handle h, const char* u
 
 void tc_voxel_grid_init(void) {
     if (g_initialized) return;
-    if (!tc_pool_init(&g_voxel_grid_pool, sizeof(tc_voxel_grid), 32)) {
+    if (!tc_pool_init_rebootstrap(
+            &g_voxel_grid_pool,
+            sizeof(tc_voxel_grid),
+            32,
+            &g_voxel_grid_generation_epoch)) {
         tc_log(TC_LOG_ERROR, "tc_voxel_grid_init: failed to init pool");
         return;
     }
