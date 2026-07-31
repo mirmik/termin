@@ -39,7 +39,7 @@ def _declare_asset(uuid: str = "python-ui-component"):
 
 def test_ui_component_is_a_thin_native_projection() -> None:
     assert UIComponent.__name__ == "UIComponent"
-    assert UIComponent.__module__ == "termin.ui_components.component"
+    assert UIComponent.__module__ == "termin.ui_components._ui_components_native"
     assert "tcgui" not in sys.modules
 
     component = UIComponent(priority=7)

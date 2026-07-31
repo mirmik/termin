@@ -34,6 +34,6 @@ surface extent through its Activity/bootstrap bridge before scene rendering.
 
 For distinct framegraph resources the pass copies input scene color to the
 output before opening the UI pass with load semantics. For an inplace alias it
-opens the existing target with load semantics directly. The Python
-`termin.render_passes.ui_widget` module is only a projection of this native
-type and contains no render implementation.
+opens the existing target with load semantics directly. Python exposes the
+native type directly from `termin.render_passes`; there is no separate Python
+pass implementation or compatibility module.

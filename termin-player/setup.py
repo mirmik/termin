@@ -49,7 +49,6 @@ setup(
         "termin-lighting",
         "tmesh",
         "tgfx",
-        "tcgui",
         "numpy",
         "packaging",
     ],

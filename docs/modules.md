@@ -188,7 +188,10 @@ Source of truth: [termin-gui docs](https://github.com/mirmik/termin-monorepo/blo
 
 Рендеринг виджетов должен использовать facade из [termin-graphics](#termin-graphics), а не дублировать низкоуровневые GPU primitives.
 
-`termin-gui-native` — экспериментальный C ABI/C++ прототип будущего native UI document; он не заменяет текущий Python `termin-gui`, пока контракт владения, handles и polyglot widget vtable не будет проверен на базовых виджетах.
+`termin-gui-native` — каноническое C ABI/C++ ядро native UI document и
+production UI редактора и scene UI. Python bindings являются проекцией тех же
+native handles и widget types. Legacy `termin-gui`/`tcgui` остаётся отдельной
+библиотекой только для ещё не мигрированных consumers.
 
 Native widget/document core не владеет OS windows, `WindowedGraphicsSession`,
 application loop или main/secondary policy. Необязательный leaf adapter может
@@ -391,9 +394,10 @@ Host-derived bundle pipeline также удалён в #681: проверенн
 Linux/Windows relocated-SDK smoke. Граница зафиксирована в
 [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
 
-Native UI является единственным поддерживаемым UI редактора; старые tcgui и
-Qt/PyQt frontend-проекции удалены. Сам `termin-gui` остаётся библиотекой для
-UIComponent, CSG, tcplot и nodegraph consumers.
+Native UI является единственным поддерживаемым UI редактора и scene UI; старые
+tcgui и Qt/PyQt frontend-проекции, Python `UIComponent` и Python
+`UIWidgetPass` удалены. Сам `termin-gui` остаётся библиотекой для CSG, tcplot и
+nodegraph consumers.
 
 Application-level code не должен протекать вниз в graphics/render/scene. Старые app-level compatibility reexports для доменных API разбираются в пользу canonical imports из owning packages; новые re-export слои в `termin-app` добавлять не следует.
 
