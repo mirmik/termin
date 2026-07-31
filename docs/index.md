@@ -14,6 +14,7 @@
 - [Code Duplication Check](./code-duplication.md) — jscpd-прогон для поиска copy/paste-дублей.
 - [Render Phase Semantics](./render-phase-semantics.md) — контракт `phase_mark`, pass-owned shader contracts, allowed/forbidden responsibilities.
 - [Android Emulator Vulkan Smoke](./android-emulator-vulkan.md) — поддерживаемый x86_64 AVD backend и контракт совместимости Slang SPIR-V.
+- [Adaptive Native UI Regression Matrix](./adaptive-ui-regression-matrix.md) — автоматические scale/layout/input проверки и platform gates.
 - [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
 - [Python Package Naming](./python-package-naming.md) — canonical source path / distribution / import namespace policy.
 - [Taskboard CLI](./taskboard-tool.md) — использование глобального Kanboard-инструмента для доски Termin.
