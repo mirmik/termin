@@ -188,6 +188,19 @@ def test_native_frame_profiler_routes_remote_connection_controls():
     assert controller.remote_disconnects == 1
 
 
+def test_native_frame_profiler_remote_binding_accepts_python_token():
+    from termin.editor._editor_native import FrameProfilerController
+    from termin.engine import EngineCore
+
+    engine = EngineCore()
+    controller = FrameProfilerController(engine, capacity=4)
+    try:
+        assert controller.connect_remote(9, "python-session-token")
+    finally:
+        controller.close()
+        engine.shutdown()
+
+
 def test_enabling_follow_does_not_feed_programmatic_selection_back_to_controller():
     controller = FakeNativeController()
     controller.follow_latest = False

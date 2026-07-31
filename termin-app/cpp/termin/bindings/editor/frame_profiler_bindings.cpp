@@ -1,5 +1,6 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/string.h>
 
 #include "termin/editor/frame_profiler_controller.hpp"
 #include <termin/engine/engine_core.hpp>
