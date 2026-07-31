@@ -66,9 +66,9 @@ class EditorStateIO:
         """
         editor_data: dict = {}
 
-        # Camera
+        # Camera. The top-level editor section is the sole persisted owner;
+        # EditorSceneAttachment keeps only an in-memory live-session cache.
         if self._attachment is not None:
-            self._attachment.save_state()
             camera_data = self._attachment.get_camera_data()
             if camera_data is not None:
                 editor_data["camera"] = camera_data
@@ -156,10 +156,18 @@ class EditorStateIO:
 
         result: dict = {}
 
-        # Camera (check both locations for backwards compatibility)
+        # Camera (check canonical and legacy locations for migration)
         camera_data = editor_data.get("camera")
         if camera_data is None and scene_data:
             camera_data = scene_data.get("editor_camera")
+        if camera_data is None and scene_data:
+            metadata = scene_data.get("metadata", {})
+            if isinstance(metadata, dict):
+                termin_metadata = metadata.get("termin", {})
+                if isinstance(termin_metadata, dict):
+                    editor_metadata = termin_metadata.get("editor", {})
+                    if isinstance(editor_metadata, dict):
+                        camera_data = editor_metadata.get("entities_data")
         if camera_data is not None:
             result["camera"] = camera_data
 

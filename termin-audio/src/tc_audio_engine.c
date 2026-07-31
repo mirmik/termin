@@ -21,7 +21,7 @@ typedef struct tc_audio_voice_slot {
 
 static ma_engine g_audio_engine;
 static tc_pool g_audio_voice_pool;
-static uint32_t g_audio_voice_generation_floor = 1;
+static tc_pool_generation_epoch g_audio_voice_generation_epoch;
 static bool g_audio_engine_initialized = false;
 static bool g_audio_engine_has_device = false;
 static bool g_audio_voice_pool_initialized = false;
@@ -37,40 +37,18 @@ static ma_format audio_format_to_miniaudio(tc_audio_sample_format format) {
     }
 }
 
-static void audio_voice_advance_generation_floor(void) {
-    uint32_t max_generation = g_audio_voice_generation_floor;
-    for (uint32_t i = 0; i < g_audio_voice_pool.capacity; ++i) {
-        if (g_audio_voice_pool.generations[i] > max_generation) {
-            max_generation = g_audio_voice_pool.generations[i];
-        }
-    }
-    g_audio_voice_generation_floor = max_generation + 1;
-    if (g_audio_voice_generation_floor == 0) {
-        g_audio_voice_generation_floor = 1;
-    }
-}
-
 static bool audio_voice_pool_init(void) {
     if (g_audio_voice_pool_initialized) return true;
-    if (!tc_pool_init(&g_audio_voice_pool, sizeof(tc_audio_voice_slot), 32)) {
+    if (!tc_pool_init_rebootstrap(
+            &g_audio_voice_pool,
+            sizeof(tc_audio_voice_slot),
+            32,
+            &g_audio_voice_generation_epoch)) {
         tc_log_error("audio_voice_pool_init: failed to initialize voice pool");
         return false;
     }
-    for (uint32_t i = 0; i < g_audio_voice_pool.capacity; ++i) {
-        g_audio_voice_pool.generations[i] = g_audio_voice_generation_floor;
-    }
     g_audio_voice_pool_initialized = true;
     return true;
-}
-
-static tc_audio_voice_handle audio_voice_allocate(void) {
-    tc_audio_voice_handle handle = tc_pool_alloc(&g_audio_voice_pool);
-    if (tc_audio_voice_handle_is_invalid(handle)) return handle;
-    if (handle.generation < g_audio_voice_generation_floor) {
-        g_audio_voice_pool.generations[handle.index] = g_audio_voice_generation_floor;
-        handle.generation = g_audio_voice_generation_floor;
-    }
-    return handle;
 }
 
 static tc_audio_voice_slot* audio_voice_get(tc_audio_voice_handle voice) {
@@ -85,7 +63,6 @@ static void audio_voice_pool_shutdown(void) {
         tc_audio_voice_handle voice = {i, g_audio_voice_pool.generations[i]};
         tc_audio_voice_destroy(voice);
     }
-    audio_voice_advance_generation_floor();
     tc_pool_free(&g_audio_voice_pool);
     g_audio_voice_pool_initialized = false;
 }
@@ -238,7 +215,7 @@ tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
         return tc_audio_voice_handle_invalid();
     }
 
-    tc_audio_voice_handle voice_handle = audio_voice_allocate();
+    tc_audio_voice_handle voice_handle = tc_pool_alloc(&g_audio_voice_pool);
     if (tc_audio_voice_handle_is_invalid(voice_handle)) {
         tc_log_error("tc_audio_voice_create: voice pool allocation failed");
         return voice_handle;

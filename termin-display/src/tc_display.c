@@ -26,6 +26,7 @@ typedef struct tc_display {
 } tc_display;
 
 static tc_pool g_display_pool;
+static tc_pool_generation_epoch g_display_generation_epoch;
 static bool g_display_pool_initialized = false;
 
 // ============================================================================
@@ -118,6 +119,7 @@ void tc_display_pool_init(void) {
         .initial_generation = 0u,
         .allocate_low_indices_first = true,
         .name = "tc_display_pool",
+        .generation_epoch = &g_display_generation_epoch,
     };
     if (!tc_pool_init_ex(
             &g_display_pool,

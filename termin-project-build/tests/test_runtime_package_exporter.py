@@ -1,6 +1,7 @@
 import json
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,9 +9,13 @@ from termin.project import make_default_scene
 from termin.project_build import export_runtime_package
 from termin.project_build.runtime_package_exporter import (
     ENGINE_TEXT3D_SHADER_UUID,
+    _builtin_pipeline_names,
     _default_pipeline_engine_shaders,
     _material_textures_to_json,
 )
+from termin.project_build.runtime_package.models import ShaderSpec
+from termin.project_build.runtime_package.materials import _shader_source_identity
+from termin.project_build.runtime_package.shaders import write_shader
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
 from termin.project_build.runtime_package.sprites import write_sprites
 from termin.project_build.runtime_package.ui_documents import (
@@ -494,6 +499,162 @@ def test_collect_runtime_refs_accepts_default_scene_contract() -> None:
         "00000000-0001-0000-0001-000000000003": "NormalizedPBR",
     }
     assert diagnostics == []
+
+
+def test_builtin_pipeline_names_include_future_builtin_without_uuid() -> None:
+    scene = {
+        "extensions": {
+            "render_mount": {
+                "render_target_configs": [
+                    {"pipeline_name": "Default"},
+                    {"pipeline_name": "DeferredPrototype"},
+                    {
+                        "pipeline_name": "Authored",
+                        "pipeline_uuid": "authored-pipeline-uuid",
+                    },
+                ]
+            }
+        }
+    }
+
+    assert _builtin_pipeline_names(scene) == {"Default", "DeferredPrototype"}
+
+
+def test_surface_producer_shader_is_metadata_only(tmp_path: Path) -> None:
+    compiler = tmp_path / "compiler-must-not-run"
+    compiler.write_text("#!/bin/sh\nexit 97\n", encoding="utf-8")
+    compiler.chmod(0o755)
+    resources: list[dict[str, str]] = []
+    shader = ShaderSpec(
+        uuid="surface-producer",
+        name="Surface Producer",
+        source_path="Materials/Surface.shader",
+        vertex_source="",
+        fragment_source="TerminSurface evaluate_surface() {}",
+        language="slang",
+        surface_producer={
+            "contract_id": "game.surface",
+            "contract_version": 1,
+            "surface_type_name": "TerminSurface",
+            "evaluator_entry": "evaluate_surface",
+            "evaluator_source": "TerminSurface evaluate_surface() {}",
+            "source_identity": "evaluator:v1",
+        },
+        surface_interface_identity="interface:v1",
+        source_identity="sha256:producer",
+        artifact_role="surface_producer",
+    )
+
+    spec = write_shader(
+        tmp_path / "package",
+        resources,
+        [],
+        shader,
+        compiler,
+        ("vulkan", "opengl", "d3d11"),
+    )
+
+    assert "artifacts" not in spec
+    assert spec["artifact_role"] == "surface_producer"
+    assert spec["surface_contract"] == {
+        "id": "game.surface",
+        "version": 1,
+        "interface_source_identity": "interface:v1",
+    }
+    assert resources == [
+        {
+            "type": "shader",
+            "uuid": "surface-producer",
+            "path": "shaders/surface-producer.shader.json",
+        }
+    ]
+    assert not list((tmp_path / "package" / "shaders").rglob("*.spv"))
+    assert not list((tmp_path / "package" / "shaders").rglob("*.cso"))
+
+
+def test_composed_shader_identity_tracks_every_source_dependency() -> None:
+    shader = SimpleNamespace(
+        language="slang",
+        vertex_entry="vertex_main",
+        fragment_entry="fragment_main",
+        geometry_entry="",
+        vertex_source="// vertex-provider:v1",
+        fragment_source=(
+            "// interface:v1\n// evaluator:v1\n// consumer:v1\n"
+            "[shader(\"fragment\")] void fragment_main() {}"
+        ),
+        geometry_source="",
+    )
+
+    original = _shader_source_identity(
+        shader, surface_interface_identity="interface:v1"
+    )
+    evaluator_changed = SimpleNamespace(
+        **{
+            **vars(shader),
+            "fragment_source": shader.fragment_source.replace(
+                "evaluator:v1", "evaluator:v2"
+            ),
+        }
+    )
+    consumer_changed = SimpleNamespace(
+        **{
+            **vars(shader),
+            "fragment_source": shader.fragment_source.replace(
+                "consumer:v1", "consumer:v2"
+            ),
+        }
+    )
+
+    assert _shader_source_identity(
+        shader, surface_interface_identity="interface:v2"
+    ) != original
+    assert _shader_source_identity(
+        evaluator_changed, surface_interface_identity="interface:v1"
+    ) != original
+    assert _shader_source_identity(
+        consumer_changed, surface_interface_identity="interface:v1"
+    ) != original
+
+
+def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> None:
+    shader = ShaderSpec(
+        uuid="shv_synthetic_surface",
+        name="SyntheticSurface_GBuffer",
+        source_path="runtime-registry",
+        vertex_source='[shader("vertex")] void vertex_main() {}',
+        fragment_source=(
+            "// interface:project-v1\n"
+            "// evaluator:project-v1\n"
+            "// consumer:gbuffer-v1\n"
+            '[shader("fragment")] void fragment_main() {}'
+        ),
+        language="slang",
+        vertex_entry="vertex_main",
+        fragment_entry="fragment_main",
+        source_identity="sha256:synthetic-composed",
+        artifact_role="pipeline_variant",
+        register_in_runtime=False,
+    )
+    resources: list[dict[str, str]] = []
+    package = tmp_path / "package"
+
+    spec = write_shader(
+        package,
+        resources,
+        [],
+        shader,
+        _write_fake_shader_compiler(tmp_path),
+        ("vulkan", "opengl", "d3d11"),
+    )
+
+    assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11"]
+    assert all(
+        (package / path).is_file()
+        for target in spec["artifacts"].values()
+        for path in target.values()
+    )
+    assert resources == []
 
 
 @full_runtime_package_exporter

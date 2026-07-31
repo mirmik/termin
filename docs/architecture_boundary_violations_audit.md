@@ -91,22 +91,25 @@ EngineCore/SceneManager/RenderingManager API.
 
 ---
 
-### 1.3 Утечка GUI в editor_core
+### 1.3 Утечка GUI в editor_core — исправлено
 
 **Где смотреть:**
 
 | Файл | Нарушение |
 |------|-----------|
-| `termin-app/termin/editor_tcgui/editor_camera_ui_controller.py` | **Исправлено 2026-05-21:** файл перенесён из `editor_core` в tcgui frontend |
+| `termin-app/termin/editor_tcgui/editor_camera_ui_controller.py` | **Исправлено 2026-07-25:** legacy tcgui frontend удалён; controller находится в UI-neutral `editor_core`, native overlay — в `editor_native` |
 | `termin-app/termin/editor_core/spacemouse_controller.py` | **Исправлено 2026-05-24:** Qt notifier удалён, остался polling |
 | `termin-app/termin/visualization/platform/backends/sdl_embedded.py` | **Исправлено 2026-05-24:** PyQt embedding hooks удалены |
 | `termin-app/termin/visualization/render/texture.py` | **Исправлено 2026-05-24:** Qt preview удалён вместе с Qt editor |
-| `termin-app/termin/visualization/ui/widgets/__init__.py` | Full re-export tcgui.widgets (иллюзия абстракции) |
-| `termin-components/termin-components-ui/python/termin/ui_components/component.py` | `UIComponent` intentionally lives below app now; package explicitly depends on `tcgui` and `termin-input` |
+| `termin-app/termin/visualization/ui/widgets/__init__.py` | **Исправлено 2026-07-25:** compatibility re-export удалён вместе с legacy frontend |
+| `termin-components/termin-components-ui/python/termin/ui_components/component.py` | **Исправлено 2026-07-31:** Python compatibility module удалён; package экспортирует native `UIComponent` и не зависит от `tcgui` |
 
-**Проблема:** `editor_core` декларирует себя как UI-agnostic слой. PyQt-зависимости закрыты; остаточная проблема — `termin/visualization/ui/widgets` как tcgui re-export внутри app/SDK boundary.
+**Проблема была:** `editor_core` декларирует себя как UI-agnostic слой, но
+legacy frontend и compatibility imports протаскивали tcgui в app/SDK boundary.
 
-**Статус 2026-05-21:** частично исправлено. Прямой tcgui-контроллер камеры убран из `editor_core`; оставшиеся пункты требуют отдельного adapter/API решения.
+**Статус 2026-07-31:** исправлено. Editor использует native UI projection,
+scene UI использует native component/pass, а `editor_core` не импортирует UI
+frameworks.
 
 ---
 

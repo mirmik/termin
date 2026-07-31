@@ -24,6 +24,7 @@ from termin.render_passes._render_passes_native import (
     TONEMAP_NONE,
     TONEMAP_REINHARD,
     TonemapPass,
+    UIWidgetPass,
     World2DPass,
     build_shadow_projection_matrix,
     build_shadow_view_matrix,
@@ -36,7 +37,6 @@ from termin.render_passes._render_passes_native import (
 )
 from termin.render_passes.highlight import HighlightPass
 from termin.render_passes.immediate_depth import ImmediateDepthPass
-from termin.render_passes.ui_widget import UIWidgetPass
 from termin.render_passes.unified_gizmo import UnifiedGizmoPass
 
 __all__ = [

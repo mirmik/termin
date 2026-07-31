@@ -13,6 +13,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/quat.hpp>
 #include <termin/geom/pose3.hpp>
+#include <termin/physics/mass_properties.hpp>
 #include <termin/physics/termin_physics_api.hpp>
 
 namespace termin {
@@ -25,9 +26,12 @@ public:
     Vec3 linear_velocity;
     Vec3 angular_velocity;
 
-    // Масса и инерция
+    // Масса и инерция. pose.lin хранит мировой центр масс, pose.ang —
+    // ориентацию authored shape frame. inertia_frame_local задаёт центр масс
+    // и главные оси относительно authored frame.
     double mass = 1.0;
     Vec3 inertia{1.0, 1.0, 1.0};
+    Pose3 inertia_frame_local{};
 
     // Аккумуляторы сил
     Vec3 force;
@@ -53,13 +57,26 @@ public:
     static RigidBody create_sphere(double radius, double m,
                                    const Pose3& p = Pose3(), bool stat = false);
 
+    // Создать тело из mass properties и мировой позы authored shape frame.
+    static RigidBody create_with_mass_properties(
+        const MassProperties& properties,
+        const Pose3& shape_pose = Pose3(),
+        bool stat = false);
+
+    // Мировая поза authored shape frame. В отличие от pose, translation здесь
+    // является entity/shape origin, а не центром масс.
+    Pose3 shape_pose() const;
+
+    // Обновить authored shape pose, сохранив локальную inertia frame.
+    void set_shape_pose(const Pose3& shape_pose);
+
     double inv_mass() const;
 
     Vec3 inv_inertia() const;
 
     Vec3 position() const;
 
-    // I_world^-1 = R * diag(I^-1_body) * R^T
+    // I_world^-1 = R_principal * diag(I^-1) * R_principal^T
     void world_inertia_inv(double* Iinv) const;
 
     Vec3 apply_inv_inertia_world(const Vec3& v) const;
