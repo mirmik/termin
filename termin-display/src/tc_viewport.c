@@ -31,6 +31,7 @@ struct tc_viewport {
 };
 
 static tc_pool g_pool;
+static tc_pool_generation_epoch g_generation_epoch;
 static bool g_pool_initialized = false;
 
 static char* tc_strdup_local(const char* s) {
@@ -82,6 +83,7 @@ void tc_viewport_pool_init(void) {
         .initial_generation = 0u,
         .allocate_low_indices_first = true,
         .name = "tc_viewport_pool",
+        .generation_epoch = &g_generation_epoch,
     };
     if (!tc_pool_init_ex(
             &g_pool,
