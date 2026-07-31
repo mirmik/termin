@@ -56,6 +56,7 @@ extern "C" {
 #include <termin_collision/termin_collision.h>
 #include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/resources/tc_shader_program_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/resources/tc_texture_registry.h>
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
@@ -117,6 +118,7 @@ void tc_init(void) {
     tc_mesh_init();
     tc_texture_init();
     tc_shader_init();
+    tc_shader_program_init();
     tc_skeleton_init();
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
     tc_animation_init();
@@ -151,6 +153,9 @@ void tc_shutdown(void) {
     tc_animation_shutdown();
 #endif
     tc_skeleton_shutdown();
+    // Programs own phase shader handles, so release their payloads while the
+    // shader registry generation they refer to is still alive.
+    tc_shader_program_shutdown();
     tc_shader_shutdown();
     tc_texture_shutdown();
     tc_mesh_shutdown();

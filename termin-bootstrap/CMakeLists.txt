@@ -178,14 +178,21 @@ if(TERMIN_BUILD_TESTS)
     add_executable(termin_bootstrap_scene_extension_lifecycle_test
         tests/test_scene_extension_lifecycle.cpp
     )
+    add_executable(termin_bootstrap_shader_program_lifecycle_test
+        tests/test_shader_program_lifecycle.cpp
+    )
     target_link_libraries(termin_bootstrap_explicit_pass_test PRIVATE termin_bootstrap)
     target_link_libraries(termin_bootstrap_scene_extension_lifecycle_test PRIVATE
         termin_bootstrap
         termin_engine::termin_engine
     )
+    target_link_libraries(termin_bootstrap_shader_program_lifecycle_test PRIVATE
+        termin_bootstrap
+    )
     set_target_properties(
         termin_bootstrap_explicit_pass_test
         termin_bootstrap_scene_extension_lifecycle_test
+        termin_bootstrap_shader_program_lifecycle_test
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
@@ -196,6 +203,10 @@ if(TERMIN_BUILD_TESTS)
     add_test(
         NAME termin_bootstrap_scene_extension_lifecycle_test
         COMMAND termin_bootstrap_scene_extension_lifecycle_test
+    )
+    add_test(
+        NAME termin_bootstrap_shader_program_lifecycle_test
+        COMMAND termin_bootstrap_shader_program_lifecycle_test
     )
     termin_label_tests_in_directory("termin-bootstrap")
 endif()
