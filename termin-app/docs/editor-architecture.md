@@ -106,6 +106,26 @@ UI-neutral models и операции остаются в `editor_core`, нап�
 `FPS Limit = 0` означает Unlimited. Значение по умолчанию — 60 FPS: при
 отсутствии repaint VSync сам по себе не обязан ограничивать пустой editor tick.
 
+### Frame Profiler sources
+
+`FrameProfilerController` является только presentation-слоем timeline, дерева
+секций, статистики и навигации по hitch-кадрам. Данные поступают через
+`IFrameProfilerSource` как `shared_ptr<const FrameProfilerSnapshot>`: snapshot
+целиком владеет bounded-набором кадров и секций и не ссылается на mutable
+profiler storage.
+
+Snapshot содержит identity источника и session, текущий status, динамические
+capabilities, кадры и явные gap records. Disconnect меняет status и добавляет
+gap, но может сохранить последний bounded frame set; новая session identity
+сбрасывает selection, тогда как disconnect той же session — нет. Доступность
+capture/detail/clear/include-UI команд определяется только capabilities, без
+ветвлений local/remote в presentation-коде.
+
+Локальная реализация копирует зарегистрированный `tc_profiler_capture` в этот
+контракт не чаще controller refresh cadence. Будущий сетевой receiver обязан
+публиковать тот же immutable snapshot и самостоятельно менять capabilities при
+изменении доступности удалённых controls.
+
 ## SDK и тестовое окружение
 
 Редактор запускается из проверенного SDK:
