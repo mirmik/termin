@@ -12,6 +12,7 @@ GUARD_TEST_MAIN();
 #include <vector>
 
 #include <termin/entity/entity.hpp>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/image/image_decode.hpp>
 #include <termin/collision/collision_world.hpp>
 #include <components/collider_component.hpp>
@@ -21,6 +22,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_shader_program_handle.hpp>
@@ -468,18 +470,22 @@ bool collect_test_light(tc_component* c, void* user_data) {
 
 } // namespace
 
-TEST_CASE("RuntimePackageLoader attaches host scene extensions before component deserialization") {
+TEST_CASE("RuntimePackageLoader attaches rendering host extensions before component deserialization") {
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
     write_text(root / "scene.json", collision_scene_json());
 
     termin::runtime::RuntimePackageLoadOptions options;
-    options.scene_extensions = {TC_SCENE_EXT_TYPE_COLLISION_WORLD};
+    termin::bootstrap::bootstrap_runtime();
+    options.scene_extensions = termin::default_scene_extension_ids();
     termin::runtime::RuntimePackageLoadResult result =
         termin::runtime::load_runtime_package(root.string(), options);
 
     REQUIRE(result.ok);
     REQUIRE(result.scene.valid());
+    CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_RENDER_MOUNT));
+    CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_RENDER_STATE));
+    CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_COLLISION_WORLD));
     termin::collision::CollisionWorld* world =
         termin::collision::CollisionWorld::from_scene(result.scene.handle());
     REQUIRE(world != nullptr);

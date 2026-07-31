@@ -35,6 +35,7 @@
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/runtime/runtime_package.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/ui/ui_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
@@ -588,7 +589,9 @@ struct OpenXRRuntimeScene {
         tgfx::set_builtin_shader_root(nullptr);
         engine = std::make_unique<termin::EngineCore>();
         termin::runtime::RuntimePackageLoader loader;
-        package = loader.load(asset_root);
+        termin::runtime::RuntimePackageLoadOptions load_options;
+        load_options.scene_extensions = termin::default_scene_extension_ids();
+        package = loader.load(asset_root, load_options);
         if (!package.ok || !package.scene.valid()) {
             log_error("OpenXR scene", (std::string("runtime package load failed: ") + package.message).c_str());
             tc_log_error("[OpenXR scene] runtime package load failed: %s", package.message.c_str());
