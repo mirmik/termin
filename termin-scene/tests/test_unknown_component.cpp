@@ -999,8 +999,7 @@ int test_component_is_a_after_rejected_parent_cycle() {
         root_name,
         "termin-scene-cycle-test",
         child_name,
-        nullptr,
-        nullptr,
+        tc_runtime_owned_factory{},
         TC_CXX_COMPONENT,
         true,
         true);

@@ -19,8 +19,7 @@ static void* g_prepare_unload_user_data = NULL;
 #define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 
 typedef struct tc_component_facet_payload {
-    tc_component_factory factory;
-    void* factory_userdata;
+    tc_runtime_owned_factory factory;
     tc_component_kind kind;
     bool is_abstract;
     const char* display_name;
@@ -75,14 +74,14 @@ static void destroy_component_facet(void* payload) {
     if (!facet) {
         return;
     }
+    tc_runtime_owned_factory_reset(&facet->factory);
     free(facet->requirements);
     free(facet);
 }
 
 bool tc_component_type_descriptor_add_facet(
     tc_runtime_type_descriptor* descriptor,
-    tc_component_factory factory,
-    void* factory_userdata,
+    tc_runtime_owned_factory* factory,
     tc_component_kind kind,
     bool is_abstract,
     const char* display_name,
@@ -92,27 +91,32 @@ bool tc_component_type_descriptor_add_facet(
     const tc_component_cap_id* capabilities,
     size_t capability_count
 ) {
+    tc_runtime_owned_factory owned_factory =
+        tc_runtime_owned_factory_take(factory);
     if (!descriptor) {
         tc_log(TC_LOG_ERROR, "[ComponentRegistry] cannot attach component facet to null descriptor");
+        tc_runtime_owned_factory_reset(&owned_factory);
         return false;
     }
-    if (!is_abstract && !factory) {
+    if (!is_abstract && !owned_factory.create) {
         tc_log(TC_LOG_ERROR, "[ComponentRegistry] concrete component descriptor requires a factory");
+        tc_runtime_owned_factory_reset(&owned_factory);
         return false;
     }
     if ((requirement_count > 0 && !requirements) ||
         (capability_count > 0 && !capabilities)) {
         tc_log(TC_LOG_ERROR, "[ComponentRegistry] staged component arrays must not be null");
+        tc_runtime_owned_factory_reset(&owned_factory);
         return false;
     }
     tc_component_facet_payload* facet =
         (tc_component_facet_payload*)calloc(1, sizeof(*facet));
     if (!facet) {
         tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to allocate staged component facet");
+        tc_runtime_owned_factory_reset(&owned_factory);
         return false;
     }
-    facet->factory = factory;
-    facet->factory_userdata = factory_userdata;
+    facet->factory = tc_runtime_owned_factory_take(&owned_factory);
     facet->kind = kind;
     facet->is_abstract = is_abstract;
     facet->display_name = display_name && display_name[0] ? tc_intern_string(display_name) : NULL;
@@ -324,13 +328,13 @@ tc_component* tc_component_registry_create(const char* type_name) {
         tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type '%s' is abstract!", type_name);
         return NULL;
     }
-    if (!facet->factory) {
+    if (!facet->factory.create) {
         tc_log(TC_LOG_ERROR, "[tc_component_registry_create] type '%s' has no factory!", type_name);
         return NULL;
     }
 
-    tc_component* c = facet->factory(facet->factory_userdata);
-    if (!c) {
+    tc_component* c = NULL;
+    if (!tc_runtime_owned_factory_invoke(&facet->factory, NULL, &c) || !c) {
         tc_log(TC_LOG_ERROR, "[tc_component_registry_create] factory for '%s' returned NULL!", type_name);
         return NULL;
     }
