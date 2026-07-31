@@ -22,6 +22,11 @@ typedef struct termin_android_config {
     // Explicit development gate for the process-global native profiler.
     // Ordinary packaged applications leave this disabled.
     int32_t enable_profiler;
+    // Remote transport is a separate development-only gate so cadence-only
+    // capture does not pay for the legacy process-global section profiler.
+    int32_t enable_remote_profiler;
+    uint16_t remote_profiler_port;
+    const char* remote_profiler_token;
 } termin_android_config;
 
 typedef struct termin_android_presentation_metrics {

@@ -375,6 +375,7 @@ TEST_CASE("Target streams real profiler frames and acknowledges frame-thread "
   CHECK(saw_start_ack);
   CHECK(saw_dictionary);
   CHECK(saw_frame);
+  CHECK(target.status().transmitted_bytes > 0);
 
   REQUIRE(send_message(client,
                        Control{12, ControlKind::pause_capture, false, 0}, 4));

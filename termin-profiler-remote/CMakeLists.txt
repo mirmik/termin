@@ -63,6 +63,16 @@ if(TERMIN_BUILD_TESTS)
     termin_set_rpath_test(termin_profiler_remote_target_service_test)
     add_test(NAME termin_profiler_remote_target_service_test
         COMMAND termin_profiler_remote_target_service_test)
+
+    if(NOT ANDROID)
+        add_executable(termin_profiler_remote_smoke_client
+            tests/remote_smoke_client.cpp
+        )
+        target_link_libraries(termin_profiler_remote_smoke_client PRIVATE
+            termin_profiler_remote
+        )
+        termin_set_rpath_test(termin_profiler_remote_smoke_client)
+    endif()
     termin_label_tests_in_directory("termin-profiler-remote")
 endif()
 

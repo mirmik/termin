@@ -86,6 +86,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_render_passes REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_profiler_remote termin_profiler_remote::termin_profiler_remote)
+else()
+    find_package(termin_profiler_remote REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -114,6 +119,7 @@ termin_set_rpath_lib(termin_android)
 target_compile_definitions(termin_android
     PRIVATE
         TERMIN_ANDROID_EXPORTS
+        TERMIN_ANDROID_ABI="${ANDROID_ABI}"
         TGFX2_HAS_VULKAN
         VK_USE_PLATFORM_ANDROID_KHR
 )
@@ -147,6 +153,7 @@ target_link_libraries(termin_android
         termin_components_render::termin_components_render
         termin_components_ui::termin_components_ui
         termin_render_passes::termin_render_passes
+        termin_profiler_remote::termin_profiler_remote
     PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}

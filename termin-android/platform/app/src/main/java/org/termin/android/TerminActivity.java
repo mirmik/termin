@@ -34,6 +34,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private SurfaceView surfaceView;
     private boolean surfaceAlive = false;
     private boolean renderLoopRunning = false;
+    private boolean nativeInitialized = false;
     private int renderFrameLogCounter = 0;
     private WindowInsets currentWindowInsets;
 
@@ -63,13 +64,36 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
         copyAssetTree("", getFilesDir());
-        nativeInitialize(
+        boolean debuggable =
+                (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        boolean enableProfiler =
+                debuggable && getIntent().getBooleanExtra("termin.profiler", false);
+        boolean remoteRequested =
+                getIntent().getBooleanExtra("termin.profiler.remote", false);
+        int remoteProfilerPort =
+                getIntent().getIntExtra("termin.profiler.port", 46051);
+        String remoteProfilerToken =
+                getIntent().getStringExtra("termin.profiler.token");
+        boolean enableRemoteProfiler = debuggable && remoteRequested
+                && remoteProfilerPort > 0 && remoteProfilerPort <= 65535
+                && remoteProfilerToken != null && !remoteProfilerToken.isEmpty();
+        if (remoteRequested && !enableRemoteProfiler) {
+            Log.e(TAG, "remote profiler requires a debuggable APK, port 1..65535, and token");
+        }
+        nativeInitialized = nativeInitialize(
                 getFilesDir().getAbsolutePath(),
                 getFilesDir().getAbsolutePath(),
                 getApplicationInfo().nativeLibraryDir,
-                (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                        && getIntent().getBooleanExtra("termin.profiler", false)
+                enableProfiler,
+                enableRemoteProfiler,
+                remoteProfilerPort,
+                remoteProfilerToken == null ? "" : remoteProfilerToken
         );
+        if (!nativeInitialized) {
+            Log.e(TAG, "native runtime initialization failed");
+            finish();
+            return;
+        }
 
         surfaceView = new SurfaceView(this);
         surfaceView.setZOrderOnTop(true);
@@ -103,7 +127,10 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     protected void onDestroy() {
         Log.i(TAG, "onDestroy");
         stopRenderLoop();
-        nativeShutdown();
+        if (nativeInitialized) {
+            nativeShutdown();
+            nativeInitialized = false;
+        }
         super.onDestroy();
     }
 
@@ -136,11 +163,14 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         nativeSurfaceDestroyed();
     }
 
-    private static native void nativeInitialize(
+    private static native boolean nativeInitialize(
             String appDataDir,
             String assetRoot,
             String nativeLibDir,
-            boolean enableProfiler);
+            boolean enableProfiler,
+            boolean enableRemoteProfiler,
+            int remoteProfilerPort,
+            String remoteProfilerToken);
     private static native void nativeShutdown();
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);

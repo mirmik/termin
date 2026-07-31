@@ -24,18 +24,23 @@ void release_jstring_chars(JNIEnv* env, jstring value, const char* chars) {
 
 } // namespace
 
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_org_termin_android_TerminActivity_nativeInitialize(
     JNIEnv* env,
     jclass,
     jstring app_data_dir,
     jstring asset_root,
     jstring native_lib_dir,
-    jboolean enable_profiler
+    jboolean enable_profiler,
+    jboolean enable_remote_profiler,
+    jint remote_profiler_port,
+    jstring remote_profiler_token
 ) {
     const char* app_data_dir_chars = jstring_chars(env, app_data_dir);
     const char* asset_root_chars = jstring_chars(env, asset_root);
     const char* native_lib_dir_chars = jstring_chars(env, native_lib_dir);
+    const char* remote_profiler_token_chars =
+        jstring_chars(env, remote_profiler_token);
 
     __android_log_print(
         ANDROID_LOG_INFO,
@@ -50,14 +55,23 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     config.asset_root = asset_root_chars;
     config.native_lib_dir = native_lib_dir_chars;
     config.enable_profiler = enable_profiler == JNI_TRUE ? 1 : 0;
+    config.enable_remote_profiler =
+        enable_remote_profiler == JNI_TRUE ? 1 : 0;
+    config.remote_profiler_port =
+        static_cast<uint16_t>(remote_profiler_port);
+    config.remote_profiler_token = remote_profiler_token_chars;
 
-    if (!termin_android_initialize(&config)) {
+    const bool initialized = termin_android_initialize(&config) != 0;
+    if (!initialized) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "termin_android_initialize failed");
     }
 
     release_jstring_chars(env, native_lib_dir, native_lib_dir_chars);
     release_jstring_chars(env, asset_root, asset_root_chars);
     release_jstring_chars(env, app_data_dir, app_data_dir_chars);
+    release_jstring_chars(
+        env, remote_profiler_token, remote_profiler_token_chars);
+    return initialized ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
