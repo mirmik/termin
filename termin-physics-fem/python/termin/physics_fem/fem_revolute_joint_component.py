@@ -7,6 +7,7 @@ import numpy as np
 
 from termin.scene import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
+from termin.geombase import Vec3
 from termin.inspect import InspectField
 from tcbase import log
 
@@ -80,8 +81,11 @@ class FEMRevoluteJointComponent(PythonComponent):
 
     def _compute_joint_point(self, entity_a: "Entity") -> np.ndarray:
         """Вычислить точку шарнира в мировых координатах."""
+        offset = self.joint_offset_in_body_a
         return np.asarray(
-            entity_a.transform.transform_point(self.joint_offset_in_body_a),
+            entity_a.transform.transform_point(
+                Vec3(float(offset[0]), float(offset[1]), float(offset[2]))
+            ),
             dtype=np.float64,
         )
 

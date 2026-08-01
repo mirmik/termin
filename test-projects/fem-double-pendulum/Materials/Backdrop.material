@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-double-pendulum-backdrop-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.055, 0.075, 0.12, 1.0],
+    "u_metallic": 0.02,
+    "u_roughness": 0.9,
+    "u_diffuse_mul": 1.0
+  }
+}
