@@ -44,5 +44,10 @@ multibody modules. In particular, the old 3D `RevoluteJoint3D` is classified
 as a point/ball joint because it does not constrain relative axes. The 3D
 fixtures also certify off-center spatial inertia, world-frame gravity/free
 fall, quaternion normalization, fixed-point behavior, a true five-row fixed
-hinge, and a two-link 3D revolute pendulum. Hinge bounds cover anchor/axis
-drift, the single allowed twist DOF, reaction work along that axis, and energy.
+hinge, and a two-link 3D revolute pendulum. The JSON stores initial 3D velocity
+fixtures in world coordinates for language-neutral authoring; the native test
+adapter converts them to the right-trivialized body-local state used by the C++
+model. Native twists, accelerations, wrenches, and reactions share
+`termin::Screw3` (`ang`, then `lin`); only the dense solver boundary maps that
+pair to `[linear, angular]` DOF rows. Hinge bounds cover anchor/axis drift, the
+single allowed twist DOF, reaction work along that axis, and energy.

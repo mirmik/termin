@@ -1,7 +1,7 @@
 # termin-qopt C++ migration intent
 
 Дата: 2026-05-27
-Обновлено: 2026-07-28
+Обновлено: 2026-08-02
 
 Статус: native foundation добавлен. Это не финальная спецификация solver API, а
 рабочая рамка для переноса `termin-qopt` из Python/NumPy/SciPy в C++.
@@ -34,13 +34,23 @@
 - double pendulum проходит общий JSON oracle из Python и C++, а внешний
   installed-SDK consumer не видит Eigen и собранные матрицы;
 - добавлена maximal-coordinate 3D foundation: principal-axis spatial inertia,
-  world-frame `[linear, angular]` ordering, quaternion exponential update,
-  fixed и two-body point/ball joints;
+  body-fixed `[linear, angular]` ordering, SE(3) exponential update, fixed и
+  two-body point/ball joints;
 - добавлены настоящие fixed/two-body 3D revolute joints: три anchor-строки и
   две axis-alignment строки оставляют ровно одну относительную twist DOF;
+- добавлен native `DynamicsContribution` lifecycle: каждый участник сам
+  регистрирует topology blocks, собирает численный вклад для dynamics и обеих
+  projection phases, принимает решение и участвует в commit/rollback шага;
+- `Multibody3DSystem` является именем generic contribution collector: тела и
+  joints представлены отдельными публичными contributions, а общий
+  `DynamicsSystem` единолично
+  владеет workspace, фазами solve/integrate/project и транзакцией шага;
+- FEM scene components перенесены в native модуль
+  `termin_components_physics_fem`; существующий double-pendulum проект не
+  загружает Python-модуль и NumPy во время исполнения;
 - старый `RevoluteJoint3D` не переносится под прежней семантикой: его
   point/ball поведение соответствует `PointJoint3D`, а новый
-  `RevoluteJoint3DHandle` означает axis-constrained шарнир;
+  `RevoluteJoint3DContribution` означает axis-constrained шарнир;
 - Python реализация пока остаётся reference implementation.
 
 Инициатива ведётся в Kanboard swimlane `Native QOpt, FEM & Robotics`,
@@ -100,9 +110,10 @@ Eigen не должен становиться публичным SDK API.
 6. [x] Перенести nullspace helpers: QR basis first, SVD basis only where needed.
 7. [x] Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
 8. [~] Перенести multibody/FEM assembler поверх того же solver API:
-   dense block/dynamics assembly, 2D double pendulum и 3D point-joint
-   foundation готовы; FEM и axis-constrained 3D joints остаются отдельными
-   следующими срезами.
+   dense block/dynamics assembly, contribution orchestration, 2D double
+   pendulum, 3D bodies, point joints, axis-constrained revolute joints и
+   native scene vertical slice готовы; общий FEM element catalog и sparse
+   assembly остаются следующими срезами.
 9. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
 10. Отдельно оценить sparse backend для больших FEM-систем.
 
@@ -129,6 +140,11 @@ Hard constraints накапливаются, а после каждого уро
 не меняет достигнутые старшие task values. Если nullspace исчерпан, новые
 несовместимые constraints дают `Infeasible/LevelSolveFailure`, а не молча
 игнорируются. Output buffers изменяются только при полном `Optimal`.
+
+Это описание фиксирует математический контракт, а не production readiness.
+HQP пока не подключён к `DynamicsSystem` или сценовым компонентам. Реализованные
+возможности, тестовое покрытие и известные ограничения перечислены отдельно в
+[HQP_STATUS.md](HQP_STATUS.md).
 
 ## Provisional equality-QP contract
 
@@ -207,6 +223,14 @@ assembler только проверяет shape/stride/finite values и дете
 образом FEM, robotics и multibody могут переиспользовать один assembly/solver
 слой, не завися от Eigen в публичном API.
 
+`DynamicsSystem` является единственным оркестратором шага. Он владеет
+`DynamicsContribution`, один раз фиксирует topology и workspace, а затем
+последовательно выполняет acceleration solve, integration, position projection
+и velocity projection. Очистка общей матрицы выполняется ровно один раз перед
+фазой; contributions только складывают свои блоки и не могут стереть вклад
+соседа. Snapshot/rollback также входят в контракт, поэтому неудачный solve или
+projection не оставляет частично обновлённое состояние.
+
 `Multibody2DSystem` — первый пользователь этого слоя. Он использует world-frame
 maximal velocities `[vₓ, vᵧ, ω]`, spatial inertia с локальным центром масс,
 gravity/external loads, fixed-point и revolute constraints. Шаг состоит из
@@ -218,17 +242,28 @@ typed handles. Ни `M`, ни `J`, ни Eigen не нужны обычному c
 Модель остаётся отдельной от игровой `termin-physics`: общий контракт между
 движками появится только при доказанном runtime-сценарии.
 
-`Multibody3DSystem` продолжает ту же maximal-coordinate модель с шестью DOF на
-тело в порядке `[vₓ,vᵧ,v_z,ωₓ,ωᵧ,ω_z]`. `Pose3` и явные linear/angular поля
-задают семантику; физический layout `Screw3` не используется как неявный
-buffer contract. Spatial inertia хранится как масса, principal moments и
-локальный inertia frame, где translation задаёт COM, а quaternion — главные
-оси. Публичный helper записывает 6x6 матрицу в checked dense view без Eigen.
+`RigidBody3DContribution` задаёт maximal-coordinate тело с шестью DOF.
+`Pose3` задаёт конфигурацию, а единый `Screw3` — twist, acceleration, wrench и
+reaction. Его `ang/lin` поля всегда преобразуются совместно: twists используют
+adjoint, wrenches — coadjoint. Только граница dense assembler явно переводит
+`Screw3` в матричный порядок `[vₓ,vᵧ,v_z,ωₓ,ωᵧ,ω_z]`; физический layout типа
+не переинтерпретируется как solver buffer. Spatial inertia хранится как масса,
+principal moments и локальный inertia frame, где translation задаёт COM, а
+quaternion — главные оси. Публичный helper записывает 6x6 матрицу в checked
+dense view без Eigen.
 
-World-frame bias выводится в той же системе координат, что и generalized
-velocities: центростремительный член для COM и `ω×(Iω)` для центральной
-инерции. Body-frame spatial cross-force formula сюда напрямую неприменима.
-Orientation интегрируется левым quaternion exponential update и нормализуется.
+Скорости и ускорения тела right-trivialized и выражены в его локальной системе.
+Поэтому spatial inertia постоянна, а нагрузка содержит полный body-frame bias
+`ad*_V M V`. Gravity и внешние world-frame wrenches преобразуются в локальный
+frame тела на границе contribution. Constraints оставляют строки в мировом
+frame, но их столбцы отображают локальные twists каждого тела.
+
+Конфигурация обновляется правой экспонентой SE(3): `T[n+1] = T[n] Exp(h V)`.
+Позиционная поправка SHAKE, найденная как endpoint-local tangent `δξ`, не
+складывается с midpoint velocity как евклидов вектор. Contribution вычисляет
+`Log(Exp(h V) Exp(δξ)) / h`, что согласованно переносит её через `dexp`.
+Второй velocity-Verlet kick решается неявно по endpoint velocity, поскольку
+body bias зависит от скорости; это восстанавливает временную симметрию шага.
 Fixed/two-body point joints дают три translational constraints и оставляют все
 три относительных вращения свободными. Fixed/two-body revolute joints добавляют
 две независимые строки выравнивания локальных hinge axes. Их position residual
@@ -237,9 +272,19 @@ acceleration RHS включает centripetal и смешанный velocity bia
 reaction для revolute разделена на anchor force и поперечный constraint torque;
 его проекция на разрешённую hinge axis равна нулю.
 
-Общий multibody oracle задаёт world-coordinate convention, `J a = γ`, знак
+Публичный `Multibody3DSystem` не знает конкретных типов модели и является
+semantic alias общего `DynamicsSystem`. Consumer явно создаёт и передаёт ему
+`RigidBody3DContribution`, `ForceOnBody3DContribution` и нужные joint
+contributions. Ссылки между joint и телами принадлежат самим contributions;
+collector видит только базовый `DynamicsContribution`. Такая граница
+позволяет позднее добавить reduced articulation как ещё один contribution, не
+переписывая текущий маятник и не создавая второй мировой solver API.
+
+Общий multibody oracle задаёт world-frame authoring fixtures, `J a = γ`, знак
 reactions, gravity convention, quaternion equivalence и допустимые invariant
-bounds для 2D и 3D. Старый Python
+bounds для 2D и 3D. В нативном 3D fixture velocities преобразуются на границе
+в right-trivialized body-local state; это не возвращает solver к world-frame
+generalized coordinates. Старый Python
 `RevoluteJoint3D` классифицирован как reference-only/retire-name: фактически
 это point/ball joint. Его данные можно перенести в `PointJoint3D`; для нового
 native revolute вызывающий код обязан дополнительно задать ненулевые локальные

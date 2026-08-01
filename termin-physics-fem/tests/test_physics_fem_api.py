@@ -1,13 +1,9 @@
-from termin.physics_fem import (
-    FEMFixedJointComponent,
-    FEMPhysicsWorldComponent,
-    FEMRevoluteJointComponent,
-    FEMRigidBodyComponent,
-)
+import termin.physics_fem as physics_fem
 
 
-def test_physics_fem_exports_canonical_classes() -> None:
-    assert FEMFixedJointComponent.__module__.startswith("termin.physics_fem.")
-    assert FEMPhysicsWorldComponent.__module__.startswith("termin.physics_fem.")
-    assert FEMRevoluteJointComponent.__module__.startswith("termin.physics_fem.")
-    assert FEMRigidBodyComponent.__module__.startswith("termin.physics_fem.")
+def test_python_package_exports_reference_classes_only() -> None:
+    assert hasattr(physics_fem, "ReferenceFEMRigidBodyComponent")
+    assert hasattr(physics_fem, "ReferenceFEMFixedJointComponent")
+    assert hasattr(physics_fem, "ReferenceFEMRevoluteJointComponent")
+    assert hasattr(physics_fem, "ReferenceFEMPhysicsWorldComponent")
+    assert not hasattr(physics_fem, "FEMRigidBodyComponent")

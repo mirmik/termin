@@ -11,7 +11,7 @@
       "content": {
         "entry_scene": "Scenes/Main.scene",
         "scenes": ["Scenes/Main.scene"],
-        "modules": ["fem_double_pendulum"],
+        "modules": [],
         "python": {
           "requirements": []
         },

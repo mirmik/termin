@@ -1,14 +1,14 @@
 # FEM Double Pendulum
 
-This complete Termin project exercises the experimental Python FEM/QP physics
-stack through `termin-physics-fem`. Two rigid links are connected by a point
-joint; the first link is pinned to a fixed world anchor. The bodies use rigid
-entity transforms, while their visible dimensions live in mesh offsets, as
-required by the FEM transform contract.
+This complete Termin project exercises the native C++ QP multibody stack
+through the built-in `FEM*Component` factories. Two rigid links are connected
+by an axial revolute joint; the first link is pinned to a fixed world anchor.
+The bodies use rigid entity transforms, while their visible dimensions live in
+mesh offsets, as required by the FEM transform contract.
 
-The current `FEMRevoluteJointComponent` constrains the shared point but not a
-rotation axis. The authored initial state is planar, so it behaves as a planar
-double pendulum unless disturbed out of plane.
+`FEMRevoluteJointComponent` declares the Y hinge axis in body-A coordinates,
+so the double pendulum remains in the authored XZ plane under off-axis
+perturbations as well as under planar initial conditions.
 
 ## Open in the editor
 
@@ -32,28 +32,21 @@ link at -25 degrees, which produces an immediately visible nonlinear motion.
   --project test-projects/fem-double-pendulum
 ```
 
-The selected project module declares `termin-physics-fem` and its QP
-dependencies for a future portable desktop bundle. An actual build is
-currently an intentional failing gate:
+The project needs no Python module or NumPy runtime dependency. The four scene
+component types are native factories registered by Termin bootstrap, so the
+desktop package is expected to build directly:
 
 ```bash
 ./sdk/bin/termin_builder build linux-dev \
   --project test-projects/fem-double-pendulum
 ```
 
-Runtime package validation currently accepts only registered C++ component
-factories. It runs before the selected Python module closure is loaded, so it
-rejects the four `FEM*Component` types even though the Python-enabled player
-can load them. This missing build/runtime capability contract is tracked on
-the Termin task board as `#1230`.
-
 ## Manual verification
 
 - Enter Play mode and let the scene run for at least 20 seconds.
 - The fixed gold anchor and both touching link endpoints should not separate.
 - The links should remain in the XZ plane in the undisturbed authored setup.
-- Check the log for module loading, unknown-component, singular-matrix, and FEM
-  transform-contract errors.
+- Check the log for unknown-component, native-QP step, constraint-projection,
+  and FEM transform-contract errors.
 
-The current point-only revolute constraint and its inactive visualization code
-are tracked separately as `#1228` and `#1229`.
+Joint visualization remains separate editor work tracked as `#1229`.

@@ -1,0 +1,47 @@
+cmake_minimum_required(VERSION 3.16)
+project(termin_components_physics_fem LANGUAGES C CXX)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt)
+    if(COMMAND termin_require_package)
+        if(_dep STREQUAL "termin_base")
+            termin_require_package(termin_base tcbase::termin_base)
+        elseif(_dep STREQUAL "termin_scene")
+            termin_require_package(termin_scene termin_scene::termin_scene)
+        elseif(_dep STREQUAL "termin_inspect")
+            termin_require_package(termin_inspect termin_inspect::termin_inspect)
+        elseif(_dep STREQUAL "termin_qopt")
+            termin_require_package(termin_qopt termin_qopt::termin_qopt)
+        endif()
+    else()
+        find_package(${_dep} REQUIRED)
+    endif()
+endforeach()
+
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
+
+termin_add_module(
+    NAME termin_components_physics_fem
+    NAMESPACE termin_components_physics_fem::
+    SOURCES
+        src/components.cpp
+        src/components_bootstrap.cpp
+    PUBLIC_DEPS
+        tcbase::termin_base
+        termin_scene::termin_scene
+        termin_inspect::termin_inspect
+        termin_qopt::termin_qopt
+    FIND_DEPS termin_base termin_scene termin_inspect termin_qopt
+    INSTALL_HEADERS include/termin
+)
+
+target_include_directories(termin_components_physics_fem PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+if(MSVC)
+    target_compile_options(termin_components_physics_fem PRIVATE /wd4251 /wd4275)
+endif()

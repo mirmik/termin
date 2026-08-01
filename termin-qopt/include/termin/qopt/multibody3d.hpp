@@ -1,236 +1,310 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <memory>
+#include <string>
 #include <string_view>
 
 #include <termin/geom/pose3.hpp>
+#include <termin/geom/screw3.hpp>
 #include <termin/qopt/dynamics.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
 
-namespace termin::qopt {
+namespace termin::qopt
+{
 
-enum class Multibody3DDiagnostic : std::uint8_t {
-  None,
-  ModelFinalized,
-  ModelNotFinalized,
-  InvalidBody,
-  InvalidJoint,
-  InvalidMass,
-  InvalidInertia,
-  NonFiniteInput,
-  InvalidMatrixView,
-  DuplicateBody,
-  InvalidJointAxis,
-  InvalidTimeStep,
-  InvalidProjectionOptions,
-  AssemblyFailure,
-  DynamicsFailure,
-  PositionProjectionFailure,
-  VelocityProjectionFailure,
-  InternalFailure,
-};
+    // Multibody3DSystem deliberately knows no concrete 3D model elements. It is
+    // the generic two-pass contribution collector: topology registration
+    // happens at finalize(), numerical assembly happens for every solve phase.
+    using Multibody3DSystem = DynamicsSystem;
+    using Multibody3DStepOptions = DynamicsSystemStepOptions;
+    using Multibody3DStepResult = DynamicsSystemStepResult;
 
-[[nodiscard]] TERMIN_QOPT_API std::string_view
-multibody3d_diagnostic_name(Multibody3DDiagnostic diagnostic) noexcept;
+    enum class Multibody3DDiagnostic : std::uint8_t
+    {
+        None,
+        InvalidMass,
+        InvalidInertia,
+        NonFiniteInput,
+        InvalidMatrixView,
+        InvalidJointAxis,
+    };
 
-struct RigidBody3DHandle {
-  std::uint64_t system_id = 0;
-  std::size_t index = std::numeric_limits<std::size_t>::max();
+    [[nodiscard]] TERMIN_QOPT_API std::string_view
+    multibody3d_diagnostic_name(Multibody3DDiagnostic diagnostic) noexcept;
 
-  [[nodiscard]] constexpr bool valid() const noexcept {
-    return system_id != 0
-        && index != std::numeric_limits<std::size_t>::max();
-  }
-};
+    // Principal moments and their frame are expressed in body-local
+    // coordinates. inertia_frame_local.lin is the center of mass; .ang orients
+    // principal axes.
+    struct SpatialInertia3D
+    {
+        double mass = 1.0;
+        termin::Vec3 principal_moments = {1.0, 1.0, 1.0};
+        termin::Pose3 inertia_frame_local = termin::Pose3::identity();
+    };
 
-struct PointJoint3DHandle {
-  std::uint64_t system_id = 0;
-  std::size_t index = std::numeric_limits<std::size_t>::max();
+    [[nodiscard]] TERMIN_QOPT_API Multibody3DDiagnostic
+    write_spatial_inertia3d_matrix_world(const SpatialInertia3D& inertia,
+                                         termin::Quat body_orientation_world,
+                                         DenseMatrixView destination) noexcept;
 
-  [[nodiscard]] constexpr bool valid() const noexcept {
-    return system_id != 0
-        && index != std::numeric_limits<std::size_t>::max();
-  }
-};
+    struct RigidBody3DState
+    {
+        termin::Pose3 pose = termin::Pose3::identity();
+        // Right-trivialized body twist at the body-frame origin.
+        termin::Screw3 velocity_local = termin::Screw3::zero();
+    };
 
-struct RevoluteJoint3DHandle {
-  std::uint64_t system_id = 0;
-  std::size_t index = std::numeric_limits<std::size_t>::max();
+    // Registers one six-DOF block. Assembly contributes spatial inertia M and
+    // the gravity/velocity-bias load f. It owns state integration and
+    // projection application, but no constraints.
+    class TERMIN_QOPT_API RigidBody3DContribution final : public DynamicsContribution
+    {
+      public:
+        RigidBody3DContribution(SpatialInertia3D inertia,
+                                RigidBody3DState initial_state = {},
+                                termin::Vec3 gravity_world = termin::Vec3::zero(),
+                                std::string_view diagnostic_name = {});
 
-  [[nodiscard]] constexpr bool valid() const noexcept {
-    return system_id != 0
-        && index != std::numeric_limits<std::size_t>::max();
-  }
-};
+        [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
+        [[nodiscard]] const SpatialInertia3D& inertia() const noexcept;
+        [[nodiscard]] const RigidBody3DState& state() const noexcept;
+        [[nodiscard]] const termin::Screw3& acceleration_local() const noexcept;
+        [[nodiscard]] termin::Screw3 velocity_world() const noexcept;
+        [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
+        [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
+        [[nodiscard]] Multibody3DDiagnostic set_state(RigidBody3DState state) noexcept;
+        [[nodiscard]] Multibody3DDiagnostic
+        set_gravity_world(termin::Vec3 gravity) noexcept;
+        [[nodiscard]] double total_energy() const noexcept;
 
-template <typename Handle>
-struct Multibody3DRegistrationResult {
-  Handle handle;
-  Multibody3DDiagnostic diagnostic = Multibody3DDiagnostic::None;
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic begin_step() noexcept override;
+        void commit_step() noexcept override;
+        void rollback_step() noexcept override;
+        void
+        apply_solution(DynamicsAssemblyPhase phase,
+                       const DynamicsTopology& topology,
+                       ConstDenseVectorView dof_values,
+                       ConstDenseVectorView constraint_reactions) noexcept override;
+        AssemblyDiagnostic
+        write_velocity(const DynamicsTopology& topology,
+                       DenseVectorView destination) const noexcept override;
+        AssemblyDiagnostic
+        set_velocity(const DynamicsTopology& topology,
+                     ConstDenseVectorView velocity) noexcept override;
+        AssemblyDiagnostic
+        set_trial_configuration(const DynamicsTopology& topology,
+                                ConstDenseVectorView midpoint_velocity,
+                                double time_step) noexcept override;
+        AssemblyDiagnostic write_corrected_midpoint_velocity(
+            const DynamicsTopology& topology,
+            ConstDenseVectorView midpoint_velocity,
+            ConstDenseVectorView trial_tangent_correction,
+            double time_step,
+            DenseVectorView destination) const noexcept override;
 
-  [[nodiscard]] constexpr bool ok() const noexcept {
-    return diagnostic == Multibody3DDiagnostic::None;
-  }
-};
+      private:
+        SpatialInertia3D inertia_;
+        RigidBody3DState state_;
+        termin::Screw3 acceleration_local_ = termin::Screw3::zero();
+        termin::Vec3 gravity_world_;
+        std::string diagnostic_name_;
+        DynamicsDofHandle dofs_;
+        Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
+        RigidBody3DState state_snapshot_;
+        termin::Screw3 acceleration_snapshot_ = termin::Screw3::zero();
+        bool snapshot_ready_ = false;
+    };
 
-// Principal moments and their frame are expressed in body-local coordinates.
-// inertia_frame_local.lin is the center of mass; .ang orients principal axes.
-struct SpatialInertia3D {
-  double mass = 1.0;
-  termin::Vec3 principal_moments = {1.0, 1.0, 1.0};
-  termin::Pose3 inertia_frame_local = termin::Pose3::identity();
-};
+    // Adds an independently mutable world-frame wrench f to an existing body
+    // DOF block. It owns no variables and therefore registers no topology
+    // blocks.
+    class TERMIN_QOPT_API ForceOnBody3DContribution final : public DynamicsContribution
+    {
+      public:
+        explicit ForceOnBody3DContribution(RigidBody3DContribution& body,
+                                           termin::Screw3 wrench_world = {}) noexcept;
 
-// Writes the 6x6 spatial inertia about the body origin in generalized ordering
-// [linear_world(3), angular_world(3)].
-[[nodiscard]] TERMIN_QOPT_API Multibody3DDiagnostic
-write_spatial_inertia3d_matrix_world(
-    const SpatialInertia3D& inertia,
-    termin::Quat body_orientation_world,
-    DenseMatrixView destination
-) noexcept;
+        void set_wrench_world(termin::Screw3 wrench) noexcept;
+        [[nodiscard]] const termin::Screw3& wrench_world() const noexcept;
 
-struct RigidBody3DState {
-  termin::Pose3 pose = termin::Pose3::identity();
-  termin::Vec3 linear_velocity_world = termin::Vec3::zero();
-  termin::Vec3 angular_velocity_world = termin::Vec3::zero();
-};
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
 
-struct RigidBody3DAcceleration {
-  termin::Vec3 linear_world = termin::Vec3::zero();
-  termin::Vec3 angular_world = termin::Vec3::zero();
-};
+      private:
+        RigidBody3DContribution* body_;
+        termin::Screw3 wrench_world_;
+    };
 
-// Persistent external wrench about the body-frame origin, expressed in world
-// coordinates. Gravity is supplied separately to step().
-struct RigidBody3DWrench {
-  termin::Vec3 force_world = termin::Vec3::zero();
-  termin::Vec3 torque_about_origin_world = termin::Vec3::zero();
-};
+    // Three equations constrain a body-local point to a fixed world point:
+    // J [a, alpha] = gamma. All body rotations remain free.
+    class TERMIN_QOPT_API FixedPointJoint3DContribution final
+        : public DynamicsContribution
+    {
+      public:
+        FixedPointJoint3DContribution(RigidBody3DContribution& body,
+                                      termin::Vec3 body_anchor_local,
+                                      termin::Vec3 world_anchor,
+                                      std::string_view diagnostic_name = {});
 
-// Constraint wrench applied to body A (or to the body for a fixed joint).
-// torque_world is perpendicular to the hinge axis by construction.
-struct RevoluteJoint3DReaction {
-  termin::Vec3 force_world = termin::Vec3::zero();
-  termin::Vec3 torque_world = termin::Vec3::zero();
-};
+        // World-frame reaction wrench at the joint anchor. ang is the
+        // constraint moment about that anchor; lin is the anchor force.
+        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic begin_step() noexcept override;
+        void commit_step() noexcept override;
+        void rollback_step() noexcept override;
+        void
+        apply_solution(DynamicsAssemblyPhase phase,
+                       const DynamicsTopology& topology,
+                       ConstDenseVectorView dof_values,
+                       ConstDenseVectorView constraint_reactions) noexcept override;
+        double position_error_linf() const noexcept override;
+        double velocity_error_linf() const noexcept override;
 
-struct Multibody3DStepOptions {
-  double time_step = 0.001;
-  double position_tolerance = 1e-9;
-  double velocity_tolerance = 1e-9;
-  std::size_t max_position_iterations = 6;
-  QpTolerance qp_tolerance;
-};
+      private:
+        RigidBody3DContribution* body_;
+        termin::Vec3 body_anchor_local_;
+        termin::Vec3 world_anchor_;
+        std::string diagnostic_name_;
+        DynamicsConstraintHandle constraint_;
+        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
+    };
 
-struct Multibody3DStepResult {
-  QpStatus status = QpStatus::InvalidInput;
-  Multibody3DDiagnostic diagnostic = Multibody3DDiagnostic::None;
-  QpSolveResult dynamics;
-  double position_constraint_linf =
-      std::numeric_limits<double>::infinity();
-  double velocity_constraint_linf =
-      std::numeric_limits<double>::infinity();
-  std::size_t position_iterations = 0;
-};
+    // Three equations make two body-local anchor points coincide while leaving
+    // all three relative rotations free (a ball/point joint).
+    class TERMIN_QOPT_API PointJoint3DContribution final : public DynamicsContribution
+    {
+      public:
+        PointJoint3DContribution(RigidBody3DContribution& body_a,
+                                 termin::Vec3 body_a_anchor_local,
+                                 RigidBody3DContribution& body_b,
+                                 termin::Vec3 body_b_anchor_local,
+                                 std::string_view diagnostic_name = {});
 
-// Dense maximal-coordinate 3D model. Its generalized-vector ordering is
-// [linear_world(3), angular_world(3)]. Point joints constrain translation at
-// an anchor and deliberately leave all three relative rotational DOFs free.
-class TERMIN_QOPT_API Multibody3DSystem {
-public:
-  Multibody3DSystem();
-  ~Multibody3DSystem();
+        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic begin_step() noexcept override;
+        void commit_step() noexcept override;
+        void rollback_step() noexcept override;
+        void
+        apply_solution(DynamicsAssemblyPhase phase,
+                       const DynamicsTopology& topology,
+                       ConstDenseVectorView dof_values,
+                       ConstDenseVectorView constraint_reactions) noexcept override;
+        double position_error_linf() const noexcept override;
+        double velocity_error_linf() const noexcept override;
 
-  Multibody3DSystem(Multibody3DSystem&&) noexcept;
-  Multibody3DSystem& operator=(Multibody3DSystem&&) noexcept;
+      private:
+        RigidBody3DContribution* body_a_;
+        RigidBody3DContribution* body_b_;
+        termin::Vec3 body_a_anchor_local_;
+        termin::Vec3 body_b_anchor_local_;
+        std::string diagnostic_name_;
+        DynamicsConstraintHandle constraint_;
+        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
+    };
 
-  Multibody3DSystem(const Multibody3DSystem&) = delete;
-  Multibody3DSystem& operator=(const Multibody3DSystem&) = delete;
+    // Five equations pin an anchor and align a body-local hinge axis with a
+    // fixed world axis, leaving only rotation around that axis free.
+    class TERMIN_QOPT_API FixedRevoluteJoint3DContribution final
+        : public DynamicsContribution
+    {
+      public:
+        FixedRevoluteJoint3DContribution(RigidBody3DContribution& body,
+                                         termin::Vec3 body_anchor_local,
+                                         termin::Vec3 body_axis_local,
+                                         termin::Vec3 world_anchor,
+                                         termin::Vec3 world_axis,
+                                         std::string_view diagnostic_name = {});
 
-  [[nodiscard]] Multibody3DRegistrationResult<RigidBody3DHandle> add_body(
-      SpatialInertia3D inertia,
-      RigidBody3DState initial_state = {},
-      std::string_view diagnostic_name = {}
-  ) noexcept;
+        [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
+        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic begin_step() noexcept override;
+        void commit_step() noexcept override;
+        void rollback_step() noexcept override;
+        void
+        apply_solution(DynamicsAssemblyPhase phase,
+                       const DynamicsTopology& topology,
+                       ConstDenseVectorView dof_values,
+                       ConstDenseVectorView constraint_reactions) noexcept override;
+        double position_error_linf() const noexcept override;
+        double velocity_error_linf() const noexcept override;
 
-  [[nodiscard]] Multibody3DRegistrationResult<PointJoint3DHandle>
-  add_fixed_point_joint(
-      RigidBody3DHandle body,
-      termin::Vec3 body_anchor_local,
-      termin::Vec3 world_anchor,
-      std::string_view diagnostic_name = {}
-  ) noexcept;
+      private:
+        RigidBody3DContribution* body_;
+        termin::Vec3 body_anchor_local_;
+        termin::Vec3 body_axis_local_;
+        termin::Vec3 world_anchor_;
+        termin::Vec3 world_axis_;
+        std::string diagnostic_name_;
+        DynamicsConstraintHandle constraint_;
+        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
+        Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
+    };
 
-  [[nodiscard]] Multibody3DRegistrationResult<PointJoint3DHandle>
-  add_point_joint(
-      RigidBody3DHandle body_a,
-      termin::Vec3 body_a_anchor_local,
-      RigidBody3DHandle body_b,
-      termin::Vec3 body_b_anchor_local,
-      std::string_view diagnostic_name = {}
-  ) noexcept;
+    // Five equations: three anchor-coincidence rows and two axis-alignment
+    // rows. Exactly one relative twist around the hinge axis remains
+    // unconstrained.
+    class TERMIN_QOPT_API RevoluteJoint3DContribution final
+        : public DynamicsContribution
+    {
+      public:
+        RevoluteJoint3DContribution(RigidBody3DContribution& body_a,
+                                    termin::Vec3 body_a_anchor_local,
+                                    termin::Vec3 body_a_axis_local,
+                                    RigidBody3DContribution& body_b,
+                                    termin::Vec3 body_b_anchor_local,
+                                    termin::Vec3 body_b_axis_local,
+                                    std::string_view diagnostic_name = {});
 
-  [[nodiscard]] Multibody3DRegistrationResult<RevoluteJoint3DHandle>
-  add_fixed_revolute_joint(
-      RigidBody3DHandle body,
-      termin::Vec3 body_anchor_local,
-      termin::Vec3 body_axis_local,
-      termin::Vec3 world_anchor,
-      termin::Vec3 world_axis,
-      std::string_view diagnostic_name = {}
-  ) noexcept;
+        [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
+        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic begin_step() noexcept override;
+        void commit_step() noexcept override;
+        void rollback_step() noexcept override;
+        void
+        apply_solution(DynamicsAssemblyPhase phase,
+                       const DynamicsTopology& topology,
+                       ConstDenseVectorView dof_values,
+                       ConstDenseVectorView constraint_reactions) noexcept override;
+        double position_error_linf() const noexcept override;
+        double velocity_error_linf() const noexcept override;
 
-  [[nodiscard]] Multibody3DRegistrationResult<RevoluteJoint3DHandle>
-  add_revolute_joint(
-      RigidBody3DHandle body_a,
-      termin::Vec3 body_a_anchor_local,
-      termin::Vec3 body_a_axis_local,
-      RigidBody3DHandle body_b,
-      termin::Vec3 body_b_anchor_local,
-      termin::Vec3 body_b_axis_local,
-      std::string_view diagnostic_name = {}
-  ) noexcept;
-
-  [[nodiscard]] Multibody3DDiagnostic finalize() noexcept;
-  [[nodiscard]] bool finalized() const noexcept;
-  [[nodiscard]] std::size_t body_count() const noexcept;
-  [[nodiscard]] std::size_t joint_count() const noexcept;
-
-  [[nodiscard]] Multibody3DDiagnostic set_body_state(
-      RigidBody3DHandle body, RigidBody3DState state
-  ) noexcept;
-  [[nodiscard]] Multibody3DDiagnostic set_body_wrench(
-      RigidBody3DHandle body, RigidBody3DWrench wrench
-  ) noexcept;
-  [[nodiscard]] RigidBody3DState body_state(
-      RigidBody3DHandle body
-  ) const noexcept;
-  [[nodiscard]] RigidBody3DAcceleration body_acceleration(
-      RigidBody3DHandle body
-  ) const noexcept;
-  [[nodiscard]] termin::Vec3 joint_reaction(
-      PointJoint3DHandle joint
-  ) const noexcept;
-  [[nodiscard]] RevoluteJoint3DReaction revolute_joint_reaction(
-      RevoluteJoint3DHandle joint
-  ) const noexcept;
-
-  [[nodiscard]] Multibody3DStepResult step(
-      termin::Vec3 gravity_world,
-      Multibody3DStepOptions options = {}
-  ) noexcept;
-
-  [[nodiscard]] double max_position_constraint_error() const noexcept;
-  [[nodiscard]] double max_velocity_constraint_error() const noexcept;
-  [[nodiscard]] double total_energy(termin::Vec3 gravity_world) const noexcept;
-
-private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
-};
+      private:
+        RigidBody3DContribution* body_a_;
+        RigidBody3DContribution* body_b_;
+        termin::Vec3 body_a_anchor_local_;
+        termin::Vec3 body_a_axis_local_;
+        termin::Vec3 body_b_anchor_local_;
+        termin::Vec3 body_b_axis_local_;
+        std::string diagnostic_name_;
+        DynamicsConstraintHandle constraint_;
+        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
+        Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
+    };
 
 } // namespace termin::qopt

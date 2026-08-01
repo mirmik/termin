@@ -94,6 +94,11 @@ else()
     find_package(termin_components_kinematic REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_components_physics_fem termin_components_physics_fem::termin_components_physics_fem)
+else()
+    find_package(termin_components_physics_fem REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
 else()
     find_package(termin_components_skeleton REQUIRED)
@@ -237,6 +242,7 @@ target_link_libraries(termin_bootstrap
         termin_components_mesh::termin_components_mesh
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
+        termin_components_physics_fem::termin_components_physics_fem
         termin_components_skeleton::termin_components_skeleton
         termin_components_render::termin_components_render
         termin_components_foliage::termin_components_foliage

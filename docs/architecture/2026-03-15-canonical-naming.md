@@ -55,8 +55,12 @@
 
 - Канонический core API: `termin.physics`
 - Канонический component API: `termin.physics_components`
-- Канонический experimental FEM scene API: `termin.physics_fem`
-- Python FEM/optimization solver API остаётся в `termin.fem` и принадлежит `termin-qopt`; `termin.physics` не должен зависеть от `termin-qopt`/`scipy`.
+- Канонический Python namespace прежнего experimental FEM scene API:
+  `termin.physics_fem`; пакет сохранён как reference-only.
+- Python FEM/optimization API остаётся в `termin.fem` и принадлежит
+  `termin-qopt` как research/reference слой. Текущие FEM scene components и 3D
+  dynamics работают в C++; `termin.physics` не должен зависеть ни от
+  `termin-qopt`, ни от `scipy`.
 
 ### Render components
 

@@ -41,7 +41,7 @@
 | [termin-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
 | [termin-collision](https://github.com/mirmik/termin-monorepo/blob/master/termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
 | [termin-physics](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics/docs/index.md) | C++ rigid-body physics bindings |
-| [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md) | Experimental Python FEM scene components |
+| [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md) | Native contribution-based FEM scene integration; legacy Python reference package |
 | [termin-input](https://github.com/mirmik/termin-monorepo/blob/master/termin-input/docs/index.md) | Input abstractions |
 | [termin-gui](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
 | [termin-modules](https://github.com/mirmik/termin-monorepo/blob/master/termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
