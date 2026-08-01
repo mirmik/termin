@@ -101,6 +101,32 @@ class FEMPhysicsWorldComponent(PythonComponent):
         self._rebuild_simulation()
         self._initialized = True
 
+    def on_destroy(self):
+        """Release the solver graph and all component back-references."""
+        self._initialized = False
+        self._scene = None
+
+        for body_comp in self._bodies:
+            body_comp._fem_body = None
+            body_comp._fem_world = None
+
+        for joint_comp in self._fixed_joints:
+            joint_comp._fem_joint = None
+            joint_comp._fem_world = None
+            joint_comp._body_component = None
+
+        for joint_comp in self._revolute_joints:
+            joint_comp._fem_joint = None
+            joint_comp._fem_world = None
+            joint_comp._body_a_component = None
+            joint_comp._body_b_component = None
+
+        self._bodies.clear()
+        self._fixed_joints.clear()
+        self._revolute_joints.clear()
+        self._assembler = None
+        super().on_destroy()
+
     def _rebuild_simulation(self):
         """Пересобрать симуляцию: создать assembler и зарегистрировать все тела/joints."""
         self._assembler = DynamicMatrixAssembler()

@@ -11,3 +11,5 @@ Each project owns its build and run instructions in its local `README.md`.
   lifecycle coverage.
 - `desktop-physics-showcase`: desktop runtime packaging with falling rigid
   bodies, collisions, lighting, and shadows.
+- `fem-double-pendulum`: desktop FEM/QP multibody simulation with two rigid
+  links, a fixed anchor, and an inter-body point joint.

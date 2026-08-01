@@ -1,0 +1,561 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "fem-double-pendulum-scene",
+    "entities": [
+      {
+        "uuid": "fem-double-pendulum-backdrop",
+        "name": "Backdrop",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 1.5, 3.1],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [9.0, 0.35, 7.5],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-backdrop-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [1.0, 1.0, 1.0]
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-backdrop-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-double-pendulum-backdrop-material",
+                "name": "Backdrop",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-link-a",
+        "name": "Pendulum Link A",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-1.228728, 0.0, 4.639635],
+          "rotation": [0.0, 0.461749, 0.0, 0.887011]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-link-a-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": true,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [0.34, 0.34, 3.0]
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-link-a-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-double-pendulum-link-a-material",
+                "name": "LinkA",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-link-a-body",
+            "type": "FEMRigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.5,
+              "inertia_diagonal": [1.1403125, 1.1403125, 0.0289],
+              "linear_damping": 0.002,
+              "angular_damping": 0.004
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-link-b",
+        "name": "Pendulum Link B",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-1.823529, 0.0, 2.419519],
+          "rotation": [0.0, -0.21644, 0.0, 0.976296]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-link-b-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": true,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [0.3, 0.3, 3.0]
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-link-b-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-double-pendulum-link-b-material",
+                "name": "LinkB",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-link-b-body",
+            "type": "FEMRigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "inertia_diagonal": [0.759375, 0.759375, 0.015],
+              "linear_damping": 0.002,
+              "angular_damping": 0.004
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-fixed-anchor",
+        "name": "Fixed Anchor",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 0.0, 5.5],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [0.34, 0.34, 0.34],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-fixed-anchor-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [1.0, 1.0, 1.0]
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-fixed-anchor-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-double-pendulum-joint-material",
+                "name": "Joint",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-fixed-joint",
+            "type": "FEMFixedJointComponent",
+            "data": {
+              "enabled": true,
+              "body_entity_name": "Pendulum Link A",
+              "damping": 0.003
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-middle-joint-marker",
+        "name": "Middle Joint",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-2.457456, 0.0, 3.77927],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-middle-joint",
+            "type": "FEMRevoluteJointComponent",
+            "data": {
+              "enabled": true,
+              "body_a_entity_name": "Pendulum Link A",
+              "body_b_entity_name": "Pendulum Link B",
+              "joint_offset_in_body_a": [0.0, 0.0, -1.5],
+              "damping": 0.003
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-key-light",
+        "name": "Directional Key Light",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [5.0, -6.0, 11.0],
+          "rotation": [-0.1098, -0.4342, 0.854, 0.2647]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-key-light-component",
+            "type": "LightComponent",
+            "data": {
+              "enabled": true,
+              "light_type": "directional",
+              "color": [1.0, 0.86, 0.68],
+              "intensity": 1.55,
+              "shadows_enabled": true,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.02,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 3.0,
+              "max_distance": 50.0,
+              "split_lambda": 0.7,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-fill-light",
+        "name": "Blue Fill Light",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-5.0, -3.0, 6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-fill-light-component",
+            "type": "LightComponent",
+            "data": {
+              "enabled": true,
+              "light_type": "point",
+              "color": [0.2, 0.42, 1.0],
+              "intensity": 3.2,
+              "shadows_enabled": false,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.0,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 1.0,
+              "max_distance": 100.0,
+              "split_lambda": 0.5,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-camera",
+        "name": "Main Camera",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-1.2, -11.0, 3.5],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-camera-component",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 60.0,
+              "fov_y_degrees": 48.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xffffffffffffffff"
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-double-pendulum-world",
+        "name": "FEM Physics World",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-world-component",
+            "type": "FEMPhysicsWorldComponent",
+            "data": {
+              "enabled": true,
+              "gravity": [0.0, 0.0, -9.81],
+              "time_step": 0.01,
+              "substeps": 2,
+              "energy_stabilization": true,
+              "strict_energy_mode": false
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": {
+            "position": [-1.2, -10.0, 3.5],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "radius": 7.0,
+            "editor_entities": {
+              "camera": [
+                {
+                  "source_id": "fem-double-pendulum-editor-camera",
+                  "type": "CameraComponent",
+                  "data": {
+                    "enabled": true,
+                    "near_clip": 0.1,
+                    "far_clip": 100.0,
+                    "ortho_size": 5.0,
+                    "fov_x_degrees": 60.0,
+                    "fov_y_degrees": 45.0,
+                    "fov_mode": "FixHorizontal",
+                    "layer_mask": "0xffffffffffffffff",
+                    "render_category_mask": "0xffffffffffffffff"
+                  }
+                },
+                {
+                  "source_id": "fem-double-pendulum-editor-orbit",
+                  "type": "OrbitCameraController",
+                  "data": {
+                    "enabled": true,
+                    "radius": 7.0,
+                    "min_radius": 1.0,
+                    "max_radius": 100.0
+                  }
+                },
+                {
+                  "type": "EditorCameraUIController",
+                  "data": {
+                    "enabled": true,
+                    "colliders_enabled": true,
+                    "wireframe_enabled": false,
+                    "navmesh_enabled": true,
+                    "ortho_enabled": false,
+                    "gizmo_world_orientation_enabled": false
+                  }
+                }
+              ]
+            }
+          },
+          "viewport_camera_name": "camera"
+        }
+      }
+    },
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {"name": "Main Target"},
+            "region": [0.0, 0.0, 1.0, 1.0],
+            "depth": 0.0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "fem-double-pendulum-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [0.008, 0.012, 0.028, 1.0],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295.0,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [0.008, 0.012, 0.028, 1.0],
+        "lighting": {
+          "ambient_color": [0.3, 0.38, 0.58],
+          "ambient_intensity": 0.24,
+          "shadow_settings": {
+            "method": 1.0,
+            "softness": 1.4,
+            "bias": 0.001
+          }
+        },
+        "skybox": {
+          "type": 1.0,
+          "color": [0.008, 0.012, 0.028],
+          "top_color": [0.12, 0.2, 0.42],
+          "bottom_color": [0.12, 0.08, 0.1]
+        }
+      }
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [-1.2, -10.0, 3.5],
+      "rotation": [0.0, 0.0, 0.0, 1.0],
+      "radius": 7.0,
+      "editor_entities": {
+        "camera": [
+          {
+            "source_id": "fem-double-pendulum-editor-camera",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 60.0,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xffffffffffffffff"
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-editor-orbit",
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 7.0,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": true,
+              "wireframe_enabled": false,
+              "navmesh_enabled": true,
+              "ortho_enabled": false,
+              "gizmo_world_orientation_enabled": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

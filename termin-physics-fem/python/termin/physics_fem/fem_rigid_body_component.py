@@ -125,10 +125,10 @@ class FEMRigidBodyComponent(PythonComponent):
                 "non-rigid world transform to FEM"
             )
             return
-        self._fem_body.set_pose(Pose3(
-            lin=np.asarray(pose.lin, dtype=np.float64),
-            ang=np.asarray(pose.ang, dtype=np.float64),
-        ))
+        # Pose3 is a native geometry value and expects native Vec3/Quat values.
+        # Converting them to ndarray here breaks the public constructor even
+        # though NumPy remains appropriate for solver-owned numeric fields.
+        self._fem_body.set_pose(Pose3(lin=pose.lin, ang=pose.ang))
 
         # Сбросить скорости
         self._fem_body.velocity_var.value[:] = 0.0

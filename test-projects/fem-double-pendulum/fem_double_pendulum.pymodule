@@ -1,0 +1,7 @@
+{
+  "name": "fem_double_pendulum",
+  "type": "python",
+  "root": "Scripts",
+  "packages": ["fem_double_pendulum"],
+  "requirements": ["termin-physics-fem"]
+}
