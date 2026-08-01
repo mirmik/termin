@@ -34,7 +34,7 @@ add_library(termin_qopt SHARED
     src/equality_qp.cpp
     src/hqp.cpp
     src/multibody2d.cpp
-    src/multibody3d.cpp
+    src/multibody3d_contributions.cpp
     src/qp_types.cpp
     src/subspaces.cpp
     src/termin_qopt.cpp
@@ -153,6 +153,28 @@ if(TERMIN_QOPT_BUILD_TESTS)
     )
     target_link_libraries(termin_qopt_multibody3d_test PRIVATE termin_qopt)
     add_test(NAME termin_qopt_multibody3d_test COMMAND termin_qopt_multibody3d_test)
+
+    add_executable(termin_qopt_multibody3d_assembly_test
+        tests/test_multibody3d_assembly.cpp
+    )
+    target_link_libraries(
+        termin_qopt_multibody3d_assembly_test PRIVATE termin_qopt
+    )
+    add_test(
+        NAME termin_qopt_multibody3d_assembly_test
+        COMMAND termin_qopt_multibody3d_assembly_test
+    )
+
+    add_executable(termin_qopt_multibody3d_energy_test
+        tests/test_multibody3d_energy.cpp
+    )
+    target_link_libraries(
+        termin_qopt_multibody3d_energy_test PRIVATE termin_qopt
+    )
+    add_test(
+        NAME termin_qopt_multibody3d_energy_test
+        COMMAND termin_qopt_multibody3d_energy_test
+    )
 
     add_executable(termin_qopt_double_pendulum2d_test
         tests/test_double_pendulum2d.cpp

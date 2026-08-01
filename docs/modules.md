@@ -269,13 +269,17 @@ Source of truth: [termin-collision docs](https://github.com/mirmik/termin-monore
 
 Source of truth: [termin-physics docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics/docs/index.md)
 
-C++ rigid-body physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state. Experimental FEM scene components live in [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md), not in `termin.physics`.
+C++ rigid-body physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state. Contribution-based FEM scene integration живёт в [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md), not in `termin.physics`.
 
 ### termin-physics-fem
 
 Source of truth: [termin-physics-fem docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md)
 
-Experimental Python FEM scene components over `termin-qopt`. This package may depend on the Python optimization stack; `termin-physics` must stay independent from it.
+Native scene integration over the contribution-based `termin-qopt` dynamics
+API. Runtime components link the C++ solver/model and do not require NumPy or a
+project Python module. The bundled `termin.physics_fem` package remains a
+reference-only projection of the former experimental API; `termin-physics`
+must stay independent from both stacks.
 
 ### termin-input
 

@@ -6,9 +6,9 @@
     "velocity2": ["world_vx", "world_vy", "angular_velocity"],
     "acceleration2": ["world_ax", "world_ay", "angular_acceleration"],
     "pose3": ["world_translation_xyz", "quaternion_xyzw"],
-    "velocity3": ["world_linear_xyz", "world_angular_xyz"],
-    "acceleration3": ["world_linear_xyz", "world_angular_xyz"],
-    "spatial_vector3": ["world_linear_xyz", "world_angular_xyz"],
+    "velocity3_fixture": ["world_linear_xyz", "world_angular_xyz"],
+    "native_screw3_fields": ["angular_or_moment_xyz", "linear_or_force_xyz"],
+    "native_dof_vector3": ["body_local_linear_xyz", "body_local_angular_xyz"],
     "constraint": "J * acceleration = gamma",
     "gravity_frame": "world",
     "quaternion_equivalence": "q and -q represent the same 3D orientation"

@@ -3,16 +3,16 @@ from types import SimpleNamespace
 
 def test_fem_world_destroy_releases_solver_component_graph() -> None:
     from termin.physics_fem import (
-        FEMFixedJointComponent,
-        FEMPhysicsWorldComponent,
-        FEMRevoluteJointComponent,
-        FEMRigidBodyComponent,
+        ReferenceFEMFixedJointComponent,
+        ReferenceFEMPhysicsWorldComponent,
+        ReferenceFEMRevoluteJointComponent,
+        ReferenceFEMRigidBodyComponent,
     )
 
-    world = FEMPhysicsWorldComponent()
-    body = FEMRigidBodyComponent()
-    fixed_joint = FEMFixedJointComponent()
-    revolute_joint = FEMRevoluteJointComponent()
+    world = ReferenceFEMPhysicsWorldComponent()
+    body = ReferenceFEMRigidBodyComponent()
+    fixed_joint = ReferenceFEMFixedJointComponent()
+    revolute_joint = ReferenceFEMRevoluteJointComponent()
 
     world._initialized = True
     world._scene = SimpleNamespace()

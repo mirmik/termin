@@ -1,22 +1,28 @@
 # termin-physics-fem
 
-`termin-physics-fem` contains experimental Python FEM scene components.
+`termin-physics-fem` retains the experimental Python FEM/reference package.
+Runtime scene components with the same serialized type names now live in the
+native `termin_components_physics_fem` module and are registered by the core
+bootstrap.
 
-The package depends on `termin-qopt` and therefore on the current Python
-optimization stack. It is deliberately separate from `termin-physics`, whose
-public Python API is the C++ rigid-body engine exposed through
-`termin.physics`.
+The native components use the C++ `termin-qopt` contribution/dynamics stack;
+they do not import NumPy or register a project Python module. The Python code
+remains an algorithmic reference while the wider FEM element catalog is being
+ported. Both stacks remain deliberately separate from the gameplay-oriented
+`termin-physics` engine.
 
 ## Public API
 
-Python package: `termin.physics_fem`.
+Serialized scene component names:
 
 Canonical component classes:
 
-- `termin.physics_fem.FEMPhysicsWorldComponent`
-- `termin.physics_fem.FEMRigidBodyComponent`
-- `termin.physics_fem.FEMFixedJointComponent`
-- `termin.physics_fem.FEMRevoluteJointComponent`
+- `FEMPhysicsWorldComponent`
+- `FEMRigidBodyComponent`
+- `FEMFixedJointComponent`
+- `FEMRevoluteJointComponent`
+
+The Python package `termin.physics_fem` is reference-only for this scene API.
 
 ## Transform contract
 
@@ -25,5 +31,6 @@ mass and inertia are component-owned, so scaled or affine scene ancestry is
 rejected rather than projected into a pose. Solver-to-scene synchronization
 updates world position and logical orientation separately.
 
-Joint anchors use exact world positions, and body-local joint offsets are
-mapped with the exact scene affine transform.
+Joint anchors use exact world positions. `FEMRevoluteJointComponent` also
+requires a non-zero body-A-local hinge axis; the native joint constrains anchor
+translation and the two rotations perpendicular to that axis.

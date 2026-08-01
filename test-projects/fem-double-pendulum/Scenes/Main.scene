@@ -345,6 +345,11 @@
             "data": {
               "enabled": true,
               "body_entity_name": "Pendulum Link A",
+              "joint_axis_in_body": [
+                0.0,
+                1.0,
+                0.0
+              ],
               "damping": 0.003
             }
           }
@@ -390,6 +395,11 @@
                 0.0,
                 0.0,
                 -1.5
+              ],
+              "joint_axis_in_body_a": [
+                0.0,
+                1.0,
+                0.0
               ],
               "damping": 0.003
             }

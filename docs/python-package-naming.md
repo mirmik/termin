@@ -78,8 +78,8 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-components/termin-components-foliage` | `termin-components-foliage` | `termin.foliage` | Foliage components. |
 | `termin-components/termin-components-ui` | `termin-components-ui` | `termin.ui_components`, `termin_ui_component_specs` | UI components. |
 | `termin-render-passes` | `termin-render-passes` | `termin.render_passes`, `termin_render_pass_specs` | Concrete render passes. |
-| `termin-qopt` | `termin-qopt` | `termin.fem`, `termin.linalg`, `termin.robot` | Optimization/FEM Python APIs. |
-| `termin-physics-fem` | `termin-physics-fem` | `termin.physics_fem` | Experimental FEM scene API. |
+| `termin-qopt` | `termin-qopt` | `termin.fem`, `termin.linalg`, `termin.robot` | Reference/research Python APIs; current solver and 3D runtime are native C++. |
+| `termin-physics-fem` | `termin-physics-fem` | `termin.physics_fem` | Reference-only Python projection; current scene integration is native C++. |
 | `termin-pga` | `termin-pga` | `termin.ga201`, `termin.geomalgo` | Geometric algebra APIs. |
 | `termin-physics` | `termin-physics` | `termin.physics` | Rigid-body physics API. |
 | `termin-components/termin-components-physics` | `termin-components-physics` | `termin_physics_component_specs` | Physics component specs. |

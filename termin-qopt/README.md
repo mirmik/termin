@@ -2,10 +2,11 @@
 
 Quadratic optimization, FEM, multibody dynamics, and robotics helpers for Termin.
 
-This package owns the `termin.fem`, `termin.linalg`, and `termin.robot`
-namespaces. The current solver and model implementations remain Python-based
-and are installed before `termin-physics-fem`, which embeds them into
-experimental runtime/editor components.
+The native `termin_qopt::termin_qopt` library is the current runtime foundation
+for dense optimization and contribution-based multibody dynamics. The
+`termin.fem`, `termin.linalg`, and `termin.robot` Python namespaces remain in
+this package as research/reference implementations; the native FEM scene
+components do not import them or NumPy at runtime.
 
 The native migration foundation provides the shared C++ target
 `termin_qopt::termin_qopt`, private Eigen integration, and caller-owned dense
@@ -20,6 +21,9 @@ rank-deficient policy rather than an implicit ABI choice. The native
 ascending order through the active-set API, accumulates hard constraints, and
 restricts each lower level to directions preserving higher-level task values.
 Rank exhaustion and incompatible lower levels return explicit statuses.
+The implementation is usable as a tested foundation, but is not yet integrated
+into a robot controller or the multibody step. Its exact scope and remaining
+gaps are recorded in [HQP_STATUS.md](HQP_STATUS.md).
 
 The first end-to-end multibody slice is also native: deterministic dense block
 assembly, typed dynamics assembly for `M a = f + Jᵀ λ`, and a maximal-coordinate
@@ -29,16 +33,22 @@ matrices. The double-pendulum example and tests exercise assembly, constrained
 solve, semi-implicit integration, position/velocity projection, reactions,
 constraint drift, and energy drift.
 
-The native 3D foundation uses the same pipeline with world-frame
-`[linear, angular]` generalized coordinates, principal-axis spatial inertia,
-quaternion exponential updates, and fixed/two-body point joints. A point joint
-constrains only coincident anchors and intentionally leaves three relative
-rotational degrees of freedom. Fixed and two-body revolute joints add two
-axis-alignment rows, leaving exactly one relative twist DOF, and expose the
+The native 3D foundation uses the same pipeline with right-trivialized,
+body-local `[linear, angular]` velocities and accelerations, constant local
+spatial inertia, SE(3) exponential updates, and fixed/two-body point joints.
+Twists, accelerations, wrenches, and joint reactions use the common
+`termin::Screw3` pair. Frame and origin changes operate on that pair through
+adjoint/coadjoint transforms; the dense assembler alone maps it explicitly to
+its internal `[linear, angular]` row order.
+Gravity, external wrenches, poses, joint anchors, constraint rows, and reactions
+cross the model boundary in their explicitly named world or local frames. A
+point joint constrains only coincident anchors and intentionally leaves three
+relative rotational degrees of freedom. Fixed and two-body revolute joints add
+two axis-alignment rows, leaving exactly one relative twist DOF, and expose the
 anchor force plus the axis-orthogonal reaction torque. The legacy Python
-`RevoluteJoint3D` name is retired because that class was only a point joint;
-the native revolute contract is intentionally stricter. Python bindings have
-not migrated yet; see
+`RevoluteJoint3D` remains reference-only and is retired as a model name because
+that class is only a point joint; the native revolute contract is intentionally
+stricter. Native solver/model Python bindings have not migrated; see
 [CPP_MIGRATION.md](CPP_MIGRATION.md).
 
 The language-neutral solver contract lives in
