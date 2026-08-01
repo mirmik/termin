@@ -407,10 +407,10 @@ namespace termin
                            body_entity.name());
             return false;
         }
-        qopt::SpatialInertia3D inertia;
+        SpatialInertia3 inertia;
         inertia.mass = component.mass;
         inertia.principal_moments = vec3(component.inertia_diagonal);
-        inertia.inertia_frame_local = Pose3::identity();
+        inertia.inertia_frame = Pose3::identity();
         qopt::RigidBody3DState state;
         state.pose = *pose;
         auto body = std::make_unique<qopt::RigidBody3DContribution>(
@@ -591,7 +591,8 @@ namespace termin
             {
                 continue;
             }
-            const Screw3 velocity_world = body->body_->velocity_world();
+            const Screw3 velocity_world =
+                body->body_->velocity_at_body_origin_world();
             wrenches_world[index] -= {
                 velocity_world.ang * body->angular_damping,
                 velocity_world.lin * body->linear_damping,
@@ -604,7 +605,8 @@ namespace termin
             {
                 continue;
             }
-            const Screw3 velocity_world = joint->body_->velocity_world();
+            const Screw3 velocity_world =
+                joint->body_->velocity_at_body_origin_world();
             wrenches_world[index] -= {
                 velocity_world.ang * joint->damping,
                 Vec3::zero(),
@@ -619,8 +621,8 @@ namespace termin
                 continue;
             }
             const Screw3 relative_velocity_world =
-                joint->body_a_->velocity_world() -
-                joint->body_b_->velocity_world();
+                joint->body_a_->velocity_at_body_origin_world() -
+                joint->body_b_->velocity_at_body_origin_world();
             const Screw3 damping_wrench{
                 relative_velocity_world.ang * joint->damping,
                 Vec3::zero(),
@@ -630,7 +632,8 @@ namespace termin
         }
         for (std::size_t index = 0; index < bodies_.size(); ++index)
         {
-            bodies_[index]->force_->set_wrench_world(wrenches_world[index]);
+            bodies_[index]->force_->set_wrench_at_body_origin_world(
+                wrenches_world[index]);
         }
 
         qopt::Multibody3DStepOptions options;

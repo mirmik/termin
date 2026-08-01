@@ -62,7 +62,7 @@ namespace
         Multibody3DSystem system;
         auto* body = add(system,
                          std::make_unique<RigidBody3DContribution>(
-                             SpatialInertia3D{1.0, {0.01, 1.0 / 12.0, 1.0 / 12.0}, {}},
+                             SpatialInertia3{1.0, {0.01, 1.0 / 12.0, 1.0 / 12.0}, {}},
                              RigidBody3DState{
                                  {Quat::identity(), {0.5, 0.0, 0.0}},
                                  Screw3::zero(),
@@ -93,7 +93,7 @@ namespace
     EnergyEnvelope simulate_double_pendulum(double dt, double duration)
     {
         Multibody3DSystem system;
-        const SpatialInertia3D inertia{1.0, {0.01, 1.0 / 12.0, 1.0 / 12.0}, {}};
+        const SpatialInertia3 inertia{1.0, {0.01, 1.0 / 12.0, 1.0 / 12.0}, {}};
         auto* upper = add(system,
                           std::make_unique<RigidBody3DContribution>(
                               inertia,
@@ -145,21 +145,9 @@ namespace
 
     Vec3 angular_momentum_world(const RigidBody3DContribution& body)
     {
-        std::array<double, 36> inertia{};
-        TERMIN_QOPT_CHECK(write_spatial_inertia3d_matrix_world(
-                              body.inertia(),
-                              body.state().pose.ang,
-                              DenseMatrixView::row_major(inertia.data(), 6, 6)) ==
-                          Multibody3DDiagnostic::None);
-        const Vec3 omega = body.velocity_world().ang;
-        return {
-            inertia[3 * 6 + 3] * omega.x + inertia[3 * 6 + 4] * omega.y +
-                inertia[3 * 6 + 5] * omega.z,
-            inertia[4 * 6 + 3] * omega.x + inertia[4 * 6 + 4] * omega.y +
-                inertia[4 * 6 + 5] * omega.z,
-            inertia[5 * 6 + 3] * omega.x + inertia[5 * 6 + 4] * omega.y +
-                inertia[5 * 6 + 5] * omega.z,
-        };
+        const SpatialInertia3 inertia_world =
+            body.inertia().rotated_by(body.state().pose.ang);
+        return inertia_world.momentum(body.velocity_at_body_origin_world()).ang;
     }
 
     FreeBodyInvariantError simulate_free_body(double dt, double duration)
@@ -167,7 +155,7 @@ namespace
         Multibody3DSystem system;
         auto* body = add(system,
                          std::make_unique<RigidBody3DContribution>(
-                             SpatialInertia3D{1.0, {2.0, 3.0, 4.0}, {}},
+                             SpatialInertia3{1.0, {2.0, 3.0, 4.0}, {}},
                              RigidBody3DState{
                                  {Quat::identity(), Vec3::zero()},
                                  Screw3{{1.0, 2.0, 3.0}, {0.5, -0.25, 0.75}},
@@ -246,7 +234,7 @@ namespace
         Multibody3DSystem system;
         auto* body = add(system,
                          std::make_unique<RigidBody3DContribution>(
-                             SpatialInertia3D{mass, {0.01, moment, moment}, {}},
+                             SpatialInertia3{mass, {0.01, moment, moment}, {}},
                              RigidBody3DState{
                                  {orientation, center},
                                  Screw3{
@@ -267,11 +255,12 @@ namespace
         TERMIN_QOPT_CHECK(system.step(options(1e-6)).ok());
 
         const RigidBody3DState& endpoint = body->state();
-        const Screw3 acceleration = body->acceleration_local();
+        const Screw3 acceleration = body->twist_rate_at_body_origin_local();
         const double kinetic_power =
             mass * endpoint.velocity_local.lin.dot(acceleration.lin) +
             moment * endpoint.velocity_local.ang.y * acceleration.ang.y;
-        const double potential_power = -mass * gravity.dot(body->velocity_world().lin);
+        const double potential_power =
+            -mass * gravity.dot(body->velocity_at_body_origin_world().lin);
         TERMIN_QOPT_CHECK(std::abs(kinetic_power + potential_power) < 1e-10);
     }
 

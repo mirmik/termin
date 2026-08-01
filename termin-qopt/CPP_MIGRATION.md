@@ -247,10 +247,20 @@ typed handles. Ни `M`, ни `J`, ни Eigen не нужны обычному c
 reaction. Его `ang/lin` поля всегда преобразуются совместно: twists используют
 adjoint, wrenches — coadjoint. Только граница dense assembler явно переводит
 `Screw3` в матричный порядок `[vₓ,vᵧ,v_z,ωₓ,ωᵧ,ω_z]`; физический layout типа
-не переинтерпретируется как solver buffer. Spatial inertia хранится как масса,
-principal moments и локальный inertia frame, где translation задаёт COM, а
-quaternion — главные оси. Публичный helper записывает 6x6 матрицу в checked
-dense view без Eigen.
+не переинтерпретируется как solver buffer. Канонический
+`termin::SpatialInertia3` живёт в `termin-base`: он хранит массу, principal
+moments и локальный inertia frame, где translation задаёт COM, а quaternion —
+главные оси, и предоставляет momentum, kinetic energy и явно упорядоченную
+`matrix_vw()`. Тот же тип возвращает `termin-physics`; qopt больше не объявляет
+собственную копию mass-properties структуры.
+
+Имена frame-sensitive операций указывают точку приведения. Пара
+`velocity_at_body_origin_world()` выражена в мировых осях, но приведена к
+началу тела; `wrench_at_body_origin_world()` задаёт момент относительно той же
+точки; reactions возвращаются через `reaction_at_joint_anchor_world()`.
+`rotated_by(Quat)` меняет только оси. Перенос twist/wrench между началами
+координат нельзя заменить таким вращением: для него используются adjoint,
+coadjoint либо явные `velocity_at_offset()`/`wrench_at_offset()`.
 
 Скорости и ускорения тела right-trivialized и выражены в его локальной системе.
 Поэтому spatial inertia постоянна, а нагрузка содержит полный body-frame bias
@@ -258,7 +268,9 @@ dense view без Eigen.
 frame тела на границе contribution. Constraints оставляют строки в мировом
 frame, но их столбцы отображают локальные twists каждого тела.
 
-Конфигурация обновляется правой экспонентой SE(3): `T[n+1] = T[n] Exp(h V)`.
+Конфигурация обновляется общей правой экспонентой `termin::se3_exp()`:
+`T[n+1] = T[n] Exp(h V)`. Обратное отображение выполняет
+`termin::se3_log()`; deprecated `Screw3::to_pose()` экспонентой не является.
 Позиционная поправка SHAKE, найденная как endpoint-local tangent `δξ`, не
 складывается с midpoint velocity как евклидов вектор. Contribution вычисляет
 `Log(Exp(h V) Exp(δξ)) / h`, что согласованно переносит её через `dexp`.

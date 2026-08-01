@@ -1,5 +1,5 @@
 from .transform import Transform3
-from tcbase._geom_native import Pose3, Screw3, Vec3
+from tcbase._geom_native import Pose3, Screw3, Vec3, se3_exp
 
 class KinematicTransform3(Transform3):
     """A Transform3 specialized for kinematic chains."""
@@ -92,7 +92,7 @@ class KinematicTransform3OneScrew(KinematicTransform3):
 
     def set_coord(self, coord: float):
         """Set the coordinate of this kinematic transform."""
-        self.output.relocate((self._sens * coord).as_pose3())
+        self.output.relocate(se3_exp(self._sens * coord))
         self._coord = coord
 
     def coord(self) -> float:

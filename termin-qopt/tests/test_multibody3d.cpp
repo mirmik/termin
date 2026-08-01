@@ -29,7 +29,7 @@ namespace
         return {quat(v.quaternion), vec(v.translation)};
     }
 
-    SpatialInertia3D inertia(OracleSpatialInertia3D v)
+    SpatialInertia3 inertia(OracleSpatialInertia3D v)
     {
         return {v.mass, vec(v.principal_moments), pose(v.inertia_frame_local)};
     }
@@ -90,19 +90,16 @@ int main()
     const auto& hinge_oracle = kFixedRevolute3DOracle;
     const auto& double_oracle = kDoubleRevolute3DOracle;
 
-    const SpatialInertia3D offset_inertia = inertia(free_fall_oracle.body.inertia);
-    std::array<double, 36> matrix{};
-    TERMIN_QOPT_CHECK(write_spatial_inertia3d_matrix_world(
-                          offset_inertia,
-                          Quat::identity(),
-                          DenseMatrixView::row_major(matrix.data(), 6, 6)) ==
-                      Multibody3DDiagnostic::None);
+    const SpatialInertia3 offset_inertia = inertia(free_fall_oracle.body.inertia);
+    const Mat66 matrix = offset_inertia.matrix_vw();
     for (std::size_t row = 0; row < 6; ++row)
     {
         for (std::size_t column = 0; column < 6; ++column)
         {
             TERMIN_QOPT_CHECK(
-                std::abs(matrix[row * 6 + column] - matrix[column * 6 + row]) < 1e-12);
+                std::abs(matrix(static_cast<int>(column), static_cast<int>(row)) -
+                         matrix(static_cast<int>(row), static_cast<int>(column))) <
+                1e-12);
         }
     }
     TERMIN_QOPT_CHECK(
@@ -125,15 +122,15 @@ int main()
     TERMIN_QOPT_CHECK(free_fall.topology().dof_count() == 6);
     TERMIN_QOPT_CHECK(free_fall.topology().constraint_count() == 0);
     TERMIN_QOPT_CHECK(free_fall.step(options(free_fall_oracle.time_step, 1e-9)).ok());
-    TERMIN_QOPT_CHECK(distance(falling->acceleration_local().lin, gravity) <
-                      free_fall_oracle.acceleration_linf);
-    TERMIN_QOPT_CHECK(falling->acceleration_local().ang.norm() <
+    TERMIN_QOPT_CHECK(distance(falling->twist_rate_at_body_origin_local().lin,
+                               gravity) < free_fall_oracle.acceleration_linf);
+    TERMIN_QOPT_CHECK(falling->twist_rate_at_body_origin_local().ang.norm() <
                       free_fall_oracle.acceleration_linf);
 
     Multibody3DSystem gyroscope;
     auto* spinning = add(gyroscope,
                          std::make_unique<RigidBody3DContribution>(
-                             SpatialInertia3D{1.0, {2.0, 3.0, 4.0}, {}},
+                             SpatialInertia3{1.0, {2.0, 3.0, 4.0}, {}},
                              RigidBody3DState{
                                  {},
                                  Screw3{{1.0, 2.0, 3.0}, {7.0, -3.0, 2.0}},
@@ -146,8 +143,8 @@ int main()
     // Velocity Verlet exposes acceleration at q[n+1], not the first force
     // evaluation at q[n]. The exact initial gyroscopic load is covered by the
     // assembly test; over this tiny step the endpoint value stays nearby.
-    TERMIN_QOPT_CHECK(distance(spinning->acceleration_local().ang, {-3.0, 2.0, -0.5}) <
-                      1e-3);
+    TERMIN_QOPT_CHECK(distance(spinning->twist_rate_at_body_origin_local().ang,
+                               {-3.0, 2.0, -0.5}) < 1e-3);
 
     // A fixed point is a separate three-row contribution.
     Multibody3DSystem anchored;
@@ -191,7 +188,7 @@ int main()
     // Contributions may share body variables without the collector knowing
     // their type.
     Multibody3DSystem pair;
-    const SpatialInertia3D unit_inertia{1.0, {0.25, 0.3, 0.35}, {}};
+    const SpatialInertia3 unit_inertia{1.0, {0.25, 0.3, 0.35}, {}};
     auto* body_a = add(pair,
                        std::make_unique<RigidBody3DContribution>(
                            unit_inertia,
@@ -224,8 +221,8 @@ int main()
     TERMIN_QOPT_CHECK(distance(body_a->state().pose.transform_point({0.5, 0.0, 0.0}),
                                body_b->state().pose.transform_point({-0.5, 0.0, 0.0})) <
                       1e-9);
-    TERMIN_QOPT_CHECK(
-        distance(body_a->velocity_world().ang, body_b->velocity_world().ang) > 1e-3);
+    TERMIN_QOPT_CHECK(distance(body_a->velocity_at_body_origin_world().ang,
+                               body_b->velocity_at_body_origin_world().ang) > 1e-3);
 
     Multibody3DSystem hinge;
     auto* hinge_body = add(
@@ -320,10 +317,10 @@ int main()
                       double_oracle.constraint_linf);
     TERMIN_QOPT_CHECK(upper_axis.cross(lower_axis).norm() <
                       double_oracle.constraint_linf);
-    TERMIN_QOPT_CHECK(std::abs(upper_hinge->reaction_world().ang.dot(upper_axis)) <
-                      double_oracle.reaction_axis_work);
-    TERMIN_QOPT_CHECK(std::abs(lower_hinge->reaction_world().ang.dot(upper_axis)) <
-                      double_oracle.reaction_axis_work);
+    TERMIN_QOPT_CHECK(std::abs(upper_hinge->reaction_at_joint_anchor_world().ang.dot(
+                          upper_axis)) < double_oracle.reaction_axis_work);
+    TERMIN_QOPT_CHECK(std::abs(lower_hinge->reaction_at_joint_anchor_world().ang.dot(
+                          upper_axis)) < double_oracle.reaction_axis_work);
     const double final_energy = upper->total_energy() + lower->total_energy();
     TERMIN_QOPT_CHECK(std::abs(final_energy - initial_energy) /
                           std::max(1.0, std::abs(initial_energy)) <

@@ -92,41 +92,10 @@ namespace
 
     RigidBody3DContribution body(RigidBody3DState state = {},
                                  Vec3 gravity = Vec3::zero(),
-                                 SpatialInertia3D inertia = {2.0, {3.0, 4.0, 5.0}, {}},
+                                 SpatialInertia3 inertia = {2.0, {3.0, 4.0, 5.0}, {}},
                                  std::string_view name = "body")
     {
         return RigidBody3DContribution(inertia, state, gravity, name);
-    }
-
-    void test_screw_transform_contract()
-    {
-        const Pose3 frame{
-            Quat::from_axis_angle(Vec3::unit_z(), 0.5 * 3.14159265358979323846),
-            {3.0, -2.0, 1.0},
-        };
-        const Screw3 twist_local{{0.5, -1.0, 2.0}, {4.0, 3.0, -2.0}};
-        const Screw3 wrench_local{{7.0, -4.0, 1.0}, {-2.0, 5.0, 3.0}};
-        const Screw3 twist_world = twist_local.adjoint(frame);
-        const Screw3 wrench_world = wrench_local.coadjoint(frame);
-
-        check_near(twist_world.dot(wrench_world), twist_local.dot(wrench_local), 1e-11);
-        const Screw3 recovered_twist = twist_world.adjoint_inv(frame);
-        const Screw3 recovered_wrench = wrench_world.coadjoint_inv(frame);
-        check_near((recovered_twist.ang - twist_local.ang).norm(), 0.0, 1e-12);
-        check_near((recovered_twist.lin - twist_local.lin).norm(), 0.0, 1e-12);
-        check_near((recovered_wrench.ang - wrench_local.ang).norm(), 0.0, 1e-12);
-        check_near((recovered_wrench.lin - wrench_local.lin).norm(), 0.0, 1e-12);
-
-        const Vec3 arm{0.25, -0.5, 1.0};
-        const Screw3 point_twist = twist_local.adjoint(arm);
-        const Screw3 origin_wrench = wrench_local.coadjoint_inv(arm);
-        check_near(
-            (point_twist.lin - (twist_local.lin + twist_local.ang.cross(arm))).norm(),
-            0.0);
-        check_near(
-            (origin_wrench.ang - (wrench_local.ang + arm.cross(wrench_local.lin)))
-                .norm(),
-            0.0);
     }
 
     void test_rigid_body_equations()
@@ -160,7 +129,7 @@ namespace
 
     void test_offset_center_of_mass_equations()
     {
-        const SpatialInertia3D inertia{
+        const SpatialInertia3 inertia{
             2.0,
             {3.0, 4.0, 5.0},
             {Quat::identity(), {1.0, 0.0, 0.0}},
@@ -353,7 +322,6 @@ namespace
 
 int main()
 {
-    test_screw_transform_contract();
     test_rigid_body_equations();
     test_offset_center_of_mass_equations();
     test_rotated_body_uses_local_dofs();

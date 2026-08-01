@@ -59,7 +59,7 @@ public:
 
     // Создать тело из mass properties и мировой позы authored shape frame.
     static RigidBody create_with_mass_properties(
-        const MassProperties& properties,
+        const SpatialInertia3& properties,
         const Pose3& shape_pose = Pose3(),
         bool stat = false);
 

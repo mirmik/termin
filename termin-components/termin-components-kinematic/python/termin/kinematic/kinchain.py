@@ -95,11 +95,11 @@ class KinematicChain3:
             for sens in lsenses:
                 # Получаем линейную и угловую составляющие чувствительности
                 # в системе текущего звена
-                scr = sens.kinematic_carry(radius)
+                scr = sens.velocity_at_offset(radius)
 
                 # Трансформируем их в систему цели и добавляем в список
                 senses.append((
-                    scr.inverse_transform_by(trsf)
+                    scr.inverse_rotated_by(trsf.ang)
                 ))
                 #senses.append(sens.transform_as_twist_by(trsf))
             
@@ -107,11 +107,11 @@ class KinematicChain3:
         if basis is not None:
             btrsf = basis
             trsf = btrsf.inverse() * outtrans
-            senses = [s.transform_by(trsf) for s in senses]
+            senses = [s.rotated_by(trsf.ang) for s in senses]
         else:
             # переносим в глобальный фрейм
             trsf = outtrans
-            senses = [s.transform_by(trsf) for s in senses]    
+            senses = [s.rotated_by(trsf.ang) for s in senses]
 
         return senses
 

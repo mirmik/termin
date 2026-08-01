@@ -2,6 +2,7 @@
 
 #include <termin/geom/mat33.hpp>
 #include <termin/geom/mat66.hpp>
+#include <termin/geom/se3.hpp>
 #include <termin/geom/vec6.hpp>
 
 #include <algorithm>
@@ -32,23 +33,22 @@ namespace termin::qopt
 
         bool finite(termin::Vec3 value) noexcept
         {
-            return finite(value.x) && finite(value.y) && finite(value.z);
+            return value.is_finite();
         }
 
         bool finite(termin::Quat value) noexcept
         {
-            return finite(value.x) && finite(value.y) && finite(value.z) &&
-                   finite(value.w);
+            return value.is_finite();
         }
 
         bool finite(termin::Pose3 value) noexcept
         {
-            return finite(value.lin) && finite(value.ang);
+            return value.is_finite();
         }
 
         bool finite(termin::Screw3 value) noexcept
         {
-            return finite(value.ang) && finite(value.lin);
+            return value.is_finite();
         }
 
         bool finite(const RigidBody3DState& value) noexcept
@@ -56,174 +56,9 @@ namespace termin::qopt
             return finite(value.pose) && finite(value.velocity_local);
         }
 
-        bool valid_inertia(const SpatialInertia3D& value) noexcept
-        {
-            return finite(value.mass) && value.mass > 0.0 &&
-                   finite(value.principal_moments) && value.principal_moments.x > 0.0 &&
-                   value.principal_moments.y > 0.0 && value.principal_moments.z > 0.0 &&
-                   finite(value.inertia_frame_local) &&
-                   value.inertia_frame_local.ang.norm() > 1e-10;
-        }
-
         double linf(termin::Vec3 value) noexcept
         {
             return std::max({std::abs(value.x), std::abs(value.y), std::abs(value.z)});
-        }
-
-        termin::Mat33 rotation_matrix(termin::Quat orientation) noexcept
-        {
-            std::array<double, 9> row_major{};
-            orientation.normalized().to_matrix(row_major.data());
-            termin::Mat33 result;
-            for (int row = 0; row < 3; ++row)
-            {
-                for (int column = 0; column < 3; ++column)
-                {
-                    result(column, row) =
-                        row_major[static_cast<std::size_t>(row * 3 + column)];
-                }
-            }
-            return result;
-        }
-
-        termin::Mat33 central_inertia_world(const SpatialInertia3D& inertia,
-                                            termin::Quat body_orientation) noexcept
-        {
-            const termin::Quat orientation =
-                (body_orientation.normalized() *
-                 inertia.inertia_frame_local.ang.normalized())
-                    .normalized();
-            const termin::Mat33 rotation = rotation_matrix(orientation);
-            const termin::Mat33 diagonal =
-                termin::Mat33::scale(inertia.principal_moments);
-            return rotation * diagonal * rotation.transposed();
-        }
-
-        termin::Mat66 spatial_inertia_world(const SpatialInertia3D& inertia,
-                                            termin::Quat body_orientation) noexcept
-        {
-            const double mass = inertia.mass;
-            const termin::Vec3 center =
-                body_orientation.normalized().rotate(inertia.inertia_frame_local.lin);
-            const termin::Mat33 central =
-                central_inertia_world(inertia, body_orientation);
-            termin::Mat33 skew;
-            skew(1, 0) = -center.z;
-            skew(2, 0) = center.y;
-            skew(0, 1) = center.z;
-            skew(2, 1) = -center.x;
-            skew(0, 2) = -center.y;
-            skew(1, 2) = center.x;
-            termin::Mat66 result;
-            for (std::size_t axis = 0; axis < 3; ++axis)
-            {
-                result(static_cast<int>(axis), static_cast<int>(axis)) = mass;
-            }
-            for (std::size_t row = 0; row < 3; ++row)
-            {
-                for (std::size_t column = 0; column < 3; ++column)
-                {
-                    const int matrix_row = static_cast<int>(row);
-                    const int matrix_column = static_cast<int>(column);
-                    result(matrix_column + 3, matrix_row) =
-                        -mass * skew(matrix_column, matrix_row);
-                    result(matrix_column, matrix_row + 3) =
-                        mass * skew(matrix_column, matrix_row);
-                    result(matrix_column + 3, matrix_row + 3) =
-                        central(matrix_column, matrix_row) +
-                        mass * ((row == column ? center.dot(center) : 0.0) -
-                                center[static_cast<int>(row)] *
-                                    center[static_cast<int>(column)]);
-                }
-            }
-            return result;
-        }
-
-        termin::Quat rotation_vector_quaternion(termin::Vec3 value) noexcept
-        {
-            const double angle = value.norm();
-            if (angle < 1e-12)
-            {
-                return termin::Quat{0.5 * value.x, 0.5 * value.y, 0.5 * value.z, 1.0}
-                    .normalized();
-            }
-            return termin::Quat::from_axis_angle(value / angle, angle);
-        }
-
-        termin::Vec3 rotation_vector(termin::Quat value) noexcept
-        {
-            value = value.normalized();
-            if (value.w < 0.0)
-                value = {-value.x, -value.y, -value.z, -value.w};
-            const termin::Vec3 imaginary{value.x, value.y, value.z};
-            const double sine_half = imaginary.norm();
-            if (sine_half < 1e-12)
-                return imaginary * 2.0;
-            const double angle = 2.0 * std::atan2(sine_half, value.w);
-            return imaginary * (angle / sine_half);
-        }
-
-        termin::Vec3 cross_matrix_apply(termin::Vec3 phi, termin::Vec3 value) noexcept
-        {
-            return phi.cross(value);
-        }
-
-        termin::Vec3 so3_left_jacobian_apply(termin::Vec3 phi,
-                                             termin::Vec3 value) noexcept
-        {
-            const double theta_squared = phi.dot(phi);
-            double a;
-            double b;
-            if (theta_squared < 1e-10)
-            {
-                a = 0.5 - theta_squared / 24.0;
-                b = 1.0 / 6.0 - theta_squared / 120.0;
-            }
-            else
-            {
-                const double theta = std::sqrt(theta_squared);
-                a = (1.0 - std::cos(theta)) / theta_squared;
-                b = (theta - std::sin(theta)) / (theta_squared * theta);
-            }
-            const termin::Vec3 first_cross = cross_matrix_apply(phi, value);
-            return value + first_cross * a + cross_matrix_apply(phi, first_cross) * b;
-        }
-
-        termin::Vec3 so3_left_jacobian_inverse_apply(termin::Vec3 phi,
-                                                     termin::Vec3 value) noexcept
-        {
-            const double theta_squared = phi.dot(phi);
-            double coefficient;
-            if (theta_squared < 1e-10)
-            {
-                coefficient = 1.0 / 12.0 + theta_squared / 720.0;
-            }
-            else
-            {
-                const double theta = std::sqrt(theta_squared);
-                coefficient =
-                    (1.0 - 0.5 * theta / std::tan(0.5 * theta)) / theta_squared;
-            }
-            const termin::Vec3 first_cross = cross_matrix_apply(phi, value);
-            return value - first_cross * 0.5 +
-                   cross_matrix_apply(phi, first_cross) * coefficient;
-        }
-
-        termin::Pose3 se3_exp(termin::Screw3 twist) noexcept
-        {
-            return {
-                rotation_vector_quaternion(twist.ang),
-                so3_left_jacobian_apply(twist.ang, twist.lin),
-            };
-        }
-
-        termin::Screw3 se3_log(const termin::Pose3& pose) noexcept
-        {
-            const termin::Vec3 angular = rotation_vector(pose.ang);
-            return {
-                angular,
-                so3_left_jacobian_inverse_apply(angular, pose.lin),
-            };
         }
 
         PointJacobian point_jacobian(termin::Vec3 radius) noexcept
@@ -254,7 +89,7 @@ namespace termin::qopt
                                            termin::Quat body_orientation) noexcept
         {
             const PointJacobian local = point_jacobian(radius_local);
-            const termin::Mat33 rotation = rotation_matrix(body_orientation);
+            const termin::Mat33 rotation = termin::Mat33::rotation(body_orientation);
             PointJacobian result{};
             for (std::size_t row = 0; row < 3; ++row)
             {
@@ -291,27 +126,8 @@ namespace termin::qopt
             return {value.ptr(), value.size(), 1};
         }
 
-        termin::Vec6 vector_vw(termin::Screw3 value) noexcept
-        {
-            return {
-                value.lin.x,
-                value.lin.y,
-                value.lin.z,
-                value.ang.x,
-                value.ang.y,
-                value.ang.z,
-            };
-        }
-
-        termin::Screw3 screw_vw(const termin::Vec6& value) noexcept
-        {
-            return {
-                {value[3], value[4], value[5]},
-                {value[0], value[1], value[2]},
-            };
-        }
-
-        termin::Screw3 screw_vw(ConstDenseVectorView value, std::size_t offset) noexcept
+        termin::Screw3 read_screw_vw(ConstDenseVectorView value,
+                                     std::size_t offset) noexcept
         {
             return {
                 {value[offset + 3], value[offset + 4], value[offset + 5]},
@@ -346,8 +162,8 @@ namespace termin::qopt
                                     termin::Vec3 local) noexcept
         {
             return body.state()
-                .velocity_local.adjoint(local)
-                .transform_by(body.state().pose)
+                .velocity_local.velocity_at_offset(local)
+                .rotated_by(body.state().pose.ang)
                 .lin;
         }
 
@@ -453,48 +269,13 @@ namespace termin::qopt
             return "invalid_inertia";
         case Multibody3DDiagnostic::NonFiniteInput:
             return "non_finite_input";
-        case Multibody3DDiagnostic::InvalidMatrixView:
-            return "invalid_matrix_view";
         case Multibody3DDiagnostic::InvalidJointAxis:
             return "invalid_joint_axis";
         }
         return "unknown";
     }
 
-    Multibody3DDiagnostic
-    write_spatial_inertia3d_matrix_world(const SpatialInertia3D& inertia,
-                                         termin::Quat orientation,
-                                         DenseMatrixView destination) noexcept
-    {
-        if (!valid_inertia(inertia))
-        {
-            return finite(inertia.mass) && inertia.mass > 0.0
-                       ? Multibody3DDiagnostic::InvalidInertia
-                       : Multibody3DDiagnostic::InvalidMass;
-        }
-        if (!finite(orientation) || orientation.norm() <= 1e-10)
-        {
-            return Multibody3DDiagnostic::NonFiniteInput;
-        }
-        if (destination.rows != 6 || destination.columns != 6 ||
-            destination.data == nullptr || destination.row_stride <= 0 ||
-            destination.column_stride <= 0)
-        {
-            return Multibody3DDiagnostic::InvalidMatrixView;
-        }
-        const termin::Mat66 matrix = spatial_inertia_world(inertia, orientation);
-        for (std::size_t row = 0; row < 6; ++row)
-        {
-            for (std::size_t column = 0; column < 6; ++column)
-            {
-                destination(row, column) =
-                    matrix(static_cast<int>(column), static_cast<int>(row));
-            }
-        }
-        return Multibody3DDiagnostic::None;
-    }
-
-    RigidBody3DContribution::RigidBody3DContribution(SpatialInertia3D inertia,
+    RigidBody3DContribution::RigidBody3DContribution(termin::SpatialInertia3 inertia,
                                                      RigidBody3DState state,
                                                      termin::Vec3 gravity,
                                                      std::string_view name)
@@ -505,7 +286,7 @@ namespace termin::qopt
         {
             diagnostic_ = Multibody3DDiagnostic::InvalidMass;
         }
-        else if (!valid_inertia(inertia))
+        else if (!inertia.is_valid())
         {
             diagnostic_ = Multibody3DDiagnostic::InvalidInertia;
         }
@@ -515,8 +296,7 @@ namespace termin::qopt
         }
         else
         {
-            inertia_.inertia_frame_local.ang =
-                inertia_.inertia_frame_local.ang.normalized();
+            inertia_.inertia_frame.ang = inertia_.inertia_frame.ang.normalized();
             state_.pose.ang = state_.pose.ang.normalized();
         }
     }
@@ -526,7 +306,7 @@ namespace termin::qopt
         return diagnostic_;
     }
 
-    const SpatialInertia3D& RigidBody3DContribution::inertia() const noexcept
+    const termin::SpatialInertia3& RigidBody3DContribution::inertia() const noexcept
     {
         return inertia_;
     }
@@ -536,14 +316,16 @@ namespace termin::qopt
         return state_;
     }
 
-    const termin::Screw3& RigidBody3DContribution::acceleration_local() const noexcept
+    const termin::Screw3&
+    RigidBody3DContribution::twist_rate_at_body_origin_local() const noexcept
     {
-        return acceleration_local_;
+        return twist_rate_at_body_origin_local_;
     }
 
-    termin::Screw3 RigidBody3DContribution::velocity_world() const noexcept
+    termin::Screw3
+    RigidBody3DContribution::velocity_at_body_origin_world() const noexcept
     {
-        return state_.velocity_local.transform_by(state_.pose);
+        return state_.velocity_local.rotated_by(state_.pose.ang);
     }
 
     DynamicsDofHandle RigidBody3DContribution::dofs() const noexcept
@@ -584,16 +366,8 @@ namespace termin::qopt
     double RigidBody3DContribution::total_energy() const noexcept
     {
         const termin::Vec3 center =
-            state_.pose.lin + state_.pose.ang.rotate(inertia_.inertia_frame_local.lin);
-        const termin::Mat66 mass =
-            spatial_inertia_world(inertia_, termin::Quat::identity());
-        const termin::Vec6 velocity = vector_vw(state_.velocity_local);
-        const termin::Vec6 momentum = mass.transform(velocity);
-        double kinetic = 0.0;
-        for (std::size_t index = 0; index < velocity.size(); ++index)
-        {
-            kinetic += 0.5 * velocity[index] * momentum[index];
-        }
+            state_.pose.lin + state_.pose.ang.rotate(inertia_.inertia_frame.lin);
+        const double kinetic = inertia_.kinetic_energy(state_.velocity_local);
         return kinetic - inertia_.mass * gravity_world_.dot(center);
     }
 
@@ -617,28 +391,26 @@ namespace termin::qopt
     RigidBody3DContribution::assemble(DynamicsAssembly& assembly,
                                       DynamicsAssemblyPhase phase) noexcept
     {
-        const termin::Mat66 mass =
-            spatial_inertia_world(inertia_, termin::Quat::identity());
+        const termin::Mat66 mass = inertia_.matrix_vw();
         AssemblyDiagnostic result = assembly.add_mass(dofs_, dofs_, view(mass));
         termin::Vec6 load;
         if (phase == DynamicsAssemblyPhase::Acceleration)
         {
-            const termin::Screw3 momentum =
-                screw_vw(mass.transform(vector_vw(state_.velocity_local)));
+            const termin::Screw3 momentum = inertia_.momentum(state_.velocity_local);
             const termin::Screw3 gravity_at_com_world{
                 termin::Vec3::zero(),
                 gravity_world_ * inertia_.mass,
             };
             const termin::Screw3 gravity_local =
-                gravity_at_com_world.inverse_transform_by(state_.pose)
-                    .coadjoint_inv(inertia_.inertia_frame_local.lin);
+                gravity_at_com_world.inverse_rotated_by(state_.pose.ang)
+                    .wrench_at_origin_from_offset(inertia_.inertia_frame.lin);
             const termin::Screw3 load_local =
                 gravity_local - state_.velocity_local.cross_force(momentum);
-            load = vector_vw(load_local);
+            load = termin::screw3_to_vec6_vw(load_local);
         }
         else if (phase == DynamicsAssemblyPhase::VelocityProjection)
         {
-            load = mass.transform(vector_vw(state_.velocity_local));
+            load = mass.transform(termin::screw3_to_vec6_vw(state_.velocity_local));
         }
         return first(result, assembly.add_load(dofs_, view(load)));
     }
@@ -646,7 +418,7 @@ namespace termin::qopt
     AssemblyDiagnostic RigidBody3DContribution::begin_step() noexcept
     {
         state_snapshot_ = state_;
-        acceleration_snapshot_ = acceleration_local_;
+        twist_rate_snapshot_ = twist_rate_at_body_origin_local_;
         snapshot_ready_ = true;
         return AssemblyDiagnostic::None;
     }
@@ -661,7 +433,7 @@ namespace termin::qopt
         if (snapshot_ready_)
         {
             state_ = state_snapshot_;
-            acceleration_local_ = acceleration_snapshot_;
+            twist_rate_at_body_origin_local_ = twist_rate_snapshot_;
             snapshot_ready_ = false;
         }
     }
@@ -672,9 +444,9 @@ namespace termin::qopt
                                                  ConstDenseVectorView) noexcept
     {
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        const termin::Screw3 value = screw_vw(values, info.offset);
+        const termin::Screw3 value = read_screw_vw(values, info.offset);
         if (phase == DynamicsAssemblyPhase::Acceleration)
-            acceleration_local_ = value;
+            twist_rate_at_body_origin_local_ = value;
         else if (phase == DynamicsAssemblyPhase::VelocityProjection)
         {
             state_.velocity_local = value;
@@ -697,7 +469,7 @@ namespace termin::qopt
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
         const RigidBody3DState candidate{
             state_.pose,
-            screw_vw(source, info.offset),
+            read_screw_vw(source, info.offset),
         };
         if (!finite(candidate))
             return AssemblyDiagnostic::NonFiniteContribution;
@@ -715,12 +487,12 @@ namespace termin::qopt
             return AssemblyDiagnostic::NonFiniteContribution;
         }
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        const termin::Screw3 velocity = screw_vw(midpoint_velocity, info.offset);
+        const termin::Screw3 velocity = read_screw_vw(midpoint_velocity, info.offset);
         if (!finite(velocity))
         {
             return AssemblyDiagnostic::NonFiniteContribution;
         }
-        state_.pose = state_snapshot_.pose * se3_exp(velocity * time_step);
+        state_.pose = state_snapshot_.pose * termin::se3_exp(velocity * time_step);
         state_.pose.ang = state_.pose.ang.normalized();
         state_.velocity_local = velocity;
         return AssemblyDiagnostic::None;
@@ -739,33 +511,33 @@ namespace termin::qopt
         }
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
         const termin::Pose3 current_increment =
-            se3_exp(screw_vw(midpoint_velocity, info.offset) * time_step);
+            termin::se3_exp(read_screw_vw(midpoint_velocity, info.offset) * time_step);
         const termin::Pose3 tangent_increment =
-            se3_exp(screw_vw(correction, info.offset));
+            termin::se3_exp(read_screw_vw(correction, info.offset));
         const termin::Screw3 correction_twist =
-            se3_log(current_increment * tangent_increment);
-        const termin::Screw3 corrected{
-            correction_twist.ang / time_step,
-            correction_twist.lin / time_step,
-        };
+            termin::se3_log(current_increment * tangent_increment);
+        const termin::Screw3 corrected = correction_twist / time_step;
         write_vw(corrected, destination, info.offset);
         return AssemblyDiagnostic::None;
     }
 
-    ForceOnBody3DContribution::ForceOnBody3DContribution(RigidBody3DContribution& body,
-                                                         termin::Screw3 wrench) noexcept
-        : body_(&body), wrench_world_(wrench)
+    ForceOnBody3DContribution::ForceOnBody3DContribution(
+        RigidBody3DContribution& body,
+        termin::Screw3 wrench_at_body_origin_world) noexcept
+        : body_(&body), wrench_at_body_origin_world_(wrench_at_body_origin_world)
     {
     }
 
-    void ForceOnBody3DContribution::set_wrench_world(termin::Screw3 value) noexcept
+    void ForceOnBody3DContribution::set_wrench_at_body_origin_world(
+        termin::Screw3 value) noexcept
     {
-        wrench_world_ = value;
+        wrench_at_body_origin_world_ = value;
     }
 
-    const termin::Screw3& ForceOnBody3DContribution::wrench_world() const noexcept
+    const termin::Screw3&
+    ForceOnBody3DContribution::wrench_at_body_origin_world() const noexcept
     {
-        return wrench_world_;
+        return wrench_at_body_origin_world_;
     }
 
     AssemblyDiagnostic
@@ -780,15 +552,15 @@ namespace termin::qopt
     {
         if (phase != DynamicsAssemblyPhase::Acceleration)
             return AssemblyDiagnostic::None;
-        if (!finite(wrench_world_))
+        if (!finite(wrench_at_body_origin_world_))
         {
             std::fprintf(stderr,
                          "[termin-qopt] force contribution contains a "
                          "non-finite wrench\n");
             return AssemblyDiagnostic::NonFiniteContribution;
         }
-        const termin::Vec6 load =
-            vector_vw(wrench_world_.inverse_transform_by(body_->state().pose));
+        const termin::Vec6 load = termin::screw3_to_vec6_vw(
+            wrench_at_body_origin_world_.inverse_rotated_by(body_->state().pose.ang));
         return assembly.add_load(body_->dofs(), view(load));
     }
 
@@ -802,9 +574,10 @@ namespace termin::qopt
     {
     }
 
-    const termin::Screw3& FixedPointJoint3DContribution::reaction_world() const noexcept
+    const termin::Screw3&
+    FixedPointJoint3DContribution::reaction_at_joint_anchor_world() const noexcept
     {
-        return reaction_world_;
+        return reaction_at_joint_anchor_world_;
     }
 
     AssemblyDiagnostic FixedPointJoint3DContribution::register_topology(
@@ -845,7 +618,7 @@ namespace termin::qopt
 
     AssemblyDiagnostic FixedPointJoint3DContribution::begin_step() noexcept
     {
-        reaction_snapshot_ = reaction_world_;
+        reaction_snapshot_ = reaction_at_joint_anchor_world_;
         return AssemblyDiagnostic::None;
     }
 
@@ -853,7 +626,7 @@ namespace termin::qopt
 
     void FixedPointJoint3DContribution::rollback_step() noexcept
     {
-        reaction_world_ = reaction_snapshot_;
+        reaction_at_joint_anchor_world_ = reaction_snapshot_;
     }
 
     void FixedPointJoint3DContribution::apply_solution(
@@ -863,7 +636,8 @@ namespace termin::qopt
         ConstDenseVectorView reactions) noexcept
     {
         if (phase == DynamicsAssemblyPhase::Acceleration)
-            reaction_world_ = read_reaction(constraint_, topology, reactions);
+            reaction_at_joint_anchor_world_ =
+                read_reaction(constraint_, topology, reactions);
     }
 
     double FixedPointJoint3DContribution::position_error_linf() const noexcept
@@ -887,9 +661,10 @@ namespace termin::qopt
     {
     }
 
-    const termin::Screw3& PointJoint3DContribution::reaction_world() const noexcept
+    const termin::Screw3&
+    PointJoint3DContribution::reaction_at_joint_anchor_world() const noexcept
     {
-        return reaction_world_;
+        return reaction_at_joint_anchor_world_;
     }
 
     AssemblyDiagnostic
@@ -944,7 +719,7 @@ namespace termin::qopt
 
     AssemblyDiagnostic PointJoint3DContribution::begin_step() noexcept
     {
-        reaction_snapshot_ = reaction_world_;
+        reaction_snapshot_ = reaction_at_joint_anchor_world_;
         return AssemblyDiagnostic::None;
     }
 
@@ -952,7 +727,7 @@ namespace termin::qopt
 
     void PointJoint3DContribution::rollback_step() noexcept
     {
-        reaction_world_ = reaction_snapshot_;
+        reaction_at_joint_anchor_world_ = reaction_snapshot_;
     }
 
     void
@@ -962,7 +737,8 @@ namespace termin::qopt
                                              ConstDenseVectorView reactions) noexcept
     {
         if (phase == DynamicsAssemblyPhase::Acceleration)
-            reaction_world_ = read_reaction(constraint_, topology, reactions);
+            reaction_at_joint_anchor_world_ =
+                read_reaction(constraint_, topology, reactions);
     }
 
     double PointJoint3DContribution::position_error_linf() const noexcept
@@ -1011,9 +787,9 @@ namespace termin::qopt
     }
 
     const termin::Screw3&
-    FixedRevoluteJoint3DContribution::reaction_world() const noexcept
+    FixedRevoluteJoint3DContribution::reaction_at_joint_anchor_world() const noexcept
     {
-        return reaction_world_;
+        return reaction_at_joint_anchor_world_;
     }
 
     AssemblyDiagnostic FixedRevoluteJoint3DContribution::register_topology(
@@ -1043,8 +819,10 @@ namespace termin::qopt
             const termin::Vec3 point = body_->state().pose.ang.rotate(
                 velocity.ang.cross(velocity.lin) +
                 velocity.ang.cross(velocity.ang.cross(body_anchor_local_)));
-            const auto angular = orientation_acceleration_rhs(
-                frame, body_->velocity_world().ang, termin::Vec3::zero());
+            const auto angular =
+                orientation_acceleration_rhs(frame,
+                                             body_->velocity_at_body_origin_world().ang,
+                                             termin::Vec3::zero());
             rhs = {-point.x, -point.y, -point.z, angular[0], angular[1]};
         }
         else if (phase == DynamicsAssemblyPhase::PositionProjection)
@@ -1063,7 +841,7 @@ namespace termin::qopt
 
     AssemblyDiagnostic FixedRevoluteJoint3DContribution::begin_step() noexcept
     {
-        reaction_snapshot_ = reaction_world_;
+        reaction_snapshot_ = reaction_at_joint_anchor_world_;
         return AssemblyDiagnostic::None;
     }
 
@@ -1071,7 +849,7 @@ namespace termin::qopt
 
     void FixedRevoluteJoint3DContribution::rollback_step() noexcept
     {
-        reaction_world_ = reaction_snapshot_;
+        reaction_at_joint_anchor_world_ = reaction_snapshot_;
     }
 
     void FixedRevoluteJoint3DContribution::apply_solution(
@@ -1086,7 +864,7 @@ namespace termin::qopt
             topology.constraint_topology().block_info(constraint_.block);
         const HingeFrame frame =
             hinge_frame(body_->state().pose.ang.rotate(body_axis_local_), world_axis_);
-        reaction_world_ =
+        reaction_at_joint_anchor_world_ =
             read_reaction(constraint_,
                           topology,
                           reactions,
@@ -1110,8 +888,9 @@ namespace termin::qopt
     {
         const HingeFrame frame =
             hinge_frame(body_->state().pose.ang.rotate(body_axis_local_), world_axis_);
-        const termin::Vec3 angular =
-            body_->velocity_world().ang.cross(frame.axis_a).cross(frame.axis_b);
+        const termin::Vec3 angular = body_->velocity_at_body_origin_world()
+                                         .ang.cross(frame.axis_a)
+                                         .cross(frame.axis_b);
         return std::max(linf(point_velocity(*body_, body_anchor_local_)),
                         std::max(std::abs(frame.tangent_1.dot(angular)),
                                  std::abs(frame.tangent_2.dot(angular))));
@@ -1153,9 +932,10 @@ namespace termin::qopt
         return diagnostic_;
     }
 
-    const termin::Screw3& RevoluteJoint3DContribution::reaction_world() const noexcept
+    const termin::Screw3&
+    RevoluteJoint3DContribution::reaction_at_joint_anchor_world() const noexcept
     {
-        return reaction_world_;
+        return reaction_at_joint_anchor_world_;
     }
 
     AssemblyDiagnostic
@@ -1197,7 +977,9 @@ namespace termin::qopt
                 vb.ang.cross(vb.ang.cross(body_b_anchor_local_)));
             const termin::Vec3 point = -ba + bb;
             const auto angular = orientation_acceleration_rhs(
-                frame, body_a_->velocity_world().ang, body_b_->velocity_world().ang);
+                frame,
+                body_a_->velocity_at_body_origin_world().ang,
+                body_b_->velocity_at_body_origin_world().ang);
             rhs = {point.x, point.y, point.z, angular[0], angular[1]};
         }
         else if (phase == DynamicsAssemblyPhase::PositionProjection)
@@ -1217,7 +999,7 @@ namespace termin::qopt
 
     AssemblyDiagnostic RevoluteJoint3DContribution::begin_step() noexcept
     {
-        reaction_snapshot_ = reaction_world_;
+        reaction_snapshot_ = reaction_at_joint_anchor_world_;
         return AssemblyDiagnostic::None;
     }
 
@@ -1225,7 +1007,7 @@ namespace termin::qopt
 
     void RevoluteJoint3DContribution::rollback_step() noexcept
     {
-        reaction_world_ = reaction_snapshot_;
+        reaction_at_joint_anchor_world_ = reaction_snapshot_;
     }
 
     void
@@ -1241,7 +1023,7 @@ namespace termin::qopt
         const HingeFrame frame =
             hinge_frame(body_a_->state().pose.ang.rotate(body_a_axis_local_),
                         body_b_->state().pose.ang.rotate(body_b_axis_local_));
-        reaction_world_ =
+        reaction_at_joint_anchor_world_ =
             read_reaction(constraint_,
                           topology,
                           reactions,
@@ -1269,8 +1051,11 @@ namespace termin::qopt
             hinge_frame(body_a_->state().pose.ang.rotate(body_a_axis_local_),
                         body_b_->state().pose.ang.rotate(body_b_axis_local_));
         const termin::Vec3 angular =
-            body_a_->velocity_world().ang.cross(frame.axis_a).cross(frame.axis_b) +
-            frame.axis_a.cross(body_b_->velocity_world().ang.cross(frame.axis_b));
+            body_a_->velocity_at_body_origin_world()
+                .ang.cross(frame.axis_a)
+                .cross(frame.axis_b) +
+            frame.axis_a.cross(
+                body_b_->velocity_at_body_origin_world().ang.cross(frame.axis_b));
         return std::max(linf(point_velocity(*body_a_, body_a_anchor_local_) -
                              point_velocity(*body_b_, body_b_anchor_local_)),
                         std::max(std::abs(frame.tangent_1.dot(angular)),
