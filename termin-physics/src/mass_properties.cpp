@@ -22,7 +22,7 @@ struct SymmetricMatrix3 {
 bool finite(double value) { return std::isfinite(value); }
 
 bool finite(const Vec3 &value) {
-  return finite(value.x) && finite(value.y) && finite(value.z);
+  return value.is_finite();
 }
 
 Vec3 componentwise_product(const Vec3 &a, const Vec3 &b) {
@@ -53,15 +53,15 @@ bool valid_inputs(const Vec3 &scale, double mass, std::string &diagnostic) {
   return true;
 }
 
-MassProperties oriented_properties(
+SpatialInertia3 oriented_properties(
     double mass,
     const Vec3 &moments,
     const Vec3 &center,
     const Quat &orientation) {
-  MassProperties result;
+  SpatialInertia3 result;
   result.mass = mass;
   result.principal_moments = moments;
-  result.inertia_frame_local = Pose3(orientation.normalized(), center);
+  result.inertia_frame = Pose3(orientation.normalized(), center);
   return result;
 }
 
@@ -183,7 +183,7 @@ bool convex_hull_properties(
     const colliders::ConvexHullCollider &hull,
     const Vec3 &entity_scale,
     double mass,
-    MassProperties &result,
+    SpatialInertia3 &result,
     std::string &diagnostic) {
   if (hull.faces.size() < 4 || hull.vertices.size() < 4) {
     diagnostic = "convex hull must contain a closed non-degenerate surface";
@@ -280,7 +280,7 @@ bool try_compute_mass_properties(
     const colliders::ColliderPrimitive &collider,
     const Vec3 &entity_scale,
     double mass,
-    MassProperties &result,
+    SpatialInertia3 &result,
     std::string &diagnostic) {
   diagnostic.clear();
   const Vec3 scale = combined_scale(collider, entity_scale);

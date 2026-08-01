@@ -17,6 +17,7 @@ synchronization. It intentionally remains separate from the gameplay physics
 world in `termin-physics`.
 
 Body velocities and damping loads cross the model boundary as complete
-`termin::Screw3` values. The component layer does not rotate force/torque or
-linear/angular halves independently; frame changes belong to the multibody
-adjoint/coadjoint contract.
+`termin::Screw3` values reduced to each body's origin and expressed in world
+axes. The API names this point explicitly. The component layer does not rotate
+force/torque or linear/angular halves independently; frame and origin changes
+belong to the multibody adjoint/coadjoint contract.

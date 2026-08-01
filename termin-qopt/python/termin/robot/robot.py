@@ -89,9 +89,9 @@ class Robot:
 
             joint_twists: List[Screw3] = []
             for sens in current.senses():
-                scr = sens.kinematic_carry(radius)
-                scr = scr.inverse_transform_by(rel)
-                scr = scr.transform_by(basis_pose)
+                scr = sens.velocity_at_offset(radius)
+                scr = scr.inverse_rotated_by(rel.ang)
+                scr = scr.rotated_by(basis_pose.ang)
                 joint_twists.append(scr)
 
             twists[current] = joint_twists

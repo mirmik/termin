@@ -202,7 +202,11 @@ class ForceOnBody3D(Contribution):
                  assembler=None):
         self.body = body
         self.acceleration = body.acceleration_var
-        self.wrench_local = wrench if in_local_frame else wrench.rotated_by(body.pose().inverse())
+        self.wrench_local = (
+            wrench
+            if in_local_frame
+            else wrench.inverse_rotated_by(body.pose().ang)
+        )
         super().__init__([], assembler=assembler)
 
     def contribute(self, matrices, index_maps):

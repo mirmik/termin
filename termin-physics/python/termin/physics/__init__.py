@@ -7,11 +7,11 @@ does not pull the Python optimization stack.
 """
 
 from termin_nanobind.runtime import preload_sdk_libs
+from termin.geombase import SpatialInertia3
 
 preload_sdk_libs("termin_physics")
 
 from termin.physics._physics_native import (
-    MassProperties,
     RigidBody,
     PhysicsWorld,
     Contact,
@@ -19,7 +19,7 @@ from termin.physics._physics_native import (
 )
 
 __all__ = [
-    "MassProperties",
+    "SpatialInertia3",
     "RigidBody",
     "PhysicsWorld",
     "Contact",

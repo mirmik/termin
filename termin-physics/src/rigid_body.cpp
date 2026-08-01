@@ -27,11 +27,11 @@ RigidBody RigidBody::create_sphere(double radius, double m, const Pose3 &p,
 }
 
 RigidBody RigidBody::create_with_mass_properties(
-    const MassProperties &properties, const Pose3 &shape_pose, bool stat) {
+    const SpatialInertia3 &properties, const Pose3 &shape_pose, bool stat) {
   RigidBody body;
   body.mass = properties.mass;
   body.inertia = properties.principal_moments;
-  body.inertia_frame_local = properties.inertia_frame_local;
+  body.inertia_frame_local = properties.inertia_frame;
   body.is_static = stat;
   body.set_shape_pose(shape_pose);
   return body;

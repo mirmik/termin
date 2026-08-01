@@ -195,7 +195,7 @@ class SpatialInertia3D:
         3. Переводим обратно
         """
         # В СК эллипсоида
-        t_local = twist.inverse_transform_by(self.frame)
+        t_local = twist.inverse_transform_as_twist_by(self.frame)
 
         # h = I @ v (диагональное умножение)
         h_lin = self.m * _array3(t_local.lin)
@@ -204,7 +204,7 @@ class SpatialInertia3D:
         h_local = Screw3(ang=_vec3(h_ang), lin=_vec3(h_lin))
 
         # Обратно в исходную СК
-        return h_local.transform_by(self.frame)
+        return h_local.transform_as_wrench_by(self.frame)
 
     def __matmul__(self, twist: Screw3) -> Screw3:
         """Operator @ for I @ twist."""
@@ -222,7 +222,7 @@ class SpatialInertia3D:
         3. Переводим обратно
         """
         # В СК эллипсоида
-        w_local = wrench.inverse_transform_by(self.frame)
+        w_local = wrench.inverse_transform_as_wrench_by(self.frame)
 
         # a = I⁻¹ @ f (диагональное деление)
         a_lin = _array3(w_local.lin) / self.m if self.m > 0 else np.zeros(3)
@@ -231,7 +231,7 @@ class SpatialInertia3D:
         a_local = Screw3(ang=_vec3(a_ang), lin=_vec3(a_lin))
 
         # Обратно в исходную СК
-        return a_local.transform_by(self.frame)
+        return a_local.transform_as_twist_by(self.frame)
 
     # ----------------------------------------------------------------
     #  Gravity wrench

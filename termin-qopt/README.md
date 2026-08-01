@@ -36,10 +36,18 @@ constraint drift, and energy drift.
 The native 3D foundation uses the same pipeline with right-trivialized,
 body-local `[linear, angular]` velocities and accelerations, constant local
 spatial inertia, SE(3) exponential updates, and fixed/two-body point joints.
+`termin::SpatialInertia3`, `termin::se3_exp()`, and `termin::se3_log()` are
+shared `termin-base` primitives; qopt owns only their dense assembly boundary
+and the equations of its concrete contributions.
 Twists, accelerations, wrenches, and joint reactions use the common
 `termin::Screw3` pair. Frame and origin changes operate on that pair through
 adjoint/coadjoint transforms; the dense assembler alone maps it explicitly to
 its internal `[linear, angular]` row order.
+The public names include the reference point: body velocity is exposed as
+`velocity_at_body_origin_world()`, external load as
+`wrench_at_body_origin_world()`, and a constraint reaction as
+`reaction_at_joint_anchor_world()`. These are not spatial twists or wrenches
+reduced to the world origin.
 Gravity, external wrenches, poses, joint anchors, constraint rows, and reactions
 cross the model boundary in their explicitly named world or local frames. A
 point joint constrains only coincident anchors and intentionally leaves three

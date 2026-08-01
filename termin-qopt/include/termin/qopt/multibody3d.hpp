@@ -6,6 +6,7 @@
 
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/screw3.hpp>
+#include <termin/geom/spatial_inertia3.hpp>
 #include <termin/qopt/dynamics.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
 
@@ -25,27 +26,11 @@ namespace termin::qopt
         InvalidMass,
         InvalidInertia,
         NonFiniteInput,
-        InvalidMatrixView,
         InvalidJointAxis,
     };
 
     [[nodiscard]] TERMIN_QOPT_API std::string_view
     multibody3d_diagnostic_name(Multibody3DDiagnostic diagnostic) noexcept;
-
-    // Principal moments and their frame are expressed in body-local
-    // coordinates. inertia_frame_local.lin is the center of mass; .ang orients
-    // principal axes.
-    struct SpatialInertia3D
-    {
-        double mass = 1.0;
-        termin::Vec3 principal_moments = {1.0, 1.0, 1.0};
-        termin::Pose3 inertia_frame_local = termin::Pose3::identity();
-    };
-
-    [[nodiscard]] TERMIN_QOPT_API Multibody3DDiagnostic
-    write_spatial_inertia3d_matrix_world(const SpatialInertia3D& inertia,
-                                         termin::Quat body_orientation_world,
-                                         DenseMatrixView destination) noexcept;
 
     struct RigidBody3DState
     {
@@ -60,16 +45,17 @@ namespace termin::qopt
     class TERMIN_QOPT_API RigidBody3DContribution final : public DynamicsContribution
     {
       public:
-        RigidBody3DContribution(SpatialInertia3D inertia,
+        RigidBody3DContribution(termin::SpatialInertia3 inertia,
                                 RigidBody3DState initial_state = {},
                                 termin::Vec3 gravity_world = termin::Vec3::zero(),
                                 std::string_view diagnostic_name = {});
 
         [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
-        [[nodiscard]] const SpatialInertia3D& inertia() const noexcept;
+        [[nodiscard]] const termin::SpatialInertia3& inertia() const noexcept;
         [[nodiscard]] const RigidBody3DState& state() const noexcept;
-        [[nodiscard]] const termin::Screw3& acceleration_local() const noexcept;
-        [[nodiscard]] termin::Screw3 velocity_world() const noexcept;
+        [[nodiscard]] const termin::Screw3&
+        twist_rate_at_body_origin_local() const noexcept;
+        [[nodiscard]] termin::Screw3 velocity_at_body_origin_world() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
         [[nodiscard]] Multibody3DDiagnostic set_state(RigidBody3DState state) noexcept;
@@ -107,15 +93,15 @@ namespace termin::qopt
             DenseVectorView destination) const noexcept override;
 
       private:
-        SpatialInertia3D inertia_;
+        termin::SpatialInertia3 inertia_;
         RigidBody3DState state_;
-        termin::Screw3 acceleration_local_ = termin::Screw3::zero();
+        termin::Screw3 twist_rate_at_body_origin_local_ = termin::Screw3::zero();
         termin::Vec3 gravity_world_;
         std::string diagnostic_name_;
         DynamicsDofHandle dofs_;
         Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
         RigidBody3DState state_snapshot_;
-        termin::Screw3 acceleration_snapshot_ = termin::Screw3::zero();
+        termin::Screw3 twist_rate_snapshot_ = termin::Screw3::zero();
         bool snapshot_ready_ = false;
     };
 
@@ -125,11 +111,13 @@ namespace termin::qopt
     class TERMIN_QOPT_API ForceOnBody3DContribution final : public DynamicsContribution
     {
       public:
-        explicit ForceOnBody3DContribution(RigidBody3DContribution& body,
-                                           termin::Screw3 wrench_world = {}) noexcept;
+        explicit ForceOnBody3DContribution(
+            RigidBody3DContribution& body,
+            termin::Screw3 wrench_at_body_origin_world = {}) noexcept;
 
-        void set_wrench_world(termin::Screw3 wrench) noexcept;
-        [[nodiscard]] const termin::Screw3& wrench_world() const noexcept;
+        void set_wrench_at_body_origin_world(termin::Screw3 wrench) noexcept;
+        [[nodiscard]] const termin::Screw3&
+        wrench_at_body_origin_world() const noexcept;
 
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
@@ -138,7 +126,7 @@ namespace termin::qopt
 
       private:
         RigidBody3DContribution* body_;
-        termin::Screw3 wrench_world_;
+        termin::Screw3 wrench_at_body_origin_world_;
     };
 
     // Three equations constrain a body-local point to a fixed world point:
@@ -154,7 +142,8 @@ namespace termin::qopt
 
         // World-frame reaction wrench at the joint anchor. ang is the
         // constraint moment about that anchor; lin is the anchor force.
-        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        [[nodiscard]] const termin::Screw3&
+        reaction_at_joint_anchor_world() const noexcept;
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
@@ -176,7 +165,7 @@ namespace termin::qopt
         termin::Vec3 world_anchor_;
         std::string diagnostic_name_;
         DynamicsConstraintHandle constraint_;
-        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_at_joint_anchor_world_ = termin::Screw3::zero();
         termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
     };
 
@@ -191,7 +180,8 @@ namespace termin::qopt
                                  termin::Vec3 body_b_anchor_local,
                                  std::string_view diagnostic_name = {});
 
-        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        [[nodiscard]] const termin::Screw3&
+        reaction_at_joint_anchor_world() const noexcept;
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
@@ -214,7 +204,7 @@ namespace termin::qopt
         termin::Vec3 body_b_anchor_local_;
         std::string diagnostic_name_;
         DynamicsConstraintHandle constraint_;
-        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_at_joint_anchor_world_ = termin::Screw3::zero();
         termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
     };
 
@@ -232,7 +222,8 @@ namespace termin::qopt
                                          std::string_view diagnostic_name = {});
 
         [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
-        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        [[nodiscard]] const termin::Screw3&
+        reaction_at_joint_anchor_world() const noexcept;
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
@@ -256,7 +247,7 @@ namespace termin::qopt
         termin::Vec3 world_axis_;
         std::string diagnostic_name_;
         DynamicsConstraintHandle constraint_;
-        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_at_joint_anchor_world_ = termin::Screw3::zero();
         termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
         Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
     };
@@ -277,7 +268,8 @@ namespace termin::qopt
                                     std::string_view diagnostic_name = {});
 
         [[nodiscard]] Multibody3DDiagnostic diagnostic() const noexcept;
-        [[nodiscard]] const termin::Screw3& reaction_world() const noexcept;
+        [[nodiscard]] const termin::Screw3&
+        reaction_at_joint_anchor_world() const noexcept;
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
@@ -302,7 +294,7 @@ namespace termin::qopt
         termin::Vec3 body_b_axis_local_;
         std::string diagnostic_name_;
         DynamicsConstraintHandle constraint_;
-        termin::Screw3 reaction_world_ = termin::Screw3::zero();
+        termin::Screw3 reaction_at_joint_anchor_world_ = termin::Screw3::zero();
         termin::Screw3 reaction_snapshot_ = termin::Screw3::zero();
         Multibody3DDiagnostic diagnostic_ = Multibody3DDiagnostic::None;
     };

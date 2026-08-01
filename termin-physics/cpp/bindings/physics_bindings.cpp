@@ -19,17 +19,11 @@ NB_MODULE(_physics_native, m) {
     nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
 
-    nb::class_<MassProperties>(m, "MassProperties")
-        .def(nb::init<>())
-        .def_rw("mass", &MassProperties::mass)
-        .def_rw("principal_moments", &MassProperties::principal_moments)
-        .def_rw("inertia_frame_local", &MassProperties::inertia_frame_local);
-
     m.def("compute_mass_properties", [](
               const colliders::ColliderPrimitive& collider,
               const Vec3& entity_scale,
               double mass) {
-        MassProperties properties;
+        SpatialInertia3 properties;
         std::string diagnostic;
         if (!try_compute_mass_properties(
                 collider, entity_scale, mass, properties, diagnostic)) {
@@ -79,7 +73,7 @@ NB_MODULE(_physics_native, m) {
         }, nb::arg("radius"), nb::arg("mass"),
            nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false)
         .def_static("create_with_mass_properties", [](
-                const MassProperties& properties,
+                const SpatialInertia3& properties,
                 std::optional<Pose3> shape_pose,
                 bool is_static) {
             return RigidBody::create_with_mass_properties(

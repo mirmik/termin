@@ -20,17 +20,17 @@ using termin::Vec3;
 using termin::colliders::BoxCollider;
 using termin::colliders::CapsuleCollider;
 using termin::colliders::ConvexHullCollider;
-using termin::physics::MassProperties;
+using termin::SpatialInertia3;
 using termin::physics::RigidBody;
 using termin::physics::try_compute_mass_properties;
 
 namespace {
 
-MassProperties checked_properties(
+SpatialInertia3 checked_properties(
     const termin::colliders::ColliderPrimitive &collider,
     const Vec3 &scale,
     double mass) {
-  MassProperties result;
+  SpatialInertia3 result;
   std::string diagnostic;
   REQUIRE(try_compute_mass_properties(collider, scale, mass, result, diagnostic));
   CHECK(diagnostic.empty());
@@ -49,7 +49,7 @@ TEST_CASE("Capsule mass properties use collision-effective dimensions") {
   CapsuleCollider capsule(0.75, 0.5);
   const Vec3 entity_scale(3.0, 2.0, 4.0);
   const double mass = 5.0;
-  const MassProperties properties =
+  const SpatialInertia3 properties =
       checked_properties(capsule, entity_scale, mass);
 
   const double radius = 1.0;
@@ -81,9 +81,9 @@ TEST_CASE("Cube hull agrees with equivalent box mass properties") {
   };
   const ConvexHullCollider hull = ConvexHullCollider::from_points(vertices);
   const BoxCollider box(Vec3(1.0, 2.0, 3.0));
-  const MassProperties hull_properties =
+  const SpatialInertia3 hull_properties =
       checked_properties(hull, Vec3(1.5, 0.5, 2.0), 7.0);
-  const MassProperties box_properties =
+  const SpatialInertia3 box_properties =
       checked_properties(box, Vec3(1.5, 0.5, 2.0), 7.0);
 
   const auto hull_moments = sorted_moments(hull_properties.principal_moments);
@@ -91,9 +91,9 @@ TEST_CASE("Cube hull agrees with equivalent box mass properties") {
   for (int index = 0; index < 3; ++index) {
     CHECK(hull_moments[index] == Approx(box_moments[index]).epsilon(1.0e-9));
   }
-  CHECK(std::abs(hull_properties.inertia_frame_local.lin.x) < 1.0e-12);
-  CHECK(std::abs(hull_properties.inertia_frame_local.lin.y) < 1.0e-12);
-  CHECK(std::abs(hull_properties.inertia_frame_local.lin.z) < 1.0e-12);
+  CHECK(std::abs(hull_properties.inertia_frame.lin.x) < 1.0e-12);
+  CHECK(std::abs(hull_properties.inertia_frame.lin.y) < 1.0e-12);
+  CHECK(std::abs(hull_properties.inertia_frame.lin.z) < 1.0e-12);
 }
 
 TEST_CASE("Asymmetric hull keeps a stable local center and principal frame") {
@@ -106,12 +106,12 @@ TEST_CASE("Asymmetric hull keeps a stable local center and principal frame") {
   const ConvexHullCollider hull = ConvexHullCollider::from_points(
       vertices,
       GeneralPose3(Quat::identity(), Vec3(1.0, -2.0, 0.5)));
-  const MassProperties properties =
+  const SpatialInertia3 properties =
       checked_properties(hull, Vec3(2.0, 3.0, 0.5), 4.0);
 
-  CHECK(properties.inertia_frame_local.lin.x == Approx(3.0));
-  CHECK(properties.inertia_frame_local.lin.y == Approx(-5.25));
-  CHECK(properties.inertia_frame_local.lin.z == Approx(0.625));
+  CHECK(properties.inertia_frame.lin.x == Approx(3.0));
+  CHECK(properties.inertia_frame.lin.y == Approx(-5.25));
+  CHECK(properties.inertia_frame.lin.z == Approx(0.625));
   CHECK(properties.principal_moments.x > 0.0);
   CHECK(properties.principal_moments.y > properties.principal_moments.x);
   CHECK(properties.principal_moments.z > properties.principal_moments.y);
@@ -140,7 +140,7 @@ TEST_CASE("Degenerate convex hull mass properties fail explicitly") {
       {0.0, 1.0, 0.0},
       {1.0, 1.0, 0.0},
   });
-  MassProperties properties;
+  SpatialInertia3 properties;
   std::string diagnostic;
   CHECK_FALSE(try_compute_mass_properties(
       hull, Vec3(1.0, 1.0, 1.0), 1.0, properties, diagnostic));
