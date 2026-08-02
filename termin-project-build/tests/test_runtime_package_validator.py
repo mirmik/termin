@@ -1295,3 +1295,58 @@ def test_validate_runtime_package_reports_missing_pipeline_pass_variant(
         in diagnostic.message
         for diagnostic in diagnostics
     )
+
+
+def test_validate_runtime_package_requires_webgpu_layout_sidecars(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    shader_uuid = "webgpu-shader"
+    shader_dir = package_dir / "shaders"
+    (shader_dir / "vulkan").mkdir(parents=True, exist_ok=True)
+    (shader_dir / "webgpu").mkdir(parents=True, exist_ok=True)
+    for stage in ("vert", "frag"):
+        (shader_dir / "vulkan" / f"{shader_uuid}.{stage}.slang").write_text(
+            "void main() {}\n",
+            encoding="utf-8",
+        )
+        (shader_dir / "webgpu" / f"{shader_uuid}.{stage}.wgsl").write_text(
+            "@fragment fn main() {}\n",
+            encoding="utf-8",
+        )
+    _write_json(
+        shader_dir / f"{shader_uuid}.shader.json",
+        {
+            "uuid": shader_uuid,
+            "language": "slang",
+            "vertex_source_path": f"shaders/vulkan/{shader_uuid}.vert.slang",
+            "fragment_source_path": f"shaders/vulkan/{shader_uuid}.frag.slang",
+            "artifacts": {
+                "webgpu": {
+                    "vertex": f"shaders/webgpu/{shader_uuid}.vert.wgsl",
+                    "fragment": f"shaders/webgpu/{shader_uuid}.frag.wgsl",
+                }
+            },
+        },
+    )
+    _write_json(
+        Path(str(shader_dir / "webgpu" / f"{shader_uuid}.vert.wgsl") + ".layout.json"),
+        {"version": 3, "target": "webgpu", "stage": "vertex", "resources": []},
+    )
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["resources"].append(
+        {
+            "type": "shader",
+            "uuid": shader_uuid,
+            "path": f"shaders/{shader_uuid}.shader.json",
+        }
+    )
+    _write_json(manifest_path, manifest)
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path
+        == f"shaders/webgpu/{shader_uuid}.frag.wgsl.layout.json"
+        and "cannot be read" in diagnostic.message
+        for diagnostic in diagnostics
+    )

@@ -378,6 +378,17 @@ def test_d3d11_compilation_receives_resolved_fxc(tmp_path: Path, monkeypatch) ->
     def run(command, **_kwargs):
         commands.append(command)
         output.write_bytes(b"dxbc")
+        Path(f"{output}.layout.json").write_text(
+            json.dumps(
+                {
+                    "version": 2,
+                    "target": "d3d11",
+                    "stage": "vertex",
+                    "resources": [],
+                }
+            ),
+            encoding="utf-8",
+        )
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr(shaders.subprocess, "run", run)

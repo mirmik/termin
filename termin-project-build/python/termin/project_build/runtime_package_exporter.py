@@ -12,6 +12,7 @@ The exporter writes the package contract consumed by termin-runtime:
     shaders/*.shader.json
     shaders/*.shader-program.json
     shaders/vulkan/*.spv
+    shaders/webgpu/*.wgsl
 
 When a referenced mesh/material exists in project sources or the current runtime
 registries, the exporter writes real runtime artifacts. Missing registry entries
