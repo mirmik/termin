@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,9 @@ namespace termin
     {
         None,
         InvalidRoot,
+        InvalidBaseMode,
+        MissingRootBody,
+        UnexpectedRootBody,
         EmptyArticulation,
         NonRigidTransform,
         UnsupportedJoint,
@@ -52,6 +56,9 @@ namespace termin
         std::string diagnostic_entity;
         std::vector<qopt::ArticulationLink3D> links;
         qopt::Articulation3DState state;
+        std::optional<qopt::ArticulationFloatingBase3D> floating_base;
+        FEMRigidBodyComponent* base_body = nullptr;
+        Entity base_entity;
         std::vector<FEMArticulationSceneBinding> bindings;
 
         [[nodiscard]] bool ok() const noexcept
@@ -60,9 +67,10 @@ namespace termin
         }
     };
 
-    // Compiles the strict alternating hierarchy
-    // articulation root -> kinematic joint entity -> rigid body entity.
-    // Every body may contain more joint entities, which naturally forms a
+    // Compiles the strict alternating hierarchy rooted at an articulation
+    // frame. A fixed root is only a frame. A floating root also owns its
+    // FEMRigidBodyComponent, which becomes the physical base body. Below it,
+    // kinematic joint entity -> rigid body entity alternation forms a
     // topologically ordered reduced-coordinate tree.
     [[nodiscard]] ENTITY_API FEMArticulationSceneCompilation
     compile_fem_articulation_scene(Entity root);

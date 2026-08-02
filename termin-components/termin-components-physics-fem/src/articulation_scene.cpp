@@ -74,6 +74,40 @@ namespace termin
             return Screw3::zero();
         }
 
+        SpatialInertia3 body_inertia(const FEMRigidBodyComponent& body)
+        {
+            SpatialInertia3 inertia;
+            inertia.mass = body.mass;
+            inertia.principal_moments = {
+                body.inertia_diagonal.x,
+                body.inertia_diagonal.y,
+                body.inertia_diagonal.z,
+            };
+            inertia.inertia_frame = Pose3::identity();
+            return inertia;
+        }
+
+        std::vector<FEMRigidBodyComponent*> enabled_bodies(Entity entity)
+        {
+            std::vector<FEMRigidBodyComponent*> result;
+            for (std::size_t index = 0; index < entity.component_count();
+                 ++index)
+            {
+                tc_component* component = entity.component_at(index);
+                if (component == nullptr || component->kind != TC_CXX_COMPONENT)
+                {
+                    continue;
+                }
+                auto* body = dynamic_cast<FEMRigidBodyComponent*>(
+                    CxxComponent::from_tc(component));
+                if (body != nullptr && body->enabled())
+                {
+                    result.push_back(body);
+                }
+            }
+            return result;
+        }
+
     } // namespace
 
     std::string_view fem_articulation_scene_diagnostic_name(
@@ -85,6 +119,12 @@ namespace termin
             return "none";
         case FEMArticulationSceneDiagnostic::InvalidRoot:
             return "invalid-root";
+        case FEMArticulationSceneDiagnostic::InvalidBaseMode:
+            return "invalid-base-mode";
+        case FEMArticulationSceneDiagnostic::MissingRootBody:
+            return "missing-root-body";
+        case FEMArticulationSceneDiagnostic::UnexpectedRootBody:
+            return "unexpected-root-body";
         case FEMArticulationSceneDiagnostic::EmptyArticulation:
             return "empty-articulation";
         case FEMArticulationSceneDiagnostic::NonRigidTransform:
@@ -117,6 +157,19 @@ namespace termin
             return result;
         }
 
+        FEMArticulationComponent* articulation =
+            root.get_component<FEMArticulationComponent>();
+        const bool floating =
+            articulation->base_mode ==
+            static_cast<int>(FEMArticulationBaseMode::Floating);
+        if (!floating && articulation->base_mode !=
+                             static_cast<int>(FEMArticulationBaseMode::Fixed))
+        {
+            result.diagnostic = FEMArticulationSceneDiagnostic::InvalidBaseMode;
+            result.diagnostic_entity = entity_name(root);
+            return result;
+        }
+
         const std::optional<Pose3> root_pose =
             root.transform().try_rigid_pose();
         if (!root_pose.has_value())
@@ -125,6 +178,41 @@ namespace termin
                 FEMArticulationSceneDiagnostic::NonRigidTransform;
             result.diagnostic_entity = entity_name(root);
             return result;
+        }
+
+        const std::vector<FEMRigidBodyComponent*> root_bodies =
+            enabled_bodies(root);
+        if (root_bodies.size() > 1)
+        {
+            result.diagnostic = FEMArticulationSceneDiagnostic::MultipleBodies;
+            result.diagnostic_entity = entity_name(root);
+            return result;
+        }
+        FEMRigidBodyComponent* root_body =
+            root_bodies.empty() ? nullptr : root_bodies.front();
+        if (floating && root_body == nullptr)
+        {
+            result.diagnostic = FEMArticulationSceneDiagnostic::MissingRootBody;
+            result.diagnostic_entity = entity_name(root);
+            return result;
+        }
+        if (!floating && root_body != nullptr)
+        {
+            result.diagnostic =
+                FEMArticulationSceneDiagnostic::UnexpectedRootBody;
+            result.diagnostic_entity = entity_name(root);
+            return result;
+        }
+        if (floating)
+        {
+            result.base_body = root_body;
+            result.base_entity = root;
+            result.floating_base = qopt::ArticulationFloatingBase3D{
+                .inertia = body_inertia(*root_body),
+                .pose_world = *root_pose,
+                .velocity_local = Screw3::zero(),
+                .diagnostic_name = entity_name(root),
+            };
         }
 
         std::unordered_set<FEMRigidBodyComponent*> compiled_bodies;
@@ -170,7 +258,7 @@ namespace termin
                          joint_entity);
                     return;
                 }
-                if (parent_link == qopt::articulation_world_link)
+                if (!floating && parent_link == qopt::articulation_root_frame)
                 {
                     parent_to_joint_zero =
                         (*root_pose * parent_to_joint_zero).normalized();
@@ -190,19 +278,19 @@ namespace termin
                 Entity body_entity;
                 for (Entity child : joint_entity.children())
                 {
-                    FEMRigidBodyComponent* candidate =
-                        child.get_component<FEMRigidBodyComponent>();
-                    if (candidate == nullptr || !candidate->enabled())
+                    const std::vector<FEMRigidBodyComponent*> candidates =
+                        enabled_bodies(child);
+                    if (candidates.empty())
                     {
                         continue;
                     }
-                    if (body != nullptr)
+                    if (body != nullptr || candidates.size() > 1)
                     {
                         fail(FEMArticulationSceneDiagnostic::MultipleBodies,
                              joint_entity);
                         return;
                     }
-                    body = candidate;
+                    body = candidates.front();
                     body_entity = child;
                 }
                 if (body == nullptr)
@@ -232,15 +320,6 @@ namespace termin
                          body_entity);
                     return;
                 }
-
-                SpatialInertia3 inertia;
-                inertia.mass = body->mass;
-                inertia.principal_moments = {
-                    body->inertia_diagonal.x,
-                    body->inertia_diagonal.y,
-                    body->inertia_diagonal.z,
-                };
-                inertia.inertia_frame = Pose3::identity();
 
                 const double coordinate_scale = joint->get_coordinate_scale();
                 if (!std::isfinite(coordinate_scale) || coordinate_scale <= 0.0)
@@ -285,7 +364,7 @@ namespace termin
                     .parent_to_joint_zero = parent_to_joint_zero,
                     .motion_twist_at_joint = motion_twist,
                     .joint_to_link = joint_to_link,
-                    .inertia = inertia,
+                    .inertia = body_inertia(*body),
                     .limits = limits,
                     .diagnostic_name = entity_name(body_entity),
                 });
@@ -308,7 +387,7 @@ namespace termin
             }
         };
 
-        compile_children(root, qopt::articulation_world_link);
+        compile_children(root, qopt::articulation_root_frame);
         if (result.diagnostic == FEMArticulationSceneDiagnostic::None &&
             result.links.empty())
         {

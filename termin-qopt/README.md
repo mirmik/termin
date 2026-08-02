@@ -64,9 +64,9 @@ The reduced-coordinate articulation path is native as well.
 scalar coordinate per link joint, or a floating-base tree whose explicit root
 rigid body contributes six local spatial DOFs before the joint coordinates.
 The floating root owns a world pose, right-trivialized local velocity and
-spatial inertia; it is not encoded as a fictitious six-coordinate joint. Each link stores the
-parent-to-zero-joint pose, a local one-DOF motion twist, the joint-to-link pose,
-and spatial inertia. Forward kinematics uses `Exp(S q)` and inverse dynamics
+spatial inertia; it is not encoded as a fictitious six-coordinate joint. Each
+link stores the parent-to-zero-joint pose, a local one-DOF motion twist, the
+joint-to-link pose, and spatial inertia. Forward kinematics uses `Exp(S q)` and inverse dynamics
 uses a recursive Newton-Euler pass. The current correctness backend obtains the
 dense reduced mass matrix by repeated inverse-dynamics passes, so it already
 fits the generic `DynamicsSystem` contract while leaving CRBA as an internal
@@ -138,12 +138,13 @@ Per-contact state exposes final normal and world tangent impulses, tangent
 velocity, friction work, and a sticking/sliding diagnostic.
 
 The separate
-`termin-components-physics-fem` layer now compiles
-an explicit root/joint/body entity hierarchy into this public model and keeps
-solved joint coordinates synchronized with `RotatorComponent` or
-`ActuatorComponent`. The FEM adapter also translates solver-neutral collision
-patches into the keyed contact-set contract. Floating articulation bases and a
-linear-time dynamics backend remain subsequent slices.
+`termin-components-physics-fem` layer now compiles explicit fixed- or
+floating-root joint/body entity hierarchies into this public model. It keeps
+the floating base pose and solved joint coordinates synchronized with scene
+entities and `RotatorComponent` or `ActuatorComponent`. The FEM adapter also
+translates solver-neutral collision patches on maximal bodies, floating bases
+and links into the keyed contact-set contract. A linear-time dynamics backend
+remains a subsequent optimization slice.
 
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
