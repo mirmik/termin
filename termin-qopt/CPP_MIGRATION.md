@@ -48,6 +48,15 @@
 - FEM scene components перенесены в native модуль
   `termin_components_physics_fem`; существующий double-pendulum проект не
   загружает Python-модуль и NumPy во время исполнения;
+- добавлен первый reduced-coordinate `Articulation3DContribution`: fixed-base
+  дерево из one-DOF screw joints регистрируется как единый блок из `N` степеней
+  свободы, вычисляет кинематику через `Exp(S q)`, mass/bias через RNEA и не
+  создаёт внутренних constraint-строк; аналитические revolute/prismatic
+  уравнения, ветвление и двойной маятник сверены с maximal-coordinate моделью;
+- native scene compiler переводит строгую иерархию articulation root →
+  kinematic joint entity → rigid body entity в публичные `ArticulationLink3D`,
+  а тестовый double-pendulum уже использует две reduced coordinates без
+  внутренних constraint-строк;
 - старый `RevoluteJoint3D` не переносится под прежней семантикой: его
   point/ball поведение соответствует `PointJoint3D`, а новый
   `RevoluteJoint3DContribution` означает axis-constrained шарнир;
@@ -111,9 +120,10 @@ Eigen не должен становиться публичным SDK API.
 7. [x] Перенести `HQPSolver`, `Level`, `QuadraticTask`, constraints.
 8. [~] Перенести multibody/FEM assembler поверх того же solver API:
    dense block/dynamics assembly, contribution orchestration, 2D double
-   pendulum, 3D bodies, point joints, axis-constrained revolute joints и
-   native scene vertical slice готовы; общий FEM element catalog и sparse
-   assembly остаются следующими срезами.
+   pendulum, 3D bodies, point joints, axis-constrained revolute joints, native
+   scene vertical slice, fixed-base reduced articulation и строгий scene-tree
+   compiler готовы; floating articulation base, внешний constraints/drives API,
+   общий FEM element catalog и sparse assembly остаются следующими срезами.
 9. Добавить Python re-export/bindings только после стабилизации C++ контрактов.
 10. Отдельно оценить sparse backend для больших FEM-систем.
 

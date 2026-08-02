@@ -1,9 +1,12 @@
+#include <termin/physics_fem/articulation_scene.hpp>
 #include <termin/physics_fem/components.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string_view>
 
+#include <components/kinematic_unit_component.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component_registry.hpp>
@@ -79,6 +82,46 @@ namespace termin
 
     } // namespace
 
+    FEMArticulationComponent::FEMArticulationComponent()
+        : CxxComponent("FEMArticulationComponent")
+    {
+    }
+
+    void FEMArticulationComponent::register_type()
+    {
+        auto descriptor =
+            ComponentTypeDescriptorBuilder::native<FEMArticulationComponent>(
+                "FEMArticulationComponent", module_owner, "Component");
+        descriptor.category("Physics");
+        (void)descriptor.commit();
+    }
+
+    void FEMArticulationComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
+    }
+
+    bool FEMArticulationComponent::initialized() const noexcept
+    {
+        return articulation_ != nullptr;
+    }
+
+    std::size_t FEMArticulationComponent::link_count() const noexcept
+    {
+        return articulation_ != nullptr ? articulation_->link_count() : 0;
+    }
+
+    double FEMArticulationComponent::total_energy() const noexcept
+    {
+        return articulation_ != nullptr
+                   ? articulation_->total_energy()
+                   : std::numeric_limits<double>::quiet_NaN();
+    }
+
     FEMRigidBodyComponent::FEMRigidBodyComponent()
         : CxxComponent("FEMRigidBodyComponent")
     {
@@ -124,6 +167,15 @@ namespace termin
         (void)descriptor.commit();
     }
 
+    void FEMRigidBodyComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
+    }
+
     FEMFixedJointComponent::FEMFixedJointComponent()
         : CxxComponent("FEMFixedJointComponent")
     {
@@ -157,6 +209,15 @@ namespace termin
                      1.0e9,
                      0.01);
         (void)descriptor.commit();
+    }
+
+    void FEMFixedJointComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
     }
 
     FEMRevoluteJointComponent::FEMRevoluteJointComponent()
@@ -208,6 +269,15 @@ namespace termin
         (void)descriptor.commit();
     }
 
+    void FEMRevoluteJointComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
+    }
+
     FEMPhysicsWorldComponent::FEMPhysicsWorldComponent()
         : CxxComponent("FEMPhysicsWorldComponent")
     {
@@ -244,18 +314,6 @@ namespace termin
                                 1,
                                 100,
                                 1);
-        tc::stage_inspect_field(inspect,
-                                &FEMPhysicsWorldComponent::energy_stabilization,
-                                "FEMPhysicsWorldComponent",
-                                "energy_stabilization",
-                                "Energy Stabilization",
-                                "bool");
-        tc::stage_inspect_field(inspect,
-                                &FEMPhysicsWorldComponent::strict_energy_mode,
-                                "FEMPhysicsWorldComponent",
-                                "strict_energy_mode",
-                                "Strict Energy Mode",
-                                "bool");
         (void)descriptor.commit();
     }
 
@@ -321,8 +379,34 @@ namespace termin
             .initialized = initialized_,
             .simulated_time = simulated_time_,
             .successful_steps = successful_steps_,
-            .body_count = bodies_.size(),
+            .body_count =
+                [this]()
+            {
+                std::size_t result = bodies_.size();
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    result += articulation != nullptr
+                                  ? articulation->link_count()
+                                  : 0;
+                }
+                return result;
+            }(),
             .joint_count = fixed_joints_.size() + revolute_joints_.size(),
+            .articulation_count = articulations_.size(),
+            .reduced_dof_count =
+                [this]()
+            {
+                std::size_t result = 0;
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    result += articulation != nullptr
+                                  ? articulation->link_count()
+                                  : 0;
+                }
+                return result;
+            }(),
             .initial_total_energy = initial_total_energy_,
             .total_energy = total_energy(),
         };
@@ -351,13 +435,20 @@ namespace termin
             return false;
         }
 
+        std::vector<FEMRigidBodyComponent*> discovered_bodies;
         const std::vector<Entity> entities = scene.get_all_entities();
         for (Entity candidate : entities)
         {
             if (auto* body = candidate.get_component<FEMRigidBodyComponent>();
                 body != nullptr && body->enabled())
             {
-                bodies_.push_back(body);
+                discovered_bodies.push_back(body);
+            }
+            if (auto* articulation =
+                    candidate.get_component<FEMArticulationComponent>();
+                articulation != nullptr && articulation->enabled())
+            {
+                articulations_.push_back(articulation);
             }
             if (auto* joint = candidate.get_component<FEMFixedJointComponent>();
                 joint != nullptr && joint->enabled())
@@ -371,17 +462,34 @@ namespace termin
                 revolute_joints_.push_back(joint);
             }
         }
-        if (bodies_.empty())
+        if (discovered_bodies.empty())
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] scene contains no FEM bodies");
             clear_runtime_links();
             return false;
         }
-        for (FEMRigidBodyComponent* body : bodies_)
+        for (FEMArticulationComponent* articulation : articulations_)
         {
-            if (!register_body(*body))
+            if (!register_articulation(*articulation))
             {
+                clear_runtime_links();
+                return false;
+            }
+        }
+        for (FEMRigidBodyComponent* body : discovered_bodies)
+        {
+            if (body->world_ == nullptr && !register_body(*body))
+            {
+                clear_runtime_links();
+                return false;
+            }
+            if (body->world_ != this)
+            {
+                tc::Log::error(
+                    "[FEMPhysicsWorldComponent] body '%s' belongs to another "
+                    "dynamics world",
+                    body->entity().name());
                 clear_runtime_links();
                 return false;
             }
@@ -590,6 +698,115 @@ namespace termin
         return true;
     }
 
+    bool FEMPhysicsWorldComponent::register_articulation(
+        FEMArticulationComponent& component)
+    {
+        FEMArticulationSceneCompilation compiled =
+            compile_fem_articulation_scene(component.entity());
+        if (!compiled.ok())
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] compilation failed at '%s': %s",
+                compiled.diagnostic_entity.c_str(),
+                fem_articulation_scene_diagnostic_name(compiled.diagnostic)
+                    .data());
+            return false;
+        }
+        for (const FEMArticulationSceneBinding& binding : compiled.bindings)
+        {
+            if (binding.body->world_ != nullptr)
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] body '%s' belongs to more than "
+                    "one dynamics model",
+                    binding.body_entity.name());
+                return false;
+            }
+            if (binding.body->linear_damping != 0.0 ||
+                binding.body->angular_damping != 0.0)
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] body '%s' uses damping, which "
+                    "is not yet projected into reduced coordinates",
+                    binding.body_entity.name());
+                return false;
+            }
+        }
+
+        auto articulation = std::make_unique<qopt::Articulation3DContribution>(
+            std::move(compiled.links),
+            std::move(compiled.state),
+            vec3(gravity),
+            component.entity().name() ? component.entity().name()
+                                      : "articulation");
+        if (articulation->diagnostic() != qopt::Articulation3DDiagnostic::None)
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] reduced model is invalid: %s",
+                qopt::articulation3d_diagnostic_name(articulation->diagnostic())
+                    .data());
+            return false;
+        }
+        component.articulation_ = articulation.get();
+        if (system_.add_contribution(std::move(articulation)) !=
+            qopt::DynamicsSystemDiagnostic::None)
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] failed to add contribution");
+            component.articulation_ = nullptr;
+            return false;
+        }
+        component.world_ = this;
+        component.bodies_.reserve(compiled.bindings.size());
+        component.joint_entities_.reserve(compiled.bindings.size());
+        for (const FEMArticulationSceneBinding& binding : compiled.bindings)
+        {
+            component.bodies_.push_back(binding.body);
+            component.joint_entities_.push_back(binding.joint_entity);
+            binding.body->world_ = this;
+        }
+        return true;
+    }
+
+    void FEMPhysicsWorldComponent::synchronize_articulations()
+    {
+        for (FEMArticulationComponent* component : articulations_)
+        {
+            if (component == nullptr || component->articulation_ == nullptr)
+            {
+                continue;
+            }
+            const qopt::Articulation3DState& state =
+                component->articulation_->state();
+            if (state.coordinates.size() != component->joint_entities_.size())
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] runtime binding size mismatch");
+                initialized_ = false;
+                return;
+            }
+            for (std::size_t index = 0;
+                 index < component->joint_entities_.size();
+                 ++index)
+            {
+                Entity joint_entity = component->joint_entities_[index];
+                KinematicUnitComponent* joint =
+                    joint_entity.valid()
+                        ? joint_entity.get_component<KinematicUnitComponent>()
+                        : nullptr;
+                if (joint == nullptr)
+                {
+                    tc::Log::error(
+                        "[FEMArticulationComponent] joint binding was "
+                        "destroyed during simulation");
+                    initialized_ = false;
+                    return;
+                }
+                joint->set_coordinate(state.coordinates[index]);
+            }
+        }
+    }
+
     void FEMPhysicsWorldComponent::step_simulation(double dt)
     {
         std::vector<Screw3> wrenches_world(bodies_.size());
@@ -681,6 +898,11 @@ namespace termin
             body->entity().transform().set_global_pose(
                 body->body_->state().pose);
         }
+        synchronize_articulations();
+        if (!initialized_)
+        {
+            return;
+        }
         simulated_time_ += dt;
         ++successful_steps_;
     }
@@ -693,6 +915,14 @@ namespace termin
             if (body != nullptr && body->body_ != nullptr)
             {
                 result += body->body_->total_energy();
+            }
+        }
+        for (const FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation != nullptr &&
+                articulation->articulation_ != nullptr)
+            {
+                result += articulation->articulation_->total_energy();
             }
         }
         return result;
@@ -728,9 +958,119 @@ namespace termin
                 joint->body_b_ = nullptr;
             }
         }
+        for (FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation == nullptr || articulation->world_ != this)
+            {
+                continue;
+            }
+            for (FEMRigidBodyComponent* body : articulation->bodies_)
+            {
+                if (body != nullptr && body->world_ == this)
+                {
+                    body->world_ = nullptr;
+                    body->body_ = nullptr;
+                    body->force_ = nullptr;
+                }
+            }
+            articulation->bodies_.clear();
+            articulation->joint_entities_.clear();
+            articulation->articulation_ = nullptr;
+            articulation->world_ = nullptr;
+        }
         bodies_.clear();
         fixed_joints_.clear();
         revolute_joints_.clear();
+        articulations_.clear();
+    }
+
+    void FEMPhysicsWorldComponent::detach(
+        FEMArticulationComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMArticulationComponent*& candidate : articulations_)
+        {
+            if (candidate == &component)
+            {
+                candidate = nullptr;
+            }
+        }
+        for (FEMRigidBodyComponent* body : component.bodies_)
+        {
+            if (body != nullptr && body->world_ == this)
+            {
+                body->world_ = nullptr;
+                body->body_ = nullptr;
+                body->force_ = nullptr;
+            }
+        }
+        component.bodies_.clear();
+        component.joint_entities_.clear();
+        component.articulation_ = nullptr;
+        component.world_ = nullptr;
+    }
+
+    void
+    FEMPhysicsWorldComponent::detach(FEMRigidBodyComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMRigidBodyComponent*& candidate : bodies_)
+        {
+            if (candidate == &component)
+            {
+                candidate = nullptr;
+            }
+        }
+        for (FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation == nullptr)
+            {
+                continue;
+            }
+            for (FEMRigidBodyComponent*& candidate : articulation->bodies_)
+            {
+                if (candidate == &component)
+                {
+                    candidate = nullptr;
+                }
+            }
+        }
+        component.body_ = nullptr;
+        component.force_ = nullptr;
+        component.world_ = nullptr;
+    }
+
+    void
+    FEMPhysicsWorldComponent::detach(FEMFixedJointComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMFixedJointComponent*& candidate : fixed_joints_)
+        {
+            if (candidate == &component)
+            {
+                candidate = nullptr;
+            }
+        }
+        component.joint_ = nullptr;
+        component.body_ = nullptr;
+        component.world_ = nullptr;
+    }
+
+    void FEMPhysicsWorldComponent::detach(
+        FEMRevoluteJointComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMRevoluteJointComponent*& candidate : revolute_joints_)
+        {
+            if (candidate == &component)
+            {
+                candidate = nullptr;
+            }
+        }
+        component.joint_ = nullptr;
+        component.body_a_ = nullptr;
+        component.body_b_ = nullptr;
+        component.world_ = nullptr;
     }
 
 } // namespace termin

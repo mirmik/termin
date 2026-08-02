@@ -108,7 +108,10 @@ namespace termin
         {
             std::ostringstream stream;
             stream << "QP multibody   ·   " << telemetry.body_count
-                   << " bodies   ·   " << telemetry.joint_count << " joints";
+                   << " bodies   ·   " << telemetry.joint_count
+                   << " constraints   ·   " << telemetry.articulation_count
+                   << " articulations / " << telemetry.reduced_dof_count
+                   << " reduced DOF";
             return stream.str();
         }
 

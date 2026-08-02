@@ -3,6 +3,7 @@
 #include <string_view>
 
 #include <termin/qopt/active_set_qp.hpp>
+#include <termin/qopt/articulation3d.hpp>
 #include <termin/qopt/block_assembly.hpp>
 #include <termin/qopt/dense_views.hpp>
 #include <termin/qopt/dynamics.hpp>

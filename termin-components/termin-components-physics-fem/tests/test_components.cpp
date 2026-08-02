@@ -3,11 +3,87 @@
 GUARD_TEST_MAIN();
 
 #include <cmath>
+#include <numbers>
 
+#include <components/rotator_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
+#include <termin/geom/general_pose3.hpp>
+#include <termin/physics_fem/articulation_scene.hpp>
 #include <termin/physics_fem/components.hpp>
 #include <termin/tc_scene.hpp>
+
+namespace
+{
+    struct DoublePendulumScene
+    {
+        termin::TcSceneRef scene;
+        termin::FEMPhysicsWorldComponent* world = nullptr;
+        termin::FEMArticulationComponent* articulation = nullptr;
+        termin::RotatorComponent* joint_a = nullptr;
+        termin::RotatorComponent* joint_b = nullptr;
+        termin::FEMRigidBodyComponent* body_a = nullptr;
+        termin::FEMRigidBodyComponent* body_b = nullptr;
+        termin::Entity root;
+    };
+
+    DoublePendulumScene make_double_pendulum_scene()
+    {
+        using namespace termin;
+
+        DoublePendulumScene result;
+        result.scene = TcSceneRef::create("reduced double pendulum");
+
+        result.root = result.scene.create_entity("Articulation Root");
+        result.root.transform().set_local_position({0.0, 0.0, 4.0});
+        result.articulation = new FEMArticulationComponent();
+        result.root.add_component(result.articulation);
+
+        Entity joint_a_entity = result.root.create_child("Hip Joint");
+        result.joint_a = new RotatorComponent();
+        result.joint_a->axis_x = 0.0;
+        result.joint_a->axis_y = 1.0;
+        result.joint_a->axis_z = 0.0;
+        result.joint_a->coordinate = 0.7;
+        result.joint_a->base_position = {0.0, 0.0, 0.0};
+        joint_a_entity.add_component(result.joint_a);
+        result.joint_a->apply();
+
+        Entity body_a_entity = joint_a_entity.create_child("Link A");
+        body_a_entity.transform().set_local_position({0.0, 0.0, -1.0});
+        result.body_a = new FEMRigidBodyComponent();
+        result.body_a->mass = 1.5;
+        result.body_a->inertia_diagonal = {0.5, 0.5, 0.05};
+        body_a_entity.add_component(result.body_a);
+
+        Entity joint_b_entity = body_a_entity.create_child("Knee Joint");
+        result.joint_b = new RotatorComponent();
+        result.joint_b->axis_x = 0.0;
+        result.joint_b->axis_y = 1.0;
+        result.joint_b->axis_z = 0.0;
+        result.joint_b->coordinate = -0.4;
+        result.joint_b->base_position = {0.0, 0.0, -1.0};
+        joint_b_entity.add_component(result.joint_b);
+        result.joint_b->apply();
+
+        Entity body_b_entity = joint_b_entity.create_child("Link B");
+        body_b_entity.transform().set_local_position({0.0, 0.0, -1.0});
+        result.body_b = new FEMRigidBodyComponent();
+        result.body_b->mass = 1.0;
+        result.body_b->inertia_diagonal = {0.4, 0.4, 0.04};
+        body_b_entity.add_component(result.body_b);
+
+        // Keep the world after the articulation in pool order. This is the
+        // destruction order used by the serialized example and exercises the
+        // component-to-world detach contract during scene teardown.
+        Entity world_entity = result.scene.create_entity("Physics World");
+        result.world = new FEMPhysicsWorldComponent();
+        result.world->time_step = 0.001;
+        world_entity.add_component(result.world);
+        return result;
+    }
+
+} // namespace
 
 TEST_CASE("native FEM component doubles round-trip through inspect")
 {
@@ -19,6 +95,7 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     FEMRigidBodyComponent::register_type();
     FEMFixedJointComponent::register_type();
     FEMRevoluteJointComponent::register_type();
+    FEMArticulationComponent::register_type();
     FEMPhysicsWorldComponent::register_type();
 
     FEMRigidBodyComponent body;
@@ -42,4 +119,75 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     restored_world.deserialize_data(&world_data);
     CHECK(std::abs(restored_world.time_step - 0.005) < 1.0e-12);
     tc_value_free(&world_data);
+}
+
+TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
+{
+    using namespace termin;
+
+    DoublePendulumScene pendulum = make_double_pendulum_scene();
+    const FEMArticulationSceneCompilation compiled =
+        compile_fem_articulation_scene(pendulum.root);
+
+    REQUIRE(compiled.ok());
+    REQUIRE_EQ(compiled.links.size(), 2U);
+    REQUIRE_EQ(compiled.bindings.size(), 2U);
+    CHECK(compiled.links[0].parent_link == qopt::articulation_world_link);
+    CHECK(compiled.links[1].parent_link == 0U);
+    CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.z - 4.0) <
+          1.0e-12);
+    CHECK(std::abs(compiled.links[0].motion_twist_at_joint.ang.y - 1.0) <
+          1.0e-12);
+    CHECK(std::abs(compiled.links[1].joint_to_link.lin.z + 1.0) < 1.0e-12);
+    CHECK(std::abs(compiled.state.coordinates[0] - 0.7) < 1.0e-12);
+    CHECK(std::abs(compiled.state.coordinates[1] + 0.4) < 1.0e-12);
+
+    pendulum.scene.destroy();
+}
+
+TEST_CASE("FEM world advances a compiled reduced double pendulum")
+{
+    using namespace termin;
+
+    DoublePendulumScene pendulum = make_double_pendulum_scene();
+    const double coordinate_before = pendulum.joint_a->coordinate;
+    pendulum.world->start();
+
+    REQUIRE(pendulum.articulation->initialized());
+    const FEMPhysicsTelemetry initial = pendulum.world->telemetry();
+    CHECK(initial.initialized);
+    CHECK(initial.body_count == 2U);
+    CHECK(initial.articulation_count == 1U);
+    CHECK(initial.reduced_dof_count == 2U);
+    CHECK(initial.joint_count == 0U);
+    CHECK(std::isfinite(initial.total_energy));
+
+    for (int step = 0; step < 20; ++step)
+    {
+        pendulum.world->update(0.001F);
+    }
+    const FEMPhysicsTelemetry advanced = pendulum.world->telemetry();
+    CHECK(advanced.initialized);
+    CHECK(advanced.successful_steps == 20U);
+    CHECK(std::abs(pendulum.joint_a->coordinate - coordinate_before) > 1.0e-8);
+    CHECK(std::abs(advanced.total_energy - initial.total_energy) < 1.0e-5);
+
+    pendulum.scene.destroy();
+}
+
+TEST_CASE("scene articulation compiler rejects an implicit missing body")
+{
+    using namespace termin;
+
+    TcSceneRef scene = TcSceneRef::create("invalid articulation");
+    Entity root = scene.create_entity("Root");
+    root.add_component(new FEMArticulationComponent());
+    Entity empty_joint = root.create_child("Joint without body");
+    empty_joint.add_component(new RotatorComponent());
+
+    const FEMArticulationSceneCompilation compiled =
+        compile_fem_articulation_scene(root);
+    CHECK(compiled.diagnostic == FEMArticulationSceneDiagnostic::MissingBody);
+    CHECK(compiled.diagnostic_entity == "Joint without body");
+    scene.destroy();
 }

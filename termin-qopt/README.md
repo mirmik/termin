@@ -59,6 +59,23 @@ that class is only a point joint; the native revolute contract is intentionally
 stricter. Native solver/model Python bindings have not migrated; see
 [CPP_MIGRATION.md](CPP_MIGRATION.md).
 
+The first reduced-coordinate articulation slice is native as well.
+`Articulation3DContribution` represents a fixed-base tree as one generalized
+DOF block with one scalar coordinate per link joint. Each link stores the
+parent-to-zero-joint pose, a local one-DOF motion twist, the joint-to-link pose,
+and spatial inertia. Forward kinematics uses `Exp(S q)` and inverse dynamics
+uses a recursive Newton-Euler pass. The current correctness backend obtains the
+dense reduced mass matrix by repeated inverse-dynamics passes, so it already
+fits the generic `DynamicsSystem` contract while leaving CRBA as an internal
+optimization. Internal tree joints need no constraint rows or projection.
+Analytic revolute/prismatic equations, branching, energy, and a
+double-pendulum comparison against the maximal-coordinate model are covered by
+native tests. The separate `termin-components-physics-fem` layer now compiles
+an explicit root/joint/body entity hierarchy into this public model and keeps
+solved joint coordinates synchronized with `RotatorComponent` or
+`ActuatorComponent`. Floating bases, link-level external constraints, drives,
+and a linear-time dynamics backend remain subsequent slices.
+
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
 analytic solutions, KKT bounds, infeasibility/unboundedness certificates,

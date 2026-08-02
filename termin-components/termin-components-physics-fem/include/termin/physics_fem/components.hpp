@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <termin/entity/component.hpp>
+#include <termin/qopt/articulation3d.hpp>
 #include <termin/qopt/multibody3d.hpp>
 
 extern "C"
@@ -17,6 +18,8 @@ namespace termin
 {
 
     class FEMPhysicsWorldComponent;
+    class FEMRigidBodyComponent;
+    class KinematicUnitComponent;
 
     struct FEMPhysicsTelemetry
     {
@@ -25,8 +28,31 @@ namespace termin
         std::uint64_t successful_steps = 0;
         std::size_t body_count = 0;
         std::size_t joint_count = 0;
+        std::size_t articulation_count = 0;
+        std::size_t reduced_dof_count = 0;
         double initial_total_energy = 0.0;
         double total_energy = 0.0;
+    };
+
+    class ENTITY_API FEMArticulationComponent final : public CxxComponent
+    {
+    public:
+        FEMArticulationComponent();
+        ~FEMArticulationComponent() override = default;
+
+        static void register_type();
+        void on_destroy() override;
+
+        [[nodiscard]] bool initialized() const noexcept;
+        [[nodiscard]] std::size_t link_count() const noexcept;
+        [[nodiscard]] double total_energy() const noexcept;
+
+    private:
+        friend class FEMPhysicsWorldComponent;
+        qopt::Articulation3DContribution* articulation_ = nullptr;
+        FEMPhysicsWorldComponent* world_ = nullptr;
+        std::vector<FEMRigidBodyComponent*> bodies_;
+        std::vector<Entity> joint_entities_;
     };
 
     class ENTITY_API FEMRigidBodyComponent final : public CxxComponent
@@ -41,6 +67,7 @@ namespace termin
         ~FEMRigidBodyComponent() override = default;
 
         static void register_type();
+        void on_destroy() override;
 
     private:
         friend class FEMPhysicsWorldComponent;
@@ -60,6 +87,7 @@ namespace termin
         ~FEMFixedJointComponent() override = default;
 
         static void register_type();
+        void on_destroy() override;
 
     private:
         friend class FEMPhysicsWorldComponent;
@@ -81,6 +109,7 @@ namespace termin
         ~FEMRevoluteJointComponent() override = default;
 
         static void register_type();
+        void on_destroy() override;
 
     private:
         friend class FEMPhysicsWorldComponent;
@@ -96,10 +125,6 @@ namespace termin
         tc_vec3 gravity = {0.0, 0.0, -9.81};
         double time_step = 0.01;
         int substeps = 1;
-        // Retained in the serialized contract. Native constrained integration
-        // does not use the legacy global velocity-rescaling energy correction.
-        bool energy_stabilization = true;
-        bool strict_energy_mode = false;
 
         FEMPhysicsWorldComponent();
         ~FEMPhysicsWorldComponent() override = default;
@@ -113,10 +138,15 @@ namespace termin
         [[nodiscard]] FEMPhysicsTelemetry telemetry() const noexcept;
 
     private:
+        friend class FEMArticulationComponent;
+        friend class FEMRigidBodyComponent;
+        friend class FEMFixedJointComponent;
+        friend class FEMRevoluteJointComponent;
         qopt::Multibody3DSystem system_;
         std::vector<FEMRigidBodyComponent*> bodies_;
         std::vector<FEMFixedJointComponent*> fixed_joints_;
         std::vector<FEMRevoluteJointComponent*> revolute_joints_;
+        std::vector<FEMArticulationComponent*> articulations_;
         double accumulated_time_ = 0.0;
         double simulated_time_ = 0.0;
         double initial_total_energy_ = 0.0;
@@ -127,9 +157,15 @@ namespace termin
         bool register_body(FEMRigidBodyComponent& component);
         bool register_fixed_joint(FEMFixedJointComponent& component);
         bool register_revolute_joint(FEMRevoluteJointComponent& component);
+        bool register_articulation(FEMArticulationComponent& component);
+        void synchronize_articulations();
         void step_simulation(double dt);
         [[nodiscard]] double total_energy() const noexcept;
         void clear_runtime_links();
+        void detach(FEMArticulationComponent& component) noexcept;
+        void detach(FEMRigidBodyComponent& component) noexcept;
+        void detach(FEMFixedJointComponent& component) noexcept;
+        void detach(FEMRevoluteJointComponent& component) noexcept;
     };
 
 } // namespace termin

@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt)
+foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt termin_components_kinematic)
     if(COMMAND termin_require_package)
         if(_dep STREQUAL "termin_base")
             termin_require_package(termin_base tcbase::termin_base)
@@ -15,6 +15,8 @@ foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt)
             termin_require_package(termin_inspect termin_inspect::termin_inspect)
         elseif(_dep STREQUAL "termin_qopt")
             termin_require_package(termin_qopt termin_qopt::termin_qopt)
+        elseif(_dep STREQUAL "termin_components_kinematic")
+            termin_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
         endif()
     else()
         find_package(${_dep} REQUIRED)
@@ -28,13 +30,15 @@ termin_add_module(
     NAMESPACE termin_components_physics_fem::
     SOURCES
         src/components.cpp
+        src/articulation_scene.cpp
         src/components_bootstrap.cpp
     PUBLIC_DEPS
         tcbase::termin_base
         termin_scene::termin_scene
         termin_inspect::termin_inspect
         termin_qopt::termin_qopt
-    FIND_DEPS termin_base termin_scene termin_inspect termin_qopt
+        termin_components_kinematic::termin_components_kinematic
+    FIND_DEPS termin_base termin_scene termin_inspect termin_qopt termin_components_kinematic
     INSTALL_HEADERS include/termin
 )
 
