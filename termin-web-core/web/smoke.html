@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Termin Web core smoke</title></head>
+<body>
+<pre id="result">TERMIN_WEB_CORE_SMOKE_RUNNING</pre>
+<script type="module">
+import { createTerminCore } from "./termin-web-core.mjs";
+
+const result = document.querySelector("#result");
+try {
+    const core = await createTerminCore();
+    core.smoke();
+    result.textContent = "TERMIN_WEB_CORE_SMOKE_PASSED";
+} catch (error) {
+    result.textContent = `TERMIN_WEB_CORE_SMOKE_FAILED: ${error.stack ?? error}`;
+}
+</script>
+</body>
+</html>
