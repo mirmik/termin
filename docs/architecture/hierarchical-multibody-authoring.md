@@ -1,9 +1,10 @@
 # Hierarchical multibody authoring
 
-Status: fixed-base articulation, bounded servo, unilateral joint limits,
+Status: fixed- and floating-base qopt articulation core, bounded servo, unilateral joint limits,
 solver-neutral point kinematics, collision-world adaptation, persistent contact,
-and convex Coulomb-friction slices implemented, 2026-08-02. Floating bases,
-restitution, material mixing, and HQP control remain future work.
+and convex Coulomb-friction slices implemented, 2026-08-02. Floating-base
+scene authoring and standing-robot acceptance remain in progress; restitution,
+material mixing, and HQP control remain future work.
 
 ## Goal
 
@@ -21,6 +22,13 @@ state and solver workspace. The implemented fixed-base articulation contributes
 one generalized degree of freedom per joint instead of registering six
 independent degrees of freedom and constraint rows for every link. This keeps
 scene traversal, matrix assembly and time integration in separate layers.
+
+The native numerical model also supports an explicit floating root body. Its
+generalized block is `[base local twist vw (6), joint velocities (N)]`; the root
+pose is integrated on SE(3), while child joints retain ordinary scalar
+coordinates. This is a property of the same contribution, not a second physics
+world or a maximal-coordinate workaround. The scene grammar below still
+documents the implemented fixed-root compiler until the next authoring slice.
 
 `Multibody3DSystem` is the common contribution collector and stepping boundary,
 not a synonym for maximal coordinates. Maximal bodies, forces, point joints

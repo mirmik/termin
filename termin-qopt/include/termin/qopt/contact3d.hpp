@@ -50,6 +50,9 @@ namespace termin::qopt
         articulation_link(Articulation3DContribution& articulation,
                           std::size_t link_index,
                           termin::Vec3 point_local) noexcept;
+        [[nodiscard]] static ContactEndpoint3D
+        articulation_base(Articulation3DContribution& articulation,
+                          termin::Vec3 point_local) noexcept;
 
         [[nodiscard]] bool valid() const noexcept;
         [[nodiscard]] bool is_static() const noexcept;
@@ -61,6 +64,7 @@ namespace termin::qopt
             Invalid,
             StaticWorld,
             RigidBody,
+            ArticulationBase,
             ArticulationLink,
         };
 

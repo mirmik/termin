@@ -31,6 +31,48 @@ namespace termin::qopt
         {
             return {values.data(), values.size(), 1};
         }
+
+        termin::Screw3 read_screw_vw(const std::vector<double>& values,
+                                     std::size_t offset = 0) noexcept
+        {
+            return {
+                {values[offset + 3], values[offset + 4], values[offset + 5]},
+                {values[offset], values[offset + 1], values[offset + 2]},
+            };
+        }
+
+        termin::Screw3 read_screw_vw(ConstDenseVectorView values,
+                                     std::size_t offset) noexcept
+        {
+            return {
+                {values[offset + 3], values[offset + 4], values[offset + 5]},
+                {values[offset], values[offset + 1], values[offset + 2]},
+            };
+        }
+
+        void write_screw_vw(termin::Screw3 value,
+                            std::vector<double>& destination,
+                            std::size_t offset = 0) noexcept
+        {
+            destination[offset] = value.lin.x;
+            destination[offset + 1] = value.lin.y;
+            destination[offset + 2] = value.lin.z;
+            destination[offset + 3] = value.ang.x;
+            destination[offset + 4] = value.ang.y;
+            destination[offset + 5] = value.ang.z;
+        }
+
+        void write_screw_vw(termin::Screw3 value,
+                            DenseVectorView destination,
+                            std::size_t offset) noexcept
+        {
+            destination[offset] = value.lin.x;
+            destination[offset + 1] = value.lin.y;
+            destination[offset + 2] = value.lin.z;
+            destination[offset + 3] = value.ang.x;
+            destination[offset + 4] = value.ang.y;
+            destination[offset + 5] = value.ang.z;
+        }
     } // namespace
 
     std::string_view
@@ -87,9 +129,30 @@ namespace termin::qopt
         joint_limit_state_snapshot_.resize(links_.size());
     }
 
+    Articulation3DContribution::Articulation3DContribution(
+        ArticulationFloatingBase3D floating_base,
+        std::vector<ArticulationLink3D> links,
+        Articulation3DState initial_state,
+        termin::Vec3 gravity_world,
+        std::string_view diagnostic_name)
+        : Articulation3DContribution(std::move(links),
+                                     std::move(initial_state),
+                                     gravity_world,
+                                     diagnostic_name)
+    {
+        floating_base_ = std::move(floating_base);
+        accelerations_.assign(dof_count(), 0.0);
+        acceleration_snapshot_.assign(dof_count(), 0.0);
+        diagnostic_ = validate_model();
+        if (diagnostic_ == Articulation3DDiagnostic::None && !update_kinematics())
+        {
+            diagnostic_ = Articulation3DDiagnostic::NonFiniteInput;
+        }
+    }
+
     Articulation3DDiagnostic Articulation3DContribution::validate_model() const noexcept
     {
-        if (links_.empty())
+        if (links_.empty() && !floating_base_.has_value())
         {
             return Articulation3DDiagnostic::EmptyModel;
         }
@@ -98,6 +161,16 @@ namespace termin::qopt
             !finite(state_.velocities))
         {
             return Articulation3DDiagnostic::InvalidState;
+        }
+        if (floating_base_.has_value() &&
+            (!floating_base_->inertia.is_valid() ||
+             !floating_base_->pose_world.is_finite() ||
+             floating_base_->pose_world.ang.norm() <= 1e-10 ||
+             !floating_base_->velocity_local.is_finite()))
+        {
+            return !floating_base_->inertia.is_valid()
+                       ? Articulation3DDiagnostic::InvalidInertia
+                       : Articulation3DDiagnostic::InvalidState;
         }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
@@ -148,7 +221,7 @@ namespace termin::qopt
 
     std::size_t Articulation3DContribution::dof_count() const noexcept
     {
-        return links_.size();
+        return links_.size() + (floating_base_.has_value() ? 6 : 0);
     }
 
     const std::vector<ArticulationLink3D>&
@@ -160,6 +233,17 @@ namespace termin::qopt
     const Articulation3DState& Articulation3DContribution::state() const noexcept
     {
         return state_;
+    }
+
+    bool Articulation3DContribution::has_floating_base() const noexcept
+    {
+        return floating_base_.has_value();
+    }
+
+    const std::optional<ArticulationFloatingBase3D>&
+    Articulation3DContribution::floating_base() const noexcept
+    {
+        return floating_base_;
     }
 
     const std::vector<double>&
@@ -194,6 +278,69 @@ namespace termin::qopt
     termin::Vec3 Articulation3DContribution::gravity_world() const noexcept
     {
         return gravity_world_;
+    }
+
+    PointKinematics3DResult Articulation3DContribution::floating_base_point_kinematics(
+        termin::Vec3 point_local) const noexcept
+    {
+        if (diagnostic_ != Articulation3DDiagnostic::None ||
+            !floating_base_.has_value())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation '%s' has no valid floating "
+                         "base point\n",
+                         diagnostic_name_.c_str());
+            return {{}, PointKinematics3DDiagnostic::InvalidModel};
+        }
+        if (!point_local.is_finite())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rejected non-finite floating-base point\n");
+            return {{}, PointKinematics3DDiagnostic::NonFinitePoint};
+        }
+
+        try
+        {
+            PointKinematics3D value;
+            value.position_world =
+                floating_base_->pose_world.transform_point(point_local);
+            value.velocity_world =
+                floating_base_->velocity_local.velocity_at_offset(point_local)
+                    .rotated_by(floating_base_->pose_world.ang)
+                    .lin;
+            value.dofs = dofs_;
+            const std::size_t generalized_count = dof_count();
+            value.linear_jacobian_world_storage.assign(3 * generalized_count, 0.0);
+            for (std::size_t column = 0; column < 6; ++column)
+            {
+                std::vector<double> unit(6, 0.0);
+                unit[column] = 1.0;
+                const termin::Vec3 response =
+                    read_screw_vw(unit)
+                        .velocity_at_offset(point_local)
+                        .rotated_by(floating_base_->pose_world.ang)
+                        .lin;
+                value.linear_jacobian_world_storage[column] = response.x;
+                value.linear_jacobian_world_storage[generalized_count + column] =
+                    response.y;
+                value.linear_jacobian_world_storage[2 * generalized_count + column] =
+                    response.z;
+            }
+            return {std::move(value), PointKinematics3DDiagnostic::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] floating-base point kinematics failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] floating-base point kinematics failed "
+                         "with an unknown exception\n");
+        }
+        return {{}, PointKinematics3DDiagnostic::InternalFailure};
     }
 
     PointKinematics3DResult Articulation3DContribution::point_kinematics(
@@ -236,20 +383,29 @@ namespace termin::qopt
                                        .rotated_by(link_poses_world_[link_index].ang)
                                        .lin;
             value.dofs = dofs_;
-            value.linear_jacobian_world_storage.assign(3 * links_.size(), 0.0);
+            const std::size_t generalized_count = dof_count();
+            const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+            value.linear_jacobian_world_storage.assign(3 * generalized_count, 0.0);
 
             std::vector<termin::Screw3> unit_velocities(link_index + 1);
-            for (std::size_t column = 0; column <= link_index; ++column)
+            for (std::size_t column = 0; column < generalized_count; ++column)
             {
+                termin::Screw3 base_velocity = termin::Screw3::zero();
+                if (floating_base_.has_value() && column < 6)
+                {
+                    std::vector<double> unit_base(6, 0.0);
+                    unit_base[column] = 1.0;
+                    base_velocity = read_screw_vw(unit_base);
+                }
                 for (std::size_t index = 0; index <= link_index; ++index)
                 {
                     const std::size_t parent = links_[index].parent_link;
                     const termin::Screw3 parent_velocity =
-                        parent == articulation_world_link ? termin::Screw3::zero()
+                        parent == articulation_world_link ? base_velocity
                                                           : unit_velocities[parent];
                     unit_velocities[index] =
                         parent_velocity.adjoint_inv(parent_to_link_[index]);
-                    if (index == column)
+                    if (column >= joint_offset && index == column - joint_offset)
                     {
                         unit_velocities[index] += motion_twists_at_link_[index];
                     }
@@ -260,9 +416,9 @@ namespace termin::qopt
                         .rotated_by(link_poses_world_[link_index].ang)
                         .lin;
                 value.linear_jacobian_world_storage[column] = response.x;
-                value.linear_jacobian_world_storage[links_.size() + column] =
+                value.linear_jacobian_world_storage[generalized_count + column] =
                     response.y;
-                value.linear_jacobian_world_storage[2 * links_.size() + column] =
+                value.linear_jacobian_world_storage[2 * generalized_count + column] =
                     response.z;
             }
             if (!value.position_world.is_finite() || !value.velocity_world.is_finite())
@@ -317,6 +473,22 @@ namespace termin::qopt
         return Articulation3DDiagnostic::None;
     }
 
+    Articulation3DDiagnostic Articulation3DContribution::set_floating_base_state(
+        termin::Pose3 pose_world, termin::Screw3 velocity_local) noexcept
+    {
+        if (!floating_base_.has_value() || !pose_world.is_finite() ||
+            pose_world.ang.norm() <= 1e-10 || !velocity_local.is_finite())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rejected invalid floating-base state\n");
+            return Articulation3DDiagnostic::InvalidState;
+        }
+        floating_base_->pose_world = pose_world.normalized();
+        floating_base_->velocity_local = velocity_local;
+        return update_kinematics() ? Articulation3DDiagnostic::None
+                                   : Articulation3DDiagnostic::NonFiniteInput;
+    }
+
     bool Articulation3DContribution::update_kinematics() noexcept
     {
         const std::size_t count = links_.size();
@@ -337,7 +509,8 @@ namespace termin::qopt
                     .normalized();
             const termin::Pose3 parent_pose =
                 link.parent_link == articulation_world_link
-                    ? termin::Pose3::identity()
+                    ? (floating_base_.has_value() ? floating_base_->pose_world
+                                                  : termin::Pose3::identity())
                     : link_poses_world_[link.parent_link];
             link_poses_world_[index] =
                 (parent_pose * parent_to_link_[index]).normalized();
@@ -346,7 +519,8 @@ namespace termin::qopt
 
             const termin::Screw3 parent_velocity =
                 link.parent_link == articulation_world_link
-                    ? termin::Screw3::zero()
+                    ? (floating_base_.has_value() ? floating_base_->velocity_local
+                                                  : termin::Screw3::zero())
                     : link_velocities_local_[link.parent_link];
             link_velocities_local_[index] =
                 parent_velocity.adjoint_inv(parent_to_link_[index]) +
@@ -369,34 +543,52 @@ namespace termin::qopt
         termin::Vec3 gravity_world,
         std::vector<double>& effort) const
     {
-        const std::size_t count = links_.size();
+        const std::size_t link_count = links_.size();
+        const std::size_t count = dof_count();
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
         if (velocities.size() != count || accelerations.size() != count ||
             !finite(velocities) || !finite(accelerations) || !gravity_world.is_finite())
         {
             return false;
         }
 
-        std::vector<termin::Screw3> velocities_local(count);
-        std::vector<termin::Screw3> accelerations_local(count);
-        std::vector<termin::Screw3> forces_local(count);
-        for (std::size_t index = 0; index < count; ++index)
+        termin::Screw3 base_velocity = termin::Screw3::zero();
+        termin::Screw3 base_acceleration{termin::Vec3::zero(), -gravity_world};
+        termin::Screw3 base_force = termin::Screw3::zero();
+        if (floating_base_.has_value())
+        {
+            base_velocity = read_screw_vw(velocities);
+            base_acceleration =
+                termin::Screw3{termin::Vec3::zero(), -gravity_world}.adjoint_inv(
+                    floating_base_->pose_world) +
+                read_screw_vw(accelerations);
+            const termin::Screw3 momentum =
+                floating_base_->inertia.momentum(base_velocity);
+            base_force = floating_base_->inertia.momentum(base_acceleration) +
+                         base_velocity.cross_force(momentum);
+        }
+
+        std::vector<termin::Screw3> velocities_local(link_count);
+        std::vector<termin::Screw3> accelerations_local(link_count);
+        std::vector<termin::Screw3> forces_local(link_count);
+        for (std::size_t index = 0; index < link_count; ++index)
         {
             const ArticulationLink3D& link = links_[index];
             const termin::Screw3 parent_velocity =
                 link.parent_link == articulation_world_link
-                    ? termin::Screw3::zero()
+                    ? base_velocity
                     : velocities_local[link.parent_link];
             const termin::Screw3 parent_acceleration =
                 link.parent_link == articulation_world_link
-                    ? termin::Screw3{termin::Vec3::zero(), -gravity_world}
+                    ? base_acceleration
                     : accelerations_local[link.parent_link];
             const termin::Screw3 joint_velocity =
-                motion_twists_at_link_[index] * velocities[index];
+                motion_twists_at_link_[index] * velocities[joint_offset + index];
             velocities_local[index] =
                 parent_velocity.adjoint_inv(parent_to_link_[index]) + joint_velocity;
             accelerations_local[index] =
                 parent_acceleration.adjoint_inv(parent_to_link_[index]) +
-                motion_twists_at_link_[index] * accelerations[index] +
+                motion_twists_at_link_[index] * accelerations[joint_offset + index] +
                 velocities_local[index].cross_motion(joint_velocity);
 
             const termin::Screw3 momentum =
@@ -406,9 +598,9 @@ namespace termin::qopt
         }
 
         effort.assign(count, 0.0);
-        for (std::size_t reverse = count; reverse-- > 0;)
+        for (std::size_t reverse = link_count; reverse-- > 0;)
         {
-            effort[reverse] =
+            effort[joint_offset + reverse] =
                 motion_twists_at_link_[reverse].dot(forces_local[reverse]);
             const std::size_t parent = links_[reverse].parent_link;
             if (parent != articulation_world_link)
@@ -416,6 +608,14 @@ namespace termin::qopt
                 forces_local[parent] +=
                     forces_local[reverse].coadjoint(parent_to_link_[reverse]);
             }
+            else if (floating_base_.has_value())
+            {
+                base_force += forces_local[reverse].coadjoint(parent_to_link_[reverse]);
+            }
+        }
+        if (floating_base_.has_value())
+        {
+            write_screw_vw(base_force, effort);
         }
         return finite(effort);
     }
@@ -424,7 +624,7 @@ namespace termin::qopt
     Articulation3DContribution::assemble_mass_and_bias(std::vector<double>& mass,
                                                        std::vector<double>& bias) const
     {
-        const std::size_t count = links_.size();
+        const std::size_t count = dof_count();
         const std::vector<double> zero(count, 0.0);
         mass.assign(count * count, 0.0);
         std::vector<double> unit_acceleration(count, 0.0);
@@ -435,6 +635,11 @@ namespace termin::qopt
             if (!inverse_dynamics(
                     zero, unit_acceleration, termin::Vec3::zero(), column))
             {
+                std::fprintf(stderr,
+                             "[termin-qopt] articulation '%s' inverse dynamics "
+                             "failed for mass column %zu\n",
+                             diagnostic_name_.c_str(),
+                             column_index);
                 return false;
             }
             for (std::size_t row = 0; row < count; ++row)
@@ -457,8 +662,24 @@ namespace termin::qopt
                 mass[column_index * count + row] = value;
             }
         }
-        return inverse_dynamics(state_.velocities, zero, gravity_world_, bias) &&
-               finite(mass);
+        std::vector<double> generalized_velocity(count, 0.0);
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (floating_base_.has_value())
+        {
+            write_screw_vw(floating_base_->velocity_local, generalized_velocity);
+        }
+        std::copy(state_.velocities.begin(),
+                  state_.velocities.end(),
+                  generalized_velocity.begin() + joint_offset);
+        if (!inverse_dynamics(generalized_velocity, zero, gravity_world_, bias))
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation '%s' inverse dynamics "
+                         "failed for velocity/gravity bias\n",
+                         diagnostic_name_.c_str());
+            return false;
+        }
+        return finite(mass);
     }
 
     double Articulation3DContribution::total_energy() const noexcept
@@ -470,6 +691,15 @@ namespace termin::qopt
             return std::numeric_limits<double>::quiet_NaN();
         }
         double result = 0.0;
+        if (floating_base_.has_value())
+        {
+            const termin::Vec3 center_world =
+                floating_base_->pose_world.transform_point(
+                    floating_base_->inertia.inertia_frame.lin);
+            result +=
+                floating_base_->inertia.kinetic_energy(floating_base_->velocity_local);
+            result -= floating_base_->inertia.mass * gravity_world_.dot(center_world);
+        }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
             const ArticulationLink3D& link = links_[index];
@@ -492,7 +722,7 @@ namespace termin::qopt
                          articulation3d_diagnostic_name(diagnostic_).data());
             return AssemblyDiagnostic::NonFiniteContribution;
         }
-        const auto result = topology.register_dofs(links_.size(), diagnostic_name_);
+        const auto result = topology.register_dofs(dof_count(), diagnostic_name_);
         dofs_ = result.handle;
         return result.diagnostic;
     }
@@ -578,33 +808,57 @@ namespace termin::qopt
         {
             std::vector<double> mass;
             std::vector<double> bias;
-            if (!update_kinematics() || !assemble_mass_and_bias(mass, bias))
+            if (!update_kinematics())
             {
+                std::fprintf(stderr,
+                             "[termin-qopt] articulation '%s' produced invalid "
+                             "kinematics during assembly\n",
+                             diagnostic_name_.c_str());
+                return AssemblyDiagnostic::NonFiniteContribution;
+            }
+            if (!assemble_mass_and_bias(mass, bias))
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] articulation '%s' produced invalid "
+                             "mass or bias during assembly\n",
+                             diagnostic_name_.c_str());
                 return AssemblyDiagnostic::NonFiniteContribution;
             }
 
-            std::vector<double> load(links_.size(), 0.0);
+            const std::size_t generalized_count = dof_count();
+            const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+            std::vector<double> load(generalized_count, 0.0);
             if (phase == DynamicsAssemblyPhase::Acceleration)
             {
-                for (std::size_t index = 0; index < links_.size(); ++index)
+                for (std::size_t index = 0; index < generalized_count; ++index)
                 {
                     load[index] = -bias[index];
                 }
             }
-            else if (phase == DynamicsAssemblyPhase::VelocityProjection)
+            if (phase == DynamicsAssemblyPhase::VelocityProjection)
             {
-                for (std::size_t row = 0; row < links_.size(); ++row)
+                std::vector<double> generalized_velocity(generalized_count, 0.0);
+                if (floating_base_.has_value())
                 {
-                    for (std::size_t column = 0; column < links_.size(); ++column)
+                    write_screw_vw(floating_base_->velocity_local,
+                                   generalized_velocity);
+                }
+                std::copy(state_.velocities.begin(),
+                          state_.velocities.end(),
+                          generalized_velocity.begin() + joint_offset);
+                std::fill(load.begin(), load.end(), 0.0);
+                for (std::size_t row = 0; row < generalized_count; ++row)
+                {
+                    for (std::size_t column = 0; column < generalized_count; ++column)
                     {
-                        load[row] += mass[row * links_.size() + column] *
-                                     state_.velocities[column];
+                        load[row] += mass[row * generalized_count + column] *
+                                     generalized_velocity[column];
                     }
                 }
             }
 
             const AssemblyDiagnostic mass_result =
-                assembly.add_mass(dofs_, dofs_, matrix_view(mass, links_.size()));
+                assembly.add_mass(dofs_, dofs_, matrix_view(mass, generalized_count));
             const AssemblyDiagnostic load_result =
                 assembly.add_load(dofs_, vector_view(load));
             if (mass_result != AssemblyDiagnostic::None)
@@ -621,11 +875,11 @@ namespace termin::qopt
                 return AssemblyDiagnostic::NonFiniteContribution;
             }
 
-            std::vector<double> row(links_.size(), 0.0);
+            std::vector<double> row(generalized_count, 0.0);
             for (std::size_t index = 0; index < links_.size(); ++index)
             {
                 const ArticulationJointLimits3D& limits = links_[index].limits;
-                row[index] = -1.0;
+                row[joint_offset + index] = -1.0;
                 if (joint_limit_rows_[index].minimum.valid())
                 {
                     const double coordinate = snapshot_ready_
@@ -638,7 +892,8 @@ namespace termin::qopt
                     AssemblyDiagnostic result = assembly.add_unilateral_jacobian(
                         joint_limit_rows_[index].minimum,
                         dofs_,
-                        ConstDenseMatrixView::row_major(row.data(), 1, links_.size()));
+                        ConstDenseMatrixView::row_major(
+                            row.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
@@ -650,7 +905,7 @@ namespace termin::qopt
                         return result;
                     }
                 }
-                row[index] = 1.0;
+                row[joint_offset + index] = 1.0;
                 if (joint_limit_rows_[index].maximum.valid())
                 {
                     const double coordinate = snapshot_ready_
@@ -663,7 +918,8 @@ namespace termin::qopt
                     AssemblyDiagnostic result = assembly.add_unilateral_jacobian(
                         joint_limit_rows_[index].maximum,
                         dofs_,
-                        ConstDenseMatrixView::row_major(row.data(), 1, links_.size()));
+                        ConstDenseMatrixView::row_major(
+                            row.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
@@ -675,7 +931,7 @@ namespace termin::qopt
                         return result;
                     }
                 }
-                row[index] = 0.0;
+                row[joint_offset + index] = 0.0;
             }
             return AssemblyDiagnostic::None;
         }
@@ -708,6 +964,7 @@ namespace termin::qopt
         std::copy(joint_limit_states_.begin(),
                   joint_limit_states_.end(),
                   joint_limit_state_snapshot_.begin());
+        floating_base_snapshot_ = floating_base_;
         snapshot_ready_ = true;
         return AssemblyDiagnostic::None;
     }
@@ -733,6 +990,7 @@ namespace termin::qopt
             std::copy(joint_limit_state_snapshot_.begin(),
                       joint_limit_state_snapshot_.end(),
                       joint_limit_states_.begin());
+            floating_base_ = floating_base_snapshot_;
             (void)update_kinematics();
             snapshot_ready_ = false;
         }
@@ -785,22 +1043,28 @@ namespace termin::qopt
                                                     ConstDenseVectorView) noexcept
     {
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        if (!info.ok() || info.size != links_.size())
+        const std::size_t generalized_count = dof_count();
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (!info.ok() || info.size != generalized_count)
         {
             return;
         }
         if (phase == DynamicsAssemblyPhase::Acceleration)
         {
-            for (std::size_t index = 0; index < links_.size(); ++index)
+            for (std::size_t index = 0; index < generalized_count; ++index)
             {
                 accelerations_[index] = values[info.offset + index];
             }
         }
         else if (phase == DynamicsAssemblyPhase::VelocityProjection)
         {
+            if (floating_base_.has_value())
+            {
+                floating_base_->velocity_local = read_screw_vw(values, info.offset);
+            }
             for (std::size_t index = 0; index < links_.size(); ++index)
             {
-                state_.velocities[index] = values[info.offset + index];
+                state_.velocities[index] = values[info.offset + joint_offset + index];
             }
             (void)update_kinematics();
         }
@@ -810,13 +1074,18 @@ namespace termin::qopt
         const DynamicsTopology& topology, DenseVectorView destination) const noexcept
     {
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        if (!info.ok() || info.size != links_.size())
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (!info.ok() || info.size != dof_count())
         {
             return AssemblyDiagnostic::InvalidBlock;
         }
+        if (floating_base_.has_value())
+        {
+            write_screw_vw(floating_base_->velocity_local, destination, info.offset);
+        }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
-            destination[info.offset + index] = state_.velocities[index];
+            destination[info.offset + joint_offset + index] = state_.velocities[index];
         }
         return AssemblyDiagnostic::None;
     }
@@ -826,15 +1095,23 @@ namespace termin::qopt
                                              ConstDenseVectorView source) noexcept
     {
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        if (!info.ok() || info.size != links_.size())
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (!info.ok() || info.size != dof_count())
         {
             return AssemblyDiagnostic::InvalidBlock;
         }
+        if (floating_base_.has_value())
+        {
+            floating_base_->velocity_local = read_screw_vw(source, info.offset);
+        }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
-            state_.velocities[index] = source[info.offset + index];
+            state_.velocities[index] = source[info.offset + joint_offset + index];
         }
-        return finite(state_.velocities) && update_kinematics()
+        return finite(state_.velocities) &&
+                       (!floating_base_.has_value() ||
+                        floating_base_->velocity_local.is_finite()) &&
+                       update_kinematics()
                    ? AssemblyDiagnostic::None
                    : AssemblyDiagnostic::NonFiniteContribution;
     }
@@ -849,13 +1126,24 @@ namespace termin::qopt
             return AssemblyDiagnostic::NonFiniteContribution;
         }
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        if (!info.ok() || info.size != links_.size())
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (!info.ok() || info.size != dof_count())
         {
             return AssemblyDiagnostic::InvalidBlock;
         }
+        if (floating_base_.has_value())
+        {
+            const termin::Screw3 velocity =
+                read_screw_vw(midpoint_velocity, info.offset);
+            floating_base_->pose_world = (floating_base_snapshot_->pose_world *
+                                          termin::se3_exp(velocity * time_step))
+                                             .normalized();
+            floating_base_->velocity_local = velocity;
+        }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
-            const double velocity = midpoint_velocity[info.offset + index];
+            const double velocity =
+                midpoint_velocity[info.offset + joint_offset + index];
             state_.coordinates[index] =
                 state_snapshot_.coordinates[index] + time_step * velocity;
             state_.velocities[index] = velocity;
@@ -878,15 +1166,27 @@ namespace termin::qopt
             return AssemblyDiagnostic::NonFiniteContribution;
         }
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
-        if (!info.ok() || info.size != links_.size())
+        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        if (!info.ok() || info.size != dof_count())
         {
             return AssemblyDiagnostic::InvalidBlock;
         }
+        if (floating_base_.has_value())
+        {
+            const termin::Pose3 current_increment = termin::se3_exp(
+                read_screw_vw(midpoint_velocity, info.offset) * time_step);
+            const termin::Pose3 tangent_increment =
+                termin::se3_exp(read_screw_vw(correction, info.offset));
+            write_screw_vw(termin::se3_log(current_increment * tangent_increment) /
+                               time_step,
+                           destination,
+                           info.offset);
+        }
         for (std::size_t index = 0; index < links_.size(); ++index)
         {
-            destination[info.offset + index] =
-                midpoint_velocity[info.offset + index] +
-                correction[info.offset + index] / time_step;
+            destination[info.offset + joint_offset + index] =
+                midpoint_velocity[info.offset + joint_offset + index] +
+                correction[info.offset + joint_offset + index] / time_step;
         }
         return AssemblyDiagnostic::None;
     }
