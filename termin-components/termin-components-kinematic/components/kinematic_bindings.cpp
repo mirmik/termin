@@ -21,7 +21,10 @@ NB_MODULE(_components_kinematic_native, m)
         .def_prop_rw(
             "axis",
             [](KinematicUnitComponent& c)
-            { return nb::make_tuple(c.axis_x, c.axis_y, c.axis_z); },
+            {
+                const Vec3 axis = c.get_axis();
+                return nb::make_tuple(axis.x, axis.y, axis.z);
+            },
             [](KinematicUnitComponent& c, nb::tuple v)
             {
                 c.set_axis(nb::cast<double>(v[0]),
@@ -31,6 +34,9 @@ NB_MODULE(_components_kinematic_native, m)
         .def_prop_rw("coordinate",
                      &KinematicUnitComponent::get_coordinate,
                      &KinematicUnitComponent::set_coordinate)
+        .def_prop_rw("coordinate_scale",
+                     &KinematicUnitComponent::get_coordinate_scale,
+                     &KinematicUnitComponent::set_coordinate_scale)
         .def("apply", &KinematicUnitComponent::apply)
         .def("recalculate_origin", &KinematicUnitComponent::recalculate_origin);
 

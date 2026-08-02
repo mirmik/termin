@@ -86,9 +86,6 @@ namespace termin::qopt
         set_state(Articulation3DState state) noexcept;
         [[nodiscard]] Articulation3DDiagnostic
         set_gravity_world(termin::Vec3 gravity) noexcept;
-        [[nodiscard]] Articulation3DDiagnostic
-        set_generalized_effort(std::vector<double> effort) noexcept;
-        [[nodiscard]] const std::vector<double>& generalized_effort() const noexcept;
         [[nodiscard]] double total_energy() const noexcept;
 
         AssemblyDiagnostic
@@ -124,7 +121,6 @@ namespace termin::qopt
         std::vector<ArticulationLink3D> links_;
         Articulation3DState state_;
         std::vector<double> accelerations_;
-        std::vector<double> generalized_effort_;
         termin::Vec3 gravity_world_;
         std::string diagnostic_name_;
         DynamicsDofHandle dofs_;

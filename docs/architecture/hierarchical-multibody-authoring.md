@@ -1,6 +1,8 @@
 # Hierarchical multibody authoring
 
-Status: proposed architecture, 2026-08-01.
+Status: fixed-base articulation and bounded servo slice implemented,
+2026-08-02. Floating bases, joint limits, contacts, and HQP control remain
+future work.
 
 ## Goal
 
@@ -13,9 +15,9 @@ a reduced-coordinate articulation inside the native
 `termin::qopt::Multibody3DSystem` topology when play starts.
 
 The authoring hierarchy is the source description, not the numerical model.
-The compiled multibody graph owns runtime body state, joint handles, drive
-state and solver workspace. An articulation contributes a floating-base block
-of `6 + joint_count` generalized degrees of freedom instead of registering six
+The compiled multibody graph owns runtime body state, joint handles, motor
+state and solver workspace. The implemented fixed-base articulation contributes
+one generalized degree of freedom per joint instead of registering six
 independent degrees of freedom and constraint rows for every link. This keeps
 scene traversal, matrix assembly and time integration in separate layers.
 
@@ -34,25 +36,21 @@ sharing world state or solver internals.
 The initial supported form is a rooted tree:
 
 ```text
-MechanismRoot (MultibodyMechanismComponent)
-└── Base (MultibodyBodyComponent, optional for a fixed base)
-    ├── visual/collider descendants belonging to Base
-    └── HipJoint (RotatorComponent)
-        └── UpperLeg (MultibodyBodyComponent)
-            └── KneeJoint (RotatorComponent + optional MultibodyDriveComponent)
-                └── LowerLeg (MultibodyBodyComponent)
+Root (FEMArticulationComponent; fixed world frame)
+└── HipJoint (RotatorComponent or ActuatorComponent)
+    └── UpperLeg (FEMRigidBodyComponent)
+        └── KneeJoint (RotatorComponent + optional motor/controller)
+            └── LowerLeg (FEMRigidBodyComponent)
 ```
 
 Rules are deliberately strict:
 
-- a floating mechanism has exactly one root body;
-- a fixed mechanism uses the mechanism root as a world frame and does not
-  create a dynamic root body;
+- the implemented mechanism root is a fixed world frame and does not create a
+  dynamic root body;
 - every non-root body has exactly one nearest ancestor body and exactly one
   enabled kinematic unit on the path between them;
 - `RotatorComponent` compiles to a revolute joint;
-- `ActuatorComponent` will compile to a prismatic joint once the native
-  primitive exists;
+- `ActuatorComponent` compiles to a prismatic reduced joint;
 - ordinary transform nodes between a joint and a body are fixed attachment
   frames and are folded into the compiled local anchors;
 - branches are allowed, cycles, cross-mechanism references, multiple joint
@@ -67,7 +65,7 @@ massless scene nodes.
 
 ## Components and ownership
 
-### `MultibodyMechanismComponent`
+### `FEMArticulationComponent`
 
 Lives at the root and owns:
 
@@ -81,13 +79,13 @@ Topology is immutable after `Multibody3DSystem::finalize()`. Structural scene
 changes require an explicit rebuild; scalar commands and external loads do
 not. A failed rebuild leaves no partially usable runtime graph.
 
-### `MultibodyBodyComponent`
+### `FEMRigidBodyComponent`
 
-Marks an inertial link and owns authored mass properties: mass, principal
-moments and the local inertia/COM frame. Inside a hierarchical mechanism it
-receives a typed articulated-link handle after successful compilation but
-does not own the solver or step it. The existing independent-body handle and
-registration path remain unchanged for maximal-coordinate models.
+Marks an inertial link and owns authored mass and diagonal principal moments.
+Inside a hierarchical mechanism it receives a typed articulated-link handle
+after successful compilation but does not own the solver or step it. The
+existing independent-body handle and registration path remain unchanged for
+maximal-coordinate models. A separate inertia/COM frame is not yet authored.
 
 Geometry-derived inertia can be added later as an explicit authoring service.
 It must not be guessed from arbitrary descendants during the first slice.
@@ -99,41 +97,43 @@ the relative one-DOF transform:
 
 - `origin_position` and `origin_rotation` define the fixed parent-to-joint
   origin transform;
-- axis direction defines the joint axis;
-- axis length maps authored coordinate units to radians or metres;
-- `coordinate` defines the authored/commanded coordinate;
+- `axis` is always a normalized joint direction;
+- `coordinate_scale` maps authored coordinate units to radians or metres;
+- `coordinate` defines authored state before play and measured state during
+  simulation;
 - `min_coordinate` and `max_coordinate` define authored joint bounds.
 
 Outside a dynamic mechanism, the current behavior is unchanged: changing
 `coordinate` applies the kinematic transform. Inside a running mechanism the
-compiled physics graph owns the actual body transforms. The component must
-therefore expose read-only measured coordinate and velocity separately; it
-must not overwrite `coordinate` with measured state.
+compiled physics graph owns the actual body transforms and writes the measured
+reduced coordinate back to `coordinate` in authored units. Servo targets are
+separate fields and are never overwritten by synchronization.
 
 The runtime ownership switch must be explicit. It is an error for both the
 kinematic component and the physics synchronizer to write the same transform
 during one simulation tick.
 
-### `MultibodyDriveComponent`
+### `FEMArticulationMotorComponent` and `FEMJointServoComponent`
 
-Drive policy is optional and separate from joint geometry. It is attached to
-the same entity as a `KinematicUnitComponent`. This avoids putting
-QP-specific control fields into the reusable kinematic transform component.
+The physical actuator and its control policy are separate and optional. Both
+are attached to the same entity as a `KinematicUnitComponent`. This avoids
+putting QP-specific effort fields or controller policy into the reusable
+kinematic transform component.
 
-The initial modes should be:
+`FEMArticulationMotorComponent` is a bounded generalized-effort channel. The
+compiler creates one `ArticulationMotorContribution` per driven articulation
+and binds each motor to the inferred reduced DOF. It can be commanded directly.
+The motor contribution owns no state or topology block: it adds bounded
+generalized effort to the articulation's load vector.
 
-- `Passive`;
-- `Effort`, with commanded force/torque and an effort limit;
-- `PositionServo`, with target coordinate, target velocity, stiffness,
-  damping, feed-forward effort and an effort limit.
-
-The compiler automatically creates the native drive record and binds it to
-the inferred joint. Missing drive means a passive joint. A drive without one
-co-located kinematic unit is a compile error.
-
-The first servo should contribute bounded equal-and-opposite internal wrench
-to the adjacent bodies. An ideal acceleration constraint or HQP task can be a
-later drive mode; it should not be disguised as the same physical actuator.
+`FEMJointServoComponent` is a position/velocity PID policy with optional
+feed-forward effort. Its proportional and bounded integral position-error
+loops can be switched independently; the integrator uses conditional
+anti-windup against the physical motor limit. Disabling both produces a pure
+velocity regulator. It reads joint state and writes the co-located motor's
+command. A missing motor means a passive joint; a servo without a motor is an
+invalid model. Ideal acceleration and HQP tasks remain separate future control
+policies and can target the same physical actuator boundary.
 
 ## Transform compilation
 
@@ -151,10 +151,12 @@ Compilation uses the authored world transforms before physics starts:
    these tree joints do not add constraint rows.
 7. Record the zero-coordinate relative orientation/translation needed to
    measure the joint coordinate continuously at runtime.
-8. Register an optional drive and authored bounds, then finalize atomically.
+8. Register optional motor channels, finalize all topology blocks, then bind
+   cross-contribution references in a second pass.
 
-Axis magnitude is never passed as physical geometry. It is only the unit
-scale between component coordinate and the native joint coordinate.
+Axis magnitude is never a unit scale or physical geometry. `set_axis()`
+normalizes it, and `coordinate_scale` alone converts authored units to the
+canonical reduced coordinate.
 
 During a step, body poses are written back in parent-before-child order using
 global pose setters. Joint marker nodes remain attached to the parent body;
@@ -167,9 +169,9 @@ stop, as for other simulated components.
 The existing native 3D multibody slice supplies maximal-coordinate bodies,
 point joints, true revolute constraints, reactions, equality-QP dynamics and
 constraint projection. It remains intact, including the current pendulum
-model. The common `Multibody3DSystem` needs an additional articulated-tree
-contribution whose generalized state is a fixed/floating base plus one scalar
-coordinate per revolute or prismatic joint.
+model. The common `Multibody3DSystem` contains an articulated-tree contribution
+whose implemented state has one scalar coordinate per revolute or prismatic
+joint and a fixed base.
 
 The reduced contribution assembles its generalized mass matrix and bias/load
 vector into the same `DynamicsTopology`. Its implementation may use standard
@@ -202,32 +204,33 @@ the first vertical slice.
 
 ## Recommended delivery slices
 
-### Slice 1: reduced articulation foundation
+### Slice 1: reduced articulation foundation (implemented)
 
 - add an articulation contribution to `Multibody3DSystem` beside the existing
   public body/joint contributions;
-- fixed/floating base, inertial links and revolute joints;
+- fixed base, inertial links, revolute and prismatic joints;
 - generalized state, forward kinematics and generalized dynamics assembly;
 - native tests comparing a reduced pendulum fixture with the existing maximal
   pendulum on observable motion/energy invariants;
 - keep the existing pendulum scene and model unchanged.
 
-This validates coexistence of both formulations inside one system before scene
-authoring or motor semantics are added.
+This established coexistence of both formulations inside one system; the scene
+compiler and motor contribution now build on that boundary.
 
-### Slice 2: hierarchical scene authoring and drives
+### Slice 2: hierarchical scene authoring and drives (partially implemented)
 
-- native scene components for mechanism, body and drive;
-- compiler for fixed/floating roots and `RotatorComponent` edges;
-- bounded effort and position-servo drive;
-- `MultibodyDriveComponent` and runtime command/state binding;
-- a branching suspended quadruped scene with moving legs;
-- energy, reaction and constraint-error tests.
+- native scene components for fixed articulations, bodies and servos;
+- compiler for fixed roots and revolute/prismatic kinematic edges;
+- bounded physical effort and position-servo control;
+- separate `FEMArticulationMotorComponent` and `FEMJointServoComponent`
+  runtime bindings;
+- passive double-pendulum acceptance scene and component-level servo tests.
 
-### Slice 3: prismatic joints and bounds
+Floating roots, direct-effort authoring, a branching quadruped fixture, and
+broader reaction/error tests remain in this slice.
 
-- native prismatic joint;
-- compile `ActuatorComponent`;
+### Slice 3: joint bounds
+
 - proper unilateral min/max constraints for both joint types;
 - limit activation/deactivation and invalid-range tests.
 
@@ -247,8 +250,9 @@ authoring or motor semantics are added.
 - Creating a second world/system API merely because articulation internals use
   reduced coordinates. Coordinate formulation is an implementation/model
   choice inside the common `Multibody3DSystem` boundary.
-- Using `RotatorComponent.coordinate` simultaneously as command and measured
-  state. Feedback would overwrite the next control target.
+- Using `RotatorComponent.coordinate` simultaneously as servo target and
+  measured state. Runtime synchronization writes the measurement there, while
+  `FEMJointServoComponent.target_coordinate` remains the command.
 - Applying motor motion by writing transforms after the physics step. That
   bypasses reaction forces, inertia and the QP constraints.
 - Silently accepting malformed hierarchies or fabricating massless bodies.

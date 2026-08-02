@@ -7,13 +7,13 @@ namespace termin
 
     // ActuatorComponent - moves entity along a specified axis.
     //
-    // The axis vector direction defines the movement axis, and its length
-    // serves as a scale factor for the coordinate. Actual displacement
-    // = axis * coordinate, composed with the origin pose.
+    // The axis is a unit direction. Actual displacement in metres is
+    // axis * coordinate * coordinate_scale, composed with the origin pose.
     //
     // Usage:
-    //   actuator.set_axis(0.01, 0, 0);   // X axis, cm scale
-    //   actuator.set_coordinate(100);      // Move 1.0 scene unit along X
+    //   actuator.set_axis(1, 0, 0);
+    //   actuator.set_coordinate_scale(0.01); // coordinate is centimetres
+    //   actuator.set_coordinate(100);       // Move 1 metre along X
     class ENTITY_API ActuatorComponent : public KinematicUnitComponent
     {
     public:

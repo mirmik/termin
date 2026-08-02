@@ -1,7 +1,9 @@
 #include "tc_inspect_cpp.hpp"
 #include <cmath>
 #include <components/kinematic_unit_component.hpp>
+#include <limits>
 #include <numbers>
+#include <tcbase/tc_log.hpp>
 #include <termin/geom/pose3.hpp>
 
 namespace termin
@@ -63,10 +65,11 @@ namespace termin
             info.getter = [](void* obj) -> tc_value
             {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
+                const Vec3 axis = c->get_axis();
                 tc_value list = tc_value_list_new();
-                tc_value_list_push(&list, tc_value_double(c->axis_x));
-                tc_value_list_push(&list, tc_value_double(c->axis_y));
-                tc_value_list_push(&list, tc_value_double(c->axis_z));
+                tc_value_list_push(&list, tc_value_double(axis.x));
+                tc_value_list_push(&list, tc_value_double(axis.y));
+                tc_value_list_push(&list, tc_value_double(axis.z));
                 return list;
             };
             info.setter = [](void* obj, tc_value value, void*) -> bool
@@ -225,6 +228,24 @@ namespace termin
 
     // KinematicUnitComponent implementation
 
+    KinematicUnitComponent::KinematicUnitComponent(
+        const char* type_name,
+        Vec3 default_axis,
+        double default_coordinate_scale)
+        : CxxComponent(type_name)
+    {
+        const double length = default_axis.norm();
+        if (default_axis.is_finite() && length > 1.0e-12)
+        {
+            axis_ = default_axis / length;
+        }
+        if (std::isfinite(default_coordinate_scale) &&
+            default_coordinate_scale > 0.0)
+        {
+            coordinate_scale_ = default_coordinate_scale;
+        }
+    }
+
     void KinematicUnitComponent::on_added()
     {
         CxxComponent::on_added();
@@ -247,10 +268,43 @@ namespace termin
 
     void KinematicUnitComponent::set_axis(double x, double y, double z)
     {
-        axis_x = x;
-        axis_y = y;
-        axis_z = z;
+        const Vec3 value{x, y, z};
+        const double length = value.norm();
+        if (!value.is_finite() || length <= 1.0e-12)
+        {
+            tc::Log::error("[KinematicUnitComponent] rejected non-finite or "
+                           "degenerate axis");
+            return;
+        }
+        axis_ = value / length;
         apply();
+    }
+
+    Vec3 KinematicUnitComponent::get_axis() const noexcept
+    {
+        return axis_;
+    }
+
+    void KinematicUnitComponent::set_coordinate_scale(double value)
+    {
+        if (!std::isfinite(value) || value <= 0.0)
+        {
+            tc::Log::error(
+                "[KinematicUnitComponent] rejected invalid coordinate scale");
+            return;
+        }
+        coordinate_scale_ = value;
+        apply();
+    }
+
+    double KinematicUnitComponent::get_coordinate_scale() const noexcept
+    {
+        return coordinate_scale_;
+    }
+
+    double KinematicUnitComponent::physical_coordinate() const noexcept
+    {
+        return coordinate * coordinate_scale_;
     }
 
     void KinematicUnitComponent::set_coordinate(double value)
@@ -273,17 +327,6 @@ namespace termin
 
         origin_position = {pos[0], pos[1], pos[2]};
         origin_rotation = {rot[0], rot[1], rot[2], rot[3]};
-    }
-
-    Vec3 KinematicUnitComponent::normalized_axis(Vec3 fallback) const
-    {
-        double len =
-            std::sqrt(axis_x * axis_x + axis_y * axis_y + axis_z * axis_z);
-        if (len < 1e-9)
-        {
-            return fallback;
-        }
-        return Vec3{axis_x / len, axis_y / len, axis_z / len};
     }
 
     bool KinematicUnitComponent::read_entity_transform(double pos[3],

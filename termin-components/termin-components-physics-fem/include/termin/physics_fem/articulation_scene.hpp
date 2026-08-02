@@ -35,8 +35,13 @@ namespace termin
     {
         KinematicUnitComponent* joint = nullptr;
         FEMRigidBodyComponent* body = nullptr;
+        FEMArticulationMotorComponent* motor = nullptr;
+        FEMJointServoComponent* servo = nullptr;
         Entity joint_entity;
         Entity body_entity;
+        // Authored coordinate units per SI generalized coordinate. The qopt
+        // articulation always stores radians or metres.
+        double coordinate_scale = 1.0;
     };
 
     struct FEMArticulationSceneCompilation

@@ -7,9 +7,10 @@ contributions are stepped by the common `DynamicsSystem` orchestrator.
 
 The module registers the serialized names `FEMPhysicsWorldComponent`,
 `FEMArticulationComponent`, `FEMRigidBodyComponent`,
-`FEMFixedJointComponent`, and `FEMRevoluteJointComponent` during core
-bootstrap. Projects using these types do not need a Python module or NumPy at
-runtime.
+`FEMArticulationMotorComponent`, `FEMJointServoComponent`,
+`FEMFixedJointComponent`, and
+`FEMRevoluteJointComponent` during core bootstrap. Projects using these types
+do not need a Python module or NumPy at runtime.
 
 The current native slice supports rigid transforms, diagonal body-local
 inertia, fixed point joints, true axial revolute joints, damping wrenches,
@@ -31,21 +32,52 @@ articulation root
 ```
 
 The joint entity is the explicit attachment frame. Its kinematic origin pose is
-the fixed parent-to-joint transform, its axis is the reduced motion twist, and
-its coordinate initializes the dynamic state. The body child's local rigid pose
-is the fixed joint-to-link transform. Branching is represented by placing
-several joint children under one body.
+the fixed parent-to-joint transform. The axis is always a unit direction; the
+separate `coordinate_scale` converts authored units to radians or metres before
+the coordinate becomes reduced state. The body child's local rigid pose is the
+fixed joint-to-link transform. Branching is represented by placing several
+joint children under one body.
 
 `compile_fem_articulation_scene()` exposes this translation as a separate,
 testable pass. It produces public `ArticulationLink3D` values and bindings; the
-world only inserts the resulting `Articulation3DContribution` into the generic
-system and copies solved coordinates back to the joint components. Scaled
+world inserts the resulting `Articulation3DContribution` into the generic
+system and copies solved SI coordinates back to the authored units. Scaled
 joint/body frames, missing or ambiguous bodies, nested roots, and unsupported
 damping are rejected instead of being approximated silently.
 
+An optional `FEMArticulationMotorComponent` may be placed beside the kinematic
+unit on the joint entity. Scene compilation binds its bounded physical effort
+channel to the inferred reduced DOF. A separate, co-located
+`FEMJointServoComponent` computes
+
+```text
+effort = kp (target_position - position)
+       + ki integral(target_position - position) dt
+       + kd (target_velocity - velocity)
+       + feed_forward_effort
+```
+
+The `position_control_enabled` switch removes the complete proportional term,
+including its target. The independently switchable integral term accumulates
+the same SI position error, is bounded by `maximum_integral_effort`, and uses
+conditional integration against the physical motor limit to prevent further
+windup during saturation. Disable both position-error loops to operate as a
+pure velocity regulator with optional direct effort feed-forward.
+
+and writes the result to the motor's `commanded_effort` field.
+`ArticulationMotorContribution` adds that command, clamped by the motor's
+`maximum_effort`, to the articulation load vector. Targets use the kinematic
+component's authored coordinate unit; gains and effort limits are physical SI
+quantities. Motors own no DOFs and are bound to the articulation block in the
+topology-binding pass after every contribution has registered its blocks. A
+motor without a servo can be commanded directly; a servo without a motor is a
+model error.
+
 The world also exposes a UI-neutral `FEMPhysicsTelemetry` snapshot containing
-simulation time, successful step count, topology size, and initial/current
-mechanical energy. Optional presentation belongs to the separate
+simulation time, successful step count, topology size, initial/current
+mechanical energy, motor effort, power, accumulated work, and saturation.
+Motor work is a per-step diagnostic integral, not an additional conserved
+state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.
 
 Body velocities and damping loads cross the model boundary as complete

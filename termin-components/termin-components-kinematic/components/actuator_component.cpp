@@ -11,8 +11,8 @@ namespace termin
     namespace
     {
 
-        void
-        register_actuator_axis_scale_field(tc::InspectFacetBuilder& builder);
+        void register_actuator_coordinate_unit_field(
+            tc::InspectFacetBuilder& builder);
 
     } // namespace
 
@@ -24,14 +24,13 @@ namespace termin
                 "termin-components-kinematic",
                 "KinematicUnitComponent");
         descriptor.category("Kinematic");
-        register_actuator_axis_scale_field(descriptor.inspect());
+        register_actuator_coordinate_unit_field(descriptor.inspect());
         (void)descriptor.commit();
     }
 
     ActuatorComponent::ActuatorComponent()
-        : KinematicUnitComponent("ActuatorComponent")
+        : KinematicUnitComponent("ActuatorComponent", Vec3{1.0, 0.0, 0.0}, 1.0)
     {
-        axis_x = 1.0; // Default: X axis
     }
 
     void ActuatorComponent::apply()
@@ -44,7 +43,7 @@ namespace termin
         }
 
         // local = origin * Translation(axis * coordinate)
-        Vec3 raw_axis{axis_x, axis_y, axis_z};
+        const Vec3 axis = get_axis();
         Vec3 origin_position_value{
             origin_position.x, origin_position.y, origin_position.z};
         Quat origin_rotation_value{origin_rotation.x,
@@ -53,7 +52,7 @@ namespace termin
                                    origin_rotation.w};
 
         // offset.position = axis * coordinate
-        Vec3 offset_pos = raw_axis * coordinate;
+        Vec3 offset_pos = axis * physical_coordinate();
         Vec3 new_position =
             origin_position_value + origin_rotation_value.rotate(offset_pos);
 
@@ -81,8 +80,7 @@ namespace termin
 
         // Reverse: origin_pos = current_pos - origin_rot.rotate(axis * coord)
         Quat origin_rotation_value{rot[0], rot[1], rot[2], rot[3]};
-        Vec3 raw_axis{axis_x, axis_y, axis_z};
-        Vec3 offset_pos = raw_axis * coordinate;
+        Vec3 offset_pos = get_axis() * physical_coordinate();
         Vec3 rotated = origin_rotation_value.rotate(offset_pos);
 
         origin_position = {
@@ -92,15 +90,15 @@ namespace termin
     namespace
     {
 
-        void
-        register_actuator_axis_scale_field(tc::InspectFacetBuilder& builder)
+        void register_actuator_coordinate_unit_field(
+            tc::InspectFacetBuilder& builder)
         {
             tc::InspectFieldInfo info;
             info.type_name = "ActuatorComponent";
-            info.path = "axis_scale";
-            info.label = "Axis Scale";
+            info.path = "coordinate_scale";
+            info.label = "Coordinate Unit";
             info.kind = "enum";
-            info.is_serializable = false;
+            info.is_serializable = true;
             info.choices = {
                 {"1.0", "m (1.0)"},
                 {"0.01", "cm (0.01)"},
@@ -110,17 +108,15 @@ namespace termin
             info.getter = [](void* obj) -> tc_value
             {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                double len =
-                    std::sqrt(c->axis_x * c->axis_x + c->axis_y * c->axis_y +
-                              c->axis_z * c->axis_z);
+                const double scale = c->get_coordinate_scale();
                 // Return closest preset as string
-                if (std::abs(len - 1.0) < 1e-6)
+                if (std::abs(scale - 1.0) < 1e-6)
                     return tc_value_string("1.0");
-                if (std::abs(len - 0.01) < 1e-6)
+                if (std::abs(scale - 0.01) < 1e-6)
                     return tc_value_string("0.01");
-                if (std::abs(len - 0.001) < 1e-6)
+                if (std::abs(scale - 0.001) < 1e-6)
                     return tc_value_string("0.001");
-                return tc_value_string("1.0");
+                return tc_value_string(std::to_string(scale).c_str());
             };
 
             info.setter = [](void* obj, tc_value value, void*) -> bool
@@ -132,15 +128,7 @@ namespace termin
                     return false;
 
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                double len =
-                    std::sqrt(c->axis_x * c->axis_x + c->axis_y * c->axis_y +
-                              c->axis_z * c->axis_z);
-                if (len < 1e-12)
-                    return false;
-
-                double factor = new_scale / len;
-                c->set_axis(
-                    c->axis_x * factor, c->axis_y * factor, c->axis_z * factor);
+                c->set_coordinate_scale(new_scale);
                 return true;
             };
 

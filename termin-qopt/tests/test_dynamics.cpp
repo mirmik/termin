@@ -24,6 +24,7 @@ namespace
         double velocity = 0.0;
         double acceleration = 0.0;
         double reaction = 0.0;
+        bool topology_bound = false;
 
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override
@@ -40,6 +41,17 @@ namespace
             }
             dofs_ = dofs.handle;
             constraint_ = constraint.handle;
+            return AssemblyDiagnostic::None;
+        }
+
+        AssemblyDiagnostic
+        bind_topology(const DynamicsTopology& topology) noexcept override
+        {
+            if (!topology.finalized() || !dofs_.valid() || !constraint_.valid())
+            {
+                return AssemblyDiagnostic::InvalidBlock;
+            }
+            topology_bound = true;
             return AssemblyDiagnostic::None;
         }
 
@@ -334,6 +346,8 @@ int main()
                       DynamicsSystemDiagnostic::None);
     TERMIN_QOPT_CHECK(system.contribution_count() == 2);
     TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(scalar_state->topology_bound);
+    TERMIN_QOPT_CHECK(second_scalar_state->topology_bound);
     const DynamicsSystemStepResult system_step = system.step({
         .time_step = 0.01,
         .position_tolerance = 1e-12,

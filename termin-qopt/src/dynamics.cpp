@@ -723,6 +723,20 @@ namespace termin::qopt
         {
             return DynamicsSystemDiagnostic::TopologyFailure;
         }
+        for (std::size_t index = 0; index < impl_->contributions.size(); ++index)
+        {
+            const AssemblyDiagnostic diagnostic =
+                impl_->contributions[index]->bind_topology(impl_->topology);
+            if (diagnostic != AssemblyDiagnostic::None)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] contribution %zu topology binding "
+                             "failed: %s\n",
+                             index,
+                             assembly_diagnostic_name(diagnostic).data());
+                return DynamicsSystemDiagnostic::TopologyFailure;
+            }
+        }
         try
         {
             const std::size_t dofs = impl_->topology.dof_count();

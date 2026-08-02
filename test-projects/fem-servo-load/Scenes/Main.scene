@@ -4,7 +4,7 @@
     "uuid": "",
     "entities": [
       {
-        "uuid": "fem-double-pendulum-backdrop",
+        "uuid": "fem-servo-load-backdrop",
         "name": "Backdrop",
         "priority": 0.0,
         "visible": true,
@@ -33,7 +33,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-backdrop-mesh",
+            "source_id": "fem-servo-load-backdrop-mesh",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
@@ -63,12 +63,12 @@
             }
           },
           {
-            "source_id": "fem-double-pendulum-backdrop-renderer",
+            "source_id": "fem-servo-load-backdrop-renderer",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "material": {
-                "uuid": "fem-double-pendulum-backdrop-material",
+                "uuid": "fem-servo-load-backdrop-material",
                 "name": "Backdrop",
                 "type": "uuid",
                 "kind": "tc_material"
@@ -81,8 +81,8 @@
         ]
       },
       {
-        "uuid": "fem-double-pendulum-fixed-anchor",
-        "name": "Fixed Anchor",
+        "uuid": "fem-servo-load-servo-stand",
+        "name": "Servo Stand",
         "priority": 0.0,
         "visible": true,
         "enabled": true,
@@ -110,7 +110,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-fixed-anchor-mesh",
+            "source_id": "fem-servo-load-servo-stand-mesh",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
@@ -140,12 +140,12 @@
             }
           },
           {
-            "source_id": "fem-double-pendulum-fixed-anchor-renderer",
+            "source_id": "fem-servo-load-servo-stand-renderer",
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
               "material": {
-                "uuid": "fem-double-pendulum-joint-material",
+                "uuid": "fem-servo-load-joint-material",
                 "name": "Joint",
                 "type": "uuid",
                 "kind": "tc_material"
@@ -156,7 +156,7 @@
             }
           },
           {
-            "source_id": "fem-double-pendulum-articulation",
+            "source_id": "fem-servo-load-articulation",
             "type": "FEMArticulationComponent",
             "data": {
               "enabled": true
@@ -165,8 +165,8 @@
         ],
         "children": [
           {
-            "uuid": "fem-double-pendulum-root-joint",
-            "name": "Root Joint",
+            "uuid": "fem-servo-load-servo-joint",
+            "name": "Servo Joint",
             "priority": 0.0,
             "visible": true,
             "enabled": true,
@@ -182,9 +182,9 @@
               ],
               "rotation": [
                 0.0,
-                0.5848783751540833,
+                0.13052619222005157,
                 0.0,
-                0.8111210059400012
+                0.9914448613738104
               ]
             },
             "scale": [
@@ -194,7 +194,7 @@
             ],
             "components": [
               {
-                "source_id": "fem-double-pendulum-root-rotator",
+                "source_id": "fem-servo-load-root-rotator",
                 "type": "RotatorComponent",
                 "data": {
                   "enabled": true,
@@ -205,9 +205,9 @@
                   ],
                   "coordinate_scale": "0.017453292519943295",
                   "coordinate": [
-                    71.58999633789062,
-                    -180.0,
-                    180.0
+                    15.0,
+                    -10,
+                    120.0
                   ],
                   "origin_position": [
                     0.0,
@@ -220,12 +220,37 @@
                     0.0
                   ]
                 }
+              },
+              {
+                "source_id": "fem-servo-load-motor",
+                "type": "FEMArticulationMotorComponent",
+                "data": {
+                  "enabled": true,
+                  "commanded_effort": 0.0,
+                  "maximum_effort": 50.0
+                }
+              },
+              {
+                "source_id": "fem-servo-load-servo",
+                "type": "FEMJointServoComponent",
+                "data": {
+                  "enabled": true,
+                  "position_control_enabled": true,
+                  "integral_control_enabled": true,
+                  "target_coordinate": 90.0,
+                  "target_velocity": 0.0,
+                  "position_gain": 100.0,
+                  "integral_gain": 100.0,
+                  "maximum_integral_effort": 40.0,
+                  "velocity_gain": 20.0,
+                  "feed_forward_effort": 0.0
+                }
               }
             ],
             "children": [
               {
-                "uuid": "fem-double-pendulum-link-a",
-                "name": "Pendulum Link A",
+                "uuid": "fem-servo-load-driven-load",
+                "name": "Driven Load",
                 "priority": 0.0,
                 "visible": true,
                 "enabled": true,
@@ -237,7 +262,7 @@
                   "position": [
                     0.0,
                     0.0,
-                    -1.5
+                    -1.75
                   ],
                   "rotation": [
                     0.0,
@@ -253,7 +278,7 @@
                 ],
                 "components": [
                   {
-                    "source_id": "fem-double-pendulum-link-a-mesh",
+                    "source_id": "fem-servo-load-driven-load-mesh",
                     "type": "MeshComponent",
                     "data": {
                       "enabled": true,
@@ -268,7 +293,7 @@
                       "mesh_offset_position": [
                         0.0,
                         0.0,
-                        0.0
+                        0.75
                       ],
                       "mesh_offset_euler": [
                         0.0,
@@ -276,20 +301,20 @@
                         0.0
                       ],
                       "mesh_offset_scale": [
-                        0.34,
-                        0.34,
-                        3.0
+                        0.18,
+                        0.18,
+                        2.0
                       ]
                     }
                   },
                   {
-                    "source_id": "fem-double-pendulum-link-a-renderer",
+                    "source_id": "fem-servo-load-driven-load-renderer",
                     "type": "MeshRenderer",
                     "data": {
                       "enabled": true,
                       "material": {
-                        "uuid": "fem-double-pendulum-link-a-material",
-                        "name": "LinkA",
+                        "uuid": "fem-servo-load-arm-material",
+                        "name": "Arm",
                         "type": "uuid",
                         "kind": "tc_material"
                       },
@@ -299,15 +324,15 @@
                     }
                   },
                   {
-                    "source_id": "fem-double-pendulum-link-a-body",
+                    "source_id": "fem-servo-load-driven-load-body",
                     "type": "FEMRigidBodyComponent",
                     "data": {
                       "enabled": true,
-                      "mass": 1.5,
+                      "mass": 2.0,
                       "inertia_diagonal": [
-                        1.1403125,
-                        1.1403125,
-                        0.0289
+                        0.58,
+                        0.58,
+                        0.041
                       ],
                       "linear_damping": 0.0,
                       "angular_damping": 0.0
@@ -316,8 +341,8 @@
                 ],
                 "children": [
                   {
-                    "uuid": "fem-double-pendulum-middle-joint-marker",
-                    "name": "Middle Joint",
+                    "uuid": "fem-servo-load-payload",
+                    "name": "Payload Visual",
                     "priority": 0.0,
                     "visible": true,
                     "enabled": true,
@@ -329,13 +354,13 @@
                       "position": [
                         0.0,
                         0.0,
-                        -1.5
+                        -0.25
                       ],
                       "rotation": [
                         0.0,
-                        0.4926438792262454,
                         0.0,
-                        0.8702310085608973
+                        0.0,
+                        1.0
                       ]
                     },
                     "scale": [
@@ -345,128 +370,53 @@
                     ],
                     "components": [
                       {
-                        "source_id": "fem-double-pendulum-middle-rotator",
-                        "type": "RotatorComponent",
+                        "source_id": "fem-servo-load-payload-mesh",
+                        "type": "MeshComponent",
                         "data": {
                           "enabled": true,
-                          "axis": [
-                            0.0,
-                            1.0,
-                            0.0
-                          ],
-                          "coordinate_scale": "0.017453292519943295",
-                          "coordinate": [
-                            59.029998779296875,
-                            -180.0,
-                            180.0
-                          ],
-                          "origin_position": [
-                            0.0,
-                            0.0,
-                            -1.5
-                          ],
-                          "origin_rotation": [
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": true,
+                          "mesh_offset_position": [
                             0.0,
                             0.0,
                             0.0
+                          ],
+                          "mesh_offset_euler": [
+                            0.0,
+                            0.0,
+                            0.0
+                          ],
+                          "mesh_offset_scale": [
+                            0.55,
+                            0.55,
+                            0.55
                           ]
+                        }
+                      },
+                      {
+                        "source_id": "fem-servo-load-payload-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "fem-servo-load-payload-material",
+                            "name": "Payload",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
                         }
                       }
                     ],
-                    "children": [
-                      {
-                        "uuid": "fem-double-pendulum-link-b",
-                        "name": "Pendulum Link B",
-                        "priority": 0.0,
-                        "visible": true,
-                        "enabled": true,
-                        "pickable": true,
-                        "selectable": true,
-                        "layer": 0.0,
-                        "flags": 0.0,
-                        "pose": {
-                          "position": [
-                            0.0,
-                            0.0,
-                            -1.5
-                          ],
-                          "rotation": [
-                            0.0,
-                            0.0,
-                            0.0,
-                            1.0
-                          ]
-                        },
-                        "scale": [
-                          1.0,
-                          1.0,
-                          1.0
-                        ],
-                        "components": [
-                          {
-                            "source_id": "fem-double-pendulum-link-b-mesh",
-                            "type": "MeshComponent",
-                            "data": {
-                              "enabled": true,
-                              "mesh_generated": false,
-                              "mesh": {
-                                "uuid": "00000000-0000-0000-0003-000000000001",
-                                "name": "Cube",
-                                "type": "uuid",
-                                "kind": "tc_mesh"
-                              },
-                              "mesh_offset_enabled": true,
-                              "mesh_offset_position": [
-                                0.0,
-                                0.0,
-                                0.0
-                              ],
-                              "mesh_offset_euler": [
-                                0.0,
-                                0.0,
-                                0.0
-                              ],
-                              "mesh_offset_scale": [
-                                0.3,
-                                0.3,
-                                3.0
-                              ]
-                            }
-                          },
-                          {
-                            "source_id": "fem-double-pendulum-link-b-renderer",
-                            "type": "MeshRenderer",
-                            "data": {
-                              "enabled": true,
-                              "material": {
-                                "uuid": "fem-double-pendulum-link-b-material",
-                                "name": "LinkB",
-                                "type": "uuid",
-                                "kind": "tc_material"
-                              },
-                              "cast_shadow": true,
-                              "_override_material": false,
-                              "materials": []
-                            }
-                          },
-                          {
-                            "source_id": "fem-double-pendulum-link-b-body",
-                            "type": "FEMRigidBodyComponent",
-                            "data": {
-                              "enabled": true,
-                              "mass": 1.0,
-                              "inertia_diagonal": [
-                                0.759375,
-                                0.759375,
-                                0.015
-                              ],
-                              "linear_damping": 0.0,
-                              "angular_damping": 0.0
-                            }
-                          }
-                        ]
-                      }
-                    ]
+                    "children": []
                   }
                 ]
               }
@@ -475,7 +425,7 @@
         ]
       },
       {
-        "uuid": "fem-double-pendulum-key-light",
+        "uuid": "fem-servo-load-key-light",
         "name": "Directional Key Light",
         "priority": 0.0,
         "visible": true,
@@ -504,7 +454,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-key-light-component",
+            "source_id": "fem-servo-load-key-light-component",
             "type": "LightComponent",
             "data": {
               "enabled": true,
@@ -528,7 +478,7 @@
         ]
       },
       {
-        "uuid": "fem-double-pendulum-fill-light",
+        "uuid": "fem-servo-load-fill-light",
         "name": "Blue Fill Light",
         "priority": 0.0,
         "visible": true,
@@ -557,7 +507,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-fill-light-component",
+            "source_id": "fem-servo-load-fill-light-component",
             "type": "LightComponent",
             "data": {
               "enabled": true,
@@ -581,7 +531,7 @@
         ]
       },
       {
-        "uuid": "fem-double-pendulum-camera",
+        "uuid": "fem-servo-load-camera",
         "name": "Main Camera",
         "priority": 0.0,
         "visible": true,
@@ -610,7 +560,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-camera-component",
+            "source_id": "fem-servo-load-camera-component",
             "type": "CameraComponent",
             "data": {
               "enabled": true,
@@ -627,7 +577,7 @@
         ]
       },
       {
-        "uuid": "fem-double-pendulum-world",
+        "uuid": "fem-servo-load-world",
         "name": "FEM Physics World",
         "priority": 0.0,
         "visible": true,
@@ -656,7 +606,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-world-component",
+            "source_id": "fem-servo-load-world-component",
             "type": "FEMPhysicsWorldComponent",
             "data": {
               "enabled": true,
@@ -665,14 +615,14 @@
                 0.0,
                 -9.81
               ],
-              "time_step": 0.01,
+              "time_step": 0.005,
               "substeps": 2.0
             }
           }
         ]
       },
       {
-        "uuid": "fem-double-pendulum-hud",
+        "uuid": "fem-servo-load-hud",
         "name": "Physics Telemetry HUD",
         "priority": 0.0,
         "visible": true,
@@ -701,7 +651,7 @@
         ],
         "components": [
           {
-            "source_id": "fem-double-pendulum-hud-ui",
+            "source_id": "fem-servo-load-hud-ui",
             "type": "UIComponent",
             "data": {
               "enabled": true,
@@ -709,20 +659,21 @@
                 "type": "uuid",
                 "kind": "ui_document",
                 "role": "ui_document",
-                "uuid": "fem-double-pendulum-physics-hud",
-                "name": "physics_hud"
+                "uuid": "fem-servo-load-physics-hud",
+                "name": "servo_hud"
               },
               "priority": 1000.0,
               "input_source_mask": 1.0
             }
           },
           {
-            "source_id": "fem-double-pendulum-hud-telemetry",
+            "source_id": "fem-servo-load-hud-telemetry",
             "type": "FEMPhysicsHudComponent",
             "data": {
               "enabled": true,
               "world_entity_name": "FEM Physics World",
-              "refresh_interval": 0.1
+              "refresh_interval": 0.1,
+              "servo_entity_name": "Servo Joint"
             }
           }
         ]
@@ -763,7 +714,7 @@
         "render_target_configs": [
           {
             "name": "Main Target",
-            "camera_uuid": "fem-double-pendulum-camera",
+            "camera_uuid": "fem-servo-load-camera",
             "dynamic_resolution": true,
             "color_format": "rgba8",
             "depth_format": "depth24",
@@ -839,7 +790,7 @@
       "editor_entities": {
         "camera": [
           {
-            "source_id": "fem-double-pendulum-editor-camera",
+            "source_id": "fem-servo-load-editor-camera",
             "type": "CameraComponent",
             "data": {
               "enabled": true,
@@ -854,7 +805,7 @@
             }
           },
           {
-            "source_id": "fem-double-pendulum-editor-orbit",
+            "source_id": "fem-servo-load-editor-orbit",
             "type": "OrbitCameraController",
             "data": {
               "enabled": true,
@@ -879,10 +830,9 @@
       }
     },
     "expanded_entities": [
-      "fem-double-pendulum-fixed-anchor",
-      "fem-double-pendulum-link-a",
-      "fem-double-pendulum-middle-joint-marker",
-      "fem-double-pendulum-root-joint"
+      "fem-servo-load-servo-stand",
+      "fem-servo-load-servo-joint",
+      "fem-servo-load-driven-load"
     ]
   }
 }
