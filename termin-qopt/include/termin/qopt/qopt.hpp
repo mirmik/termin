@@ -12,6 +12,7 @@
 #include <termin/qopt/hqp.hpp>
 #include <termin/qopt/multibody2d.hpp>
 #include <termin/qopt/multibody3d.hpp>
+#include <termin/qopt/point_kinematics3d.hpp>
 #include <termin/qopt/qp_types.hpp>
 #include <termin/qopt/subspaces.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>

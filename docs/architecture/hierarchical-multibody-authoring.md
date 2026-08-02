@@ -1,8 +1,8 @@
 # Hierarchical multibody authoring
 
-Status: fixed-base articulation, bounded servo, and unilateral joint-limit
-slices implemented, 2026-08-02. Floating bases, contacts, and HQP control
-remain future work.
+Status: fixed-base articulation, bounded servo, unilateral joint-limit, and
+solver-neutral point-kinematics slices implemented, 2026-08-02. Floating bases,
+contact assembly/integration, and HQP control remain future work.
 
 ## Goal
 
@@ -285,9 +285,12 @@ future persistent contact contribution rather than `DynamicsSystem`.
    of the unilateral machinery. Limits produce reactions and never clamp an
    already integrated transform.
 4. Expose a solver-facing point-kinematics contract for maximal bodies,
-   arbitrary articulation links and the static world. It provides point
-   velocity, generalized Jacobian and the transpose force mapping without a
-   dependency on scene entities or colliders.
+   arbitrary articulation links and the static world. This is implemented as
+   `PointKinematics3D`: it provides world position and velocity, the owning DOF
+   block, a row-major `3 x n` generalized Jacobian, and `J^T` force mapping
+   without a dependency on scene entities, colliders, or Eigen. Tests cover
+   direct velocity, finite differences on a branching tree, virtual work,
+   static zero-DOF points, and invalid inputs.
 5. Implement a public `ContactSet3DContribution` which consumes endpoint pairs,
    normals, signed gaps and stable caller keys. It owns normal rows, reactions
    and split penetration correction, but knows nothing about collision queries.

@@ -9,6 +9,8 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <exception>
+#include <utility>
 
 namespace termin::qopt
 {
@@ -336,6 +338,73 @@ namespace termin::qopt
     termin::Vec3 RigidBody3DContribution::gravity_world() const noexcept
     {
         return gravity_world_;
+    }
+
+    PointKinematics3DResult
+    RigidBody3DContribution::point_kinematics(termin::Vec3 point_local) const noexcept
+    {
+        if (diagnostic_ != Multibody3DDiagnostic::None)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] cannot query point kinematics of invalid "
+                         "rigid body '%s'\n",
+                         diagnostic_name_.c_str());
+            return {{}, PointKinematics3DDiagnostic::InvalidModel};
+        }
+        if (!point_local.is_finite())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rejected non-finite rigid-body point\n");
+            return {{}, PointKinematics3DDiagnostic::NonFinitePoint};
+        }
+
+        try
+        {
+            PointKinematics3D value;
+            value.position_world = state_.pose.transform_point(point_local);
+            value.velocity_world = state_.velocity_local.velocity_at_offset(point_local)
+                                       .rotated_by(state_.pose.ang)
+                                       .lin;
+            value.dofs = dofs_;
+            value.linear_jacobian_world_storage.assign(18, 0.0);
+
+            const std::array<termin::Screw3, 6> basis{
+                termin::Screw3{{}, termin::Vec3::unit_x()},
+                termin::Screw3{{}, termin::Vec3::unit_y()},
+                termin::Screw3{{}, termin::Vec3::unit_z()},
+                termin::Screw3{termin::Vec3::unit_x(), {}},
+                termin::Screw3{termin::Vec3::unit_y(), {}},
+                termin::Screw3{termin::Vec3::unit_z(), {}},
+            };
+            for (std::size_t column = 0; column < basis.size(); ++column)
+            {
+                const termin::Vec3 response = basis[column]
+                                                  .velocity_at_offset(point_local)
+                                                  .rotated_by(state_.pose.ang)
+                                                  .lin;
+                value.linear_jacobian_world_storage[column] = response.x;
+                value.linear_jacobian_world_storage[6 + column] = response.y;
+                value.linear_jacobian_world_storage[12 + column] = response.z;
+            }
+            if (!value.position_world.is_finite() || !value.velocity_world.is_finite())
+            {
+                return {{}, PointKinematics3DDiagnostic::InvalidModel};
+            }
+            return {std::move(value), PointKinematics3DDiagnostic::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rigid-body point kinematics failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rigid-body point kinematics failed with "
+                         "an unknown exception\n");
+        }
+        return {{}, PointKinematics3DDiagnostic::InternalFailure};
     }
 
     Multibody3DDiagnostic

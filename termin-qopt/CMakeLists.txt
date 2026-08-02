@@ -37,6 +37,7 @@ add_library(termin_qopt SHARED
     src/hqp.cpp
     src/multibody2d.cpp
     src/multibody3d_contributions.cpp
+    src/point_kinematics3d.cpp
     src/qp_types.cpp
     src/subspaces.cpp
     src/termin_qopt.cpp
@@ -198,6 +199,17 @@ if(TERMIN_QOPT_BUILD_TESTS)
     add_test(
         NAME termin_qopt_articulation3d_motor_test
         COMMAND termin_qopt_articulation3d_motor_test
+    )
+
+    add_executable(termin_qopt_point_kinematics3d_test
+        tests/test_point_kinematics3d.cpp
+    )
+    target_link_libraries(
+        termin_qopt_point_kinematics3d_test PRIVATE termin_qopt
+    )
+    add_test(
+        NAME termin_qopt_point_kinematics3d_test
+        COMMAND termin_qopt_point_kinematics3d_test
     )
 
     add_executable(termin_qopt_double_pendulum2d_test

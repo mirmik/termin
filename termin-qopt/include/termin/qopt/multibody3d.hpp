@@ -8,6 +8,7 @@
 #include <termin/geom/screw3.hpp>
 #include <termin/geom/spatial_inertia3.hpp>
 #include <termin/qopt/dynamics.hpp>
+#include <termin/qopt/point_kinematics3d.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
 
 namespace termin::qopt
@@ -58,6 +59,8 @@ namespace termin::qopt
         [[nodiscard]] termin::Screw3 velocity_at_body_origin_world() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
+        [[nodiscard]] PointKinematics3DResult
+        point_kinematics(termin::Vec3 point_local) const noexcept;
         [[nodiscard]] Multibody3DDiagnostic set_state(RigidBody3DState state) noexcept;
         [[nodiscard]] Multibody3DDiagnostic
         set_gravity_world(termin::Vec3 gravity) noexcept;

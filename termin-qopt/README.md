@@ -73,12 +73,25 @@ double-pendulum comparison against the maximal-coordinate model are covered by
 native tests. Optional per-link minimum and maximum coordinates become
 transient velocity inequalities only when reached or predictively crossed;
 their public state reports separate reactions and active flags without
-clamping the coordinate after integration. The separate
+clamping the coordinate after integration.
+
+The solver-neutral `PointKinematics3D` contract now gives a static world point,
+a material point on `RigidBody3DContribution`, or a material point on any
+`Articulation3DContribution` link the same representation: world position,
+world linear velocity, the owning DOF block, and a row-major `3 x n` generalized
+Jacobian. `map_force_to_generalized_effort()` applies `J^T` without exposing
+Eigen. The model owner keeps local spatial-vector conventions internal; contact
+contributions can consume the result without knowing the coordinate
+formulation. Native tests verify `J qdot`, finite-difference columns on a
+branching tree, the virtual-work identity, static zero-DOF behavior, and error
+diagnostics.
+
+The separate
 `termin-components-physics-fem` layer now compiles
 an explicit root/joint/body entity hierarchy into this public model and keeps
 solved joint coordinates synchronized with `RotatorComponent` or
-`ActuatorComponent`. Floating bases, link-level external constraints, and a
-linear-time dynamics backend remain subsequent slices.
+`ActuatorComponent`. Floating bases, contact-set assembly, and a linear-time
+dynamics backend remain subsequent slices.
 
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
