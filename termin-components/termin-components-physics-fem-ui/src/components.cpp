@@ -115,6 +115,36 @@ namespace termin
             return stream.str();
         }
 
+        std::string format_motors(const FEMPhysicsTelemetry& telemetry)
+        {
+            std::ostringstream stream;
+            stream << telemetry.motor_count << " motors   ·   " << std::fixed
+                   << std::setprecision(2) << telemetry.motor_effort_linf
+                   << " N·m/N max   ·   " << telemetry.motor_power
+                   << " W   ·   " << telemetry.motor_work << " J";
+            return stream.str();
+        }
+
+        std::string format_servo(const FEMJointServoComponent& servo,
+                                 const FEMArticulationMotorComponent& motor)
+        {
+            if (!servo.initialized() || !motor.initialized())
+            {
+                return "servo waiting for solver";
+            }
+            const double error = servo.position_error();
+            const double coordinate = servo.target_coordinate - error;
+            std::ostringstream stream;
+            stream << std::fixed << std::setprecision(2) << "q " << coordinate
+                   << " / " << servo.target_coordinate << "   ·   error "
+                   << std::showpos << error << std::noshowpos << "   ·   I "
+                   << servo.integral_effort() << "   ·   effort "
+                   << motor.applied_effort() << " / " << motor.maximum_effort
+                   << "   ·   " << motor.power() << " W   ·   "
+                   << (motor.saturated() ? "SATURATED" : "tracking");
+            return stream.str();
+        }
+
         bool set_label(gui_native::TcDocument document,
                        std::string_view name,
                        std::string text)
@@ -148,6 +178,12 @@ namespace termin
                                 "FEMPhysicsHudComponent",
                                 "world_entity_name",
                                 "World Entity",
+                                "string");
+        tc::stage_inspect_field(inspect,
+                                &FEMPhysicsHudComponent::servo_entity_name,
+                                "FEMPhysicsHudComponent",
+                                "servo_entity_name",
+                                "Servo Entity",
                                 "string");
         tc::stage_inspect_field(inspect,
                                 &FEMPhysicsHudComponent::refresh_interval,
@@ -243,6 +279,39 @@ namespace termin
             set_label(
                 document, "simulation_value", format_simulation(telemetry)) &&
             set_label(document, "topology_value", format_topology(telemetry));
+        if (find_label(document, "motor_value") != nullptr)
+        {
+            (void)set_label(document, "motor_value", format_motors(telemetry));
+        }
+        if (!servo_entity_name.empty() &&
+            find_label(document, "servo_value") != nullptr)
+        {
+            Entity servo_entity = scene.find_entity_by_name(servo_entity_name);
+            FEMJointServoComponent* servo =
+                servo_entity.valid()
+                    ? servo_entity.get_component<FEMJointServoComponent>()
+                    : nullptr;
+            FEMArticulationMotorComponent* motor =
+                servo_entity.valid()
+                    ? servo_entity
+                          .get_component<FEMArticulationMotorComponent>()
+                    : nullptr;
+            if (servo == nullptr || motor == nullptr)
+            {
+                if (!binding_error_reported_)
+                {
+                    tc::Log::error(
+                        "[FEMPhysicsHudComponent] entity '%s' has no "
+                        "FEMJointServoComponent and "
+                        "FEMArticulationMotorComponent pair",
+                        servo_entity_name.c_str());
+                    binding_error_reported_ = true;
+                }
+                return;
+            }
+            (void)set_label(
+                document, "servo_value", format_servo(*servo, *motor));
+        }
         if (!complete && !binding_error_reported_)
         {
             tc::Log::error(

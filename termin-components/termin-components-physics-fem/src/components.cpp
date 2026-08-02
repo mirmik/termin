@@ -122,6 +122,195 @@ namespace termin
                    : std::numeric_limits<double>::quiet_NaN();
     }
 
+    FEMArticulationMotorComponent::FEMArticulationMotorComponent()
+        : CxxComponent("FEMArticulationMotorComponent")
+    {
+    }
+
+    void FEMArticulationMotorComponent::register_type()
+    {
+        auto descriptor = ComponentTypeDescriptorBuilder::native<
+            FEMArticulationMotorComponent>(
+            "FEMArticulationMotorComponent", module_owner, "Component");
+        descriptor.category("Physics");
+        auto& inspect = descriptor.inspect();
+        stage_double(inspect,
+                     &FEMArticulationMotorComponent::commanded_effort,
+                     "FEMArticulationMotorComponent",
+                     "commanded_effort",
+                     "Commanded Effort",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMArticulationMotorComponent::maximum_effort,
+                     "FEMArticulationMotorComponent",
+                     "maximum_effort",
+                     "Maximum Effort",
+                     0.0,
+                     1.0e9,
+                     0.1);
+        (void)descriptor.commit();
+    }
+
+    void FEMArticulationMotorComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
+    }
+
+    bool FEMArticulationMotorComponent::initialized() const noexcept
+    {
+        return world_ != nullptr && articulation_ != nullptr &&
+               motor_ != nullptr;
+    }
+
+    double FEMArticulationMotorComponent::applied_effort() const noexcept
+    {
+        return initialized() ? motor_->applied_effort(channel_index_)
+                             : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double FEMArticulationMotorComponent::power() const noexcept
+    {
+        if (!initialized())
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        const qopt::Articulation3DState& state = articulation_->state();
+        if (dof_index_ >= state.velocities.size())
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        return applied_effort() * state.velocities[dof_index_];
+    }
+
+    bool FEMArticulationMotorComponent::saturated() const noexcept
+    {
+        return initialized() && motor_->saturated(channel_index_);
+    }
+
+    FEMJointServoComponent::FEMJointServoComponent()
+        : CxxComponent("FEMJointServoComponent")
+    {
+    }
+
+    void FEMJointServoComponent::register_type()
+    {
+        auto descriptor =
+            ComponentTypeDescriptorBuilder::native<FEMJointServoComponent>(
+                "FEMJointServoComponent", module_owner, "Component");
+        descriptor.category("Control");
+        auto& inspect = descriptor.inspect();
+        tc::stage_inspect_field(
+            inspect,
+            &FEMJointServoComponent::position_control_enabled,
+            "FEMJointServoComponent",
+            "position_control_enabled",
+            "Position Control",
+            "bool");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMJointServoComponent::integral_control_enabled,
+            "FEMJointServoComponent",
+            "integral_control_enabled",
+            "Integral Control",
+            "bool");
+        stage_double(inspect,
+                     &FEMJointServoComponent::target_coordinate,
+                     "FEMJointServoComponent",
+                     "target_coordinate",
+                     "Target Coordinate",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::target_velocity,
+                     "FEMJointServoComponent",
+                     "target_velocity",
+                     "Target Velocity",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::position_gain,
+                     "FEMJointServoComponent",
+                     "position_gain",
+                     "Position Gain",
+                     0.0,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::integral_gain,
+                     "FEMJointServoComponent",
+                     "integral_gain",
+                     "Integral Gain",
+                     0.0,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::maximum_integral_effort,
+                     "FEMJointServoComponent",
+                     "maximum_integral_effort",
+                     "Maximum Integral Effort",
+                     0.0,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::velocity_gain,
+                     "FEMJointServoComponent",
+                     "velocity_gain",
+                     "Velocity Gain",
+                     0.0,
+                     1.0e9,
+                     0.1);
+        stage_double(inspect,
+                     &FEMJointServoComponent::feed_forward_effort,
+                     "FEMJointServoComponent",
+                     "feed_forward_effort",
+                     "Feed-forward Effort",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        (void)descriptor.commit();
+    }
+
+    void FEMJointServoComponent::on_destroy()
+    {
+        if (world_ != nullptr)
+        {
+            world_->detach(*this);
+        }
+        CxxComponent::on_destroy();
+    }
+
+    bool FEMJointServoComponent::initialized() const noexcept
+    {
+        return world_ != nullptr && joint_ != nullptr &&
+               motor_component_ != nullptr && articulation_ != nullptr;
+    }
+
+    double FEMJointServoComponent::position_error() const noexcept
+    {
+        return joint_ != nullptr ? target_coordinate - joint_->get_coordinate()
+                                 : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double FEMJointServoComponent::commanded_effort() const noexcept
+    {
+        return initialized() ? commanded_effort_
+                             : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double FEMJointServoComponent::integral_effort() const noexcept
+    {
+        return initialized() ? integral_effort_
+                             : std::numeric_limits<double>::quiet_NaN();
+    }
+
     FEMRigidBodyComponent::FEMRigidBodyComponent()
         : CxxComponent("FEMRigidBodyComponent")
     {
@@ -370,6 +559,7 @@ namespace termin
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;
+        motor_work_ = 0.0;
         CxxComponent::on_destroy();
     }
 
@@ -407,6 +597,89 @@ namespace termin
                 }
                 return result;
             }(),
+            .motor_count =
+                [this]()
+            {
+                std::size_t result = 0;
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    result += articulation != nullptr
+                                  ? articulation->motors_.size()
+                                  : 0;
+                }
+                return result;
+            }(),
+            .saturated_motor_count =
+                [this]()
+            {
+                std::size_t result = 0;
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    if (articulation == nullptr)
+                    {
+                        continue;
+                    }
+                    for (const FEMArticulationMotorComponent* motor :
+                         articulation->motors_)
+                    {
+                        result +=
+                            motor != nullptr && motor->saturated() ? 1U : 0U;
+                    }
+                }
+                return result;
+            }(),
+            .motor_effort_linf =
+                [this]()
+            {
+                double result = 0.0;
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    if (articulation == nullptr)
+                    {
+                        continue;
+                    }
+                    for (const FEMArticulationMotorComponent* motor :
+                         articulation->motors_)
+                    {
+                        if (motor != nullptr)
+                        {
+                            result = std::max(
+                                result, std::abs(motor->applied_effort()));
+                        }
+                    }
+                }
+                return result;
+            }(),
+            .motor_power =
+                [this]()
+            {
+                double result = 0.0;
+                for (const FEMArticulationComponent* articulation :
+                     articulations_)
+                {
+                    if (articulation == nullptr)
+                    {
+                        continue;
+                    }
+                    for (const FEMArticulationMotorComponent* motor :
+                         articulation->motors_)
+                    {
+                        if (motor != nullptr)
+                        {
+                            const double power = motor->power();
+                            if (std::isfinite(power))
+                            {
+                                result += power;
+                            }
+                        }
+                    }
+                }
+                return result;
+            }(),
+            .motor_work = motor_work_,
             .initial_total_energy = initial_total_energy_,
             .total_energy = total_energy(),
         };
@@ -420,6 +693,7 @@ namespace termin
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;
+        motor_work_ = 0.0;
 
         Entity owner = entity();
         if (!owner.valid())
@@ -747,6 +1021,72 @@ namespace termin
                     .data());
             return false;
         }
+
+        std::vector<qopt::ArticulationMotorChannel> motor_channels;
+        for (std::size_t dof_index = 0; dof_index < compiled.bindings.size();
+             ++dof_index)
+        {
+            const FEMArticulationSceneBinding& binding =
+                compiled.bindings[dof_index];
+            FEMArticulationMotorComponent* motor = binding.motor;
+            FEMJointServoComponent* servo = binding.servo;
+            if (servo != nullptr && servo->enabled() &&
+                (motor == nullptr || !motor->enabled()))
+            {
+                tc::Log::error(
+                    "[FEMJointServoComponent] servo on '%s' requires an "
+                    "enabled FEMArticulationMotorComponent",
+                    binding.joint_entity.name());
+                return false;
+            }
+            if (motor == nullptr || !motor->enabled())
+            {
+                continue;
+            }
+            if (!std::isfinite(motor->commanded_effort) ||
+                !std::isfinite(motor->maximum_effort) ||
+                motor->maximum_effort < 0.0)
+            {
+                tc::Log::error(
+                    "[FEMArticulationMotorComponent] invalid settings on '%s'",
+                    binding.joint_entity.name());
+                return false;
+            }
+            if (motor->world_ != nullptr)
+            {
+                tc::Log::error(
+                    "[FEMArticulationMotorComponent] motor on '%s' belongs to "
+                    "another world",
+                    binding.joint_entity.name());
+                return false;
+            }
+            if (servo != nullptr && servo->enabled() &&
+                (!std::isfinite(servo->target_coordinate) ||
+                 !std::isfinite(servo->target_velocity) ||
+                 !std::isfinite(servo->position_gain) ||
+                 servo->position_gain < 0.0 ||
+                 !std::isfinite(servo->integral_gain) ||
+                 servo->integral_gain < 0.0 ||
+                 !std::isfinite(servo->maximum_integral_effort) ||
+                 servo->maximum_integral_effort < 0.0 ||
+                 !std::isfinite(servo->velocity_gain) ||
+                 servo->velocity_gain < 0.0 ||
+                 !std::isfinite(servo->feed_forward_effort) ||
+                 servo->world_ != nullptr))
+            {
+                tc::Log::error(
+                    "[FEMJointServoComponent] invalid settings or ownership "
+                    "on '%s'",
+                    binding.joint_entity.name());
+                return false;
+            }
+            motor_channels.push_back({
+                .dof_index = dof_index,
+                .effort_limit = motor->maximum_effort,
+                .diagnostic_name = binding.joint_entity.name(),
+            });
+        }
+
         component.articulation_ = articulation.get();
         if (system_.add_contribution(std::move(articulation)) !=
             qopt::DynamicsSystemDiagnostic::None)
@@ -756,14 +1096,70 @@ namespace termin
             component.articulation_ = nullptr;
             return false;
         }
+        if (!motor_channels.empty())
+        {
+            auto motor = std::make_unique<qopt::ArticulationMotorContribution>(
+                *component.articulation_,
+                std::move(motor_channels),
+                component.entity().name() ? component.entity().name()
+                                          : "articulation-motors");
+            if (motor->diagnostic() != qopt::ArticulationMotorDiagnostic::None)
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] motor model is invalid: %s",
+                    qopt::articulation_motor_diagnostic_name(
+                        motor->diagnostic())
+                        .data());
+                return false;
+            }
+            component.motor_ = motor.get();
+            if (system_.add_contribution(std::move(motor)) !=
+                qopt::DynamicsSystemDiagnostic::None)
+            {
+                tc::Log::error("[FEMArticulationComponent] failed to add motor "
+                               "contribution");
+                component.motor_ = nullptr;
+                return false;
+            }
+        }
         component.world_ = this;
         component.bodies_.reserve(compiled.bindings.size());
         component.joint_entities_.reserve(compiled.bindings.size());
-        for (const FEMArticulationSceneBinding& binding : compiled.bindings)
+        component.joint_coordinate_scales_.reserve(compiled.bindings.size());
+        component.motors_.reserve(compiled.bindings.size());
+        component.servos_.reserve(compiled.bindings.size());
+        std::size_t motor_channel = 0;
+        for (std::size_t dof_index = 0; dof_index < compiled.bindings.size();
+             ++dof_index)
         {
+            const FEMArticulationSceneBinding& binding =
+                compiled.bindings[dof_index];
             component.bodies_.push_back(binding.body);
             component.joint_entities_.push_back(binding.joint_entity);
+            component.joint_coordinate_scales_.push_back(
+                binding.coordinate_scale);
             binding.body->world_ = this;
+            if (binding.motor != nullptr && binding.motor->enabled())
+            {
+                binding.motor->world_ = this;
+                binding.motor->articulation_ = component.articulation_;
+                binding.motor->motor_ = component.motor_;
+                binding.motor->dof_index_ = dof_index;
+                binding.motor->channel_index_ = motor_channel++;
+                component.motors_.push_back(binding.motor);
+            }
+            if (binding.servo != nullptr && binding.servo->enabled())
+            {
+                binding.servo->world_ = this;
+                binding.servo->joint_ = binding.joint;
+                binding.servo->motor_component_ = binding.motor;
+                binding.servo->articulation_ = component.articulation_;
+                binding.servo->dof_index_ = dof_index;
+                binding.servo->coordinate_scale_ = binding.coordinate_scale;
+                binding.servo->integral_effort_ = 0.0;
+                binding.servo->commanded_effort_ = 0.0;
+                component.servos_.push_back(binding.servo);
+            }
         }
         return true;
     }
@@ -785,6 +1181,14 @@ namespace termin
                 initialized_ = false;
                 return;
             }
+            if (component->joint_coordinate_scales_.size() !=
+                component->joint_entities_.size())
+            {
+                tc::Log::error("[FEMArticulationComponent] coordinate scale "
+                               "binding size mismatch");
+                initialized_ = false;
+                return;
+            }
             for (std::size_t index = 0;
                  index < component->joint_entities_.size();
                  ++index)
@@ -802,9 +1206,131 @@ namespace termin
                     initialized_ = false;
                     return;
                 }
-                joint->set_coordinate(state.coordinates[index]);
+                const double coordinate_scale =
+                    component->joint_coordinate_scales_[index];
+                if (!std::isfinite(coordinate_scale) || coordinate_scale <= 0.0)
+                {
+                    tc::Log::error("[FEMArticulationComponent] invalid "
+                                   "coordinate scale binding");
+                    initialized_ = false;
+                    return;
+                }
+                joint->set_coordinate(state.coordinates[index] /
+                                      coordinate_scale);
             }
         }
+    }
+
+    bool FEMPhysicsWorldComponent::update_motor_commands(double dt)
+    {
+        for (FEMArticulationComponent* component : articulations_)
+        {
+            if (component == nullptr || component->articulation_ == nullptr)
+            {
+                continue;
+            }
+            const qopt::Articulation3DState& state =
+                component->articulation_->state();
+            for (FEMJointServoComponent* servo : component->servos_)
+            {
+                if (servo == nullptr || servo->motor_component_ == nullptr ||
+                    servo->dof_index_ >= state.coordinates.size() ||
+                    servo->dof_index_ >= state.velocities.size())
+                {
+                    tc::Log::error(
+                        "[FEMJointServoComponent] invalid runtime binding");
+                    return false;
+                }
+                if (!std::isfinite(servo->coordinate_scale_) ||
+                    servo->coordinate_scale_ <= 0.0)
+                {
+                    tc::Log::error(
+                        "[FEMJointServoComponent] invalid coordinate scale");
+                    return false;
+                }
+                const double target_position =
+                    servo->target_coordinate * servo->coordinate_scale_;
+                const double target_velocity =
+                    servo->target_velocity * servo->coordinate_scale_;
+                const double position_error =
+                    target_position - state.coordinates[servo->dof_index_];
+                const double position_effort =
+                    servo->position_control_enabled
+                        ? servo->position_gain * position_error
+                        : 0.0;
+                const double velocity_effort =
+                    servo->velocity_gain *
+                    (target_velocity - state.velocities[servo->dof_index_]);
+                const double non_integral_effort = position_effort +
+                                                   velocity_effort +
+                                                   servo->feed_forward_effort;
+
+                if (!servo->enabled() || !servo->motor_component_->enabled() ||
+                    !servo->integral_control_enabled ||
+                    servo->integral_gain == 0.0)
+                {
+                    servo->integral_effort_ = 0.0;
+                }
+                else
+                {
+                    const double proposed_integral_effort = std::clamp(
+                        servo->integral_effort_ +
+                            servo->integral_gain * position_error * dt,
+                        -servo->maximum_integral_effort,
+                        servo->maximum_integral_effort);
+                    const double proposed_command =
+                        non_integral_effort + proposed_integral_effort;
+                    const double integral_delta =
+                        proposed_integral_effort - servo->integral_effort_;
+                    const double motor_limit =
+                        servo->motor_component_->maximum_effort;
+                    const bool pushes_further_into_saturation =
+                        (proposed_command > motor_limit &&
+                         integral_delta > 0.0) ||
+                        (proposed_command < -motor_limit &&
+                         integral_delta < 0.0);
+                    if (!pushes_further_into_saturation)
+                    {
+                        servo->integral_effort_ = proposed_integral_effort;
+                    }
+                }
+
+                const double effort =
+                    servo->enabled()
+                        ? non_integral_effort + servo->integral_effort_
+                        : 0.0;
+                if (!std::isfinite(effort))
+                {
+                    tc::Log::error(
+                        "[FEMJointServoComponent] produced a non-finite "
+                        "effort command");
+                    return false;
+                }
+                servo->commanded_effort_ = effort;
+                servo->motor_component_->commanded_effort = effort;
+            }
+            for (FEMArticulationMotorComponent* motor : component->motors_)
+            {
+                if (motor == nullptr || motor->motor_ == nullptr ||
+                    !std::isfinite(motor->commanded_effort) ||
+                    !std::isfinite(motor->maximum_effort) ||
+                    motor->maximum_effort < 0.0 ||
+                    motor->motor_->set_effort_limit(motor->channel_index_,
+                                                    motor->maximum_effort) !=
+                        qopt::ArticulationMotorDiagnostic::None ||
+                    motor->motor_->set_command(
+                        motor->channel_index_,
+                        motor->enabled() ? motor->commanded_effort : 0.0) !=
+                        qopt::ArticulationMotorDiagnostic::None)
+                {
+                    tc::Log::error(
+                        "[FEMArticulationMotorComponent] failed to update "
+                        "motor command");
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     void FEMPhysicsWorldComponent::step_simulation(double dt)
@@ -874,6 +1400,12 @@ namespace termin
                 wrenches_world[index]);
         }
 
+        if (!update_motor_commands(dt))
+        {
+            initialized_ = false;
+            return;
+        }
+
         qopt::Multibody3DStepOptions options;
         options.time_step = dt;
         options.position_tolerance = 1.0e-8;
@@ -903,6 +1435,8 @@ namespace termin
         {
             return;
         }
+        const FEMPhysicsTelemetry current = telemetry();
+        motor_work_ += current.motor_power * dt;
         simulated_time_ += dt;
         ++successful_steps_;
     }
@@ -975,6 +1509,31 @@ namespace termin
             }
             articulation->bodies_.clear();
             articulation->joint_entities_.clear();
+            articulation->joint_coordinate_scales_.clear();
+            for (FEMArticulationMotorComponent* motor : articulation->motors_)
+            {
+                if (motor != nullptr && motor->world_ == this)
+                {
+                    motor->world_ = nullptr;
+                    motor->articulation_ = nullptr;
+                    motor->motor_ = nullptr;
+                }
+            }
+            articulation->motors_.clear();
+            for (FEMJointServoComponent* servo : articulation->servos_)
+            {
+                if (servo != nullptr && servo->world_ == this)
+                {
+                    servo->world_ = nullptr;
+                    servo->joint_ = nullptr;
+                    servo->motor_component_ = nullptr;
+                    servo->articulation_ = nullptr;
+                    servo->integral_effort_ = 0.0;
+                    servo->commanded_effort_ = 0.0;
+                }
+            }
+            articulation->servos_.clear();
+            articulation->motor_ = nullptr;
             articulation->articulation_ = nullptr;
             articulation->world_ = nullptr;
         }
@@ -1006,8 +1565,94 @@ namespace termin
         }
         component.bodies_.clear();
         component.joint_entities_.clear();
+        component.joint_coordinate_scales_.clear();
+        for (FEMArticulationMotorComponent* motor : component.motors_)
+        {
+            if (motor != nullptr && motor->world_ == this)
+            {
+                motor->world_ = nullptr;
+                motor->articulation_ = nullptr;
+                motor->motor_ = nullptr;
+            }
+        }
+        component.motors_.clear();
+        for (FEMJointServoComponent* servo : component.servos_)
+        {
+            if (servo != nullptr && servo->world_ == this)
+            {
+                servo->world_ = nullptr;
+                servo->joint_ = nullptr;
+                servo->motor_component_ = nullptr;
+                servo->articulation_ = nullptr;
+                servo->integral_effort_ = 0.0;
+                servo->commanded_effort_ = 0.0;
+            }
+        }
+        component.servos_.clear();
+        component.motor_ = nullptr;
         component.articulation_ = nullptr;
         component.world_ = nullptr;
+    }
+
+    void FEMPhysicsWorldComponent::detach(
+        FEMArticulationMotorComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation == nullptr)
+            {
+                continue;
+            }
+            for (FEMArticulationMotorComponent*& motor : articulation->motors_)
+            {
+                if (motor == &component)
+                {
+                    motor = nullptr;
+                }
+            }
+            for (FEMJointServoComponent* servo : articulation->servos_)
+            {
+                if (servo != nullptr && servo->motor_component_ == &component)
+                {
+                    servo->world_ = nullptr;
+                    servo->joint_ = nullptr;
+                    servo->motor_component_ = nullptr;
+                    servo->articulation_ = nullptr;
+                    servo->integral_effort_ = 0.0;
+                    servo->commanded_effort_ = 0.0;
+                }
+            }
+        }
+        component.world_ = nullptr;
+        component.articulation_ = nullptr;
+        component.motor_ = nullptr;
+    }
+
+    void
+    FEMPhysicsWorldComponent::detach(FEMJointServoComponent& component) noexcept
+    {
+        initialized_ = false;
+        for (FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation == nullptr)
+            {
+                continue;
+            }
+            for (FEMJointServoComponent*& servo : articulation->servos_)
+            {
+                if (servo == &component)
+                {
+                    servo = nullptr;
+                }
+            }
+        }
+        component.world_ = nullptr;
+        component.joint_ = nullptr;
+        component.motor_component_ = nullptr;
+        component.articulation_ = nullptr;
+        component.integral_effort_ = 0.0;
+        component.commanded_effort_ = 0.0;
     }
 
     void

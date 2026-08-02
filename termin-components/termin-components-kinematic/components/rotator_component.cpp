@@ -11,15 +11,16 @@ namespace termin
     namespace
     {
 
-        void
-        register_rotator_axis_scale_field(tc::InspectFacetBuilder& builder);
+        void register_rotator_coordinate_unit_field(
+            tc::InspectFacetBuilder& builder);
 
     } // namespace
 
     RotatorComponent::RotatorComponent()
-        : KinematicUnitComponent("RotatorComponent")
+        : KinematicUnitComponent("RotatorComponent",
+                                 Vec3{0.0, 0.0, 1.0},
+                                 std::numbers::pi_v<double> / 180.0)
     {
-        axis_z = 1.0; // Default: Z axis
     }
 
     void RotatorComponent::register_type()
@@ -30,7 +31,7 @@ namespace termin
                 "termin-components-kinematic",
                 "KinematicUnitComponent");
         descriptor.category("Kinematic");
-        register_rotator_axis_scale_field(descriptor.inspect());
+        register_rotator_coordinate_unit_field(descriptor.inspect());
         (void)descriptor.commit();
     }
 
@@ -40,18 +41,11 @@ namespace termin
         if (!ent.valid())
             return;
 
-        Vec3 raw_axis{axis_x, axis_y, axis_z};
-        double len =
-            std::sqrt(raw_axis.x * raw_axis.x + raw_axis.y * raw_axis.y +
-                      raw_axis.z * raw_axis.z);
-        if (len < 1e-9)
-            return;
-
-        Vec3 dir{raw_axis.x / len, raw_axis.y / len, raw_axis.z / len};
-        double angle = coordinate * len;
+        const Vec3 axis = get_axis();
+        const double angle = physical_coordinate();
 
         // local = origin * Rotation(axis, angle)
-        Quat coord_rot = Quat::from_axis_angle(dir, angle);
+        Quat coord_rot = Quat::from_axis_angle(axis, angle);
         Quat origin{origin_rotation.x,
                     origin_rotation.y,
                     origin_rotation.z,
@@ -84,17 +78,8 @@ namespace termin
 
         // Reverse: origin_rot = current_rot * coord_rot.inverse()
         // Since current_rot = origin_rot * coord_rot
-        Vec3 raw_axis{axis_x, axis_y, axis_z};
-        double len =
-            std::sqrt(raw_axis.x * raw_axis.x + raw_axis.y * raw_axis.y +
-                      raw_axis.z * raw_axis.z);
-
-        Quat coord_rot = Quat::identity();
-        if (len > 1e-9)
-        {
-            Vec3 dir{raw_axis.x / len, raw_axis.y / len, raw_axis.z / len};
-            coord_rot = Quat::from_axis_angle(dir, coordinate * len);
-        }
+        const Quat coord_rot =
+            Quat::from_axis_angle(get_axis(), physical_coordinate());
 
         Quat current_rot{rot[0], rot[1], rot[2], rot[3]};
         Quat origin = current_rot * coord_rot.inverse();
@@ -104,36 +89,35 @@ namespace termin
     namespace
     {
 
-        void register_rotator_axis_scale_field(tc::InspectFacetBuilder& builder)
+        void
+        register_rotator_coordinate_unit_field(tc::InspectFacetBuilder& builder)
         {
             tc::InspectFieldInfo info;
             info.type_name = "RotatorComponent";
-            info.path = "axis_scale";
-            info.label = "Axis Scale";
+            info.path = "coordinate_scale";
+            info.label = "Coordinate Unit";
             info.kind = "enum";
-            info.is_serializable = false;
+            info.is_serializable = true;
 
-            // π/180 ≈ 0.01745329 — coordinate in degrees
-            // 1.0 — coordinate in radians
-            std::string deg_str =
-                std::to_string(std::numbers::pi_v<double> / 180.0);
+            // Keep enough decimal digits to round-trip the double conversion
+            // instead of baking std::to_string's six-decimal approximation
+            // into every serialized scene.
+            constexpr const char* degree_scale = "0.017453292519943295";
             info.choices = {
-                {deg_str, "deg"},
+                {degree_scale, "deg"},
                 {"1.0", "rad"},
             };
 
             info.getter = [](void* obj) -> tc_value
             {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                double len =
-                    std::sqrt(c->axis_x * c->axis_x + c->axis_y * c->axis_y +
-                              c->axis_z * c->axis_z);
-                double deg_scale = std::numbers::pi_v<double> / 180.0;
-                if (std::abs(len - deg_scale) < 1e-6)
-                    return tc_value_string(std::to_string(deg_scale).c_str());
-                if (std::abs(len - 1.0) < 1e-6)
+                constexpr double deg_scale = std::numbers::pi_v<double> / 180.0;
+                const double scale = c->get_coordinate_scale();
+                if (std::abs(scale - deg_scale) < 1e-6)
+                    return tc_value_string(degree_scale);
+                if (std::abs(scale - 1.0) < 1e-6)
                     return tc_value_string("1.0");
-                return tc_value_string(std::to_string(deg_scale).c_str());
+                return tc_value_string(std::to_string(scale).c_str());
             };
 
             info.setter = [](void* obj, tc_value value, void*) -> bool
@@ -145,15 +129,7 @@ namespace termin
                     return false;
 
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                double len =
-                    std::sqrt(c->axis_x * c->axis_x + c->axis_y * c->axis_y +
-                              c->axis_z * c->axis_z);
-                if (len < 1e-12)
-                    return false;
-
-                double factor = new_scale / len;
-                c->set_axis(
-                    c->axis_x * factor, c->axis_y * factor, c->axis_z * factor);
+                c->set_coordinate_scale(new_scale);
                 return true;
             };
 

@@ -139,6 +139,15 @@ namespace termin::qopt
         [[nodiscard]] virtual AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept = 0;
 
+        // Resolve references to blocks owned by other contributions after all
+        // registrations have completed and the topology is immutable.
+        [[nodiscard]] virtual AssemblyDiagnostic
+        bind_topology(const DynamicsTopology& topology) noexcept
+        {
+            (void)topology;
+            return AssemblyDiagnostic::None;
+        }
+
         [[nodiscard]] virtual AssemblyDiagnostic
         assemble(DynamicsAssembly& assembly, DynamicsAssemblyPhase phase) noexcept = 0;
 

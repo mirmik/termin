@@ -159,8 +159,9 @@
                 "axis": [
                   0,
                   0,
-                  0.01745329238474369
+                  1
                 ],
+                "coordinate_scale": "0.017453292519943295",
                 "coordinate": -89.999600000000001,
                 "origin_position": [
                   0,
@@ -172,11 +173,6 @@
                   0,
                   0,
                   0
-                ],
-                "base_scale": [
-                  1,
-                  1,
-                  1
                 ]
               }
             },
@@ -269,10 +265,11 @@
                   "type": "ActuatorComponent",
                   "data": {
                     "axis": [
-                      -0.0099999997764825821,
+                      -1,
                       0,
                       0
                     ],
+                    "coordinate_scale": "0.01",
                     "coordinate": -40.73198,
                     "origin_position": [
                       0,
@@ -284,11 +281,6 @@
                       0,
                       0,
                       0
-                    ],
-                    "base_scale": [
-                      1,
-                      1,
-                      1
                     ]
                   }
                 },
@@ -446,8 +438,9 @@
                             "axis": [
                               0,
                               0,
-                              0.01745329238474369
+                              1
                             ],
+                            "coordinate_scale": "0.017453292519943295",
                             "coordinate": 0,
                             "origin_position": [
                               0,
@@ -459,11 +452,6 @@
                               0,
                               0,
                               0
-                            ],
-                            "base_scale": [
-                              1,
-                              1,
-                              1
                             ]
                           }
                         },

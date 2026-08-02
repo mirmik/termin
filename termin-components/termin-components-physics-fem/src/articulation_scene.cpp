@@ -249,13 +249,27 @@ namespace termin
                     .inertia = inertia,
                     .diagnostic_name = entity_name(body_entity),
                 });
-                result.state.coordinates.push_back(joint->coordinate);
+                const double coordinate_scale = joint->get_coordinate_scale();
+                if (!std::isfinite(coordinate_scale) || coordinate_scale <= 0.0)
+                {
+                    fail(FEMArticulationSceneDiagnostic::DegenerateJointAxis,
+                         joint_entity);
+                    return;
+                }
+                result.state.coordinates.push_back(joint->coordinate *
+                                                   coordinate_scale);
                 result.state.velocities.push_back(0.0);
                 result.bindings.push_back({
                     .joint = joint,
                     .body = body,
+                    .motor =
+                        joint_entity
+                            .get_component<FEMArticulationMotorComponent>(),
+                    .servo =
+                        joint_entity.get_component<FEMJointServoComponent>(),
                     .joint_entity = joint_entity,
                     .body_entity = body_entity,
+                    .coordinate_scale = coordinate_scale,
                 });
                 compile_children(body_entity, link_index);
             }

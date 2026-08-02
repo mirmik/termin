@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-servo-load-backdrop-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.035, 0.055, 0.095, 1.0],
+    "u_metallic": 0.02,
+    "u_roughness": 0.92,
+    "u_diffuse_mul": 1.0
+  }
+}

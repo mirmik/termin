@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-servo-load-joint-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [1.0, 0.66, 0.06, 1.0],
+    "u_metallic": 0.62,
+    "u_roughness": 0.2,
+    "u_diffuse_mul": 1.0
+  }
+}

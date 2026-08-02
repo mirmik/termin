@@ -7,13 +7,13 @@ namespace termin
 
     // RotatorComponent - rotates entity around a specified axis.
     //
-    // The axis vector direction defines the rotation axis, and its length
-    // serves as a scale factor for the coordinate. Actual rotation angle
-    // = coordinate * |axis|, composed with the origin pose.
+    // The axis is a unit direction. Actual rotation angle in radians is
+    // coordinate * coordinate_scale, composed with the origin pose.
     //
     // Usage:
-    //   rotator.set_axis(0, 0, M_PI/180);  // Z axis, degrees scale
-    //   rotator.set_coordinate(90);          // 90 degrees
+    //   rotator.set_axis(0, 0, 1);
+    //   rotator.set_coordinate_scale(M_PI / 180.0);
+    //   rotator.set_coordinate(90);
     class ENTITY_API RotatorComponent : public KinematicUnitComponent
     {
     public:

@@ -21,19 +21,14 @@ namespace termin
     // define the specific kinematic behavior (translation for Actuator,
     // rotation for Rotator).
     //
-    // The axis vector direction defines the DOF axis, and its length
-    // serves as a scale factor for the coordinate.
+    // The axis is always unit length. Coordinate scale is stored separately,
+    // so geometry never has to infer physical units from a direction vector.
     //
     // The origin pose is the fixed transform from the parent entity to the
     // kinematic frame. Formula: local = origin * motion(coordinate).
     class ENTITY_API KinematicUnitComponent : public CxxComponent
     {
     public:
-        // DOF axis (direction + scale factor via length)
-        double axis_x = 0.0;
-        double axis_y = 0.0;
-        double axis_z = 0.0;
-
         // Current coordinate (interpretation depends on subclass)
         double coordinate = 0.0;
         double min_coordinate = -100.0;
@@ -57,10 +52,13 @@ namespace termin
 
         // Axis
         void set_axis(double x, double y, double z);
-        Vec3 get_axis() const
-        {
-            return Vec3{axis_x, axis_y, axis_z};
-        }
+        [[nodiscard]] Vec3 get_axis() const noexcept;
+
+        // Physical displacement per authored coordinate unit. Rotators use
+        // radians per unit; actuators use metres per unit.
+        void set_coordinate_scale(double value);
+        [[nodiscard]] double get_coordinate_scale() const noexcept;
+        [[nodiscard]] double physical_coordinate() const noexcept;
 
         // Coordinate
         void set_coordinate(double value);
@@ -77,18 +75,16 @@ namespace termin
         virtual void recalculate_origin();
 
     protected:
-        explicit KinematicUnitComponent(const char* type_name)
-            : CxxComponent(type_name)
-        {
-        }
-
-        // Get normalized axis with fallback for zero-length
-        Vec3 normalized_axis(Vec3 fallback) const;
+        KinematicUnitComponent(const char* type_name,
+                               Vec3 default_axis,
+                               double default_coordinate_scale);
 
         // Helper: read current entity local rigid pose.
         bool read_entity_transform(double pos[3], double rot[4]) const;
 
     private:
+        Vec3 axis_ = Vec3{0.0, 0.0, 1.0};
+        double coordinate_scale_ = 1.0;
         bool deserialized_state_ = false;
     };
 

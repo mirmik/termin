@@ -11,6 +11,9 @@ namespace termin
     {
     public:
         std::string world_entity_name = "FEM Physics World";
+        // Optional. When set, a co-located servo diagnostic row named
+        // "servo_value" is updated in addition to aggregate world telemetry.
+        std::string servo_entity_name;
         double refresh_interval = 0.1;
 
         FEMPhysicsHudComponent();

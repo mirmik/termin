@@ -76,7 +76,6 @@ namespace termin::qopt
             diagnostic_ = Articulation3DDiagnostic::NonFiniteInput;
         }
         accelerations_.assign(links_.size(), 0.0);
-        generalized_effort_.assign(links_.size(), 0.0);
         state_snapshot_.coordinates.assign(links_.size(), 0.0);
         state_snapshot_.velocities.assign(links_.size(), 0.0);
         acceleration_snapshot_.assign(links_.size(), 0.0);
@@ -205,24 +204,6 @@ namespace termin::qopt
         }
         gravity_world_ = value;
         return Articulation3DDiagnostic::None;
-    }
-
-    Articulation3DDiagnostic Articulation3DContribution::set_generalized_effort(
-        std::vector<double> value) noexcept
-    {
-        if (value.size() != links_.size() || !finite(value))
-        {
-            std::fprintf(stderr, "[termin-qopt] rejected invalid generalized effort\n");
-            return Articulation3DDiagnostic::InvalidState;
-        }
-        generalized_effort_ = std::move(value);
-        return Articulation3DDiagnostic::None;
-    }
-
-    const std::vector<double>&
-    Articulation3DContribution::generalized_effort() const noexcept
-    {
-        return generalized_effort_;
     }
 
     bool Articulation3DContribution::update_kinematics() noexcept
@@ -423,7 +404,7 @@ namespace termin::qopt
             {
                 for (std::size_t index = 0; index < links_.size(); ++index)
                 {
-                    load[index] = generalized_effort_[index] - bias[index];
+                    load[index] = -bias[index];
                 }
             }
             else if (phase == DynamicsAssemblyPhase::VelocityProjection)

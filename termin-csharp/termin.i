@@ -564,12 +564,9 @@ namespace termin {
 %nodefaultctor termin::KinematicUnitComponent;
 %ignore termin::KinematicUnitComponent::origin_position;
 %ignore termin::KinematicUnitComponent::origin_rotation;
-%ignore termin::KinematicUnitComponent::base_scale;
 %ignore termin::KinematicUnitComponent::recalculate_origin;
 %ignore termin::KinematicUnitComponent::apply;
-%ignore termin::KinematicUnitComponent::normalized_axis;
 %ignore termin::KinematicUnitComponent::read_entity_transform;
-%ignore termin::KinematicUnitComponent::write_base_transform;
 %ignore termin::KinematicUnitComponent::on_added;
 
 %ignore termin::CameraComponent::viewports_;
@@ -838,6 +835,10 @@ public:
     // Set DOF axis
     void set_axis(double x, double y, double z);
     Vec3 get_axis() const;
+
+    void set_coordinate_scale(double value);
+    double get_coordinate_scale() const;
+    double physical_coordinate() const;
 
     // Set coordinate
     void set_coordinate(double value);
