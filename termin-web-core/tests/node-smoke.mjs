@@ -11,7 +11,12 @@ if (!outputDirectory) {
 const loaderUrl = pathToFileURL(path.join(outputDirectory, "termin-web-core.mjs"));
 const { createTerminCore } = await import(loaderUrl.href);
 const hostUrl = pathToFileURL(path.join(outputDirectory, "termin-web-host.mjs"));
-const { createTerminWebHost, TerminWebHostState } = await import(hostUrl.href);
+const {
+    assertTerminWebEnvironment,
+    createTerminWebHost,
+    terminWebEnvironment,
+    TerminWebHostState,
+} = await import(hostUrl.href);
 const inputUrl = pathToFileURL(path.join(outputDirectory, "termin-web-input.mjs"));
 const {
     createTerminWebInputAdapter,
@@ -25,6 +30,18 @@ const core = await createTerminCore({
     locateFile: (file) => path.join(outputDirectory, file),
 });
 core.smoke();
+
+assert.deepEqual(terminWebEnvironment({
+    isSecureContext: true,
+    crossOriginIsolated: false,
+    navigator: {gpu: {}},
+}), {secureContext: true, webGpu: true, crossOriginIsolated: false});
+assert.throws(
+    () => assertTerminWebEnvironment({isSecureContext: false, navigator: {gpu: {}}}),
+    /secure context/);
+assert.throws(
+    () => assertTerminWebEnvironment({isSecureContext: true, navigator: {}}),
+    /WebGPU support/);
 
 assert.equal(inputModifiers({shiftKey: true, ctrlKey: true, altKey: false, metaKey: true}), 11);
 assert.equal(terminKeyCode({key: "w"}), 87);
@@ -208,4 +225,25 @@ for (const [fixture, expected] of [
     }
 }
 await host.teardown();
+
+const simulatedDeviceLossModule = {
+    _termin_web_host_frame_count() { return 1; },
+    _termin_web_host_error() { return 1; },
+    _termin_web_host_loop_stop() {},
+    UTF8ToString(pointer) {
+        return pointer === 1 ? "device lost: simulated" : "";
+    },
+};
+const simulatedDeviceLossHost = createTerminWebHost(simulatedDeviceLossModule, {
+    fetch: fetchFile,
+    requestAnimationFrame: requestFrame,
+    cancelAnimationFrame: cancelFrame,
+    logger: {error() {}},
+});
+simulatedDeviceLossHost.state = TerminWebHostState.Running;
+simulatedDeviceLossHost.nativeLoaded = true;
+simulatedDeviceLossHost.tick(1000 / 60);
+assert.equal(simulatedDeviceLossHost.state, TerminWebHostState.Error);
+assert.match(simulatedDeviceLossHost.error, /device lost: simulated/);
+
 console.log("TERMIN_WEB_CORE_NODE_SMOKE_PASSED");

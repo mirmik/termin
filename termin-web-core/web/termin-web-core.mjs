@@ -1,6 +1,6 @@
-import createTerminWebCore from "./termin_web_core.mjs?v=20260802-input4";
+import createTerminWebCore from "./termin_web_core.mjs?v=20260802-gate1";
 
-export const TERMIN_WEB_ASSET_REVISION = "20260802-input4";
+export const TERMIN_WEB_ASSET_REVISION = "20260802-gate1";
 
 export async function createTerminCore(options = {}) {
     const module = await createTerminWebCore({

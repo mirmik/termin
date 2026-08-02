@@ -526,7 +526,8 @@ runtime parity. Three.js viewer можно довести до полезног�
 6. Web-specific ветвления не проникают в scene/component domain.
 7. Input и resize проходят через явный browser adapter.
 8. Ошибки package, shader, adapter/device и device loss видны в логах и host UI.
-9. Chrome и Safari проходят smoke; Firefox запускается там, где WebGPU включён.
+9. Обязательный Chromium gate проходит автоматически; Firefox проверяется
+   вручную там, где WebGPU включён. Safari отложен за пределы первого milestone.
 10. Зафиксированы compressed Wasm size, package size, startup stages и frame
     timing, чтобы последующие решения принимались по измерениям.
 
@@ -577,5 +578,7 @@ runtime parity. Three.js viewer можно довести до полезног�
 Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap,
 Phase 1 WebGPU vertical slice, core-only package host и первый packaged
 scene/render slice завершены карточками #1238, #1240, #1241 и #1242. Browser
-input/resize vertical slice #1243 реализован и передан на ручную проверку;
-production-хвосты ведутся отдельно и не смешиваются с полным browser editor.
+input/resize vertical slice #1243 реализован, прошёл ручную проверку в Chromium
+и закрыт. Chromium runtime gate #1245 оформляется как отдельный CI job с
+machine-readable отчётом; production-хвосты ведутся отдельно и не смешиваются
+с полным browser editor.

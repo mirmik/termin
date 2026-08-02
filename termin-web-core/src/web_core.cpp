@@ -526,6 +526,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
         return 0;
     }
     try {
+        if (web_player->device && web_player->device->has_device_error()) {
+            web_player_graphics_error = web_player->device->device_error_message();
+            web_player_graphics_status = -4;
+            throw std::runtime_error(
+                web_player_graphics_error.empty()
+                    ? "WebGPU device lost"
+                    : web_player_graphics_error);
+        }
         web_player->engine->scene_manager.request_render();
         const bool rendered = web_player->engine->tick_and_render(delta_seconds);
         if (rendered && !present_web_player_canvas()) {
