@@ -122,6 +122,7 @@ if(TERMIN_COMPONENTS_RENDER_CORE_ONLY)
     set_property(TARGET termin_components_render PROPERTY SOURCES
         src/components_bootstrap_core.cpp
         src/camera_component.cpp
+        src/orbit_camera_controller.cpp
         src/light_component.cpp
         src/mesh_renderer.cpp
     )

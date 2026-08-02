@@ -1,7 +1,13 @@
-import createTerminWebCore from "./termin_web_core.mjs";
+import createTerminWebCore from "./termin_web_core.mjs?v=20260802-input4";
+
+export const TERMIN_WEB_ASSET_REVISION = "20260802-input4";
 
 export async function createTerminCore(options = {}) {
-    const module = await createTerminWebCore(options);
+    const module = await createTerminWebCore({
+        locateFile: (file) => new URL(
+            `${file}?v=${TERMIN_WEB_ASSET_REVISION}`, import.meta.url).href,
+        ...options,
+    });
     return {
         module,
         smoke() {

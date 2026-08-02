@@ -36,7 +36,7 @@ target_link_options(termin_web_core PRIVATE
     "-sENVIRONMENT=web,node"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sFORCE_FILESYSTEM=1"
-    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_error','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_error','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage']"
 )
 set_target_properties(termin_web_core PROPERTIES
@@ -47,7 +47,9 @@ set_target_properties(termin_web_core PROPERTIES
 file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 configure_file(web/termin-web-core.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs" COPYONLY)
 configure_file(web/termin-web-host.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs" COPYONLY)
+configure_file(web/termin-web-input.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs" COPYONLY)
 configure_file(web/smoke.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/smoke.html" COPYONLY)
+configure_file(web/viewer.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/viewer.html" COPYONLY)
 file(COPY web/fixtures DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 find_program(TERMIN_HOST_PYTHON NAMES python3 python REQUIRED)

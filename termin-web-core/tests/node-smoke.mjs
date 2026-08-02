@@ -1,4 +1,5 @@
 import path from "node:path";
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,10 +12,122 @@ const loaderUrl = pathToFileURL(path.join(outputDirectory, "termin-web-core.mjs"
 const { createTerminCore } = await import(loaderUrl.href);
 const hostUrl = pathToFileURL(path.join(outputDirectory, "termin-web-host.mjs"));
 const { createTerminWebHost, TerminWebHostState } = await import(hostUrl.href);
+const inputUrl = pathToFileURL(path.join(outputDirectory, "termin-web-input.mjs"));
+const {
+    createTerminWebInputAdapter,
+    inputModifiers,
+    pointerDevice,
+    terminKeyCode,
+    terminMouseButton,
+    terminScanCode,
+} = await import(inputUrl.href);
 const core = await createTerminCore({
     locateFile: (file) => path.join(outputDirectory, file),
 });
 core.smoke();
+
+assert.equal(inputModifiers({shiftKey: true, ctrlKey: true, altKey: false, metaKey: true}), 11);
+assert.equal(terminKeyCode({key: "w"}), 87);
+assert.equal(terminKeyCode({key: "ArrowLeft"}), 263);
+assert.equal(terminScanCode("KeyA"), 4);
+assert.equal(terminMouseButton(1), 2);
+assert.equal(terminMouseButton(2), 1);
+assert.equal(pointerDevice(undefined), 0);
+
+class FakeEventTarget {
+    constructor() {
+        this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+        if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+        this.listeners.get(type).add(listener);
+    }
+    removeEventListener(type, listener) {
+        this.listeners.get(type)?.delete(listener);
+    }
+    emit(type, event = {}) {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+}
+
+class FakeCanvas extends FakeEventTarget {
+    constructor() {
+        super();
+        this.width = 100;
+        this.height = 50;
+        this.tabIndex = -1;
+        this.rect = {left: 10, top: 20, width: 200, height: 100};
+    }
+    hasAttribute() { return false; }
+    getBoundingClientRect() { return this.rect; }
+    focus() {}
+    setPointerCapture() {}
+    hasPointerCapture() { return true; }
+    releasePointerCapture() {}
+}
+
+const inputCalls = [];
+const fakeModule = new Proxy({
+    ccall(name, returnType, argumentTypes, args) {
+        inputCalls.push({name, args});
+        return 1;
+    },
+}, {
+    get(target, property) {
+        if (property in target) return target[property];
+        if (typeof property === "string" && property.startsWith("_termin_web_host_")) {
+            return (...args) => {
+                inputCalls.push({name: property, args});
+                return 1;
+            };
+        }
+        return undefined;
+    },
+});
+const fakeCanvas = new FakeCanvas();
+const fakeWindow = new FakeEventTarget();
+const fakeDocument = new FakeEventTarget();
+fakeDocument.hidden = false;
+const inputAdapter = createTerminWebInputAdapter(fakeModule, {
+    canvas: fakeCanvas,
+    window: fakeWindow,
+    document: fakeDocument,
+    ResizeObserver: null,
+    devicePixelRatio: () => 2,
+    logger: {error() {}, warn() {}},
+}).attach();
+assert.deepEqual([fakeCanvas.width, fakeCanvas.height], [400, 200]);
+inputAdapter.setEnabled(true);
+fakeCanvas.emit("pointerdown", {
+    pointerId: 7, pointerType: "mouse", button: 1, detail: 1,
+    clientX: 110, clientY: 70, pressure: 0.5,
+    shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+    preventDefault() {},
+});
+fakeCanvas.emit("pointermove", {
+    pointerId: 7, pointerType: "mouse", clientX: 150, clientY: 80, pressure: 0.5,
+});
+assert.deepEqual(inputCalls[0], {
+    name: "_termin_web_host_dispatch_pointer",
+    args: [7, 0, 0, 200, 100, 0.5],
+});
+assert.equal(inputCalls[1].name, "_termin_web_host_dispatch_mouse_button");
+assert.equal(inputCalls[1].args[2], 2);
+assert.equal(inputCalls[2].name, "_termin_web_host_dispatch_pointer");
+assert.equal(inputCalls[3].name, "_termin_web_host_dispatch_mouse_move");
+fakeCanvas.emit("pointermove", {
+    pointerId: 8, clientX: 160, clientY: 85, pressure: 0,
+});
+assert.equal(inputCalls.at(-1).name, "_termin_web_host_dispatch_mouse_move");
+fakeCanvas.rect = {left: 10, top: 20, width: 300, height: 150};
+assert.equal(inputAdapter.syncCanvasSize(), true);
+assert.deepEqual(inputCalls.at(-1), {
+    name: "_termin_web_host_resize",
+    args: [600, 300],
+});
+inputAdapter.setEnabled(false);
+assert.equal(inputCalls.at(-1).name, "_termin_web_host_dispatch_focus_lost");
+inputAdapter.detach();
 
 async function fetchFile(url) {
     try {

@@ -186,6 +186,23 @@ def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
     )
 
 
+def wait_for_viewer(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        result = devtools.call("Runtime.evaluate", {
+            "expression": "JSON.stringify({state:globalThis.__terminViewer?.host?.state ?? '',error:document.querySelector('#error')?.textContent ?? '',frames:globalThis.__terminViewer?.host?.frameCount?.() ?? 0,metrics:globalThis.__terminViewer?.input?.metrics ?? null})",
+            "returnByValue": True,
+        }).get("result", {}).get("value", "")
+        if result:
+            state = json.loads(result)
+            if state["state"] == "running" and state["frames"] >= 2:
+                return state
+            if state["state"] == "error":
+                raise RuntimeError(f"viewer entered error state: {state}")
+        time.sleep(0.05)
+    raise RuntimeError("viewer did not reach running state")
+
+
 def analyze_png(content: bytes) -> dict[str, int]:
     if not content.startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError("DevTools canvas screenshot is not a PNG")
@@ -243,7 +260,9 @@ def analyze_png(content: bytes) -> dict[str, int]:
     colors: set[tuple[int, int, int]] = set()
     channel_min = [255, 255, 255]
     channel_max = [0, 0, 0]
+    pixel_bytes = bytearray()
     for row in rows:
+        pixel_bytes.extend(row)
         for offset in range(0, len(row), channels):
             red, green, blue = row[offset:offset + 3]
             if max(red, green, blue) > 120:
@@ -259,6 +278,7 @@ def analyze_png(content: bytes) -> dict[str, int]:
         "quantized_colors": len(colors),
         "channel_min": channel_min,
         "channel_max": channel_max,
+        "pixel_sha256": hashlib.sha256(pixel_bytes).hexdigest(),
     }
 
 
@@ -332,6 +352,57 @@ def main() -> int:
                         "packaged scene did not produce a visible textured frame: "
                         f"{frame_metrics}; console={console_diagnostics(devtools)}"
                     )
+                devtools.call("Input.dispatchMouseEvent", {
+                    "type": "mousePressed", "x": 320, "y": 180,
+                    "button": "left", "buttons": 1, "clickCount": 1,
+                })
+                devtools.call("Input.dispatchMouseEvent", {
+                    "type": "mouseMoved", "x": 410, "y": 225,
+                    "button": "left", "buttons": 1,
+                })
+                devtools.call("Input.dispatchMouseEvent", {
+                    "type": "mouseReleased", "x": 410, "y": 225,
+                    "button": "left", "buttons": 0, "clickCount": 1,
+                })
+                devtools.call("Input.dispatchMouseEvent", {
+                    "type": "mouseWheel", "x": 410, "y": 225,
+                    "deltaX": 0, "deltaY": -100,
+                })
+                devtools.call("Input.dispatchKeyEvent", {
+                    "type": "keyDown", "key": "a", "code": "KeyA", "text": "a",
+                    "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65,
+                })
+                devtools.call("Input.dispatchKeyEvent", {
+                    "type": "keyUp", "key": "a", "code": "KeyA",
+                    "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65,
+                })
+                time.sleep(0.25)
+                moved_screenshot = devtools.call("Page.captureScreenshot", {
+                    "format": "png",
+                    "clip": {"x": 0, "y": 0, "width": 640, "height": 360, "scale": 1},
+                    "captureBeyondViewport": False,
+                })
+                moved_metrics = analyze_png(base64.b64decode(moved_screenshot["data"]))
+                if moved_metrics["pixel_sha256"] == frame_metrics["pixel_sha256"]:
+                    raise RuntimeError(
+                        "packaged orbit camera did not change the rendered frame; "
+                        f"input={devtools.call('Runtime.evaluate', {'expression': 'JSON.stringify(globalThis.__terminSmokeInput?.metrics)', 'returnByValue': True})}"
+                    )
+                resize_result = devtools.call("Runtime.evaluate", {
+                    "expression": "(() => { const c=document.querySelector('#termin-canvas'); c.style.width='800px'; c.style.height='450px'; globalThis.__terminSmokeInput.syncCanvasSize(); return JSON.stringify({width:c.width,height:c.height,metrics:globalThis.__terminSmokeInput.metrics}); })()",
+                    "returnByValue": True,
+                }).get("result", {}).get("value", "")
+                resize_data = json.loads(resize_result)
+                if resize_data["width"] < 800 or resize_data["height"] < 450 or \
+                        resize_data["metrics"]["events"] < 10 or \
+                        resize_data["metrics"]["resizes"] < 1:
+                    raise RuntimeError(
+                        f"browser input/resize adapter did not report expected activity: {resize_data}"
+                    )
+                devtools.call("Runtime.evaluate", {
+                    "expression": "(() => { const c=document.querySelector('#termin-canvas'); c.blur(); c.style.width='640px'; c.style.height='360px'; globalThis.__terminSmokeInput.syncCanvasSize(); c.focus(); return true; })()",
+                    "returnByValue": True,
+                })
                 devtools.call("Runtime.evaluate", {
                     "expression": "document.querySelector('#result').textContent='TERMIN_WEB_CORE_SMOKE_RUNNING'; globalThis.__terminSmokeContinue(); 'continued'",
                     "returnByValue": True,
@@ -345,6 +416,37 @@ def main() -> int:
                 raise RuntimeError(
                     f"Browser smoke failed: {result}; {diagnostics}; "
                     f"console={console_diagnostics(devtools)}")
+
+            viewer_url = f"http://127.0.0.1:{server.server_port}/viewer.html"
+            devtools.call("Page.navigate", {"url": viewer_url})
+            wait_for_viewer(devtools)
+            devtools.call("Runtime.evaluate", {
+                "expression": "document.querySelectorAll('.panel').forEach((element) => { element.style.visibility = 'hidden'; }); true",
+                "returnByValue": True,
+            })
+            before = devtools.call("Page.captureScreenshot", {"format": "png"})
+            before_metrics = analyze_png(base64.b64decode(before["data"]))
+            devtools.call("Input.dispatchMouseEvent", {
+                "type": "mousePressed", "x": 320, "y": 180,
+                "button": "left", "buttons": 1, "clickCount": 1,
+            })
+            devtools.call("Input.dispatchMouseEvent", {
+                "type": "mouseMoved", "x": 430, "y": 240,
+                "button": "left", "buttons": 1,
+            })
+            devtools.call("Input.dispatchMouseEvent", {
+                "type": "mouseReleased", "x": 430, "y": 240,
+                "button": "left", "buttons": 0, "clickCount": 1,
+            })
+            time.sleep(0.25)
+            after = devtools.call("Page.captureScreenshot", {"format": "png"})
+            after_metrics = analyze_png(base64.b64decode(after["data"]))
+            viewer_state = wait_for_viewer(devtools)
+            if after_metrics["pixel_sha256"] == before_metrics["pixel_sha256"]:
+                raise RuntimeError(
+                    "viewer orbit gesture did not change the rendered frame: "
+                    f"{viewer_state}; console={console_diagnostics(devtools)}"
+                )
     except Exception as error:
         failure = error
     finally:

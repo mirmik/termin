@@ -439,9 +439,8 @@ package root, `MeshComponent` и resource типа `Texture`. Строгий bro
 не допускает `wgpuSurfacePresent`, canvas публикуется самим браузером в конце
 RAF callback.
 
-Это ещё не вся Phase 2: восстановление mesh/texture/material/camera требует
-следующих resource-domain slices, package provider/archive и scene renderer
-composition. Pointer/keyboard input также остаётся отдельным следующим шагом.
+Это ещё не вся Phase 2: остаются package provider/archive и расширение scene
+renderer composition за пределы текущего render-only профиля.
 
 Статус карточки Kanboard #1242 на 2026-08-02: первый настоящий scene/render
 vertical slice завершён. Web profile теперь композитит render-only bootstrap,
@@ -472,9 +471,27 @@ boundary; JS host наблюдает состояния и метрики.
 - steady RAF interval на SwiftShader: около 16.7 ms (60 Hz).
 
 Это несжатые локальные размеры и synthetic software-GPU timings, поэтому они
-служат regression baseline, а не production budget. Не закрыты: pointer/keyboard
-input, archive/cache transport, device-loss recovery, partial/scaled blit,
-полная PBR/shadow shader matrix и Safari/Firefox CI.
+служат regression baseline, а не production budget. Не закрыты: archive/cache
+transport, device-loss recovery, partial/scaled blit, полная PBR/shadow shader
+matrix и Safari/Firefox CI.
+
+Статус карточки Kanboard #1243 на 2026-08-02: добавлен самостоятельный browser
+input/canvas adapter и полноэкранный `viewer.html`. Adapter переводит
+pointer/mouse/wheel/keyboard/text events в native display contract, учитывает
+CSS coordinates, DPR, pointer capture, focus loss и resize canvas surface.
+Render-only bootstrap включает `OrbitCameraController`; fixture теперь является
+текстурированным кубом, которым в web viewer можно управлять левой/правой
+кнопками мыши и колесом. Mouse buttons контроллера сериализуются в сцене, а его
+desktop default остаётся DCC-подобным с orbit на средней кнопке. Web host
+владеет viewport input managers симметрично desktop player: display router сам
+по себе принимает события, но без manager не передаёт их scene input handlers.
+Именно отсутствие этого lifecycle-звена ранее давало наблюдаемое состояние,
+когда browser event counter рос, а камера не двигалась. Browser smoke
+через Chrome/SwiftShader воспроизводит orbit и wheel как на smoke harness, так
+и непосредственно на полноэкранной viewer page,
+скрывает HUD перед сравнением, проверяет изменение пикселей самой сцены и
+повторную конфигурацию backing surface.
+Firefox и аппаратные Chrome/Safari конфигурации этой проверкой пока не покрыты.
 
 ### Phase 3: production runtime
 
@@ -559,6 +576,6 @@ runtime parity. Three.js viewer можно довести до полезног�
 
 Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap,
 Phase 1 WebGPU vertical slice, core-only package host и первый packaged
-scene/render slice завершены карточками #1238, #1240, #1241 и #1242. Следующая
-пользовательская вертикаль — #1243 (browser input/resize); production-хвосты
-ведутся отдельно и не смешиваются с полным browser editor.
+scene/render slice завершены карточками #1238, #1240, #1241 и #1242. Browser
+input/resize vertical slice #1243 реализован и передан на ручную проверку;
+production-хвосты ведутся отдельно и не смешиваются с полным browser editor.
