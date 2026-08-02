@@ -302,10 +302,18 @@ future persistent contact contribution rather than `DynamicsSystem`.
    depenetration cannot create a rebound. Penetrating, impacting, resting,
    separating, removal, mixed-endpoint, matrix-sign, and invalid-input behavior
    is covered by native tests.
-6. Adapt `CollisionWorld` manifolds in the FEM scene integration layer. The
-   adapter owns collider-to-endpoint mapping, filtering and sign conversion;
-   it does not create another `PhysicsWorld` or reuse the maximal-body impulse
-   solver from `termin-physics`.
+6. Adapt `CollisionWorld` manifolds in the FEM scene integration layer. This
+   is implemented by the scene contact adapter in
+   `termin-components-physics-fem`: before each substep it updates the one
+   scene `CollisionWorld`, detects `ContactPatch` values, rebuilds an explicit
+   collider-to-static/maximal-body/articulation-link map, and replaces the
+   transient rows of one `ContactSet3DContribution`. A dynamic collider is
+   owned by the enabled, co-located `FEMRigidBodyComponent`; a collider without
+   such a body is static. Missing or ambiguous dynamic ownership is logged and
+   rejected. The world collision-layer mask, component/entity enabled state,
+   same-body pairs, and connected or adjacent-link pairs are explicit adapter
+   policy. The adapter does not create another `PhysicsWorld` or reuse the
+   maximal-body impulse solver from `termin-physics`.
 7. Validate the frictionless vertical slice in a separate acceptance project:
    a maximal body and an articulation link contact static terrain, with gap,
    reaction, active-set and energy telemetry.

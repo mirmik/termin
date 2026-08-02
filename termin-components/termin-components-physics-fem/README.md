@@ -87,10 +87,28 @@ model error.
 
 The world also exposes a UI-neutral `FEMPhysicsTelemetry` snapshot containing
 simulation time, successful step count, topology size, initial/current
-mechanical energy, motor effort, power, accumulated work, and saturation.
+mechanical energy, motor effort, power, accumulated work, saturation, contact
+count, active normal rows, minimum gap, and maximum normal reaction.
 Motor work is a per-step diagnostic integral, not an additional conserved
 state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.
+
+## Scene contacts
+
+The FEM scene adapter consumes solver-neutral `ContactPatch` values from the
+scene's single `CollisionWorld`; it never creates a gameplay `PhysicsWorld`.
+At every native substep it refreshes broad-phase poses and maps each enabled
+co-located `ColliderComponent` to either a maximal body, an articulation link,
+or the static world. Collider rebuild, disable, removal, and scene teardown are
+therefore observed before a patch is converted to `ContactEndpoint3D` values,
+without retaining collider pointers in `termin-qopt` across substeps.
+
+`collision_layer_mask` selects entity layers accepted by the FEM world.
+Same-body contacts are always discarded. Contacts between directly connected
+maximal bodies and adjacent links of one articulation are discarded by
+default; `adjacent_link_collision_enabled` opts those pairs back in. A dynamic
+collider whose enabled `FEMRigidBodyComponent` is not registered by this FEM
+world is an error rather than an implicit static obstacle.
 
 Body velocities and damping loads cross the model boundary as complete
 `termin::Screw3` values reduced to each body's origin and expressed in world
