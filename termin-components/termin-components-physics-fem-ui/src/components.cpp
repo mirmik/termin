@@ -9,6 +9,7 @@
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/gui_native/checkbox.hpp>
 #include <termin/gui_native/label.hpp>
 #include <termin/physics_fem/components.hpp>
 #include <termin/tc_scene.hpp>
@@ -79,6 +80,36 @@ namespace termin
             }
             return dynamic_cast<gui_native::Label*>(
                 static_cast<gui_native::Widget*>(widget->body));
+        }
+
+        gui_native::Checkbox* find_checkbox(gui_native::TcDocument document,
+                                            std::string_view name)
+        {
+            tc_widget* widget = find_named_widget(document, name);
+            if (widget == nullptr ||
+                widget->native_language != TC_LANGUAGE_CXX ||
+                widget->body == nullptr)
+            {
+                return nullptr;
+            }
+            return dynamic_cast<gui_native::Checkbox*>(
+                static_cast<gui_native::Widget*>(widget->body));
+        }
+
+        std::size_t set_descendant_servos_enabled(Entity entity, bool enabled)
+        {
+            std::size_t count = 0;
+            if (FEMJointServoComponent* servo =
+                    entity.get_component<FEMJointServoComponent>())
+            {
+                servo->set_enabled(enabled);
+                ++count;
+            }
+            for (Entity child : entity.children())
+            {
+                count += set_descendant_servos_enabled(child, enabled);
+            }
+            return count;
         }
 
 #ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
@@ -161,6 +192,35 @@ namespace termin
             return stream.str();
         }
 
+        std::string format_friction(const FEMPhysicsTelemetry& telemetry)
+        {
+            std::ostringstream stream;
+            stream << telemetry.sliding_contact_count << " sliding   ·   "
+                   << std::fixed << std::setprecision(4)
+                   << telemetry.tangent_speed_linf << " m/s tangent   ·   "
+                   << telemetry.tangent_impulse_sum << " N·s   ·   capacity "
+                   << telemetry.friction_capacity_sum << " N·s   ·   work "
+                   << telemetry.friction_work << " J";
+            return stream.str();
+        }
+
+        std::string format_body(Entity body_entity,
+                                const FEMRigidBodyComponent& body)
+        {
+            if (!body.initialized())
+            {
+                return "body waiting for solver";
+            }
+            const Vec3 position = body_entity.transform().global_position();
+            const Screw3 velocity = body.velocity_local();
+            std::ostringstream stream;
+            stream << std::fixed << std::setprecision(3) << "base xyz  "
+                   << position.x << "  " << position.y << "  " << position.z
+                   << " m   ·   |v| " << velocity.lin.norm()
+                   << " m/s   ·   |ω| " << velocity.ang.norm() << " rad/s";
+            return stream.str();
+        }
+
         std::string format_servo(const FEMJointServoComponent& servo,
                                  const FEMArticulationMotorComponent& motor)
         {
@@ -221,6 +281,27 @@ namespace termin
                                 "servo_entity_name",
                                 "Servo Entity",
                                 "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::servo_group_root_entity_name,
+            "FEMPhysicsHudComponent",
+            "servo_group_root_entity_name",
+            "Servo Group Root Entity",
+            "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::servo_group_checkbox_name,
+            "FEMPhysicsHudComponent",
+            "servo_group_checkbox_name",
+            "Servo Group Checkbox",
+            "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::tracked_body_entity_name,
+            "FEMPhysicsHudComponent",
+            "tracked_body_entity_name",
+            "Tracked Body Entity",
+            "string");
         tc::stage_inspect_field(inspect,
                                 &FEMPhysicsHudComponent::plot_widget_name,
                                 "FEMPhysicsHudComponent",
@@ -274,6 +355,8 @@ namespace termin
         CxxComponent::start();
         refresh_accumulator_ = 0.0;
         binding_error_reported_ = false;
+        servo_group_state_known_ = false;
+        servo_group_enabled_ = true;
         plot_time_.clear();
         plot_coordinate_.clear();
         plot_target_.clear();
@@ -314,6 +397,8 @@ namespace termin
     {
         refresh_accumulator_ = 0.0;
         binding_error_reported_ = false;
+        servo_group_state_known_ = false;
+        servo_group_enabled_ = true;
         plot_time_.clear();
         plot_coordinate_.clear();
         plot_target_.clear();
@@ -357,6 +442,44 @@ namespace termin
             return;
         }
 
+        if (!servo_group_root_entity_name.empty())
+        {
+            Entity group_root =
+                scene.find_entity_by_name(servo_group_root_entity_name);
+            gui_native::Checkbox* checkbox =
+                find_checkbox(document, servo_group_checkbox_name);
+            if (!group_root.valid() || checkbox == nullptr)
+            {
+                if (!binding_error_reported_)
+                {
+                    tc::Log::error(
+                        "[FEMPhysicsHudComponent] servo group requires entity "
+                        "'%s' and Checkbox '%s'",
+                        servo_group_root_entity_name.c_str(),
+                        servo_group_checkbox_name.c_str());
+                    binding_error_reported_ = true;
+                }
+                return;
+            }
+            const bool enabled = checkbox->checked();
+            if (!servo_group_state_known_ || enabled != servo_group_enabled_)
+            {
+                const std::size_t changed =
+                    set_descendant_servos_enabled(group_root, enabled);
+                if (changed == 0U)
+                {
+                    tc::Log::error(
+                        "[FEMPhysicsHudComponent] servo group entity '%s' "
+                        "contains no FEMJointServoComponent descendants",
+                        servo_group_root_entity_name.c_str());
+                    binding_error_reported_ = true;
+                    return;
+                }
+                servo_group_state_known_ = true;
+                servo_group_enabled_ = enabled;
+            }
+        }
+
         const FEMPhysicsTelemetry telemetry = world->telemetry();
         const bool complete =
             set_label(document,
@@ -381,6 +504,37 @@ namespace termin
         {
             (void)set_label(
                 document, "contact_value", format_contacts(telemetry));
+        }
+        if (find_label(document, "friction_value") != nullptr)
+        {
+            (void)set_label(
+                document, "friction_value", format_friction(telemetry));
+        }
+        if (!tracked_body_entity_name.empty())
+        {
+            Entity body_entity =
+                scene.find_entity_by_name(tracked_body_entity_name);
+            FEMRigidBodyComponent* body =
+                body_entity.valid()
+                    ? body_entity.get_component<FEMRigidBodyComponent>()
+                    : nullptr;
+            if (body == nullptr)
+            {
+                if (!binding_error_reported_)
+                {
+                    tc::Log::error(
+                        "[FEMPhysicsHudComponent] entity '%s' has no "
+                        "FEMRigidBodyComponent",
+                        tracked_body_entity_name.c_str());
+                    binding_error_reported_ = true;
+                }
+                return;
+            }
+            if (find_label(document, "body_value") != nullptr)
+            {
+                (void)set_label(
+                    document, "body_value", format_body(body_entity, *body));
+            }
         }
 #ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
         tcplot::gui_native::Plot2D* contact_gap_plot =

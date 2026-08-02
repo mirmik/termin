@@ -3,6 +3,7 @@
 GUARD_TEST_MAIN();
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -172,6 +173,144 @@ namespace
         result.world = new FEMPhysicsWorldComponent();
         result.world->gravity = {0.0, 0.0, 0.0};
         result.world->time_step = 0.001;
+        world_entity.add_component(result.world);
+        return result;
+    }
+
+    struct StandingRobotScene
+    {
+        termin::TcSceneRef scene;
+        termin::Entity root;
+        termin::FEMPhysicsWorldComponent* world = nullptr;
+        termin::FEMArticulationComponent* articulation = nullptr;
+        termin::FEMRigidBodyComponent* base = nullptr;
+        std::array<termin::RotatorComponent*, 8> joints{};
+        std::array<termin::FEMRigidBodyComponent*, 8> legs{};
+        std::array<termin::FEMArticulationMotorComponent*, 8> motors{};
+        std::array<termin::FEMJointServoComponent*, 8> servos{};
+    };
+
+    StandingRobotScene make_standing_robot_scene()
+    {
+        using namespace termin;
+
+        StandingRobotScene result;
+        result.scene = TcSceneRef::create("standing articulated robot");
+
+        Entity terrain = result.scene.create_entity("Terrain");
+        terrain.transform().set_local_position({0.0, 0.0, -0.25});
+        auto* terrain_collider = new ColliderComponent();
+        terrain_collider->box_size = {8.0, 8.0, 0.5};
+        terrain.add_component(terrain_collider);
+
+        result.root = result.scene.create_entity("Robot Base");
+        result.root.transform().set_local_position({0.0, 0.0, 1.55});
+        result.articulation = new FEMArticulationComponent();
+        result.articulation->base_mode =
+            static_cast<int>(FEMArticulationBaseMode::Floating);
+        result.root.add_component(result.articulation);
+        result.base = new FEMRigidBodyComponent();
+        result.base->mass = 8.0;
+        result.base->inertia_diagonal = {1.1, 1.6, 1.9};
+        result.root.add_component(result.base);
+        auto* base_collider = new ColliderComponent();
+        base_collider->box_size = {1.4, 1.0, 0.4};
+        result.root.add_component(base_collider);
+
+        constexpr std::array<double, 4> hip_x{-0.58, 0.58, -0.58, 0.58};
+        constexpr std::array<double, 4> hip_y{-0.4, -0.4, 0.4, 0.4};
+        constexpr std::array<double, 4> side_sign{1.0, -1.0, 1.0, -1.0};
+        constexpr std::array<const char*, 4> hip_names{
+            "Front Left Hip",
+            "Front Right Hip",
+            "Rear Left Hip",
+            "Rear Right Hip",
+        };
+        constexpr std::array<const char*, 4> upper_leg_names{
+            "Front Left Upper Leg",
+            "Front Right Upper Leg",
+            "Rear Left Upper Leg",
+            "Rear Right Upper Leg",
+        };
+        constexpr std::array<const char*, 4> knee_names{
+            "Front Left Knee",
+            "Front Right Knee",
+            "Rear Left Knee",
+            "Rear Right Knee",
+        };
+        constexpr std::array<const char*, 4> lower_leg_names{
+            "Front Left Lower Leg",
+            "Front Right Lower Leg",
+            "Rear Left Lower Leg",
+            "Rear Right Lower Leg",
+        };
+        const auto add_servo =
+            [&result](Entity joint_entity, std::size_t index, double target)
+        {
+            result.joints[index] = new RotatorComponent();
+            joint_entity.add_component(result.joints[index]);
+            result.joints[index]->set_axis(0.0, 1.0, 0.0);
+            result.joints[index]->set_coordinate_scale(
+                std::numbers::pi_v<double> / 180.0);
+            result.joints[index]->coordinate = target;
+
+            result.motors[index] = new FEMArticulationMotorComponent();
+            result.motors[index]->maximum_effort = 40.0;
+            joint_entity.add_component(result.motors[index]);
+
+            result.servos[index] = new FEMJointServoComponent();
+            result.servos[index]->target_coordinate = target;
+            result.servos[index]->position_gain = 100.0;
+            result.servos[index]->velocity_gain = 15.0;
+            result.servos[index]->feed_forward_effort = 0.0;
+            joint_entity.add_component(result.servos[index]);
+        };
+
+        for (std::size_t branch = 0; branch < hip_x.size(); ++branch)
+        {
+            const std::size_t hip_index = branch * 2U;
+            const std::size_t knee_index = hip_index + 1U;
+            const double hip_target = 15.0 * side_sign[branch];
+            const double knee_target = -30.0 * side_sign[branch];
+
+            Entity hip_entity = result.root.create_child(hip_names[branch]);
+            add_servo(hip_entity, hip_index, hip_target);
+            result.joints[hip_index]->origin_position = {
+                hip_x[branch], hip_y[branch], -0.1};
+            result.joints[hip_index]->apply();
+
+            Entity upper_leg = hip_entity.create_child(upper_leg_names[branch]);
+            upper_leg.transform().set_local_position({0.0, 0.0, -0.35});
+            result.legs[hip_index] = new FEMRigidBodyComponent();
+            result.legs[hip_index]->mass = 0.4;
+            result.legs[hip_index]->inertia_diagonal = {0.018, 0.018, 0.003};
+            upper_leg.add_component(result.legs[hip_index]);
+
+            Entity knee_entity = upper_leg.create_child(knee_names[branch]);
+            add_servo(knee_entity, knee_index, knee_target);
+            result.joints[knee_index]->origin_position = {0.0, 0.0, -0.35};
+            result.joints[knee_index]->apply();
+
+            Entity lower_leg =
+                knee_entity.create_child(lower_leg_names[branch]);
+            lower_leg.transform().set_local_position({0.0, 0.0, -0.35});
+            result.legs[knee_index] = new FEMRigidBodyComponent();
+            result.legs[knee_index]->mass = 0.4;
+            result.legs[knee_index]->inertia_diagonal = {0.018, 0.018, 0.003};
+            lower_leg.add_component(result.legs[knee_index]);
+            auto* foot_collider = new ColliderComponent();
+            foot_collider->collider_type = "Sphere";
+            foot_collider->box_size = {0.24, 0.24, 0.24};
+            foot_collider->collider_offset_enabled = true;
+            foot_collider->collider_offset_position = {0.0, 0.0, -0.23};
+            lower_leg.add_component(foot_collider);
+        }
+
+        Entity world_entity = result.scene.create_entity("Physics World");
+        result.world = new FEMPhysicsWorldComponent();
+        result.world->gravity = {0.0, 0.0, -9.81};
+        result.world->time_step = 0.002;
+        result.world->contact_friction_coefficient = 0.8;
         world_entity.add_component(result.world);
         return result;
     }
@@ -626,6 +765,71 @@ TEST_CASE("FEM routes contacts to a floating articulation base")
     CHECK(telemetry.contact_count >= 1U);
     CHECK(telemetry.active_contact_count >= 1U);
     CHECK(fixture.root.transform().global_position().z > 0.45);
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    StandingRobotScene fixture = make_standing_robot_scene();
+    fixture.world->start();
+
+    REQUIRE(fixture.articulation->initialized());
+    REQUIRE(fixture.base->initialized());
+    const FEMPhysicsTelemetry initial = fixture.world->telemetry();
+    CHECK(initial.initialized);
+    CHECK(initial.body_count == 9U);
+    CHECK(initial.articulation_count == 1U);
+    CHECK(initial.reduced_dof_count == 14U);
+    CHECK(initial.motor_count == 8U);
+
+    bool contact_seen = false;
+    double accumulated_friction_work = 0.0;
+    double reaction_sum = 0.0;
+    constexpr int standing_steps = 2500;
+    constexpr int reaction_window = 500;
+    for (int step = 0; step < standing_steps; ++step)
+    {
+        fixture.world->update(0.002F);
+        const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+        contact_seen = contact_seen || telemetry.active_contact_count > 0U;
+        accumulated_friction_work += telemetry.friction_work;
+        if (step >= standing_steps - reaction_window)
+        {
+            reaction_sum += telemetry.normal_reaction_sum;
+        }
+    }
+
+    const Vec3 standing_position = fixture.root.transform().global_position();
+    const FEMPhysicsTelemetry standing = fixture.world->telemetry();
+    CHECK(standing.successful_steps == standing_steps);
+    CHECK(contact_seen);
+    CHECK(standing.active_contact_count >= 4U);
+    CHECK(standing.sliding_contact_count == 0U);
+    CHECK(accumulated_friction_work <= 1.0e-10);
+    CHECK(standing_position.z > 1.25);
+    CHECK(standing_position.z < 1.55);
+    CHECK(std::abs(standing_position.x) < 0.1);
+    CHECK(std::abs(standing_position.y) < 0.1);
+    CHECK(std::abs(reaction_sum / reaction_window - 11.2 * 9.81) < 0.5);
+    CHECK(standing.motor_effort_linf > 0.0);
+
+    for (FEMJointServoComponent* servo : fixture.servos)
+    {
+        servo->set_enabled(false);
+    }
+    constexpr int collapse_steps = 5000;
+    for (int step = 0; step < collapse_steps; ++step)
+    {
+        fixture.world->update(0.002F);
+    }
+    const Vec3 fallen_position = fixture.root.transform().global_position();
+    CHECK(fixture.world->telemetry().successful_steps ==
+          standing_steps + collapse_steps);
+    CHECK(fallen_position.z < standing_position.z - 0.25);
 
     fixture.scene.destroy();
 }
