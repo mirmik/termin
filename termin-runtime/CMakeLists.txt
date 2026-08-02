@@ -9,6 +9,9 @@ option(TERMIN_RUNTIME_BUILD_TESTS "Build termin-runtime tests" ON)
 option(TERMIN_RUNTIME_MINIMAL_ONLY
     "Build the core package-v2 loader without desktop resource domains"
     OFF)
+option(TERMIN_RUNTIME_RENDER_ONLY
+    "Build the portable package-v2 scene/render resource profile"
+    OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -63,16 +66,16 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_render REQUIRED)
 endif()
-if(COMMAND termin_require_package)
+if(NOT TERMIN_RUNTIME_RENDER_ONLY AND COMMAND termin_require_package)
     termin_require_package(termin_components_foliage termin_components_foliage::termin_components_foliage)
-else()
+elseif(NOT TERMIN_RUNTIME_RENDER_ONLY)
     find_package(termin_components_foliage REQUIRED)
 endif()
-if(COMMAND termin_require_package)
+if(NOT TERMIN_RUNTIME_RENDER_ONLY AND COMMAND termin_require_package)
     termin_require_package(
         termin_gui_native
         termin_gui_native::termin_gui_native)
-else()
+elseif(NOT TERMIN_RUNTIME_RENDER_ONLY)
     find_package(termin_gui_native REQUIRED)
 endif()
 endif()
@@ -104,6 +107,9 @@ target_compile_definitions(termin_runtime PRIVATE TERMIN_RUNTIME_EXPORTS)
 if(TERMIN_RUNTIME_MINIMAL_ONLY)
     target_compile_definitions(termin_runtime PUBLIC TERMIN_RUNTIME_MINIMAL_ONLY)
 endif()
+if(TERMIN_RUNTIME_RENDER_ONLY)
+    target_compile_definitions(termin_runtime PUBLIC TERMIN_RUNTIME_RENDER_ONLY)
+endif()
 
 target_include_directories(termin_runtime
     PUBLIC
@@ -125,11 +131,15 @@ target_link_libraries(termin_runtime PUBLIC
         termin_engine::termin_engine
         termin_components_mesh::termin_components_mesh
         termin_components_render::termin_components_render
-        termin_components_foliage::termin_components_foliage
-        termin_gui_native::termin_gui_native
     PRIVATE
         termin_image::termin_image
 )
+if(NOT TERMIN_RUNTIME_RENDER_ONLY)
+target_link_libraries(termin_runtime PUBLIC
+        termin_components_foliage::termin_components_foliage
+        termin_gui_native::termin_gui_native
+)
+endif()
 endif()
 
 if(MSVC)
@@ -160,6 +170,7 @@ if(TERMIN_RUNTIME_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     add_test(NAME termin_runtime_package_loader_test COMMAND termin_runtime_package_loader_test)
 endif()
 
+if(NOT EMSCRIPTEN)
 install(TARGETS termin_runtime
     EXPORT termin_runtimeTargets
     LIBRARY DESTINATION lib
@@ -209,5 +220,6 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_runtimeConfigVersion.cmake
     DESTINATION lib/cmake/termin_runtime
 )
+endif()
 
 termin_label_tests_in_directory("termin-runtime")

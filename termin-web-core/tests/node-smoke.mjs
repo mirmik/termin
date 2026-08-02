@@ -58,6 +58,7 @@ function cancelFrame(id) {
 
 const fixtures = pathToFileURL(path.join(outputDirectory, "fixtures") + path.sep);
 const host = createTerminWebHost(core, {
+    headless: true,
     fetch: fetchFile,
     requestAnimationFrame: requestFrame,
     cancelAnimationFrame: cancelFrame,

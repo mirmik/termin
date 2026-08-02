@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "fragment",
+  "resources": [
+    {"name": "u_params", "kind": "constant_buffer", "scope": "pass", "set": 0, "binding": 7, "stage_mask": 2, "size": 16, "webgpu": {"group": 0, "binding": 7}, "fields": [{"name":"intensity","type":"Float","offset":0,"size":4}]},
+    {"name": "u_original", "kind": "texture", "scope": "transient", "set": 0, "binding": 186, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 186, "sampler_binding": 144}},
+    {"name": "u_bloom", "kind": "texture", "scope": "transient", "set": 0, "binding": 164, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 164, "sampler_binding": 166}}
+  ]
+}

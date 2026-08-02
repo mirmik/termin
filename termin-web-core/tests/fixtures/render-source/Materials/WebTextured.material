@@ -1,0 +1,10 @@
+{
+  "uuid": "web-render-fixture-material",
+  "shader": "WebTextured",
+  "uniforms": {
+    "u_tint_color": [1.0, 1.0, 1.0, 1.0]
+  },
+  "textures": {
+    "u_tint_texture": "web-render-fixture-checker-texture"
+  }
+}

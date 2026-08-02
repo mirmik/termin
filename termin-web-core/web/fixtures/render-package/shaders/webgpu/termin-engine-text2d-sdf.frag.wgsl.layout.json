@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "fragment",
+  "resources": [
+    {"name": "text2d_sdf_draw", "kind": "constant_buffer", "scope": "draw", "set": 0, "binding": 31, "stage_mask": 2, "size": 96, "webgpu": {"group": 0, "binding": 31}, "fields": [{"name":"u_projection","type":"Mat4","offset":0,"size":64}, {"name":"u_color","type":"Vec4","offset":64,"size":16}, {"name":"u_smoothing","type":"Float","offset":80,"size":4}]},
+    {"name": "u_font_atlas", "kind": "texture", "scope": "transient", "set": 0, "binding": 156, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 156, "sampler_binding": 190}}
+  ]
+}

@@ -47,6 +47,29 @@ tc_pipeline_handle make_default_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("Default");
     RenderPipeline pipeline(ph);
 
+#ifdef TERMIN_ENGINE_CORE_RENDER_PIPELINE
+    if (tc_pass* p = create_and_configure_pass("ColorPass", "Color", {
+            {"input_res", "empty"},
+            {"output_res", "color"},
+            {"shadow_res", ""},
+            {"phase_mark", "opaque"}
+        })) {
+        adopt_default_pass(ph, p);
+    }
+    if (tc_pass* p = create_and_configure_pass("PresentToScreenPass", "Present", {
+            {"input_res", "color"}
+        })) {
+        adopt_default_pass(ph, p);
+    }
+    for (const char* resource : {"empty", "color"}) {
+        ResourceSpec spec;
+        spec.resource = resource;
+        spec.format = "render_target";
+        pipeline.add_spec(spec);
+    }
+    return ph;
+#endif
+
     if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
             {"output_res", "shadow_maps"}
         })) {

@@ -1,0 +1,15 @@
+{
+  "uuid": "web-render-fixture-checker-texture",
+  "name": "Checker",
+  "source_path": "textures/web-render-fixture-checker-texture.png",
+  "import_settings": {
+    "flip_x": false,
+    "flip_y": true,
+    "transpose": false,
+    "filter": "nearest",
+    "mipmaps": false,
+    "wrap": "repeat",
+    "encoding": "srgb",
+    "alpha_mode": "straight"
+  }
+}

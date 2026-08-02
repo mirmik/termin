@@ -25,11 +25,15 @@
 #include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
+#endif
 #include <termin/image/image_decode.hpp>
 #include <termin/render/render_pipeline.hpp>
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/render/sprite_asset.hpp>
+#endif
 #include <termin/render/tc_pipeline_template.hpp>
 
 extern "C" {
@@ -45,10 +49,16 @@ struct RuntimePackageResourceKeepalive {
     std::vector<TcTexture> textures;
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<TcFoliageData> foliage_data;
+#endif
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<TcSpriteAsset> sprites;
+#endif
     std::vector<TcPipelineTemplate> pipeline_templates;
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<gui_native::TcUiDocumentAsset> ui_documents;
+#endif
 };
 
 namespace {
@@ -1620,6 +1630,7 @@ bool load_mesh_resource(
     return true;
 }
 
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 bool load_foliage_data_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -1650,7 +1661,9 @@ bool load_foliage_data_resource(
     keepalive.foliage_data.push_back(std::move(foliage));
     return true;
 }
+#endif
 
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 bool load_sprite_asset_resource(
     const nos::trent& entry,
     const nos::trent& spec,
@@ -1734,6 +1747,7 @@ bool load_sprite_asset_resource(
     keepalive.sprites.push_back(std::move(sprite));
     return true;
 }
+#endif
 
 bool load_pipeline_resource(
     const std::filesystem::path& root,
@@ -1803,7 +1817,13 @@ bool load_resource(
         return load_pipeline_resource(root, entry, keepalive, error);
     }
     if (type == "foliage_data") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support foliage_data resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         return load_foliage_data_resource(root, entry, keepalive, error);
+#endif
     }
 
     const std::filesystem::path spec_path = package_path(root, rel_path);
@@ -1825,9 +1845,20 @@ bool load_resource(
         return load_mesh_resource(spec, keepalive, error);
     }
     if (type == "sprite_asset") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support sprite_asset resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         return load_sprite_asset_resource(entry, spec, keepalive, error);
+#endif
     }
     if (type == "ui_document") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support ui_document resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         const std::string uuid = string_field(entry, "uuid");
         if (uuid.empty()) {
             error = "ui_document resource requires a UUID";
@@ -1845,6 +1876,7 @@ bool load_resource(
         }
         keepalive.ui_documents.push_back(asset);
         return true;
+#endif
     }
 
     error = "unsupported resource type '" + type + "'";
@@ -2052,7 +2084,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             return result;
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
-        if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Full) {
+        if (options.bootstrap_profile != bootstrap::RuntimeBootstrapProfile::Minimal) {
             ensure_runtime_builtin_textures();
         }
         constexpr std::array<const char*, 9> resource_order = {

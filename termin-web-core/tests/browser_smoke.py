@@ -14,11 +14,13 @@ import tempfile
 import threading
 import time
 import urllib.request
+import zlib
 from urllib.parse import urlparse
 
 
 SUCCESS_MARKER = "TERMIN_WEB_CORE_SMOKE_PASSED"
 FAILURE_MARKER = "TERMIN_WEB_CORE_SMOKE_FAILED"
+FRAME_READY_MARKER = "TERMIN_WEB_CORE_FRAME_READY"
 
 
 def find_browser() -> str:
@@ -64,6 +66,7 @@ class DevToolsSocket:
         if not response.startswith(b"HTTP/1.1 101") or expected not in response:
             raise RuntimeError(f"DevTools WebSocket handshake failed: {response!r}")
         self.next_id = 1
+        self.events: list[dict] = []
 
     def _receive_exactly(self, size: int) -> bytes:
         chunks = bytearray()
@@ -133,6 +136,7 @@ class DevToolsSocket:
         while True:
             response = self._receive_json()
             if response.get("id") != message_id:
+                self.events.append(response)
                 continue
             if "error" in response:
                 raise RuntimeError(f"DevTools {method} failed: {response['error']}")
@@ -170,7 +174,7 @@ def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
             "returnByValue": True,
         })
         value = result.get("result", {}).get("value", "")
-        if value == SUCCESS_MARKER or value.startswith(FAILURE_MARKER):
+        if value in (SUCCESS_MARKER, FRAME_READY_MARKER) or value.startswith(FAILURE_MARKER):
             return value
         time.sleep(0.05)
     diagnostics = devtools.call("Runtime.evaluate", {
@@ -180,6 +184,96 @@ def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
     raise RuntimeError(
         f"browser smoke page did not publish a terminal result: {diagnostics}"
     )
+
+
+def analyze_png(content: bytes) -> dict[str, int]:
+    if not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("DevTools canvas screenshot is not a PNG")
+    offset = 8
+    width = height = color_type = bit_depth = interlace = 0
+    compressed = bytearray()
+    while offset + 12 <= len(content):
+        size = struct.unpack("!I", content[offset:offset + 4])[0]
+        kind = content[offset + 4:offset + 8]
+        payload = content[offset + 8:offset + 8 + size]
+        offset += 12 + size
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type, _compression, _filter, interlace = struct.unpack(
+                "!IIBBBBB", payload
+            )
+        elif kind == b"IDAT":
+            compressed.extend(payload)
+        elif kind == b"IEND":
+            break
+    channels = {2: 3, 6: 4}.get(color_type)
+    if bit_depth != 8 or channels is None or interlace != 0:
+        raise RuntimeError(
+            f"unsupported screenshot PNG layout: depth={bit_depth} color={color_type} interlace={interlace}"
+        )
+    raw = zlib.decompress(compressed)
+    stride = width * channels
+    previous = bytearray(stride)
+    rows: list[bytearray] = []
+    cursor = 0
+    for _row in range(height):
+        filter_type = raw[cursor]
+        cursor += 1
+        scanline = bytearray(raw[cursor:cursor + stride])
+        cursor += stride
+        for index in range(stride):
+            left = scanline[index - channels] if index >= channels else 0
+            up = previous[index]
+            upper_left = previous[index - channels] if index >= channels else 0
+            if filter_type == 1:
+                scanline[index] = (scanline[index] + left) & 0xFF
+            elif filter_type == 2:
+                scanline[index] = (scanline[index] + up) & 0xFF
+            elif filter_type == 3:
+                scanline[index] = (scanline[index] + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                estimate = left + up - upper_left
+                distances = (abs(estimate - left), abs(estimate - up), abs(estimate - upper_left))
+                predictor = (left, up, upper_left)[distances.index(min(distances))]
+                scanline[index] = (scanline[index] + predictor) & 0xFF
+            elif filter_type != 0:
+                raise RuntimeError(f"unsupported PNG filter {filter_type}")
+        rows.append(scanline)
+        previous = scanline
+    bright_pixels = 0
+    colors: set[tuple[int, int, int]] = set()
+    channel_min = [255, 255, 255]
+    channel_max = [0, 0, 0]
+    for row in rows:
+        for offset in range(0, len(row), channels):
+            red, green, blue = row[offset:offset + 3]
+            if max(red, green, blue) > 120:
+                bright_pixels += 1
+            for index, value in enumerate((red, green, blue)):
+                channel_min[index] = min(channel_min[index], value)
+                channel_max[index] = max(channel_max[index], value)
+            colors.add((red >> 4, green >> 4, blue >> 4))
+    return {
+        "width": width,
+        "height": height,
+        "bright_pixels": bright_pixels,
+        "quantized_colors": len(colors),
+        "channel_min": channel_min,
+        "channel_max": channel_max,
+    }
+
+
+def console_diagnostics(devtools: DevToolsSocket) -> list[str]:
+    messages: list[str] = []
+    seen: set[str] = set()
+    for event in devtools.events:
+        if event.get("method") != "Runtime.consoleAPICalled":
+            continue
+        args = event.get("params", {}).get("args", [])
+        text = " ".join(str(arg.get("value", arg.get("description", ""))) for arg in args)
+        if text and text not in seen:
+            seen.add(text)
+            messages.append(text)
+    return messages[-100:]
 
 
 def main() -> int:
@@ -209,7 +303,6 @@ def main() -> int:
                     "--enable-unsafe-webgpu",
                     "--enable-features=Vulkan",
                     "--enable-dawn-features=allow_unsafe_apis",
-                    "--disable-vulkan-surface",
                     "--use-angle=swiftshader",
                     "--no-sandbox",
                     "--remote-allow-origins=*",
@@ -225,8 +318,33 @@ def main() -> int:
             devtools = DevToolsSocket(target["webSocketDebuggerUrl"])
             devtools.call("Runtime.enable")
             result = wait_for_result(devtools)
+            if result == FRAME_READY_MARKER:
+                screenshot = devtools.call("Page.captureScreenshot", {
+                    "format": "png",
+                    "clip": {"x": 0, "y": 0, "width": 640, "height": 360, "scale": 1},
+                    "captureBeyondViewport": False,
+                })
+                frame_metrics = analyze_png(base64.b64decode(screenshot["data"]))
+                if (frame_metrics["width"], frame_metrics["height"]) != (640, 360) or \
+                        frame_metrics["bright_pixels"] < 100 or \
+                        frame_metrics["quantized_colors"] < 3:
+                    raise RuntimeError(
+                        "packaged scene did not produce a visible textured frame: "
+                        f"{frame_metrics}; console={console_diagnostics(devtools)}"
+                    )
+                devtools.call("Runtime.evaluate", {
+                    "expression": "document.querySelector('#result').textContent='TERMIN_WEB_CORE_SMOKE_RUNNING'; globalThis.__terminSmokeContinue(); 'continued'",
+                    "returnByValue": True,
+                })
+                result = wait_for_result(devtools)
             if result != SUCCESS_MARKER:
-                raise RuntimeError(f"Browser smoke failed: {result}")
+                diagnostics = devtools.call("Runtime.evaluate", {
+                    "expression": "JSON.stringify({hostStatus:document.querySelector('#host-status')?.textContent,frame:globalThis.__terminSmokeFrame,asyncError:globalThis.__terminSmokeAsyncError,hostError:globalThis.__terminSmokeModule?globalThis.__terminSmokeModule.UTF8ToString(globalThis.__terminSmokeModule._termin_web_host_error()):'',graphicsStatus:globalThis.__terminSmokeModule?._termin_web_host_graphics_status?.(),graphicsError:globalThis.__terminSmokeModule?globalThis.__terminSmokeModule.UTF8ToString(globalThis.__terminSmokeModule._termin_web_host_graphics_error()):''})",
+                    "returnByValue": True,
+                }).get("result", {}).get("value", "")
+                raise RuntimeError(
+                    f"Browser smoke failed: {result}; {diagnostics}; "
+                    f"console={console_diagnostics(devtools)}")
     except Exception as error:
         failure = error
     finally:
