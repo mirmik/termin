@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <termin/runtime/termin_runtime_api.h>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/tc_scene.hpp>
 
 extern "C" {
@@ -19,6 +20,10 @@ struct RuntimePackageLoadOptions {
     // Extensions required by the runtime host. They are attached to every
     // packaged scene before components are deserialized.
     std::vector<tc_scene_ext_type_id> scene_extensions;
+    // Full remains the native-compatible default. Minimal registers only the
+    // core scene domain and rejects package content that needs omitted types.
+    bootstrap::RuntimeBootstrapProfile bootstrap_profile =
+        bootstrap::RuntimeBootstrapProfile::Full;
 };
 
 struct ShaderRuntimeConfiguration {

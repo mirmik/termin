@@ -11,5 +11,33 @@ export async function createTerminCore(options = {}) {
             }
             return result;
         },
+        async renderSmoke() {
+            module._termin_web_render_smoke_start();
+            for (;;) {
+                const status = module._termin_web_render_smoke_status();
+                if (status === 2) {
+                    // WebGPU validation is asynchronous. Give uncaptured-error
+                    // and device-loss callbacks a turn before accepting the frame.
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    const settledStatus = module._termin_web_render_smoke_status();
+                    if (settledStatus < 0) {
+                        const error = module.UTF8ToString(module._termin_web_render_smoke_error());
+                        throw new Error(`Termin WebGPU smoke failed (${settledStatus}): ${error}`);
+                    }
+                    return;
+                }
+                if (status < 0) {
+                    const error = module.UTF8ToString(module._termin_web_render_smoke_error());
+                    throw new Error(`Termin WebGPU smoke failed (${status}): ${error}`);
+                }
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+        },
+        resize(width, height) {
+            if (!module._termin_web_render_smoke_resize(width, height)) {
+                const error = module.UTF8ToString(module._termin_web_render_smoke_error());
+                throw new Error(`Termin WebGPU resize failed: ${error}`);
+            }
+        },
     };
 }

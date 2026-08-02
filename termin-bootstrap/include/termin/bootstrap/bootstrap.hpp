@@ -12,6 +12,11 @@
 
 namespace termin::bootstrap {
 
+enum class RuntimeBootstrapProfile {
+    Minimal,
+    Full,
+};
+
 struct RuntimeKindOptions {
     bool mesh = true;
     bool material = true;
@@ -20,6 +25,7 @@ struct RuntimeKindOptions {
     bool voxel_grid = true;
     bool navmesh = true;
     bool entity = true;
+    bool ui_document = true;
 };
 
 struct SceneExtensionOptions {
@@ -38,6 +44,7 @@ TERMIN_BOOTSTRAP_API void init_pointer_extractors();
 TERMIN_BOOTSTRAP_API void init_python_component_callbacks();
 
 TERMIN_BOOTSTRAP_API void bootstrap_runtime();
+TERMIN_BOOTSTRAP_API void bootstrap_runtime(RuntimeBootstrapProfile profile);
 TERMIN_BOOTSTRAP_API void register_builtin_pass_types();
 TERMIN_BOOTSTRAP_API void bootstrap_player();
 TERMIN_BOOTSTRAP_API void bootstrap_editor();

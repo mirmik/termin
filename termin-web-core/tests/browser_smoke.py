@@ -39,7 +39,9 @@ def main() -> int:
             [
                 find_browser(),
                 "--headless",
-                "--disable-gpu",
+                "--enable-unsafe-webgpu",
+                "--enable-features=Vulkan",
+                "--use-angle=swiftshader",
                 "--no-sandbox",
                 "--dump-dom",
                 "--virtual-time-budget=10000",

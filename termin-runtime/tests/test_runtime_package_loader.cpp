@@ -470,6 +470,84 @@ bool collect_test_light(tc_component* c, void* user_data) {
 
 } // namespace
 
+TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects omitted domains") {
+    termin::bootstrap::shutdown_runtime();
+    const std::filesystem::path root = make_package_root();
+    write_text(root / "manifest.json", R"({
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": []
+}
+)"
+    );
+    write_text(root / "scene.json", R"({
+  "uuid": "minimal-runtime-scene",
+  "entities": [
+    {
+      "uuid": "minimal-runtime-entity",
+      "name": "CoreEntity",
+      "components": []
+    }
+  ]
+}
+)"
+    );
+
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.bootstrap_profile =
+        termin::bootstrap::RuntimeBootstrapProfile::Minimal;
+    termin::runtime::RuntimePackageLoader loader;
+    auto supported = loader.load(root.string(), options);
+    REQUIRE(supported.ok);
+    CHECK_EQ(supported.scene.entity_count(), 1);
+    for (auto& scene : supported.scenes) {
+        scene.scene.destroy();
+    }
+    supported.scene = {};
+    supported.resources.reset();
+
+    write_text(root / "scene.json", R"({
+  "uuid": "unsupported-minimal-runtime-scene",
+  "entities": [
+    {
+      "uuid": "unsupported-minimal-runtime-entity",
+      "name": "RenderEntity",
+      "components": [
+        {"type": "MeshComponent", "data": {}}
+      ]
+    }
+  ]
+}
+)"
+    );
+    auto unsupported_component = loader.load(root.string(), options);
+    CHECK_FALSE(unsupported_component.ok);
+    CHECK(unsupported_component.message.find("MeshComponent") != std::string::npos);
+    CHECK(unsupported_component.message.find("minimal runtime profile") != std::string::npos);
+
+    write_text(root / "scene.json", R"({"uuid": "minimal-runtime-scene", "entities": []})");
+    write_text(root / "manifest.json", R"({
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": [
+    {"type": "mesh", "uuid": "unsupported-mesh", "path": "meshes/test.tmesh.json"}
+  ]
+}
+)"
+    );
+    auto unsupported_resource = loader.load(root.string(), options);
+    CHECK_FALSE(unsupported_resource.ok);
+    CHECK(unsupported_resource.message.find("resource type 'mesh'") != std::string::npos);
+
+    termin::bootstrap::shutdown_runtime();
+}
+
 TEST_CASE("RuntimePackageLoader attaches rendering host extensions before component deserialization") {
     const std::filesystem::path root = make_package_root();
     write_test_package(root);

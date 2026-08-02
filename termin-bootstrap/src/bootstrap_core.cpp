@@ -90,6 +90,7 @@ struct BootstrapState {
     bool ui_document_registered = false;
     bool entity_registered = false;
     bool inspect_initialized = false;
+    bool minimal_components_registered = false;
     bool builtin_components_registered = false;
     bool builtin_passes_registered = false;
 };
@@ -219,8 +220,10 @@ void register_runtime_kinds(const RuntimeKindOptions& options) {
     if (options.entity) {
         register_once<Entity>("entity", g_bootstrap_state.entity_registered);
     }
-    register_once<gui_native::TcUiDocumentAsset>(
-        "ui_document", g_bootstrap_state.ui_document_registered);
+    if (options.ui_document) {
+        register_once<gui_native::TcUiDocumentAsset>(
+            "ui_document", g_bootstrap_state.ui_document_registered);
+    }
 }
 
 void register_scene_extensions(const SceneExtensionOptions& options) {
@@ -246,12 +249,21 @@ void init_inspect_adapters() {
     g_bootstrap_state.inspect_initialized = true;
 }
 
+void register_minimal_component_types() {
+    if (g_bootstrap_state.minimal_components_registered) {
+        return;
+    }
+
+    register_builtin_scene_component_types();
+    g_bootstrap_state.minimal_components_registered = true;
+}
+
 void register_builtin_component_types() {
     if (g_bootstrap_state.builtin_components_registered) {
         return;
     }
 
-    register_builtin_scene_component_types();
+    register_minimal_component_types();
     prefab::register_prefab_component_types();
     register_builtin_mesh_component_types();
     register_builtin_collision_component_types();
@@ -282,14 +294,31 @@ void register_builtin_pass_types() {
 }
 
 void bootstrap_runtime() {
+    bootstrap_runtime(RuntimeBootstrapProfile::Full);
+}
+
+void bootstrap_runtime(RuntimeBootstrapProfile profile) {
     tc_init();
+    init_inspect_adapters();
+    if (profile == RuntimeBootstrapProfile::Minimal) {
+        RuntimeKindOptions kinds;
+        kinds.mesh = false;
+        kinds.material = false;
+        kinds.skeleton = false;
+        kinds.animation = false;
+        kinds.voxel_grid = false;
+        kinds.navmesh = false;
+        kinds.ui_document = false;
+        register_runtime_kinds(kinds);
+        register_minimal_component_types();
+        return;
+    }
 #ifdef TERMIN_BOOTSTRAP_HAS_TCPLOT_GUI_NATIVE
     if (!tcplot::gui_native::register_plot_widget_types()) {
         tc::Log::error(
             "[termin-bootstrap] failed to register tcplot GUI widget types");
     }
 #endif
-    init_inspect_adapters();
     register_runtime_kinds();
     register_builtin_component_types();
     register_builtin_pass_types();
