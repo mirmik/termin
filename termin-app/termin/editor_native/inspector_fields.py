@@ -270,6 +270,8 @@ class NativeInspectorFields:
             )
             minimum, maximum = maximum, minimum
         current = max(minimum, min(maximum, current))
+        state = [current, minimum, maximum]
+        updating_controls = False
 
         container = self.document.create_vstack(f"native-inspector-interval-{row.key}")
         container.set_layout_spacing(3.0)
@@ -279,7 +281,7 @@ class NativeInspectorFields:
         slider.set_step(float(field_info.step) if field_info.step is not None else 0.01)
         slider.set_decimals(4)
         slider.widget.enabled = not field_info.read_only
-        container.add_fixed_child(slider.widget, 30.0)
+        container.add_fixed_child(slider.widget, 52.0)
 
         bounds_row = self.document.create_hstack(f"native-inspector-interval-bounds-{row.key}")
         bounds_row.set_layout_spacing(3.0)
@@ -302,41 +304,59 @@ class NativeInspectorFields:
         weak_owner = weakref.ref(self)
 
         def apply_value(value: float) -> None:
+            nonlocal updating_controls
+            if updating_controls:
+                return
             owner = weak_owner()
             if owner is not None:
-                owner._apply(row.key, [value, minimum, maximum], merge=True)
+                state[0] = max(state[1], min(state[2], value))
+                owner._apply(row.key, list(state), merge=True)
 
         def apply_minimum(value: float) -> None:
+            nonlocal updating_controls
+            if updating_controls:
+                return
             owner = weak_owner()
             if owner is not None:
-                new_minimum = min(value, maximum)
-                owner._apply(
-                    row.key,
-                    [max(new_minimum, min(maximum, current)), new_minimum, maximum],
-                    merge=True,
-                )
+                state[1] = min(value, state[2])
+                state[0] = max(state[1], min(state[2], state[0]))
+                updating_controls = True
+                try:
+                    minimum_box.value = state[1]
+                    slider.set_range(state[1], state[2])
+                    slider.value = state[0]
+                finally:
+                    updating_controls = False
+                owner._apply(row.key, list(state), merge=True)
 
         def apply_maximum(value: float) -> None:
+            nonlocal updating_controls
+            if updating_controls:
+                return
             owner = weak_owner()
             if owner is not None:
-                new_maximum = max(value, minimum)
-                owner._apply(
-                    row.key,
-                    [max(minimum, min(new_maximum, current)), minimum, new_maximum],
-                    merge=True,
-                )
+                state[2] = max(value, state[1])
+                state[0] = max(state[1], min(state[2], state[0]))
+                updating_controls = True
+                try:
+                    maximum_box.value = state[2]
+                    slider.set_range(state[1], state[2])
+                    slider.value = state[0]
+                finally:
+                    updating_controls = False
+                owner._apply(row.key, list(state), merge=True)
 
         slider.connect_changed(apply_value)
         minimum_box.connect_changed(apply_minimum)
         maximum_box.connect_changed(apply_maximum)
         self.field_widgets[row.key] = controls
-        self.root.add_fixed_child(container, 61.0)
+        self.root.add_fixed_child(container, 83.0)
 
     def _append_vec3_list_field(self, row: InspectorFieldRow) -> None:
         field_info = row.field
         if field_info is None:
             return
-        values = () if row.mixed or row.value is None else tuple(_vector(point, 3) for point in row.value)
+        values = [] if row.mixed or row.value is None else [list(_vector(point, 3)) for point in row.value]
         editable = not field_info.read_only and not row.mixed
         container = self.document.create_vstack(f"native-inspector-vec3-list-{row.key}")
         container.set_layout_spacing(3.0)
@@ -460,6 +480,7 @@ class NativeInspectorFields:
                 return
             updated = [list(point) for point in values]
             updated[index] = [box.value for box in controls.coordinate_boxes]
+            values[index] = updated[index]
             owner._apply(row.key, updated, merge=True)
 
         list_widget.connect_selection_changed(selected)
@@ -817,7 +838,11 @@ class NativeInspectorFields:
         return label
 
     def _apply(self, key: str, value: Any, *, merge: bool = False) -> None:
-        self.rebuild(self.controller.apply_value(key, value, merge=merge))
+        snapshot = self.controller.apply_value(key, value, merge=merge)
+        if merge:
+            self.request_render()
+            return
+        self.rebuild(snapshot)
 
 
 def build_native_inspector_fields(

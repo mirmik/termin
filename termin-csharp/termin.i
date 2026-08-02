@@ -562,10 +562,10 @@ namespace termin {
 
 // KinematicUnitComponent - base fields hidden from SWIG (accessed via inspect system)
 %nodefaultctor termin::KinematicUnitComponent;
-%ignore termin::KinematicUnitComponent::base_position;
-%ignore termin::KinematicUnitComponent::base_rotation;
+%ignore termin::KinematicUnitComponent::origin_position;
+%ignore termin::KinematicUnitComponent::origin_rotation;
 %ignore termin::KinematicUnitComponent::base_scale;
-%ignore termin::KinematicUnitComponent::capture_base;
+%ignore termin::KinematicUnitComponent::recalculate_origin;
 %ignore termin::KinematicUnitComponent::apply;
 %ignore termin::KinematicUnitComponent::normalized_axis;
 %ignore termin::KinematicUnitComponent::read_entity_transform;

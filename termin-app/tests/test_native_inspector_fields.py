@@ -521,8 +521,11 @@ def test_native_inspector_slider_and_interval_slider_edits():
         metadata_collector=lambda _target: {},
     )
     document = tc_ui_document_create()
+    renderer = _bind_font(document)
     panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
+    assert document.add_root(panel.root.handle)
     panel.set_targets([target])
+    document.layout_roots(Rect(0.0, 0.0, 420.0, 180.0))
 
     slider = panel.field_widgets["fill_percent"]
     slider.value = 42.4
@@ -530,6 +533,29 @@ def test_native_inspector_slider_and_interval_slider_edits():
 
     interval = panel.field_widgets["coordinate"]
     assert isinstance(interval, NativeIntervalSliderWidgets)
+    assert interval.value.widget.bounds.height == pytest.approx(52.0)
+    assert interval.minimum.widget.bounds.y >= (
+        interval.value.widget.bounds.y + interval.value.widget.bounds.height + 3.0
+    )
+
+    bounds = interval.value.widget.bounds
+    pointer = PointerEvent()
+    pointer.type = PointerEventType.Down
+    pointer.x = bounds.x + 60.0
+    pointer.y = bounds.y + 35.0
+    assert document.dispatch_pointer_event(pointer) == EventResult.Handled
+    after_down = target.coordinate[0]
+    assert panel.field_widgets["coordinate"] is interval
+
+    pointer.type = PointerEventType.Move
+    pointer.x = bounds.x + 260.0
+    assert document.dispatch_pointer_event(pointer) == EventResult.Handled
+    assert target.coordinate[0] > after_down
+    assert panel.field_widgets["coordinate"] is interval
+
+    pointer.type = PointerEventType.Up
+    assert document.dispatch_pointer_event(pointer) == EventResult.Handled
+
     interval.value.value = 7.0
     assert target.coordinate == pytest.approx([7.0, -5.0, 10.0])
 
@@ -542,6 +568,7 @@ def test_native_inspector_slider_and_interval_slider_edits():
     assert isinstance(interval, NativeIntervalSliderWidgets)
     interval.maximum.value = 6.0
     assert target.coordinate == pytest.approx([8.0, 8.0, 8.0])
+    del renderer
     tc_ui_document_destroy(document)
 
 

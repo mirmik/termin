@@ -44,17 +44,15 @@ namespace termin
 
         bool joint_zero_pose(const KinematicUnitComponent& joint, Pose3& result)
         {
-            const Vec3 scale{
-                joint.base_scale.x, joint.base_scale.y, joint.base_scale.z};
-            const Quat rotation{joint.base_rotation.x,
-                                joint.base_rotation.y,
-                                joint.base_rotation.z,
-                                joint.base_rotation.w};
-            const Vec3 position{joint.base_position.x,
-                                joint.base_position.y,
-                                joint.base_position.z};
-            if (!unit_scale(scale) || !rotation.is_finite() ||
-                rotation.norm() <= rigid_tolerance || !position.is_finite())
+            const Quat rotation{joint.origin_rotation.x,
+                                joint.origin_rotation.y,
+                                joint.origin_rotation.z,
+                                joint.origin_rotation.w};
+            const Vec3 position{joint.origin_position.x,
+                                joint.origin_position.y,
+                                joint.origin_position.z};
+            if (!rotation.is_finite() || rotation.norm() <= rigid_tolerance ||
+                !position.is_finite())
             {
                 return false;
             }
@@ -162,7 +160,9 @@ namespace termin
                 }
 
                 Pose3 parent_to_joint_zero;
-                if (!joint_zero_pose(*joint, parent_to_joint_zero))
+                Pose3 current_joint_pose;
+                if (!local_rigid_pose(joint_entity, current_joint_pose) ||
+                    !joint_zero_pose(*joint, parent_to_joint_zero))
                 {
                     fail(FEMArticulationSceneDiagnostic::NonRigidTransform,
                          joint_entity);
