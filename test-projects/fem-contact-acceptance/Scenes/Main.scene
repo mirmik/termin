@@ -230,7 +230,7 @@
       },
       {
         "uuid": "fem-contact-articulation-root",
-        "name": "Supported Articulation",
+        "name": "Falling Articulated Lever",
         "priority": 0.0,
         "visible": true,
         "enabled": true,
@@ -240,9 +240,9 @@
         "flags": 0.0,
         "pose": {
           "position": [
-            1.5,
+            1.25,
             0.0,
-            0.5
+            1.5
           ],
           "rotation": [
             0.0,
@@ -281,9 +281,9 @@
                 0.0
               ],
               "mesh_offset_scale": [
-                0.25,
-                0.25,
-                0.25
+                0.18,
+                0.18,
+                0.18
               ]
             }
           },
@@ -314,7 +314,7 @@
         "children": [
           {
             "uuid": "fem-contact-support-joint",
-            "name": "Support Joint",
+            "name": "Lever Hinge",
             "priority": 0.0,
             "visible": true,
             "enabled": true,
@@ -368,21 +368,12 @@
                   ],
                   "coordinate_scale": "0.017453292519943295"
                 }
-              },
-              {
-                "source_id": "fem-contact-support-motor",
-                "type": "FEMArticulationMotorComponent",
-                "data": {
-                  "enabled": true,
-                  "commanded_effort": 2.0,
-                  "maximum_effort": 10.0
-                }
               }
             ],
             "children": [
               {
                 "uuid": "fem-contact-supported-link",
-                "name": "Supported Link",
+                "name": "Lever Arm",
                 "priority": 0.0,
                 "visible": true,
                 "enabled": true,
@@ -433,9 +424,9 @@
                         0.0
                       ],
                       "mesh_offset_scale": [
-                        1.0,
-                        0.7,
-                        1.0
+                        2.0,
+                        0.35,
+                        0.35
                       ]
                     }
                   },
@@ -462,9 +453,9 @@
                       "enabled": true,
                       "mass": 1.0,
                       "inertia_diagonal": [
-                        0.1666666667,
-                        0.1666666667,
-                        0.1666666667
+                        0.0204166667,
+                        0.3435416667,
+                        0.3435416667
                       ],
                       "linear_damping": 0.0,
                       "angular_damping": 0.0
@@ -478,9 +469,9 @@
                       "collider_type": "Box",
                       "convex_hull_mesh_source": "Field",
                       "box_size": [
-                        1.0,
-                        0.7,
-                        1.0
+                        2.0,
+                        0.35,
+                        0.35
                       ],
                       "convex_hull_mesh": {
                         "type": "none"

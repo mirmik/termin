@@ -6,6 +6,32 @@ root:
   background_color: [0, 0, 0, 0]
   children:
     - type: termin.gui.Panel
+      name: scene_legend_background
+      anchor: top-left
+      offset: [18, 18]
+      layout: {width: 455, height: 86}
+      background_color: [0.02, 0.04, 0.075, 0.88]
+    - type: termin.gui.VStack
+      name: scene_legend
+      anchor: top-left
+      offset: [18, 18]
+      layout: {width: 455, height: 86}
+      padding: [14, 10, 14, 10]
+      spacing: 5
+      children:
+        - type: termin.gui.Label
+          name: maximal_body_legend
+          text: BLUE  ·  FREE 6-DOF MAXIMAL BODY
+          font_size: 13
+          color: [0.32, 0.68, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: articulation_legend
+          text: ORANGE  ·  1-DOF HINGED LEVER FALLING ONTO GROUND
+          font_size: 13
+          color: [1.0, 0.57, 0.24, 1]
+          basis: preferred
+    - type: termin.gui.Panel
       name: card_background
       anchor: top-right
       offset: [-18, 18]
@@ -52,12 +78,6 @@ root:
           text: waiting for topology
           font_size: 12
           color: [0.48, 0.67, 0.80, 1]
-          basis: preferred
-        - type: termin.gui.Label
-          name: motor_value
-          text: waiting for articulation motor
-          font_size: 12
-          color: [0.96, 0.68, 0.28, 1]
           basis: preferred
         - type: termin.gui.Label
           name: contact_value
