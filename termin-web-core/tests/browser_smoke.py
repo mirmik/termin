@@ -2,6 +2,7 @@
 import argparse
 import base64
 import functools
+import gzip
 import hashlib
 import http.server
 import json
@@ -15,12 +16,58 @@ import threading
 import time
 import urllib.request
 import zlib
+from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
 
 
 SUCCESS_MARKER = "TERMIN_WEB_CORE_SMOKE_PASSED"
 FAILURE_MARKER = "TERMIN_WEB_CORE_SMOKE_FAILED"
 FRAME_READY_MARKER = "TERMIN_WEB_CORE_FRAME_READY"
+
+
+def artifact_measurements(output_directory: str) -> dict:
+    root = Path(output_directory).resolve()
+
+    def measure(path: Path) -> dict[str, int | str]:
+        content = path.read_bytes()
+        return {
+            "path": path.relative_to(root).as_posix(),
+            "bytes": len(content),
+            "gzip_bytes": len(gzip.compress(content, compresslevel=9, mtime=0)),
+        }
+
+    primary_names = (
+        "termin_web_core.wasm",
+        "termin_web_core.mjs",
+        "termin-web-core.mjs",
+        "termin-web-host.mjs",
+        "termin-web-input.mjs",
+        "viewer.html",
+    )
+    primary = [measure(root / name) for name in primary_names]
+    package_root = root / "fixtures" / "render-package"
+    package_files = sorted(path for path in package_root.rglob("*") if path.is_file())
+    package = [measure(path) for path in package_files]
+    return {
+        "artifacts": primary,
+        "artifact_bytes": sum(item["bytes"] for item in primary),
+        "artifact_gzip_bytes": sum(item["gzip_bytes"] for item in primary),
+        "package_files": len(package),
+        "package_bytes": sum(item["bytes"] for item in package),
+        "package_gzip_bytes": sum(item["gzip_bytes"] for item in package),
+    }
+
+
+def write_report(path: str, report: dict) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(destination)
 
 
 def find_browser() -> str:
@@ -190,7 +237,7 @@ def wait_for_viewer(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = devtools.call("Runtime.evaluate", {
-            "expression": "JSON.stringify({state:globalThis.__terminViewer?.host?.state ?? '',error:document.querySelector('#error')?.textContent ?? '',frames:globalThis.__terminViewer?.host?.frameCount?.() ?? 0,metrics:globalThis.__terminViewer?.input?.metrics ?? null})",
+            "expression": "JSON.stringify({state:globalThis.__terminViewer?.host?.state ?? '',error:document.querySelector('#error')?.textContent ?? '',frames:globalThis.__terminViewer?.host?.frameCount?.() ?? 0,hostMetrics:globalThis.__terminViewer?.host?.metrics ?? null,inputMetrics:globalThis.__terminViewer?.input?.metrics ?? null})",
             "returnByValue": True,
         }).get("result", {}).get("value", "")
         if result:
@@ -299,7 +346,22 @@ def console_diagnostics(devtools: DevToolsSocket) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Termin Web core browser smoke test")
     parser.add_argument("output_directory")
+    parser.add_argument(
+        "--report",
+        help="write the machine-readable gate report (default: OUTPUT/browser-gate-report.json)",
+    )
     args = parser.parse_args()
+
+    report_path = args.report or os.environ.get("TERMIN_WEB_GATE_REPORT") or \
+        os.path.join(args.output_directory, "browser-gate-report.json")
+    started_at = time.monotonic()
+    report = {
+        "schema_version": 1,
+        "status": "running",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "platform_gate": "chromium",
+        "artifacts": artifact_measurements(args.output_directory),
+    }
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=args.output_directory)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -337,7 +399,19 @@ def main() -> int:
             target = wait_for_page(debug_port, page_url)
             devtools = DevToolsSocket(target["webSocketDebuggerUrl"])
             devtools.call("Runtime.enable")
+            devtools.call("Page.enable")
+            report["browser"] = devtools.call("Browser.getVersion")
             result = wait_for_result(devtools)
+            report["environment"] = json.loads(devtools.call(
+                "Runtime.evaluate", {
+                    "expression": "JSON.stringify({userAgent:navigator.userAgent,platform:navigator.platform,secureContext:isSecureContext,crossOriginIsolated,webGpu:Boolean(navigator.gpu),hardwareConcurrency:navigator.hardwareConcurrency ?? null})",
+                    "returnByValue": True,
+                }).get("result", {}).get("value", "{}"))
+            if not report["environment"].get("secureContext") or \
+                    not report["environment"].get("webGpu"):
+                raise RuntimeError(
+                    "browser gate page did not expose secure-context WebGPU: "
+                    f"{report['environment']}")
             if result == FRAME_READY_MARKER:
                 screenshot = devtools.call("Page.captureScreenshot", {
                     "format": "png",
@@ -417,6 +491,18 @@ def main() -> int:
                     f"Browser smoke failed: {result}; {diagnostics}; "
                     f"console={console_diagnostics(devtools)}")
 
+            smoke_state = json.loads(devtools.call("Runtime.evaluate", {
+                "expression": "JSON.stringify({frame:globalThis.__terminSmokeFrame,inputMetrics:globalThis.__terminSmokeInput?.metrics ?? null})",
+                "returnByValue": True,
+            }).get("result", {}).get("value", "{}"))
+            report["smoke"] = {
+                "frame": smoke_state.get("frame"),
+                "input_metrics": smoke_state.get("inputMetrics"),
+                "initial_frame": frame_metrics,
+                "moved_frame": moved_metrics,
+                "resize": resize_data,
+            }
+
             viewer_url = f"http://127.0.0.1:{server.server_port}/viewer.html"
             devtools.call("Page.navigate", {"url": viewer_url})
             wait_for_viewer(devtools)
@@ -447,6 +533,11 @@ def main() -> int:
                     "viewer orbit gesture did not change the rendered frame: "
                     f"{viewer_state}; console={console_diagnostics(devtools)}"
                 )
+            report["viewer"] = {
+                "state": viewer_state,
+                "before_frame": before_metrics,
+                "after_frame": after_metrics,
+            }
     except Exception as error:
         failure = error
     finally:
@@ -467,8 +558,17 @@ def main() -> int:
         details = f"{failure}"
         if stderr:
             details += f"\nChrome stderr:\n{stderr}"
+        report["status"] = "failed"
+        report["duration_ms"] = round((time.monotonic() - started_at) * 1000, 3)
+        report["error"] = str(failure)
+        report["chrome_stderr"] = stderr
+        write_report(report_path, report)
         raise RuntimeError(details) from failure
+    report["status"] = "passed"
+    report["duration_ms"] = round((time.monotonic() - started_at) * 1000, 3)
+    write_report(report_path, report)
     print(SUCCESS_MARKER)
+    print(f"TERMIN_WEB_GATE_REPORT={report_path}")
     return 0
 
 

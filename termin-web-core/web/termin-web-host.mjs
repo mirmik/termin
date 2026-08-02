@@ -7,6 +7,26 @@ export const TerminWebHostState = Object.freeze({
     Error: "error",
 });
 
+export function terminWebEnvironment(scope = globalThis) {
+    return Object.freeze({
+        secureContext: scope.isSecureContext === true,
+        webGpu: Boolean(scope.navigator?.gpu),
+        crossOriginIsolated: scope.crossOriginIsolated === true,
+    });
+}
+
+export function assertTerminWebEnvironment(scope = globalThis) {
+    const environment = terminWebEnvironment(scope);
+    if (!environment.secureContext) {
+        throw new Error(
+            "Termin Web requires a secure context (HTTPS or loopback localhost)");
+    }
+    if (!environment.webGpu) {
+        throw new Error("Termin Web requires a browser with WebGPU support");
+    }
+    return environment;
+}
+
 function packageBaseUrl(packageUrl) {
     const base = new URL(packageUrl, globalThis.location?.href ?? import.meta.url);
     return base.href.endsWith("/") ? base : new URL(`${base.href}/`);
@@ -280,6 +300,7 @@ export class TerminWebHost {
     }
 
     async initializeGraphics(timeoutMs = 5000) {
+        assertTerminWebEnvironment(globalThis);
         const canvas = globalThis.document?.querySelector?.("#termin-canvas");
         if (!canvas) throw new Error("TerminWebHost requires #termin-canvas");
         const initial = this.module._termin_web_host_graphics_start(
