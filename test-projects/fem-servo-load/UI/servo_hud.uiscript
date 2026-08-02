@@ -10,16 +10,16 @@ root:
       anchor: top-right
       offset: [-18, 18]
       layout:
-        width: 520
-        height: 270
+        width: 620
+        height: 500
       background_color: [0.02, 0.04, 0.075, 0.94]
     - type: termin.gui.VStack
       name: telemetry_card
       anchor: top-right
       offset: [-18, 18]
       layout:
-        width: 520
-        height: 270
+        width: 620
+        height: 500
       padding: [18, 14, 18, 14]
       spacing: 5
       children:
@@ -69,3 +69,10 @@ root:
           font_size: 12
           color: [0.48, 0.92, 0.70, 1]
           basis: preferred
+        - type: termin.gui.Plot2D
+          name: servo_plot
+          title: SERVO COORDINATE
+          x_label: time, s
+          y_label: angle, deg
+          auto_fit: true
+          basis: 250

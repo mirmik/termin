@@ -229,6 +229,11 @@ Plot-domain data, projection, ticks и оптимизированные series i
 кодом в одну `TcVisualScene`. `termin-visual-scene` не должен приобретать
 знание о series, axes, data ranges или chart layout.
 
+Необязательный leaf-модуль `tcplot-gui-native` зависит одновременно от
+`tcplot` и `termin-gui-native` и предоставляет готовый runtime-виджет
+`termin.gui.Plot2D`. Он нужен там, где полная ручная композиция chart parts не
+оправдана. Обратных зависимостей из plot и UI core на этот bridge нет.
+
 ### termin-nodegraph
 
 Source of truth: [termin-nodegraph docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-nodegraph/docs/index.md)

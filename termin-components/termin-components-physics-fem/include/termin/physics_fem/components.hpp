@@ -95,7 +95,7 @@ namespace termin
         std::size_t channel_index_ = 0;
     };
 
-    // A PD control policy for a co-located articulation motor. Target state is
+    // A PID control policy for a co-located articulation motor. Target state is
     // expressed in the neighboring kinematic component's authored units.
     class ENTITY_API FEMJointServoComponent final : public CxxComponent
     {

@@ -36,6 +36,9 @@
 #ifdef TERMIN_BOOTSTRAP_HAS_NAVMESH_COMPONENTS
 #include <termin/navmesh/components_bootstrap.hpp>
 #endif
+#ifdef TERMIN_BOOTSTRAP_HAS_TCPLOT_GUI_NATIVE
+#include <tcplot/gui_native/widget_registration.hpp>
+#endif
 
 extern "C" {
 #include <core/tc_component.h>
@@ -280,6 +283,12 @@ void register_builtin_pass_types() {
 
 void bootstrap_runtime() {
     tc_init();
+#ifdef TERMIN_BOOTSTRAP_HAS_TCPLOT_GUI_NATIVE
+    if (!tcplot::gui_native::register_plot_widget_types()) {
+        tc::Log::error(
+            "[termin-bootstrap] failed to register tcplot GUI widget types");
+    }
+#endif
     init_inspect_adapters();
     register_runtime_kinds();
     register_builtin_component_types();
