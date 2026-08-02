@@ -196,6 +196,96 @@ namespace termin::qopt
         return gravity_world_;
     }
 
+    PointKinematics3DResult Articulation3DContribution::point_kinematics(
+        std::size_t link_index, termin::Vec3 point_local) const noexcept
+    {
+        if (diagnostic_ != Articulation3DDiagnostic::None ||
+            link_poses_world_.size() != links_.size() ||
+            parent_to_link_.size() != links_.size() ||
+            motion_twists_at_link_.size() != links_.size() ||
+            link_velocities_local_.size() != links_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] cannot query point kinematics of invalid "
+                         "articulation '%s'\n",
+                         diagnostic_name_.c_str());
+            return {{}, PointKinematics3DDiagnostic::InvalidModel};
+        }
+        if (link_index >= links_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation point references invalid link "
+                         "%zu\n",
+                         link_index);
+            return {{}, PointKinematics3DDiagnostic::InvalidLink};
+        }
+        if (!point_local.is_finite())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] rejected non-finite articulation point\n");
+            return {{}, PointKinematics3DDiagnostic::NonFinitePoint};
+        }
+
+        try
+        {
+            PointKinematics3D value;
+            value.position_world =
+                link_poses_world_[link_index].transform_point(point_local);
+            value.velocity_world = link_velocities_local_[link_index]
+                                       .velocity_at_offset(point_local)
+                                       .rotated_by(link_poses_world_[link_index].ang)
+                                       .lin;
+            value.dofs = dofs_;
+            value.linear_jacobian_world_storage.assign(3 * links_.size(), 0.0);
+
+            std::vector<termin::Screw3> unit_velocities(link_index + 1);
+            for (std::size_t column = 0; column <= link_index; ++column)
+            {
+                for (std::size_t index = 0; index <= link_index; ++index)
+                {
+                    const std::size_t parent = links_[index].parent_link;
+                    const termin::Screw3 parent_velocity =
+                        parent == articulation_world_link ? termin::Screw3::zero()
+                                                          : unit_velocities[parent];
+                    unit_velocities[index] =
+                        parent_velocity.adjoint_inv(parent_to_link_[index]);
+                    if (index == column)
+                    {
+                        unit_velocities[index] += motion_twists_at_link_[index];
+                    }
+                }
+                const termin::Vec3 response =
+                    unit_velocities[link_index]
+                        .velocity_at_offset(point_local)
+                        .rotated_by(link_poses_world_[link_index].ang)
+                        .lin;
+                value.linear_jacobian_world_storage[column] = response.x;
+                value.linear_jacobian_world_storage[links_.size() + column] =
+                    response.y;
+                value.linear_jacobian_world_storage[2 * links_.size() + column] =
+                    response.z;
+            }
+            if (!value.position_world.is_finite() || !value.velocity_world.is_finite())
+            {
+                return {{}, PointKinematics3DDiagnostic::InvalidModel};
+            }
+            return {std::move(value), PointKinematics3DDiagnostic::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation point kinematics failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation point kinematics failed with "
+                         "an unknown exception\n");
+        }
+        return {{}, PointKinematics3DDiagnostic::InternalFailure};
+    }
+
     Articulation3DDiagnostic
     Articulation3DContribution::set_state(Articulation3DState value) noexcept
     {

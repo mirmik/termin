@@ -12,6 +12,7 @@
 #include <termin/geom/screw3.hpp>
 #include <termin/geom/spatial_inertia3.hpp>
 #include <termin/qopt/dynamics.hpp>
+#include <termin/qopt/point_kinematics3d.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
 
 namespace termin::qopt
@@ -105,6 +106,9 @@ namespace termin::qopt
         joint_limit_states() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
+        [[nodiscard]] PointKinematics3DResult
+        point_kinematics(std::size_t link_index,
+                         termin::Vec3 point_local) const noexcept;
 
         [[nodiscard]] Articulation3DDiagnostic
         set_state(Articulation3DState state) noexcept;
