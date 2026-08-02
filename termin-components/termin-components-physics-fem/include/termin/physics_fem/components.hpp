@@ -26,6 +26,12 @@ namespace termin
     class FEMJointLimitComponent;
     class FEMJointServoComponent;
 
+    enum class FEMArticulationBaseMode : int
+    {
+        Fixed = 0,
+        Floating = 1,
+    };
+
     struct FEMPhysicsTelemetry
     {
         bool initialized = false;
@@ -60,6 +66,8 @@ namespace termin
     class ENTITY_API FEMArticulationComponent final : public CxxComponent
     {
     public:
+        int base_mode = static_cast<int>(FEMArticulationBaseMode::Fixed);
+
         FEMArticulationComponent();
         ~FEMArticulationComponent() override = default;
 
@@ -74,6 +82,7 @@ namespace termin
         friend class FEMPhysicsWorldComponent;
         qopt::Articulation3DContribution* articulation_ = nullptr;
         FEMPhysicsWorldComponent* world_ = nullptr;
+        FEMRigidBodyComponent* base_body_ = nullptr;
         std::vector<FEMRigidBodyComponent*> bodies_;
         std::vector<Entity> joint_entities_;
         std::vector<double> joint_coordinate_scales_;
@@ -107,6 +116,7 @@ namespace termin
         qopt::Articulation3DContribution* articulation_ = nullptr;
         qopt::ArticulationMotorContribution* motor_ = nullptr;
         std::size_t dof_index_ = 0;
+        std::size_t joint_index_ = 0;
         std::size_t channel_index_ = 0;
     };
 
@@ -192,6 +202,9 @@ namespace termin
         friend class FEMPhysicsWorldComponent;
         qopt::RigidBody3DContribution* body_ = nullptr;
         qopt::ForceOnBody3DContribution* force_ = nullptr;
+        qopt::Articulation3DContribution* articulation_ = nullptr;
+        std::size_t articulation_link_index_ = qopt::articulation_root_frame;
+        bool articulation_base_ = false;
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 

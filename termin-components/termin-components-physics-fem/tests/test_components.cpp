@@ -113,6 +113,69 @@ namespace
         return result;
     }
 
+    struct FloatingTreeScene
+    {
+        termin::TcSceneRef scene;
+        termin::Entity root;
+        termin::FEMPhysicsWorldComponent* world = nullptr;
+        termin::FEMArticulationComponent* articulation = nullptr;
+        termin::FEMRigidBodyComponent* base = nullptr;
+        termin::FEMRigidBodyComponent* link_a = nullptr;
+        termin::FEMRigidBodyComponent* link_b = nullptr;
+        termin::RotatorComponent* joint_a = nullptr;
+        termin::RotatorComponent* joint_b = nullptr;
+    };
+
+    FloatingTreeScene make_floating_tree_scene()
+    {
+        using namespace termin;
+
+        FloatingTreeScene result;
+        result.scene = TcSceneRef::create("floating articulation tree");
+        result.root = result.scene.create_entity("Floating Base");
+        result.root.transform().set_local_position({1.0, 0.0, 2.0});
+        result.articulation = new FEMArticulationComponent();
+        result.articulation->base_mode =
+            static_cast<int>(FEMArticulationBaseMode::Floating);
+        result.root.add_component(result.articulation);
+        result.base = new FEMRigidBodyComponent();
+        result.base->mass = 4.0;
+        result.base->inertia_diagonal = {1.0, 1.0, 1.0};
+        result.root.add_component(result.base);
+
+        const auto add_branch = [&result](const char* joint_name,
+                                          const char* body_name,
+                                          double x,
+                                          RotatorComponent*& joint,
+                                          FEMRigidBodyComponent*& body)
+        {
+            Entity joint_entity = result.root.create_child(joint_name);
+            joint = new RotatorComponent();
+            joint_entity.add_component(joint);
+            joint->set_axis(0.0, 1.0, 0.0);
+            joint->origin_position = {x, 0.0, 0.0};
+            joint->apply();
+
+            Entity body_entity = joint_entity.create_child(body_name);
+            body_entity.transform().set_local_position({0.0, 0.0, -0.5});
+            body = new FEMRigidBodyComponent();
+            body->mass = 1.0;
+            body->inertia_diagonal = {0.1, 0.1, 0.1};
+            body_entity.add_component(body);
+        };
+        add_branch(
+            "Left Joint", "Left Link", -0.75, result.joint_a, result.link_a);
+        add_branch(
+            "Right Joint", "Right Link", 0.75, result.joint_b, result.link_b);
+
+        Entity world_entity = result.scene.create_entity("Physics World");
+        result.world = new FEMPhysicsWorldComponent();
+        result.world->gravity = {0.0, 0.0, 0.0};
+        result.world->time_step = 0.001;
+        world_entity.add_component(result.world);
+        return result;
+    }
+
     struct ServoLoadScene
     {
         termin::TcSceneRef scene;
@@ -243,6 +306,16 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     CHECK(std::abs(restored_world.time_step - 0.005) < 1.0e-12);
     tc_value_free(&world_data);
 
+    FEMArticulationComponent articulation;
+    articulation.base_mode =
+        static_cast<int>(FEMArticulationBaseMode::Floating);
+    tc_value articulation_data = articulation.serialize_data();
+    FEMArticulationComponent restored_articulation;
+    restored_articulation.deserialize_data(&articulation_data);
+    CHECK(restored_articulation.base_mode ==
+          static_cast<int>(FEMArticulationBaseMode::Floating));
+    tc_value_free(&articulation_data);
+
     FEMJointLimitComponent limits;
     limits.minimum_enabled = true;
     limits.maximum_enabled = true;
@@ -355,6 +428,57 @@ TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
     pendulum.scene.destroy();
 }
 
+TEST_CASE("scene articulation compiler maps a floating base and branches")
+{
+    using namespace termin;
+
+    FloatingTreeScene fixture = make_floating_tree_scene();
+    const FEMArticulationSceneCompilation compiled =
+        compile_fem_articulation_scene(fixture.root);
+
+    REQUIRE(compiled.ok());
+    REQUIRE(compiled.floating_base.has_value());
+    CHECK(compiled.base_body == fixture.base);
+    CHECK(compiled.base_entity == fixture.root);
+    CHECK(
+        (compiled.floating_base->pose_world.lin - Vec3{1.0, 0.0, 2.0}).norm() <
+        1.0e-12);
+    REQUIRE_EQ(compiled.links.size(), 2U);
+    CHECK(compiled.links[0].parent_link == qopt::articulation_root_frame);
+    CHECK(compiled.links[1].parent_link == qopt::articulation_root_frame);
+    CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.x + 0.75) <
+          1.0e-12);
+    CHECK(std::abs(compiled.links[1].parent_to_joint_zero.lin.x - 0.75) <
+          1.0e-12);
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("scene articulation compiler rejects contradictory base layouts")
+{
+    using namespace termin;
+
+    DoublePendulumScene fixed = make_double_pendulum_scene();
+    auto* unexpected_body = new FEMRigidBodyComponent();
+    fixed.root.add_component(unexpected_body);
+    CHECK(compile_fem_articulation_scene(fixed.root).diagnostic ==
+          FEMArticulationSceneDiagnostic::UnexpectedRootBody);
+    fixed.scene.destroy();
+
+    DoublePendulumScene floating = make_double_pendulum_scene();
+    floating.articulation->base_mode =
+        static_cast<int>(FEMArticulationBaseMode::Floating);
+    CHECK(compile_fem_articulation_scene(floating.root).diagnostic ==
+          FEMArticulationSceneDiagnostic::MissingRootBody);
+    floating.scene.destroy();
+
+    FloatingTreeScene multiple = make_floating_tree_scene();
+    multiple.root.add_component(new FEMRigidBodyComponent());
+    CHECK(compile_fem_articulation_scene(multiple.root).diagnostic ==
+          FEMArticulationSceneDiagnostic::MultipleBodies);
+    multiple.scene.destroy();
+}
+
 TEST_CASE("scene articulation compiler converts authored joint limits")
 {
     using namespace termin;
@@ -439,6 +563,71 @@ TEST_CASE("FEM world advances a compiled reduced double pendulum")
     CHECK(std::abs(advanced.total_energy - initial.total_energy) < 1.0e-5);
 
     pendulum.scene.destroy();
+}
+
+TEST_CASE("FEM world advances and synchronizes a floating articulation root")
+{
+    using namespace termin;
+
+    FloatingTreeScene fixture = make_floating_tree_scene();
+    auto* motor = new FEMArticulationMotorComponent();
+    motor->commanded_effort = 1.0;
+    motor->maximum_effort = 2.0;
+    fixture.joint_a->entity().add_component(motor);
+    fixture.world->start();
+
+    REQUIRE(fixture.articulation->initialized());
+    REQUIRE(fixture.base->initialized());
+    REQUIRE(fixture.link_a->initialized());
+    REQUIRE(motor->initialized());
+    const FEMPhysicsTelemetry initial = fixture.world->telemetry();
+    CHECK(initial.initialized);
+    CHECK(initial.body_count == 3U);
+    CHECK(initial.articulation_count == 1U);
+    CHECK(initial.reduced_dof_count == 8U);
+
+    REQUIRE(
+        fixture.base->set_velocity_local(Screw3{Vec3::zero(), Vec3::unit_x()}));
+    const double x_before = fixture.root.transform().global_position().x;
+    fixture.world->update(0.001F);
+    CHECK(fixture.world->telemetry().successful_steps == 1U);
+    CHECK(fixture.root.transform().global_position().x > x_before);
+    CHECK(fixture.base->velocity_local().lin.x > 0.9);
+    CHECK(std::abs(motor->applied_effort() - 1.0) < 1.0e-12);
+    CHECK(std::isfinite(motor->power()));
+    CHECK(!fixture.link_a->set_velocity_local(Screw3::zero()));
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("FEM routes contacts to a floating articulation base")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    FloatingTreeScene fixture = make_floating_tree_scene();
+    fixture.root.transform().set_global_position({0.0, 0.0, 0.45});
+    auto* base_collider = new ColliderComponent();
+    base_collider->box_size = {1.0, 1.0, 1.0};
+    fixture.root.add_component(base_collider);
+
+    Entity terrain = fixture.scene.create_entity("Terrain");
+    terrain.transform().set_local_position({0.0, 0.0, -0.5});
+    auto* terrain_collider = new ColliderComponent();
+    terrain_collider->box_size = {10.0, 10.0, 1.0};
+    terrain.add_component(terrain_collider);
+
+    fixture.world->start();
+    REQUIRE(fixture.world->telemetry().initialized);
+    fixture.world->update(0.001F);
+
+    const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.contact_count >= 1U);
+    CHECK(telemetry.active_contact_count >= 1U);
+    CHECK(fixture.root.transform().global_position().z > 0.45);
+
+    fixture.scene.destroy();
 }
 
 TEST_CASE("FEM motor accepts a direct reduced-coordinate effort command")

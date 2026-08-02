@@ -21,11 +21,15 @@ world in `termin-physics`.
 
 ## Reduced articulation hierarchy
 
-`FEMArticulationComponent` marks a fixed articulation root. Its subtree uses a
-strict alternating hierarchy:
+`FEMArticulationComponent` marks an articulation root and exposes an explicit
+`Base Mode` choice. In `Fixed` mode the root entity is only an inertial-world
+frame. In `Floating` mode that same entity must also own one enabled
+`FEMRigidBodyComponent`; it becomes the physical six-DOF base body. No extra
+attachment entity is required. Both modes use the same strict hierarchy below
+the root:
 
 ```text
-articulation root
+articulation root (plus FEMRigidBodyComponent in Floating mode)
 └── RotatorComponent or ActuatorComponent entity
     └── FEMRigidBodyComponent entity
         └── next joint entity
@@ -33,11 +37,13 @@ articulation root
 ```
 
 The joint entity is the explicit attachment frame. Its kinematic origin pose is
-the fixed parent-to-joint transform. The axis is always a unit direction; the
+the fixed parent-to-joint transform. For a fixed root, the root world pose is
+folded into each top-level joint transform; for a floating root, top-level
+joint transforms remain base-local. The axis is always a unit direction; the
 separate `coordinate_scale` converts authored units to radians or metres before
 the coordinate becomes reduced state. The body child's local rigid pose is the
 fixed joint-to-link transform. Branching is represented by placing several
-joint children under one body.
+joint children under the root or one body.
 
 An optional `FEMJointLimitComponent` on a joint entity gives that reduced DOF
 a minimum, a maximum, or both. Bounds use the neighboring kinematic
@@ -51,9 +57,12 @@ not clamp the authored transform after integration.
 `compile_fem_articulation_scene()` exposes this translation as a separate,
 testable pass. It produces public `ArticulationLink3D` values and bindings; the
 world inserts the resulting `Articulation3DContribution` into the generic
-system and copies solved SI coordinates back to the authored units. Scaled
-joint/body frames, missing or ambiguous bodies, nested roots, and unsupported
-damping are rejected instead of being approximated silently.
+system, copies solved SI coordinates back to the authored units, and writes a
+floating base pose back to the root entity. Floating generalized coordinates
+are ordered as `[base local twist vw (6), joints (N)]`; joint motor channels
+are offset past the base block. Scaled joint/body frames, missing,
+contradictory or ambiguous bodies, nested roots, and unsupported damping are
+rejected instead of being approximated silently.
 
 An optional `FEMArticulationMotorComponent` may be placed beside the kinematic
 unit on the joint entity. Scene compilation binds its bounded physical effort
@@ -101,10 +110,11 @@ state. Optional presentation belongs to the separate
 The FEM scene adapter consumes solver-neutral `ContactPatch` values from the
 scene's single `CollisionWorld`; it never creates a gameplay `PhysicsWorld`.
 At every native substep it refreshes broad-phase poses and maps each enabled
-co-located `ColliderComponent` to either a maximal body, an articulation link,
-or the static world. Collider rebuild, disable, removal, and scene teardown are
-therefore observed before a patch is converted to `ContactEndpoint3D` values,
-without retaining collider pointers in `termin-qopt` across substeps.
+co-located `ColliderComponent` to either a maximal body, a floating
+articulation base, an articulation link, or the static world. Collider rebuild,
+disable, removal, and scene teardown are therefore observed before a patch is
+converted to `ContactEndpoint3D` values, without retaining collider pointers in
+`termin-qopt` across substeps.
 
 The adapter derives deterministic contact keys from the canonical collider
 pair and collision feature IDs. It supplies all currently live collider-pair
@@ -129,8 +139,8 @@ default; `adjacent_link_collision_enabled` opts those pairs back in. A dynamic
 collider whose enabled `FEMRigidBodyComponent` is not registered by this FEM
 world is an error rather than an implicit static obstacle.
 
-Body velocities and damping loads cross the model boundary as complete
-`termin::Screw3` values reduced to each body's origin and expressed in world
-axes. The API names this point explicitly. The component layer does not rotate
-force/torque or linear/angular halves independently; frame and origin changes
-belong to the multibody adjoint/coadjoint contract.
+Body velocities cross the model boundary as complete `termin::Screw3` values
+expressed in each body-local frame at that body's origin. The API names both
+the frame and point explicitly. The component layer does not rotate
+linear/angular halves independently; frame and origin changes belong to the
+multibody adjoint/coadjoint contract.

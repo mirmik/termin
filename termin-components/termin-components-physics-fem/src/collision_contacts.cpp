@@ -54,6 +54,7 @@ namespace termin
             Ignored,
             Static,
             RigidBody,
+            ArticulationBase,
             ArticulationLink,
         };
         struct EndpointOwner
@@ -68,6 +69,7 @@ namespace termin
         {
             qopt::Articulation3DContribution* articulation = nullptr;
             std::size_t link_index = 0;
+            bool base = false;
         };
 
         std::unordered_map<FEMRigidBodyComponent*, ArticulationBinding>
@@ -79,6 +81,20 @@ namespace termin
             {
                 continue;
             }
+            if (articulation->base_body_ != nullptr &&
+                !articulation_bindings
+                     .emplace(articulation->base_body_,
+                              ArticulationBinding{
+                                  .articulation = articulation->articulation_,
+                                  .base = true,
+                              })
+                     .second)
+            {
+                tc::Log::error(
+                    "[FEMPhysicsWorldComponent] ambiguous floating-base "
+                    "contact ownership");
+                return false;
+            }
             for (std::size_t link_index = 0;
                  link_index < articulation->bodies_.size();
                  ++link_index)
@@ -86,9 +102,12 @@ namespace termin
                 FEMRigidBodyComponent* body = articulation->bodies_[link_index];
                 if (body == nullptr ||
                     !articulation_bindings
-                         .emplace(body,
-                                  ArticulationBinding{
-                                      articulation->articulation_, link_index})
+                         .emplace(
+                             body,
+                             ArticulationBinding{
+                                 .articulation = articulation->articulation_,
+                                 .link_index = link_index,
+                             })
                          .second)
                 {
                     tc::Log::error(
@@ -178,7 +197,9 @@ namespace termin
             }
             else
             {
-                endpoint.kind = EndpointKind::ArticulationLink;
+                endpoint.kind = articulation_binding->second.base
+                                    ? EndpointKind::ArticulationBase
+                                    : EndpointKind::ArticulationLink;
                 endpoint.articulation =
                     articulation_binding->second.articulation;
                 endpoint.link_index = articulation_binding->second.link_index;
@@ -203,6 +224,10 @@ namespace termin
             {
                 return a.body == b.body;
             }
+            if (a.kind == EndpointKind::ArticulationBase)
+            {
+                return a.articulation == b.articulation;
+            }
             if (a.kind == EndpointKind::ArticulationLink)
             {
                 return a.articulation == b.articulation &&
@@ -213,12 +238,28 @@ namespace termin
         const auto adjacent_articulation_links =
             [this](const EndpointOwner& a, const EndpointOwner& b)
         {
-            if (adjacent_link_collision_enabled ||
-                a.kind != EndpointKind::ArticulationLink ||
-                b.kind != EndpointKind::ArticulationLink ||
-                a.articulation != b.articulation || a.articulation == nullptr)
+            const bool a_articulation =
+                a.kind == EndpointKind::ArticulationBase ||
+                a.kind == EndpointKind::ArticulationLink;
+            const bool b_articulation =
+                b.kind == EndpointKind::ArticulationBase ||
+                b.kind == EndpointKind::ArticulationLink;
+            if (adjacent_link_collision_enabled || !a_articulation ||
+                !b_articulation || a.articulation != b.articulation ||
+                a.articulation == nullptr)
             {
                 return false;
+            }
+            if (a.kind == EndpointKind::ArticulationBase ||
+                b.kind == EndpointKind::ArticulationBase)
+            {
+                const EndpointOwner& link =
+                    a.kind == EndpointKind::ArticulationLink ? a : b;
+                const auto& links = a.articulation->links();
+                return link.kind == EndpointKind::ArticulationLink &&
+                       link.link_index < links.size() &&
+                       links[link.link_index].parent_link ==
+                           qopt::articulation_root_frame;
             }
             const auto& links = a.articulation->links();
             if (a.link_index >= links.size() || b.link_index >= links.size())
@@ -260,6 +301,11 @@ namespace termin
                     *endpoint.body,
                     endpoint.body->state().pose.inverse_transform_point(
                         point_world));
+            case EndpointKind::ArticulationBase:
+                return qopt::ContactEndpoint3D::articulation_base(
+                    *endpoint.articulation,
+                    endpoint.articulation->floating_base()
+                        ->pose_world.inverse_transform_point(point_world));
             case EndpointKind::ArticulationLink:
                 return qopt::ContactEndpoint3D::articulation_link(
                     *endpoint.articulation,

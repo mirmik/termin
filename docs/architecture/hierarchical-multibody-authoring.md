@@ -1,10 +1,10 @@
 # Hierarchical multibody authoring
 
-Status: fixed- and floating-base qopt articulation core, bounded servo, unilateral joint limits,
-solver-neutral point kinematics, collision-world adaptation, persistent contact,
-and convex Coulomb-friction slices implemented, 2026-08-02. Floating-base
-scene authoring and standing-robot acceptance remain in progress; restitution,
-material mixing, and HQP control remain future work.
+Status: fixed- and floating-base qopt articulation core and scene authoring,
+bounded servo, unilateral joint limits, solver-neutral point kinematics,
+collision-world adaptation, persistent contact, and convex Coulomb-friction
+slices implemented, 2026-08-02. Standing-robot acceptance remains next;
+restitution, material mixing, and HQP control remain future work.
 
 ## Goal
 
@@ -18,8 +18,8 @@ a reduced-coordinate articulation inside the native
 
 The authoring hierarchy is the source description, not the numerical model.
 The compiled multibody graph owns runtime body state, joint handles, motor
-state and solver workspace. The implemented fixed-base articulation contributes
-one generalized degree of freedom per joint instead of registering six
+state and solver workspace. A fixed-base articulation contributes one
+generalized degree of freedom per joint instead of registering six
 independent degrees of freedom and constraint rows for every link. This keeps
 scene traversal, matrix assembly and time integration in separate layers.
 
@@ -27,8 +27,8 @@ The native numerical model also supports an explicit floating root body. Its
 generalized block is `[base local twist vw (6), joint velocities (N)]`; the root
 pose is integrated on SE(3), while child joints retain ordinary scalar
 coordinates. This is a property of the same contribution, not a second physics
-world or a maximal-coordinate workaround. The scene grammar below still
-documents the implemented fixed-root compiler until the next authoring slice.
+world or a maximal-coordinate workaround. The scene compiler now authors both
+forms through the same component and hierarchy.
 
 `Multibody3DSystem` is the common contribution collector and stepping boundary,
 not a synonym for maximal coordinates. Maximal bodies, forces, point joints
@@ -42,7 +42,7 @@ sharing world state or solver internals.
 
 ## Scene grammar
 
-The initial supported form is a rooted tree:
+The supported form is a rooted tree. A fixed root is only a frame:
 
 ```text
 Root (FEMArticulationComponent; fixed world frame)
@@ -52,10 +52,22 @@ Root (FEMArticulationComponent; fixed world frame)
             └── LowerLeg (FEMRigidBodyComponent)
 ```
 
+A floating root is itself the central body; no synthetic attachment entity is
+inserted:
+
+```text
+Root (FEMArticulationComponent, Base Mode = Floating,
+      FEMRigidBodyComponent)
+├── LeftHip (RotatorComponent or ActuatorComponent)
+│   └── LeftLeg (FEMRigidBodyComponent)
+└── RightHip (RotatorComponent or ActuatorComponent)
+    └── RightLeg (FEMRigidBodyComponent)
+```
+
 Rules are deliberately strict:
 
-- the implemented mechanism root is a fixed world frame and does not create a
-  dynamic root body;
+- `Base Mode = Fixed` rejects an enabled root body, while `Floating` requires
+  the enabled `FEMRigidBodyComponent` co-located with the articulation;
 - every non-root body has exactly one nearest ancestor body and exactly one
   enabled kinematic unit on the path between them;
 - `RotatorComponent` compiles to a revolute joint;
@@ -79,10 +91,12 @@ massless scene nodes.
 Lives at the root and owns:
 
 - compile/rebuild policy and diagnostics;
-- the native `Multibody3DSystem` instance;
 - the entity-to-contribution bindings;
-- fixed-step accumulation, gravity and projection options;
 - synchronization from solver body poses to scene transforms.
+
+`FEMPhysicsWorldComponent` owns the native `Multibody3DSystem`, fixed-step
+accumulation, gravity, contacts and projection policy. The articulation owns
+only its compiled contribution and scene bindings inside that world.
 
 Topology is immutable after `Multibody3DSystem::finalize()`. Structural scene
 changes require an explicit rebuild; scalar commands and external loads do
@@ -90,10 +104,13 @@ not. A failed rebuild leaves no partially usable runtime graph.
 
 ### `FEMRigidBodyComponent`
 
-Marks an inertial link and owns authored mass and diagonal principal moments.
-Inside a hierarchical mechanism it receives a typed articulated-link handle
-after successful compilation but does not own the solver or step it. The
-existing independent-body handle and registration path remain unchanged for
+Marks an inertial body and owns authored mass and diagonal principal moments.
+Inside a hierarchical mechanism it receives a typed floating-base or
+articulated-link binding after successful compilation but does not own the
+solver or step it. Its local velocity query works for maximal bodies, floating
+bases and links; only maximal bodies and floating bases accept an independently
+assigned velocity because a link velocity is determined by reduced state. The
+existing independent-body registration path remains unchanged for
 maximal-coordinate models. A separate inertia/COM frame is not yet authored.
 
 Geometry-derived inertia can be added later as an explicit authoring service.
@@ -150,20 +167,22 @@ physical actuator boundary.
 
 Compilation uses the authored world transforms before physics starts:
 
-1. Traverse only the mechanism root subtree and assign every entity to its
-   nearest marked body or to the fixed world root.
-2. Register one articulation contribution and its inertial links, retaining
+1. Validate the explicit base mode. A fixed root defines an inertial frame; a
+   floating root contributes its co-located rigid body and initial world pose.
+2. Traverse only the mechanism root subtree and assign every joint/body edge
+   to its nearest parent body or to the articulation root frame.
+3. Register one articulation contribution and its inertial links, retaining
    typed articulation/link handles.
-3. For each body edge, locate its single kinematic unit.
-4. Use the joint entity world origin as the anchor and rotate the normalized
-   authored axis into world space.
-5. Transform the anchor and axis into both adjacent body-local frames.
+4. For each body edge, locate its single kinematic unit.
+5. Keep top-level joint origins base-local for floating roots and fold the
+   fixed root pose into them only for fixed roots.
 6. Register an internal reduced-coordinate joint and its motion subspace;
    these tree joints do not add constraint rows.
 7. Record the zero-coordinate relative orientation/translation needed to
    measure the joint coordinate continuously at runtime.
-8. Register optional motor channels, finalize all topology blocks, then bind
-   cross-contribution references in a second pass.
+8. Register optional motor channels after the six base DOFs when floating,
+   finalize all topology blocks, then bind cross-contribution references in a
+   second pass.
 
 Axis magnitude is never a unit scale or physical geometry. `set_axis()`
 normalizes it, and `coordinate_scale` alone converts authored units to the
@@ -182,7 +201,8 @@ point joints, true revolute constraints, reactions, equality-QP dynamics and
 constraint projection. It remains intact, including the current pendulum
 model. The common `Multibody3DSystem` contains an articulated-tree contribution
 whose implemented state has one scalar coordinate per revolute or prismatic
-joint and a fixed base.
+joint plus, when floating, a world pose and six body-local base velocity
+coordinates.
 
 The reduced contribution assembles its generalized mass matrix and bias/load
 vector into the same `DynamicsTopology`. Its implementation may use standard
@@ -207,11 +227,10 @@ Controlled robot mechanisms additionally require explicit native contracts:
 6. Deterministic diagnostics for invalid topology, degenerate axes, duplicate
    body ownership, failed finalization and failed steps.
 
-A visually convincing free-falling articulated dog needs only revolute joints
-and drives. A dog that stands or walks needs a further contact slice: collision
-queries, non-penetration, normal reactions and friction. The current native
-multibody model has no contact contract, so locomotion is explicitly outside
-the first vertical slice.
+A standing or walking dog additionally needs collision queries,
+non-penetration, normal reactions and friction. Those contracts now exist for
+maximal bodies, floating bases and articulated links; the next acceptance slice
+exercises their composition in a complete robot scene.
 
 ## Recommended delivery slices
 
@@ -228,17 +247,19 @@ the first vertical slice.
 This established coexistence of both formulations inside one system; the scene
 compiler and motor contribution now build on that boundary.
 
-### Slice 2: hierarchical scene authoring and drives (partially implemented)
+### Slice 2: hierarchical scene authoring and drives (implemented)
 
-- native scene components for fixed articulations, bodies and servos;
-- compiler for fixed roots and revolute/prismatic kinematic edges;
+- native scene components for fixed/floating articulations, bodies and servos;
+- compiler for fixed/floating roots and revolute/prismatic kinematic edges;
 - bounded physical effort and position-servo control;
 - separate `FEMArticulationMotorComponent` and `FEMJointServoComponent`
   runtime bindings;
-- passive double-pendulum acceptance scene and component-level servo tests.
+- passive double-pendulum acceptance scene and component-level servo tests;
+- floating root/body synchronization, branching compilation, motor indexing,
+  and base/link contact routing tests.
 
-Floating roots, direct-effort authoring, a branching quadruped fixture, and
-broader reaction/error tests remain in this slice.
+A standing branching quadruped fixture and broader reaction/error tests remain
+as acceptance work built on this slice.
 
 ### Slice 3: joint bounds (implemented)
 

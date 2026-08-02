@@ -134,6 +134,13 @@ namespace termin
             ComponentTypeDescriptorBuilder::native<FEMArticulationComponent>(
                 "FEMArticulationComponent", module_owner, "Component");
         descriptor.category("Physics");
+        tc::stage_inspect_field_choices(descriptor.inspect(),
+                                        &FEMArticulationComponent::base_mode,
+                                        "FEMArticulationComponent",
+                                        "base_mode",
+                                        "Base Mode",
+                                        "enum",
+                                        {{"0", "Fixed"}, {"1", "Floating"}});
         (void)descriptor.commit();
     }
 
@@ -222,11 +229,11 @@ namespace termin
             return std::numeric_limits<double>::quiet_NaN();
         }
         const qopt::Articulation3DState& state = articulation_->state();
-        if (dof_index_ >= state.velocities.size())
+        if (joint_index_ >= state.velocities.size())
         {
             return std::numeric_limits<double>::quiet_NaN();
         }
-        return applied_effort() * state.velocities[dof_index_];
+        return applied_effort() * state.velocities[joint_index_];
     }
 
     bool FEMArticulationMotorComponent::saturated() const noexcept
@@ -463,35 +470,85 @@ namespace termin
 
     bool FEMRigidBodyComponent::initialized() const noexcept
     {
-        return world_ != nullptr && body_ != nullptr;
+        return world_ != nullptr &&
+               (body_ != nullptr || articulation_ != nullptr);
     }
 
     Screw3 FEMRigidBodyComponent::velocity_local() const noexcept
     {
-        return body_ != nullptr ? body_->state().velocity_local
-                                : Screw3::zero();
+        if (body_ != nullptr)
+        {
+            return body_->state().velocity_local;
+        }
+        if (articulation_ == nullptr)
+        {
+            return Screw3::zero();
+        }
+        if (articulation_base_)
+        {
+            const auto& base = articulation_->floating_base();
+            return base.has_value() ? base->velocity_local : Screw3::zero();
+        }
+        const auto& velocities = articulation_->link_velocities_local();
+        return articulation_link_index_ < velocities.size()
+                   ? velocities[articulation_link_index_]
+                   : Screw3::zero();
     }
 
     bool FEMRigidBodyComponent::set_velocity_local(Screw3 velocity) noexcept
     {
-        if (body_ == nullptr)
+        if (body_ != nullptr)
+        {
+            qopt::RigidBody3DState state = body_->state();
+            state.velocity_local = velocity;
+            const qopt::Multibody3DDiagnostic diagnostic =
+                body_->set_state(state);
+            if (diagnostic != qopt::Multibody3DDiagnostic::None)
+            {
+                tc::Log::error(
+                    "[FEMRigidBodyComponent] rejected local velocity: %s",
+                    qopt::multibody3d_diagnostic_name(diagnostic).data());
+                return false;
+            }
+            return true;
+        }
+        if (articulation_ != nullptr && articulation_base_)
+        {
+            const auto& base = articulation_->floating_base();
+            if (!base.has_value())
+            {
+                tc::Log::error(
+                    "[FEMRigidBodyComponent] floating-base binding has no "
+                    "base state");
+                return false;
+            }
+            const qopt::Articulation3DDiagnostic diagnostic =
+                articulation_->set_floating_base_state(base->pose_world,
+                                                       velocity);
+            if (diagnostic != qopt::Articulation3DDiagnostic::None)
+            {
+                tc::Log::error(
+                    "[FEMRigidBodyComponent] rejected floating-base local "
+                    "velocity: %s",
+                    qopt::articulation3d_diagnostic_name(diagnostic).data());
+                return false;
+            }
+            return true;
+        }
+        if (articulation_ != nullptr)
+        {
+            tc::Log::error(
+                "[FEMRigidBodyComponent] articulation link velocity is "
+                "determined by reduced coordinates");
+            return false;
+        }
+        else
         {
             tc::Log::error(
                 "[FEMRigidBodyComponent] cannot set velocity before the body "
                 "is initialized");
             return false;
         }
-        qopt::RigidBody3DState state = body_->state();
-        state.velocity_local = velocity;
-        const qopt::Multibody3DDiagnostic diagnostic = body_->set_state(state);
-        if (diagnostic != qopt::Multibody3DDiagnostic::None)
-        {
-            tc::Log::error(
-                "[FEMRigidBodyComponent] rejected local velocity: %s",
-                qopt::multibody3d_diagnostic_name(diagnostic).data());
-            return false;
-        }
-        return true;
     }
 
     FEMFixedJointComponent::FEMFixedJointComponent()
@@ -723,9 +780,11 @@ namespace termin
                 for (const FEMArticulationComponent* articulation :
                      articulations_)
                 {
-                    result += articulation != nullptr
-                                  ? articulation->link_count()
-                                  : 0;
+                    if (articulation != nullptr)
+                    {
+                        result += articulation->link_count();
+                        result += articulation->base_body_ != nullptr ? 1U : 0U;
+                    }
                 }
                 return result;
             }(),
@@ -738,8 +797,9 @@ namespace termin
                 for (const FEMArticulationComponent* articulation :
                      articulations_)
                 {
-                    result += articulation != nullptr
-                                  ? articulation->link_count()
+                    result += articulation != nullptr &&
+                                      articulation->articulation_ != nullptr
+                                  ? articulation->articulation_->dof_count()
                                   : 0;
                 }
                 return result;
@@ -1309,6 +1369,26 @@ namespace termin
                     .data());
             return false;
         }
+        if (compiled.base_body != nullptr)
+        {
+            if (compiled.base_body->world_ != nullptr)
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] base body '%s' belongs to "
+                    "more than one dynamics model",
+                    compiled.base_entity.name());
+                return false;
+            }
+            if (compiled.base_body->linear_damping != 0.0 ||
+                compiled.base_body->angular_damping != 0.0)
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] base body '%s' uses damping, "
+                    "which is not yet projected into reduced coordinates",
+                    compiled.base_entity.name());
+                return false;
+            }
+        }
         for (const FEMArticulationSceneBinding& binding : compiled.bindings)
         {
             if (binding.body->world_ != nullptr)
@@ -1330,12 +1410,26 @@ namespace termin
             }
         }
 
-        auto articulation = std::make_unique<qopt::Articulation3DContribution>(
-            std::move(compiled.links),
-            std::move(compiled.state),
-            vec3(gravity),
-            component.entity().name() ? component.entity().name()
-                                      : "articulation");
+        std::unique_ptr<qopt::Articulation3DContribution> articulation;
+        if (compiled.floating_base.has_value())
+        {
+            articulation = std::make_unique<qopt::Articulation3DContribution>(
+                std::move(*compiled.floating_base),
+                std::move(compiled.links),
+                std::move(compiled.state),
+                vec3(gravity),
+                component.entity().name() ? component.entity().name()
+                                          : "articulation");
+        }
+        else
+        {
+            articulation = std::make_unique<qopt::Articulation3DContribution>(
+                std::move(compiled.links),
+                std::move(compiled.state),
+                vec3(gravity),
+                component.entity().name() ? component.entity().name()
+                                          : "articulation");
+        }
         if (articulation->diagnostic() != qopt::Articulation3DDiagnostic::None)
         {
             tc::Log::error(
@@ -1346,11 +1440,14 @@ namespace termin
         }
 
         std::vector<qopt::ArticulationMotorChannel> motor_channels;
-        for (std::size_t dof_index = 0; dof_index < compiled.bindings.size();
-             ++dof_index)
+        const std::size_t joint_dof_offset =
+            articulation->has_floating_base() ? 6U : 0U;
+        for (std::size_t joint_index = 0;
+             joint_index < compiled.bindings.size();
+             ++joint_index)
         {
             const FEMArticulationSceneBinding& binding =
-                compiled.bindings[dof_index];
+                compiled.bindings[joint_index];
             FEMArticulationMotorComponent* motor = binding.motor;
             FEMJointServoComponent* servo = binding.servo;
             if (servo != nullptr && servo->enabled() &&
@@ -1404,7 +1501,7 @@ namespace termin
                 return false;
             }
             motor_channels.push_back({
-                .dof_index = dof_index,
+                .dof_index = joint_dof_offset + joint_index,
                 .effort_limit = motor->maximum_effort,
                 .diagnostic_name = binding.joint_entity.name(),
             });
@@ -1446,28 +1543,42 @@ namespace termin
             }
         }
         component.world_ = this;
+        component.base_body_ = compiled.base_body;
+        if (component.base_body_ != nullptr)
+        {
+            component.base_body_->world_ = this;
+            component.base_body_->articulation_ = component.articulation_;
+            component.base_body_->articulation_link_index_ =
+                qopt::articulation_root_frame;
+            component.base_body_->articulation_base_ = true;
+        }
         component.bodies_.reserve(compiled.bindings.size());
         component.joint_entities_.reserve(compiled.bindings.size());
         component.joint_coordinate_scales_.reserve(compiled.bindings.size());
         component.motors_.reserve(compiled.bindings.size());
         component.servos_.reserve(compiled.bindings.size());
         std::size_t motor_channel = 0;
-        for (std::size_t dof_index = 0; dof_index < compiled.bindings.size();
-             ++dof_index)
+        for (std::size_t joint_index = 0;
+             joint_index < compiled.bindings.size();
+             ++joint_index)
         {
             const FEMArticulationSceneBinding& binding =
-                compiled.bindings[dof_index];
+                compiled.bindings[joint_index];
             component.bodies_.push_back(binding.body);
             component.joint_entities_.push_back(binding.joint_entity);
             component.joint_coordinate_scales_.push_back(
                 binding.coordinate_scale);
             binding.body->world_ = this;
+            binding.body->articulation_ = component.articulation_;
+            binding.body->articulation_link_index_ = joint_index;
+            binding.body->articulation_base_ = false;
             if (binding.motor != nullptr && binding.motor->enabled())
             {
                 binding.motor->world_ = this;
                 binding.motor->articulation_ = component.articulation_;
                 binding.motor->motor_ = component.motor_;
-                binding.motor->dof_index_ = dof_index;
+                binding.motor->dof_index_ = joint_dof_offset + joint_index;
+                binding.motor->joint_index_ = joint_index;
                 binding.motor->channel_index_ = motor_channel++;
                 component.motors_.push_back(binding.motor);
             }
@@ -1477,7 +1588,7 @@ namespace termin
                 binding.servo->joint_ = binding.joint;
                 binding.servo->motor_component_ = binding.motor;
                 binding.servo->articulation_ = component.articulation_;
-                binding.servo->dof_index_ = dof_index;
+                binding.servo->dof_index_ = joint_index;
                 binding.servo->coordinate_scale_ = binding.coordinate_scale;
                 binding.servo->position_effort_ = 0.0;
                 binding.servo->velocity_effort_ = 0.0;
@@ -1499,6 +1610,20 @@ namespace termin
             }
             const qopt::Articulation3DState& state =
                 component->articulation_->state();
+            if (component->base_body_ != nullptr)
+            {
+                const auto& base = component->articulation_->floating_base();
+                if (!base.has_value())
+                {
+                    tc::Log::error(
+                        "[FEMArticulationComponent] base body binding has no "
+                        "floating-base state");
+                    initialized_ = false;
+                    return;
+                }
+                component->base_body_->entity().transform().set_global_pose(
+                    base->pose_world);
+            }
             if (state.coordinates.size() != component->joint_entities_.size())
             {
                 tc::Log::error(
@@ -1806,6 +1931,9 @@ namespace termin
                 body->world_ = nullptr;
                 body->body_ = nullptr;
                 body->force_ = nullptr;
+                body->articulation_ = nullptr;
+                body->articulation_link_index_ = qopt::articulation_root_frame;
+                body->articulation_base_ = false;
             }
         }
         for (FEMFixedJointComponent* joint : fixed_joints_)
@@ -1833,6 +1961,18 @@ namespace termin
             {
                 continue;
             }
+            if (articulation->base_body_ != nullptr &&
+                articulation->base_body_->world_ == this)
+            {
+                articulation->base_body_->world_ = nullptr;
+                articulation->base_body_->body_ = nullptr;
+                articulation->base_body_->force_ = nullptr;
+                articulation->base_body_->articulation_ = nullptr;
+                articulation->base_body_->articulation_link_index_ =
+                    qopt::articulation_root_frame;
+                articulation->base_body_->articulation_base_ = false;
+            }
+            articulation->base_body_ = nullptr;
             for (FEMRigidBodyComponent* body : articulation->bodies_)
             {
                 if (body != nullptr && body->world_ == this)
@@ -1840,6 +1980,10 @@ namespace termin
                     body->world_ = nullptr;
                     body->body_ = nullptr;
                     body->force_ = nullptr;
+                    body->articulation_ = nullptr;
+                    body->articulation_link_index_ =
+                        qopt::articulation_root_frame;
+                    body->articulation_base_ = false;
                 }
             }
             articulation->bodies_.clear();
@@ -1900,8 +2044,23 @@ namespace termin
                 body->world_ = nullptr;
                 body->body_ = nullptr;
                 body->force_ = nullptr;
+                body->articulation_ = nullptr;
+                body->articulation_link_index_ = qopt::articulation_root_frame;
+                body->articulation_base_ = false;
             }
         }
+        if (component.base_body_ != nullptr &&
+            component.base_body_->world_ == this)
+        {
+            component.base_body_->world_ = nullptr;
+            component.base_body_->body_ = nullptr;
+            component.base_body_->force_ = nullptr;
+            component.base_body_->articulation_ = nullptr;
+            component.base_body_->articulation_link_index_ =
+                qopt::articulation_root_frame;
+            component.base_body_->articulation_base_ = false;
+        }
+        component.base_body_ = nullptr;
         component.bodies_.clear();
         component.joint_entities_.clear();
         component.joint_coordinate_scales_.clear();
@@ -2017,6 +2176,10 @@ namespace termin
             {
                 continue;
             }
+            if (articulation->base_body_ == &component)
+            {
+                articulation->base_body_ = nullptr;
+            }
             for (FEMRigidBodyComponent*& candidate : articulation->bodies_)
             {
                 if (candidate == &component)
@@ -2027,6 +2190,9 @@ namespace termin
         }
         component.body_ = nullptr;
         component.force_ = nullptr;
+        component.articulation_ = nullptr;
+        component.articulation_link_index_ = qopt::articulation_root_frame;
+        component.articulation_base_ = false;
         component.world_ = nullptr;
     }
 
