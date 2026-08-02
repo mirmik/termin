@@ -1266,6 +1266,7 @@ namespace termin
                                                    servo->feed_forward_effort;
 
                 if (!servo->enabled() || !servo->motor_component_->enabled() ||
+                    !servo->position_control_enabled ||
                     !servo->integral_control_enabled ||
                     servo->integral_gain == 0.0)
                 {
