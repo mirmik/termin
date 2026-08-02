@@ -6,6 +6,7 @@
 #include <termin/qopt/articulation3d.hpp>
 #include <termin/qopt/articulation3d_motor.hpp>
 #include <termin/qopt/block_assembly.hpp>
+#include <termin/qopt/contact3d.hpp>
 #include <termin/qopt/dense_views.hpp>
 #include <termin/qopt/dynamics.hpp>
 #include <termin/qopt/equality_qp.hpp>

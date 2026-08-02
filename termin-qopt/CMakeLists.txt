@@ -32,6 +32,7 @@ add_library(termin_qopt SHARED
     src/articulation3d.cpp
     src/articulation3d_motor.cpp
     src/block_assembly.cpp
+    src/contact3d.cpp
     src/dynamics.cpp
     src/equality_qp.cpp
     src/hqp.cpp
@@ -210,6 +211,17 @@ if(TERMIN_QOPT_BUILD_TESTS)
     add_test(
         NAME termin_qopt_point_kinematics3d_test
         COMMAND termin_qopt_point_kinematics3d_test
+    )
+
+    add_executable(termin_qopt_contact3d_test
+        tests/test_contact3d.cpp
+    )
+    target_link_libraries(
+        termin_qopt_contact3d_test PRIVATE termin_qopt
+    )
+    add_test(
+        NAME termin_qopt_contact3d_test
+        COMMAND termin_qopt_contact3d_test
     )
 
     add_executable(termin_qopt_double_pendulum2d_test

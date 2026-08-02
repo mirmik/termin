@@ -1,8 +1,9 @@
 # Hierarchical multibody authoring
 
-Status: fixed-base articulation, bounded servo, unilateral joint-limit, and
-solver-neutral point-kinematics slices implemented, 2026-08-02. Floating bases,
-contact assembly/integration, and HQP control remain future work.
+Status: fixed-base articulation, bounded servo, unilateral joint-limit,
+solver-neutral point kinematics, and frictionless contact contribution slices
+implemented, 2026-08-02. Floating bases, collision-world adaptation,
+persistent/frictional contact, and HQP control remain future work.
 
 ## Goal
 
@@ -292,8 +293,15 @@ future persistent contact contribution rather than `DynamicsSystem`.
    direct velocity, finite differences on a branching tree, virtual work,
    static zero-DOF points, and invalid inputs.
 5. Implement a public `ContactSet3DContribution` which consumes endpoint pairs,
-   normals, signed gaps and stable caller keys. It owns normal rows, reactions
-   and split penetration correction, but knows nothing about collision queries.
+   normals, signed gaps and stable caller keys. This is implemented for static
+   world points, maximal bodies, and arbitrary articulation links. It owns
+   transient normal rows, impulse/reaction and tight-row state, and split
+   penetration correction, but knows nothing about collision queries. Position
+   projection changes only the trial configuration; the physical midpoint
+   velocity remains separate until the unilateral velocity projection, so
+   depenetration cannot create a rebound. Penetrating, impacting, resting,
+   separating, removal, mixed-endpoint, matrix-sign, and invalid-input behavior
+   is covered by native tests.
 6. Adapt `CollisionWorld` manifolds in the FEM scene integration layer. The
    adapter owns collider-to-endpoint mapping, filtering and sign conversion;
    it does not create another `PhysicsWorld` or reuse the maximal-body impulse

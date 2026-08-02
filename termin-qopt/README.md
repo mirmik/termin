@@ -86,12 +86,26 @@ formulation. Native tests verify `J qdot`, finite-difference columns on a
 branching tree, the virtual-work identity, static zero-DOF behavior, and error
 diagnostics.
 
+Frictionless normal contact is the next implemented native slice.
+`ContactSet3DContribution` accepts caller-keyed pairs of static, maximal-body,
+or articulation-link endpoints together with a unit world normal and signed
+gap. It registers transient `C v <= d` rows each step, exposes the resulting
+normal impulse/reaction and tight-row state, and has no dependency on scene
+entities, colliders, or Eigen. Penetration uses split position projection:
+configuration correction is solved in the mass metric, while the physical
+midpoint velocity is preserved until the separate unilateral velocity solve.
+Consequently correction does not manufacture rebound energy. Native tests
+cover exact Jacobian signs, mixed endpoint formulations, penetration recovery,
+impact, resting support, separation, contact removal, and invalid transactional
+input. Collision-world adaptation, persistent manifold matching, warm starts,
+and friction remain later integration slices.
+
 The separate
 `termin-components-physics-fem` layer now compiles
 an explicit root/joint/body entity hierarchy into this public model and keeps
 solved joint coordinates synchronized with `RotatorComponent` or
-`ActuatorComponent`. Floating bases, contact-set assembly, and a linear-time
-dynamics backend remain subsequent slices.
+`ActuatorComponent`. Floating bases, collision-world contact adaptation, and a
+linear-time dynamics backend remain subsequent slices.
 
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
