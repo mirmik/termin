@@ -166,8 +166,8 @@
                 1.1403125,
                 0.0289
               ],
-              "linear_damping": 0.002,
-              "angular_damping": 0.004
+              "linear_damping": 0.0,
+              "angular_damping": 0.0
             }
           }
         ]
@@ -258,8 +258,8 @@
                 0.759375,
                 0.015
               ],
-              "linear_damping": 0.002,
-              "angular_damping": 0.004
+              "linear_damping": 0.0,
+              "angular_damping": 0.0
             }
           }
         ]
@@ -350,7 +350,7 @@
                 1.0,
                 0.0
               ],
-              "damping": 0.003
+              "damping": 0.0
             }
           }
         ]
@@ -401,7 +401,7 @@
                 1.0,
                 0.0
               ],
-              "damping": 0.003
+              "damping": 0.0
             }
           }
         ]
