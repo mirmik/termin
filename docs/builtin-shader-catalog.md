@@ -114,59 +114,14 @@ Resources without an explicit scope stay `unscoped` or whatever the compiler
 sidecar reports. Runtime source loaders must not infer non-transient scopes from
 resource names such as `material`, `draw_data`, or `u_params`.
 
-## Current entries
+## Current catalog
 
-| UUID | Name | Stage | Language | Source |
-|---|---|---|---|---|
-| `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
-| `termin-runtime-default-color` | `TerminRuntimeDefaultColor` | vertex + fragment | Slang | `builtin_shaders/termin-runtime-default-color.slang` |
-| `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow.slang` |
-| `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-debug-triangle.slang` |
-| `termin-engine-present-blit` | `PresentBlitVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-present-blit.slang` |
-| `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-immediate.slang` |
-| `termin-engine-canvas2d-solid` | `Canvas2DSolidVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-canvas2d-solid.slang` |
-| `termin-engine-canvas2d-texture` | `Canvas2DTextureVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-canvas2d-texture.slang` |
-| `termin-engine-text2d` | `Text2DEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-text2d.slang` |
-| `termin-engine-text2d-sdf` | `Text2DEngineSdfVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-text2d-sdf.slang` |
-| `termin-engine-text3d` | `Text3DEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-text3d.slang` |
-| `termin-engine-screen-line` | `ScreenSpaceLineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
-| `termin-engine-screen-line-cap` | `ScreenSpaceLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-cap.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
-| `termin-engine-screen-line-join` | `ScreenSpaceLineJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-join.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
-| `termin-engine-screen-line-round-join` | `ScreenSpaceLineRoundJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-round-join.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
-| `termin-engine-world-line` | `WorldSpaceLineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-line.vert.glsl`, `builtin_shaders/termin-engine-world-line.frag.glsl` |
-| `termin-engine-world-line-cap` | `WorldSpaceLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-line-cap.vert.glsl`, `builtin_shaders/termin-engine-world-line.frag.glsl` |
-| `termin-engine-world-line-join` | `WorldSpaceLineJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-line-join.vert.glsl`, `builtin_shaders/termin-engine-world-line.frag.glsl` |
-| `termin-engine-world-line-round-join` | `WorldSpaceLineRoundJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-line-round-join.vert.glsl`, `builtin_shaders/termin-engine-world-line.frag.glsl` |
-| `termin-engine-world-line-lit` | `WorldSpaceLineLitFS` | fragment | GLSL | `builtin_shaders/termin-engine-world-line-lit.frag.glsl` |
-| `termin-engine-world-tube-line` | `WorldTubeLineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
-| `termin-engine-world-tube-line-cap` | `WorldTubeLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-cap.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
-| `termin-engine-world-tube-line-lit` | `WorldTubeLineLitFS` | fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-lit.frag.glsl` |
-| `termin-engine-line-default` | `DefaultLineShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-line-default.vert.glsl`, `builtin_shaders/termin-engine-line-default.frag.glsl` |
-| `termin-engine-navmesh-debug` | `NavMeshDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-navmesh-debug.slang` |
-| `termin-engine-off-mesh-link-debug` | `OffMeshLinkDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-off-mesh-link-debug.slang` |
-| `termin-engine-voxel-display` | `VoxelDisplay` | vertex + fragment | Slang | `builtin_shaders/termin-engine-voxel-display.slang` |
-| `termin-engine-voxelizer-line` | `VoxelizerLine` | vertex + fragment | Slang | `builtin_shaders/termin-engine-voxelizer-line.slang` |
-| `termin-engine-pick-material` | `PickShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-pick-material.slang` |
-| `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow-material.slang` |
-| `termin-engine-depth-material` | `DepthShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth-material.slang` |
-| `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-id.slang` |
-| `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-normal.slang` |
-| `termin-engine-depth` | `DepthEngineVSFS_Encoding` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth.slang` |
-| `termin-engine-depth-only` | `DepthOnlyEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth-only.slang` |
-| `termin-engine-depth-to-color` | `DepthToColorFS` | fragment | Slang | `builtin_shaders/termin-engine-depth-to-color.frag.slang` |
-| `termin-engine-color-to-depth` | `ColorToDepthFS` | fragment | Slang | `builtin_shaders/termin-engine-color-to-depth.frag.slang` |
-| `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
-| `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-grayscale.frag.slang` |
-| `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-bright.frag.slang` |
-| `termin-engine-highlight` | `HighlightEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-highlight.frag.slang` |
-| `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-gizmo-mask.slang` |
-| `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-ground-grid.slang` |
-| `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-solid-primitive.slang` |
-| `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
-| `termin-engine-bloom-blur-vertical` | `BloomBlurVerticalFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-blur-vertical.frag.slang` |
-| `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-upsample.frag.slang` |
-| `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-composite.frag.slang` |
-| `termin-engine-tonemap` | `TonemapEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-tonemap.frag.slang` |
+The manifest is the authoritative catalog and must not be duplicated manually
+in this document. The reproducible
+[built-in Slang → WGSL audit](analysis/2026-08-02-builtin-slang-wgsl-audit.md)
+renders the complete identity and stage classification directly from the
+manifest. At the current audit baseline it contains 54 identities: 53 staged
+Slang shaders (93 stages) and one legacy `.shader` program.
 
 ## Migration rule
 

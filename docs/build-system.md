@@ -992,3 +992,52 @@ MSVC-специфичные warnings (C4251 — STL-члены в dllexport-кл
 - [ ] Python: установить и `.pyd`/`.so`, и `.py` файлы
 - [ ] Добавить модуль в `build-system/packages.json` в правильное место для pip/package workflow, если модуль имеет Python-пакет
 - [ ] Добавить модуль в корневой `CMakeLists.txt`, если он должен участвовать в SDK build graph
+
+---
+
+## WebAssembly core profile
+
+Браузерный runtime начинается с намеренно небольшой статической композиции:
+`termin-base`, `termin-inspect`, `termin-mesh` и `termin-scene`. Профиль CMake
+`TERMIN_PLATFORM_WEB` исключает desktop graphics, windowing,
+Python, editor и launcher targets, чтобы платформенные зависимости не
+просачивались в WebAssembly-граф.
+
+Точная версия Emscripten закреплена в
+`build-system/emscripten-version.txt`. В чистом checkout toolchain
+устанавливается, артефакт собирается и Node smoke запускается одной командой:
+
+```bash
+./build-web-core.sh --setup
+```
+
+Повторные сборки используют `build/toolchains/emsdk` и `build/web-core`. Для
+дополнительного прогона в настоящем браузере нужен Chromium-family browser:
+
+```bash
+./build-web-core.sh --browser-smoke
+```
+
+Если Chromium отсутствует в `PATH`, `TERMIN_WEB_BROWSER` должен указывать на
+его executable. `build/web-core/bin/termin-web-core.mjs` — стабильная внешняя
+ESM-точка входа; `termin_web_core.mjs` и `termin_web_core.wasm` являются
+генерируемыми деталями. Пока loader экспортирует только smoke-level core API и
+намеренно не является rendering или editor API.
+
+### Offline WGSL audit
+
+Web shader gate использует отдельный закреплённый toolchain: Slang генерирует
+WGSL, а Naga независимо парсит и валидирует результат. Версии, URL и checksum
+зафиксированы в `build-system/web-shader-toolchain-lock.json`. Полный каталог
+built-in Slang shaders проверяется одной командой:
+
+```bash
+./audit-webgpu-shaders.sh --setup
+```
+
+Повторные запуски используют `build/toolchains/slang-<version>` и
+`build/toolchains/naga-<version>`, а WGSL, reflection и machine-readable report
+пишут в `build/web-shader-audit`. Проверка требует явных уникальных
+`@group`/`@binding`, std140 lowering для uniform buffers, валидного matrix
+lowering и отдельных texture/sampler bindings. Текущий полный отчёт лежит в
+[Built-in Slang → WGSL audit](analysis/2026-08-02-builtin-slang-wgsl-audit.md).
