@@ -13,6 +13,7 @@
 #include <inspect/tc_kind.h>
 #include <tcbase/tc_version.h>
 #include <termin/bootstrap/bootstrap.hpp>
+#include <termin/runtime/runtime_package.hpp>
 #include <termin_scene/termin_scene.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx2/webgpu/webgpu_render_device.hpp>
@@ -42,6 +43,20 @@ struct WebRenderState {
 std::unique_ptr<WebRenderState> web_render_state;
 int web_render_status = 0;
 std::string web_render_error;
+
+termin::runtime::RuntimePackageLoadResult web_host_package;
+std::string web_host_error;
+std::uint32_t web_host_frame_count = 0;
+
+void unload_web_host_package() {
+    for (termin::runtime::RuntimePackageScene& packaged : web_host_package.scenes) {
+        if (packaged.scene.valid()) {
+            packaged.scene.destroy();
+        }
+    }
+    web_host_package = {};
+    web_host_frame_count = 0;
+}
 
 tgfx::ShaderHandle create_web_shader(
     tgfx::WebGpuRenderDevice& device,
@@ -232,6 +247,70 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     tc_scene_free(scene);
     termin::bootstrap::shutdown_runtime();
     return 0x5443;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) {
+    unload_web_host_package();
+    web_host_error.clear();
+    if (root_path == nullptr || root_path[0] == '\0') {
+        web_host_error = "runtime package root must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.bootstrap_profile =
+        termin::bootstrap::RuntimeBootstrapProfile::Minimal;
+    termin::runtime::RuntimePackageLoader loader;
+    web_host_package = loader.load(root_path, options);
+    if (!web_host_package.ok) {
+        web_host_error = web_host_package.message;
+        unload_web_host_package();
+        termin::bootstrap::shutdown_runtime();
+        return 0;
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
+    if (!web_host_package.ok || !web_host_package.scene.valid()) {
+        web_host_error = "runtime package is not loaded";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (!(delta_seconds >= 0.0) || delta_seconds > 1.0) {
+        web_host_error = "invalid browser frame delta";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    try {
+        web_host_package.scene.update(delta_seconds);
+        ++web_host_frame_count;
+        return 1;
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost update failed: %s", web_host_error.c_str());
+        return 0;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_unload() {
+    unload_web_host_package();
+    web_host_error.clear();
+    termin::bootstrap::shutdown_runtime();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_error() {
+    return web_host_error.c_str();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE std::uint32_t termin_web_host_frame_count() {
+    return web_host_frame_count;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
+    return web_host_package.ok && web_host_package.scene.valid()
+        ? web_host_package.scene.entity_count()
+        : 0;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_render_smoke_start() {
