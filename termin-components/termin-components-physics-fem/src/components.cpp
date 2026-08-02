@@ -42,7 +42,7 @@ namespace termin
                                     type_name,
                                     path,
                                     label,
-                                    "float",
+                                    "double",
                                     min,
                                     max,
                                     step);
@@ -308,7 +308,24 @@ namespace termin
         initialized_ = false;
         clear_runtime_links();
         system_ = qopt::Multibody3DSystem();
+        accumulated_time_ = 0.0;
+        simulated_time_ = 0.0;
+        initial_total_energy_ = 0.0;
+        successful_steps_ = 0;
         CxxComponent::on_destroy();
+    }
+
+    FEMPhysicsTelemetry FEMPhysicsWorldComponent::telemetry() const noexcept
+    {
+        return {
+            .initialized = initialized_,
+            .simulated_time = simulated_time_,
+            .successful_steps = successful_steps_,
+            .body_count = bodies_.size(),
+            .joint_count = fixed_joints_.size() + revolute_joints_.size(),
+            .initial_total_energy = initial_total_energy_,
+            .total_energy = total_energy(),
+        };
     }
 
     bool FEMPhysicsWorldComponent::rebuild_simulation()
@@ -316,6 +333,9 @@ namespace termin
         clear_runtime_links();
         system_ = qopt::Multibody3DSystem();
         accumulated_time_ = 0.0;
+        simulated_time_ = 0.0;
+        initial_total_energy_ = 0.0;
+        successful_steps_ = 0;
 
         Entity owner = entity();
         if (!owner.valid())
@@ -391,6 +411,7 @@ namespace termin
             clear_runtime_links();
             return false;
         }
+        initial_total_energy_ = total_energy();
         return true;
     }
 
@@ -660,6 +681,21 @@ namespace termin
             body->entity().transform().set_global_pose(
                 body->body_->state().pose);
         }
+        simulated_time_ += dt;
+        ++successful_steps_;
+    }
+
+    double FEMPhysicsWorldComponent::total_energy() const noexcept
+    {
+        double result = 0.0;
+        for (const FEMRigidBodyComponent* body : bodies_)
+        {
+            if (body != nullptr && body->body_ != nullptr)
+            {
+                result += body->body_->total_energy();
+            }
+        }
+        return result;
     }
 
     void FEMPhysicsWorldComponent::clear_runtime_links()

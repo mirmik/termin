@@ -16,6 +16,11 @@ fixed-step accumulation, constraint projection, and solver-to-scene pose
 synchronization. It intentionally remains separate from the gameplay physics
 world in `termin-physics`.
 
+The world also exposes a UI-neutral `FEMPhysicsTelemetry` snapshot containing
+simulation time, successful step count, topology size, and initial/current
+mechanical energy. Optional presentation belongs to the separate
+`termin-components-physics-fem-ui` adapter module.
+
 Body velocities and damping loads cross the model boundary as complete
 `termin::Screw3` values reduced to each body's origin and expressed in world
 axes. The API names this point explicitly. The component layer does not rotate
