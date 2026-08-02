@@ -36,8 +36,8 @@ target_link_options(termin_web_core PRIVATE
     "-sENVIRONMENT=web,node"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sFORCE_FILESYSTEM=1"
-    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke','_termin_web_host_load','_termin_web_host_tick','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
-    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall']"
+    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_error','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage']"
 )
 set_target_properties(termin_web_core PROPERTIES
     OUTPUT_NAME "termin_web_core"

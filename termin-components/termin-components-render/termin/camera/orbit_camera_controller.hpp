@@ -73,7 +73,7 @@ private:
         };
         std::unordered_map<uint64_t, TouchPoint> touch_points;
     };
-    std::unordered_map<uintptr_t, ViewportState> _viewport_states;
+    std::unordered_map<uint64_t, ViewportState> _viewport_states;
     // === Camera component reference (CmpRef validates entity liveness) ===
     CmpRef<CameraComponent> _camera;
 
@@ -169,7 +169,7 @@ private:
 
     void _ensure_camera();
     bool _event_targets_this_camera(tc_viewport_handle viewport);
-    ViewportState& _get_viewport_state(uintptr_t viewport_id);
+    ViewportState& _get_viewport_state(uint64_t viewport_id);
 
     // Clamp value to range
     static double _clamp(double v, double lo, double hi) {

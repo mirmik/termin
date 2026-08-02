@@ -4,19 +4,33 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
 
 #include <core/tc_scene.h>
 #include <core/tc_component.h>
 #include <inspect/tc_kind.h>
 #include <tcbase/tc_version.h>
 #include <termin/bootstrap/bootstrap.hpp>
+#include <termin/engine/engine_core.hpp>
+#include <termin/platform/offscreen_render_surface.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin_scene/termin_scene.h>
+#include <tgfx2/graphics_host.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx2/webgpu/webgpu_render_device.hpp>
+
+extern "C" {
+#include <render/tc_display.h>
+#include <render/tc_render_surface.h>
+}
 
 #include "web_render_shaders.hpp"
 
@@ -44,18 +58,119 @@ std::unique_ptr<WebRenderState> web_render_state;
 int web_render_status = 0;
 std::string web_render_error;
 
-termin::runtime::RuntimePackageLoadResult web_host_package;
+struct WebPlayerState {
+    std::unique_ptr<tgfx::GraphicsHost> graphics_host;
+    tgfx::WebGpuRenderDevice* device = nullptr;
+    std::unique_ptr<termin::EngineCore> engine;
+    termin::runtime::RuntimePackageLoadResult package;
+    std::vector<std::string> registered_scene_names;
+    std::vector<tc_viewport_handle> viewports;
+    tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    uint32_t width = 640;
+    uint32_t height = 360;
+};
+
+std::unique_ptr<WebPlayerState> web_player;
+termin::runtime::RuntimePackageLoadResult web_headless_package;
+int web_player_graphics_status = 0;
+std::string web_player_graphics_error;
 std::string web_host_error;
 std::uint32_t web_host_frame_count = 0;
+bool web_host_loop_running = false;
+double web_host_loop_last_timestamp = -1.0;
+
+extern "C" int termin_web_host_tick(double delta_seconds);
+
+EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
+    if (!web_host_loop_running) return EM_FALSE;
+    const double delta_seconds = web_host_loop_last_timestamp < 0.0
+        ? 0.0
+        : (timestamp_ms - web_host_loop_last_timestamp) / 1000.0;
+    web_host_loop_last_timestamp = timestamp_ms;
+    if (!termin_web_host_tick(delta_seconds)) {
+        web_host_loop_running = false;
+        return EM_FALSE;
+    }
+    return EM_TRUE;
+}
 
 void unload_web_host_package() {
-    for (termin::runtime::RuntimePackageScene& packaged : web_host_package.scenes) {
+    web_host_loop_running = false;
+    web_host_loop_last_timestamp = -1.0;
+    for (termin::runtime::RuntimePackageScene& packaged : web_headless_package.scenes) {
+        if (packaged.scene.valid()) packaged.scene.destroy();
+    }
+    web_headless_package = {};
+    if (!web_player) {
+        web_host_frame_count = 0;
+        return;
+    }
+    if (web_player->engine) {
+        tc_log_info("TerminWebHost unload: shutting down EngineCore");
+        if (!web_player->engine->shutdown()) {
+            tc_log_error("TerminWebHost: EngineCore shutdown failed");
+        }
+        web_player->engine.reset();
+        tc_log_info("TerminWebHost unload: EngineCore released");
+    }
+    tc_log_info("TerminWebHost unload: destroying packaged scenes");
+    for (termin::runtime::RuntimePackageScene& packaged : web_player->package.scenes) {
         if (packaged.scene.valid()) {
             packaged.scene.destroy();
         }
     }
-    web_host_package = {};
+    web_player->package = {};
+    web_player->viewports.clear();
+    web_player->presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    web_player->registered_scene_names.clear();
+    if (web_player->graphics_host) {
+        tc_log_info("TerminWebHost unload: closing GraphicsHost");
+        web_player->graphics_host->close();
+        web_player->graphics_host.reset();
+        tc_log_info("TerminWebHost unload: GraphicsHost released");
+    }
+    web_player.reset();
+    web_player_graphics_status = 0;
     web_host_frame_count = 0;
+}
+
+tc_display_handle create_web_player_display(const std::string& requested_name) {
+    if (!web_player || !web_player->device) {
+        tc_log_error("TerminWebHost: display requested without WebGPU device");
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
+    const std::string name = requested_name.empty() ? "Main" : requested_name;
+    return termin::create_offscreen_display(
+        web_player->device,
+        static_cast<int>(web_player->width),
+        static_cast<int>(web_player->height),
+        name.c_str());
+}
+
+bool present_web_player_canvas() {
+    if (!web_player || !web_player->device ||
+            !tc_display_handle_valid(web_player->presentation_display)) {
+        return false;
+    }
+    tc_render_surface* display_surface =
+        tc_display_get_surface(web_player->presentation_display);
+    uint32_t output_texture_id = 0;
+    if (!display_surface || !tc_render_surface_validate_output(
+            display_surface,
+            reinterpret_cast<uintptr_t>(web_player->device),
+            &output_texture_id)) {
+        tc_log_error("TerminWebHost: rendered display output is invalid");
+        return false;
+    }
+    tgfx::TextureHandle canvas = web_player->device->acquire_surface_texture();
+    std::unique_ptr<tgfx::ICommandList> commands =
+        web_player->device->create_command_list();
+    commands->begin();
+    commands->copy_texture(tgfx::TextureHandle{output_texture_id}, canvas);
+    commands->end();
+    web_player->device->submit(*commands);
+    web_player->device->present();
+    return true;
 }
 
 tgfx::ShaderHandle create_web_shader(
@@ -250,6 +365,92 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) {
+    web_host_error.clear();
+    if (!web_player || web_player_graphics_status != 2 ||
+            !web_player->graphics_host || !web_player->device) {
+        web_host_error = "WebGPU player is not initialized";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (root_path == nullptr || root_path[0] == '\0') {
+        web_host_error = "runtime package root must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.bootstrap_profile =
+        termin::bootstrap::RuntimeBootstrapProfile::Render;
+    options.scene_extensions = termin::default_scene_extension_ids();
+    try {
+        termin::runtime::RuntimePackageLoader loader;
+        web_player->package = loader.load(root_path, options);
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error(
+            "TerminWebHost package load threw: %s", web_host_error.c_str());
+        unload_web_host_package();
+        return 0;
+    }
+    if (!web_player->package.ok || !web_player->package.scene.valid()) {
+        web_host_error = web_player->package.message;
+        unload_web_host_package();
+        return 0;
+    }
+    try {
+        web_player->engine = std::make_unique<termin::EngineCore>();
+        termin::RenderEngine* render_engine =
+            web_player->engine->rendering_manager.render_engine();
+        render_engine->set_graphics_host(*web_player->graphics_host);
+        render_engine->configure_shader_artifacts(
+            web_player->package.shader_runtime.artifact_root,
+            web_player->package.shader_runtime.cache_root,
+            web_player->package.shader_runtime.compiler_path,
+            false);
+
+        termin::SceneManager& scene_manager = web_player->engine->scene_manager;
+        for (const termin::runtime::RuntimePackageScene& packaged
+                : web_player->package.scenes) {
+            scene_manager.register_scene(packaged.identity, packaged.scene.handle());
+            scene_manager.set_scene_path(packaged.identity, packaged.scene.source_path());
+            scene_manager.set_mode(packaged.identity, TC_SCENE_MODE_INACTIVE);
+            web_player->registered_scene_names.push_back(packaged.identity);
+        }
+        scene_manager.set_mode(
+            web_player->package.entry_scene_identity,
+            TC_SCENE_MODE_PLAY);
+
+        termin::RenderingManager& manager = web_player->engine->rendering_manager;
+        manager.set_display_factory([](const std::string& name) {
+            return create_web_player_display(name);
+        });
+        web_player->viewports = manager.attach_scene_full(
+            web_player->package.scene.handle());
+        if (web_player->viewports.empty()) {
+            throw std::runtime_error(
+                "entry scene render_mount created no browser viewports");
+        }
+        web_player->presentation_display = manager.get_display_by_name("Main");
+        if (!tc_display_handle_valid(web_player->presentation_display)) {
+            throw std::runtime_error(
+                "entry scene render_mount has no 'Main' display");
+        }
+        scene_manager.request_render();
+        tc_log_info(
+            "TerminWebHost: attached packaged scene '%s' entities=%zu viewports=%zu",
+            web_player->package.entry_scene_identity.c_str(),
+            web_player->package.scene.entity_count(),
+            web_player->viewports.size());
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost load failed: %s", web_host_error.c_str());
+        unload_web_host_package();
+        return 0;
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load_headless(
+    const char* root_path) {
     unload_web_host_package();
     web_host_error.clear();
     if (root_path == nullptr || root_path[0] == '\0') {
@@ -258,12 +459,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         return 0;
     }
     termin::runtime::RuntimePackageLoadOptions options;
-    options.bootstrap_profile =
-        termin::bootstrap::RuntimeBootstrapProfile::Minimal;
+    options.bootstrap_profile = termin::bootstrap::RuntimeBootstrapProfile::Minimal;
     termin::runtime::RuntimePackageLoader loader;
-    web_host_package = loader.load(root_path, options);
-    if (!web_host_package.ok) {
-        web_host_error = web_host_package.message;
+    web_headless_package = loader.load(root_path, options);
+    if (!web_headless_package.ok) {
+        web_host_error = web_headless_package.message;
         unload_web_host_package();
         termin::bootstrap::shutdown_runtime();
         return 0;
@@ -272,7 +472,19 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
-    if (!web_host_package.ok || !web_host_package.scene.valid()) {
+    if (web_headless_package.ok && web_headless_package.scene.valid()) {
+        try {
+            web_headless_package.scene.update(delta_seconds);
+            ++web_host_frame_count;
+            return 1;
+        } catch (const std::exception& exception) {
+            web_host_error = exception.what();
+            tc_log_error("TerminWebHost headless update failed: %s", web_host_error.c_str());
+            return 0;
+        }
+    }
+    if (!web_player || !web_player->package.ok ||
+            !web_player->package.scene.valid() || !web_player->engine) {
         web_host_error = "runtime package is not loaded";
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
@@ -283,7 +495,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
         return 0;
     }
     try {
-        web_host_package.scene.update(delta_seconds);
+        web_player->engine->scene_manager.request_render();
+        const bool rendered = web_player->engine->tick_and_render(delta_seconds);
+        if (rendered && !present_web_player_canvas()) {
+            throw std::runtime_error("failed to present Termin render output to canvas");
+        }
         ++web_host_frame_count;
         return 1;
     } catch (const std::exception& exception) {
@@ -293,10 +509,29 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
     }
 }
 
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_loop_start() {
+    if (!web_player || !web_player->engine || web_player_graphics_status != 2) {
+        web_host_error = "cannot start browser frame loop before the render host is ready";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (web_host_loop_running) return 1;
+    web_host_loop_running = true;
+    web_host_loop_last_timestamp = -1.0;
+    emscripten_request_animation_frame_loop(
+        &web_host_animation_frame,
+        nullptr);
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_loop_stop() {
+    web_host_loop_running = false;
+    web_host_loop_last_timestamp = -1.0;
+}
+
 extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_unload() {
     unload_web_host_package();
     web_host_error.clear();
-    termin::bootstrap::shutdown_runtime();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_error() {
@@ -308,9 +543,69 @@ extern "C" EMSCRIPTEN_KEEPALIVE std::uint32_t termin_web_host_frame_count() {
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
-    return web_host_package.ok && web_host_package.scene.valid()
-        ? web_host_package.scene.entity_count()
+    if (web_headless_package.ok && web_headless_package.scene.valid()) {
+        return web_headless_package.scene.entity_count();
+    }
+    return web_player && web_player->package.ok && web_player->package.scene.valid()
+        ? web_player->package.scene.entity_count()
         : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(
+    uint32_t width, uint32_t height) {
+    if (web_player_graphics_status != 0) return web_player_graphics_status;
+    if (width == 0 || height == 0) {
+        web_player_graphics_error = "browser canvas size must be positive";
+        web_player_graphics_status = -1;
+        return web_player_graphics_status;
+    }
+    web_player = std::make_unique<WebPlayerState>();
+    web_player->width = width;
+    web_player->height = height;
+    web_player_graphics_status = 1;
+    tgfx::WebGpuDeviceRequest request;
+    request.canvas_selector = "#termin-canvas";
+    request.width = width;
+    request.height = height;
+    tgfx::WebGpuRenderDevice::request_async(
+        request,
+        [](std::unique_ptr<tgfx::WebGpuRenderDevice> device, std::string error) {
+            if (!device || !web_player) {
+                web_player_graphics_error = error.empty()
+                    ? "WebGPU device initialization failed"
+                    : std::move(error);
+                web_player_graphics_status = -2;
+                tc_log_error(
+                    "TerminWebHost: %s", web_player_graphics_error.c_str());
+                return;
+            }
+            try {
+                web_player->device = device.get();
+                web_player->graphics_host =
+                    tgfx::GraphicsHost::adopt_application_device(std::move(device));
+                web_player_graphics_status = 2;
+            } catch (const std::exception& exception) {
+                web_player_graphics_error = exception.what();
+                web_player_graphics_status = -3;
+                tc_log_error(
+                    "TerminWebHost graphics initialization failed: %s",
+                    web_player_graphics_error.c_str());
+            }
+        });
+    return web_player_graphics_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_status() {
+    if (web_player && web_player->device &&
+            web_player->device->has_device_error()) {
+        web_player_graphics_error = web_player->device->device_error_message();
+        web_player_graphics_status = -4;
+    }
+    return web_player_graphics_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_graphics_error() {
+    return web_player_graphics_error.c_str();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_render_smoke_start() {

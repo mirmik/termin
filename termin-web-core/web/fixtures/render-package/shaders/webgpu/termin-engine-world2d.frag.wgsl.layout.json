@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "fragment",
+  "resources": [
+    {"name": "u_texture", "kind": "texture", "scope": "transient", "set": 0, "binding": 188, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 188, "sampler_binding": 190}}
+  ]
+}

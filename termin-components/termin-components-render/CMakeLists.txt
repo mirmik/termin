@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(termin_components_render LANGUAGES C CXX)
 
+option(TERMIN_COMPONENTS_RENDER_CORE_ONLY
+    "Build the portable camera/light/static-mesh component slice"
+    OFF)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -113,6 +117,17 @@ termin_add_module(
     INSTALL_HEADERS
         termin
 )
+
+if(TERMIN_COMPONENTS_RENDER_CORE_ONLY)
+    set_property(TARGET termin_components_render PROPERTY SOURCES
+        src/components_bootstrap_core.cpp
+        src/camera_component.cpp
+        src/light_component.cpp
+        src/mesh_renderer.cpp
+    )
+    target_compile_definitions(termin_components_render
+        PUBLIC TERMIN_COMPONENTS_RENDER_CORE_ONLY)
+endif()
 
 if(MSVC)
     target_compile_options(termin_components_render PRIVATE /wd4251 /wd4275)

@@ -1,0 +1,133 @@
+{
+  "uuid": "web-render-fixture-scene",
+  "entities": [
+    {
+      "uuid": "web-render-fixture-mesh",
+      "name": "Packaged Mesh",
+      "components": [
+        {
+          "type": "MeshComponent",
+          "data": {
+            "mesh": {
+              "uuid": "web-render-fixture-mesh-resource",
+              "name": "Web Fixture Mesh",
+              "type": "uuid",
+              "kind": "tc_mesh"
+            }
+          }
+        },
+        {
+          "type": "MeshRenderer",
+          "data": {
+            "material": {
+              "uuid": "web-render-fixture-material",
+              "name": "Web Fixture Material",
+              "type": "uuid",
+              "kind": "tc_material"
+            },
+            "cast_shadow": false
+          }
+        }
+      ]
+    },
+    {
+      "uuid": "web-render-fixture-camera",
+      "name": "Main Camera",
+      "pose": {
+        "position": [
+          0.0,
+          -4.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "components": [
+        {
+          "type": "CameraComponent",
+          "data": {
+            "near_clip": 0.1,
+            "far_clip": 100.0,
+            "fov_y_degrees": 55.0
+          }
+        }
+      ]
+    }
+  ],
+  "extensions": {
+    "render_mount": {
+      "pipeline_templates": [],
+      "viewport_configs": [
+        {
+          "name": "Main Viewport",
+          "display_name": "Main",
+          "render_target": {
+            "name": "Main Target"
+          },
+          "region": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "depth": 0,
+          "input_mode": "simple",
+          "block_input_in_editor": false,
+          "enabled": true
+        }
+      ],
+      "render_target_configs": [
+        {
+          "name": "Main Target",
+          "camera_uuid": "web-render-fixture-camera",
+          "dynamic_resolution": true,
+          "color_format": "rgba8",
+          "depth_format": "depth24",
+          "clear_color": [
+            0.02,
+            0.03,
+            0.07,
+            1.0
+          ],
+          "clear_depth": 1.0,
+          "pipeline_name": "Default",
+          "layer_mask": 4294967295,
+          "enabled": true
+        }
+      ]
+    },
+    "render_state": {
+      "background_color": [
+        0.02,
+        0.03,
+        0.07,
+        1.0
+      ],
+      "lighting": {
+        "ambient_color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "ambient_intensity": 1.0,
+        "shadow_settings": {
+          "method": 1,
+          "softness": 1.0,
+          "bias": 0.0
+        }
+      },
+      "skybox": {
+        "type": 0,
+        "color": [
+          0.02,
+          0.03,
+          0.07
+        ]
+      }
+    }
+  }
+}

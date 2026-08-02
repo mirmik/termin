@@ -1,0 +1,8 @@
+{
+  "uuid": "web-render-fixture-mesh-resource",
+  "scale": 1.0,
+  "axis_x": "x",
+  "axis_y": "y",
+  "axis_z": "z",
+  "flip_uv_v": false
+}

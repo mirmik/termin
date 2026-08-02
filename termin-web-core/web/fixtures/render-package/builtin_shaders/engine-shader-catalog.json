@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "shaders": [
+    {
+      "uuid": "termin-engine-fsq",
+      "name": "FullscreenQuadEngineVS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-fsq.vert.slang",
+          "entry": "vs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-skybox",
+      "name": "SkyboxEngineVSFS",
+      "language": "shader",
+      "program": {
+        "path": "termin-engine-skybox.shader"
+      }
+    },
+    {
+      "uuid": "termin-engine-shadow",
+      "name": "ShadowEngineVSFS",
+      "language": "slang",
+      "runtime_sources": [
+        "termin-engine-shadow.slang"
+      ],
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-shadow.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-shadow.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-grayscale",
+      "name": "GrayscaleEngineFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-grayscale.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-bloom-bright",
+      "name": "BloomBrightFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-bloom-bright.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-bloom-downsample",
+      "name": "BloomDownsampleFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-bloom-downsample.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-bloom-blur-vertical",
+      "name": "BloomBlurVerticalFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-bloom-blur-vertical.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-bloom-upsample",
+      "name": "BloomUpsampleFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-bloom-upsample.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-bloom-composite",
+      "name": "BloomCompositeFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-bloom-composite.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-tonemap",
+      "name": "TonemapEngineFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-tonemap.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-canvas2d-solid",
+      "name": "Canvas2DSolidVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-canvas2d-solid.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-canvas2d-solid.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-canvas2d-texture",
+      "name": "Canvas2DTextureVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-canvas2d-texture.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-canvas2d-texture.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-text2d",
+      "name": "Text2DEngineVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-text2d.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-text2d.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-text2d-sdf",
+      "name": "Text2DEngineSdfVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-text2d-sdf.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-text2d-sdf.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-text3d",
+      "name": "Text3DEngineVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-text3d.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-text3d.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-world2d",
+      "name": "World2DEngineVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-world2d.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-world2d.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-shadow-material",
+      "name": "ShadowShader",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-shadow-material.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-shadow-material.slang",
+          "entry": "fs_main"
+        }
+      }
+    }
+  ]
+}

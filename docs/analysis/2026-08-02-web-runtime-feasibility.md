@@ -443,6 +443,39 @@ RAF callback.
 следующих resource-domain slices, package provider/archive и scene renderer
 composition. Pointer/keyboard input также остаётся отдельным следующим шагом.
 
+Статус карточки Kanboard #1242 на 2026-08-02: первый настоящий scene/render
+vertical slice завершён. Web profile теперь композитит render-only bootstrap,
+`RuntimePackageLoader`, `EngineCore`, `RenderingManager`, offscreen display и
+`WebGpuRenderDevice`. Backend реализует общий bridge для `tc_texture`,
+`tc_mesh` и `tc_shader`, включая per-device cache, prebuilt WGSL sidecar v3,
+default sampler, GPU-first render targets и depth-stencil render passes.
+
+Acceptance fixture экспортируется штатным strict resource policy из source
+project и содержит scene, camera, OBJ mesh, PNG texture, material и Slang
+shader; browser скачивает обычный package v2 graph. Chrome/SwiftShader smoke
+проверяет пиксели canvas, затем выполняет reload, teardown, отрицательные
+package cases и прежний direct-backend smoke. Кадровый callback принадлежит
+Emscripten HTML5 main loop: emdawnwebgpu публикует canvas только на его RAF
+boundary; JS host наблюдает состояния и метрики.
+
+Измеренный Release baseline на локальном headless Chrome/SwiftShader:
+
+- `termin_web_core.wasm`: 1 896 467 bytes;
+- generated Emscripten module: 122 573 bytes;
+- ESM host: 17 884 bytes;
+- strict render fixture: 104 208 bytes в 87 файлах;
+- package fetch: примерно 90–92 ms;
+- WebGPU init: примерно 12 ms;
+- native load/composition: примерно 20–23 ms;
+- startup до running: примерно 122–126 ms;
+- first presented frame: примерно 142–153 ms;
+- steady RAF interval на SwiftShader: около 16.7 ms (60 Hz).
+
+Это несжатые локальные размеры и synthetic software-GPU timings, поэтому они
+служат regression baseline, а не production budget. Не закрыты: pointer/keyboard
+input, archive/cache transport, device-loss recovery, partial/scaled blit,
+полная PBR/shadow shader matrix и Safari/Firefox CI.
+
 ### Phase 3: production runtime
 
 - standard render passes и post-processing capability matrix;
@@ -524,8 +557,8 @@ runtime parity. Three.js viewer можно довести до полезног�
 
 ## Board status
 
-Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap
-и Phase 1 WebGPU vertical slice завершены карточками #1238 и #1240; core-only
-runtime package host реализуется в #1241. Последующие #1242 и #1243 расширяют
-scene/render composition и browser input/resize, не смешивая эту работу с
-полным browser editor.
+Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap,
+Phase 1 WebGPU vertical slice, core-only package host и первый packaged
+scene/render slice завершены карточками #1238, #1240, #1241 и #1242. Следующая
+пользовательская вертикаль — #1243 (browser input/resize); production-хвосты
+ведутся отдельно и не смешиваются с полным browser editor.

@@ -24,14 +24,23 @@ try {
     const host = createTerminWebHost(core, {
         statusElement: document.querySelector("#host-status"),
     });
-    await host.load("./fixtures/core-package/");
+    await host.load("./fixtures/render-package/");
     await host.waitForFrames(3);
-    if (host.state !== TerminWebHostState.Running || host.entityCount() !== 1) {
-        throw new Error("runtime host did not enter running state with one entity");
+    if (host.state !== TerminWebHostState.Running || host.entityCount() !== 2) {
+        throw new Error("runtime host did not enter running state with two packaged entities");
     }
-    await host.reload("./fixtures/core-package/");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const canvas = document.querySelector("#termin-canvas");
+    globalThis.__terminSmokeFrame = {
+        metrics: {...host.metrics},
+    };
+    result.textContent = "TERMIN_WEB_CORE_FRAME_READY";
+    await new Promise((resolve) => {
+        globalThis.__terminSmokeContinue = resolve;
+    });
+    await host.reload("./fixtures/render-package/");
     await host.waitForFrames(2);
-    if (host.entityCount() !== 1) {
+    if (host.entityCount() !== 2) {
         throw new Error("runtime host reload lost the entry scene");
     }
     await host.teardown();
@@ -67,13 +76,26 @@ try {
     }
     await host.teardown();
     await core.renderSmoke();
-    const canvas = document.querySelector("#termin-canvas");
     canvas.width = 800;
     canvas.height = 450;
     core.resize(800, 450);
     result.textContent = "TERMIN_WEB_CORE_SMOKE_PASSED";
 } catch (error) {
-    result.textContent = `TERMIN_WEB_CORE_SMOKE_FAILED: ${error.stack ?? error}`;
+    const details = error instanceof Error
+        ? (error.stack ?? error.message)
+        : JSON.stringify({
+            thrown: error,
+            hostStatus: document.querySelector("#host-status")?.textContent,
+            hostError: globalThis.__terminSmokeModule
+                ? globalThis.__terminSmokeModule.UTF8ToString(
+                    globalThis.__terminSmokeModule._termin_web_host_error())
+                : "",
+            graphicsError: globalThis.__terminSmokeModule
+                ? globalThis.__terminSmokeModule.UTF8ToString(
+                    globalThis.__terminSmokeModule._termin_web_host_graphics_error())
+                : "",
+        });
+    result.textContent = `TERMIN_WEB_CORE_SMOKE_FAILED: ${details}`;
 }
 </script>
 </body>

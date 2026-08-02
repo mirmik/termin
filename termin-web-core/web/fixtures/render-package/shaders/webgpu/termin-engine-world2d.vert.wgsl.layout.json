@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "vertex",
+  "resources": [
+    {"name": "world2d_frame", "kind": "constant_buffer", "scope": "draw", "set": 0, "binding": 31, "stage_mask": 1, "size": 64, "webgpu": {"group": 0, "binding": 31}, "fields": [{"name":"view_projection","type":"Mat4","offset":0,"size":64}]}
+  ]
+}

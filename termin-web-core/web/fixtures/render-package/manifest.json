@@ -1,0 +1,208 @@
+{
+  "version": 2,
+  "diagnostics": [],
+  "entry_scene": "Main.scene",
+  "builtin_shader_contract": {
+    "version": 1,
+    "catalog": "builtin_shaders/engine-shader-catalog.json",
+    "shaders": [
+      {
+        "uuid": "termin-engine-fsq",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-fsq.vert.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-skybox",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-skybox.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-skybox.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-shadow",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-shadow.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-shadow.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-grayscale",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-grayscale.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-bloom-bright",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-bloom-bright.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-bloom-downsample",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-bloom-downsample.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-bloom-blur-vertical",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-bloom-blur-vertical.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-bloom-upsample",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-bloom-upsample.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-bloom-composite",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-bloom-composite.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-tonemap",
+        "artifacts": {
+          "webgpu": {
+            "fragment": "shaders/webgpu/termin-engine-tonemap.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-canvas2d-solid",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-canvas2d-solid.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-canvas2d-solid.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-canvas2d-texture",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-canvas2d-texture.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-canvas2d-texture.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-text2d",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-text2d.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-text2d.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-text2d-sdf",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-text2d-sdf.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-text2d-sdf.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-text3d",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-text3d.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-text3d.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-world2d",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-world2d.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-world2d.frag.wgsl"
+          }
+        }
+      },
+      {
+        "uuid": "termin-engine-shadow-material",
+        "artifacts": {
+          "webgpu": {
+            "vertex": "shaders/webgpu/termin-engine-shadow-material.vert.wgsl",
+            "fragment": "shaders/webgpu/termin-engine-shadow-material.frag.wgsl"
+          }
+        }
+      }
+    ]
+  },
+  "pipeline_shader_requirements": [
+    {
+      "scene": "scenes/Main.scene.json",
+      "pipeline": "Default",
+      "variants": [
+        {
+          "uuid": "shader-phase-3324b40c23af7090",
+          "name": "WebTextured/opaque",
+          "path": "shaders/shader-phase-3324b40c23af7090.shader.json",
+          "source_identity": "sha256:d88a0f11b9a39d9c40aa9dec6261ab636d73cf996ac5eedc72589dd5a993708c"
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "type": "shader",
+      "uuid": "shader-phase-3324b40c23af7090",
+      "path": "shaders/shader-phase-3324b40c23af7090.shader.json"
+    },
+    {
+      "type": "shader_program",
+      "uuid": "web-render-fixture-textured-shader",
+      "path": "shaders/web-render-fixture-textured-shader.shader-program.json"
+    },
+    {
+      "type": "mesh",
+      "uuid": "web-render-fixture-mesh-resource",
+      "path": "meshes/web-render-fixture-mesh-resource.tmesh.json"
+    },
+    {
+      "type": "material",
+      "uuid": "web-render-fixture-material",
+      "path": "materials/web-render-fixture-material.tmat.json"
+    },
+    {
+      "type": "texture",
+      "uuid": "web-render-fixture-checker-texture",
+      "path": "textures/web-render-fixture-checker-texture.texture.json"
+    }
+  ],
+  "scenes": [
+    {
+      "identity": "Main.scene",
+      "path": "scenes/Main.scene.json"
+    }
+  ],
+  "target_requirements": {
+    "backends": [
+      "webgpu"
+    ]
+  }
+}

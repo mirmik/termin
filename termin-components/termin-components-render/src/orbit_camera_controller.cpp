@@ -12,8 +12,8 @@ extern "C" {
 namespace termin {
 
 // Helper to create a unique key from viewport handle
-static inline uintptr_t viewport_key(tc_viewport_handle h) {
-    return (static_cast<uintptr_t>(h.index) << 32) | h.generation;
+static inline uint64_t viewport_key(tc_viewport_handle h) {
+    return (static_cast<uint64_t>(h.index) << 32) | h.generation;
 }
 
 OrbitCameraController::OrbitCameraController(
@@ -348,7 +348,7 @@ void OrbitCameraController::fly_rotate(double yaw, double pitch, double roll) {
     _sync_from_transform();
 }
 
-OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state(uintptr_t viewport_id) {
+OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state(uint64_t viewport_id) {
     return _viewport_states[viewport_id];
 }
 
@@ -427,7 +427,7 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
     }
 
     // Get viewport pointer as key for per-viewport state
-    uintptr_t vp_key = viewport_key(e->viewport);
+    uint64_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
 
     // Middle mouse = orbit
@@ -449,7 +449,7 @@ void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
     if (!e || !_event_targets_this_camera(e->viewport)) return;
 
-    uintptr_t vp_key = viewport_key(e->viewport);
+    uint64_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
 
     if (!state.has_last) {

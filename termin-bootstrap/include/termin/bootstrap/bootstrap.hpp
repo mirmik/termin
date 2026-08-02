@@ -14,6 +14,7 @@ namespace termin::bootstrap {
 
 enum class RuntimeBootstrapProfile {
     Minimal,
+    Render,
     Full,
 };
 

@@ -9,6 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(TERMIN_ENGINE_BUILD_SHARED "Build shared library" ON)
 option(TERMIN_ENGINE_BUILD_TESTS "Build termin-engine tests" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-engine" OFF)
+option(TERMIN_ENGINE_CORE_RENDER_PIPELINE
+    "Use the portable color/resolve/present default pipeline"
+    OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -81,6 +84,10 @@ else()
 endif()
 
 add_library(termin_engine::termin_engine ALIAS termin_engine)
+
+if(TERMIN_ENGINE_CORE_RENDER_PIPELINE)
+    target_compile_definitions(termin_engine PRIVATE TERMIN_ENGINE_CORE_RENDER_PIPELINE)
+endif()
 
 if(COMMAND termin_enable_pch_for)
     termin_enable_pch_for(termin_engine)
