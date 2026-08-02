@@ -710,6 +710,8 @@ namespace termin::qopt
         std::vector<double> velocity;
         std::vector<double> midpoint_velocity;
         std::vector<double> corrected_midpoint_velocity;
+        std::vector<double> configuration_velocity;
+        std::vector<double> corrected_configuration_velocity;
         std::size_t step_contribution_count = 0;
         bool finalized = false;
 
@@ -937,12 +939,12 @@ namespace termin::qopt
         [[nodiscard]] DynamicsSystemDiagnostic
         apply_position_correction(double time_step) noexcept
         {
-            std::fill(corrected_midpoint_velocity.begin(),
-                      corrected_midpoint_velocity.end(),
+            std::fill(corrected_configuration_velocity.begin(),
+                      corrected_configuration_velocity.end(),
                       std::numeric_limits<double>::quiet_NaN());
-            const ConstDenseVectorView midpoint{
-                midpoint_velocity.data(),
-                midpoint_velocity.size(),
+            const ConstDenseVectorView configuration{
+                configuration_velocity.data(),
+                configuration_velocity.size(),
                 1,
             };
             const ConstDenseVectorView correction{
@@ -951,15 +953,15 @@ namespace termin::qopt
                 1,
             };
             const DenseVectorView destination{
-                corrected_midpoint_velocity.data(),
-                corrected_midpoint_velocity.size(),
+                corrected_configuration_velocity.data(),
+                corrected_configuration_velocity.size(),
                 1,
             };
             for (std::size_t index = 0; index < contributions.size(); ++index)
             {
                 const AssemblyDiagnostic diagnostic =
                     contributions[index]->write_corrected_midpoint_velocity(
-                        topology, midpoint, correction, time_step, destination);
+                        topology, configuration, correction, time_step, destination);
                 if (diagnostic != AssemblyDiagnostic::None)
                 {
                     std::fprintf(stderr,
@@ -970,8 +972,8 @@ namespace termin::qopt
                     return DynamicsSystemDiagnostic::InternalFailure;
                 }
             }
-            if (!std::all_of(corrected_midpoint_velocity.begin(),
-                             corrected_midpoint_velocity.end(),
+            if (!std::all_of(corrected_configuration_velocity.begin(),
+                             corrected_configuration_velocity.end(),
                              [](double value) { return std::isfinite(value); }))
             {
                 std::fprintf(stderr,
@@ -979,7 +981,7 @@ namespace termin::qopt
                              "no position-correction owner\n");
                 return DynamicsSystemDiagnostic::InternalFailure;
             }
-            midpoint_velocity.swap(corrected_midpoint_velocity);
+            configuration_velocity.swap(corrected_configuration_velocity);
             return DynamicsSystemDiagnostic::None;
         }
 
@@ -1133,6 +1135,8 @@ namespace termin::qopt
             impl_->velocity.assign(dofs, 0.0);
             impl_->midpoint_velocity.assign(dofs, 0.0);
             impl_->corrected_midpoint_velocity.assign(dofs, 0.0);
+            impl_->configuration_velocity.assign(dofs, 0.0);
+            impl_->corrected_configuration_velocity.assign(dofs, 0.0);
             impl_->finalized = true;
             return DynamicsSystemDiagnostic::None;
         }
@@ -1268,6 +1272,7 @@ namespace termin::qopt
                     impl_->velocity[index] +
                     0.5 * options.time_step * impl_->dof_solution[index];
             }
+            impl_->configuration_velocity = impl_->midpoint_velocity;
             const auto midpoint_view = [&]() noexcept
             {
                 return ConstDenseVectorView{
@@ -1276,9 +1281,18 @@ namespace termin::qopt
                     1,
                 };
             };
+            const auto configuration_view = [&]() noexcept
+            {
+                return ConstDenseVectorView{
+                    impl_->configuration_velocity.data(),
+                    impl_->configuration_velocity.size(),
+                    1,
+                };
+            };
             if (impl_->write_velocity(midpoint_view()) !=
                     DynamicsSystemDiagnostic::None ||
-                impl_->set_trial_configuration(midpoint_view(), options.time_step) !=
+                impl_->set_trial_configuration(configuration_view(),
+                                               options.time_step) !=
                     DynamicsSystemDiagnostic::None)
             {
                 rollback();
@@ -1312,21 +1326,55 @@ namespace termin::qopt
                         DynamicsSystemDiagnostic::AssemblyFailure,
                         first_dynamics);
                 }
-                const QpSolveResult projection = solve_constrained_dynamics(
-                    assembly.system(),
-                    {
+                QpSolveResult projection;
+                if (unilateral_constraint_count == 0)
+                {
+                    projection = solve_constrained_dynamics(
+                        assembly.system(),
                         {
-                            impl_->dof_solution.data(),
-                            impl_->dof_solution.size(),
-                            1,
+                            {
+                                impl_->dof_solution.data(),
+                                impl_->dof_solution.size(),
+                                1,
+                            },
+                            {
+                                impl_->constraint_reaction.data(),
+                                impl_->constraint_reaction.size(),
+                                1,
+                            },
                         },
+                        options.qp_tolerance);
+                }
+                else
+                {
+                    projection = solve_unilateral_velocity(
+                        assembly.system(),
+                        assembly.unilateral_constraints(),
                         {
-                            impl_->constraint_reaction.data(),
-                            impl_->constraint_reaction.size(),
-                            1,
+                            {
+                                impl_->dof_solution.data(),
+                                impl_->dof_solution.size(),
+                                1,
+                            },
+                            {
+                                impl_->constraint_reaction.data(),
+                                impl_->constraint_reaction.size(),
+                                1,
+                            },
+                            {
+                                impl_->unilateral_reaction.data(),
+                                impl_->unilateral_reaction.size(),
+                                1,
+                            },
+                            {
+                                impl_->unilateral_tight_mask.data(),
+                                impl_->unilateral_tight_mask.size(),
+                                1,
+                            },
                         },
-                    },
-                    options.qp_tolerance);
+                        {},
+                        {.tolerance = options.qp_tolerance});
+                }
                 ++result.position_iterations;
                 if (projection.status != QpStatus::Optimal)
                 {
@@ -1338,9 +1386,9 @@ namespace termin::qopt
                 }
                 if (impl_->apply_position_correction(options.time_step) !=
                         DynamicsSystemDiagnostic::None ||
-                    impl_->write_velocity(midpoint_view()) !=
+                    impl_->write_velocity(configuration_view()) !=
                         DynamicsSystemDiagnostic::None ||
-                    impl_->set_trial_configuration(midpoint_view(),
+                    impl_->set_trial_configuration(configuration_view(),
                                                    options.time_step) !=
                         DynamicsSystemDiagnostic::None)
                 {
@@ -1358,6 +1406,19 @@ namespace termin::qopt
                 return dynamics_system_failure(
                     QpStatus::NumericalFailure,
                     DynamicsSystemDiagnostic::PositionProjectionFailure,
+                    first_dynamics);
+            }
+
+            // Position projection changes only the trial configuration. The
+            // physical midpoint velocity remains the unconstrained dynamics
+            // result and is restored before the endpoint acceleration solve.
+            if (impl_->write_velocity(midpoint_view()) !=
+                DynamicsSystemDiagnostic::None)
+            {
+                rollback();
+                return dynamics_system_failure(
+                    QpStatus::NumericalFailure,
+                    DynamicsSystemDiagnostic::InternalFailure,
                     first_dynamics);
             }
 
