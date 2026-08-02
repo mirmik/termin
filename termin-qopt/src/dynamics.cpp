@@ -187,6 +187,50 @@ namespace termin::qopt
         return constraints_;
     }
 
+    DynamicsRegistrationResult<DynamicsUnilateralConstraintHandle>
+    DynamicsUnilateralTopology::register_constraint(
+        std::size_t size, std::string_view diagnostic_name) noexcept
+    {
+        if (finalized_)
+        {
+            return {{}, AssemblyDiagnostic::TopologyFinalized};
+        }
+        const DenseBlockRegistrationResult result =
+            constraints_.register_block(size, diagnostic_name);
+        return {{result.handle}, result.diagnostic};
+    }
+
+    AssemblyDiagnostic DynamicsUnilateralTopology::finalize() noexcept
+    {
+        if (finalized_)
+        {
+            return AssemblyDiagnostic::TopologyFinalized;
+        }
+        const AssemblyDiagnostic result = constraints_.finalize();
+        if (result != AssemblyDiagnostic::None)
+        {
+            return result;
+        }
+        finalized_ = true;
+        return AssemblyDiagnostic::None;
+    }
+
+    bool DynamicsUnilateralTopology::finalized() const noexcept
+    {
+        return finalized_;
+    }
+
+    std::size_t DynamicsUnilateralTopology::constraint_count() const noexcept
+    {
+        return constraints_.total_size();
+    }
+
+    const DenseBlockTopology&
+    DynamicsUnilateralTopology::constraint_topology() const noexcept
+    {
+        return constraints_;
+    }
+
     DynamicsAssembly::DynamicsAssembly(const DynamicsTopology& topology,
                                        DynamicsWorkspaceView workspace) noexcept
         : workspace_(workspace),
@@ -210,6 +254,63 @@ namespace termin::qopt
         });
     }
 
+    DynamicsAssembly::DynamicsAssembly(
+        const DynamicsTopology& topology,
+        const DynamicsUnilateralTopology& unilateral_topology,
+        DynamicsWorkspaceView workspace) noexcept
+        : workspace_(workspace),
+          mass_(topology.dof_topology(), topology.dof_topology(), workspace.mass),
+          load_(topology.dof_topology(), workspace.load),
+          constraint_jacobian_(topology.constraint_topology(),
+                               topology.dof_topology(),
+                               workspace.constraint_jacobian),
+          constraint_rhs_(topology.constraint_topology(), workspace.constraint_rhs)
+    {
+        if (!topology.finalized() || !unilateral_topology.finalized())
+        {
+            diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
+            return;
+        }
+        diagnostic_ = first_diagnostic({
+            mass_.diagnostic(),
+            load_.diagnostic(),
+            constraint_jacobian_.diagnostic(),
+            constraint_rhs_.diagnostic(),
+        });
+        if (diagnostic_ != AssemblyDiagnostic::None)
+        {
+            return;
+        }
+        try
+        {
+            unilateral_jacobian_ = std::make_unique<DenseBlockMatrixAssembly>(
+                unilateral_topology.constraint_topology(),
+                topology.dof_topology(),
+                workspace.unilateral_jacobian);
+            unilateral_limit_ = std::make_unique<DenseBlockVectorAssembly>(
+                unilateral_topology.constraint_topology(), workspace.unilateral_limit);
+            diagnostic_ = first_diagnostic({
+                unilateral_jacobian_->diagnostic(),
+                unilateral_limit_->diagnostic(),
+            });
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] unilateral assembly construction "
+                         "failed: %s\n",
+                         error.what());
+            diagnostic_ = AssemblyDiagnostic::InternalFailure;
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] unilateral assembly construction "
+                         "failed with unknown exception\n");
+            diagnostic_ = AssemblyDiagnostic::InternalFailure;
+        }
+    }
+
     AssemblyDiagnostic DynamicsAssembly::diagnostic() const noexcept
     {
         return diagnostic_;
@@ -226,11 +327,19 @@ namespace termin::qopt
         {
             return diagnostic_;
         }
-        return first_diagnostic({
+        const AssemblyDiagnostic permanent = first_diagnostic({
             mass_.clear(),
             load_.clear(),
             constraint_jacobian_.clear(),
             constraint_rhs_.clear(),
+        });
+        if (permanent != AssemblyDiagnostic::None || unilateral_jacobian_ == nullptr)
+        {
+            return permanent;
+        }
+        return first_diagnostic({
+            unilateral_jacobian_->clear(),
+            unilateral_limit_->clear(),
         });
     }
 
@@ -264,6 +373,29 @@ namespace termin::qopt
         return constraint_rhs_.add(constraint.block, contribution);
     }
 
+    AssemblyDiagnostic DynamicsAssembly::add_unilateral_jacobian(
+        DynamicsUnilateralConstraintHandle constraint,
+        DynamicsDofHandle dofs,
+        ConstDenseMatrixView contribution) noexcept
+    {
+        if (unilateral_jacobian_ == nullptr)
+        {
+            return AssemblyDiagnostic::InvalidBlock;
+        }
+        return unilateral_jacobian_->add(constraint.block, dofs.block, contribution);
+    }
+
+    AssemblyDiagnostic DynamicsAssembly::add_unilateral_limit(
+        DynamicsUnilateralConstraintHandle constraint,
+        ConstDenseVectorView contribution) noexcept
+    {
+        if (unilateral_limit_ == nullptr)
+        {
+            return AssemblyDiagnostic::InvalidBlock;
+        }
+        return unilateral_limit_->add(constraint.block, contribution);
+    }
+
     ConstDynamicsSystemView DynamicsAssembly::system() const noexcept
     {
         return {
@@ -271,6 +403,15 @@ namespace termin::qopt
             workspace_.load,
             workspace_.constraint_jacobian,
             workspace_.constraint_rhs,
+        };
+    }
+
+    ConstDynamicsUnilateralView
+    DynamicsAssembly::unilateral_constraints() const noexcept
+    {
+        return {
+            workspace_.unilateral_jacobian,
+            workspace_.unilateral_limit,
         };
     }
 
@@ -368,12 +509,14 @@ namespace termin::qopt
         [[nodiscard]] DynamicsSystemStepResult
         dynamics_system_failure(QpStatus status,
                                 DynamicsSystemDiagnostic diagnostic,
-                                QpSolveResult dynamics = {}) noexcept
+                                QpSolveResult dynamics = {},
+                                std::size_t unilateral_constraint_count = 0) noexcept
         {
             DynamicsSystemStepResult result;
             result.status = status;
             result.diagnostic = diagnostic;
             result.dynamics = dynamics;
+            result.unilateral_constraint_count = unilateral_constraint_count;
             return result;
         }
 
@@ -382,11 +525,14 @@ namespace termin::qopt
     struct DynamicsSystem::Impl
     {
         DynamicsTopology topology;
+        DynamicsUnilateralTopology unilateral_topology;
         std::vector<std::unique_ptr<DynamicsContribution>> contributions;
         std::vector<double> mass;
         std::vector<double> load;
         std::vector<double> jacobian;
         std::vector<double> constraint_rhs;
+        std::vector<double> unilateral_jacobian;
+        std::vector<double> unilateral_limit;
         std::vector<double> dof_solution;
         std::vector<double> constraint_reaction;
         std::vector<double> velocity;
@@ -435,6 +581,49 @@ namespace termin::qopt
                 }
                 ++step_contribution_count;
             }
+            return DynamicsSystemDiagnostic::None;
+        }
+
+        [[nodiscard]] DynamicsSystemDiagnostic prepare_unilateral_topology()
+        {
+            unilateral_topology = DynamicsUnilateralTopology{};
+            for (std::size_t index = 0; index < contributions.size(); ++index)
+            {
+                const AssemblyDiagnostic diagnostic =
+                    contributions[index]->register_unilateral_constraints(
+                        unilateral_topology);
+                if (diagnostic != AssemblyDiagnostic::None)
+                {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] contribution %zu transient "
+                                 "unilateral topology registration failed: %s\n",
+                                 index,
+                                 assembly_diagnostic_name(diagnostic).data());
+                    return DynamicsSystemDiagnostic::TopologyFailure;
+                }
+            }
+            const AssemblyDiagnostic finalize_diagnostic =
+                unilateral_topology.finalize();
+            if (finalize_diagnostic != AssemblyDiagnostic::None)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient unilateral topology "
+                             "finalization failed: %s\n",
+                             assembly_diagnostic_name(finalize_diagnostic).data());
+                return DynamicsSystemDiagnostic::TopologyFailure;
+            }
+            const std::size_t constraints = unilateral_topology.constraint_count();
+            const std::size_t dofs = topology.dof_count();
+            if (dofs != 0 &&
+                constraints > std::numeric_limits<std::size_t>::max() / dofs)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient unilateral workspace "
+                             "size overflow\n");
+                return DynamicsSystemDiagnostic::InternalFailure;
+            }
+            unilateral_jacobian.assign(constraints * dofs, 0.0);
+            unilateral_limit.assign(constraints, 0.0);
             return DynamicsSystemDiagnostic::None;
         }
 
@@ -648,6 +837,8 @@ namespace termin::qopt
             return "position_projection_failure";
         case DynamicsSystemDiagnostic::VelocityProjectionFailure:
             return "velocity_projection_failure";
+        case DynamicsSystemDiagnostic::UnilateralSolveUnavailable:
+            return "unilateral_solve_unavailable";
         case DynamicsSystemDiagnostic::InternalFailure:
             return "internal_failure";
         }
@@ -810,8 +1001,19 @@ namespace termin::qopt
 
         try
         {
+            const DynamicsSystemDiagnostic unilateral_topology_diagnostic =
+                impl_->prepare_unilateral_topology();
+            if (unilateral_topology_diagnostic != DynamicsSystemDiagnostic::None)
+            {
+                rollback();
+                return dynamics_system_failure(QpStatus::InvalidInput,
+                                               unilateral_topology_diagnostic);
+            }
+            const std::size_t unilateral_constraint_count =
+                impl_->unilateral_topology.constraint_count();
             DynamicsAssembly assembly(
                 impl_->topology,
+                impl_->unilateral_topology,
                 {
                     DenseMatrixView::row_major(impl_->mass.data(),
                                                impl_->topology.dof_count(),
@@ -825,6 +1027,14 @@ namespace termin::qopt
                         impl_->constraint_rhs.size(),
                         1,
                     },
+                    DenseMatrixView::row_major(impl_->unilateral_jacobian.data(),
+                                               unilateral_constraint_count,
+                                               impl_->topology.dof_count()),
+                    {
+                        impl_->unilateral_limit.data(),
+                        impl_->unilateral_limit.size(),
+                        1,
+                    },
                 });
             if (!assembly.valid() ||
                 impl_->read_velocity() != DynamicsSystemDiagnostic::None ||
@@ -834,6 +1044,21 @@ namespace termin::qopt
                 rollback();
                 return dynamics_system_failure(
                     QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure);
+            }
+
+            if (unilateral_constraint_count != 0)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] %zu transient unilateral rows were "
+                             "assembled, but the velocity-level unilateral "
+                             "solver is not available yet\n",
+                             unilateral_constraint_count);
+                rollback();
+                return dynamics_system_failure(
+                    QpStatus::InvalidInput,
+                    DynamicsSystemDiagnostic::UnilateralSolveUnavailable,
+                    {},
+                    unilateral_constraint_count);
             }
 
             const QpSolveResult first_dynamics =

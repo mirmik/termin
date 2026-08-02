@@ -32,6 +32,16 @@ namespace termin::qopt
         }
     };
 
+    struct DynamicsUnilateralConstraintHandle
+    {
+        DenseBlockHandle block;
+
+        [[nodiscard]] constexpr bool valid() const noexcept
+        {
+            return block.valid();
+        }
+    };
+
     template <typename Handle> struct DynamicsRegistrationResult
     {
         Handle handle;
@@ -67,12 +77,36 @@ namespace termin::qopt
         bool finalized_ = false;
     };
 
+    // The unilateral row layout is rebuilt for every transactional step. It
+    // deliberately owns no permanent DOFs or equality rows: contacts and
+    // other active-set constraints may appear and disappear without
+    // invalidating the finalized model topology.
+    class TERMIN_QOPT_API DynamicsUnilateralTopology
+    {
+      public:
+        [[nodiscard]]
+        DynamicsRegistrationResult<DynamicsUnilateralConstraintHandle>
+        register_constraint(std::size_t size,
+                            std::string_view diagnostic_name) noexcept;
+        [[nodiscard]] AssemblyDiagnostic finalize() noexcept;
+
+        [[nodiscard]] bool finalized() const noexcept;
+        [[nodiscard]] std::size_t constraint_count() const noexcept;
+        [[nodiscard]] const DenseBlockTopology& constraint_topology() const noexcept;
+
+      private:
+        DenseBlockTopology constraints_;
+        bool finalized_ = false;
+    };
+
     struct DynamicsWorkspaceView
     {
         DenseMatrixView mass;
         DenseVectorView load;
         DenseMatrixView constraint_jacobian;
         DenseVectorView constraint_rhs;
+        DenseMatrixView unilateral_jacobian;
+        DenseVectorView unilateral_limit;
     };
 
     struct ConstDynamicsSystemView
@@ -83,6 +117,13 @@ namespace termin::qopt
         ConstDenseVectorView constraint_rhs;
     };
 
+    struct ConstDynamicsUnilateralView
+    {
+        // C * x <= d, matching ActiveSetQpProblemView conventions.
+        ConstDenseMatrixView jacobian;
+        ConstDenseVectorView limit;
+    };
+
     // A checked per-step writer. The topology and numerical storage are
     // borrowed; reuse the same workspace across steps when topology is
     // unchanged.
@@ -90,6 +131,9 @@ namespace termin::qopt
     {
       public:
         DynamicsAssembly(const DynamicsTopology& topology,
+                         DynamicsWorkspaceView workspace) noexcept;
+        DynamicsAssembly(const DynamicsTopology& topology,
+                         const DynamicsUnilateralTopology& unilateral_topology,
                          DynamicsWorkspaceView workspace) noexcept;
 
         [[nodiscard]] AssemblyDiagnostic diagnostic() const noexcept;
@@ -109,8 +153,17 @@ namespace termin::qopt
         [[nodiscard]] AssemblyDiagnostic
         add_constraint_rhs(DynamicsConstraintHandle constraint,
                            ConstDenseVectorView contribution) noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_unilateral_jacobian(DynamicsUnilateralConstraintHandle constraint,
+                                DynamicsDofHandle dofs,
+                                ConstDenseMatrixView contribution) noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_unilateral_limit(DynamicsUnilateralConstraintHandle constraint,
+                             ConstDenseVectorView contribution) noexcept;
 
         [[nodiscard]] ConstDynamicsSystemView system() const noexcept;
+        [[nodiscard]] ConstDynamicsUnilateralView
+        unilateral_constraints() const noexcept;
 
       private:
         DynamicsWorkspaceView workspace_;
@@ -118,6 +171,8 @@ namespace termin::qopt
         DenseBlockVectorAssembly load_;
         DenseBlockMatrixAssembly constraint_jacobian_;
         DenseBlockVectorAssembly constraint_rhs_;
+        std::unique_ptr<DenseBlockMatrixAssembly> unilateral_jacobian_;
+        std::unique_ptr<DenseBlockVectorAssembly> unilateral_limit_;
         AssemblyDiagnostic diagnostic_ = AssemblyDiagnostic::InternalFailure;
     };
 
@@ -153,6 +208,16 @@ namespace termin::qopt
 
         [[nodiscard]] virtual AssemblyDiagnostic begin_step() noexcept
         {
+            return AssemblyDiagnostic::None;
+        }
+
+        // Register rows which exist only for the current step. Handles from a
+        // previous call are stale by construction and are rejected by the
+        // checked assembly.
+        [[nodiscard]] virtual AssemblyDiagnostic
+        register_unilateral_constraints(DynamicsUnilateralTopology& topology) noexcept
+        {
+            (void)topology;
             return AssemblyDiagnostic::None;
         }
 
@@ -253,6 +318,7 @@ namespace termin::qopt
         DynamicsFailure,
         PositionProjectionFailure,
         VelocityProjectionFailure,
+        UnilateralSolveUnavailable,
         InternalFailure,
     };
 
@@ -277,6 +343,7 @@ namespace termin::qopt
         double position_constraint_linf = 0.0;
         double velocity_constraint_linf = 0.0;
         std::size_t position_iterations = 0;
+        std::size_t unilateral_constraint_count = 0;
 
         [[nodiscard]] constexpr bool ok() const noexcept
         {

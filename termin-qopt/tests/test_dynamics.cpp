@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -182,6 +183,123 @@ namespace
         std::array<double, 4> snapshot_{};
     };
 
+    class TransientRowsContribution final : public DynamicsContribution
+    {
+      public:
+        std::size_t requested_rows = 0;
+        std::size_t registration_count = 0;
+        std::size_t rollback_count = 0;
+
+        AssemblyDiagnostic
+        register_topology(DynamicsTopology& topology) noexcept override
+        {
+            const auto result = topology.register_dofs(1, "transient_owner");
+            if (result.ok())
+            {
+                dofs_ = result.handle;
+            }
+            return result.diagnostic;
+        }
+
+        AssemblyDiagnostic register_unilateral_constraints(
+            DynamicsUnilateralTopology& topology) noexcept override
+        {
+            ++registration_count;
+            unilateral_ = {};
+            if (requested_rows == 0)
+            {
+                return AssemblyDiagnostic::None;
+            }
+            const auto result =
+                topology.register_constraint(requested_rows, "transient_test_rows");
+            if (result.ok())
+            {
+                unilateral_ = result.handle;
+            }
+            return result.diagnostic;
+        }
+
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
+                                    DynamicsAssemblyPhase) noexcept override
+        {
+            const std::array<double, 1> mass{1.0};
+            const std::array<double, 1> load{0.0};
+            AssemblyDiagnostic diagnostic = assembly.add_mass(
+                dofs_, dofs_, ConstDenseMatrixView::row_major(mass.data(), 1, 1));
+            if (diagnostic != AssemblyDiagnostic::None)
+            {
+                return diagnostic;
+            }
+            diagnostic = assembly.add_load(dofs_, {load.data(), load.size(), 1});
+            if (diagnostic != AssemblyDiagnostic::None || requested_rows == 0)
+            {
+                return diagnostic;
+            }
+            const std::array<double, 3> jacobian{-1.0, -2.0, -3.0};
+            const std::array<double, 3> limit{0.0, 1.0, 2.0};
+            diagnostic = assembly.add_unilateral_jacobian(
+                unilateral_,
+                dofs_,
+                ConstDenseMatrixView::row_major(jacobian.data(), requested_rows, 1));
+            if (diagnostic != AssemblyDiagnostic::None)
+            {
+                return diagnostic;
+            }
+            return assembly.add_unilateral_limit(unilateral_,
+                                                 {limit.data(), requested_rows, 1});
+        }
+
+        AssemblyDiagnostic begin_step() noexcept override
+        {
+            velocity_snapshot_ = velocity_;
+            return AssemblyDiagnostic::None;
+        }
+
+        void rollback_step() noexcept override
+        {
+            velocity_ = velocity_snapshot_;
+            ++rollback_count;
+        }
+
+        AssemblyDiagnostic
+        write_velocity(const DynamicsTopology& topology,
+                       DenseVectorView destination) const noexcept override
+        {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            if (!info.ok())
+            {
+                return info.diagnostic;
+            }
+            destination[info.offset] = velocity_;
+            return AssemblyDiagnostic::None;
+        }
+
+        AssemblyDiagnostic set_velocity(const DynamicsTopology& topology,
+                                        ConstDenseVectorView source) noexcept override
+        {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            if (!info.ok())
+            {
+                return info.diagnostic;
+            }
+            velocity_ = source[info.offset];
+            return AssemblyDiagnostic::None;
+        }
+
+        AssemblyDiagnostic set_trial_configuration(const DynamicsTopology&,
+                                                   ConstDenseVectorView,
+                                                   double) noexcept override
+        {
+            return AssemblyDiagnostic::None;
+        }
+
+      private:
+        DynamicsDofHandle dofs_;
+        DynamicsUnilateralConstraintHandle unilateral_;
+        double velocity_ = 0.0;
+        double velocity_snapshot_ = 0.0;
+    };
+
 } // namespace
 
 int main()
@@ -197,17 +315,39 @@ int main()
     TERMIN_QOPT_CHECK(topology.dof_count() == 2);
     TERMIN_QOPT_CHECK(topology.constraint_count() == 1);
 
+    DynamicsUnilateralTopology unilateral_topology;
+    const auto contact_rows =
+        unilateral_topology.register_constraint(2, "contact_rows");
+    TERMIN_QOPT_CHECK(contact_rows.ok());
+    TERMIN_QOPT_CHECK(
+        unilateral_topology.register_constraint(1, "contact_rows").diagnostic ==
+        AssemblyDiagnostic::DuplicateBlockName);
+    TERMIN_QOPT_CHECK(unilateral_topology.finalize() == AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(unilateral_topology.constraint_count() == 2);
+    TERMIN_QOPT_CHECK(unilateral_topology.register_constraint(1, "late").diagnostic ==
+                      AssemblyDiagnostic::TopologyFinalized);
+
     std::array<double, 4> mass{};
     std::array<double, 2> load{};
     std::array<double, 2> jacobian{};
     std::array<double, 1> rhs{};
-    DynamicsAssembly assembly(topology,
-                              {
-                                  DenseMatrixView::row_major(mass.data(), 2, 2),
-                                  {load.data(), load.size(), 1},
-                                  DenseMatrixView::row_major(jacobian.data(), 1, 2),
-                                  {rhs.data(), rhs.size(), 1},
-                              });
+    std::array<double, 4> unilateral_jacobian{};
+    std::array<double, 2> unilateral_limit{};
+    DynamicsAssembly assembly(
+        topology,
+        unilateral_topology,
+        {
+            DenseMatrixView::row_major(mass.data(), 2, 2),
+            {load.data(), load.size(), 1},
+            DenseMatrixView::row_major(jacobian.data(), 1, 2),
+            {rhs.data(), rhs.size(), 1},
+            DenseMatrixView::row_major(unilateral_jacobian.data(), 2, 2),
+            {
+                unilateral_limit.data(),
+                unilateral_limit.size(),
+                1,
+            },
+        });
     TERMIN_QOPT_CHECK(assembly.valid());
     TERMIN_QOPT_CHECK(assembly.clear() == AssemblyDiagnostic::None);
 
@@ -243,6 +383,68 @@ int main()
     TERMIN_QOPT_CHECK(
         assembly.add_constraint_rhs(coupling.handle, {zero.data(), zero.size(), 1}) ==
         AssemblyDiagnostic::None);
+    const std::array<double, 2> unilateral_first{1.0, 2.0};
+    const std::array<double, 2> unilateral_second{-1.0, -2.0};
+    const std::array<double, 2> unilateral_limits{3.0, 4.0};
+    TERMIN_QOPT_CHECK(
+        assembly.add_unilateral_jacobian(
+            contact_rows.handle,
+            first.handle,
+            ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) ==
+        AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(
+        assembly.add_unilateral_jacobian(
+            contact_rows.handle,
+            second.handle,
+            ConstDenseMatrixView::row_major(unilateral_second.data(), 2, 1)) ==
+        AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_unilateral_limit(contact_rows.handle,
+                                                    {
+                                                        unilateral_limits.data(),
+                                                        unilateral_limits.size(),
+                                                        1,
+                                                    }) == AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(unilateral_jacobian[0] == 1.0);
+    TERMIN_QOPT_CHECK(unilateral_jacobian[1] == -1.0);
+    TERMIN_QOPT_CHECK(unilateral_jacobian[2] == 2.0);
+    TERMIN_QOPT_CHECK(unilateral_jacobian[3] == -2.0);
+    TERMIN_QOPT_CHECK(unilateral_limit == unilateral_limits);
+
+    DynamicsUnilateralTopology next_unilateral_topology;
+    const auto next_contact =
+        next_unilateral_topology.register_constraint(1, "next_contact");
+    TERMIN_QOPT_CHECK(next_contact.ok());
+    TERMIN_QOPT_CHECK(next_unilateral_topology.finalize() == AssemblyDiagnostic::None);
+    std::array<double, 2> next_jacobian{};
+    std::array<double, 1> next_limit{};
+    DynamicsAssembly next_assembly(
+        topology,
+        next_unilateral_topology,
+        {
+            DenseMatrixView::row_major(mass.data(), 2, 2),
+            {load.data(), load.size(), 1},
+            DenseMatrixView::row_major(jacobian.data(), 1, 2),
+            {rhs.data(), rhs.size(), 1},
+            DenseMatrixView::row_major(next_jacobian.data(), 1, 2),
+            {next_limit.data(), next_limit.size(), 1},
+        });
+    TERMIN_QOPT_CHECK(next_assembly.valid());
+    TERMIN_QOPT_CHECK(next_assembly.add_unilateral_limit(contact_rows.handle,
+                                                         {next_limit.data(), 1, 1}) ==
+                      AssemblyDiagnostic::InvalidBlock);
+    TERMIN_QOPT_CHECK(
+        next_assembly.add_unilateral_jacobian(
+            next_contact.handle,
+            first.handle,
+            ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) ==
+        AssemblyDiagnostic::DimensionMismatch);
+    const std::array<double, 1> non_finite_limit{
+        std::numeric_limits<double>::quiet_NaN(),
+    };
+    TERMIN_QOPT_CHECK(next_assembly.add_unilateral_limit(
+                          next_contact.handle,
+                          {non_finite_limit.data(), non_finite_limit.size(), 1}) ==
+                      AssemblyDiagnostic::NonFiniteContribution);
 
     std::array<double, 2> acceleration{-100.0, -100.0};
     std::array<double, 1> reaction{-100.0};
@@ -362,6 +564,26 @@ int main()
     TERMIN_QOPT_CHECK(std::abs(second_scalar_state->position) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(second_scalar_state->velocity) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(second_scalar_state->acceleration) < 1e-12);
+
+    DynamicsSystem transient_system;
+    auto transient = std::make_unique<TransientRowsContribution>();
+    TransientRowsContribution* transient_state = transient.get();
+    TERMIN_QOPT_CHECK(transient_system.add_contribution(std::move(transient)) ==
+                      DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(transient_system.finalize() == DynamicsSystemDiagnostic::None);
+    transient_state->requested_rows = 2;
+    const DynamicsSystemStepResult unsupported = transient_system.step();
+    TERMIN_QOPT_CHECK(unsupported.status == QpStatus::InvalidInput);
+    TERMIN_QOPT_CHECK(unsupported.diagnostic ==
+                      DynamicsSystemDiagnostic::UnilateralSolveUnavailable);
+    TERMIN_QOPT_CHECK(unsupported.unilateral_constraint_count == 2);
+    TERMIN_QOPT_CHECK(transient_state->rollback_count == 1);
+
+    transient_state->requested_rows = 0;
+    const DynamicsSystemStepResult zero_rows = transient_system.step();
+    TERMIN_QOPT_CHECK(zero_rows.ok());
+    TERMIN_QOPT_CHECK(zero_rows.unilateral_constraint_count == 0);
+    TERMIN_QOPT_CHECK(transient_state->registration_count == 2);
 
     return 0;
 }
