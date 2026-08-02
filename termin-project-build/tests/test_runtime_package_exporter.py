@@ -38,6 +38,8 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
         "import json, pathlib, sys\n"
         "inp = pathlib.Path(sys.argv[sys.argv.index('--input') + 1])\n"
         "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "stage = sys.argv[sys.argv.index('--stage') + 1]\n"
         "out.parent.mkdir(parents=True, exist_ok=True)\n"
         "out.write_bytes(b'SPIRV')\n"
         "source = inp.read_text(encoding='utf-8') if inp.exists() else ''\n"
@@ -50,7 +52,8 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
         "    resources.append({'name': 'material', 'kind': 'constant_buffer', 'scope': 'material'})\n"
         "if 'Sampler2D u_input' in source:\n"
         "    resources.append({'name': 'u_input', 'kind': 'texture', 'scope': 'transient'})\n"
-        "layout = {'version': 1, 'resources': resources}\n"
+        "layout = {'version': 3 if target == 'webgpu' else 1, "
+        "          'target': target, 'stage': stage, 'resources': resources}\n"
         "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps(layout, indent=2), encoding='utf-8')\n",
         encoding="utf-8",
     )
@@ -645,16 +648,26 @@ def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> 
         [],
         shader,
         _write_fake_shader_compiler(tmp_path),
-        ("vulkan", "opengl", "d3d11"),
+        ("vulkan", "opengl", "d3d11", "webgpu"),
     )
 
-    assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11"]
+    assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11", "webgpu"]
     assert all(
         (package / path).is_file()
         for target in spec["artifacts"].values()
         for path in target.values()
     )
     assert resources == []
+    assert spec["artifacts"]["webgpu"] == {
+        "vertex": "shaders/webgpu/shv_synthetic_surface.vert.wgsl",
+        "fragment": "shaders/webgpu/shv_synthetic_surface.frag.wgsl",
+    }
+    for artifact in spec["artifacts"]["webgpu"].values():
+        layout = json.loads(
+            Path(f"{package / artifact}.layout.json").read_text(encoding="utf-8")
+        )
+        assert layout["version"] == 3
+        assert layout["target"] == "webgpu"
 
 
 @full_runtime_package_exporter
