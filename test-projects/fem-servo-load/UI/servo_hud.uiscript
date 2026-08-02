@@ -11,7 +11,7 @@ root:
       offset: [-18, 18]
       layout:
         width: 620
-        height: 500
+        height: 650
       background_color: [0.02, 0.04, 0.075, 0.94]
     - type: termin.gui.VStack
       name: telemetry_card
@@ -19,7 +19,7 @@ root:
       offset: [-18, 18]
       layout:
         width: 620
-        height: 500
+        height: 650
       padding: [18, 14, 18, 14]
       spacing: 5
       children:
@@ -75,4 +75,17 @@ root:
           x_label: time, s
           y_label: angle, deg
           auto_fit: true
-          basis: 250
+          basis: 205
+        - type: termin.gui.Label
+          name: effort_legend
+          text: "position: blue   integral: orange   velocity: green   command: purple   applied: red dashed"
+          font_size: 11
+          color: [0.72, 0.80, 0.86, 1]
+          basis: preferred
+        - type: termin.gui.Plot2D
+          name: servo_effort_plot
+          title: CONTROL EFFORT
+          x_label: time, s
+          y_label: effort, N*m
+          auto_fit: true
+          basis: 205
