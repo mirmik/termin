@@ -49,10 +49,15 @@ shows measured/target coordinate, tracking error, applied/maximum effort,
 instantaneous power and aggregate motor work. Mechanical energy is not
 conserved because the motor exchanges energy with the articulation.
 
-The same HUD embeds a ready `termin.gui.Plot2D` widget and streams a bounded
-30-second history of measured and target coordinates into two retained line
-series. This demonstrates direct tcplot rendering inside a `.uiscript` widget
-tree; it does not use a `SceneView` or an offscreen texture.
+The same HUD embeds two ready `termin.gui.Plot2D` widgets and streams a bounded
+30-second history into retained line series. The first plot compares measured
+and target coordinates. The second separates the proportional, integral, and
+velocity-feedback contributions to the servo command, overlays their total,
+and shows the effort actually applied by the bounded motor. The difference
+between the command and applied-effort curves makes motor saturation visible
+without mixing angular and effort scales on one axis. This demonstrates direct
+tcplot rendering inside a `.uiscript` widget tree; it does not use a
+`SceneView` or an offscreen texture.
 
 The project uses only native component factories and has no Python runtime
 module or NumPy dependency.

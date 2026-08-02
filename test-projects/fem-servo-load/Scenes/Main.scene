@@ -242,7 +242,7 @@
                   "position_gain": 100.0,
                   "integral_gain": 100.0,
                   "maximum_integral_effort": 40.0,
-                  "velocity_gain": 20.0,
+                  "velocity_gain": 40.0,
                   "feed_forward_effort": 0.0
                 }
               }
@@ -672,6 +672,9 @@
               "enabled": true,
               "world_entity_name": "FEM Physics World",
               "servo_entity_name": "Servo Joint",
+              "plot_widget_name": "servo_plot",
+              "effort_plot_widget_name": "servo_effort_plot",
+              "plot_history": 8.0,
               "refresh_interval": 0.1
             }
           }
@@ -828,6 +831,7 @@
         ]
       }
     },
+    "selected_entity": "fem-servo-load-servo-joint",
     "expanded_entities": [
       "fem-servo-load-driven-load",
       "fem-servo-load-servo-joint",

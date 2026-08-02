@@ -212,6 +212,13 @@ namespace termin
                                 "plot_widget_name",
                                 "Plot Widget",
                                 "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::effort_plot_widget_name,
+            "FEMPhysicsHudComponent",
+            "effort_plot_widget_name",
+            "Effort Plot Widget",
+            "string");
         tc::stage_inspect_field(inspect,
                                 &FEMPhysicsHudComponent::plot_history,
                                 "FEMPhysicsHudComponent",
@@ -241,6 +248,11 @@ namespace termin
         plot_time_.clear();
         plot_coordinate_.clear();
         plot_target_.clear();
+        plot_position_effort_.clear();
+        plot_integral_effort_.clear();
+        plot_velocity_effort_.clear();
+        plot_commanded_effort_.clear();
+        plot_applied_effort_.clear();
         refresh();
     }
 
@@ -273,6 +285,11 @@ namespace termin
         plot_time_.clear();
         plot_coordinate_.clear();
         plot_target_.clear();
+        plot_position_effort_.clear();
+        plot_integral_effort_.clear();
+        plot_velocity_effort_.clear();
+        plot_commanded_effort_.clear();
+        plot_applied_effort_.clear();
         CxxComponent::on_destroy();
     }
 
@@ -356,51 +373,109 @@ namespace termin
                     document, "servo_value", format_servo(*servo, *motor));
             }
 #ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
-            if (tcplot::gui_native::Plot2D* plot =
-                    find_plot(document, plot_widget_name))
+            tcplot::gui_native::Plot2D* coordinate_plot =
+                find_plot(document, plot_widget_name);
+            tcplot::gui_native::Plot2D* effort_plot =
+                find_plot(document, effort_plot_widget_name);
+            if ((coordinate_plot != nullptr || effort_plot != nullptr) &&
+                telemetry.initialized && servo->initialized())
             {
-                if (telemetry.initialized && servo->initialized())
+                if (!plot_time_.empty() &&
+                    telemetry.simulated_time < plot_time_.back())
                 {
-                    if (!plot_time_.empty() &&
-                        telemetry.simulated_time < plot_time_.back())
-                    {
-                        plot_time_.clear();
-                        plot_coordinate_.clear();
-                        plot_target_.clear();
-                    }
-                    const double coordinate =
-                        servo->target_coordinate - servo->position_error();
-                    plot_time_.push_back(telemetry.simulated_time);
-                    plot_coordinate_.push_back(coordinate);
-                    plot_target_.push_back(servo->target_coordinate);
+                    plot_time_.clear();
+                    plot_coordinate_.clear();
+                    plot_target_.clear();
+                    plot_position_effort_.clear();
+                    plot_integral_effort_.clear();
+                    plot_velocity_effort_.clear();
+                    plot_commanded_effort_.clear();
+                    plot_applied_effort_.clear();
+                }
+                const double coordinate =
+                    servo->target_coordinate - servo->position_error();
+                plot_time_.push_back(telemetry.simulated_time);
+                plot_coordinate_.push_back(coordinate);
+                plot_target_.push_back(servo->target_coordinate);
+                plot_position_effort_.push_back(servo->position_effort());
+                plot_integral_effort_.push_back(servo->integral_effort());
+                plot_velocity_effort_.push_back(servo->velocity_effort());
+                plot_commanded_effort_.push_back(servo->commanded_effort());
+                plot_applied_effort_.push_back(motor->applied_effort());
 
-                    const double first_time =
-                        telemetry.simulated_time - std::max(plot_history, 1.0);
-                    const auto first = std::lower_bound(
-                        plot_time_.begin(), plot_time_.end(), first_time);
-                    const std::size_t erase_count =
-                        static_cast<std::size_t>(first - plot_time_.begin());
-                    if (erase_count > 0)
-                    {
-                        plot_time_.erase(plot_time_.begin(), first);
-                        plot_coordinate_.erase(plot_coordinate_.begin(),
-                                               plot_coordinate_.begin() +
-                                                   erase_count);
-                        plot_target_.erase(plot_target_.begin(),
-                                           plot_target_.begin() + erase_count);
-                    }
+                const double first_time =
+                    telemetry.simulated_time - std::max(plot_history, 1.0);
+                const auto first = std::lower_bound(
+                    plot_time_.begin(), plot_time_.end(), first_time);
+                const std::size_t erase_count =
+                    static_cast<std::size_t>(first - plot_time_.begin());
+                if (erase_count > 0)
+                {
+                    plot_time_.erase(plot_time_.begin(), first);
+                    plot_coordinate_.erase(plot_coordinate_.begin(),
+                                           plot_coordinate_.begin() +
+                                               erase_count);
+                    plot_target_.erase(plot_target_.begin(),
+                                       plot_target_.begin() + erase_count);
+                    plot_position_effort_.erase(
+                        plot_position_effort_.begin(),
+                        plot_position_effort_.begin() + erase_count);
+                    plot_integral_effort_.erase(
+                        plot_integral_effort_.begin(),
+                        plot_integral_effort_.begin() + erase_count);
+                    plot_velocity_effort_.erase(
+                        plot_velocity_effort_.begin(),
+                        plot_velocity_effort_.begin() + erase_count);
+                    plot_commanded_effort_.erase(
+                        plot_commanded_effort_.begin(),
+                        plot_commanded_effort_.begin() + erase_count);
+                    plot_applied_effort_.erase(
+                        plot_applied_effort_.begin(),
+                        plot_applied_effort_.begin() + erase_count);
+                }
 
-                    if (plot->line_count() != 2)
+                if (coordinate_plot != nullptr)
+                {
+                    if (coordinate_plot->line_count() != 2)
                     {
-                        plot->clear_lines();
-                        plot->add_line();
+                        coordinate_plot->clear_lines();
+                        coordinate_plot->add_line();
                         tcplot::PlotLineSeriesStyle2D target_style;
                         target_style.color = tcplot::styles::cycle_color(1);
                         target_style.line_style = tcplot::LineStyle::Dash;
-                        plot->add_line(target_style);
+                        coordinate_plot->add_line(target_style);
                     }
-                    (void)plot->set_line_data(0, plot_time_, plot_coordinate_);
-                    (void)plot->set_line_data(1, plot_time_, plot_target_);
+                    (void)coordinate_plot->set_line_data(
+                        0, plot_time_, plot_coordinate_);
+                    (void)coordinate_plot->set_line_data(
+                        1, plot_time_, plot_target_);
+                }
+                if (effort_plot != nullptr)
+                {
+                    if (effort_plot->line_count() != 5)
+                    {
+                        effort_plot->clear_lines();
+                        effort_plot->add_line();
+                        effort_plot->add_line();
+                        effort_plot->add_line();
+                        tcplot::PlotLineSeriesStyle2D commanded_style;
+                        commanded_style.color = tcplot::styles::cycle_color(4);
+                        effort_plot->add_line(commanded_style);
+                        tcplot::PlotLineSeriesStyle2D applied_style;
+                        applied_style.color = tcplot::styles::cycle_color(3);
+                        applied_style.line_style = tcplot::LineStyle::Dash;
+                        effort_plot->add_line(applied_style);
+                    }
+                    (void)effort_plot->set_line_data(
+                        0, plot_time_, plot_position_effort_);
+                    (void)effort_plot->set_line_data(
+                        1, plot_time_, plot_integral_effort_);
+                    (void)effort_plot->set_line_data(
+                        2, plot_time_, plot_velocity_effort_);
+                    (void)effort_plot->set_line_data(
+                        3, plot_time_, plot_commanded_effort_);
+                    (void)effort_plot->set_line_data(
+                        4, plot_time_, plot_applied_effort_);
                 }
             }
 #endif

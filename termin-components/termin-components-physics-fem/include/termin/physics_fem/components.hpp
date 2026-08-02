@@ -118,6 +118,8 @@ namespace termin
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] double position_error() const noexcept;
+        [[nodiscard]] double position_effort() const noexcept;
+        [[nodiscard]] double velocity_effort() const noexcept;
         [[nodiscard]] double integral_effort() const noexcept;
         [[nodiscard]] double commanded_effort() const noexcept;
 
@@ -129,6 +131,8 @@ namespace termin
         qopt::Articulation3DContribution* articulation_ = nullptr;
         std::size_t dof_index_ = 0;
         double coordinate_scale_ = 1.0;
+        double position_effort_ = 0.0;
+        double velocity_effort_ = 0.0;
         double integral_effort_ = 0.0;
         double commanded_effort_ = 0.0;
     };

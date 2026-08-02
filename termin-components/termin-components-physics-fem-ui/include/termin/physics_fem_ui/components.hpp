@@ -16,6 +16,7 @@ namespace termin
         // "servo_value" is updated in addition to aggregate world telemetry.
         std::string servo_entity_name;
         std::string plot_widget_name = "servo_plot";
+        std::string effort_plot_widget_name = "servo_effort_plot";
         double plot_history = 30.0;
         double refresh_interval = 0.1;
 
@@ -34,6 +35,11 @@ namespace termin
         std::vector<double> plot_time_;
         std::vector<double> plot_coordinate_;
         std::vector<double> plot_target_;
+        std::vector<double> plot_position_effort_;
+        std::vector<double> plot_integral_effort_;
+        std::vector<double> plot_velocity_effort_;
+        std::vector<double> plot_commanded_effort_;
+        std::vector<double> plot_applied_effort_;
 
         void refresh();
     };
