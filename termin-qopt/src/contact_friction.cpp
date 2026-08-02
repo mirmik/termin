@@ -121,13 +121,19 @@ namespace termin::qopt
         {
             return invalid_result(QpDiagnostic::NonFiniteInput);
         }
+        std::vector<double> base_normal_impulse(contacts);
         for (std::size_t contact = 0; contact < contacts; ++contact)
         {
-            if (problem.normal_impulse[contact] < 0.0 ||
+            if (problem.normal_impulse[contact] < -options.qp.active_tolerance ||
                 problem.friction_coefficient[contact] < 0.0)
             {
                 return invalid_result(QpDiagnostic::InvalidBounds);
             }
+            // The preceding unilateral solve is feasible only up to the QP
+            // tolerance. Preserve the physical non-negative impulse invariant
+            // at the boundary passed to the friction solve.
+            base_normal_impulse[contact] =
+                std::max(problem.normal_impulse[contact], 0.0);
         }
         for (std::size_t row = 0; row < normal_constraints; ++row)
         {
@@ -172,7 +178,7 @@ namespace termin::qopt
             bool any_capacity = false;
             for (std::size_t contact = 0; contact < contacts; ++contact)
             {
-                any_capacity |= problem.normal_impulse[contact] > 0.0 &&
+                any_capacity |= base_normal_impulse[contact] > 0.0 &&
                                 problem.friction_coefficient[contact] > 0.0;
             }
             if (!any_capacity)
@@ -188,7 +194,7 @@ namespace termin::qopt
                 for (std::size_t contact = 0; contact < solution.normal_impulse.size;
                      ++contact)
                 {
-                    solution.normal_impulse[contact] = problem.normal_impulse[contact];
+                    solution.normal_impulse[contact] = base_normal_impulse[contact];
                 }
                 for (std::size_t contact = 0; contact < solution.friction_work.size;
                      ++contact)
@@ -317,10 +323,10 @@ namespace termin::qopt
             {
                 const std::size_t lower_row = normal_constraints + contact;
                 inequalities[lower_row * variables + contact * 3] = -1.0;
-                limits[lower_row] = problem.normal_impulse[contact];
+                limits[lower_row] = base_normal_impulse[contact];
                 const std::size_t active_normal_row =
                     normal_constraints + contacts + contact;
-                if (problem.normal_impulse[contact] > options.qp.active_tolerance)
+                if (base_normal_impulse[contact] > options.qp.active_tolerance)
                 {
                     for (std::size_t variable = 0; variable < variables; ++variable)
                     {
@@ -333,7 +339,7 @@ namespace termin::qopt
                     }
                 }
                 const double radius = problem.friction_coefficient[contact] *
-                                      problem.normal_impulse[contact];
+                                      base_normal_impulse[contact];
                 const double polygon_limit =
                     radius * std::cos(std::numbers::pi /
                                       static_cast<double>(options.cone_facets));
@@ -394,7 +400,7 @@ namespace termin::qopt
             for (std::size_t contact = 0; contact < contacts; ++contact)
             {
                 output_normal_impulse[contact] =
-                    problem.normal_impulse[contact] + variable_impulse[contact * 3];
+                    base_normal_impulse[contact] + variable_impulse[contact * 3];
                 output_impulse[contact * 2] = variable_impulse[contact * 3 + 1];
                 output_impulse[contact * 2 + 1] = variable_impulse[contact * 3 + 2];
             }

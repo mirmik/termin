@@ -277,6 +277,24 @@ namespace
         TERMIN_QOPT_CHECK(fixture.solved_velocity[0] == 7.0);
         TERMIN_QOPT_CHECK(fixture.tangent_impulse[0] == 10.0);
     }
+
+    void test_roundoff_negative_normal_impulse_is_clamped()
+    {
+        OneContactFixture fixture;
+        fixture.normal_impulse[0] = -5e-10;
+        const QpSolveResult result =
+            solve_contact_friction(fixture.problem(), fixture.solution());
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(fixture.solved_normal_impulse[0] == 0.0);
+        TERMIN_QOPT_CHECK(fixture.tangent_impulse[0] == 0.0);
+        TERMIN_QOPT_CHECK(fixture.tangent_impulse[1] == 0.0);
+
+        fixture.normal_impulse[0] = -2e-9;
+        const QpSolveResult invalid =
+            solve_contact_friction(fixture.problem(), fixture.solution());
+        TERMIN_QOPT_CHECK(invalid.status == QpStatus::InvalidInput);
+        TERMIN_QOPT_CHECK(invalid.diagnostic == QpDiagnostic::InvalidBounds);
+    }
 } // namespace
 
 int main()
@@ -288,5 +306,6 @@ int main()
     test_kinematically_locked_tangents_are_noop();
     test_multi_contact_support_redistributes_normal_impulse();
     test_invalid_normal_state_is_rejected_transactionally();
+    test_roundoff_negative_normal_impulse_is_clamped();
     return 0;
 }

@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-standing-robot-lower-leg-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.98, 0.68, 0.10, 1.0],
+    "u_metallic": 0.16,
+    "u_roughness": 0.32,
+    "u_diffuse_mul": 1.0
+  }
+}

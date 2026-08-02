@@ -101,6 +101,11 @@ count, cached and warm-started contact count, active normal rows, minimum gap,
 normal impulse sum, normal reaction sum, and maximum normal reaction.
 With contact friction enabled it also reports sliding-contact count, tangent
 speed, tangent impulse, available friction capacity, and friction work.
+
+`test-projects/fem-standing-robot` combines the floating-base scene compiler,
+eight reduced servo/motor channels, four frictional feet, and native HUD
+telemetry into a vertical robot acceptance. Its headless counterpart verifies
+both a bounded five-second stance and collapse after runtime servo disable.
 Motor work is a per-step diagnostic integral, not an additional conserved
 state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.

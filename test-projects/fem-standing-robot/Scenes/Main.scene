@@ -1,0 +1,2806 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "",
+    "entities": [
+      {
+        "uuid": "fem-standing-ground",
+        "name": "Static Ground",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            -0.25
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-ground-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": true,
+              "mesh_offset_position": [
+                0,
+                0,
+                0
+              ],
+              "mesh_offset_euler": [
+                0,
+                0,
+                0
+              ],
+              "mesh_offset_scale": [
+                8,
+                8,
+                0.5
+              ]
+            }
+          },
+          {
+            "source_id": "fem-standing-ground-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-standing-robot-ground-material",
+                "name": "Ground",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
+            }
+          },
+          {
+            "source_id": "fem-standing-ground-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [
+                8,
+                8,
+                0.5
+              ],
+              "convex_hull_mesh": {
+                "type": "none"
+              },
+              "collider_offset_enabled": false,
+              "collider_offset_position": [
+                0,
+                0,
+                0
+              ],
+              "collider_offset_euler": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-standing-robot-root",
+        "name": "Robot Base",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            1.55
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-body-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": true,
+              "mesh_offset_position": [
+                0,
+                0,
+                0
+              ],
+              "mesh_offset_euler": [
+                0,
+                0,
+                0
+              ],
+              "mesh_offset_scale": [
+                1.4,
+                1,
+                0.4
+              ]
+            }
+          },
+          {
+            "source_id": "fem-standing-body-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "fem-standing-robot-body-material",
+                "name": "Body",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": true,
+              "_override_material": false,
+              "materials": []
+            }
+          },
+          {
+            "source_id": "fem-standing-articulation",
+            "type": "FEMArticulationComponent",
+            "data": {
+              "enabled": true,
+              "base_mode": 1
+            }
+          },
+          {
+            "source_id": "fem-standing-base-body",
+            "type": "FEMRigidBodyComponent",
+            "data": {
+              "enabled": true,
+              "mass": 8,
+              "inertia_diagonal": [
+                1.1,
+                1.6,
+                1.9
+              ],
+              "linear_damping": 0,
+              "angular_damping": 0
+            }
+          },
+          {
+            "source_id": "fem-standing-base-collider",
+            "type": "ColliderComponent",
+            "data": {
+              "enabled": true,
+              "collider_type": "Box",
+              "convex_hull_mesh_source": "Field",
+              "box_size": [
+                1.4,
+                1,
+                0.4
+              ],
+              "convex_hull_mesh": {
+                "type": "none"
+              },
+              "collider_offset_enabled": false,
+              "collider_offset_position": [
+                0,
+                0,
+                0
+              ],
+              "collider_offset_euler": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "children": [
+          {
+            "uuid": "fem-standing-front-left-hip",
+            "name": "Front Left Hip",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                -0.58,
+                -0.4,
+                -0.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "components": [
+              {
+                "source_id": "fem-standing-front-left-hip-mesh",
+                "type": "MeshComponent",
+                "data": {
+                  "enabled": true,
+                  "mesh_generated": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000002",
+                    "name": "Sphere",
+                    "type": "uuid",
+                    "kind": "tc_mesh"
+                  },
+                  "mesh_offset_enabled": true,
+                  "mesh_offset_position": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_euler": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_scale": [
+                    0.17,
+                    0.17,
+                    0.17
+                  ]
+                }
+              },
+              {
+                "source_id": "fem-standing-front-left-hip-renderer",
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "material": {
+                    "uuid": "fem-standing-robot-joint-material",
+                    "name": "Joint",
+                    "type": "uuid",
+                    "kind": "tc_material"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false,
+                  "materials": []
+                }
+              },
+              {
+                "source_id": "fem-standing-front-left-hip-rotator",
+                "type": "RotatorComponent",
+                "data": {
+                  "enabled": true,
+                  "axis": [
+                    0,
+                    1,
+                    0
+                  ],
+                  "coordinate": [
+                    15,
+                    -60,
+                    60
+                  ],
+                  "origin_position": [
+                    -0.58,
+                    -0.4,
+                    -0.1
+                  ],
+                  "origin_rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ],
+                  "coordinate_scale": "0.017453292519943295"
+                }
+              },
+              {
+                "source_id": "fem-standing-front-left-hip-motor",
+                "type": "FEMArticulationMotorComponent",
+                "data": {
+                  "enabled": true,
+                  "commanded_effort": 0,
+                  "maximum_effort": 40
+                }
+              },
+              {
+                "source_id": "fem-standing-front-left-hip-servo",
+                "type": "FEMJointServoComponent",
+                "data": {
+                  "enabled": true,
+                  "position_control_enabled": true,
+                  "integral_control_enabled": false,
+                  "target_coordinate": 15,
+                  "target_velocity": 0,
+                  "position_gain": 100,
+                  "integral_gain": 0,
+                  "maximum_integral_effort": 10,
+                  "velocity_gain": 15,
+                  "feed_forward_effort": 0
+                }
+              }
+            ],
+            "children": [
+              {
+                "uuid": "fem-standing-front-left-upper-leg",
+                "name": "Front Left Upper Leg",
+                "priority": 0,
+                "visible": true,
+                "enabled": true,
+                "pickable": true,
+                "selectable": true,
+                "layer": 0,
+                "flags": 0,
+                "pose": {
+                  "position": [
+                    0,
+                    0,
+                    -0.35
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ]
+                },
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "components": [
+                  {
+                    "source_id": "fem-standing-front-left-upper-mesh",
+                    "type": "MeshComponent",
+                    "data": {
+                      "enabled": true,
+                      "mesh_generated": false,
+                      "mesh": {
+                        "uuid": "00000000-0000-0000-0003-000000000001",
+                        "name": "Cube",
+                        "type": "uuid",
+                        "kind": "tc_mesh"
+                      },
+                      "mesh_offset_enabled": true,
+                      "mesh_offset_position": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_euler": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_scale": [
+                        0.19,
+                        0.19,
+                        0.7
+                      ]
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-front-left-upper-renderer",
+                    "type": "MeshRenderer",
+                    "data": {
+                      "enabled": true,
+                      "material": {
+                        "uuid": "fem-standing-robot-upper-leg-material",
+                        "name": "UpperLeg",
+                        "type": "uuid",
+                        "kind": "tc_material"
+                      },
+                      "cast_shadow": true,
+                      "_override_material": false,
+                      "materials": []
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-front-left-upper-body",
+                    "type": "FEMRigidBodyComponent",
+                    "data": {
+                      "enabled": true,
+                      "mass": 0.4,
+                      "inertia_diagonal": [
+                        0.018,
+                        0.018,
+                        0.003
+                      ],
+                      "linear_damping": 0,
+                      "angular_damping": 0
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "uuid": "fem-standing-front-left-knee",
+                    "name": "Front Left Knee",
+                    "priority": 0,
+                    "visible": true,
+                    "enabled": true,
+                    "pickable": true,
+                    "selectable": true,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                      "position": [
+                        0,
+                        0,
+                        -0.35
+                      ],
+                      "rotation": [
+                        0,
+                        0,
+                        0,
+                        1
+                      ]
+                    },
+                    "scale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "components": [
+                      {
+                        "source_id": "fem-standing-front-left-knee-mesh",
+                        "type": "MeshComponent",
+                        "data": {
+                          "enabled": true,
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": true,
+                          "mesh_offset_position": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_euler": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_scale": [
+                            0.16,
+                            0.16,
+                            0.16
+                          ]
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-left-knee-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "fem-standing-robot-joint-material",
+                            "name": "Joint",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-left-knee-rotator",
+                        "type": "RotatorComponent",
+                        "data": {
+                          "enabled": true,
+                          "axis": [
+                            0,
+                            1,
+                            0
+                          ],
+                          "coordinate": [
+                            -30,
+                            -60,
+                            60
+                          ],
+                          "origin_position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "origin_rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ],
+                          "coordinate_scale": "0.017453292519943295"
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-left-knee-motor",
+                        "type": "FEMArticulationMotorComponent",
+                        "data": {
+                          "enabled": true,
+                          "commanded_effort": 0,
+                          "maximum_effort": 40
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-left-knee-servo",
+                        "type": "FEMJointServoComponent",
+                        "data": {
+                          "enabled": true,
+                          "position_control_enabled": true,
+                          "integral_control_enabled": false,
+                          "target_coordinate": -30,
+                          "target_velocity": 0,
+                          "position_gain": 100,
+                          "integral_gain": 0,
+                          "maximum_integral_effort": 10,
+                          "velocity_gain": 15,
+                          "feed_forward_effort": 0
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "uuid": "fem-standing-front-left-lower-leg",
+                        "name": "Front Left Lower Leg",
+                        "priority": 0,
+                        "visible": true,
+                        "enabled": true,
+                        "pickable": true,
+                        "selectable": true,
+                        "layer": 0,
+                        "flags": 0,
+                        "pose": {
+                          "position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ]
+                        },
+                        "scale": [
+                          1,
+                          1,
+                          1
+                        ],
+                        "components": [
+                          {
+                            "source_id": "fem-standing-front-left-lower-mesh",
+                            "type": "MeshComponent",
+                            "data": {
+                              "enabled": true,
+                              "mesh_generated": false,
+                              "mesh": {
+                                "uuid": "00000000-0000-0000-0003-000000000001",
+                                "name": "Cube",
+                                "type": "uuid",
+                                "kind": "tc_mesh"
+                              },
+                              "mesh_offset_enabled": true,
+                              "mesh_offset_position": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_scale": [
+                                0.17,
+                                0.17,
+                                0.7
+                              ]
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-left-lower-renderer",
+                            "type": "MeshRenderer",
+                            "data": {
+                              "enabled": true,
+                              "material": {
+                                "uuid": "fem-standing-robot-lower-leg-material",
+                                "name": "LowerLeg",
+                                "type": "uuid",
+                                "kind": "tc_material"
+                              },
+                              "cast_shadow": true,
+                              "_override_material": false,
+                              "materials": []
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-left-lower-body",
+                            "type": "FEMRigidBodyComponent",
+                            "data": {
+                              "enabled": true,
+                              "mass": 0.4,
+                              "inertia_diagonal": [
+                                0.018,
+                                0.018,
+                                0.003
+                              ],
+                              "linear_damping": 0,
+                              "angular_damping": 0
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-left-foot-collider",
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Sphere",
+                              "convex_hull_mesh_source": "Field",
+                              "box_size": [
+                                0.24,
+                                0.24,
+                                0.24
+                              ],
+                              "convex_hull_mesh": {
+                                "type": "none"
+                              },
+                              "collider_offset_enabled": true,
+                              "collider_offset_position": [
+                                0,
+                                0,
+                                -0.23
+                              ],
+                              "collider_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ]
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "uuid": "fem-standing-front-left-foot-visual",
+                            "name": "Front Left Foot Visual",
+                            "priority": 0,
+                            "visible": true,
+                            "enabled": true,
+                            "pickable": true,
+                            "selectable": true,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                              "position": [
+                                0,
+                                0,
+                                -0.35
+                              ],
+                              "rotation": [
+                                0,
+                                0,
+                                0,
+                                1
+                              ]
+                            },
+                            "scale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "components": [
+                              {
+                                "source_id": "fem-standing-front-left-foot-mesh",
+                                "type": "MeshComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "mesh_generated": false,
+                                  "mesh": {
+                                    "uuid": "00000000-0000-0000-0003-000000000002",
+                                    "name": "Sphere",
+                                    "type": "uuid",
+                                    "kind": "tc_mesh"
+                                  },
+                                  "mesh_offset_enabled": true,
+                                  "mesh_offset_position": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_euler": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_scale": [
+                                    0.28,
+                                    0.28,
+                                    0.2
+                                  ]
+                                }
+                              },
+                              {
+                                "source_id": "fem-standing-front-left-foot-renderer",
+                                "type": "MeshRenderer",
+                                "data": {
+                                  "enabled": true,
+                                  "material": {
+                                    "uuid": "fem-standing-robot-lower-leg-material",
+                                    "name": "LowerLeg",
+                                    "type": "uuid",
+                                    "kind": "tc_material"
+                                  },
+                                  "cast_shadow": true,
+                                  "_override_material": false,
+                                  "materials": []
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "fem-standing-front-right-hip",
+            "name": "Front Right Hip",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.58,
+                -0.4,
+                -0.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "components": [
+              {
+                "source_id": "fem-standing-front-right-hip-mesh",
+                "type": "MeshComponent",
+                "data": {
+                  "enabled": true,
+                  "mesh_generated": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000002",
+                    "name": "Sphere",
+                    "type": "uuid",
+                    "kind": "tc_mesh"
+                  },
+                  "mesh_offset_enabled": true,
+                  "mesh_offset_position": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_euler": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_scale": [
+                    0.17,
+                    0.17,
+                    0.17
+                  ]
+                }
+              },
+              {
+                "source_id": "fem-standing-front-right-hip-renderer",
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "material": {
+                    "uuid": "fem-standing-robot-joint-material",
+                    "name": "Joint",
+                    "type": "uuid",
+                    "kind": "tc_material"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false,
+                  "materials": []
+                }
+              },
+              {
+                "source_id": "fem-standing-front-right-hip-rotator",
+                "type": "RotatorComponent",
+                "data": {
+                  "enabled": true,
+                  "axis": [
+                    0,
+                    1,
+                    0
+                  ],
+                  "coordinate": [
+                    -15,
+                    -60,
+                    60
+                  ],
+                  "origin_position": [
+                    0.58,
+                    -0.4,
+                    -0.1
+                  ],
+                  "origin_rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ],
+                  "coordinate_scale": "0.017453292519943295"
+                }
+              },
+              {
+                "source_id": "fem-standing-front-right-hip-motor",
+                "type": "FEMArticulationMotorComponent",
+                "data": {
+                  "enabled": true,
+                  "commanded_effort": 0,
+                  "maximum_effort": 40
+                }
+              },
+              {
+                "source_id": "fem-standing-front-right-hip-servo",
+                "type": "FEMJointServoComponent",
+                "data": {
+                  "enabled": true,
+                  "position_control_enabled": true,
+                  "integral_control_enabled": false,
+                  "target_coordinate": -15,
+                  "target_velocity": 0,
+                  "position_gain": 100,
+                  "integral_gain": 0,
+                  "maximum_integral_effort": 10,
+                  "velocity_gain": 15,
+                  "feed_forward_effort": 0
+                }
+              }
+            ],
+            "children": [
+              {
+                "uuid": "fem-standing-front-right-upper-leg",
+                "name": "Front Right Upper Leg",
+                "priority": 0,
+                "visible": true,
+                "enabled": true,
+                "pickable": true,
+                "selectable": true,
+                "layer": 0,
+                "flags": 0,
+                "pose": {
+                  "position": [
+                    0,
+                    0,
+                    -0.35
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ]
+                },
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "components": [
+                  {
+                    "source_id": "fem-standing-front-right-upper-mesh",
+                    "type": "MeshComponent",
+                    "data": {
+                      "enabled": true,
+                      "mesh_generated": false,
+                      "mesh": {
+                        "uuid": "00000000-0000-0000-0003-000000000001",
+                        "name": "Cube",
+                        "type": "uuid",
+                        "kind": "tc_mesh"
+                      },
+                      "mesh_offset_enabled": true,
+                      "mesh_offset_position": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_euler": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_scale": [
+                        0.19,
+                        0.19,
+                        0.7
+                      ]
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-front-right-upper-renderer",
+                    "type": "MeshRenderer",
+                    "data": {
+                      "enabled": true,
+                      "material": {
+                        "uuid": "fem-standing-robot-upper-leg-material",
+                        "name": "UpperLeg",
+                        "type": "uuid",
+                        "kind": "tc_material"
+                      },
+                      "cast_shadow": true,
+                      "_override_material": false,
+                      "materials": []
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-front-right-upper-body",
+                    "type": "FEMRigidBodyComponent",
+                    "data": {
+                      "enabled": true,
+                      "mass": 0.4,
+                      "inertia_diagonal": [
+                        0.018,
+                        0.018,
+                        0.003
+                      ],
+                      "linear_damping": 0,
+                      "angular_damping": 0
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "uuid": "fem-standing-front-right-knee",
+                    "name": "Front Right Knee",
+                    "priority": 0,
+                    "visible": true,
+                    "enabled": true,
+                    "pickable": true,
+                    "selectable": true,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                      "position": [
+                        0,
+                        0,
+                        -0.35
+                      ],
+                      "rotation": [
+                        0,
+                        0,
+                        0,
+                        1
+                      ]
+                    },
+                    "scale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "components": [
+                      {
+                        "source_id": "fem-standing-front-right-knee-mesh",
+                        "type": "MeshComponent",
+                        "data": {
+                          "enabled": true,
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": true,
+                          "mesh_offset_position": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_euler": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_scale": [
+                            0.16,
+                            0.16,
+                            0.16
+                          ]
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-right-knee-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "fem-standing-robot-joint-material",
+                            "name": "Joint",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-right-knee-rotator",
+                        "type": "RotatorComponent",
+                        "data": {
+                          "enabled": true,
+                          "axis": [
+                            0,
+                            1,
+                            0
+                          ],
+                          "coordinate": [
+                            30,
+                            -60,
+                            60
+                          ],
+                          "origin_position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "origin_rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ],
+                          "coordinate_scale": "0.017453292519943295"
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-right-knee-motor",
+                        "type": "FEMArticulationMotorComponent",
+                        "data": {
+                          "enabled": true,
+                          "commanded_effort": 0,
+                          "maximum_effort": 40
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-front-right-knee-servo",
+                        "type": "FEMJointServoComponent",
+                        "data": {
+                          "enabled": true,
+                          "position_control_enabled": true,
+                          "integral_control_enabled": false,
+                          "target_coordinate": 30,
+                          "target_velocity": 0,
+                          "position_gain": 100,
+                          "integral_gain": 0,
+                          "maximum_integral_effort": 10,
+                          "velocity_gain": 15,
+                          "feed_forward_effort": 0
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "uuid": "fem-standing-front-right-lower-leg",
+                        "name": "Front Right Lower Leg",
+                        "priority": 0,
+                        "visible": true,
+                        "enabled": true,
+                        "pickable": true,
+                        "selectable": true,
+                        "layer": 0,
+                        "flags": 0,
+                        "pose": {
+                          "position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ]
+                        },
+                        "scale": [
+                          1,
+                          1,
+                          1
+                        ],
+                        "components": [
+                          {
+                            "source_id": "fem-standing-front-right-lower-mesh",
+                            "type": "MeshComponent",
+                            "data": {
+                              "enabled": true,
+                              "mesh_generated": false,
+                              "mesh": {
+                                "uuid": "00000000-0000-0000-0003-000000000001",
+                                "name": "Cube",
+                                "type": "uuid",
+                                "kind": "tc_mesh"
+                              },
+                              "mesh_offset_enabled": true,
+                              "mesh_offset_position": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_scale": [
+                                0.17,
+                                0.17,
+                                0.7
+                              ]
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-right-lower-renderer",
+                            "type": "MeshRenderer",
+                            "data": {
+                              "enabled": true,
+                              "material": {
+                                "uuid": "fem-standing-robot-lower-leg-material",
+                                "name": "LowerLeg",
+                                "type": "uuid",
+                                "kind": "tc_material"
+                              },
+                              "cast_shadow": true,
+                              "_override_material": false,
+                              "materials": []
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-right-lower-body",
+                            "type": "FEMRigidBodyComponent",
+                            "data": {
+                              "enabled": true,
+                              "mass": 0.4,
+                              "inertia_diagonal": [
+                                0.018,
+                                0.018,
+                                0.003
+                              ],
+                              "linear_damping": 0,
+                              "angular_damping": 0
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-front-right-foot-collider",
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Sphere",
+                              "convex_hull_mesh_source": "Field",
+                              "box_size": [
+                                0.24,
+                                0.24,
+                                0.24
+                              ],
+                              "convex_hull_mesh": {
+                                "type": "none"
+                              },
+                              "collider_offset_enabled": true,
+                              "collider_offset_position": [
+                                0,
+                                0,
+                                -0.23
+                              ],
+                              "collider_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ]
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "uuid": "fem-standing-front-right-foot-visual",
+                            "name": "Front Right Foot Visual",
+                            "priority": 0,
+                            "visible": true,
+                            "enabled": true,
+                            "pickable": true,
+                            "selectable": true,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                              "position": [
+                                0,
+                                0,
+                                -0.35
+                              ],
+                              "rotation": [
+                                0,
+                                0,
+                                0,
+                                1
+                              ]
+                            },
+                            "scale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "components": [
+                              {
+                                "source_id": "fem-standing-front-right-foot-mesh",
+                                "type": "MeshComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "mesh_generated": false,
+                                  "mesh": {
+                                    "uuid": "00000000-0000-0000-0003-000000000002",
+                                    "name": "Sphere",
+                                    "type": "uuid",
+                                    "kind": "tc_mesh"
+                                  },
+                                  "mesh_offset_enabled": true,
+                                  "mesh_offset_position": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_euler": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_scale": [
+                                    0.28,
+                                    0.28,
+                                    0.2
+                                  ]
+                                }
+                              },
+                              {
+                                "source_id": "fem-standing-front-right-foot-renderer",
+                                "type": "MeshRenderer",
+                                "data": {
+                                  "enabled": true,
+                                  "material": {
+                                    "uuid": "fem-standing-robot-lower-leg-material",
+                                    "name": "LowerLeg",
+                                    "type": "uuid",
+                                    "kind": "tc_material"
+                                  },
+                                  "cast_shadow": true,
+                                  "_override_material": false,
+                                  "materials": []
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "fem-standing-rear-left-hip",
+            "name": "Rear Left Hip",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                -0.58,
+                0.4,
+                -0.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "components": [
+              {
+                "source_id": "fem-standing-rear-left-hip-mesh",
+                "type": "MeshComponent",
+                "data": {
+                  "enabled": true,
+                  "mesh_generated": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000002",
+                    "name": "Sphere",
+                    "type": "uuid",
+                    "kind": "tc_mesh"
+                  },
+                  "mesh_offset_enabled": true,
+                  "mesh_offset_position": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_euler": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_scale": [
+                    0.17,
+                    0.17,
+                    0.17
+                  ]
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-left-hip-renderer",
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "material": {
+                    "uuid": "fem-standing-robot-joint-material",
+                    "name": "Joint",
+                    "type": "uuid",
+                    "kind": "tc_material"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false,
+                  "materials": []
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-left-hip-rotator",
+                "type": "RotatorComponent",
+                "data": {
+                  "enabled": true,
+                  "axis": [
+                    0,
+                    1,
+                    0
+                  ],
+                  "coordinate": [
+                    15,
+                    -60,
+                    60
+                  ],
+                  "origin_position": [
+                    -0.58,
+                    0.4,
+                    -0.1
+                  ],
+                  "origin_rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ],
+                  "coordinate_scale": "0.017453292519943295"
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-left-hip-motor",
+                "type": "FEMArticulationMotorComponent",
+                "data": {
+                  "enabled": true,
+                  "commanded_effort": 0,
+                  "maximum_effort": 40
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-left-hip-servo",
+                "type": "FEMJointServoComponent",
+                "data": {
+                  "enabled": true,
+                  "position_control_enabled": true,
+                  "integral_control_enabled": false,
+                  "target_coordinate": 15,
+                  "target_velocity": 0,
+                  "position_gain": 100,
+                  "integral_gain": 0,
+                  "maximum_integral_effort": 10,
+                  "velocity_gain": 15,
+                  "feed_forward_effort": 0
+                }
+              }
+            ],
+            "children": [
+              {
+                "uuid": "fem-standing-rear-left-upper-leg",
+                "name": "Rear Left Upper Leg",
+                "priority": 0,
+                "visible": true,
+                "enabled": true,
+                "pickable": true,
+                "selectable": true,
+                "layer": 0,
+                "flags": 0,
+                "pose": {
+                  "position": [
+                    0,
+                    0,
+                    -0.35
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ]
+                },
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "components": [
+                  {
+                    "source_id": "fem-standing-rear-left-upper-mesh",
+                    "type": "MeshComponent",
+                    "data": {
+                      "enabled": true,
+                      "mesh_generated": false,
+                      "mesh": {
+                        "uuid": "00000000-0000-0000-0003-000000000001",
+                        "name": "Cube",
+                        "type": "uuid",
+                        "kind": "tc_mesh"
+                      },
+                      "mesh_offset_enabled": true,
+                      "mesh_offset_position": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_euler": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_scale": [
+                        0.19,
+                        0.19,
+                        0.7
+                      ]
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-rear-left-upper-renderer",
+                    "type": "MeshRenderer",
+                    "data": {
+                      "enabled": true,
+                      "material": {
+                        "uuid": "fem-standing-robot-upper-leg-material",
+                        "name": "UpperLeg",
+                        "type": "uuid",
+                        "kind": "tc_material"
+                      },
+                      "cast_shadow": true,
+                      "_override_material": false,
+                      "materials": []
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-rear-left-upper-body",
+                    "type": "FEMRigidBodyComponent",
+                    "data": {
+                      "enabled": true,
+                      "mass": 0.4,
+                      "inertia_diagonal": [
+                        0.018,
+                        0.018,
+                        0.003
+                      ],
+                      "linear_damping": 0,
+                      "angular_damping": 0
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "uuid": "fem-standing-rear-left-knee",
+                    "name": "Rear Left Knee",
+                    "priority": 0,
+                    "visible": true,
+                    "enabled": true,
+                    "pickable": true,
+                    "selectable": true,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                      "position": [
+                        0,
+                        0,
+                        -0.35
+                      ],
+                      "rotation": [
+                        0,
+                        0,
+                        0,
+                        1
+                      ]
+                    },
+                    "scale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "components": [
+                      {
+                        "source_id": "fem-standing-rear-left-knee-mesh",
+                        "type": "MeshComponent",
+                        "data": {
+                          "enabled": true,
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": true,
+                          "mesh_offset_position": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_euler": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_scale": [
+                            0.16,
+                            0.16,
+                            0.16
+                          ]
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-left-knee-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "fem-standing-robot-joint-material",
+                            "name": "Joint",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-left-knee-rotator",
+                        "type": "RotatorComponent",
+                        "data": {
+                          "enabled": true,
+                          "axis": [
+                            0,
+                            1,
+                            0
+                          ],
+                          "coordinate": [
+                            -30,
+                            -60,
+                            60
+                          ],
+                          "origin_position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "origin_rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ],
+                          "coordinate_scale": "0.017453292519943295"
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-left-knee-motor",
+                        "type": "FEMArticulationMotorComponent",
+                        "data": {
+                          "enabled": true,
+                          "commanded_effort": 0,
+                          "maximum_effort": 40
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-left-knee-servo",
+                        "type": "FEMJointServoComponent",
+                        "data": {
+                          "enabled": true,
+                          "position_control_enabled": true,
+                          "integral_control_enabled": false,
+                          "target_coordinate": -30,
+                          "target_velocity": 0,
+                          "position_gain": 100,
+                          "integral_gain": 0,
+                          "maximum_integral_effort": 10,
+                          "velocity_gain": 15,
+                          "feed_forward_effort": 0
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "uuid": "fem-standing-rear-left-lower-leg",
+                        "name": "Rear Left Lower Leg",
+                        "priority": 0,
+                        "visible": true,
+                        "enabled": true,
+                        "pickable": true,
+                        "selectable": true,
+                        "layer": 0,
+                        "flags": 0,
+                        "pose": {
+                          "position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ]
+                        },
+                        "scale": [
+                          1,
+                          1,
+                          1
+                        ],
+                        "components": [
+                          {
+                            "source_id": "fem-standing-rear-left-lower-mesh",
+                            "type": "MeshComponent",
+                            "data": {
+                              "enabled": true,
+                              "mesh_generated": false,
+                              "mesh": {
+                                "uuid": "00000000-0000-0000-0003-000000000001",
+                                "name": "Cube",
+                                "type": "uuid",
+                                "kind": "tc_mesh"
+                              },
+                              "mesh_offset_enabled": true,
+                              "mesh_offset_position": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_scale": [
+                                0.17,
+                                0.17,
+                                0.7
+                              ]
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-left-lower-renderer",
+                            "type": "MeshRenderer",
+                            "data": {
+                              "enabled": true,
+                              "material": {
+                                "uuid": "fem-standing-robot-lower-leg-material",
+                                "name": "LowerLeg",
+                                "type": "uuid",
+                                "kind": "tc_material"
+                              },
+                              "cast_shadow": true,
+                              "_override_material": false,
+                              "materials": []
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-left-lower-body",
+                            "type": "FEMRigidBodyComponent",
+                            "data": {
+                              "enabled": true,
+                              "mass": 0.4,
+                              "inertia_diagonal": [
+                                0.018,
+                                0.018,
+                                0.003
+                              ],
+                              "linear_damping": 0,
+                              "angular_damping": 0
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-left-foot-collider",
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Sphere",
+                              "convex_hull_mesh_source": "Field",
+                              "box_size": [
+                                0.24,
+                                0.24,
+                                0.24
+                              ],
+                              "convex_hull_mesh": {
+                                "type": "none"
+                              },
+                              "collider_offset_enabled": true,
+                              "collider_offset_position": [
+                                0,
+                                0,
+                                -0.23
+                              ],
+                              "collider_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ]
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "uuid": "fem-standing-rear-left-foot-visual",
+                            "name": "Rear Left Foot Visual",
+                            "priority": 0,
+                            "visible": true,
+                            "enabled": true,
+                            "pickable": true,
+                            "selectable": true,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                              "position": [
+                                0,
+                                0,
+                                -0.35
+                              ],
+                              "rotation": [
+                                0,
+                                0,
+                                0,
+                                1
+                              ]
+                            },
+                            "scale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "components": [
+                              {
+                                "source_id": "fem-standing-rear-left-foot-mesh",
+                                "type": "MeshComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "mesh_generated": false,
+                                  "mesh": {
+                                    "uuid": "00000000-0000-0000-0003-000000000002",
+                                    "name": "Sphere",
+                                    "type": "uuid",
+                                    "kind": "tc_mesh"
+                                  },
+                                  "mesh_offset_enabled": true,
+                                  "mesh_offset_position": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_euler": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_scale": [
+                                    0.28,
+                                    0.28,
+                                    0.2
+                                  ]
+                                }
+                              },
+                              {
+                                "source_id": "fem-standing-rear-left-foot-renderer",
+                                "type": "MeshRenderer",
+                                "data": {
+                                  "enabled": true,
+                                  "material": {
+                                    "uuid": "fem-standing-robot-lower-leg-material",
+                                    "name": "LowerLeg",
+                                    "type": "uuid",
+                                    "kind": "tc_material"
+                                  },
+                                  "cast_shadow": true,
+                                  "_override_material": false,
+                                  "materials": []
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "fem-standing-rear-right-hip",
+            "name": "Rear Right Hip",
+            "priority": 0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+              "position": [
+                0.58,
+                0.4,
+                -0.1
+              ],
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "components": [
+              {
+                "source_id": "fem-standing-rear-right-hip-mesh",
+                "type": "MeshComponent",
+                "data": {
+                  "enabled": true,
+                  "mesh_generated": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000002",
+                    "name": "Sphere",
+                    "type": "uuid",
+                    "kind": "tc_mesh"
+                  },
+                  "mesh_offset_enabled": true,
+                  "mesh_offset_position": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_euler": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "mesh_offset_scale": [
+                    0.17,
+                    0.17,
+                    0.17
+                  ]
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-right-hip-renderer",
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "material": {
+                    "uuid": "fem-standing-robot-joint-material",
+                    "name": "Joint",
+                    "type": "uuid",
+                    "kind": "tc_material"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false,
+                  "materials": []
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-right-hip-rotator",
+                "type": "RotatorComponent",
+                "data": {
+                  "enabled": true,
+                  "axis": [
+                    0,
+                    1,
+                    0
+                  ],
+                  "coordinate": [
+                    -15,
+                    -60,
+                    60
+                  ],
+                  "origin_position": [
+                    0.58,
+                    0.4,
+                    -0.1
+                  ],
+                  "origin_rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ],
+                  "coordinate_scale": "0.017453292519943295"
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-right-hip-motor",
+                "type": "FEMArticulationMotorComponent",
+                "data": {
+                  "enabled": true,
+                  "commanded_effort": 0,
+                  "maximum_effort": 40
+                }
+              },
+              {
+                "source_id": "fem-standing-rear-right-hip-servo",
+                "type": "FEMJointServoComponent",
+                "data": {
+                  "enabled": true,
+                  "position_control_enabled": true,
+                  "integral_control_enabled": false,
+                  "target_coordinate": -15,
+                  "target_velocity": 0,
+                  "position_gain": 100,
+                  "integral_gain": 0,
+                  "maximum_integral_effort": 10,
+                  "velocity_gain": 15,
+                  "feed_forward_effort": 0
+                }
+              }
+            ],
+            "children": [
+              {
+                "uuid": "fem-standing-rear-right-upper-leg",
+                "name": "Rear Right Upper Leg",
+                "priority": 0,
+                "visible": true,
+                "enabled": true,
+                "pickable": true,
+                "selectable": true,
+                "layer": 0,
+                "flags": 0,
+                "pose": {
+                  "position": [
+                    0,
+                    0,
+                    -0.35
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ]
+                },
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "components": [
+                  {
+                    "source_id": "fem-standing-rear-right-upper-mesh",
+                    "type": "MeshComponent",
+                    "data": {
+                      "enabled": true,
+                      "mesh_generated": false,
+                      "mesh": {
+                        "uuid": "00000000-0000-0000-0003-000000000001",
+                        "name": "Cube",
+                        "type": "uuid",
+                        "kind": "tc_mesh"
+                      },
+                      "mesh_offset_enabled": true,
+                      "mesh_offset_position": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_euler": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "mesh_offset_scale": [
+                        0.19,
+                        0.19,
+                        0.7
+                      ]
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-rear-right-upper-renderer",
+                    "type": "MeshRenderer",
+                    "data": {
+                      "enabled": true,
+                      "material": {
+                        "uuid": "fem-standing-robot-upper-leg-material",
+                        "name": "UpperLeg",
+                        "type": "uuid",
+                        "kind": "tc_material"
+                      },
+                      "cast_shadow": true,
+                      "_override_material": false,
+                      "materials": []
+                    }
+                  },
+                  {
+                    "source_id": "fem-standing-rear-right-upper-body",
+                    "type": "FEMRigidBodyComponent",
+                    "data": {
+                      "enabled": true,
+                      "mass": 0.4,
+                      "inertia_diagonal": [
+                        0.018,
+                        0.018,
+                        0.003
+                      ],
+                      "linear_damping": 0,
+                      "angular_damping": 0
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "uuid": "fem-standing-rear-right-knee",
+                    "name": "Rear Right Knee",
+                    "priority": 0,
+                    "visible": true,
+                    "enabled": true,
+                    "pickable": true,
+                    "selectable": true,
+                    "layer": 0,
+                    "flags": 0,
+                    "pose": {
+                      "position": [
+                        0,
+                        0,
+                        -0.35
+                      ],
+                      "rotation": [
+                        0,
+                        0,
+                        0,
+                        1
+                      ]
+                    },
+                    "scale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "components": [
+                      {
+                        "source_id": "fem-standing-rear-right-knee-mesh",
+                        "type": "MeshComponent",
+                        "data": {
+                          "enabled": true,
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": true,
+                          "mesh_offset_position": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_euler": [
+                            0,
+                            0,
+                            0
+                          ],
+                          "mesh_offset_scale": [
+                            0.16,
+                            0.16,
+                            0.16
+                          ]
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-right-knee-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "fem-standing-robot-joint-material",
+                            "name": "Joint",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-right-knee-rotator",
+                        "type": "RotatorComponent",
+                        "data": {
+                          "enabled": true,
+                          "axis": [
+                            0,
+                            1,
+                            0
+                          ],
+                          "coordinate": [
+                            30,
+                            -60,
+                            60
+                          ],
+                          "origin_position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "origin_rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ],
+                          "coordinate_scale": "0.017453292519943295"
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-right-knee-motor",
+                        "type": "FEMArticulationMotorComponent",
+                        "data": {
+                          "enabled": true,
+                          "commanded_effort": 0,
+                          "maximum_effort": 40
+                        }
+                      },
+                      {
+                        "source_id": "fem-standing-rear-right-knee-servo",
+                        "type": "FEMJointServoComponent",
+                        "data": {
+                          "enabled": true,
+                          "position_control_enabled": true,
+                          "integral_control_enabled": false,
+                          "target_coordinate": 30,
+                          "target_velocity": 0,
+                          "position_gain": 100,
+                          "integral_gain": 0,
+                          "maximum_integral_effort": 10,
+                          "velocity_gain": 15,
+                          "feed_forward_effort": 0
+                        }
+                      }
+                    ],
+                    "children": [
+                      {
+                        "uuid": "fem-standing-rear-right-lower-leg",
+                        "name": "Rear Right Lower Leg",
+                        "priority": 0,
+                        "visible": true,
+                        "enabled": true,
+                        "pickable": true,
+                        "selectable": true,
+                        "layer": 0,
+                        "flags": 0,
+                        "pose": {
+                          "position": [
+                            0,
+                            0,
+                            -0.35
+                          ],
+                          "rotation": [
+                            0,
+                            0,
+                            0,
+                            1
+                          ]
+                        },
+                        "scale": [
+                          1,
+                          1,
+                          1
+                        ],
+                        "components": [
+                          {
+                            "source_id": "fem-standing-rear-right-lower-mesh",
+                            "type": "MeshComponent",
+                            "data": {
+                              "enabled": true,
+                              "mesh_generated": false,
+                              "mesh": {
+                                "uuid": "00000000-0000-0000-0003-000000000001",
+                                "name": "Cube",
+                                "type": "uuid",
+                                "kind": "tc_mesh"
+                              },
+                              "mesh_offset_enabled": true,
+                              "mesh_offset_position": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ],
+                              "mesh_offset_scale": [
+                                0.17,
+                                0.17,
+                                0.7
+                              ]
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-right-lower-renderer",
+                            "type": "MeshRenderer",
+                            "data": {
+                              "enabled": true,
+                              "material": {
+                                "uuid": "fem-standing-robot-lower-leg-material",
+                                "name": "LowerLeg",
+                                "type": "uuid",
+                                "kind": "tc_material"
+                              },
+                              "cast_shadow": true,
+                              "_override_material": false,
+                              "materials": []
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-right-lower-body",
+                            "type": "FEMRigidBodyComponent",
+                            "data": {
+                              "enabled": true,
+                              "mass": 0.4,
+                              "inertia_diagonal": [
+                                0.018,
+                                0.018,
+                                0.003
+                              ],
+                              "linear_damping": 0,
+                              "angular_damping": 0
+                            }
+                          },
+                          {
+                            "source_id": "fem-standing-rear-right-foot-collider",
+                            "type": "ColliderComponent",
+                            "data": {
+                              "enabled": true,
+                              "collider_type": "Sphere",
+                              "convex_hull_mesh_source": "Field",
+                              "box_size": [
+                                0.24,
+                                0.24,
+                                0.24
+                              ],
+                              "convex_hull_mesh": {
+                                "type": "none"
+                              },
+                              "collider_offset_enabled": true,
+                              "collider_offset_position": [
+                                0,
+                                0,
+                                -0.23
+                              ],
+                              "collider_offset_euler": [
+                                0,
+                                0,
+                                0
+                              ]
+                            }
+                          }
+                        ],
+                        "children": [
+                          {
+                            "uuid": "fem-standing-rear-right-foot-visual",
+                            "name": "Rear Right Foot Visual",
+                            "priority": 0,
+                            "visible": true,
+                            "enabled": true,
+                            "pickable": true,
+                            "selectable": true,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                              "position": [
+                                0,
+                                0,
+                                -0.35
+                              ],
+                              "rotation": [
+                                0,
+                                0,
+                                0,
+                                1
+                              ]
+                            },
+                            "scale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "components": [
+                              {
+                                "source_id": "fem-standing-rear-right-foot-mesh",
+                                "type": "MeshComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "mesh_generated": false,
+                                  "mesh": {
+                                    "uuid": "00000000-0000-0000-0003-000000000002",
+                                    "name": "Sphere",
+                                    "type": "uuid",
+                                    "kind": "tc_mesh"
+                                  },
+                                  "mesh_offset_enabled": true,
+                                  "mesh_offset_position": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_euler": [
+                                    0,
+                                    0,
+                                    0
+                                  ],
+                                  "mesh_offset_scale": [
+                                    0.28,
+                                    0.28,
+                                    0.2
+                                  ]
+                                }
+                              },
+                              {
+                                "source_id": "fem-standing-rear-right-foot-renderer",
+                                "type": "MeshRenderer",
+                                "data": {
+                                  "enabled": true,
+                                  "material": {
+                                    "uuid": "fem-standing-robot-lower-leg-material",
+                                    "name": "LowerLeg",
+                                    "type": "uuid",
+                                    "kind": "tc_material"
+                                  },
+                                  "cast_shadow": true,
+                                  "_override_material": false,
+                                  "materials": []
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "fem-standing-key-light",
+        "name": "Directional Key Light",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            5,
+            -6,
+            11
+          ],
+          "rotation": [
+            -0.2519347274,
+            -0.8749107386,
+            0.3903870434,
+            0.1365944691
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-key-light-component",
+            "type": "LightComponent",
+            "data": {
+              "enabled": true,
+              "light_type": "directional",
+              "color": [
+                1,
+                0.86,
+                0.68
+              ],
+              "intensity": 1.55,
+              "shadows_enabled": true,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.02,
+              "shadows_map_resolution": 1024,
+              "cascade_count": 3,
+              "max_distance": 50,
+              "split_lambda": 0.7,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-standing-camera",
+        "name": "Main Camera",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            3.5,
+            -8,
+            3
+          ],
+          "rotation": [
+            -0.120279,
+            -0.009709,
+            0.079871,
+            0.989474
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-camera-component",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100,
+              "ortho_size": 5,
+              "fov_x_degrees": 60,
+              "fov_y_degrees": 48,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xffffffffffffffff"
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-standing-world",
+        "name": "FEM Physics World",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-world-component",
+            "type": "FEMPhysicsWorldComponent",
+            "data": {
+              "enabled": true,
+              "gravity": [
+                0,
+                0,
+                -9.81
+              ],
+              "time_step": 0.002,
+              "substeps": 1,
+              "contact_friction_coefficient": 0.8,
+              "collision_layer_mask": "0xffffffffffffffff",
+              "adjacent_link_collision_enabled": false
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "fem-standing-hud",
+        "name": "Robot Telemetry HUD",
+        "priority": 0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "fem-standing-hud-ui",
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": {
+                "type": "uuid",
+                "kind": "ui_document",
+                "role": "ui_document",
+                "uuid": "fem-standing-robot-hud",
+                "name": "robot_hud"
+              },
+              "priority": 1000,
+              "input_source_mask": 1
+            }
+          },
+          {
+            "source_id": "fem-standing-hud-telemetry",
+            "type": "FEMPhysicsHudComponent",
+            "data": {
+              "enabled": true,
+              "world_entity_name": "FEM Physics World",
+              "servo_entity_name": "Front Left Knee",
+              "servo_group_root_entity_name": "Robot Base",
+              "servo_group_checkbox_name": "servo_group_enabled",
+              "tracked_body_entity_name": "Robot Base",
+              "plot_widget_name": "servo_plot",
+              "effort_plot_widget_name": "servo_effort_plot",
+              "contact_gap_plot_widget_name": "contact_gap_plot",
+              "contact_reaction_plot_widget_name": "contact_reaction_plot",
+              "plot_history": 12,
+              "refresh_interval": 0.05
+            }
+          }
+        ]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": null,
+          "viewport_camera_name": "camera"
+        }
+      }
+    },
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "depth": 0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "fem-standing-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [
+              0.008,
+              0.012,
+              0.028,
+              1
+            ],
+            "clear_depth": 1,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [
+          0.008,
+          0.012,
+          0.028,
+          1
+        ],
+        "lighting": {
+          "ambient_color": [
+            0.3,
+            0.38,
+            0.58
+          ],
+          "ambient_intensity": 0.24,
+          "shadow_settings": {
+            "method": 1,
+            "softness": 1.4,
+            "bias": 0.001
+          }
+        },
+        "skybox": {
+          "type": 1,
+          "color": [
+            0.008,
+            0.012,
+            0.028
+          ],
+          "top_color": [
+            0.12,
+            0.2,
+            0.42
+          ],
+          "bottom_color": [
+            0.12,
+            0.08,
+            0.1
+          ]
+        }
+      },
+      "collision_world": {}
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [
+        -3,
+        -10,
+        4
+      ],
+      "rotation": [
+        -0.08,
+        0,
+        -0.18,
+        0.98
+      ],
+      "radius": 10,
+      "editor_entities": {
+        "camera": []
+      }
+    },
+    "expanded_entities": [
+      "fem-standing-robot-root"
+    ]
+  }
+}

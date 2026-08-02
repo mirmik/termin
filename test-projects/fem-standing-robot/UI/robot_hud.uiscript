@@ -1,0 +1,147 @@
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: robot_overlay
+  safe_area: respect
+  background_color: [0, 0, 0, 0]
+  children:
+    - type: termin.gui.Panel
+      name: legend_background
+      anchor: bottom-left
+      offset: [18, -18]
+      layout: {width: 360, height: 84}
+      background_color: [0.02, 0.04, 0.075, 0.90]
+    - type: termin.gui.VStack
+      name: legend
+      anchor: bottom-left
+      offset: [18, -18]
+      layout: {width: 360, height: 84}
+      padding: [14, 10, 14, 10]
+      spacing: 4
+      children:
+        - type: termin.gui.Label
+          text: BLUE BODY  ·  ORANGE TWO-LINK LEGS  ·  GREEN JOINTS
+          font_size: 10
+          color: [0.70, 0.84, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          text: FREE 6-DOF BASE  ·  8 REDUCED JOINT DOF
+          font_size: 10
+          color: [0.42, 0.93, 0.75, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          text: Starts 5 cm above the plane; feet settle through Coulomb friction.
+          font_size: 9
+          color: [0.62, 0.70, 0.79, 1]
+          basis: preferred
+    - type: termin.gui.Panel
+      name: card_background
+      anchor: top-right
+      offset: [-18, 18]
+      layout: {width: 440, height: 680}
+      background_color: [0.02, 0.04, 0.075, 0.95]
+    - type: termin.gui.VStack
+      name: telemetry_card
+      anchor: top-right
+      offset: [-18, 18]
+      layout: {width: 440, height: 680}
+      padding: [18, 14, 18, 14]
+      spacing: 5
+      children:
+        - type: termin.gui.Label
+          name: card_title
+          text: FLOATING ROBOT / FRICTIONAL STANCE
+          font_size: 12
+          color: [0.35, 0.74, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_value
+          text: waiting for solver
+          font_size: 22
+          color: [0.94, 0.98, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_change
+          text: mechanical energy change
+          font_size: 12
+          color: [0.58, 0.76, 0.90, 1]
+          basis: preferred
+        - type: termin.gui.HStack
+          name: servo_toggle_row
+          spacing: 8
+          basis: 28
+          children:
+            - type: termin.gui.Checkbox
+              name: servo_group_enabled
+              checked: true
+              basis: 24
+            - type: termin.gui.Label
+              text: SERVOS ENABLED  ·  clear to let the knees collapse
+              font_size: 12
+              color: [0.48, 0.92, 0.70, 1]
+              basis: preferred
+        - type: termin.gui.Panel
+          name: divider
+          background_color: [0.18, 0.34, 0.48, 0.9]
+          basis: 1
+        - type: termin.gui.Label
+          name: simulation_value
+          text: 0.00 s   ·   0 steps
+          font_size: 13
+          color: [0.84, 0.91, 0.96, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: topology_value
+          text: waiting for topology
+          font_size: 12
+          color: [0.48, 0.67, 0.80, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: body_value
+          text: waiting for floating base
+          font_size: 12
+          color: [0.48, 0.82, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: motor_value
+          text: waiting for motor contributions
+          font_size: 12
+          color: [0.96, 0.68, 0.28, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: servo_value
+          text: waiting for representative knee servo
+          font_size: 12
+          color: [0.48, 0.92, 0.70, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: contact_value
+          text: waiting for foot contacts
+          font_size: 12
+          color: [0.72, 0.85, 0.94, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: friction_value
+          text: waiting for friction pass
+          font_size: 12
+          color: [0.96, 0.62, 0.42, 1]
+          basis: preferred
+        - type: termin.gui.Plot2D
+          name: contact_reaction_plot
+          title: FEET NORMAL REACTION
+          x_label: time, s
+          y_label: reaction, N
+          auto_fit: true
+          basis: 170
+        - type: termin.gui.Label
+          text: "representative knee: P blue · I orange · D green · command purple · applied red dashed"
+          font_size: 10
+          color: [0.67, 0.75, 0.82, 1]
+          basis: preferred
+        - type: termin.gui.Plot2D
+          name: servo_effort_plot
+          title: FRONT-LEFT KNEE EFFORT
+          x_label: time, s
+          y_label: effort, N*m
+          auto_fit: true
+          basis: 170

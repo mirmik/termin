@@ -15,6 +15,13 @@ namespace termin
         // Optional. When set, a co-located servo diagnostic row named
         // "servo_value" is updated in addition to aggregate world telemetry.
         std::string servo_entity_name;
+        // Optional articulation root and checkbox used to enable or disable
+        // every descendant servo as one UI control.
+        std::string servo_group_root_entity_name;
+        std::string servo_group_checkbox_name = "servo_group_enabled";
+        // Optional. When set, a co-located FEM rigid body is reported through
+        // the "body_value" label using its world pose and local spatial speed.
+        std::string tracked_body_entity_name;
         std::string plot_widget_name = "servo_plot";
         std::string effort_plot_widget_name = "servo_effort_plot";
         std::string contact_gap_plot_widget_name = "contact_gap_plot";
@@ -34,6 +41,8 @@ namespace termin
     private:
         double refresh_accumulator_ = 0.0;
         bool binding_error_reported_ = false;
+        bool servo_group_state_known_ = false;
+        bool servo_group_enabled_ = true;
         std::vector<double> plot_time_;
         std::vector<double> plot_coordinate_;
         std::vector<double> plot_target_;
