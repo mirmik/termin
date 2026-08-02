@@ -14,6 +14,11 @@
 #include <termin/tc_scene.hpp>
 #include <termin/ui/ui_component.hpp>
 
+#ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
+#include <tcplot/gui_native/plot2d.hpp>
+#include <tcplot/styles.hpp>
+#endif
+
 namespace termin
 {
     namespace
@@ -75,6 +80,22 @@ namespace termin
             return dynamic_cast<gui_native::Label*>(
                 static_cast<gui_native::Widget*>(widget->body));
         }
+
+#ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
+        tcplot::gui_native::Plot2D* find_plot(gui_native::TcDocument document,
+                                              std::string_view name)
+        {
+            tc_widget* widget = find_named_widget(document, name);
+            if (widget == nullptr ||
+                widget->native_language != TC_LANGUAGE_CXX ||
+                widget->body == nullptr)
+            {
+                return nullptr;
+            }
+            return dynamic_cast<tcplot::gui_native::Plot2D*>(
+                static_cast<gui_native::Widget*>(widget->body));
+        }
+#endif
 
         std::string format_energy(double energy)
         {
@@ -186,6 +207,21 @@ namespace termin
                                 "Servo Entity",
                                 "string");
         tc::stage_inspect_field(inspect,
+                                &FEMPhysicsHudComponent::plot_widget_name,
+                                "FEMPhysicsHudComponent",
+                                "plot_widget_name",
+                                "Plot Widget",
+                                "string");
+        tc::stage_inspect_field(inspect,
+                                &FEMPhysicsHudComponent::plot_history,
+                                "FEMPhysicsHudComponent",
+                                "plot_history",
+                                "Plot History",
+                                "double",
+                                1.0,
+                                600.0,
+                                1.0);
+        tc::stage_inspect_field(inspect,
                                 &FEMPhysicsHudComponent::refresh_interval,
                                 "FEMPhysicsHudComponent",
                                 "refresh_interval",
@@ -202,6 +238,9 @@ namespace termin
         CxxComponent::start();
         refresh_accumulator_ = 0.0;
         binding_error_reported_ = false;
+        plot_time_.clear();
+        plot_coordinate_.clear();
+        plot_target_.clear();
         refresh();
     }
 
@@ -231,6 +270,9 @@ namespace termin
     {
         refresh_accumulator_ = 0.0;
         binding_error_reported_ = false;
+        plot_time_.clear();
+        plot_coordinate_.clear();
+        plot_target_.clear();
         CxxComponent::on_destroy();
     }
 
@@ -283,8 +325,7 @@ namespace termin
         {
             (void)set_label(document, "motor_value", format_motors(telemetry));
         }
-        if (!servo_entity_name.empty() &&
-            find_label(document, "servo_value") != nullptr)
+        if (!servo_entity_name.empty())
         {
             Entity servo_entity = scene.find_entity_by_name(servo_entity_name);
             FEMJointServoComponent* servo =
@@ -309,8 +350,60 @@ namespace termin
                 }
                 return;
             }
-            (void)set_label(
-                document, "servo_value", format_servo(*servo, *motor));
+            if (find_label(document, "servo_value") != nullptr)
+            {
+                (void)set_label(
+                    document, "servo_value", format_servo(*servo, *motor));
+            }
+#ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
+            if (tcplot::gui_native::Plot2D* plot =
+                    find_plot(document, plot_widget_name))
+            {
+                if (telemetry.initialized && servo->initialized())
+                {
+                    if (!plot_time_.empty() &&
+                        telemetry.simulated_time < plot_time_.back())
+                    {
+                        plot_time_.clear();
+                        plot_coordinate_.clear();
+                        plot_target_.clear();
+                    }
+                    const double coordinate =
+                        servo->target_coordinate - servo->position_error();
+                    plot_time_.push_back(telemetry.simulated_time);
+                    plot_coordinate_.push_back(coordinate);
+                    plot_target_.push_back(servo->target_coordinate);
+
+                    const double first_time =
+                        telemetry.simulated_time - std::max(plot_history, 1.0);
+                    const auto first = std::lower_bound(
+                        plot_time_.begin(), plot_time_.end(), first_time);
+                    const std::size_t erase_count =
+                        static_cast<std::size_t>(first - plot_time_.begin());
+                    if (erase_count > 0)
+                    {
+                        plot_time_.erase(plot_time_.begin(), first);
+                        plot_coordinate_.erase(plot_coordinate_.begin(),
+                                               plot_coordinate_.begin() +
+                                                   erase_count);
+                        plot_target_.erase(plot_target_.begin(),
+                                           plot_target_.begin() + erase_count);
+                    }
+
+                    if (plot->line_count() != 2)
+                    {
+                        plot->clear_lines();
+                        plot->add_line();
+                        tcplot::PlotLineSeriesStyle2D target_style;
+                        target_style.color = tcplot::styles::cycle_color(1);
+                        target_style.line_style = tcplot::LineStyle::Dash;
+                        plot->add_line(target_style);
+                    }
+                    (void)plot->set_line_data(0, plot_time_, plot_coordinate_);
+                    (void)plot->set_line_data(1, plot_time_, plot_target_);
+                }
+            }
+#endif
         }
         if (!complete && !binding_error_reported_)
         {

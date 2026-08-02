@@ -31,6 +31,18 @@ foreach(_dep IN ITEMS
     endif()
 endforeach()
 
+set(_plot_public_dep)
+set(_plot_find_dep)
+if(NOT TERMIN_PLATFORM_ANDROID)
+    if(COMMAND termin_require_package)
+        termin_require_package(tcplot_gui_native tcplot_gui_native::tcplot_gui_native)
+    else()
+        find_package(tcplot_gui_native REQUIRED)
+    endif()
+    set(_plot_public_dep tcplot_gui_native::tcplot_gui_native)
+    set(_plot_find_dep tcplot_gui_native)
+endif()
+
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 
 termin_add_module(
@@ -46,6 +58,7 @@ termin_add_module(
         termin_gui_native::termin_gui_native
         termin_components_ui::termin_components_ui
         termin_components_physics_fem::termin_components_physics_fem
+        ${_plot_public_dep}
     FIND_DEPS
         termin_base
         termin_scene
@@ -53,12 +66,18 @@ termin_add_module(
         termin_gui_native
         termin_components_ui
         termin_components_physics_fem
+        ${_plot_find_dep}
     INSTALL_HEADERS include/termin
 )
 
 target_include_directories(termin_components_physics_fem_ui PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
+
+if(NOT TERMIN_PLATFORM_ANDROID)
+    target_compile_definitions(termin_components_physics_fem_ui
+        PRIVATE TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT)
+endif()
 
 if(MSVC)
     target_compile_options(termin_components_physics_fem_ui PRIVATE /wd4251 /wd4275)
