@@ -49,6 +49,8 @@ struct ActiveSetQpSolutionView {
 
 struct ActiveSetQpOptions {
   QpTolerance tolerance;
+  // Feasibility and warm-start validity tolerance. A constraint enters the
+  // exact working set only at the tighter, scale-aware QP tolerance.
   double active_tolerance = 1e-9;
   std::size_t max_iterations = 128;
 };

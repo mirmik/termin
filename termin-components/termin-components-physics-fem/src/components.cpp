@@ -1877,10 +1877,11 @@ namespace termin
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] native step failed: status=%s "
-                "diagnostic=%s",
+                "diagnostic=%s position_error=%g position_iterations=%zu",
                 qopt::qp_status_name(result.status).data(),
-                qopt::dynamics_system_diagnostic_name(result.diagnostic)
-                    .data());
+                qopt::dynamics_system_diagnostic_name(result.diagnostic).data(),
+                result.position_constraint_linf,
+                result.position_iterations);
             initialized_ = false;
             return;
         }

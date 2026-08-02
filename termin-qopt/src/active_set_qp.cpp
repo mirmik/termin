@@ -98,7 +98,15 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
     return Matrix::Identity(variables, variables);
   }
 
-  Eigen::JacobiSVD<Matrix> svd(matrix,
+  Matrix normalized = matrix;
+  for (Eigen::Index row = 0; row < normalized.rows(); ++row) {
+    const double row_scale = normalized.row(row).cwiseAbs().maxCoeff();
+    if (row_scale > 0.0) {
+      normalized.row(row) /= row_scale;
+    }
+  }
+
+  Eigen::JacobiSVD<Matrix> svd(normalized,
                                Eigen::ComputeFullU | Eigen::ComputeFullV);
   if (svd.info() != Eigen::Success) {
     success = false;
@@ -158,7 +166,18 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
                                                   QpTolerance tolerance) {
   bool success = false;
   const Matrix nullspace = nullspace_basis(working, tolerance, success);
-  if (!success || nullspace.cols() == 0) {
+  if (!success) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set recession nullspace SVD failed: "
+                 "variables=%td constraints=%td scale=%g\n",
+                 working.cols(), working.rows(), matrix_linf(working));
+    return {};
+  }
+  if (nullspace.cols() == 0) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set recession has empty nullspace: "
+                 "variables=%td constraints=%td\n",
+                 working.cols(), working.rows());
     return {};
   }
 
@@ -166,6 +185,12 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   const Matrix reduced = 0.5 * (raw_reduced + raw_reduced.transpose());
   Eigen::SelfAdjointEigenSolver<Matrix> eigensolver(reduced);
   if (eigensolver.info() != Eigen::Success) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set recession reduced Hessian "
+                 "decomposition failed: variables=%td constraints=%td "
+                 "reduced=%td scale=%g finite=%d\n",
+                 working.cols(), working.rows(), nullspace.cols(),
+                 matrix_linf(reduced), reduced.allFinite() ? 1 : 0);
     return {};
   }
 
@@ -183,19 +208,20 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   const Vector objective_gradient = hessian * primal + gradient;
   const Vector spectral_gradient =
       eigenvectors.transpose() * nullspace.transpose() * objective_gradient;
-  const double gradient_tolerance =
-      scaled_tolerance(tolerance, linf(spectral_gradient));
   Vector coefficients = Vector::Zero(eigenvalues.size());
   for (Eigen::Index index = 0; index < eigenvalues.size(); ++index) {
-    if (std::abs(eigenvalues[index]) <= curvature_tolerance &&
-        std::abs(spectral_gradient[index]) > gradient_tolerance) {
+    if (std::abs(eigenvalues[index]) <= curvature_tolerance) {
       coefficients[index] = -spectral_gradient[index];
     }
   }
 
   Vector direction = nullspace * eigenvectors * coefficients;
   const double scale = linf(direction);
-  if (scale <= gradient_tolerance) {
+  if (scale == 0.0) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set equality subproblem reported an "
+                 "unbounded direction, but its recomputed nullspace "
+                 "projection is zero\n");
     return {};
   }
   direction /= scale;
@@ -253,6 +279,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
         CoreResult result;
         result.result =
             failure(recession.status, recession.diagnostic, iterations);
+        result.result.active_set_size = active.size();
         return result;
       }
       direction = std::move(recession.direction);
@@ -260,6 +287,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       CoreResult result;
       result.result = subproblem.result;
       result.result.iterations = iterations;
+      result.result.active_set_size = active.size();
       if (result.result.status == QpStatus::Infeasible) {
         result.result.status = QpStatus::NumericalFailure;
         result.result.diagnostic = QpDiagnostic::ResidualTooLarge;
@@ -307,6 +335,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       result.result =
           failure(QpStatus::Unbounded, QpDiagnostic::LinearDescentInNullspace,
                   iterations);
+      result.result.active_set_size = active.size();
       return result;
     }
 
@@ -345,6 +374,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   CoreResult result;
   result.result = failure(QpStatus::NumericalFailure,
                           QpDiagnostic::IterationLimit, iterations);
+  result.result.active_set_size = active.size();
   return result;
 }
 
@@ -473,8 +503,11 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   phase_start.head(variables) = seed;
   phase_start[variables] = maximum_violation + margin;
 
+  const double working_set_tolerance = scaled_tolerance(
+      options.tolerance,
+      std::max(matrix_linf(phase_inequalities), linf(phase_limits)));
   std::vector<std::size_t> active = tight_constraints(
-      phase_inequalities, phase_limits, phase_start, options.active_tolerance);
+      phase_inequalities, phase_limits, phase_start, working_set_tolerance);
   return solve_feasible_core(phase_hessian, phase_gradient, phase_equalities,
                              targets, phase_inequalities, phase_limits,
                              std::move(phase_start), std::move(active), options,
@@ -621,6 +654,9 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
 
   const NormalizedInequalities normalized =
       normalize_inequalities(inequalities, inequality_limits, lower, upper);
+  const double working_set_tolerance = scaled_tolerance(
+      options.tolerance,
+      std::max(matrix_linf(normalized.matrix), linf(normalized.limits)));
 
   Matrix feasibility_hessian =
       Matrix::Identity(static_cast<Eigen::Index>(variables),
@@ -676,11 +712,13 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
           return failure(QpStatus::InvalidInput,
                          QpDiagnostic::InvalidWarmStart);
         }
-        initial_active.push_back(row);
+        if (residual <= working_set_tolerance) {
+          initial_active.push_back(row);
+        }
       }
     } else {
       initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                         primal, options.active_tolerance);
+                                         primal, working_set_tolerance);
     }
   } else {
     primal = equality_feasible.primal;
@@ -714,7 +752,7 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
       }
     }
     initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                       primal, options.active_tolerance);
+                                       primal, working_set_tolerance);
   }
 
   CoreResult solved = solve_feasible_core(

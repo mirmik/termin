@@ -1960,6 +1960,13 @@ namespace termin::qopt
                         }
                     }
 
+                    QpTolerance friction_tolerance = options.qp_tolerance;
+                    const double friction_accuracy =
+                        options.velocity_tolerance * 1.0e-2;
+                    friction_tolerance.absolute = std::max(
+                        friction_tolerance.absolute, friction_accuracy);
+                    friction_tolerance.relative = std::max(
+                        friction_tolerance.relative, friction_accuracy);
                     const QpSolveResult friction_result = solve_contact_friction(
                         {
                             ConstDenseMatrixView::row_major(
@@ -2006,14 +2013,23 @@ namespace termin::qopt
                              impl_->friction_bilateral_impulse.size(),
                              1},
                         },
-                        {.qp = {.tolerance = options.qp_tolerance}});
+                        {.qp = {.tolerance = friction_tolerance}});
                     if (friction_result.status != QpStatus::Optimal)
                     {
                         std::fprintf(
                             stderr,
                             "[termin-qopt] contact friction solve failed: "
-                            "%s\n",
-                            qp_diagnostic_name(friction_result.diagnostic).data());
+                            "%s stationarity=%g equality=%g inequality=%g "
+                            "dual=%g complementarity=%g iterations=%zu "
+                            "active=%zu\n",
+                            qp_diagnostic_name(friction_result.diagnostic).data(),
+                            friction_result.stationarity_linf,
+                            friction_result.equality_linf,
+                            friction_result.inequality_linf,
+                            friction_result.dual_linf,
+                            friction_result.complementarity_linf,
+                            friction_result.iterations,
+                            friction_result.active_set_size);
                         rollback();
                         DynamicsSystemStepResult failure = dynamics_system_failure(
                             friction_result.status,

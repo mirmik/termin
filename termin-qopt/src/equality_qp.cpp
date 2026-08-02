@@ -57,8 +57,8 @@ using namespace detail;
 
   const Matrix input_hessian = copy_matrix(problem.hessian);
   const Vector gradient = copy_vector(problem.gradient);
-  const Matrix equalities = copy_matrix(problem.equalities);
-  const Vector equality_targets = copy_vector(problem.equality_targets);
+  const Matrix input_equalities = copy_matrix(problem.equalities);
+  const Vector input_equality_targets = copy_vector(problem.equality_targets);
 
   const double hessian_scale = matrix_linf(input_hessian);
   const double symmetry_residual =
@@ -70,6 +70,17 @@ using namespace detail;
 
   const Eigen::Index variable_count = static_cast<Eigen::Index>(variables);
   const Eigen::Index constraint_count = static_cast<Eigen::Index>(constraints);
+  Matrix equalities = input_equalities;
+  Vector equality_targets = input_equality_targets;
+  Vector equality_row_scales = Vector::Ones(constraint_count);
+  for (Eigen::Index row = 0; row < constraint_count; ++row) {
+    const double row_scale = equalities.row(row).cwiseAbs().maxCoeff();
+    if (row_scale > 0.0) {
+      equality_row_scales[row] = row_scale;
+      equalities.row(row) /= row_scale;
+      equality_targets[row] /= row_scale;
+    }
+  }
   Matrix nullspace;
   Vector feasible = Vector::Zero(variable_count);
   Matrix left_range;
@@ -86,6 +97,10 @@ using namespace detail;
     Eigen::JacobiSVD<Matrix> svd(equalities,
                                  Eigen::ComputeFullU | Eigen::ComputeFullV);
     if (svd.info() != Eigen::Success) {
+      std::fprintf(stderr,
+                   "[termin-qopt] equality QP constraint SVD failed: "
+                   "variables=%zu constraints=%zu scale=%g\n",
+                   variables, constraints, matrix_linf(equalities));
       return failure(QpStatus::NumericalFailure,
                      QpDiagnostic::DecompositionFailure);
     }
@@ -116,9 +131,11 @@ using namespace detail;
     nullspace = svd.matrixV().rightCols(variable_count - rank);
   }
 
-  const Vector feasibility_error = equalities * feasible - equality_targets;
+  const Vector feasibility_error =
+      input_equalities * feasible - input_equality_targets;
   const double feasibility_scale =
-      std::max(linf(equalities * feasible), linf(equality_targets));
+      std::max(linf(input_equalities * feasible),
+               linf(input_equality_targets));
   const double feasibility_tolerance =
       scaled_tolerance(tolerance, feasibility_scale);
   if (linf(feasibility_error) > feasibility_tolerance) {
@@ -142,6 +159,14 @@ using namespace detail;
 
     Eigen::SelfAdjointEigenSolver<Matrix> eigensolver(reduced_hessian);
     if (eigensolver.info() != Eigen::Success) {
+      std::fprintf(stderr,
+                   "[termin-qopt] equality QP reduced Hessian decomposition "
+                   "failed: variables=%zu constraints=%zu rank=%zu "
+                   "reduced=%td scale=%g finite=%d\n",
+                   variables, constraints, constraint_rank,
+                   static_cast<std::ptrdiff_t>(reduced_variables),
+                   matrix_linf(reduced_hessian),
+                   reduced_hessian.allFinite() ? 1 : 0);
       return failure(QpStatus::NumericalFailure,
                      QpDiagnostic::DecompositionFailure);
     }
@@ -189,16 +214,18 @@ using namespace detail;
   if (constraint_rank > 0) {
     equality_dual = -left_range * inverse_singular_values.asDiagonal() *
                     right_range.transpose() * objective_gradient;
+    equality_dual.array() /= equality_row_scales.array();
   }
 
   const Vector stationarity_error =
-      objective_gradient + equalities.transpose() * equality_dual;
-  const Vector equality_error = equalities * primal - equality_targets;
+      objective_gradient + input_equalities.transpose() * equality_dual;
+  const Vector equality_error =
+      input_equalities * primal - input_equality_targets;
   const double stationarity_scale = std::max({
       1.0,
       linf(hessian * primal),
       linf(gradient),
-      linf(equalities.transpose() * equality_dual),
+      linf(input_equalities.transpose() * equality_dual),
   });
 
   QpSolveResult result;

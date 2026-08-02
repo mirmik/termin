@@ -101,11 +101,16 @@ count, cached and warm-started contact count, active normal rows, minimum gap,
 normal impulse sum, normal reaction sum, and maximum normal reaction.
 With contact friction enabled it also reports sliding-contact count, tangent
 speed, tangent impulse, available friction capacity, and friction work.
+The global friction QP uses the configured QP tolerance, relaxed only up to one
+hundredth of the physical velocity tolerance. This avoids rejecting a
+physically negligible friction residual while keeping it well below the
+step-level acceptance threshold.
 
 `test-projects/fem-standing-robot` combines the floating-base scene compiler,
 eight reduced servo/motor channels, four frictional feet, and native HUD
 telemetry into a vertical robot acceptance. Its headless counterpart verifies
-both a bounded five-second stance and collapse after runtime servo disable.
+a bounded five-second stance, a fifty-second asymmetric high landing, and
+collapse after runtime servo disable.
 Motor work is a per-step diagnostic integral, not an additional conserved
 state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.
@@ -115,11 +120,14 @@ state. Optional presentation belongs to the separate
 The FEM scene adapter consumes solver-neutral `ContactPatch` values from the
 scene's single `CollisionWorld`; it never creates a gameplay `PhysicsWorld`.
 At every native substep it refreshes broad-phase poses and maps each enabled
-co-located `ColliderComponent` to either a maximal body, a floating
-articulation base, an articulation link, or the static world. Collider rebuild,
-disable, removal, and scene teardown are therefore observed before a patch is
-converted to `ContactEndpoint3D` values, without retaining collider pointers in
-`termin-qopt` across substeps.
+`ColliderComponent` to the nearest `FEMRigidBodyComponent` on its own entity or
+an ancestor. This lets end-effector entities own their collision geometry while
+the parent link owns mass and inertia. A collider without such an owner belongs
+to the static world. The resolved body becomes either a maximal body, a floating
+articulation base, or an articulation link. Collider rebuild, disable, removal,
+and scene teardown are therefore observed before a patch is converted to
+`ContactEndpoint3D` values, without retaining collider pointers in `termin-qopt`
+across substeps.
 
 The adapter derives deterministic contact keys from the canonical collider
 pair and collision feature IDs. It supplies all currently live collider-pair

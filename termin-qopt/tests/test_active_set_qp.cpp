@@ -172,6 +172,39 @@ void test_warm_start_can_drop_an_incorrect_constraint() {
   TERMIN_QOPT_CHECK(result.active_set_size == 0);
 }
 
+void test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set() {
+  const std::vector<double> hessian{2.0};
+  const std::vector<double> gradient{0.0};
+  const std::vector<double> inequalities{1.0, -1.0};
+  const std::vector<double> limits{0.0, 5.0e-12};
+  const std::vector<double> no_values;
+  std::vector<double> primal(1, 123.0);
+  std::vector<double> dual(2, 456.0);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 1, 1),
+          const_vector(gradient),
+          row_major(no_values, 0, 1),
+          const_vector(no_values),
+          row_major(inequalities, 2, 1),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          {nullptr, 0, 1},
+          vector(dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0]) <= 1.0e-12);
+  TERMIN_QOPT_CHECK(result.inequality_linf == 0.0);
+}
+
 void test_linear_recession_is_blocked_or_reported_unbounded() {
   const std::vector<double> hessian{0.0};
   const std::vector<double> gradient{-1.0};
@@ -228,6 +261,77 @@ void test_linear_recession_is_blocked_or_reported_unbounded() {
   TERMIN_QOPT_CHECK(result.status == QpStatus::Unbounded);
   TERMIN_QOPT_CHECK(all_equal(primal, 123.0));
   TERMIN_QOPT_CHECK(all_equal(dual, 456.0));
+}
+
+void test_recession_nullspace_is_invariant_to_constraint_row_scale() {
+  const std::vector<double> hessian{
+      0.0, 0.0,
+      0.0, 0.0,
+  };
+  const std::vector<double> gradient{-1.0, 0.0};
+  const std::vector<double> inequalities{
+      0.0, 1.0e-150,
+      0.0, -1.0e150,
+  };
+  const std::vector<double> limits{0.0, 0.0};
+  const std::vector<double> no_values;
+  std::vector<double> primal(2, 123.0);
+  std::vector<double> dual(2, 456.0);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 2, 2),
+          const_vector(gradient),
+          row_major(no_values, 0, 2),
+          const_vector(no_values),
+          row_major(inequalities, 2, 2),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          {nullptr, 0, 1},
+          vector(dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Unbounded);
+  TERMIN_QOPT_CHECK(result.diagnostic ==
+                    QpDiagnostic::LinearDescentInNullspace);
+}
+
+void test_tiny_resolvable_recession_direction_reaches_a_blocker() {
+  const std::vector<double> hessian{0.0};
+  const std::vector<double> gradient{-4.0e-12};
+  const std::vector<double> inequalities{1.0};
+  const std::vector<double> limits{1.0};
+  const std::vector<double> no_values;
+  std::vector<double> primal(1);
+  std::vector<double> dual(1);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 1, 1),
+          const_vector(gradient),
+          row_major(no_values, 0, 1),
+          const_vector(no_values),
+          row_major(inequalities, 1, 1),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          {nullptr, 0, 1},
+          vector(dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0] - 1.0) <= 1e-12);
 }
 
 void test_inconsistent_bounds_are_infeasible() {
@@ -480,7 +584,10 @@ int main() {
   test_shared_oracle();
   test_bounds_and_full_duals();
   test_warm_start_can_drop_an_incorrect_constraint();
+  test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set();
   test_linear_recession_is_blocked_or_reported_unbounded();
+  test_recession_nullspace_is_invariant_to_constraint_row_scale();
+  test_tiny_resolvable_recession_direction_reaches_a_blocker();
   test_inconsistent_bounds_are_infeasible();
   test_invalid_warm_start_and_iteration_limit_do_not_write();
   test_nonconvexity_and_output_overlap_are_rejected();

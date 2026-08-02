@@ -160,8 +160,13 @@ namespace termin
                 continue;
             }
 
-            FEMRigidBodyComponent* body =
-                candidate.get_component<FEMRigidBodyComponent>();
+            FEMRigidBodyComponent* body = nullptr;
+            Entity body_entity = candidate;
+            while (body_entity.valid() && body == nullptr)
+            {
+                body = body_entity.get_component<FEMRigidBodyComponent>();
+                body_entity = body_entity.parent();
+            }
             if (body == nullptr || !body->enabled())
             {
                 endpoint.kind = EndpointKind::Static;

@@ -92,6 +92,36 @@ void test_redundant_equalities_and_minimum_norm_dual() {
   TERMIN_QOPT_CHECK(result.equality_linf <= 1e-10);
 }
 
+void test_constraint_row_scaling_does_not_change_the_solution() {
+  const std::vector<double> hessian{
+      2.0, 0.0,
+      0.0, 4.0,
+  };
+  const std::vector<double> gradient{-2.0, -8.0};
+  const std::vector<double> equalities{
+      1.0e-12, 1.0e-12,
+      1.0e12, -1.0e12,
+  };
+  const std::vector<double> targets{3.0e-12, -1.0e12};
+  std::vector<double> primal(2);
+  std::vector<double> dual(2);
+
+  const QpSolveResult result = solve_equality_qp(
+      {
+          row_major(hessian, 2, 2),
+          const_vector(gradient),
+          row_major(equalities, 2, 2),
+          const_vector(targets),
+      },
+      {vector(primal), vector(dual)});
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0] - 1.0) <= 1e-10);
+  TERMIN_QOPT_CHECK(std::abs(primal[1] - 2.0) <= 1e-10);
+  TERMIN_QOPT_CHECK(result.stationarity_linf <= 1e-10);
+  TERMIN_QOPT_CHECK(result.equality_linf / 1.0e12 <= 1.0e-12);
+}
+
 void test_strided_views() {
   const std::vector<double> hessian{
       2.0, 0.0, -100.0, 0.0, 2.0, -100.0,
@@ -230,6 +260,7 @@ void test_nonconvex_and_overlapping_outputs() {
 int main() {
   test_shared_oracle();
   test_redundant_equalities_and_minimum_norm_dual();
+  test_constraint_row_scaling_does_not_change_the_solution();
   test_strided_views();
   test_input_output_aliasing_uses_snapshot_semantics();
   test_invalid_inputs_are_diagnostic_and_do_not_write_outputs();

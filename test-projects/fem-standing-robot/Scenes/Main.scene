@@ -6,30 +6,30 @@
       {
         "uuid": "fem-standing-ground",
         "name": "Static Ground",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
-            0,
-            0,
+            0.0,
+            0.0,
             -0.25
           ],
           "rotation": [
-            0,
-            0,
-            0,
-            1
+            0.0,
+            0.0,
+            0.0,
+            1.0
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -46,18 +46,18 @@
               },
               "mesh_offset_enabled": true,
               "mesh_offset_position": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "mesh_offset_euler": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "mesh_offset_scale": [
-                8,
-                8,
+                8.0,
+                8.0,
                 0.5
               ]
             }
@@ -86,8 +86,8 @@
               "collider_type": "Box",
               "convex_hull_mesh_source": "Field",
               "box_size": [
-                8,
-                8,
+                8.0,
+                8.0,
                 0.5
               ],
               "convex_hull_mesh": {
@@ -95,14 +95,14 @@
               },
               "collider_offset_enabled": false,
               "collider_offset_position": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "collider_offset_euler": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ]
             }
           }
@@ -111,30 +111,30 @@
       {
         "uuid": "fem-standing-robot-root",
         "name": "Robot Base",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
-            0,
-            0,
-            1.55
+            0.0,
+            0.0,
+            3.3596982955932617
           ],
           "rotation": [
-            0,
-            0,
-            0,
-            1
+            -0.03302609427971528,
+            -0.0715192083359704,
+            -0.002369370458237609,
+            0.9968894953901635
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -151,18 +151,18 @@
               },
               "mesh_offset_enabled": true,
               "mesh_offset_position": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "mesh_offset_euler": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "mesh_offset_scale": [
                 1.4,
-                1,
+                1.0,
                 0.4
               ]
             }
@@ -188,7 +188,7 @@
             "type": "FEMArticulationComponent",
             "data": {
               "enabled": true,
-              "base_mode": 1
+              "base_mode": 1.0
             }
           },
           {
@@ -196,14 +196,14 @@
             "type": "FEMRigidBodyComponent",
             "data": {
               "enabled": true,
-              "mass": 8,
+              "mass": 8.0,
               "inertia_diagonal": [
                 1.1,
                 1.6,
                 1.9
               ],
-              "linear_damping": 0,
-              "angular_damping": 0
+              "linear_damping": 0.0,
+              "angular_damping": 0.0
             }
           },
           {
@@ -215,7 +215,7 @@
               "convex_hull_mesh_source": "Field",
               "box_size": [
                 1.4,
-                1,
+                1.0,
                 0.4
               ],
               "convex_hull_mesh": {
@@ -223,14 +223,14 @@
               },
               "collider_offset_enabled": false,
               "collider_offset_position": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ],
               "collider_offset_euler": [
-                0,
-                0,
-                0
+                0.0,
+                0.0,
+                0.0
               ]
             }
           }
@@ -239,13 +239,13 @@
           {
             "uuid": "fem-standing-front-left-hip",
             "name": "Front Left Hip",
-            "priority": 0,
+            "priority": 0.0,
             "visible": true,
             "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
-            "flags": 0,
+            "layer": 0.0,
+            "flags": 0.0,
             "pose": {
               "position": [
                 -0.58,
@@ -253,16 +253,16 @@
                 -0.1
               ],
               "rotation": [
-                0,
-                0,
-                0,
-                1
+                0.0,
+                -0.13052619222005157,
+                0.0,
+                0.9914448613738104
               ]
             },
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ],
             "components": [
               {
@@ -279,14 +279,14 @@
                   },
                   "mesh_offset_enabled": true,
                   "mesh_offset_position": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_euler": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_scale": [
                     0.17,
@@ -317,14 +317,14 @@
                 "data": {
                   "enabled": true,
                   "axis": [
-                    0,
-                    1,
-                    0
+                    0.0,
+                    1.0,
+                    0.0
                   ],
                   "coordinate": [
-                    15,
-                    -60,
-                    60
+                    -15.0,
+                    -60.0,
+                    60.0
                   ],
                   "origin_position": [
                     -0.58,
@@ -332,10 +332,9 @@
                     -0.1
                   ],
                   "origin_rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "coordinate_scale": "0.017453292519943295"
                 }
@@ -345,8 +344,8 @@
                 "type": "FEMArticulationMotorComponent",
                 "data": {
                   "enabled": true,
-                  "commanded_effort": 0,
-                  "maximum_effort": 40
+                  "commanded_effort": 0.0,
+                  "maximum_effort": 40.0
                 }
               },
               {
@@ -356,13 +355,13 @@
                   "enabled": true,
                   "position_control_enabled": true,
                   "integral_control_enabled": false,
-                  "target_coordinate": 15,
-                  "target_velocity": 0,
-                  "position_gain": 100,
-                  "integral_gain": 0,
-                  "maximum_integral_effort": 10,
-                  "velocity_gain": 15,
-                  "feed_forward_effort": 0
+                  "target_coordinate": -15.0,
+                  "target_velocity": 0.0,
+                  "position_gain": 100.0,
+                  "integral_gain": 0.0,
+                  "maximum_integral_effort": 10.0,
+                  "velocity_gain": 15.0,
+                  "feed_forward_effort": 0.0
                 }
               }
             ],
@@ -370,30 +369,30 @@
               {
                 "uuid": "fem-standing-front-left-upper-leg",
                 "name": "Front Left Upper Leg",
-                "priority": 0,
+                "priority": 0.0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
-                "flags": 0,
+                "layer": 0.0,
+                "flags": 0.0,
                 "pose": {
                   "position": [
-                    0,
-                    0,
+                    0.0,
+                    0.0,
                     -0.35
                   ],
                   "rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
                   ]
                 },
                 "scale": [
-                  1,
-                  1,
-                  1
+                  1.0,
+                  1.0,
+                  1.0
                 ],
                 "components": [
                   {
@@ -410,14 +409,14 @@
                       },
                       "mesh_offset_enabled": true,
                       "mesh_offset_position": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_euler": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_scale": [
                         0.19,
@@ -453,8 +452,8 @@
                         0.018,
                         0.003
                       ],
-                      "linear_damping": 0,
-                      "angular_damping": 0
+                      "linear_damping": 0.0,
+                      "angular_damping": 0.0
                     }
                   }
                 ],
@@ -462,30 +461,30 @@
                   {
                     "uuid": "fem-standing-front-left-knee",
                     "name": "Front Left Knee",
-                    "priority": 0,
+                    "priority": 0.0,
                     "visible": true,
                     "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
-                    "flags": 0,
+                    "layer": 0.0,
+                    "flags": 0.0,
                     "pose": {
                       "position": [
-                        0,
-                        0,
+                        0.0,
+                        0.0,
                         -0.35
                       ],
                       "rotation": [
-                        0,
-                        0,
-                        0,
-                        1
+                        0.0,
+                        0.25881904510252074,
+                        0.0,
+                        0.9659258262890683
                       ]
                     },
                     "scale": [
-                      1,
-                      1,
-                      1
+                      1.0,
+                      1.0,
+                      1.0
                     ],
                     "components": [
                       {
@@ -502,14 +501,14 @@
                           },
                           "mesh_offset_enabled": true,
                           "mesh_offset_position": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_euler": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_scale": [
                             0.16,
@@ -540,25 +539,24 @@
                         "data": {
                           "enabled": true,
                           "axis": [
-                            0,
-                            1,
-                            0
+                            0.0,
+                            1.0,
+                            0.0
                           ],
                           "coordinate": [
-                            -30,
-                            -60,
-                            60
+                            30.0,
+                            -60.0,
+                            60.0
                           ],
                           "origin_position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "origin_rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "coordinate_scale": "0.017453292519943295"
                         }
@@ -568,8 +566,8 @@
                         "type": "FEMArticulationMotorComponent",
                         "data": {
                           "enabled": true,
-                          "commanded_effort": 0,
-                          "maximum_effort": 40
+                          "commanded_effort": 0.0,
+                          "maximum_effort": 40.0
                         }
                       },
                       {
@@ -579,13 +577,13 @@
                           "enabled": true,
                           "position_control_enabled": true,
                           "integral_control_enabled": false,
-                          "target_coordinate": -30,
-                          "target_velocity": 0,
-                          "position_gain": 100,
-                          "integral_gain": 0,
-                          "maximum_integral_effort": 10,
-                          "velocity_gain": 15,
-                          "feed_forward_effort": 0
+                          "target_coordinate": 30.0,
+                          "target_velocity": 0.0,
+                          "position_gain": 100.0,
+                          "integral_gain": 0.0,
+                          "maximum_integral_effort": 10.0,
+                          "velocity_gain": 15.0,
+                          "feed_forward_effort": 0.0
                         }
                       }
                     ],
@@ -593,30 +591,30 @@
                       {
                         "uuid": "fem-standing-front-left-lower-leg",
                         "name": "Front Left Lower Leg",
-                        "priority": 0,
+                        "priority": 0.0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
-                        "flags": 0,
+                        "layer": 0.0,
+                        "flags": 0.0,
                         "pose": {
                           "position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
                           ]
                         },
                         "scale": [
-                          1,
-                          1,
-                          1
+                          1.0,
+                          1.0,
+                          1.0
                         ],
                         "components": [
                           {
@@ -633,14 +631,14 @@
                               },
                               "mesh_offset_enabled": true,
                               "mesh_offset_position": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_euler": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_scale": [
                                 0.17,
@@ -676,67 +674,39 @@
                                 0.018,
                                 0.003
                               ],
-                              "linear_damping": 0,
-                              "angular_damping": 0
-                            }
-                          },
-                          {
-                            "source_id": "fem-standing-front-left-foot-collider",
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Sphere",
-                              "convex_hull_mesh_source": "Field",
-                              "box_size": [
-                                0.24,
-                                0.24,
-                                0.24
-                              ],
-                              "convex_hull_mesh": {
-                                "type": "none"
-                              },
-                              "collider_offset_enabled": true,
-                              "collider_offset_position": [
-                                0,
-                                0,
-                                -0.23
-                              ],
-                              "collider_offset_euler": [
-                                0,
-                                0,
-                                0
-                              ]
+                              "linear_damping": 0.0,
+                              "angular_damping": 0.0
                             }
                           }
                         ],
                         "children": [
                           {
-                            "uuid": "fem-standing-front-left-foot-visual",
-                            "name": "Front Left Foot Visual",
-                            "priority": 0,
+                            "uuid": "fem-standing-front-left-foot-effector",
+                            "name": "Front Left Foot Effector",
+                            "priority": 0.0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
-                            "flags": 0,
+                            "layer": 0.0,
+                            "flags": 0.0,
                             "pose": {
                               "position": [
-                                0,
-                                0,
+                                0.0,
+                                0.0,
                                 -0.35
                               ],
                               "rotation": [
-                                0,
-                                0,
-                                0,
-                                1
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0
                               ]
                             },
                             "scale": [
-                              1,
-                              1,
-                              1
+                              1.0,
+                              1.0,
+                              1.0
                             ],
                             "components": [
                               {
@@ -753,19 +723,19 @@
                                   },
                                   "mesh_offset_enabled": true,
                                   "mesh_offset_position": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_euler": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_scale": [
-                                    0.28,
-                                    0.28,
-                                    0.2
+                                    0.24,
+                                    0.24,
+                                    0.24
                                   ]
                                 }
                               },
@@ -784,6 +754,34 @@
                                   "_override_material": false,
                                   "materials": []
                                 }
+                              },
+                              {
+                                "source_id": "fem-standing-front-left-foot-collider",
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Sphere",
+                                  "convex_hull_mesh_source": "Field",
+                                  "box_size": [
+                                    0.24,
+                                    0.24,
+                                    0.24
+                                  ],
+                                  "convex_hull_mesh": {
+                                    "type": "none"
+                                  },
+                                  "collider_offset_enabled": false,
+                                  "collider_offset_position": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "collider_offset_euler": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ]
+                                }
                               }
                             ]
                           }
@@ -798,13 +796,13 @@
           {
             "uuid": "fem-standing-front-right-hip",
             "name": "Front Right Hip",
-            "priority": 0,
+            "priority": 0.0,
             "visible": true,
             "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
-            "flags": 0,
+            "layer": 0.0,
+            "flags": 0.0,
             "pose": {
               "position": [
                 0.58,
@@ -812,16 +810,16 @@
                 -0.1
               ],
               "rotation": [
-                0,
-                0,
-                0,
-                1
+                0.0,
+                0.13052619222005157,
+                0.0,
+                0.9914448613738104
               ]
             },
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ],
             "components": [
               {
@@ -838,14 +836,14 @@
                   },
                   "mesh_offset_enabled": true,
                   "mesh_offset_position": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_euler": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_scale": [
                     0.17,
@@ -876,14 +874,14 @@
                 "data": {
                   "enabled": true,
                   "axis": [
-                    0,
-                    1,
-                    0
+                    0.0,
+                    1.0,
+                    0.0
                   ],
                   "coordinate": [
-                    -15,
-                    -60,
-                    60
+                    15.0,
+                    -60.0,
+                    60.0
                   ],
                   "origin_position": [
                     0.58,
@@ -891,10 +889,9 @@
                     -0.1
                   ],
                   "origin_rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "coordinate_scale": "0.017453292519943295"
                 }
@@ -904,8 +901,8 @@
                 "type": "FEMArticulationMotorComponent",
                 "data": {
                   "enabled": true,
-                  "commanded_effort": 0,
-                  "maximum_effort": 40
+                  "commanded_effort": 0.0,
+                  "maximum_effort": 40.0
                 }
               },
               {
@@ -915,13 +912,13 @@
                   "enabled": true,
                   "position_control_enabled": true,
                   "integral_control_enabled": false,
-                  "target_coordinate": -15,
-                  "target_velocity": 0,
-                  "position_gain": 100,
-                  "integral_gain": 0,
-                  "maximum_integral_effort": 10,
-                  "velocity_gain": 15,
-                  "feed_forward_effort": 0
+                  "target_coordinate": 15.0,
+                  "target_velocity": 0.0,
+                  "position_gain": 100.0,
+                  "integral_gain": 0.0,
+                  "maximum_integral_effort": 10.0,
+                  "velocity_gain": 15.0,
+                  "feed_forward_effort": 0.0
                 }
               }
             ],
@@ -929,30 +926,30 @@
               {
                 "uuid": "fem-standing-front-right-upper-leg",
                 "name": "Front Right Upper Leg",
-                "priority": 0,
+                "priority": 0.0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
-                "flags": 0,
+                "layer": 0.0,
+                "flags": 0.0,
                 "pose": {
                   "position": [
-                    0,
-                    0,
+                    0.0,
+                    0.0,
                     -0.35
                   ],
                   "rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
                   ]
                 },
                 "scale": [
-                  1,
-                  1,
-                  1
+                  1.0,
+                  1.0,
+                  1.0
                 ],
                 "components": [
                   {
@@ -969,14 +966,14 @@
                       },
                       "mesh_offset_enabled": true,
                       "mesh_offset_position": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_euler": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_scale": [
                         0.19,
@@ -1012,8 +1009,8 @@
                         0.018,
                         0.003
                       ],
-                      "linear_damping": 0,
-                      "angular_damping": 0
+                      "linear_damping": 0.0,
+                      "angular_damping": 0.0
                     }
                   }
                 ],
@@ -1021,30 +1018,30 @@
                   {
                     "uuid": "fem-standing-front-right-knee",
                     "name": "Front Right Knee",
-                    "priority": 0,
+                    "priority": 0.0,
                     "visible": true,
                     "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
-                    "flags": 0,
+                    "layer": 0.0,
+                    "flags": 0.0,
                     "pose": {
                       "position": [
-                        0,
-                        0,
+                        0.0,
+                        0.0,
                         -0.35
                       ],
                       "rotation": [
-                        0,
-                        0,
-                        0,
-                        1
+                        0.0,
+                        -0.25881904510252074,
+                        0.0,
+                        0.9659258262890683
                       ]
                     },
                     "scale": [
-                      1,
-                      1,
-                      1
+                      1.0,
+                      1.0,
+                      1.0
                     ],
                     "components": [
                       {
@@ -1061,14 +1058,14 @@
                           },
                           "mesh_offset_enabled": true,
                           "mesh_offset_position": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_euler": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_scale": [
                             0.16,
@@ -1099,25 +1096,24 @@
                         "data": {
                           "enabled": true,
                           "axis": [
-                            0,
-                            1,
-                            0
+                            0.0,
+                            1.0,
+                            0.0
                           ],
                           "coordinate": [
-                            30,
-                            -60,
-                            60
+                            -30.0,
+                            -60.0,
+                            60.0
                           ],
                           "origin_position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "origin_rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "coordinate_scale": "0.017453292519943295"
                         }
@@ -1127,8 +1123,8 @@
                         "type": "FEMArticulationMotorComponent",
                         "data": {
                           "enabled": true,
-                          "commanded_effort": 0,
-                          "maximum_effort": 40
+                          "commanded_effort": 0.0,
+                          "maximum_effort": 40.0
                         }
                       },
                       {
@@ -1138,13 +1134,13 @@
                           "enabled": true,
                           "position_control_enabled": true,
                           "integral_control_enabled": false,
-                          "target_coordinate": 30,
-                          "target_velocity": 0,
-                          "position_gain": 100,
-                          "integral_gain": 0,
-                          "maximum_integral_effort": 10,
-                          "velocity_gain": 15,
-                          "feed_forward_effort": 0
+                          "target_coordinate": -30.0,
+                          "target_velocity": 0.0,
+                          "position_gain": 100.0,
+                          "integral_gain": 0.0,
+                          "maximum_integral_effort": 10.0,
+                          "velocity_gain": 15.0,
+                          "feed_forward_effort": 0.0
                         }
                       }
                     ],
@@ -1152,30 +1148,30 @@
                       {
                         "uuid": "fem-standing-front-right-lower-leg",
                         "name": "Front Right Lower Leg",
-                        "priority": 0,
+                        "priority": 0.0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
-                        "flags": 0,
+                        "layer": 0.0,
+                        "flags": 0.0,
                         "pose": {
                           "position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
                           ]
                         },
                         "scale": [
-                          1,
-                          1,
-                          1
+                          1.0,
+                          1.0,
+                          1.0
                         ],
                         "components": [
                           {
@@ -1192,14 +1188,14 @@
                               },
                               "mesh_offset_enabled": true,
                               "mesh_offset_position": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_euler": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_scale": [
                                 0.17,
@@ -1235,67 +1231,39 @@
                                 0.018,
                                 0.003
                               ],
-                              "linear_damping": 0,
-                              "angular_damping": 0
-                            }
-                          },
-                          {
-                            "source_id": "fem-standing-front-right-foot-collider",
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Sphere",
-                              "convex_hull_mesh_source": "Field",
-                              "box_size": [
-                                0.24,
-                                0.24,
-                                0.24
-                              ],
-                              "convex_hull_mesh": {
-                                "type": "none"
-                              },
-                              "collider_offset_enabled": true,
-                              "collider_offset_position": [
-                                0,
-                                0,
-                                -0.23
-                              ],
-                              "collider_offset_euler": [
-                                0,
-                                0,
-                                0
-                              ]
+                              "linear_damping": 0.0,
+                              "angular_damping": 0.0
                             }
                           }
                         ],
                         "children": [
                           {
-                            "uuid": "fem-standing-front-right-foot-visual",
-                            "name": "Front Right Foot Visual",
-                            "priority": 0,
+                            "uuid": "fem-standing-front-right-foot-effector",
+                            "name": "Front Right Foot Effector",
+                            "priority": 0.0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
-                            "flags": 0,
+                            "layer": 0.0,
+                            "flags": 0.0,
                             "pose": {
                               "position": [
-                                0,
-                                0,
+                                0.0,
+                                0.0,
                                 -0.35
                               ],
                               "rotation": [
-                                0,
-                                0,
-                                0,
-                                1
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0
                               ]
                             },
                             "scale": [
-                              1,
-                              1,
-                              1
+                              1.0,
+                              1.0,
+                              1.0
                             ],
                             "components": [
                               {
@@ -1312,19 +1280,19 @@
                                   },
                                   "mesh_offset_enabled": true,
                                   "mesh_offset_position": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_euler": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_scale": [
-                                    0.28,
-                                    0.28,
-                                    0.2
+                                    0.24,
+                                    0.24,
+                                    0.24
                                   ]
                                 }
                               },
@@ -1343,6 +1311,34 @@
                                   "_override_material": false,
                                   "materials": []
                                 }
+                              },
+                              {
+                                "source_id": "fem-standing-front-right-foot-collider",
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Sphere",
+                                  "convex_hull_mesh_source": "Field",
+                                  "box_size": [
+                                    0.24,
+                                    0.24,
+                                    0.24
+                                  ],
+                                  "convex_hull_mesh": {
+                                    "type": "none"
+                                  },
+                                  "collider_offset_enabled": false,
+                                  "collider_offset_position": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "collider_offset_euler": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ]
+                                }
                               }
                             ]
                           }
@@ -1357,13 +1353,13 @@
           {
             "uuid": "fem-standing-rear-left-hip",
             "name": "Rear Left Hip",
-            "priority": 0,
+            "priority": 0.0,
             "visible": true,
             "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
-            "flags": 0,
+            "layer": 0.0,
+            "flags": 0.0,
             "pose": {
               "position": [
                 -0.58,
@@ -1371,16 +1367,16 @@
                 -0.1
               ],
               "rotation": [
-                0,
-                0,
-                0,
-                1
+                0.0,
+                -0.13052619222005157,
+                0.0,
+                0.9914448613738104
               ]
             },
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ],
             "components": [
               {
@@ -1397,14 +1393,14 @@
                   },
                   "mesh_offset_enabled": true,
                   "mesh_offset_position": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_euler": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_scale": [
                     0.17,
@@ -1435,14 +1431,14 @@
                 "data": {
                   "enabled": true,
                   "axis": [
-                    0,
-                    1,
-                    0
+                    0.0,
+                    1.0,
+                    0.0
                   ],
                   "coordinate": [
-                    15,
-                    -60,
-                    60
+                    -15.0,
+                    -60.0,
+                    60.0
                   ],
                   "origin_position": [
                     -0.58,
@@ -1450,10 +1446,9 @@
                     -0.1
                   ],
                   "origin_rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "coordinate_scale": "0.017453292519943295"
                 }
@@ -1463,8 +1458,8 @@
                 "type": "FEMArticulationMotorComponent",
                 "data": {
                   "enabled": true,
-                  "commanded_effort": 0,
-                  "maximum_effort": 40
+                  "commanded_effort": 0.0,
+                  "maximum_effort": 40.0
                 }
               },
               {
@@ -1474,13 +1469,13 @@
                   "enabled": true,
                   "position_control_enabled": true,
                   "integral_control_enabled": false,
-                  "target_coordinate": 15,
-                  "target_velocity": 0,
-                  "position_gain": 100,
-                  "integral_gain": 0,
-                  "maximum_integral_effort": 10,
-                  "velocity_gain": 15,
-                  "feed_forward_effort": 0
+                  "target_coordinate": -15.0,
+                  "target_velocity": 0.0,
+                  "position_gain": 100.0,
+                  "integral_gain": 0.0,
+                  "maximum_integral_effort": 10.0,
+                  "velocity_gain": 15.0,
+                  "feed_forward_effort": 0.0
                 }
               }
             ],
@@ -1488,30 +1483,30 @@
               {
                 "uuid": "fem-standing-rear-left-upper-leg",
                 "name": "Rear Left Upper Leg",
-                "priority": 0,
+                "priority": 0.0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
-                "flags": 0,
+                "layer": 0.0,
+                "flags": 0.0,
                 "pose": {
                   "position": [
-                    0,
-                    0,
+                    0.0,
+                    0.0,
                     -0.35
                   ],
                   "rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
                   ]
                 },
                 "scale": [
-                  1,
-                  1,
-                  1
+                  1.0,
+                  1.0,
+                  1.0
                 ],
                 "components": [
                   {
@@ -1528,14 +1523,14 @@
                       },
                       "mesh_offset_enabled": true,
                       "mesh_offset_position": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_euler": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_scale": [
                         0.19,
@@ -1571,8 +1566,8 @@
                         0.018,
                         0.003
                       ],
-                      "linear_damping": 0,
-                      "angular_damping": 0
+                      "linear_damping": 0.0,
+                      "angular_damping": 0.0
                     }
                   }
                 ],
@@ -1580,30 +1575,30 @@
                   {
                     "uuid": "fem-standing-rear-left-knee",
                     "name": "Rear Left Knee",
-                    "priority": 0,
+                    "priority": 0.0,
                     "visible": true,
                     "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
-                    "flags": 0,
+                    "layer": 0.0,
+                    "flags": 0.0,
                     "pose": {
                       "position": [
-                        0,
-                        0,
+                        0.0,
+                        0.0,
                         -0.35
                       ],
                       "rotation": [
-                        0,
-                        0,
-                        0,
-                        1
+                        0.0,
+                        0.25881904510252074,
+                        0.0,
+                        0.9659258262890683
                       ]
                     },
                     "scale": [
-                      1,
-                      1,
-                      1
+                      1.0,
+                      1.0,
+                      1.0
                     ],
                     "components": [
                       {
@@ -1620,14 +1615,14 @@
                           },
                           "mesh_offset_enabled": true,
                           "mesh_offset_position": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_euler": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_scale": [
                             0.16,
@@ -1658,25 +1653,24 @@
                         "data": {
                           "enabled": true,
                           "axis": [
-                            0,
-                            1,
-                            0
+                            0.0,
+                            1.0,
+                            0.0
                           ],
                           "coordinate": [
-                            -30,
-                            -60,
-                            60
+                            30.0,
+                            -60.0,
+                            60.0
                           ],
                           "origin_position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "origin_rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "coordinate_scale": "0.017453292519943295"
                         }
@@ -1686,8 +1680,8 @@
                         "type": "FEMArticulationMotorComponent",
                         "data": {
                           "enabled": true,
-                          "commanded_effort": 0,
-                          "maximum_effort": 40
+                          "commanded_effort": 0.0,
+                          "maximum_effort": 40.0
                         }
                       },
                       {
@@ -1697,13 +1691,13 @@
                           "enabled": true,
                           "position_control_enabled": true,
                           "integral_control_enabled": false,
-                          "target_coordinate": -30,
-                          "target_velocity": 0,
-                          "position_gain": 100,
-                          "integral_gain": 0,
-                          "maximum_integral_effort": 10,
-                          "velocity_gain": 15,
-                          "feed_forward_effort": 0
+                          "target_coordinate": 30.0,
+                          "target_velocity": 0.0,
+                          "position_gain": 100.0,
+                          "integral_gain": 0.0,
+                          "maximum_integral_effort": 10.0,
+                          "velocity_gain": 15.0,
+                          "feed_forward_effort": 0.0
                         }
                       }
                     ],
@@ -1711,30 +1705,30 @@
                       {
                         "uuid": "fem-standing-rear-left-lower-leg",
                         "name": "Rear Left Lower Leg",
-                        "priority": 0,
+                        "priority": 0.0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
-                        "flags": 0,
+                        "layer": 0.0,
+                        "flags": 0.0,
                         "pose": {
                           "position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
                           ]
                         },
                         "scale": [
-                          1,
-                          1,
-                          1
+                          1.0,
+                          1.0,
+                          1.0
                         ],
                         "components": [
                           {
@@ -1751,14 +1745,14 @@
                               },
                               "mesh_offset_enabled": true,
                               "mesh_offset_position": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_euler": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_scale": [
                                 0.17,
@@ -1794,67 +1788,39 @@
                                 0.018,
                                 0.003
                               ],
-                              "linear_damping": 0,
-                              "angular_damping": 0
-                            }
-                          },
-                          {
-                            "source_id": "fem-standing-rear-left-foot-collider",
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Sphere",
-                              "convex_hull_mesh_source": "Field",
-                              "box_size": [
-                                0.24,
-                                0.24,
-                                0.24
-                              ],
-                              "convex_hull_mesh": {
-                                "type": "none"
-                              },
-                              "collider_offset_enabled": true,
-                              "collider_offset_position": [
-                                0,
-                                0,
-                                -0.23
-                              ],
-                              "collider_offset_euler": [
-                                0,
-                                0,
-                                0
-                              ]
+                              "linear_damping": 0.0,
+                              "angular_damping": 0.0
                             }
                           }
                         ],
                         "children": [
                           {
-                            "uuid": "fem-standing-rear-left-foot-visual",
-                            "name": "Rear Left Foot Visual",
-                            "priority": 0,
+                            "uuid": "fem-standing-rear-left-foot-effector",
+                            "name": "Rear Left Foot Effector",
+                            "priority": 0.0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
-                            "flags": 0,
+                            "layer": 0.0,
+                            "flags": 0.0,
                             "pose": {
                               "position": [
-                                0,
-                                0,
+                                0.0,
+                                0.0,
                                 -0.35
                               ],
                               "rotation": [
-                                0,
-                                0,
-                                0,
-                                1
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0
                               ]
                             },
                             "scale": [
-                              1,
-                              1,
-                              1
+                              1.0,
+                              1.0,
+                              1.0
                             ],
                             "components": [
                               {
@@ -1871,19 +1837,19 @@
                                   },
                                   "mesh_offset_enabled": true,
                                   "mesh_offset_position": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_euler": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_scale": [
-                                    0.28,
-                                    0.28,
-                                    0.2
+                                    0.24,
+                                    0.24,
+                                    0.24
                                   ]
                                 }
                               },
@@ -1902,6 +1868,34 @@
                                   "_override_material": false,
                                   "materials": []
                                 }
+                              },
+                              {
+                                "source_id": "fem-standing-rear-left-foot-collider",
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Sphere",
+                                  "convex_hull_mesh_source": "Field",
+                                  "box_size": [
+                                    0.24,
+                                    0.24,
+                                    0.24
+                                  ],
+                                  "convex_hull_mesh": {
+                                    "type": "none"
+                                  },
+                                  "collider_offset_enabled": false,
+                                  "collider_offset_position": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "collider_offset_euler": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ]
+                                }
                               }
                             ]
                           }
@@ -1916,13 +1910,13 @@
           {
             "uuid": "fem-standing-rear-right-hip",
             "name": "Rear Right Hip",
-            "priority": 0,
+            "priority": 0.0,
             "visible": true,
             "enabled": true,
             "pickable": true,
             "selectable": true,
-            "layer": 0,
-            "flags": 0,
+            "layer": 0.0,
+            "flags": 0.0,
             "pose": {
               "position": [
                 0.58,
@@ -1930,16 +1924,16 @@
                 -0.1
               ],
               "rotation": [
-                0,
-                0,
-                0,
-                1
+                0.0,
+                0.13052619222005157,
+                0.0,
+                0.9914448613738104
               ]
             },
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ],
             "components": [
               {
@@ -1956,14 +1950,14 @@
                   },
                   "mesh_offset_enabled": true,
                   "mesh_offset_position": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_euler": [
-                    0,
-                    0,
-                    0
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "mesh_offset_scale": [
                     0.17,
@@ -1994,14 +1988,14 @@
                 "data": {
                   "enabled": true,
                   "axis": [
-                    0,
-                    1,
-                    0
+                    0.0,
+                    1.0,
+                    0.0
                   ],
                   "coordinate": [
-                    -15,
-                    -60,
-                    60
+                    15.0,
+                    -60.0,
+                    60.0
                   ],
                   "origin_position": [
                     0.58,
@@ -2009,10 +2003,9 @@
                     -0.1
                   ],
                   "origin_rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0
                   ],
                   "coordinate_scale": "0.017453292519943295"
                 }
@@ -2022,8 +2015,8 @@
                 "type": "FEMArticulationMotorComponent",
                 "data": {
                   "enabled": true,
-                  "commanded_effort": 0,
-                  "maximum_effort": 40
+                  "commanded_effort": 0.0,
+                  "maximum_effort": 40.0
                 }
               },
               {
@@ -2033,13 +2026,13 @@
                   "enabled": true,
                   "position_control_enabled": true,
                   "integral_control_enabled": false,
-                  "target_coordinate": -15,
-                  "target_velocity": 0,
-                  "position_gain": 100,
-                  "integral_gain": 0,
-                  "maximum_integral_effort": 10,
-                  "velocity_gain": 15,
-                  "feed_forward_effort": 0
+                  "target_coordinate": 15.0,
+                  "target_velocity": 0.0,
+                  "position_gain": 100.0,
+                  "integral_gain": 0.0,
+                  "maximum_integral_effort": 10.0,
+                  "velocity_gain": 15.0,
+                  "feed_forward_effort": 0.0
                 }
               }
             ],
@@ -2047,30 +2040,30 @@
               {
                 "uuid": "fem-standing-rear-right-upper-leg",
                 "name": "Rear Right Upper Leg",
-                "priority": 0,
+                "priority": 0.0,
                 "visible": true,
                 "enabled": true,
                 "pickable": true,
                 "selectable": true,
-                "layer": 0,
-                "flags": 0,
+                "layer": 0.0,
+                "flags": 0.0,
                 "pose": {
                   "position": [
-                    0,
-                    0,
+                    0.0,
+                    0.0,
                     -0.35
                   ],
                   "rotation": [
-                    0,
-                    0,
-                    0,
-                    1
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
                   ]
                 },
                 "scale": [
-                  1,
-                  1,
-                  1
+                  1.0,
+                  1.0,
+                  1.0
                 ],
                 "components": [
                   {
@@ -2087,14 +2080,14 @@
                       },
                       "mesh_offset_enabled": true,
                       "mesh_offset_position": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_euler": [
-                        0,
-                        0,
-                        0
+                        0.0,
+                        0.0,
+                        0.0
                       ],
                       "mesh_offset_scale": [
                         0.19,
@@ -2130,8 +2123,8 @@
                         0.018,
                         0.003
                       ],
-                      "linear_damping": 0,
-                      "angular_damping": 0
+                      "linear_damping": 0.0,
+                      "angular_damping": 0.0
                     }
                   }
                 ],
@@ -2139,30 +2132,30 @@
                   {
                     "uuid": "fem-standing-rear-right-knee",
                     "name": "Rear Right Knee",
-                    "priority": 0,
+                    "priority": 0.0,
                     "visible": true,
                     "enabled": true,
                     "pickable": true,
                     "selectable": true,
-                    "layer": 0,
-                    "flags": 0,
+                    "layer": 0.0,
+                    "flags": 0.0,
                     "pose": {
                       "position": [
-                        0,
-                        0,
+                        0.0,
+                        0.0,
                         -0.35
                       ],
                       "rotation": [
-                        0,
-                        0,
-                        0,
-                        1
+                        0.0,
+                        -0.25881904510252074,
+                        0.0,
+                        0.9659258262890683
                       ]
                     },
                     "scale": [
-                      1,
-                      1,
-                      1
+                      1.0,
+                      1.0,
+                      1.0
                     ],
                     "components": [
                       {
@@ -2179,14 +2172,14 @@
                           },
                           "mesh_offset_enabled": true,
                           "mesh_offset_position": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_euler": [
-                            0,
-                            0,
-                            0
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "mesh_offset_scale": [
                             0.16,
@@ -2217,25 +2210,24 @@
                         "data": {
                           "enabled": true,
                           "axis": [
-                            0,
-                            1,
-                            0
+                            0.0,
+                            1.0,
+                            0.0
                           ],
                           "coordinate": [
-                            30,
-                            -60,
-                            60
+                            -30.0,
+                            -60.0,
+                            60.0
                           ],
                           "origin_position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "origin_rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0
                           ],
                           "coordinate_scale": "0.017453292519943295"
                         }
@@ -2245,8 +2237,8 @@
                         "type": "FEMArticulationMotorComponent",
                         "data": {
                           "enabled": true,
-                          "commanded_effort": 0,
-                          "maximum_effort": 40
+                          "commanded_effort": 0.0,
+                          "maximum_effort": 40.0
                         }
                       },
                       {
@@ -2256,13 +2248,13 @@
                           "enabled": true,
                           "position_control_enabled": true,
                           "integral_control_enabled": false,
-                          "target_coordinate": 30,
-                          "target_velocity": 0,
-                          "position_gain": 100,
-                          "integral_gain": 0,
-                          "maximum_integral_effort": 10,
-                          "velocity_gain": 15,
-                          "feed_forward_effort": 0
+                          "target_coordinate": -30.0,
+                          "target_velocity": 0.0,
+                          "position_gain": 100.0,
+                          "integral_gain": 0.0,
+                          "maximum_integral_effort": 10.0,
+                          "velocity_gain": 15.0,
+                          "feed_forward_effort": 0.0
                         }
                       }
                     ],
@@ -2270,30 +2262,30 @@
                       {
                         "uuid": "fem-standing-rear-right-lower-leg",
                         "name": "Rear Right Lower Leg",
-                        "priority": 0,
+                        "priority": 0.0,
                         "visible": true,
                         "enabled": true,
                         "pickable": true,
                         "selectable": true,
-                        "layer": 0,
-                        "flags": 0,
+                        "layer": 0.0,
+                        "flags": 0.0,
                         "pose": {
                           "position": [
-                            0,
-                            0,
+                            0.0,
+                            0.0,
                             -0.35
                           ],
                           "rotation": [
-                            0,
-                            0,
-                            0,
-                            1
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
                           ]
                         },
                         "scale": [
-                          1,
-                          1,
-                          1
+                          1.0,
+                          1.0,
+                          1.0
                         ],
                         "components": [
                           {
@@ -2310,14 +2302,14 @@
                               },
                               "mesh_offset_enabled": true,
                               "mesh_offset_position": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_euler": [
-                                0,
-                                0,
-                                0
+                                0.0,
+                                0.0,
+                                0.0
                               ],
                               "mesh_offset_scale": [
                                 0.17,
@@ -2353,67 +2345,39 @@
                                 0.018,
                                 0.003
                               ],
-                              "linear_damping": 0,
-                              "angular_damping": 0
-                            }
-                          },
-                          {
-                            "source_id": "fem-standing-rear-right-foot-collider",
-                            "type": "ColliderComponent",
-                            "data": {
-                              "enabled": true,
-                              "collider_type": "Sphere",
-                              "convex_hull_mesh_source": "Field",
-                              "box_size": [
-                                0.24,
-                                0.24,
-                                0.24
-                              ],
-                              "convex_hull_mesh": {
-                                "type": "none"
-                              },
-                              "collider_offset_enabled": true,
-                              "collider_offset_position": [
-                                0,
-                                0,
-                                -0.23
-                              ],
-                              "collider_offset_euler": [
-                                0,
-                                0,
-                                0
-                              ]
+                              "linear_damping": 0.0,
+                              "angular_damping": 0.0
                             }
                           }
                         ],
                         "children": [
                           {
-                            "uuid": "fem-standing-rear-right-foot-visual",
-                            "name": "Rear Right Foot Visual",
-                            "priority": 0,
+                            "uuid": "fem-standing-rear-right-foot-effector",
+                            "name": "Rear Right Foot Effector",
+                            "priority": 0.0,
                             "visible": true,
                             "enabled": true,
                             "pickable": true,
                             "selectable": true,
-                            "layer": 0,
-                            "flags": 0,
+                            "layer": 0.0,
+                            "flags": 0.0,
                             "pose": {
                               "position": [
-                                0,
-                                0,
+                                0.0,
+                                0.0,
                                 -0.35
                               ],
                               "rotation": [
-                                0,
-                                0,
-                                0,
-                                1
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0
                               ]
                             },
                             "scale": [
-                              1,
-                              1,
-                              1
+                              1.0,
+                              1.0,
+                              1.0
                             ],
                             "components": [
                               {
@@ -2430,19 +2394,19 @@
                                   },
                                   "mesh_offset_enabled": true,
                                   "mesh_offset_position": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_euler": [
-                                    0,
-                                    0,
-                                    0
+                                    0.0,
+                                    0.0,
+                                    0.0
                                   ],
                                   "mesh_offset_scale": [
-                                    0.28,
-                                    0.28,
-                                    0.2
+                                    0.24,
+                                    0.24,
+                                    0.24
                                   ]
                                 }
                               },
@@ -2461,6 +2425,34 @@
                                   "_override_material": false,
                                   "materials": []
                                 }
+                              },
+                              {
+                                "source_id": "fem-standing-rear-right-foot-collider",
+                                "type": "ColliderComponent",
+                                "data": {
+                                  "enabled": true,
+                                  "collider_type": "Sphere",
+                                  "convex_hull_mesh_source": "Field",
+                                  "box_size": [
+                                    0.24,
+                                    0.24,
+                                    0.24
+                                  ],
+                                  "convex_hull_mesh": {
+                                    "type": "none"
+                                  },
+                                  "collider_offset_enabled": false,
+                                  "collider_offset_position": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ],
+                                  "collider_offset_euler": [
+                                    0.0,
+                                    0.0,
+                                    0.0
+                                  ]
+                                }
                               }
                             ]
                           }
@@ -2477,18 +2469,18 @@
       {
         "uuid": "fem-standing-key-light",
         "name": "Directional Key Light",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
-            5,
-            -6,
-            11
+            5.0,
+            -6.0,
+            11.0
           ],
           "rotation": [
             -0.2519347274,
@@ -2498,9 +2490,9 @@
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -2510,7 +2502,7 @@
               "enabled": true,
               "light_type": "directional",
               "color": [
-                1,
+                1.0,
                 0.86,
                 0.68
               ],
@@ -2518,10 +2510,10 @@
               "shadows_enabled": true,
               "shadows_bias": 0.001,
               "shadows_normal_bias": 0.02,
-              "shadows_map_resolution": 1024,
-              "cascade_count": 3,
-              "max_distance": 50,
-              "split_lambda": 0.7,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 3.0,
+              "max_distance": 50.0,
+              "split_lambda": 0.699999988079071,
               "cascade_blend": true
             }
           }
@@ -2530,18 +2522,18 @@
       {
         "uuid": "fem-standing-camera",
         "name": "Main Camera",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
             3.5,
-            -8,
-            3
+            -8.0,
+            3.0
           ],
           "rotation": [
             -0.120279,
@@ -2551,9 +2543,9 @@
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -2562,10 +2554,10 @@
             "data": {
               "enabled": true,
               "near_clip": 0.1,
-              "far_clip": 100,
-              "ortho_size": 5,
-              "fov_x_degrees": 60,
-              "fov_y_degrees": 48,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 48.0,
               "fov_mode": "FixHorizontal",
               "layer_mask": "0xffffffffffffffff",
               "render_category_mask": "0xffffffffffffffff"
@@ -2576,30 +2568,30 @@
       {
         "uuid": "fem-standing-world",
         "name": "FEM Physics World",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
-            0,
-            0,
-            0
+            0.0,
+            0.0,
+            0.0
           ],
           "rotation": [
-            0,
-            0,
-            0,
-            1
+            0.0,
+            0.0,
+            0.0,
+            1.0
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -2608,12 +2600,12 @@
             "data": {
               "enabled": true,
               "gravity": [
-                0,
-                0,
+                0.0,
+                0.0,
                 -9.81
               ],
               "time_step": 0.002,
-              "substeps": 1,
+              "substeps": 1.0,
               "contact_friction_coefficient": 0.8,
               "collision_layer_mask": "0xffffffffffffffff",
               "adjacent_link_collision_enabled": false
@@ -2624,30 +2616,30 @@
       {
         "uuid": "fem-standing-hud",
         "name": "Robot Telemetry HUD",
-        "priority": 0,
+        "priority": 0.0,
         "visible": true,
         "enabled": true,
         "pickable": true,
         "selectable": true,
-        "layer": 0,
-        "flags": 0,
+        "layer": 0.0,
+        "flags": 0.0,
         "pose": {
           "position": [
-            0,
-            0,
-            0
+            0.0,
+            0.0,
+            0.0
           ],
           "rotation": [
-            0,
-            0,
-            0,
-            1
+            0.0,
+            0.0,
+            0.0,
+            1.0
           ]
         },
         "scale": [
-          1,
-          1,
-          1
+          1.0,
+          1.0,
+          1.0
         ],
         "components": [
           {
@@ -2662,8 +2654,8 @@
                 "uuid": "fem-standing-robot-hud",
                 "name": "robot_hud"
               },
-              "priority": 1000,
-              "input_source_mask": 1
+              "priority": 1000.0,
+              "input_source_mask": 1.0
             }
           },
           {
@@ -2680,7 +2672,7 @@
               "effort_plot_widget_name": "servo_effort_plot",
               "contact_gap_plot_widget_name": "contact_gap_plot",
               "contact_reaction_plot_widget_name": "contact_reaction_plot",
-              "plot_history": 12,
+              "plot_history": 12.0,
               "refresh_interval": 0.05
             }
           }
@@ -2708,12 +2700,12 @@
               "name": "Main Target"
             },
             "region": [
-              0,
-              0,
-              1,
-              1
+              0.0,
+              0.0,
+              1.0,
+              1.0
             ],
-            "depth": 0,
+            "depth": 0.0,
             "input_mode": "simple",
             "block_input_in_editor": false,
             "enabled": true
@@ -2727,54 +2719,54 @@
             "color_format": "rgba8",
             "depth_format": "depth24",
             "clear_color": [
-              0.008,
-              0.012,
-              0.028,
-              1
+              0.00800000037997961,
+              0.012000000104308128,
+              0.02800000086426735,
+              1.0
             ],
-            "clear_depth": 1,
+            "clear_depth": 1.0,
             "pipeline_name": "Default",
-            "layer_mask": 4294967295,
+            "layer_mask": 4294967295.0,
             "enabled": true
           }
         ]
       },
       "render_state": {
         "background_color": [
-          0.008,
-          0.012,
-          0.028,
-          1
+          0.00800000037997961,
+          0.012000000104308128,
+          0.02800000086426735,
+          1.0
         ],
         "lighting": {
           "ambient_color": [
-            0.3,
-            0.38,
-            0.58
+            0.30000001192092896,
+            0.3799999952316284,
+            0.5799999833106995
           ],
-          "ambient_intensity": 0.24,
+          "ambient_intensity": 0.23999999463558197,
           "shadow_settings": {
-            "method": 1,
-            "softness": 1.4,
-            "bias": 0.001
+            "method": 1.0,
+            "softness": 1.399999976158142,
+            "bias": 0.0010000000474974513
           }
         },
         "skybox": {
-          "type": 1,
+          "type": 1.0,
           "color": [
-            0.008,
-            0.012,
-            0.028
+            0.00800000037997961,
+            0.012000000104308128,
+            0.02800000086426735
           ],
           "top_color": [
-            0.12,
-            0.2,
-            0.42
+            0.11999999731779099,
+            0.20000000298023224,
+            0.41999998688697815
           ],
           "bottom_color": [
-            0.12,
-            0.08,
-            0.1
+            0.11999999731779099,
+            0.07999999821186066,
+            0.10000000149011612
           ]
         }
       },
@@ -2784,19 +2776,57 @@
   "editor": {
     "camera": {
       "position": [
-        -3,
-        -10,
-        4
+        -5.336265146427658,
+        -8.398403464898362,
+        5.098776473245665
       ],
       "rotation": [
-        -0.08,
-        0,
-        -0.18,
-        0.98
+        -0.16616950477473122,
+        0.05680744891155584,
+        -0.318456611817273,
+        0.931528848625175
       ],
-      "radius": 10,
+      "radius": 10.0,
       "editor_entities": {
-        "camera": []
+        "camera": [
+          {
+            "source_id": "b5cd1e71-5ba1-4846-b98a-94c340dbcc94",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xfffffffffffffffe"
+            }
+          },
+          {
+            "source_id": "a526f16d-01f1-49ae-8c8a-1b71b8c70f6e",
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 10.0,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "source_id": "942ddff0-cee7-4647-b2ca-0bb2a5d7464a",
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "navmesh_enabled": true,
+              "ortho_enabled": false,
+              "gizmo_world_orientation_enabled": false
+            }
+          }
+        ]
       }
     },
     "expanded_entities": [
