@@ -461,6 +461,39 @@ namespace termin
         CxxComponent::on_destroy();
     }
 
+    bool FEMRigidBodyComponent::initialized() const noexcept
+    {
+        return world_ != nullptr && body_ != nullptr;
+    }
+
+    Screw3 FEMRigidBodyComponent::velocity_local() const noexcept
+    {
+        return body_ != nullptr ? body_->state().velocity_local
+                                : Screw3::zero();
+    }
+
+    bool FEMRigidBodyComponent::set_velocity_local(Screw3 velocity) noexcept
+    {
+        if (body_ == nullptr)
+        {
+            tc::Log::error(
+                "[FEMRigidBodyComponent] cannot set velocity before the body "
+                "is initialized");
+            return false;
+        }
+        qopt::RigidBody3DState state = body_->state();
+        state.velocity_local = velocity;
+        const qopt::Multibody3DDiagnostic diagnostic = body_->set_state(state);
+        if (diagnostic != qopt::Multibody3DDiagnostic::None)
+        {
+            tc::Log::error(
+                "[FEMRigidBodyComponent] rejected local velocity: %s",
+                qopt::multibody3d_diagnostic_name(diagnostic).data());
+            return false;
+        }
+        return true;
+    }
+
     FEMFixedJointComponent::FEMFixedJointComponent()
         : CxxComponent("FEMFixedJointComponent")
     {
@@ -752,6 +785,11 @@ namespace termin
                 }
                 return result;
             }(),
+            .cached_contact_count =
+                contacts_ != nullptr ? contacts_->cached_contact_count() : 0,
+            .warm_started_contact_count =
+                contacts_ != nullptr ? contacts_->warm_started_contact_count()
+                                     : 0,
             .minimum_contact_gap =
                 [this]()
             {
@@ -763,6 +801,34 @@ namespace termin
                 for (const qopt::ContactState3D& state : contacts_->states())
                 {
                     result = std::min(result, state.signed_gap);
+                }
+                return result;
+            }(),
+            .normal_impulse_sum =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += std::max(state.normal_impulse, 0.0);
+                    }
+                }
+                return result;
+            }(),
+            .normal_reaction_sum =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += std::max(state.normal_reaction, 0.0);
+                    }
                 }
                 return result;
             }(),

@@ -17,6 +17,8 @@ namespace termin
         std::string servo_entity_name;
         std::string plot_widget_name = "servo_plot";
         std::string effort_plot_widget_name = "servo_effort_plot";
+        std::string contact_gap_plot_widget_name = "contact_gap_plot";
+        std::string contact_reaction_plot_widget_name = "contact_reaction_plot";
         double plot_history = 30.0;
         double refresh_interval = 0.1;
 
@@ -40,6 +42,9 @@ namespace termin
         std::vector<double> plot_velocity_effort_;
         std::vector<double> plot_commanded_effort_;
         std::vector<double> plot_applied_effort_;
+        std::vector<double> contact_plot_time_;
+        std::vector<double> contact_plot_gap_;
+        std::vector<double> contact_plot_reaction_;
 
         void refresh();
     };

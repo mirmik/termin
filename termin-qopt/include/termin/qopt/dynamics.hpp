@@ -256,6 +256,19 @@ namespace termin::qopt
             (void)tight_mask;
         }
 
+        // Writes cached 0/1 activity hints into this contribution's current
+        // unilateral rows. True means at least one hint was supplied; the
+        // system pairs it with a generic previously projected velocity and
+        // falls back to a cold solve if that primal is no longer feasible.
+        [[nodiscard]] virtual bool
+        write_unilateral_warm_start(const DynamicsUnilateralTopology& topology,
+                                    DenseVectorView active_mask) const noexcept
+        {
+            (void)topology;
+            (void)active_mask;
+            return false;
+        }
+
         // State-owning contributions write their generalized velocity block.
         // The collector initializes the destination with NaNs, so every
         // registered DOF must have exactly one owner that supplies finite
