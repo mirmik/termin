@@ -162,12 +162,12 @@
                   0.01745329238474369
                 ],
                 "coordinate": -89.999600000000001,
-                "base_position": [
+                "origin_position": [
                   0,
                   0,
                   0.34999999403953552
                 ],
-                "base_rotation": [
+                "origin_rotation": [
                   1,
                   0,
                   0,
@@ -177,8 +177,7 @@
                   1,
                   1,
                   1
-                ],
-                "capture_base": false
+                ]
               }
             },
             {
@@ -275,12 +274,12 @@
                       0
                     ],
                     "coordinate": -40.73198,
-                    "base_position": [
+                    "origin_position": [
                       0,
                       0,
                       0.50999999046325684
                     ],
-                    "base_rotation": [
+                    "origin_rotation": [
                       1,
                       0,
                       0,
@@ -290,8 +289,7 @@
                       1,
                       1,
                       1
-                    ],
-                    "capture_base": false
+                    ]
                   }
                 },
                 {
@@ -451,12 +449,12 @@
                               0.01745329238474369
                             ],
                             "coordinate": 0,
-                            "base_position": [
+                            "origin_position": [
                               0,
                               0,
                               0
                             ],
-                            "base_rotation": [
+                            "origin_rotation": [
                               1,
                               0,
                               0,
@@ -466,8 +464,7 @@
                               1,
                               1,
                               1
-                            ],
-                            "capture_base": false
+                            ]
                           }
                         },
                         {

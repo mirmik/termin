@@ -30,11 +30,11 @@ articulation root
             └── next body entity
 ```
 
-The joint entity is the explicit attachment frame. Its kinematic base pose is
-the zero-coordinate joint frame, its axis is the reduced motion twist, and its
-coordinate initializes the dynamic state. The body child's local rigid pose is
-the fixed joint-to-link transform. Branching is represented by placing several
-joint children under one body.
+The joint entity is the explicit attachment frame. Its kinematic origin pose is
+the fixed parent-to-joint transform, its axis is the reduced motion twist, and
+its coordinate initializes the dynamic state. The body child's local rigid pose
+is the fixed joint-to-link transform. Branching is represented by placing
+several joint children under one body.
 
 `compile_fem_articulation_scene()` exposes this translation as a separate,
 testable pass. It produces public `ArticulationLink3D` values and bindings; the

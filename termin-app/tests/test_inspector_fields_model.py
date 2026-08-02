@@ -56,7 +56,7 @@ def _fields(_target):
             path="reset",
             label="Reset",
             kind="button",
-            getter=lambda _target: None,
+            is_serializable=False,
             action=reset,
         ),
     }
@@ -119,6 +119,10 @@ def test_inspector_fields_apply_action_and_change_handler_contract():
         change_handler=apply_change,
     )
     controller.set_targets([first, second])
+
+    reset_row = controller.snapshot.field_row("reset")
+    assert reset_row.value is None
+    assert not reset_row.field.is_serializable
 
     snapshot = controller.apply_value("gain", 1.5, merge=True)
     assert changes == [("gain", (0.25, 0.75), 1.5, True)]

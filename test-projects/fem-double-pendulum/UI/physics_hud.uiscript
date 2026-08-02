@@ -10,7 +10,7 @@ root:
       anchor: top-right
       offset: [-18, 18]
       layout:
-        width: 350
+        width: 400
         height: 214
       background_color: [0.025, 0.045, 0.075, 0.92]
     - type: termin.gui.VStack
@@ -18,7 +18,7 @@ root:
       anchor: top-right
       offset: [-18, 18]
       layout:
-        width: 350
+        width: 400
         height: 214
       padding: [18, 14, 18, 14]
       spacing: 5

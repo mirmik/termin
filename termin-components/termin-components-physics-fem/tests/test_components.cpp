@@ -15,6 +15,25 @@ GUARD_TEST_MAIN();
 
 namespace
 {
+    void register_test_component_types()
+    {
+        static const bool registered = []()
+        {
+            tc_inspect_kind_core_init();
+            tc_inspect_component_adapter_init();
+            termin::register_builtin_scene_component_types();
+            termin::KinematicUnitComponent::register_type();
+            termin::RotatorComponent::register_type();
+            termin::FEMRigidBodyComponent::register_type();
+            termin::FEMFixedJointComponent::register_type();
+            termin::FEMRevoluteJointComponent::register_type();
+            termin::FEMArticulationComponent::register_type();
+            termin::FEMPhysicsWorldComponent::register_type();
+            return true;
+        }();
+        (void)registered;
+    }
+
     struct DoublePendulumScene
     {
         termin::TcSceneRef scene;
@@ -41,12 +60,12 @@ namespace
 
         Entity joint_a_entity = result.root.create_child("Hip Joint");
         result.joint_a = new RotatorComponent();
+        joint_a_entity.add_component(result.joint_a);
         result.joint_a->axis_x = 0.0;
         result.joint_a->axis_y = 1.0;
         result.joint_a->axis_z = 0.0;
         result.joint_a->coordinate = 0.7;
-        result.joint_a->base_position = {0.0, 0.0, 0.0};
-        joint_a_entity.add_component(result.joint_a);
+        result.joint_a->origin_position = {0.0, 0.0, 0.0};
         result.joint_a->apply();
 
         Entity body_a_entity = joint_a_entity.create_child("Link A");
@@ -58,12 +77,12 @@ namespace
 
         Entity joint_b_entity = body_a_entity.create_child("Knee Joint");
         result.joint_b = new RotatorComponent();
+        joint_b_entity.add_component(result.joint_b);
         result.joint_b->axis_x = 0.0;
         result.joint_b->axis_y = 1.0;
         result.joint_b->axis_z = 0.0;
         result.joint_b->coordinate = -0.4;
-        result.joint_b->base_position = {0.0, 0.0, -1.0};
-        joint_b_entity.add_component(result.joint_b);
+        result.joint_b->origin_position = {0.0, 0.0, -1.0};
         result.joint_b->apply();
 
         Entity body_b_entity = joint_b_entity.create_child("Link B");
@@ -89,14 +108,7 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
 {
     using namespace termin;
 
-    tc_inspect_kind_core_init();
-    tc_inspect_component_adapter_init();
-    register_builtin_scene_component_types();
-    FEMRigidBodyComponent::register_type();
-    FEMFixedJointComponent::register_type();
-    FEMRevoluteJointComponent::register_type();
-    FEMArticulationComponent::register_type();
-    FEMPhysicsWorldComponent::register_type();
+    register_test_component_types();
 
     FEMRigidBodyComponent body;
     body.mass = 1.5;
@@ -119,6 +131,61 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     restored_world.deserialize_data(&world_data);
     CHECK(std::abs(restored_world.time_step - 0.005) < 1.0e-12);
     tc_value_free(&world_data);
+}
+
+TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("rotator lifecycle");
+
+    Entity fresh_entity = scene.create_entity("Fresh Joint");
+    fresh_entity.transform().set_local_position({1.0, 2.0, 3.0});
+    fresh_entity.transform().set_local_rotation(
+        Quat::from_axis_angle({0.0, 1.0, 0.0}, 0.4));
+    fresh_entity.transform().set_local_scale({2.0, 3.0, 4.0});
+    auto* fresh = new RotatorComponent();
+    fresh_entity.add_component(fresh);
+    CHECK((fresh->origin_position - Vec3{1.0, 2.0, 3.0}).norm() < 1.0e-12);
+    CHECK(std::abs(fresh->origin_rotation.y - std::sin(0.2)) < 1.0e-12);
+    CHECK(
+        (fresh_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0}).norm() <
+        1.0e-12);
+
+    RotatorComponent authored;
+    authored.axis_x = 0.0;
+    authored.axis_y = 1.0;
+    authored.axis_z = 0.0;
+    authored.coordinate = 0.8;
+    authored.origin_position = {4.0, 5.0, 6.0};
+    authored.origin_rotation = {0.0, 0.0, 0.0, 1.0};
+    tc_value data = authored.serialize_data();
+
+    Entity restored_entity = scene.create_entity("Restored Joint");
+    restored_entity.transform().set_local_scale({2.0, 3.0, 4.0});
+    auto* restored = new RotatorComponent();
+    restored->deserialize_data(&data, scene.handle());
+    restored_entity.add_component(restored);
+    tc_value_free(&data);
+
+    CHECK((restored_entity.transform().local_position() - Vec3{4.0, 5.0, 6.0})
+              .norm() < 1.0e-12);
+    CHECK(std::abs(restored_entity.transform().local_rotation().y -
+                   std::sin(0.4)) < 1.0e-12);
+    CHECK((restored_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0})
+              .norm() < 1.0e-12);
+    tc_value restored_data = restored->serialize_data();
+    CHECK(!tc_value_dict_has(&restored_data, "base_scale"));
+    CHECK(!tc_value_dict_has(&restored_data, "base_position"));
+    CHECK(!tc_value_dict_has(&restored_data, "base_rotation"));
+    CHECK(!tc_value_dict_has(&restored_data, "capture_base"));
+    CHECK(!tc_value_dict_has(&restored_data, "recalculate_origin"));
+    CHECK(tc_value_dict_has(&restored_data, "origin_position"));
+    CHECK(tc_value_dict_has(&restored_data, "origin_rotation"));
+    tc_value_free(&restored_data);
+
+    scene.destroy();
 }
 
 TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")

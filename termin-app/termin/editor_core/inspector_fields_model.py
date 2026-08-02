@@ -78,6 +78,8 @@ def collect_inspect_fields(target: Any) -> dict[str, InspectField]:
             if not info.is_inspectable:
                 continue
 
+            is_action = info.action is not None
+
             def getter(component, path=info.path):
                 return component.get_field(path)
 
@@ -101,8 +103,10 @@ def collect_inspect_fields(target: Any) -> dict[str, InspectField]:
                 choices=[(choice.value, choice.label) for choice in info.choices] or None,
                 action=action if info.action is not None else None,
                 metadata={},
-                getter=getter,
-                setter=setter,
+                getter=(lambda _component: None) if is_action else getter,
+                setter=None if is_action else setter,
+                is_serializable=info.is_serializable,
+                is_inspectable=info.is_inspectable,
             )
         return result
 
@@ -122,6 +126,8 @@ def collect_inspect_fields(target: Any) -> dict[str, InspectField]:
         if not info.is_inspectable:
             continue
 
+        is_action = info.action is not None
+
         def getter(obj, path=info.path):
             return registry.get(obj, path)
 
@@ -138,8 +144,10 @@ def collect_inspect_fields(target: Any) -> dict[str, InspectField]:
             choices=[(choice.value, choice.label) for choice in info.choices] or None,
             action=info.action if info.action is not None else None,
             metadata={},
-            getter=getter,
-            setter=setter,
+            getter=(lambda _obj: None) if is_action else getter,
+            setter=None if is_action else setter,
+            is_serializable=info.is_serializable,
+            is_inspectable=info.is_inspectable,
         )
     return result
 
@@ -274,7 +282,11 @@ class InspectorFieldsController:
         field: InspectField,
         metadata: dict[str, Any],
     ) -> InspectorFieldRow:
-        values = tuple(field.get_value(target) for target in self._targets)
+        values = (
+            tuple(None for _target in self._targets)
+            if field.action is not None
+            else tuple(field.get_value(target) for target in self._targets)
+        )
         mixed = any(not values_equal(values[0], value) for value in values[1:])
         visible = self._field_visible(key, metadata)
         return InspectorFieldRow(

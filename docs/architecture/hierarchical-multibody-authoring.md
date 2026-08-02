@@ -97,8 +97,8 @@ It must not be guessed from arbitrary descendants during the first slice.
 `RotatorComponent` and `ActuatorComponent` remain the canonical description of
 the relative one-DOF transform:
 
-- `base_position`, `base_rotation`, `base_scale` define the zero-coordinate
-  attachment transform;
+- `origin_position` and `origin_rotation` define the fixed parent-to-joint
+  origin transform;
 - axis direction defines the joint axis;
 - axis length maps authored coordinate units to radians or metres;
 - `coordinate` defines the authored/commanded coordinate;

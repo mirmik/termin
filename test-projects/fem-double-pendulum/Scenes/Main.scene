@@ -182,9 +182,9 @@
               ],
               "rotation": [
                 0.0,
+                0.5848783751540833,
                 0.0,
-                0.0,
-                1.0
+                0.8111210059400012
               ]
             },
             "scale": [
@@ -200,24 +200,23 @@
                   "enabled": true,
                   "axis": [
                     0.0,
-                    1.0,
+                    0.017453,
                     0.0
                   ],
-                  "coordinate": 0.959932,
-                  "base_position": [
+                  "coordinate": [
+                    71.58999633789062,
+                    -180.0,
+                    180.0
+                  ],
+                  "origin_position": [
                     0.0,
                     0.0,
                     0.0
                   ],
-                  "base_rotation": [
+                  "origin_rotation": [
                     0.0,
                     0.0,
                     0.0
-                  ],
-                  "base_scale": [
-                    1.0,
-                    1.0,
-                    1.0
                   ]
                 }
               }
@@ -333,9 +332,9 @@
                       ],
                       "rotation": [
                         0.0,
+                        0.4926438792262454,
                         0.0,
-                        0.0,
-                        1.0
+                        0.8702310085608973
                       ]
                     },
                     "scale": [
@@ -351,24 +350,23 @@
                           "enabled": true,
                           "axis": [
                             0.0,
-                            1.0,
+                            0.017453,
                             0.0
                           ],
-                          "coordinate": -1.396265,
-                          "base_position": [
+                          "coordinate": [
+                            59.029998779296875,
+                            -180.0,
+                            180.0
+                          ],
+                          "origin_position": [
                             0.0,
                             0.0,
                             -1.5
                           ],
-                          "base_rotation": [
+                          "origin_rotation": [
                             0.0,
                             0.0,
                             0.0
-                          ],
-                          "base_scale": [
-                            1.0,
-                            1.0,
-                            1.0
                           ]
                         }
                       }
@@ -877,6 +875,12 @@
           }
         ]
       }
-    }
+    },
+    "expanded_entities": [
+      "fem-double-pendulum-fixed-anchor",
+      "fem-double-pendulum-link-a",
+      "fem-double-pendulum-middle-joint-marker",
+      "fem-double-pendulum-root-joint"
+    ]
   }
 }

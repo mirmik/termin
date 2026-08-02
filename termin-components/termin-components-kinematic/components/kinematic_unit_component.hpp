@@ -3,77 +3,93 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
-#include <termin/geom/vec3.hpp>
 #include <termin/geom/quat.hpp>
+#include <termin/geom/vec3.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "tc_types.h"
 }
 
-namespace termin {
+namespace termin
+{
 
-// KinematicUnitComponent - abstract base for 1-DOF kinematic components.
-//
-// Provides shared fields (axis, coordinate, base pose) and inspect registrars.
-// Subclasses override apply() and capture_base() to define the specific
-// kinematic behavior (translation for Actuator, rotation for Rotator).
-//
-// The axis vector direction defines the DOF axis, and its length
-// serves as a scale factor for the coordinate.
-//
-// Base pose (position + rotation + scale) defines the entity transform
-// at coordinate=0. Formula: local = base * offset(coordinate).
-class ENTITY_API KinematicUnitComponent : public CxxComponent {
-public:
-    // DOF axis (direction + scale factor via length)
-    double axis_x = 0.0;
-    double axis_y = 0.0;
-    double axis_z = 0.0;
+    // KinematicUnitComponent - abstract base for 1-DOF kinematic components.
+    //
+    // Provides shared fields (axis, coordinate, origin pose) and inspect
+    // registrars. Subclasses override apply() and recalculate_origin() to
+    // define the specific kinematic behavior (translation for Actuator,
+    // rotation for Rotator).
+    //
+    // The axis vector direction defines the DOF axis, and its length
+    // serves as a scale factor for the coordinate.
+    //
+    // The origin pose is the fixed transform from the parent entity to the
+    // kinematic frame. Formula: local = origin * motion(coordinate).
+    class ENTITY_API KinematicUnitComponent : public CxxComponent
+    {
+    public:
+        // DOF axis (direction + scale factor via length)
+        double axis_x = 0.0;
+        double axis_y = 0.0;
+        double axis_z = 0.0;
 
-    // Current coordinate (interpretation depends on subclass)
-    double coordinate = 0.0;
-    double min_coordinate = -100.0;
-    double max_coordinate = 100.0;
+        // Current coordinate (interpretation depends on subclass)
+        double coordinate = 0.0;
+        double min_coordinate = -100.0;
+        double max_coordinate = 100.0;
 
-    // Base pose (GeneralPose3, set by capture_base())
-    tc_vec3 base_position = {0, 0, 0};
-    tc_quat base_rotation = {0, 0, 0, 1};
-    tc_vec3 base_scale = {1, 1, 1};
+        // Fixed parent-to-kinematic-frame pose. Scale belongs to the entity
+        // and is never part of a kinematic coordinate transform.
+        tc_vec3 origin_position = {0, 0, 0};
+        tc_quat origin_rotation = {0, 0, 0, 1};
 
-public:
-    ~KinematicUnitComponent() override = default;
+    public:
+        ~KinematicUnitComponent() override = default;
 
-    static void register_type();
+        static void register_type();
 
-    // Lifecycle
-    void on_added() override;
+        // Lifecycle
+        void on_added() override;
+        void deserialize_data(
+            const tc_value* data,
+            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
-    // Axis
-    void set_axis(double x, double y, double z);
-    Vec3 get_axis() const { return Vec3{axis_x, axis_y, axis_z}; }
+        // Axis
+        void set_axis(double x, double y, double z);
+        Vec3 get_axis() const
+        {
+            return Vec3{axis_x, axis_y, axis_z};
+        }
 
-    // Coordinate
-    void set_coordinate(double value);
-    double get_coordinate() const { return coordinate; }
+        // Coordinate
+        void set_coordinate(double value);
+        double get_coordinate() const
+        {
+            return coordinate;
+        }
 
-    // Apply transform based on current coordinate — override in subclasses
-    virtual void apply();
+        // Apply transform based on current coordinate — override in subclasses
+        virtual void apply();
 
-    // Capture current entity transform as base (reverse calculation) — override in subclasses
-    virtual void capture_base();
+        // Recalculate the origin from the current entity transform without
+        // changing the current coordinate or visible pose.
+        virtual void recalculate_origin();
 
-protected:
-    explicit KinematicUnitComponent(const char* type_name)
-        : CxxComponent(type_name) {}
+    protected:
+        explicit KinematicUnitComponent(const char* type_name)
+            : CxxComponent(type_name)
+        {
+        }
 
-    // Get normalized axis with fallback for zero-length
-    Vec3 normalized_axis(Vec3 fallback) const;
+        // Get normalized axis with fallback for zero-length
+        Vec3 normalized_axis(Vec3 fallback) const;
 
-    // Helper: read current entity local transform
-    bool read_entity_transform(double pos[3], double rot[4], double scl[3]) const;
+        // Helper: read current entity local rigid pose.
+        bool read_entity_transform(double pos[3], double rot[4]) const;
 
-    // Helper: write base pose as entity local transform
-    void write_base_transform(Entity& ent) const;
-};
+    private:
+        bool deserialized_state_ = false;
+    };
 
 } // namespace termin
