@@ -8,7 +8,7 @@
 │  tc_collision.h, _colliders_native, _collision_native   │
 ├─────────────────────────────────────────────────────────┤
 │  CollisionWorld                                         │
-│  Broad-phase (BVH) + Narrow-phase + Contact manifolds  │
+│  Broad-phase + Narrow-phase + Contact patch reduction  │
 ├──────────────────────┬──────────────────────────────────┤
 │  Составные           │  Примитивы                       │
 │  AttachedCollider    │  BoxCollider                     │
@@ -26,7 +26,7 @@
 | Namespace | Ответственность |
 |-----------|----------------|
 | `termin::colliders` | Геометрические примитивы, GJK/EPA, double dispatch |
-| `termin::collision` | CollisionWorld, BVH, ContactManifold, RayHit |
+| `termin::collision` | CollisionWorld, BVH, ContactPatch, deterministic reduction, RayHit |
 
 ## Поток обнаружения столкновений
 
@@ -41,6 +41,8 @@
        ├── Примитив-примитив: аналитика (SAT, closest-point)
        ├── С ConvexHull: GJK + EPA
        └── Box-Box коллизия: SAT + Sutherland-Hodgman clipping
+           └── solver-neutral ContactCandidate
+               └── deterministic ContactPatch reduction
 ```
 
 ## Интеграция со сценой
@@ -69,7 +71,7 @@ termin_collision
 include/
   termin_collision/    # Точка входа: termin_collision.h (version, runtime init/shutdown)
   termin/colliders/    # C++ заголовки: Collider, Box, Sphere, Capsule, ConvexHull, GJK, EPA
-  termin/collision/    # C++ заголовки: CollisionWorld, BVH, ContactManifold
+  termin/collision/    # C++ заголовки: CollisionWorld, BVH, ContactPatch и reducer
   physics/             # C API: tc_collision.h, tc_collision_world.h
 src/                   # Реализация C API
 cpp/bindings/          # nanobind Python-биндинги

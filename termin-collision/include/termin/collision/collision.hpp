@@ -7,7 +7,7 @@
  * This module provides:
  * - BVH for broad-phase collision detection
  * - CollisionWorld for managing colliders and detecting contacts
- * - ContactManifold for unified contact representation
+ * - ContactPatch for solver-neutral contact geometry
  *
  * Usage:
  *   CollisionWorld world;
@@ -25,5 +25,5 @@
  */
 
 #include "bvh.hpp"
-#include "contact_manifold.hpp"
+#include "contact_patch.hpp"
 #include "collision_world.hpp"

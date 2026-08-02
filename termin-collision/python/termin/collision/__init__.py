@@ -4,7 +4,7 @@ Unified collision detection system.
 Provides:
 - BVH for broad-phase collision detection
 - CollisionWorld for managing colliders and detecting contacts
-- ContactManifold for unified contact representation
+- ContactPatch for solver-neutral contact geometry
 
 Usage:
     from termin.collision import CollisionWorld
@@ -29,9 +29,9 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("termin_collision")
 
 from ._collision_native import (
-    ContactID,
-    ContactPoint,
-    ContactManifold,
+    ContactFeaturePair,
+    ContactCandidate,
+    ContactPatch,
     RayHit,
     ColliderPair,
     BroadPhaseMode,
@@ -40,9 +40,9 @@ from ._collision_native import (
 )
 
 __all__ = [
-    'ContactID',
-    'ContactPoint',
-    'ContactManifold',
+    'ContactFeaturePair',
+    'ContactCandidate',
+    'ContactPatch',
     'RayHit',
     'ColliderPair',
     'BroadPhaseMode',

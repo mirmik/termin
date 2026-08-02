@@ -96,9 +96,9 @@ CollisionWorld, BVH, контактные данные.
 from termin.collision import (
     CollisionWorld,
     BVH,
-    ContactManifold,
-    ContactPoint,
-    ContactID,
+    ContactPatch,
+    ContactCandidate,
+    ContactFeaturePair,
     RayHit,        # расширенная версия с collider pointer
     ColliderPair,
 )
@@ -116,11 +116,11 @@ world.update_pose(collider)
 world.update_all()
 
 # Детекция
-manifolds = world.detect_contacts()
-for m in manifolds:
-    print(m.collider_a, m.collider_b, m.normal)
-    for pt in m.get_points():
-        print(pt.position, pt.penetration)
+patches = world.detect_contacts()
+for patch in patches:
+    print(patch.collider_a, patch.collider_b, patch.normal_world)
+    for point in patch.points:
+        print(point.point_on_a_world, point.point_on_b_world, point.signed_gap)
 
 # Raycast
 hits = world.raycast(ray)
@@ -133,16 +133,18 @@ colliders = world.query_aabb(aabb)
 world = CollisionWorld.from_scene(scene)
 ```
 
-### ContactManifold
+### ContactPatch
 
 ```python
-m.collider_a        # Collider*
-m.collider_b        # Collider*
-m.normal             # Vec3
-m.point_count        # int
-m.get_points()       # list[ContactPoint]
-m.same_pair(other)   # bool
-m.pair_key()         # uint64
+patch.collider_a        # Collider*
+patch.collider_b        # Collider*
+patch.normal_world      # Vec3, from A to B
+patch.points            # list[ContactCandidate]
+patch.same_pair(other)  # bool
+patch.pair_key()        # uint64
+
+# signed_gap < 0 means penetration
+# dot(point_on_b_world - point_on_a_world, normal_world) == signed_gap
 ```
 
 ### BVH

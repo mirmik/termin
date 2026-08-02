@@ -76,7 +76,7 @@ cmake --build build -j$(nproc)
 include/
   termin_collision/    # Точка входа: version, runtime init/shutdown
   termin/colliders/    # C++: Collider, Box, Sphere, Capsule, ConvexHull, GJK, EPA
-  termin/collision/    # C++: CollisionWorld, BVH, ContactManifold
+  termin/collision/    # C++: CollisionWorld, BVH, ContactPatch и reducer
   physics/             # C API: tc_collision.h, tc_collision_world.h
 src/                   # Реализация C API и scene extension
 cpp/bindings/          # nanobind Python-биндинги
