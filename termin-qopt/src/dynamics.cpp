@@ -1,6 +1,9 @@
 #include <termin/qopt/dynamics.hpp>
 
+#include <termin/qopt/contact_friction.hpp>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -256,6 +259,166 @@ namespace termin::qopt
     DynamicsUnilateralTopology::constraint_topology() const noexcept
     {
         return constraints_;
+    }
+
+    DynamicsRegistrationResult<DynamicsFrictionContactHandle>
+    DynamicsFrictionTopology::register_contact(
+        std::string_view diagnostic_name) noexcept
+    {
+        if (finalized_)
+        {
+            return {{}, AssemblyDiagnostic::TopologyFinalized};
+        }
+        const DenseBlockRegistrationResult contact =
+            contacts_.register_block(1, diagnostic_name);
+        if (!contact.ok())
+        {
+            return {{}, contact.diagnostic};
+        }
+        const DenseBlockRegistrationResult tangent =
+            tangents_.register_block(2, diagnostic_name);
+        if (!tangent.ok())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] friction tangent topology registration "
+                         "failed after contact registration\n");
+            return {{}, tangent.diagnostic};
+        }
+        return {{contact.handle, tangent.handle}, AssemblyDiagnostic::None};
+    }
+
+    AssemblyDiagnostic DynamicsFrictionTopology::finalize() noexcept
+    {
+        if (finalized_)
+        {
+            return AssemblyDiagnostic::TopologyFinalized;
+        }
+        const AssemblyDiagnostic contact = contacts_.finalize();
+        if (contact != AssemblyDiagnostic::None)
+        {
+            return contact;
+        }
+        const AssemblyDiagnostic tangent = tangents_.finalize();
+        if (tangent != AssemblyDiagnostic::None)
+        {
+            return tangent;
+        }
+        finalized_ = true;
+        return AssemblyDiagnostic::None;
+    }
+
+    bool DynamicsFrictionTopology::finalized() const noexcept
+    {
+        return finalized_;
+    }
+
+    std::size_t DynamicsFrictionTopology::contact_count() const noexcept
+    {
+        return contacts_.total_size();
+    }
+
+    std::size_t DynamicsFrictionTopology::tangent_count() const noexcept
+    {
+        return tangents_.total_size();
+    }
+
+    const DenseBlockTopology&
+    DynamicsFrictionTopology::contact_topology() const noexcept
+    {
+        return contacts_;
+    }
+
+    const DenseBlockTopology&
+    DynamicsFrictionTopology::tangent_topology() const noexcept
+    {
+        return tangents_;
+    }
+
+    DynamicsFrictionAssembly::DynamicsFrictionAssembly(
+        const DynamicsTopology& topology,
+        const DynamicsFrictionTopology& friction_topology,
+        DynamicsFrictionWorkspaceView workspace) noexcept
+        : workspace_(workspace),
+          contact_normal_jacobian_(friction_topology.contact_topology(),
+                                   topology.dof_topology(),
+                                   workspace.contact_normal_jacobian),
+          tangent_jacobian_(friction_topology.tangent_topology(),
+                            topology.dof_topology(),
+                            workspace.tangent_jacobian),
+          normal_impulse_(friction_topology.contact_topology(),
+                          workspace.normal_impulse),
+          friction_coefficient_(friction_topology.contact_topology(),
+                                workspace.friction_coefficient)
+    {
+        if (!topology.finalized() || !friction_topology.finalized())
+        {
+            diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
+            return;
+        }
+        diagnostic_ = first_diagnostic({
+            contact_normal_jacobian_.diagnostic(),
+            tangent_jacobian_.diagnostic(),
+            normal_impulse_.diagnostic(),
+            friction_coefficient_.diagnostic(),
+        });
+    }
+
+    AssemblyDiagnostic DynamicsFrictionAssembly::diagnostic() const noexcept
+    {
+        return diagnostic_;
+    }
+
+    bool DynamicsFrictionAssembly::valid() const noexcept
+    {
+        return diagnostic_ == AssemblyDiagnostic::None;
+    }
+
+    AssemblyDiagnostic DynamicsFrictionAssembly::clear() noexcept
+    {
+        if (!valid())
+        {
+            return diagnostic_;
+        }
+        return first_diagnostic({
+            contact_normal_jacobian_.clear(),
+            tangent_jacobian_.clear(),
+            normal_impulse_.clear(),
+            friction_coefficient_.clear(),
+        });
+    }
+
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_tangent_jacobian(
+        DynamicsFrictionContactHandle contact,
+        DynamicsDofHandle dofs,
+        ConstDenseMatrixView contribution) noexcept
+    {
+        return tangent_jacobian_.add(contact.tangent_block, dofs.block, contribution);
+    }
+
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_contact_normal_jacobian(
+        DynamicsFrictionContactHandle contact,
+        DynamicsDofHandle dofs,
+        ConstDenseMatrixView contribution) noexcept
+    {
+        return contact_normal_jacobian_.add(
+            contact.contact_block, dofs.block, contribution);
+    }
+
+    AssemblyDiagnostic
+    DynamicsFrictionAssembly::add_normal_impulse(DynamicsFrictionContactHandle contact,
+                                                 double impulse) noexcept
+    {
+        const std::array<double, 1> value{impulse};
+        return normal_impulse_.add(contact.contact_block,
+                                   {value.data(), value.size(), 1});
+    }
+
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_friction_coefficient(
+        DynamicsFrictionContactHandle contact, double coefficient) noexcept
+    {
+        const std::array<double, 1> value{coefficient};
+        return friction_coefficient_.add(contact.contact_block,
+                                         {value.data(), value.size(), 1});
     }
 
     DynamicsAssembly::DynamicsAssembly(const DynamicsTopology& topology,
@@ -696,6 +859,7 @@ namespace termin::qopt
     {
         DynamicsTopology topology;
         DynamicsUnilateralTopology unilateral_topology;
+        DynamicsFrictionTopology friction_topology;
         std::vector<std::unique_ptr<DynamicsContribution>> contributions;
         std::vector<double> mass;
         std::vector<double> load;
@@ -706,6 +870,15 @@ namespace termin::qopt
         std::vector<double> unilateral_reaction;
         std::vector<double> unilateral_tight_mask;
         std::vector<double> unilateral_warm_mask;
+        std::vector<double> friction_tangent_jacobian;
+        std::vector<double> friction_contact_normal_jacobian;
+        std::vector<double> friction_normal_jacobian;
+        std::vector<double> friction_minimum_normal_velocity;
+        std::vector<double> friction_normal_impulse;
+        std::vector<double> friction_coefficient;
+        std::vector<double> friction_tangent_impulse;
+        std::vector<double> friction_work;
+        std::vector<double> friction_bilateral_impulse;
         std::vector<double> velocity_warm_primal;
         std::vector<double> dof_solution;
         std::vector<double> constraint_reaction;
@@ -808,6 +981,79 @@ namespace termin::qopt
             return DynamicsSystemDiagnostic::None;
         }
 
+        [[nodiscard]] DynamicsSystemDiagnostic
+        prepare_friction_topology(double time_step)
+        {
+            friction_topology = DynamicsFrictionTopology{};
+            for (std::size_t index = 0; index < contributions.size(); ++index)
+            {
+                const AssemblyDiagnostic diagnostic =
+                    contributions[index]->register_friction_contacts(friction_topology,
+                                                                     time_step);
+                if (diagnostic != AssemblyDiagnostic::None)
+                {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] contribution %zu transient "
+                                 "friction topology registration failed: %s\n",
+                                 index,
+                                 assembly_diagnostic_name(diagnostic).data());
+                    return DynamicsSystemDiagnostic::TopologyFailure;
+                }
+            }
+            const AssemblyDiagnostic finalize_diagnostic = friction_topology.finalize();
+            if (finalize_diagnostic != AssemblyDiagnostic::None)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient friction topology "
+                             "finalization failed: %s\n",
+                             assembly_diagnostic_name(finalize_diagnostic).data());
+                return DynamicsSystemDiagnostic::TopologyFailure;
+            }
+
+            const std::size_t dofs = topology.dof_count();
+            const std::size_t tangents = friction_topology.tangent_count();
+            const std::size_t contacts = friction_topology.contact_count();
+            if (dofs != 0 && tangents > std::numeric_limits<std::size_t>::max() / dofs)
+            {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient friction workspace size "
+                             "overflow\n");
+                return DynamicsSystemDiagnostic::InternalFailure;
+            }
+            friction_tangent_jacobian.assign(tangents * dofs, 0.0);
+            friction_contact_normal_jacobian.assign(contacts * dofs, 0.0);
+            friction_normal_impulse.assign(contacts, 0.0);
+            friction_coefficient.assign(contacts, 0.0);
+            friction_tangent_impulse.assign(tangents, 0.0);
+            friction_work.assign(contacts, 0.0);
+            friction_bilateral_impulse.assign(topology.constraint_count(), 0.0);
+            return DynamicsSystemDiagnostic::None;
+        }
+
+        [[nodiscard]] DynamicsSystemDiagnostic
+        assemble_friction(DynamicsFrictionAssembly& assembly) noexcept
+        {
+            if (assembly.clear() != AssemblyDiagnostic::None)
+            {
+                return DynamicsSystemDiagnostic::AssemblyFailure;
+            }
+            for (std::size_t index = 0; index < contributions.size(); ++index)
+            {
+                const AssemblyDiagnostic diagnostic =
+                    contributions[index]->assemble_friction(assembly);
+                if (diagnostic != AssemblyDiagnostic::None)
+                {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] contribution %zu friction "
+                                 "assembly failed: %s\n",
+                                 index,
+                                 assembly_diagnostic_name(diagnostic).data());
+                    return DynamicsSystemDiagnostic::AssemblyFailure;
+                }
+            }
+            return DynamicsSystemDiagnostic::None;
+        }
+
         [[nodiscard]] ActiveSetQpWarmStartView unilateral_warm_start() noexcept
         {
             if (!velocity_warm_primal_valid ||
@@ -892,6 +1138,30 @@ namespace termin::qopt
             {
                 contribution->apply_unilateral_solution(
                     topology, unilateral_topology, reactions, tight_mask);
+            }
+        }
+
+        void apply_friction_solution() noexcept
+        {
+            const ConstDenseVectorView impulses{
+                friction_tangent_impulse.data(),
+                friction_tangent_impulse.size(),
+                1,
+            };
+            const ConstDenseVectorView normal_impulses{
+                friction_normal_impulse.data(),
+                friction_normal_impulse.size(),
+                1,
+            };
+            const ConstDenseVectorView work{
+                friction_work.data(),
+                friction_work.size(),
+                1,
+            };
+            for (const auto& contribution : contributions)
+            {
+                contribution->apply_friction_solution(
+                    friction_topology, normal_impulses, impulses, work);
             }
         }
 
@@ -1245,6 +1515,16 @@ namespace termin::qopt
             }
             const std::size_t unilateral_constraint_count =
                 impl_->unilateral_topology.constraint_count();
+            const DynamicsSystemDiagnostic friction_topology_diagnostic =
+                impl_->prepare_friction_topology(options.time_step);
+            if (friction_topology_diagnostic != DynamicsSystemDiagnostic::None)
+            {
+                rollback();
+                return dynamics_system_failure(QpStatus::InvalidInput,
+                                               friction_topology_diagnostic,
+                                               {},
+                                               unilateral_constraint_count);
+            }
             DynamicsAssembly assembly(
                 impl_->topology,
                 impl_->unilateral_topology,
@@ -1628,6 +1908,130 @@ namespace termin::qopt
                 }
                 impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
                 impl_->apply_unilateral_solution();
+
+                const std::size_t friction_contact_count =
+                    impl_->friction_topology.contact_count();
+                if (friction_contact_count != 0)
+                {
+                    DynamicsFrictionAssembly friction_assembly(
+                        impl_->topology,
+                        impl_->friction_topology,
+                        {
+                            DenseMatrixView::row_major(
+                                impl_->friction_contact_normal_jacobian.data(),
+                                friction_contact_count,
+                                impl_->topology.dof_count()),
+                            DenseMatrixView::row_major(
+                                impl_->friction_tangent_jacobian.data(),
+                                impl_->friction_topology.tangent_count(),
+                                impl_->topology.dof_count()),
+                            {impl_->friction_normal_impulse.data(),
+                             impl_->friction_normal_impulse.size(),
+                             1},
+                            {impl_->friction_coefficient.data(),
+                             impl_->friction_coefficient.size(),
+                             1},
+                        });
+                    if (!friction_assembly.valid() ||
+                        impl_->assemble_friction(friction_assembly) !=
+                            DynamicsSystemDiagnostic::None)
+                    {
+                        rollback();
+                        return dynamics_system_failure(
+                            QpStatus::InvalidInput,
+                            DynamicsSystemDiagnostic::AssemblyFailure,
+                            second_dynamics,
+                            unilateral_constraint_count);
+                    }
+
+                    const std::size_t dofs = impl_->topology.dof_count();
+                    impl_->friction_normal_jacobian.resize(unilateral_constraint_count *
+                                                           dofs);
+                    impl_->friction_minimum_normal_velocity.resize(
+                        unilateral_constraint_count);
+                    for (std::size_t row = 0; row < unilateral_constraint_count; ++row)
+                    {
+                        impl_->friction_minimum_normal_velocity[row] =
+                            -impl_->unilateral_limit[row];
+                        for (std::size_t dof = 0; dof < dofs; ++dof)
+                        {
+                            impl_->friction_normal_jacobian[row * dofs + dof] =
+                                -impl_->unilateral_jacobian[row * dofs + dof];
+                        }
+                    }
+
+                    const QpSolveResult friction_result = solve_contact_friction(
+                        {
+                            ConstDenseMatrixView::row_major(
+                                impl_->mass.data(), dofs, dofs),
+                            ConstDenseMatrixView::row_major(
+                                impl_->jacobian.data(),
+                                impl_->topology.constraint_count(),
+                                dofs),
+                            {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                            ConstDenseMatrixView::row_major(
+                                impl_->friction_normal_jacobian.data(),
+                                unilateral_constraint_count,
+                                dofs),
+                            {impl_->friction_minimum_normal_velocity.data(),
+                             impl_->friction_minimum_normal_velocity.size(),
+                             1},
+                            ConstDenseMatrixView::row_major(
+                                impl_->friction_contact_normal_jacobian.data(),
+                                friction_contact_count,
+                                dofs),
+                            ConstDenseMatrixView::row_major(
+                                impl_->friction_tangent_jacobian.data(),
+                                impl_->friction_topology.tangent_count(),
+                                dofs),
+                            {impl_->friction_normal_impulse.data(),
+                             impl_->friction_normal_impulse.size(),
+                             1},
+                            {impl_->friction_coefficient.data(),
+                             impl_->friction_coefficient.size(),
+                             1},
+                        },
+                        {
+                            {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                            {impl_->friction_tangent_impulse.data(),
+                             impl_->friction_tangent_impulse.size(),
+                             1},
+                            {impl_->friction_normal_impulse.data(),
+                             impl_->friction_normal_impulse.size(),
+                             1},
+                            {impl_->friction_work.data(),
+                             impl_->friction_work.size(),
+                             1},
+                            {impl_->friction_bilateral_impulse.data(),
+                             impl_->friction_bilateral_impulse.size(),
+                             1},
+                        },
+                        {.qp = {.tolerance = options.qp_tolerance}});
+                    if (friction_result.status != QpStatus::Optimal)
+                    {
+                        std::fprintf(
+                            stderr,
+                            "[termin-qopt] contact friction solve failed: "
+                            "%s\n",
+                            qp_diagnostic_name(friction_result.diagnostic).data());
+                        rollback();
+                        DynamicsSystemStepResult failure = dynamics_system_failure(
+                            friction_result.status,
+                            DynamicsSystemDiagnostic::VelocityProjectionFailure,
+                            second_dynamics,
+                            unilateral_constraint_count);
+                        failure.velocity_projection = friction_result;
+                        return failure;
+                    }
+                    for (std::size_t row = 0; row < impl_->constraint_reaction.size();
+                         ++row)
+                    {
+                        impl_->constraint_reaction[row] +=
+                            impl_->friction_bilateral_impulse[row];
+                    }
+                    impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
+                    impl_->apply_friction_solution();
+                }
             }
             result.velocity_constraint_linf = impl_->max_velocity_error();
             if (result.velocity_constraint_linf > options.velocity_tolerance)

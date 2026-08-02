@@ -632,6 +632,14 @@ namespace termin
                                 1,
                                 100,
                                 1);
+        stage_double(inspect,
+                     &FEMPhysicsWorldComponent::contact_friction_coefficient,
+                     "FEMPhysicsWorldComponent",
+                     "contact_friction_coefficient",
+                     "Contact Friction",
+                     0.0,
+                     10.0,
+                     0.01);
         register_collision_layer_mask_field(inspect);
         tc::stage_inspect_field(
             inspect,
@@ -785,6 +793,20 @@ namespace termin
                 }
                 return result;
             }(),
+            .sliding_contact_count =
+                [this]()
+            {
+                std::size_t result = 0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += state.sliding ? 1U : 0U;
+                    }
+                }
+                return result;
+            }(),
             .cached_contact_count =
                 contacts_ != nullptr ? contacts_->cached_contact_count() : 0,
             .warm_started_contact_count =
@@ -843,6 +865,67 @@ namespace termin
                     {
                         result =
                             std::max(result, std::abs(state.normal_reaction));
+                    }
+                }
+                return result;
+            }(),
+            .tangent_impulse_sum =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += state.tangent_impulse_world.norm();
+                    }
+                }
+                return result;
+            }(),
+            .tangent_speed_linf =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result = std::max(result,
+                                          state.tangent_velocity_world.norm());
+                    }
+                }
+                return result;
+            }(),
+            .friction_capacity_sum =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    const auto& contacts = contacts_->contacts();
+                    const auto& states = contacts_->states();
+                    const std::size_t count =
+                        std::min(contacts.size(), states.size());
+                    for (std::size_t index = 0; index < count; ++index)
+                    {
+                        result += contacts[index].friction_coefficient *
+                                  std::max(states[index].normal_impulse, 0.0);
+                    }
+                }
+                return result;
+            }(),
+            .friction_work =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += state.friction_work;
                     }
                 }
                 return result;
@@ -923,6 +1006,15 @@ namespace termin
         if (!scene.valid())
         {
             tc::Log::error("[FEMPhysicsWorldComponent] owner scene is invalid");
+            return false;
+        }
+        if (!std::isfinite(contact_friction_coefficient) ||
+            contact_friction_coefficient < 0.0)
+        {
+            tc::Log::error(
+                "[FEMPhysicsWorldComponent] invalid contact friction "
+                "coefficient=%g",
+                contact_friction_coefficient);
             return false;
         }
 

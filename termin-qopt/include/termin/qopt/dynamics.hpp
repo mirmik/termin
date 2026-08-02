@@ -43,6 +43,17 @@ namespace termin::qopt
         }
     };
 
+    struct DynamicsFrictionContactHandle
+    {
+        DenseBlockHandle contact_block;
+        DenseBlockHandle tangent_block;
+
+        [[nodiscard]] constexpr bool valid() const noexcept
+        {
+            return contact_block.valid() && tangent_block.valid();
+        }
+    };
+
     template <typename Handle> struct DynamicsRegistrationResult
     {
         Handle handle;
@@ -98,6 +109,69 @@ namespace termin::qopt
       private:
         DenseBlockTopology constraints_;
         bool finalized_ = false;
+    };
+
+    // Transient friction contacts are rebuilt beside unilateral rows. Each
+    // registered contact owns one scalar parameter slot and two tangent rows.
+    class TERMIN_QOPT_API DynamicsFrictionTopology
+    {
+      public:
+        [[nodiscard]] DynamicsRegistrationResult<DynamicsFrictionContactHandle>
+        register_contact(std::string_view diagnostic_name) noexcept;
+        [[nodiscard]] AssemblyDiagnostic finalize() noexcept;
+
+        [[nodiscard]] bool finalized() const noexcept;
+        [[nodiscard]] std::size_t contact_count() const noexcept;
+        [[nodiscard]] std::size_t tangent_count() const noexcept;
+        [[nodiscard]] const DenseBlockTopology& contact_topology() const noexcept;
+        [[nodiscard]] const DenseBlockTopology& tangent_topology() const noexcept;
+
+      private:
+        DenseBlockTopology contacts_;
+        DenseBlockTopology tangents_;
+        bool finalized_ = false;
+    };
+
+    struct DynamicsFrictionWorkspaceView
+    {
+        DenseMatrixView contact_normal_jacobian;
+        DenseMatrixView tangent_jacobian;
+        DenseVectorView normal_impulse;
+        DenseVectorView friction_coefficient;
+    };
+
+    class TERMIN_QOPT_API DynamicsFrictionAssembly
+    {
+      public:
+        DynamicsFrictionAssembly(const DynamicsTopology& topology,
+                                 const DynamicsFrictionTopology& friction_topology,
+                                 DynamicsFrictionWorkspaceView workspace) noexcept;
+
+        [[nodiscard]] AssemblyDiagnostic diagnostic() const noexcept;
+        [[nodiscard]] bool valid() const noexcept;
+        [[nodiscard]] AssemblyDiagnostic clear() noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_tangent_jacobian(DynamicsFrictionContactHandle contact,
+                             DynamicsDofHandle dofs,
+                             ConstDenseMatrixView contribution) noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_contact_normal_jacobian(DynamicsFrictionContactHandle contact,
+                                    DynamicsDofHandle dofs,
+                                    ConstDenseMatrixView contribution) noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_normal_impulse(DynamicsFrictionContactHandle contact,
+                           double impulse) noexcept;
+        [[nodiscard]] AssemblyDiagnostic
+        add_friction_coefficient(DynamicsFrictionContactHandle contact,
+                                 double coefficient) noexcept;
+
+      private:
+        DynamicsFrictionWorkspaceView workspace_;
+        DenseBlockMatrixAssembly contact_normal_jacobian_;
+        DenseBlockMatrixAssembly tangent_jacobian_;
+        DenseBlockVectorAssembly normal_impulse_;
+        DenseBlockVectorAssembly friction_coefficient_;
+        AssemblyDiagnostic diagnostic_ = AssemblyDiagnostic::InternalFailure;
     };
 
     struct DynamicsWorkspaceView
@@ -225,6 +299,22 @@ namespace termin::qopt
             return AssemblyDiagnostic::None;
         }
 
+        [[nodiscard]] virtual AssemblyDiagnostic
+        register_friction_contacts(DynamicsFrictionTopology& topology,
+                                   double time_step) noexcept
+        {
+            (void)topology;
+            (void)time_step;
+            return AssemblyDiagnostic::None;
+        }
+
+        [[nodiscard]] virtual AssemblyDiagnostic
+        assemble_friction(DynamicsFrictionAssembly& assembly) noexcept
+        {
+            (void)assembly;
+            return AssemblyDiagnostic::None;
+        }
+
         virtual void commit_step() noexcept {}
 
         virtual void rollback_step() noexcept {}
@@ -267,6 +357,18 @@ namespace termin::qopt
             (void)topology;
             (void)active_mask;
             return false;
+        }
+
+        virtual void
+        apply_friction_solution(const DynamicsFrictionTopology& topology,
+                                ConstDenseVectorView normal_impulses,
+                                ConstDenseVectorView tangent_impulses,
+                                ConstDenseVectorView friction_work) noexcept
+        {
+            (void)topology;
+            (void)normal_impulses;
+            (void)tangent_impulses;
+            (void)friction_work;
         }
 
         // State-owning contributions write their generalized velocity block.

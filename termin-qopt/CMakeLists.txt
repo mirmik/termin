@@ -32,6 +32,7 @@ add_library(termin_qopt SHARED
     src/articulation3d.cpp
     src/articulation3d_motor.cpp
     src/block_assembly.cpp
+    src/contact_friction.cpp
     src/contact3d.cpp
     src/dynamics.cpp
     src/equality_qp.cpp
@@ -138,6 +139,15 @@ if(TERMIN_QOPT_BUILD_TESTS)
     )
     target_link_libraries(termin_qopt_dynamics_test PRIVATE termin_qopt)
     add_test(NAME termin_qopt_dynamics_test COMMAND termin_qopt_dynamics_test)
+
+    add_executable(termin_qopt_contact_friction_test
+        tests/test_contact_friction.cpp
+    )
+    target_link_libraries(termin_qopt_contact_friction_test PRIVATE termin_qopt)
+    add_test(
+        NAME termin_qopt_contact_friction_test
+        COMMAND termin_qopt_contact_friction_test
+    )
 
     add_executable(termin_qopt_multibody2d_test
         tests/test_multibody2d.cpp
