@@ -1,14 +1,15 @@
 # FEM Double Pendulum
 
 This complete Termin project exercises the native C++ QP multibody stack
-through the built-in `FEM*Component` factories. Two rigid links are connected
-by an axial revolute joint; the first link is pinned to a fixed world anchor.
-The bodies use rigid entity transforms, while their visible dimensions live in
-mesh offsets, as required by the FEM transform contract.
+through the reduced-coordinate articulation path. `Fixed Anchor` is an
+`FEMArticulationComponent`; beneath it the scene alternates explicit joint
+entities containing `RotatorComponent` with link entities containing
+`FEMRigidBodyComponent`. The two generalized coordinates replace twelve body
+coordinates and ten hinge constraint equations.
 
-`FEMRevoluteJointComponent` declares the Y hinge axis in body-A coordinates,
-so the double pendulum remains in the authored XZ plane under off-axis
-perturbations as well as under planar initial conditions.
+Both rotators declare the Y hinge axis in their local attachment frames, so the
+double pendulum remains in the authored XZ plane by construction. The visible
+link dimensions remain mesh offsets; all articulation frames are rigid.
 
 ## Open in the editor
 
@@ -32,7 +33,7 @@ link at -25 degrees, which produces an immediately visible nonlinear motion.
   --project test-projects/fem-double-pendulum
 ```
 
-The project needs no Python module or NumPy runtime dependency. The four scene
+The project needs no Python module or NumPy runtime dependency. Its scene
 component types are native factories registered by Termin bootstrap, so the
 desktop package is expected to build directly:
 
@@ -53,7 +54,8 @@ simulation or presentation path.
 - The fixed gold anchor and both touching link endpoints should not separate.
 - The links should remain in the XZ plane in the undisturbed authored setup.
 - The telemetry HUD should update energy, time, and successful step count.
-- Check the log for unknown-component, native-QP step, constraint-projection,
-  and FEM transform-contract errors.
+- The HUD topology line should report one articulation and two reduced DOFs.
+- Check the log for unknown-component, articulation-compilation, native-QP
+  step, and FEM transform-contract errors.
 
 Joint visualization remains separate editor work tracked as `#1229`.

@@ -29,6 +29,7 @@ target_include_directories(termin_qopt_eigen SYSTEM INTERFACE
 
 add_library(termin_qopt SHARED
     src/active_set_qp.cpp
+    src/articulation3d.cpp
     src/block_assembly.cpp
     src/dynamics.cpp
     src/equality_qp.cpp
@@ -174,6 +175,17 @@ if(TERMIN_QOPT_BUILD_TESTS)
     add_test(
         NAME termin_qopt_multibody3d_energy_test
         COMMAND termin_qopt_multibody3d_energy_test
+    )
+
+    add_executable(termin_qopt_articulation3d_test
+        tests/test_articulation3d.cpp
+    )
+    target_link_libraries(
+        termin_qopt_articulation3d_test PRIVATE termin_qopt
+    )
+    add_test(
+        NAME termin_qopt_articulation3d_test
+        COMMAND termin_qopt_articulation3d_test
     )
 
     add_executable(termin_qopt_double_pendulum2d_test
