@@ -189,6 +189,12 @@ namespace
         std::size_t requested_rows = 0;
         std::size_t registration_count = 0;
         std::size_t rollback_count = 0;
+        std::size_t commit_count = 0;
+        std::size_t unilateral_solution_count = 0;
+        bool make_infeasible = false;
+        double velocity = 0.0;
+        std::array<double, 3> reactions{};
+        std::array<double, 3> tight_mask{};
 
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override
@@ -220,10 +226,12 @@ namespace
         }
 
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
-                                    DynamicsAssemblyPhase) noexcept override
+                                    DynamicsAssemblyPhase phase) noexcept override
         {
             const std::array<double, 1> mass{1.0};
-            const std::array<double, 1> load{0.0};
+            const std::array<double, 1> load{
+                phase == DynamicsAssemblyPhase::VelocityProjection ? velocity : 0.0,
+            };
             AssemblyDiagnostic diagnostic = assembly.add_mass(
                 dofs_, dofs_, ConstDenseMatrixView::row_major(mass.data(), 1, 1));
             if (diagnostic != AssemblyDiagnostic::None)
@@ -235,8 +243,10 @@ namespace
             {
                 return diagnostic;
             }
-            const std::array<double, 3> jacobian{-1.0, -2.0, -3.0};
-            const std::array<double, 3> limit{0.0, 1.0, 2.0};
+            const std::array<double, 3> jacobian{-1.0, 1.0, -3.0};
+            const std::array<double, 3> regular_limit{0.0, 10.0, 2.0};
+            const std::array<double, 3> infeasible_limit{-1.0, -1.0, 2.0};
+            const auto& limit = make_infeasible ? infeasible_limit : regular_limit;
             diagnostic = assembly.add_unilateral_jacobian(
                 unilateral_,
                 dofs_,
@@ -251,14 +261,48 @@ namespace
 
         AssemblyDiagnostic begin_step() noexcept override
         {
-            velocity_snapshot_ = velocity_;
+            velocity_snapshot_ = velocity;
             return AssemblyDiagnostic::None;
+        }
+
+        void commit_step() noexcept override
+        {
+            ++commit_count;
         }
 
         void rollback_step() noexcept override
         {
-            velocity_ = velocity_snapshot_;
+            velocity = velocity_snapshot_;
             ++rollback_count;
+        }
+
+        void apply_solution(DynamicsAssemblyPhase phase,
+                            const DynamicsTopology& topology,
+                            ConstDenseVectorView dof_values,
+                            ConstDenseVectorView) noexcept override
+        {
+            if (phase != DynamicsAssemblyPhase::VelocityProjection)
+            {
+                return;
+            }
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            velocity = dof_values[info.offset];
+        }
+
+        void apply_unilateral_solution(
+            const DynamicsTopology&,
+            const DynamicsUnilateralTopology& unilateral_topology,
+            ConstDenseVectorView solution_reactions,
+            ConstDenseVectorView solution_tight_mask) noexcept override
+        {
+            ++unilateral_solution_count;
+            const DenseBlockInfo info =
+                unilateral_topology.constraint_topology().block_info(unilateral_.block);
+            for (std::size_t index = 0; index < info.size; ++index)
+            {
+                reactions[index] = solution_reactions[info.offset + index];
+                tight_mask[index] = solution_tight_mask[info.offset + index];
+            }
         }
 
         AssemblyDiagnostic
@@ -270,7 +314,7 @@ namespace
             {
                 return info.diagnostic;
             }
-            destination[info.offset] = velocity_;
+            destination[info.offset] = velocity;
             return AssemblyDiagnostic::None;
         }
 
@@ -282,7 +326,7 @@ namespace
             {
                 return info.diagnostic;
             }
-            velocity_ = source[info.offset];
+            velocity = source[info.offset];
             return AssemblyDiagnostic::None;
         }
 
@@ -296,7 +340,6 @@ namespace
       private:
         DynamicsDofHandle dofs_;
         DynamicsUnilateralConstraintHandle unilateral_;
-        double velocity_ = 0.0;
         double velocity_snapshot_ = 0.0;
     };
 
@@ -459,6 +502,142 @@ int main()
     TERMIN_QOPT_CHECK(std::abs(acceleration[1] - 0.8) < 1e-10);
     TERMIN_QOPT_CHECK(std::abs(reaction[0] + 2.4) < 1e-10);
 
+    // A perfectly inelastic scalar impact: v*=-3, v>=0, M=2. The
+    // C=-1 convention gives lambda=6 and generalized impulse -C^T*lambda=6.
+    const std::array<double, 1> impact_mass{2.0};
+    std::array<double, 1> impact_load{-6.0};
+    const std::array<double, 1> normal_row{-1.0};
+    const std::array<double, 1> normal_limit{0.0};
+    std::array<double, 1> impact_velocity{-100.0};
+    std::array<double, 1> impact_reaction{-100.0};
+    std::array<double, 1> impact_mask{-100.0};
+    const ConstDynamicsSystemView scalar_velocity_system{
+        ConstDenseMatrixView::row_major(impact_mass.data(), 1, 1),
+        {impact_load.data(), impact_load.size(), 1},
+        ConstDenseMatrixView::row_major(nullptr, 0, 1),
+        {},
+    };
+    const ConstDynamicsUnilateralView scalar_unilateral{
+        ConstDenseMatrixView::row_major(normal_row.data(), 1, 1),
+        {normal_limit.data(), normal_limit.size(), 1},
+    };
+    const QpSolveResult impact = solve_unilateral_velocity(
+        scalar_velocity_system,
+        scalar_unilateral,
+        {
+            {impact_velocity.data(), impact_velocity.size(), 1},
+            {},
+            {impact_reaction.data(), impact_reaction.size(), 1},
+            {impact_mask.data(), impact_mask.size(), 1},
+        });
+    TERMIN_QOPT_CHECK(impact.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(impact_velocity[0]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(impact_reaction[0] - 6.0) < 1e-12);
+    TERMIN_QOPT_CHECK(impact_reaction[0] >= 0.0);
+    TERMIN_QOPT_CHECK(impact_mask[0] == 1.0);
+    TERMIN_QOPT_CHECK(impact.complementarity_linf < 1e-12);
+    TERMIN_QOPT_CHECK(impact_mass[0] * impact_velocity[0] * impact_velocity[0] <=
+                      impact_mass[0] * 9.0);
+
+    // A feasible warm primal and the returned tight mask form a complete,
+    // contact-agnostic warm start for the next solve.
+    std::array<double, 1> warm_velocity{-200.0};
+    std::array<double, 1> warm_reaction{-200.0};
+    std::array<double, 1> warm_mask{-200.0};
+    const QpSolveResult warm_impact = solve_unilateral_velocity(
+        scalar_velocity_system,
+        scalar_unilateral,
+        {
+            {warm_velocity.data(), warm_velocity.size(), 1},
+            {},
+            {warm_reaction.data(), warm_reaction.size(), 1},
+            {warm_mask.data(), warm_mask.size(), 1},
+        },
+        {
+            {impact_velocity.data(), impact_velocity.size(), 1},
+            {impact_mask.data(), impact_mask.size(), 1},
+            {},
+            {},
+        });
+    TERMIN_QOPT_CHECK(warm_impact.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(warm_velocity[0]) < 1e-12);
+    TERMIN_QOPT_CHECK(warm_mask[0] == 1.0);
+
+    // Resting and separating trial velocities need no normal impulse.
+    impact_load[0] = 0.0;
+    const QpSolveResult resting = solve_unilateral_velocity(
+        scalar_velocity_system,
+        scalar_unilateral,
+        {{impact_velocity.data(), 1, 1}, {}, {impact_reaction.data(), 1, 1}, {}});
+    TERMIN_QOPT_CHECK(resting.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(impact_velocity[0]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(impact_reaction[0]) < 1e-12);
+    impact_load[0] = 6.0;
+    const QpSolveResult separating = solve_unilateral_velocity(
+        scalar_velocity_system,
+        scalar_unilateral,
+        {{impact_velocity.data(), 1, 1}, {}, {impact_reaction.data(), 1, 1}, {}});
+    TERMIN_QOPT_CHECK(separating.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(impact_velocity[0] - 3.0) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(impact_reaction[0]) < 1e-12);
+
+    // Equality and unilateral rows are solved together, so the contact cannot
+    // violate a permanent joint constraint.
+    const std::array<double, 4> coupled_mass{1.0, 0.0, 0.0, 1.0};
+    const std::array<double, 2> coupled_load{-2.0, 0.0};
+    const std::array<double, 2> coupled_equality{1.0, -1.0};
+    const std::array<double, 1> coupled_rhs{0.0};
+    const std::array<double, 2> coupled_normal{-1.0, 0.0};
+    std::array<double, 2> coupled_velocity{-100.0, -100.0};
+    std::array<double, 1> coupled_equality_reaction{-100.0};
+    std::array<double, 1> coupled_unilateral_reaction{-100.0};
+    const QpSolveResult coupled = solve_unilateral_velocity(
+        {
+            ConstDenseMatrixView::row_major(coupled_mass.data(), 2, 2),
+            {coupled_load.data(), coupled_load.size(), 1},
+            ConstDenseMatrixView::row_major(coupled_equality.data(), 1, 2),
+            {coupled_rhs.data(), coupled_rhs.size(), 1},
+        },
+        {
+            ConstDenseMatrixView::row_major(coupled_normal.data(), 1, 2),
+            {normal_limit.data(), normal_limit.size(), 1},
+        },
+        {
+            {coupled_velocity.data(), coupled_velocity.size(), 1},
+            {coupled_equality_reaction.data(), 1, 1},
+            {coupled_unilateral_reaction.data(), 1, 1},
+            {},
+        });
+    TERMIN_QOPT_CHECK(coupled.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(coupled_velocity[0] - coupled_velocity[1]) < 1e-12);
+    TERMIN_QOPT_CHECK(coupled_velocity[0] >= -1e-12);
+
+    // With no unilateral rows the generalized velocity solver preserves the
+    // equality-only solution and physical reaction convention.
+    rhs[0] = 0.0;
+    std::array<double, 2> equality_only_velocity{-300.0, -300.0};
+    std::array<double, 1> equality_only_reaction{-300.0};
+    const QpSolveResult equality_only = solve_unilateral_velocity(
+        assembly.system(),
+        {
+            ConstDenseMatrixView::row_major(nullptr, 0, 2),
+            {},
+        },
+        {
+            {
+                equality_only_velocity.data(),
+                equality_only_velocity.size(),
+                1,
+            },
+            {equality_only_reaction.data(), equality_only_reaction.size(), 1},
+            {},
+            {},
+        });
+    TERMIN_QOPT_CHECK(equality_only.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[0] - acceleration[0]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[1] - acceleration[1]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_reaction[0] - reaction[0]) < 1e-12);
+
     // A shifted coupling remains a regular feasible affine constraint.
     const std::array<double, 1> inconsistent_rhs{1.0};
     rhs[0] = inconsistent_rhs[0];
@@ -571,19 +750,39 @@ int main()
     TERMIN_QOPT_CHECK(transient_system.add_contribution(std::move(transient)) ==
                       DynamicsSystemDiagnostic::None);
     TERMIN_QOPT_CHECK(transient_system.finalize() == DynamicsSystemDiagnostic::None);
+    transient_state->velocity = -3.0;
     transient_state->requested_rows = 2;
-    const DynamicsSystemStepResult unsupported = transient_system.step();
-    TERMIN_QOPT_CHECK(unsupported.status == QpStatus::InvalidInput);
-    TERMIN_QOPT_CHECK(unsupported.diagnostic ==
-                      DynamicsSystemDiagnostic::UnilateralSolveUnavailable);
-    TERMIN_QOPT_CHECK(unsupported.unilateral_constraint_count == 2);
-    TERMIN_QOPT_CHECK(transient_state->rollback_count == 1);
+    const DynamicsSystemStepResult projected = transient_system.step();
+    TERMIN_QOPT_CHECK(projected.ok());
+    TERMIN_QOPT_CHECK(projected.unilateral_constraint_count == 2);
+    TERMIN_QOPT_CHECK(projected.velocity_projection.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(transient_state->velocity) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(transient_state->reactions[0] - 3.0) < 1e-12);
+    TERMIN_QOPT_CHECK(transient_state->reactions[1] >= 0.0);
+    TERMIN_QOPT_CHECK(transient_state->tight_mask[0] == 1.0);
+    TERMIN_QOPT_CHECK(transient_state->unilateral_solution_count == 1);
+    TERMIN_QOPT_CHECK(transient_state->commit_count == 1);
+    TERMIN_QOPT_CHECK(transient_state->rollback_count == 0);
 
+    transient_state->velocity = 4.0;
+    transient_state->make_infeasible = true;
+    const DynamicsSystemStepResult failed_contact = transient_system.step();
+    TERMIN_QOPT_CHECK(failed_contact.status == QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(failed_contact.diagnostic ==
+                      DynamicsSystemDiagnostic::VelocityProjectionFailure);
+    TERMIN_QOPT_CHECK(failed_contact.unilateral_constraint_count == 2);
+    TERMIN_QOPT_CHECK(failed_contact.velocity_projection.status ==
+                      QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(transient_state->velocity == 4.0);
+    TERMIN_QOPT_CHECK(transient_state->rollback_count == 1);
+    TERMIN_QOPT_CHECK(transient_state->commit_count == 1);
+
+    transient_state->make_infeasible = false;
     transient_state->requested_rows = 0;
     const DynamicsSystemStepResult zero_rows = transient_system.step();
     TERMIN_QOPT_CHECK(zero_rows.ok());
     TERMIN_QOPT_CHECK(zero_rows.unilateral_constraint_count == 0);
-    TERMIN_QOPT_CHECK(transient_state->registration_count == 2);
+    TERMIN_QOPT_CHECK(transient_state->registration_count == 3);
 
     return 0;
 }

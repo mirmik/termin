@@ -261,6 +261,23 @@ it does not implement either kind of reduction.
 2. Solve the velocity update as a mass-metric QP with permanent equalities and
    transient normal inequalities. With zero restitution, contact impulses must
    not add kinetic energy.
+
+The native solver contract for this second step is
+
+```text
+minimize    0.5 v^T M v - load^T v
+subject to  J v = b
+            C v <= d
+```
+
+For projection around a trial velocity `v*`, a contribution assembles
+`load = M v*`. A normal constraint `J_n v >= target` is therefore stored as
+`C = -J_n`, `d = -target`. Its returned multiplier is non-negative and the
+physical generalized impulse is `-C^T lambda = J_n^T lambda`. Equality and
+unilateral rows are solved together; there is no post-solve velocity clamp.
+The solver accepts a feasible primal plus optional active masks and returns a
+tight-row mask, while temporal ownership and caching of that data remain in a
+future persistent contact contribution rather than `DynamicsSystem`.
 3. Use revolute and prismatic joint limits as the first, fixed-identity client
    of the unilateral machinery. Limits produce reactions and never clamp an
    already integrated transform.

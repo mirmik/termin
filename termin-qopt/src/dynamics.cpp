@@ -50,6 +50,17 @@ namespace termin::qopt
         }
 
         [[nodiscard]] QpDiagnostic
+        validate_optional_output(DenseVectorView view,
+                                 std::size_t expected_size) noexcept
+        {
+            if (view.empty())
+            {
+                return QpDiagnostic::None;
+            }
+            return validate_output(view, expected_size);
+        }
+
+        [[nodiscard]] QpDiagnostic
         validate_system(ConstDynamicsSystemView system) noexcept
         {
             const std::size_t dof_count = system.load.size;
@@ -101,6 +112,22 @@ namespace termin::qopt
                         reinterpret_cast<std::uintptr_t>(&second[index])))
                 {
                     return true;
+                }
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool
+        any_outputs_overlap(std::initializer_list<DenseVectorView> outputs)
+        {
+            for (auto first = outputs.begin(); first != outputs.end(); ++first)
+            {
+                for (auto second = first + 1; second != outputs.end(); ++second)
+                {
+                    if (outputs_overlap(*first, *second))
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -503,6 +530,149 @@ namespace termin::qopt
         return result;
     }
 
+    QpSolveResult solve_unilateral_velocity(ConstDynamicsSystemView system,
+                                            ConstDynamicsUnilateralView unilateral,
+                                            DynamicsVelocitySolutionView solution,
+                                            ActiveSetQpWarmStartView warm_start,
+                                            ActiveSetQpOptions options) noexcept
+    {
+        const std::size_t dof_count = system.load.size;
+        const std::size_t equality_count = system.constraint_rhs.size;
+        const std::size_t unilateral_count = unilateral.limit.size;
+        const QpDiagnostic system_diagnostic = validate_system(system);
+        if (system_diagnostic != QpDiagnostic::None)
+        {
+            return invalid_result(system_diagnostic);
+        }
+        if (unilateral.jacobian.rows != unilateral_count ||
+            unilateral.jacobian.columns != dof_count)
+        {
+            return invalid_result(QpDiagnostic::DimensionMismatch);
+        }
+        if ((!unilateral.jacobian.empty() && unilateral.jacobian.data == nullptr) ||
+            (!unilateral.limit.empty() && unilateral.limit.data == nullptr))
+        {
+            return invalid_result(QpDiagnostic::NullData);
+        }
+        if ((!unilateral.jacobian.empty() &&
+             (unilateral.jacobian.row_stride <= 0 ||
+              unilateral.jacobian.column_stride <= 0)) ||
+            (!unilateral.limit.empty() && unilateral.limit.stride <= 0))
+        {
+            return invalid_result(QpDiagnostic::InvalidStride);
+        }
+
+        const QpDiagnostic output_diagnostics[] = {
+            validate_output(solution.velocity, dof_count),
+            validate_output(solution.constraint_reaction, equality_count),
+            validate_output(solution.unilateral_reaction, unilateral_count),
+            validate_optional_output(solution.tight_unilateral_mask, unilateral_count),
+        };
+        for (const QpDiagnostic diagnostic : output_diagnostics)
+        {
+            if (diagnostic != QpDiagnostic::None)
+            {
+                return invalid_result(diagnostic);
+            }
+        }
+        if (any_outputs_overlap({
+                solution.velocity,
+                solution.constraint_reaction,
+                solution.unilateral_reaction,
+                solution.tight_unilateral_mask,
+            }))
+        {
+            return invalid_result(QpDiagnostic::OverlappingOutputs);
+        }
+
+        try
+        {
+            std::vector<double> gradient(dof_count);
+            std::vector<double> velocity(dof_count);
+            std::vector<double> equality_dual(equality_count);
+            std::vector<double> unilateral_dual(unilateral_count);
+            std::vector<double> tight_mask(unilateral_count);
+            for (std::size_t index = 0; index < dof_count; ++index)
+            {
+                if (!std::isfinite(system.load[index]))
+                {
+                    return invalid_result(QpDiagnostic::NonFiniteInput);
+                }
+                gradient[index] = -system.load[index];
+            }
+
+            const QpSolveResult result = solve_active_set_qp(
+                {
+                    system.mass,
+                    {gradient.data(), gradient.size(), 1},
+                    system.constraint_jacobian,
+                    system.constraint_rhs,
+                    unilateral.jacobian,
+                    unilateral.limit,
+                    {},
+                    {},
+                },
+                {
+                    {velocity.data(), velocity.size(), 1},
+                    {equality_dual.data(), equality_dual.size(), 1},
+                    {unilateral_dual.data(), unilateral_dual.size(), 1},
+                    {},
+                    {},
+                },
+                warm_start,
+                options);
+            if (result.status != QpStatus::Optimal)
+            {
+                return result;
+            }
+
+            for (std::size_t row = 0; row < unilateral_count; ++row)
+            {
+                double value = -unilateral.limit[row];
+                for (std::size_t column = 0; column < dof_count; ++column)
+                {
+                    value += unilateral.jacobian(row, column) * velocity[column];
+                }
+                tight_mask[row] =
+                    std::abs(value) <= options.active_tolerance ? 1.0 : 0.0;
+            }
+            for (std::size_t index = 0; index < dof_count; ++index)
+            {
+                solution.velocity[index] = velocity[index];
+            }
+            for (std::size_t index = 0; index < equality_count; ++index)
+            {
+                solution.constraint_reaction[index] = -equality_dual[index];
+            }
+            for (std::size_t index = 0; index < unilateral_count; ++index)
+            {
+                solution.unilateral_reaction[index] = unilateral_dual[index];
+                if (!solution.tight_unilateral_mask.empty())
+                {
+                    solution.tight_unilateral_mask[index] = tight_mask[index];
+                }
+            }
+            return result;
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] unilateral velocity solve failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] unilateral velocity solve failed with "
+                         "an unknown exception\n");
+        }
+
+        QpSolveResult result;
+        result.status = QpStatus::NumericalFailure;
+        result.diagnostic = QpDiagnostic::DecompositionFailure;
+        return result;
+    }
+
     namespace
     {
 
@@ -533,6 +703,8 @@ namespace termin::qopt
         std::vector<double> constraint_rhs;
         std::vector<double> unilateral_jacobian;
         std::vector<double> unilateral_limit;
+        std::vector<double> unilateral_reaction;
+        std::vector<double> unilateral_tight_mask;
         std::vector<double> dof_solution;
         std::vector<double> constraint_reaction;
         std::vector<double> velocity;
@@ -624,6 +796,8 @@ namespace termin::qopt
             }
             unilateral_jacobian.assign(constraints * dofs, 0.0);
             unilateral_limit.assign(constraints, 0.0);
+            unilateral_reaction.assign(constraints, 0.0);
+            unilateral_tight_mask.assign(constraints, 0.0);
             return DynamicsSystemDiagnostic::None;
         }
 
@@ -660,6 +834,25 @@ namespace termin::qopt
             for (const auto& contribution : contributions)
             {
                 contribution->apply_solution(phase, topology, dofs, reactions);
+            }
+        }
+
+        void apply_unilateral_solution() noexcept
+        {
+            const ConstDenseVectorView reactions{
+                unilateral_reaction.data(),
+                unilateral_reaction.size(),
+                1,
+            };
+            const ConstDenseVectorView tight_mask{
+                unilateral_tight_mask.data(),
+                unilateral_tight_mask.size(),
+                1,
+            };
+            for (const auto& contribution : contributions)
+            {
+                contribution->apply_unilateral_solution(
+                    topology, unilateral_topology, reactions, tight_mask);
             }
         }
 
@@ -837,8 +1030,6 @@ namespace termin::qopt
             return "position_projection_failure";
         case DynamicsSystemDiagnostic::VelocityProjectionFailure:
             return "velocity_projection_failure";
-        case DynamicsSystemDiagnostic::UnilateralSolveUnavailable:
-            return "unilateral_solve_unavailable";
         case DynamicsSystemDiagnostic::InternalFailure:
             return "internal_failure";
         }
@@ -1046,21 +1237,6 @@ namespace termin::qopt
                     QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure);
             }
 
-            if (unilateral_constraint_count != 0)
-            {
-                std::fprintf(stderr,
-                             "[termin-qopt] %zu transient unilateral rows were "
-                             "assembled, but the velocity-level unilateral "
-                             "solver is not available yet\n",
-                             unilateral_constraint_count);
-                rollback();
-                return dynamics_system_failure(
-                    QpStatus::InvalidInput,
-                    DynamicsSystemDiagnostic::UnilateralSolveUnavailable,
-                    {},
-                    unilateral_constraint_count);
-            }
-
             const QpSolveResult first_dynamics =
                 solve_constrained_dynamics(assembly.system(),
                                            {
@@ -1115,6 +1291,7 @@ namespace termin::qopt
             result.status = QpStatus::Optimal;
             result.diagnostic = DynamicsSystemDiagnostic::None;
             result.dynamics = first_dynamics;
+            result.unilateral_constraint_count = unilateral_constraint_count;
 
             for (std::size_t iteration = 0; iteration < options.max_position_iterations;
                  ++iteration)
@@ -1273,7 +1450,8 @@ namespace termin::qopt
             impl_->apply_solution(DynamicsAssemblyPhase::Acceleration);
             result.dynamics = second_dynamics;
 
-            if (impl_->topology.constraint_count() != 0)
+            if (impl_->topology.constraint_count() != 0 ||
+                unilateral_constraint_count != 0)
             {
                 if (impl_->assemble(assembly,
                                     DynamicsAssemblyPhase::VelocityProjection) !=
@@ -1285,8 +1463,9 @@ namespace termin::qopt
                         DynamicsSystemDiagnostic::AssemblyFailure,
                         second_dynamics);
                 }
-                const QpSolveResult velocity_projection = solve_constrained_dynamics(
+                const QpSolveResult velocity_projection = solve_unilateral_velocity(
                     assembly.system(),
+                    assembly.unilateral_constraints(),
                     {
                         {
                             impl_->dof_solution.data(),
@@ -1298,26 +1477,45 @@ namespace termin::qopt
                             impl_->constraint_reaction.size(),
                             1,
                         },
+                        {
+                            impl_->unilateral_reaction.data(),
+                            impl_->unilateral_reaction.size(),
+                            1,
+                        },
+                        {
+                            impl_->unilateral_tight_mask.data(),
+                            impl_->unilateral_tight_mask.size(),
+                            1,
+                        },
                     },
-                    options.qp_tolerance);
+                    {},
+                    {.tolerance = options.qp_tolerance});
+                result.velocity_projection = velocity_projection;
                 if (velocity_projection.status != QpStatus::Optimal)
                 {
                     rollback();
-                    return dynamics_system_failure(
+                    DynamicsSystemStepResult failure = dynamics_system_failure(
                         velocity_projection.status,
                         DynamicsSystemDiagnostic::VelocityProjectionFailure,
-                        second_dynamics);
+                        second_dynamics,
+                        unilateral_constraint_count);
+                    failure.velocity_projection = velocity_projection;
+                    return failure;
                 }
                 impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
+                impl_->apply_unilateral_solution();
             }
             result.velocity_constraint_linf = impl_->max_velocity_error();
             if (result.velocity_constraint_linf > options.velocity_tolerance)
             {
                 rollback();
-                return dynamics_system_failure(
+                DynamicsSystemStepResult failure = dynamics_system_failure(
                     QpStatus::NumericalFailure,
                     DynamicsSystemDiagnostic::VelocityProjectionFailure,
-                    second_dynamics);
+                    second_dynamics,
+                    unilateral_constraint_count);
+                failure.velocity_projection = result.velocity_projection;
+                return failure;
             }
 
             impl_->commit_step();
