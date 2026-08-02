@@ -14,10 +14,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, -0.25],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            -0.25
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-ground-mesh",
@@ -32,9 +45,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": true,
-              "mesh_offset_position": [0.0, 0.0, 0.0],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [8.0, 4.0, 0.5]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                8.0,
+                4.0,
+                0.5
+              ]
             }
           },
           {
@@ -60,11 +85,25 @@
               "enabled": true,
               "collider_type": "Box",
               "convex_hull_mesh_source": "Field",
-              "box_size": [8.0, 4.0, 0.5],
-              "convex_hull_mesh": {"type": "none"},
+              "box_size": [
+                8.0,
+                4.0,
+                0.5
+              ],
+              "convex_hull_mesh": {
+                "type": "none"
+              },
               "collider_offset_enabled": false,
-              "collider_offset_position": [0.0, 0.0, 0.0],
-              "collider_offset_euler": [0.0, 0.0, 0.0]
+              "collider_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "collider_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ]
             }
           }
         ]
@@ -80,10 +119,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [-2.0, 0.0, 3.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            -2.0,
+            0.0,
+            3.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-drop-mesh",
@@ -98,9 +150,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": true,
-              "mesh_offset_position": [0.0, 0.0, 0.0],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [0.8, 0.8, 0.8]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                0.8,
+                0.8,
+                0.8
+              ]
             }
           },
           {
@@ -125,7 +189,11 @@
             "data": {
               "enabled": true,
               "mass": 1.0,
-              "inertia_diagonal": [0.1066666667, 0.1066666667, 0.1066666667],
+              "inertia_diagonal": [
+                0.1066666667,
+                0.1066666667,
+                0.1066666667
+              ],
               "linear_damping": 0.0,
               "angular_damping": 0.0
             }
@@ -137,11 +205,25 @@
               "enabled": true,
               "collider_type": "Box",
               "convex_hull_mesh_source": "Field",
-              "box_size": [0.8, 0.8, 0.8],
-              "convex_hull_mesh": {"type": "none"},
+              "box_size": [
+                0.8,
+                0.8,
+                0.8
+              ],
+              "convex_hull_mesh": {
+                "type": "none"
+              },
               "collider_offset_enabled": false,
-              "collider_offset_position": [0.0, 0.0, 0.0],
-              "collider_offset_euler": [0.0, 0.0, 0.0]
+              "collider_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "collider_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ]
             }
           }
         ]
@@ -157,10 +239,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [1.5, 0.0, 0.5],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            1.5,
+            0.0,
+            0.5
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-root-mesh",
@@ -175,9 +270,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": true,
-              "mesh_offset_position": [0.0, 0.0, 0.0],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [0.25, 0.25, 0.25]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                0.25,
+                0.25,
+                0.25
+              ]
             }
           },
           {
@@ -199,7 +306,9 @@
           {
             "source_id": "fem-contact-articulation-component",
             "type": "FEMArticulationComponent",
-            "data": {"enabled": true}
+            "data": {
+              "enabled": true
+            }
           }
         ],
         "children": [
@@ -214,20 +323,49 @@
             "layer": 0.0,
             "flags": 0.0,
             "pose": {
-              "position": [0.0, 0.0, 0.0],
-              "rotation": [0.0, 0.0, 0.0, 1.0]
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
             },
-            "scale": [1.0, 1.0, 1.0],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
             "components": [
               {
                 "source_id": "fem-contact-support-rotator",
                 "type": "RotatorComponent",
                 "data": {
                   "enabled": true,
-                  "axis": [0.0, 1.0, 0.0],
-                  "coordinate": [0.0, -45.0, 45.0],
-                  "origin_position": [0.0, 0.0, 0.0],
-                  "origin_rotation": [0.0, 0.0, 0.0],
+                  "axis": [
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  "coordinate": [
+                    0.0,
+                    -45.0,
+                    45.0
+                  ],
+                  "origin_position": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "origin_rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
                   "coordinate_scale": "0.017453292519943295"
                 }
               },
@@ -253,10 +391,23 @@
                 "layer": 0.0,
                 "flags": 0.0,
                 "pose": {
-                  "position": [1.0, 0.0, 0.0],
-                  "rotation": [0.0, 0.0, 0.0, 1.0]
+                  "position": [
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  "rotation": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
                 },
-                "scale": [1.0, 1.0, 1.0],
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0
+                ],
                 "components": [
                   {
                     "source_id": "fem-contact-link-mesh",
@@ -271,9 +422,21 @@
                         "kind": "tc_mesh"
                       },
                       "mesh_offset_enabled": true,
-                      "mesh_offset_position": [0.0, 0.0, 0.0],
-                      "mesh_offset_euler": [0.0, 0.0, 0.0],
-                      "mesh_offset_scale": [1.0, 0.7, 1.0]
+                      "mesh_offset_position": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
+                      "mesh_offset_euler": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
+                      "mesh_offset_scale": [
+                        1.0,
+                        0.7,
+                        1.0
+                      ]
                     }
                   },
                   {
@@ -298,7 +461,11 @@
                     "data": {
                       "enabled": true,
                       "mass": 1.0,
-                      "inertia_diagonal": [0.1666666667, 0.1666666667, 0.1666666667],
+                      "inertia_diagonal": [
+                        0.1666666667,
+                        0.1666666667,
+                        0.1666666667
+                      ],
                       "linear_damping": 0.0,
                       "angular_damping": 0.0
                     }
@@ -310,11 +477,25 @@
                       "enabled": true,
                       "collider_type": "Box",
                       "convex_hull_mesh_source": "Field",
-                      "box_size": [1.0, 0.7, 1.0],
-                      "convex_hull_mesh": {"type": "none"},
+                      "box_size": [
+                        1.0,
+                        0.7,
+                        1.0
+                      ],
+                      "convex_hull_mesh": {
+                        "type": "none"
+                      },
                       "collider_offset_enabled": false,
-                      "collider_offset_position": [0.0, 0.0, 0.0],
-                      "collider_offset_euler": [0.0, 0.0, 0.0]
+                      "collider_offset_position": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
+                      "collider_offset_euler": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ]
                     }
                   }
                 ]
@@ -334,10 +515,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [5.0, -6.0, 11.0],
-          "rotation": [-0.2519347274, -0.8749107386, 0.3903870434, 0.1365944691]
+          "position": [
+            5.0,
+            -6.0,
+            11.0
+          ],
+          "rotation": [
+            -0.2519347274,
+            -0.8749107386,
+            0.3903870434,
+            0.1365944691
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-key-light-component",
@@ -345,7 +539,11 @@
             "data": {
               "enabled": true,
               "light_type": "directional",
-              "color": [1.0, 0.86, 0.68],
+              "color": [
+                1.0,
+                0.86,
+                0.68
+              ],
               "intensity": 1.55,
               "shadows_enabled": true,
               "shadows_bias": 0.001,
@@ -353,7 +551,7 @@
               "shadows_map_resolution": 1024.0,
               "cascade_count": 3.0,
               "max_distance": 50.0,
-              "split_lambda": 0.7,
+              "split_lambda": 0.699999988079071,
               "cascade_blend": true
             }
           }
@@ -370,10 +568,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, -12.0, 4.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            -12.0,
+            2.5085701942443848
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-camera-component",
@@ -383,7 +594,7 @@
               "near_clip": 0.1,
               "far_clip": 100.0,
               "ortho_size": 5.0,
-              "fov_x_degrees": 60.0,
+              "fov_x_degrees": 59.99999999999999,
               "fov_y_degrees": 48.0,
               "fov_mode": "FixHorizontal",
               "layer_mask": "0xffffffffffffffff",
@@ -403,17 +614,34 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-world-component",
             "type": "FEMPhysicsWorldComponent",
             "data": {
               "enabled": true,
-              "gravity": [0.0, 0.0, -9.81],
+              "gravity": [
+                0.0,
+                0.0,
+                -9.81
+              ],
               "time_step": 0.002,
               "substeps": 1.0,
               "collision_layer_mask": "0xffffffffffffffff",
@@ -433,10 +661,23 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "fem-contact-hud-ui",
@@ -460,6 +701,9 @@
             "data": {
               "enabled": true,
               "world_entity_name": "FEM Physics World",
+              "servo_entity_name": "",
+              "plot_widget_name": "servo_plot",
+              "effort_plot_widget_name": "servo_effort_plot",
               "contact_gap_plot_widget_name": "contact_gap_plot",
               "contact_reaction_plot_widget_name": "contact_reaction_plot",
               "plot_history": 30.0,
@@ -486,8 +730,15 @@
           {
             "name": "Main Viewport",
             "display_name": "Main",
-            "render_target": {"name": "Main Target"},
-            "region": [0.0, 0.0, 1.0, 1.0],
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
             "depth": 0.0,
             "input_mode": "simple",
             "block_input_in_editor": false,
@@ -501,7 +752,12 @@
             "dynamic_resolution": true,
             "color_format": "rgba8",
             "depth_format": "depth24",
-            "clear_color": [0.008, 0.012, 0.028, 1.0],
+            "clear_color": [
+              0.00800000037997961,
+              0.012000000104308128,
+              0.02800000086426735,
+              1.0
+            ],
             "clear_depth": 1.0,
             "pipeline_name": "Default",
             "layer_mask": 4294967295.0,
@@ -510,17 +766,42 @@
         ]
       },
       "render_state": {
-        "background_color": [0.008, 0.012, 0.028, 1.0],
+        "background_color": [
+          0.00800000037997961,
+          0.012000000104308128,
+          0.02800000086426735,
+          1.0
+        ],
         "lighting": {
-          "ambient_color": [0.3, 0.38, 0.58],
-          "ambient_intensity": 0.24,
-          "shadow_settings": {"method": 1.0, "softness": 1.4, "bias": 0.001}
+          "ambient_color": [
+            0.30000001192092896,
+            0.3799999952316284,
+            0.5799999833106995
+          ],
+          "ambient_intensity": 0.23999999463558197,
+          "shadow_settings": {
+            "method": 1.0,
+            "softness": 1.399999976158142,
+            "bias": 0.0010000000474974513
+          }
         },
         "skybox": {
           "type": 1.0,
-          "color": [0.008, 0.012, 0.028],
-          "top_color": [0.12, 0.2, 0.42],
-          "bottom_color": [0.12, 0.08, 0.1]
+          "color": [
+            0.00800000037997961,
+            0.012000000104308128,
+            0.02800000086426735
+          ],
+          "top_color": [
+            0.11999999731779099,
+            0.20000000298023224,
+            0.41999998688697815
+          ],
+          "bottom_color": [
+            0.11999999731779099,
+            0.07999999821186066,
+            0.10000000149011612
+          ]
         }
       },
       "collision_world": {}
@@ -528,12 +809,60 @@
   },
   "editor": {
     "camera": {
-      "position": [0.0, -13.0, 4.0],
-      "rotation": [0.0, 0.0, 0.0, 1.0],
-      "radius": 12.0,
-      "editor_entities": {"camera": []}
+      "position": [
+        -2.0872155772902152,
+        -22.480413568954344,
+        6.691807383974551
+      ],
+      "rotation": [
+        -0.11131616790879201,
+        0.005833833158397927,
+        -0.05200979433283032,
+        0.9924059947653674
+      ],
+      "radius": 21.0,
+      "editor_entities": {
+        "camera": [
+          {
+            "source_id": "c6556d6f-2a84-4198-9f58-8e29c2ab471d",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xfffffffffffffffe"
+            }
+          },
+          {
+            "source_id": "3888b1b3-1fd3-4ce0-b9b0-6b8bbce58b83",
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "radius": 21.0,
+              "min_radius": 1.0,
+              "max_radius": 100.0
+            }
+          },
+          {
+            "source_id": "3bf9f265-7d73-4ddc-8b8c-068e374dab6f",
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "navmesh_enabled": true,
+              "ortho_enabled": false,
+              "gizmo_world_orientation_enabled": false
+            }
+          }
+        ]
+      }
     },
-    "selected_entity": "fem-contact-drop-body",
     "expanded_entities": [
       "fem-contact-articulation-root",
       "fem-contact-support-joint"
