@@ -203,10 +203,9 @@
                     1.0,
                     0.0
                   ],
-                  "coordinate_scale": "0.017453292519943295",
                   "coordinate": [
                     15.0,
-                    -10,
+                    -10.0,
                     120.0
                   ],
                   "origin_position": [
@@ -218,7 +217,8 @@
                     0.0,
                     0.0,
                     0.0
-                  ]
+                  ],
+                  "coordinate_scale": "0.017453292519943295"
                 }
               },
               {
@@ -415,8 +415,7 @@
                           "materials": []
                         }
                       }
-                    ],
-                    "children": []
+                    ]
                   }
                 ]
               }
@@ -542,9 +541,9 @@
         "flags": 0.0,
         "pose": {
           "position": [
-            -1.2,
+            1.8349828720092773,
             -11.0,
-            3.5
+            4.156352996826172
           ],
           "rotation": [
             0.0,
@@ -672,8 +671,8 @@
             "data": {
               "enabled": true,
               "world_entity_name": "FEM Physics World",
-              "refresh_interval": 0.1,
-              "servo_entity_name": "Servo Joint"
+              "servo_entity_name": "Servo Joint",
+              "refresh_interval": 0.1
             }
           }
         ]
@@ -776,15 +775,15 @@
   "editor": {
     "camera": {
       "position": [
-        -23.473443539503148,
-        -25.5866310292115,
-        12.59603274196098
+        -0.9696240244052934,
+        -35.998391646153536,
+        3.730381589832727
       ],
       "rotation": [
-        -0.12876430554613824,
-        0.052810090400049,
-        -0.3757633182688813,
-        0.9162056410068206
+        -0.003490630148980687,
+        -1.2184647302540137e-05,
+        0.00349063014896273,
+        0.9999878153526975
       ],
       "radius": 33.0,
       "editor_entities": {
@@ -830,9 +829,9 @@
       }
     },
     "expanded_entities": [
-      "fem-servo-load-servo-stand",
+      "fem-servo-load-driven-load",
       "fem-servo-load-servo-joint",
-      "fem-servo-load-driven-load"
+      "fem-servo-load-servo-stand"
     ]
   }
 }

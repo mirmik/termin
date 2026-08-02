@@ -57,12 +57,14 @@ effort = kp (target_position - position)
        + feed_forward_effort
 ```
 
-The `position_control_enabled` switch removes the complete proportional term,
-including its target. The independently switchable integral term accumulates
-the same SI position error, is bounded by `maximum_integral_effort`, and uses
-conditional integration against the physical motor limit to prevent further
-windup during saturation. Disable both position-error loops to operate as a
-pure velocity regulator with optional direct effort feed-forward.
+The `position_control_enabled` switch controls the complete position loop:
+disabling it removes both the proportional and integral terms and resets the
+accumulated integral effort. Within the enabled position loop, the integral
+term can be disabled independently. It accumulates the same SI position error,
+is bounded by `maximum_integral_effort`, and uses conditional integration
+against the physical motor limit to prevent further windup during saturation.
+Disable the position loop to operate as a pure velocity regulator with optional
+direct effort feed-forward.
 
 and writes the result to the motor's `commanded_effort` field.
 `ArticulationMotorContribution` adds that command, clamped by the motor's

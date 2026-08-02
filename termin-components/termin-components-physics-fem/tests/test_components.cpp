@@ -385,9 +385,11 @@ TEST_CASE("FEM servo can disable its position control loop")
     pendulum.joint_a->entity().add_component(motor);
     auto* servo = new FEMJointServoComponent();
     servo->position_control_enabled = false;
+    servo->integral_control_enabled = true;
     servo->target_coordinate = 1000.0;
     servo->target_velocity = 0.3;
     servo->position_gain = 1000.0;
+    servo->integral_gain = 1000.0;
     servo->velocity_gain = 6.0;
     pendulum.joint_a->entity().add_component(servo);
 
@@ -396,6 +398,7 @@ TEST_CASE("FEM servo can disable its position control loop")
     pendulum.world->update(0.001f);
 
     CHECK(std::abs(servo->commanded_effort() - 1.8) < 1.0e-12);
+    CHECK(std::abs(servo->integral_effort()) < 1.0e-12);
     CHECK(std::abs(motor->applied_effort() - 1.8) < 1.0e-12);
     CHECK(!motor->saturated());
 
@@ -451,6 +454,10 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     CHECK(!fixture.motor->saturated());
     CHECK(std::isfinite(telemetry.motor_power));
     CHECK(std::isfinite(telemetry.motor_work));
+
+    fixture.servo->position_control_enabled = false;
+    fixture.world->update(0.005f);
+    CHECK(std::abs(fixture.servo->integral_effort()) < 1.0e-12);
 
     fixture.scene.destroy();
 }

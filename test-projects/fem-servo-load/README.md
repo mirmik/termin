@@ -30,10 +30,11 @@ joint's steady-state position error without treating a constant direct effort
 as gravity compensation. Constant direct effort remains available for external
 controllers and known bias loads.
 
-Clear `Position Control` to remove the proportional position term entirely.
-Clear `Integral Control` as well for a pure velocity regulator using
-`target_velocity`, `velocity_gain`, and the optional direct feed-forward
-effort. The two position-error loops are independent switches.
+Clear `Position Control` to disable the complete position loop, including both
+the proportional and integral terms. `Integral Control` independently disables
+only the integral term while the position loop remains enabled. With `Position
+Control` cleared, the component is a pure velocity regulator using
+`target_velocity`, `velocity_gain`, and the optional direct feed-forward effort.
 
 ## Run
 

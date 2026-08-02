@@ -127,13 +127,15 @@ The motor contribution owns no state or topology block: it adds bounded
 generalized effort to the articulation's load vector.
 
 `FEMJointServoComponent` is a position/velocity PID policy with optional
-feed-forward effort. Its proportional and bounded integral position-error
-loops can be switched independently; the integrator uses conditional
-anti-windup against the physical motor limit. Disabling both produces a pure
-velocity regulator. It reads joint state and writes the co-located motor's
-command. A missing motor means a passive joint; a servo without a motor is an
-invalid model. Ideal acceleration and HQP tasks remain separate future control
-policies and can target the same physical actuator boundary.
+feed-forward effort. `Position Control` governs the complete position-error
+loop: disabling it removes both proportional and integral terms and resets the
+integrator. Within that loop, the bounded integral term can be disabled
+independently and uses conditional anti-windup against the physical motor
+limit. Disabling the position loop produces a pure velocity regulator. It reads
+joint state and writes the co-located motor's command. A missing motor means a
+passive joint; a servo without a motor is an invalid model. Ideal acceleration
+and HQP tasks remain separate future control policies and can target the same
+physical actuator boundary.
 
 ## Transform compilation
 
