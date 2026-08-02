@@ -238,9 +238,51 @@ broader reaction/error tests remain in this slice.
 
 ### Slice 4: contacts
 
-- define the collision-query boundary without merging the two physics worlds;
-- non-penetration and friction model;
-- standing and locomotion acceptance scenes.
+Contacts are a sequence of independently testable solver and integration
+slices, not a scene-level special case:
+
+#### Contact geometry ownership
+
+`termin-collision` owns solver-neutral contact candidate generation and
+deterministic geometric patch reduction. The same reduced patch is consumed by
+the game-physics and FEM/qopt stacks. It contains points on both shapes, a
+normal, signed gaps and geometric feature identifiers, but no rigid-body
+pointers, generalized coordinates, accumulated impulses or active-set state.
+
+Spatial reduction selects a bounded representative set from one instantaneous
+geometric patch. Temporal matching, impulse persistence and warm start are
+different operations and belong to each solver-side contact-set consumer. The
+scene adapter only maps colliders to dynamics endpoints and converts conventions;
+it does not implement either kind of reduction.
+
+1. Add transient unilateral rows to `DynamicsSystem`. Permanent body, joint,
+   DOF and equality topology remains finalized, while contributions register a
+   different number of inequalities on every step.
+2. Solve the velocity update as a mass-metric QP with permanent equalities and
+   transient normal inequalities. With zero restitution, contact impulses must
+   not add kinetic energy.
+3. Use revolute and prismatic joint limits as the first, fixed-identity client
+   of the unilateral machinery. Limits produce reactions and never clamp an
+   already integrated transform.
+4. Expose a solver-facing point-kinematics contract for maximal bodies,
+   arbitrary articulation links and the static world. It provides point
+   velocity, generalized Jacobian and the transpose force mapping without a
+   dependency on scene entities or colliders.
+5. Implement a public `ContactSet3DContribution` which consumes endpoint pairs,
+   normals, signed gaps and stable caller keys. It owns normal rows, reactions
+   and split penetration correction, but knows nothing about collision queries.
+6. Adapt `CollisionWorld` manifolds in the FEM scene integration layer. The
+   adapter owns collider-to-endpoint mapping, filtering and sign conversion;
+   it does not create another `PhysicsWorld` or reuse the maximal-body impulse
+   solver from `termin-physics`.
+7. Validate the frictionless vertical slice in a separate acceptance project:
+   a maximal body and an articulation link contact static terrain, with gap,
+   reaction, active-set and energy telemetry.
+8. Add deterministic persistent manifold matching and warm start in the contact
+   contribution, then add a documented convex Coulomb-friction approximation.
+
+Floating-base dynamics and standing or locomotion demos follow this contact
+foundation. They are not prerequisites for frictionless contact correctness.
 
 ## Rejected shortcuts
 
