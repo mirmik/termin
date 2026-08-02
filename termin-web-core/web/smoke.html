@@ -3,14 +3,69 @@
 <head><meta charset="utf-8"><title>Termin Web core smoke</title></head>
 <body style="margin: 0; background: #080d18; color: #dce7ff; font-family: monospace">
 <canvas id="termin-canvas" width="640" height="360"></canvas>
+<pre id="host-status">idle</pre>
 <pre id="result">TERMIN_WEB_CORE_SMOKE_RUNNING</pre>
 <script type="module">
 import { createTerminCore } from "./termin-web-core.mjs";
+import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs";
 
 const result = document.querySelector("#result");
+globalThis.__terminSmokeAsyncError = "";
+globalThis.addEventListener("error", (event) => {
+    globalThis.__terminSmokeAsyncError = event.error?.stack ?? event.message;
+});
+globalThis.addEventListener("unhandledrejection", (event) => {
+    globalThis.__terminSmokeAsyncError = event.reason?.stack ?? String(event.reason);
+});
 try {
     const core = await createTerminCore();
+    globalThis.__terminSmokeModule = core.module;
     core.smoke();
+    const host = createTerminWebHost(core, {
+        statusElement: document.querySelector("#host-status"),
+    });
+    await host.load("./fixtures/core-package/");
+    await host.waitForFrames(3);
+    if (host.state !== TerminWebHostState.Running || host.entityCount() !== 1) {
+        throw new Error("runtime host did not enter running state with one entity");
+    }
+    await host.reload("./fixtures/core-package/");
+    await host.waitForFrames(2);
+    if (host.entityCount() !== 1) {
+        throw new Error("runtime host reload lost the entry scene");
+    }
+    await host.teardown();
+    if (host.state !== TerminWebHostState.Idle || host.entityCount() !== 0) {
+        throw new Error("runtime host teardown did not release the package");
+    }
+    try {
+        await host.load("./fixtures/invalid-package/");
+        throw new Error("invalid package unexpectedly loaded");
+    } catch (error) {
+        if (!error.message.includes("version 2") ||
+                host.state !== TerminWebHostState.Error) {
+            throw error;
+        }
+    }
+    try {
+        await host.load("./fixtures/missing-package/");
+        throw new Error("missing package unexpectedly loaded");
+    } catch (error) {
+        if (!error.message.includes("HTTP 404") ||
+                host.state !== TerminWebHostState.Error) {
+            throw error;
+        }
+    }
+    try {
+        await host.load("./fixtures/invalid-path-package/");
+        throw new Error("escaping package path unexpectedly loaded");
+    } catch (error) {
+        if (!error.message.includes("dot segments") ||
+                host.state !== TerminWebHostState.Error) {
+            throw error;
+        }
+    }
+    await host.teardown();
     await core.renderSmoke();
     const canvas = document.querySelector("#termin-canvas");
     canvas.width = 800;

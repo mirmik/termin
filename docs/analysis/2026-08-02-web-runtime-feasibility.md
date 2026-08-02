@@ -422,6 +422,27 @@ WebGPU через Vulkan/SwiftShader и настоящим canvas также п�
 
 Оценка: ещё 4–8 недель, сильно зависит от shader matrix и bootstrap slicing.
 
+Статус на 2026-08-02: первый core-only host slice реализован в карточке
+Kanboard #1241. Web build включает отдельный minimal-only implementation
+`RuntimePackageLoader` без desktop resource domains. ESM host скачивает
+package-v2 manifest и scene files, монтирует их в generation-specific MEMFS,
+запускает entry scene и обслуживает update через `requestAnimationFrame`.
+Состояния загрузки и ошибки опубликованы наружу; repeated load и teardown
+уничтожают сцены и очищают MEMFS.
+
+Детерминированный Node/Wasm smoke проверяет load/update/reload/cleanup и
+отрицательные случаи: неверную версию, отсутствующий manifest, выход пути за
+package root, `MeshComponent` и resource типа `Texture`. Строгий browser smoke
+через Chrome DevTools проходит тот же host lifecycle на живой странице, затем
+рисует WebGPU-кадр и проверяет resize. В ходе проверки устранён ложноположительный
+старый `--dump-dom` gate и исправлена browser semantics `present()`: Emdawnwebgpu
+не допускает `wgpuSurfacePresent`, canvas публикуется самим браузером в конце
+RAF callback.
+
+Это ещё не вся Phase 2: восстановление mesh/texture/material/camera требует
+следующих resource-domain slices, package provider/archive и scene renderer
+composition. Pointer/keyboard input также остаётся отдельным следующим шагом.
+
 ### Phase 3: production runtime
 
 - standard render passes и post-processing capability matrix;
@@ -503,8 +524,8 @@ runtime parity. Three.js viewer можно довести до полезног�
 
 ## Board status
 
-На момент анализа поиск по проектной доске по словам `web`, `wasm` и `browser`
-не нашёл существующих карточек. Создавать implementation card до выбора
-продуктовой цели не следует. После принятия направления первая карточка должна
-описывать ограниченный Phase 0/Phase 1 spike, а не обещать полный browser
-editor.
+Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap
+и Phase 1 WebGPU vertical slice завершены карточками #1238 и #1240; core-only
+runtime package host реализуется в #1241. Последующие #1242 и #1243 расширяют
+scene/render composition и browser input/resize, не смешивая эту работу с
+полным browser editor.

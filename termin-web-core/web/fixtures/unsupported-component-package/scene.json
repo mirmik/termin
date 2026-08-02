@@ -1,0 +1,12 @@
+{
+  "uuid": "web-runtime-unsupported-component-scene",
+  "entities": [
+    {
+      "uuid": "web-runtime-unsupported-component-entity",
+      "name": "UnsupportedMeshEntity",
+      "components": [
+        {"type": "MeshComponent"}
+      ]
+    }
+  ]
+}
