@@ -93,6 +93,8 @@ namespace termin
             return "unsupported-joint";
         case FEMArticulationSceneDiagnostic::DegenerateJointAxis:
             return "degenerate-joint-axis";
+        case FEMArticulationSceneDiagnostic::InvalidJointLimits:
+            return "invalid-joint-limits";
         case FEMArticulationSceneDiagnostic::MissingBody:
             return "missing-body";
         case FEMArticulationSceneDiagnostic::MultipleBodies:
@@ -240,15 +242,6 @@ namespace termin
                 };
                 inertia.inertia_frame = Pose3::identity();
 
-                const std::size_t link_index = result.links.size();
-                result.links.push_back({
-                    .parent_link = parent_link,
-                    .parent_to_joint_zero = parent_to_joint_zero,
-                    .motion_twist_at_joint = motion_twist,
-                    .joint_to_link = joint_to_link,
-                    .inertia = inertia,
-                    .diagnostic_name = entity_name(body_entity),
-                });
                 const double coordinate_scale = joint->get_coordinate_scale();
                 if (!std::isfinite(coordinate_scale) || coordinate_scale <= 0.0)
                 {
@@ -256,6 +249,46 @@ namespace termin
                          joint_entity);
                     return;
                 }
+                qopt::ArticulationJointLimits3D limits;
+                FEMJointLimitComponent* authored_limits =
+                    joint_entity.get_component<FEMJointLimitComponent>();
+                if (authored_limits != nullptr && authored_limits->enabled())
+                {
+                    if ((authored_limits->minimum_enabled &&
+                         !std::isfinite(authored_limits->minimum_coordinate)) ||
+                        (authored_limits->maximum_enabled &&
+                         !std::isfinite(authored_limits->maximum_coordinate)) ||
+                        (authored_limits->minimum_enabled &&
+                         authored_limits->maximum_enabled &&
+                         authored_limits->minimum_coordinate >
+                             authored_limits->maximum_coordinate))
+                    {
+                        fail(FEMArticulationSceneDiagnostic::InvalidJointLimits,
+                             joint_entity);
+                        return;
+                    }
+                    if (authored_limits->minimum_enabled)
+                    {
+                        limits.minimum = authored_limits->minimum_coordinate *
+                                         coordinate_scale;
+                    }
+                    if (authored_limits->maximum_enabled)
+                    {
+                        limits.maximum = authored_limits->maximum_coordinate *
+                                         coordinate_scale;
+                    }
+                }
+
+                const std::size_t link_index = result.links.size();
+                result.links.push_back({
+                    .parent_link = parent_link,
+                    .parent_to_joint_zero = parent_to_joint_zero,
+                    .motion_twist_at_joint = motion_twist,
+                    .joint_to_link = joint_to_link,
+                    .inertia = inertia,
+                    .limits = limits,
+                    .diagnostic_name = entity_name(body_entity),
+                });
                 result.state.coordinates.push_back(joint->coordinate *
                                                    coordinate_scale);
                 result.state.velocities.push_back(0.0);

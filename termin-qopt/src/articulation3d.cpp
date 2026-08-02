@@ -3,6 +3,7 @@
 #include <termin/geom/se3.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <exception>
@@ -51,6 +52,8 @@ namespace termin::qopt
             return "invalid_inertia";
         case Articulation3DDiagnostic::InvalidState:
             return "invalid_state";
+        case Articulation3DDiagnostic::InvalidJointLimits:
+            return "invalid_joint_limits";
         case Articulation3DDiagnostic::NonFiniteInput:
             return "non_finite_input";
         }
@@ -69,6 +72,8 @@ namespace termin::qopt
         link_poses_world_.resize(links_.size());
         motion_twists_at_link_.resize(links_.size());
         link_velocities_local_.resize(links_.size());
+        joint_limit_rows_.resize(links_.size());
+        joint_limit_states_.resize(links_.size());
         diagnostic_ = validate_model();
         if (diagnostic_ == Articulation3DDiagnostic::None &&
             (!gravity_world_.is_finite() || !update_kinematics()))
@@ -79,6 +84,7 @@ namespace termin::qopt
         state_snapshot_.coordinates.assign(links_.size(), 0.0);
         state_snapshot_.velocities.assign(links_.size(), 0.0);
         acceleration_snapshot_.assign(links_.size(), 0.0);
+        joint_limit_state_snapshot_.resize(links_.size());
     }
 
     Articulation3DDiagnostic Articulation3DContribution::validate_model() const noexcept
@@ -116,6 +122,15 @@ namespace termin::qopt
             if (!link.inertia.is_valid())
             {
                 return Articulation3DDiagnostic::InvalidInertia;
+            }
+            if ((link.limits.minimum.has_value() &&
+                 !std::isfinite(*link.limits.minimum)) ||
+                (link.limits.maximum.has_value() &&
+                 !std::isfinite(*link.limits.maximum)) ||
+                (link.limits.minimum.has_value() && link.limits.maximum.has_value() &&
+                 *link.limits.minimum > *link.limits.maximum))
+            {
+                return Articulation3DDiagnostic::InvalidJointLimits;
             }
         }
         return Articulation3DDiagnostic::None;
@@ -163,6 +178,12 @@ namespace termin::qopt
     Articulation3DContribution::link_velocities_local() const noexcept
     {
         return link_velocities_local_;
+    }
+
+    const std::vector<ArticulationJointLimitState3D>&
+    Articulation3DContribution::joint_limit_states() const noexcept
+    {
+        return joint_limit_states_;
     }
 
     DynamicsDofHandle Articulation3DContribution::dofs() const noexcept
@@ -386,6 +407,79 @@ namespace termin::qopt
         return result.diagnostic;
     }
 
+    AssemblyDiagnostic Articulation3DContribution::register_unilateral_constraints(
+        DynamicsUnilateralTopology& topology, double time_step) noexcept
+    {
+        if (diagnostic_ != Articulation3DDiagnostic::None ||
+            !std::isfinite(time_step) || time_step <= 0.0 ||
+            joint_limit_rows_.size() != links_.size() ||
+            joint_limit_states_.size() != links_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation '%s' cannot register "
+                         "joint limits\n",
+                         diagnostic_name_.c_str());
+            return AssemblyDiagnostic::NonFiniteContribution;
+        }
+
+        unilateral_time_step_ = time_step;
+        std::fill(joint_limit_rows_.begin(), joint_limit_rows_.end(), JointLimitRows{});
+        std::fill(joint_limit_states_.begin(),
+                  joint_limit_states_.end(),
+                  ArticulationJointLimitState3D{});
+        try
+        {
+            const std::string prefix =
+                diagnostic_name_.empty() ? "articulation" : diagnostic_name_;
+            for (std::size_t index = 0; index < links_.size(); ++index)
+            {
+                const ArticulationJointLimits3D& limits = links_[index].limits;
+                const double coordinate = state_.coordinates[index];
+                const double predicted_coordinate =
+                    coordinate + time_step * state_.velocities[index];
+                if (limits.minimum.has_value() &&
+                    (coordinate <= *limits.minimum ||
+                     predicted_coordinate <= *limits.minimum))
+                {
+                    const auto result = topology.register_constraint(
+                        1, prefix + ".joint_limit.minimum." + std::to_string(index));
+                    if (!result.ok())
+                    {
+                        return result.diagnostic;
+                    }
+                    joint_limit_rows_[index].minimum = result.handle;
+                }
+                if (limits.maximum.has_value() &&
+                    (coordinate >= *limits.maximum ||
+                     predicted_coordinate >= *limits.maximum))
+                {
+                    const auto result = topology.register_constraint(
+                        1, prefix + ".joint_limit.maximum." + std::to_string(index));
+                    if (!result.ok())
+                    {
+                        return result.diagnostic;
+                    }
+                    joint_limit_rows_[index].maximum = result.handle;
+                }
+            }
+            return AssemblyDiagnostic::None;
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation joint-limit topology "
+                         "failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] articulation joint-limit topology "
+                         "failed with an unknown exception\n");
+        }
+        return AssemblyDiagnostic::InternalFailure;
+    }
+
     AssemblyDiagnostic
     Articulation3DContribution::assemble(DynamicsAssembly& assembly,
                                          DynamicsAssemblyPhase phase) noexcept
@@ -423,7 +517,77 @@ namespace termin::qopt
                 assembly.add_mass(dofs_, dofs_, matrix_view(mass, links_.size()));
             const AssemblyDiagnostic load_result =
                 assembly.add_load(dofs_, vector_view(load));
-            return mass_result == AssemblyDiagnostic::None ? load_result : mass_result;
+            if (mass_result != AssemblyDiagnostic::None)
+            {
+                return mass_result;
+            }
+            if (load_result != AssemblyDiagnostic::None ||
+                phase != DynamicsAssemblyPhase::VelocityProjection)
+            {
+                return load_result;
+            }
+            if (!std::isfinite(unilateral_time_step_) || unilateral_time_step_ <= 0.0)
+            {
+                return AssemblyDiagnostic::NonFiniteContribution;
+            }
+
+            std::vector<double> row(links_.size(), 0.0);
+            for (std::size_t index = 0; index < links_.size(); ++index)
+            {
+                const ArticulationJointLimits3D& limits = links_[index].limits;
+                row[index] = -1.0;
+                if (joint_limit_rows_[index].minimum.valid())
+                {
+                    const double coordinate = snapshot_ready_
+                                                  ? state_snapshot_.coordinates[index]
+                                                  : state_.coordinates[index];
+                    const double margin = std::max(0.0, coordinate - *limits.minimum);
+                    const std::array<double, 1> limit{
+                        margin / unilateral_time_step_,
+                    };
+                    AssemblyDiagnostic result = assembly.add_unilateral_jacobian(
+                        joint_limit_rows_[index].minimum,
+                        dofs_,
+                        ConstDenseMatrixView::row_major(row.data(), 1, links_.size()));
+                    if (result == AssemblyDiagnostic::None)
+                    {
+                        result = assembly.add_unilateral_limit(
+                            joint_limit_rows_[index].minimum,
+                            {limit.data(), limit.size(), 1});
+                    }
+                    if (result != AssemblyDiagnostic::None)
+                    {
+                        return result;
+                    }
+                }
+                row[index] = 1.0;
+                if (joint_limit_rows_[index].maximum.valid())
+                {
+                    const double coordinate = snapshot_ready_
+                                                  ? state_snapshot_.coordinates[index]
+                                                  : state_.coordinates[index];
+                    const double margin = std::max(0.0, *limits.maximum - coordinate);
+                    const std::array<double, 1> limit{
+                        margin / unilateral_time_step_,
+                    };
+                    AssemblyDiagnostic result = assembly.add_unilateral_jacobian(
+                        joint_limit_rows_[index].maximum,
+                        dofs_,
+                        ConstDenseMatrixView::row_major(row.data(), 1, links_.size()));
+                    if (result == AssemblyDiagnostic::None)
+                    {
+                        result = assembly.add_unilateral_limit(
+                            joint_limit_rows_[index].maximum,
+                            {limit.data(), limit.size(), 1});
+                    }
+                    if (result != AssemblyDiagnostic::None)
+                    {
+                        return result;
+                    }
+                }
+                row[index] = 0.0;
+            }
+            return AssemblyDiagnostic::None;
         }
         catch (const std::exception& error)
         {
@@ -451,6 +615,9 @@ namespace termin::qopt
         std::copy(accelerations_.begin(),
                   accelerations_.end(),
                   acceleration_snapshot_.begin());
+        std::copy(joint_limit_states_.begin(),
+                  joint_limit_states_.end(),
+                  joint_limit_state_snapshot_.begin());
         snapshot_ready_ = true;
         return AssemblyDiagnostic::None;
     }
@@ -473,8 +640,52 @@ namespace termin::qopt
             std::copy(acceleration_snapshot_.begin(),
                       acceleration_snapshot_.end(),
                       accelerations_.begin());
+            std::copy(joint_limit_state_snapshot_.begin(),
+                      joint_limit_state_snapshot_.end(),
+                      joint_limit_states_.begin());
             (void)update_kinematics();
             snapshot_ready_ = false;
+        }
+    }
+
+    void Articulation3DContribution::apply_unilateral_solution(
+        const DynamicsTopology&,
+        const DynamicsUnilateralTopology& unilateral_topology,
+        ConstDenseVectorView reactions,
+        ConstDenseVectorView tight_mask) noexcept
+    {
+        if (joint_limit_rows_.size() != links_.size() ||
+            joint_limit_states_.size() != links_.size())
+        {
+            return;
+        }
+        for (std::size_t index = 0; index < links_.size(); ++index)
+        {
+            ArticulationJointLimitState3D& state = joint_limit_states_[index];
+            const auto read = [&](DynamicsUnilateralConstraintHandle handle,
+                                  double& reaction,
+                                  bool& active)
+            {
+                if (!handle.valid())
+                {
+                    return;
+                }
+                const DenseBlockInfo info =
+                    unilateral_topology.constraint_topology().block_info(handle.block);
+                if (!info.ok() || info.size != 1 || info.offset >= reactions.size ||
+                    info.offset >= tight_mask.size)
+                {
+                    return;
+                }
+                reaction = reactions[info.offset];
+                active = tight_mask[info.offset] == 1.0;
+            };
+            read(joint_limit_rows_[index].minimum,
+                 state.minimum_reaction,
+                 state.minimum_active);
+            read(joint_limit_rows_[index].maximum,
+                 state.maximum_reaction,
+                 state.maximum_active);
         }
     }
 

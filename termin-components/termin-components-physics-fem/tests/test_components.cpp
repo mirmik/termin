@@ -3,6 +3,7 @@
 GUARD_TEST_MAIN();
 
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 #include <components/rotator_component.hpp>
@@ -29,6 +30,7 @@ namespace
             termin::FEMRevoluteJointComponent::register_type();
             termin::FEMArticulationComponent::register_type();
             termin::FEMArticulationMotorComponent::register_type();
+            termin::FEMJointLimitComponent::register_type();
             termin::FEMJointServoComponent::register_type();
             termin::FEMPhysicsWorldComponent::register_type();
             return true;
@@ -188,6 +190,20 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     restored_world.deserialize_data(&world_data);
     CHECK(std::abs(restored_world.time_step - 0.005) < 1.0e-12);
     tc_value_free(&world_data);
+
+    FEMJointLimitComponent limits;
+    limits.minimum_enabled = true;
+    limits.maximum_enabled = true;
+    limits.minimum_coordinate = -30.0;
+    limits.maximum_coordinate = 45.0;
+    tc_value limit_data = limits.serialize_data();
+    FEMJointLimitComponent restored_limits;
+    restored_limits.deserialize_data(&limit_data);
+    CHECK(restored_limits.minimum_enabled);
+    CHECK(restored_limits.maximum_enabled);
+    CHECK(std::abs(restored_limits.minimum_coordinate + 30.0) < 1.0e-12);
+    CHECK(std::abs(restored_limits.maximum_coordinate - 45.0) < 1.0e-12);
+    tc_value_free(&limit_data);
 }
 
 TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
@@ -285,6 +301,62 @@ TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
     CHECK(std::abs(compiled.state.coordinates[1] + 0.4) < 1.0e-12);
 
     pendulum.scene.destroy();
+}
+
+TEST_CASE("scene articulation compiler converts authored joint limits")
+{
+    using namespace termin;
+
+    DoublePendulumScene pendulum = make_double_pendulum_scene();
+    pendulum.joint_a->set_coordinate_scale(0.1);
+    auto* limits = new FEMJointLimitComponent();
+    limits->minimum_enabled = true;
+    limits->maximum_enabled = true;
+    limits->minimum_coordinate = -2.0;
+    limits->maximum_coordinate = 3.0;
+    pendulum.joint_a->entity().add_component(limits);
+
+    const FEMArticulationSceneCompilation compiled =
+        compile_fem_articulation_scene(pendulum.root);
+    REQUIRE(compiled.ok());
+    REQUIRE(compiled.links[0].limits.minimum.has_value());
+    REQUIRE(compiled.links[0].limits.maximum.has_value());
+    CHECK(std::abs(*compiled.links[0].limits.minimum + 0.2) < 1.0e-12);
+    CHECK(std::abs(*compiled.links[0].limits.maximum - 0.3) < 1.0e-12);
+    CHECK(std::abs(compiled.state.coordinates[0] - 0.07) < 1.0e-12);
+
+    pendulum.scene.destroy();
+}
+
+TEST_CASE("scene articulation compiler rejects invalid joint limits")
+{
+    using namespace termin;
+
+    DoublePendulumScene reversed = make_double_pendulum_scene();
+    auto* reversed_limits = new FEMJointLimitComponent();
+    reversed_limits->minimum_enabled = true;
+    reversed_limits->maximum_enabled = true;
+    reversed_limits->minimum_coordinate = 2.0;
+    reversed_limits->maximum_coordinate = -1.0;
+    reversed.joint_a->entity().add_component(reversed_limits);
+    const FEMArticulationSceneCompilation reversed_compilation =
+        compile_fem_articulation_scene(reversed.root);
+    CHECK(reversed_compilation.diagnostic ==
+          FEMArticulationSceneDiagnostic::InvalidJointLimits);
+    CHECK(reversed_compilation.diagnostic_entity == "Hip Joint");
+    reversed.scene.destroy();
+
+    DoublePendulumScene non_finite = make_double_pendulum_scene();
+    auto* non_finite_limits = new FEMJointLimitComponent();
+    non_finite_limits->minimum_enabled = true;
+    non_finite_limits->minimum_coordinate =
+        std::numeric_limits<double>::quiet_NaN();
+    non_finite.joint_a->entity().add_component(non_finite_limits);
+    const FEMArticulationSceneCompilation non_finite_compilation =
+        compile_fem_articulation_scene(non_finite.root);
+    CHECK(non_finite_compilation.diagnostic ==
+          FEMArticulationSceneDiagnostic::InvalidJointLimits);
+    non_finite.scene.destroy();
 }
 
 TEST_CASE("FEM world advances a compiled reduced double pendulum")

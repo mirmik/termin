@@ -1,8 +1,8 @@
 # Hierarchical multibody authoring
 
-Status: fixed-base articulation and bounded servo slice implemented,
-2026-08-02. Floating bases, joint limits, contacts, and HQP control remain
-future work.
+Status: fixed-base articulation, bounded servo, and unilateral joint-limit
+slices implemented, 2026-08-02. Floating bases, contacts, and HQP control
+remain future work.
 
 ## Goal
 
@@ -231,10 +231,13 @@ compiler and motor contribution now build on that boundary.
 Floating roots, direct-effort authoring, a branching quadruped fixture, and
 broader reaction/error tests remain in this slice.
 
-### Slice 3: joint bounds
+### Slice 3: joint bounds (implemented)
 
-- proper unilateral min/max constraints for both joint types;
-- limit activation/deactivation and invalid-range tests.
+- optional unilateral min/max constraints for revolute and prismatic joints;
+- predictive transient-row activation in the velocity projection;
+- separate minimum/maximum reactions and active diagnostics;
+- `FEMJointLimitComponent` authoring in kinematic coordinate units;
+- activation, release, energy, invalid-range, and scene compilation tests.
 
 ### Slice 4: contacts
 

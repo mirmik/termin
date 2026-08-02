@@ -147,6 +147,20 @@ namespace
                                                   {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_QOPT_CHECK(invalid_parent.diagnostic() ==
                           Articulation3DDiagnostic::InvalidParent);
+
+        links = double_pendulum_links();
+        links[0].limits = {.minimum = 1.0, .maximum = -1.0};
+        Articulation3DContribution invalid_limits(std::move(links),
+                                                  {{0.0, 0.0}, {0.0, 0.0}});
+        TERMIN_QOPT_CHECK(invalid_limits.diagnostic() ==
+                          Articulation3DDiagnostic::InvalidJointLimits);
+
+        links = double_pendulum_links();
+        links[0].limits.minimum = std::numeric_limits<double>::quiet_NaN();
+        Articulation3DContribution non_finite_limits(std::move(links),
+                                                     {{0.0, 0.0}, {0.0, 0.0}});
+        TERMIN_QOPT_CHECK(non_finite_limits.diagnostic() ==
+                          Articulation3DDiagnostic::InvalidJointLimits);
     }
 
     void test_double_pendulum_equations()
@@ -221,6 +235,120 @@ namespace
         check_near(system.mass[0], kMass, 1e-12);
         check_near(system.load[0], -kMass * kGravity, 1e-12);
         check_near(contribution.link_poses_world()[0].lin.z, 0.7, 1e-12);
+    }
+
+    std::vector<ArticulationLink3D> limited_link(bool prismatic)
+    {
+        return {
+            {
+                .parent_link = articulation_world_link,
+                .parent_to_joint_zero = Pose3::identity(),
+                .motion_twist_at_joint = prismatic
+                                             ? Screw3{Vec3::zero(), Vec3::unit_z()}
+                                             : Screw3{Vec3::unit_y(), Vec3::zero()},
+                .joint_to_link = Pose3::identity(),
+                .inertia = rod_inertia(),
+                .limits = {.minimum = 0.0, .maximum = 1.0},
+                .diagnostic_name = prismatic ? "limited-slider" : "limited-hinge",
+            },
+        };
+    }
+
+    void test_joint_limits()
+    {
+        Multibody3DSystem system;
+        auto contribution = std::make_unique<Articulation3DContribution>(
+            limited_link(false),
+            Articulation3DState{{0.0}, {-2.0}},
+            Vec3::zero(),
+            "limited-revolute");
+        Articulation3DContribution* state = contribution.get();
+        TERMIN_QOPT_CHECK(system.add_contribution(std::move(contribution)) ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+
+        const double energy_before = state->total_energy();
+        const DynamicsSystemStepResult lower_hit = system.step(options(0.01));
+        TERMIN_QOPT_CHECK(lower_hit.ok());
+        TERMIN_QOPT_CHECK(lower_hit.unilateral_constraint_count == 1);
+        TERMIN_QOPT_CHECK(std::abs(state->state().velocities[0]) < 1e-10);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_reaction > 0.0);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_active);
+        TERMIN_QOPT_CHECK(std::abs(state->joint_limit_states()[0].maximum_reaction) <
+                          1e-12);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].signed_effort() > 0.0);
+        TERMIN_QOPT_CHECK(state->total_energy() <= energy_before + 1e-12);
+
+        TERMIN_QOPT_CHECK(state->set_state({{0.0}, {1.0}}) ==
+                          Articulation3DDiagnostic::None);
+        const DynamicsSystemStepResult lower_release = system.step(options(0.01));
+        TERMIN_QOPT_CHECK(lower_release.ok());
+        TERMIN_QOPT_CHECK(lower_release.unilateral_constraint_count == 1);
+        TERMIN_QOPT_CHECK(state->state().velocities[0] > 0.9);
+        TERMIN_QOPT_CHECK(std::abs(state->joint_limit_states()[0].minimum_reaction) <
+                          1e-12);
+        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].minimum_active);
+
+        TERMIN_QOPT_CHECK(state->set_state({{1.0}, {2.0}}) ==
+                          Articulation3DDiagnostic::None);
+        const double upper_energy_before = state->total_energy();
+        const DynamicsSystemStepResult upper_hit = system.step(options(0.01));
+        TERMIN_QOPT_CHECK(upper_hit.ok());
+        TERMIN_QOPT_CHECK(upper_hit.unilateral_constraint_count == 1);
+        TERMIN_QOPT_CHECK(std::abs(state->state().velocities[0]) < 1e-10);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].maximum_reaction > 0.0);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].maximum_active);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].signed_effort() < 0.0);
+        TERMIN_QOPT_CHECK(state->total_energy() <= upper_energy_before + 1e-12);
+
+        TERMIN_QOPT_CHECK(state->set_state({{0.5}, {0.1}}) ==
+                          Articulation3DDiagnostic::None);
+        const DynamicsSystemStepResult inactive = system.step(options(0.01));
+        TERMIN_QOPT_CHECK(inactive.ok());
+        TERMIN_QOPT_CHECK(inactive.unilateral_constraint_count == 0);
+        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].minimum_active);
+        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].maximum_active);
+
+        TERMIN_QOPT_CHECK(state->set_state({{0.05}, {-10.0}}) ==
+                          Articulation3DDiagnostic::None);
+        const DynamicsSystemStepResult predicted_hit = system.step(options(0.01));
+        TERMIN_QOPT_CHECK(predicted_hit.ok());
+        TERMIN_QOPT_CHECK(predicted_hit.unilateral_constraint_count == 1);
+        check_near(state->state().velocities[0], -5.0, 1e-10);
+        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_reaction > 0.0);
+
+        Multibody3DSystem prismatic_system;
+        auto prismatic = std::make_unique<Articulation3DContribution>(
+            limited_link(true),
+            Articulation3DState{{1.0}, {1.5}},
+            Vec3::zero(),
+            "limited-prismatic");
+        Articulation3DContribution* prismatic_state = prismatic.get();
+        TERMIN_QOPT_CHECK(prismatic_system.add_contribution(std::move(prismatic)) ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(prismatic_system.finalize() ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(prismatic_system.step(options(0.01)).ok());
+        TERMIN_QOPT_CHECK(std::abs(prismatic_state->state().velocities[0]) < 1e-10);
+        TERMIN_QOPT_CHECK(prismatic_state->joint_limit_states()[0].maximum_reaction >
+                          0.0);
+
+        auto no_limits = limited_link(false);
+        no_limits[0].limits = {};
+        Multibody3DSystem unlimited_system;
+        auto unlimited = std::make_unique<Articulation3DContribution>(
+            std::move(no_limits),
+            Articulation3DState{{0.0}, {-2.0}},
+            Vec3::zero(),
+            "unlimited");
+        TERMIN_QOPT_CHECK(unlimited_system.add_contribution(std::move(unlimited)) ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(unlimited_system.finalize() ==
+                          DynamicsSystemDiagnostic::None);
+        const DynamicsSystemStepResult unlimited_step =
+            unlimited_system.step(options(0.01));
+        TERMIN_QOPT_CHECK(unlimited_step.ok());
+        TERMIN_QOPT_CHECK(unlimited_step.unilateral_constraint_count == 0);
     }
 
     void test_branching_forward_kinematics()
@@ -357,6 +485,7 @@ int main()
     test_double_pendulum_equations();
     test_velocity_bias();
     test_prismatic_joint_equations();
+    test_joint_limits();
     test_branching_forward_kinematics();
     test_reduced_matches_maximal_double_pendulum();
     return 0;

@@ -70,11 +70,15 @@ fits the generic `DynamicsSystem` contract while leaving CRBA as an internal
 optimization. Internal tree joints need no constraint rows or projection.
 Analytic revolute/prismatic equations, branching, energy, and a
 double-pendulum comparison against the maximal-coordinate model are covered by
-native tests. The separate `termin-components-physics-fem` layer now compiles
+native tests. Optional per-link minimum and maximum coordinates become
+transient velocity inequalities only when reached or predictively crossed;
+their public state reports separate reactions and active flags without
+clamping the coordinate after integration. The separate
+`termin-components-physics-fem` layer now compiles
 an explicit root/joint/body entity hierarchy into this public model and keeps
 solved joint coordinates synchronized with `RotatorComponent` or
-`ActuatorComponent`. Floating bases, link-level external constraints, drives,
-and a linear-time dynamics backend remain subsequent slices.
+`ActuatorComponent`. Floating bases, link-level external constraints, and a
+linear-time dynamics backend remain subsequent slices.
 
 The language-neutral solver contract lives in
 [`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
