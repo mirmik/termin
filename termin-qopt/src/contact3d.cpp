@@ -119,11 +119,23 @@ namespace termin::qopt
         return endpoint;
     }
 
+    ContactEndpoint3D
+    ContactEndpoint3D::articulation_base(Articulation3DContribution& articulation,
+                                         termin::Vec3 point_local) noexcept
+    {
+        ContactEndpoint3D endpoint;
+        endpoint.kind_ = Kind::ArticulationBase;
+        endpoint.articulation_ = &articulation;
+        endpoint.point_ = point_local;
+        return endpoint;
+    }
+
     bool ContactEndpoint3D::valid() const noexcept
     {
         return kind_ != Kind::Invalid && point_.is_finite() &&
                (kind_ == Kind::StaticWorld ||
                 (kind_ == Kind::RigidBody && body_ != nullptr) ||
+                (kind_ == Kind::ArticulationBase && articulation_ != nullptr) ||
                 (kind_ == Kind::ArticulationLink && articulation_ != nullptr));
     }
 
@@ -142,6 +154,12 @@ namespace termin::qopt
             if (body_ != nullptr)
             {
                 return body_->point_kinematics(point_);
+            }
+            break;
+        case Kind::ArticulationBase:
+            if (articulation_ != nullptr)
+            {
+                return articulation_->floating_base_point_kinematics(point_);
             }
             break;
         case Kind::ArticulationLink:

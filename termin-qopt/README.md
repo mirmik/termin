@@ -59,9 +59,12 @@ that class is only a point joint; the native revolute contract is intentionally
 stricter. Native solver/model Python bindings have not migrated; see
 [CPP_MIGRATION.md](CPP_MIGRATION.md).
 
-The first reduced-coordinate articulation slice is native as well.
-`Articulation3DContribution` represents a fixed-base tree as one generalized
-DOF block with one scalar coordinate per link joint. Each link stores the
+The reduced-coordinate articulation path is native as well.
+`Articulation3DContribution` represents either a fixed-base tree with one
+scalar coordinate per link joint, or a floating-base tree whose explicit root
+rigid body contributes six local spatial DOFs before the joint coordinates.
+The floating root owns a world pose, right-trivialized local velocity and
+spatial inertia; it is not encoded as a fictitious six-coordinate joint. Each link stores the
 parent-to-zero-joint pose, a local one-DOF motion twist, the joint-to-link pose,
 and spatial inertia. Forward kinematics uses `Exp(S q)` and inverse dynamics
 uses a recursive Newton-Euler pass. The current correctness backend obtains the
@@ -70,14 +73,17 @@ fits the generic `DynamicsSystem` contract while leaving CRBA as an internal
 optimization. Internal tree joints need no constraint rows or projection.
 Analytic revolute/prismatic equations, branching, energy, and a
 double-pendulum comparison against the maximal-coordinate model are covered by
-native tests. Optional per-link minimum and maximum coordinates become
+native tests. Floating-root RNEA, mass/bias assembly, SE(3) midpoint
+integration, energy, rollback, base/link point Jacobians and contact endpoints
+are checked against the independent `RigidBody3DContribution` oracle and a
+coupled `6 + N` tree. Optional per-link minimum and maximum coordinates become
 transient velocity inequalities only when reached or predictively crossed;
 their public state reports separate reactions and active flags without
 clamping the coordinate after integration.
 
 The solver-neutral `PointKinematics3D` contract now gives a static world point,
-a material point on `RigidBody3DContribution`, or a material point on any
-`Articulation3DContribution` link the same representation: world position,
+a material point on `RigidBody3DContribution`, or a material point on an
+`Articulation3DContribution` base/link the same representation: world position,
 world linear velocity, the owning DOF block, and a row-major `3 x n` generalized
 Jacobian. `map_force_to_generalized_effort()` applies `J^T` without exposing
 Eigen. The model owner keeps local spatial-vector conventions internal; contact

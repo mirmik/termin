@@ -18,8 +18,11 @@
 namespace termin::qopt
 {
 
-    inline constexpr std::size_t articulation_world_link =
+    inline constexpr std::size_t articulation_root_frame =
         std::numeric_limits<std::size_t>::max();
+    // Compatibility spelling for fixed-base callers. New code should use the
+    // formulation-neutral root-frame name.
+    inline constexpr std::size_t articulation_world_link = articulation_root_frame;
 
     enum class Articulation3DDiagnostic : std::uint8_t
     {
@@ -57,12 +60,12 @@ namespace termin::qopt
     };
 
     // One physical link and the one-DOF joint that attaches it to its parent.
-    // Links must be stored in topological order. The world parent denotes a
-    // fixed base frame, so this first vertical slice has one reduced DOF per
-    // link and no floating-base coordinates.
+    // Links must be stored in topological order. The root-frame sentinel
+    // denotes the articulation root frame: inertial world for a fixed base,
+    // or the explicit root body frame for a floating base.
     struct ArticulationLink3D
     {
-        std::size_t parent_link = articulation_world_link;
+        std::size_t parent_link = articulation_root_frame;
         termin::Pose3 parent_to_joint_zero = termin::Pose3::identity();
         // Motion twist expressed at the moving joint-frame origin. A canonical
         // revolute joint uses {unit_axis, 0}; a prismatic joint uses
@@ -81,13 +84,30 @@ namespace termin::qopt
         std::vector<double> velocities;
     };
 
-    // A reduced fixed-base tree contribution. Internal joints are satisfied by
-    // construction: the generic DynamicsSystem sees one N-dimensional block,
-    // not N maximal rigid bodies and their constraint rows.
+    // The physical root body of a floating-base articulation. Its velocity is
+    // the right-trivialized body twist at the base-frame origin. In the
+    // generalized block the corresponding six entries precede all joint
+    // velocities and use the standard vw order: linear, then angular.
+    struct ArticulationFloatingBase3D
+    {
+        termin::SpatialInertia3 inertia;
+        termin::Pose3 pose_world = termin::Pose3::identity();
+        termin::Screw3 velocity_local = termin::Screw3::zero();
+        std::string diagnostic_name;
+    };
+
+    // A reduced fixed- or floating-base tree contribution. Internal joints are
+    // satisfied by construction: the generic DynamicsSystem sees one N or
+    // (6 + N)-dimensional block, not maximal rigid bodies and constraint rows.
     class TERMIN_QOPT_API Articulation3DContribution final : public DynamicsContribution
     {
       public:
         Articulation3DContribution(std::vector<ArticulationLink3D> links,
+                                   Articulation3DState initial_state,
+                                   termin::Vec3 gravity_world = termin::Vec3::zero(),
+                                   std::string_view diagnostic_name = {});
+        Articulation3DContribution(ArticulationFloatingBase3D floating_base,
+                                   std::vector<ArticulationLink3D> links,
                                    Articulation3DState initial_state,
                                    termin::Vec3 gravity_world = termin::Vec3::zero(),
                                    std::string_view diagnostic_name = {});
@@ -97,6 +117,9 @@ namespace termin::qopt
         [[nodiscard]] std::size_t dof_count() const noexcept;
         [[nodiscard]] const std::vector<ArticulationLink3D>& links() const noexcept;
         [[nodiscard]] const Articulation3DState& state() const noexcept;
+        [[nodiscard]] bool has_floating_base() const noexcept;
+        [[nodiscard]] const std::optional<ArticulationFloatingBase3D>&
+        floating_base() const noexcept;
         [[nodiscard]] const std::vector<double>& accelerations() const noexcept;
         [[nodiscard]] const std::vector<termin::Pose3>&
         link_poses_world() const noexcept;
@@ -109,9 +132,14 @@ namespace termin::qopt
         [[nodiscard]] PointKinematics3DResult
         point_kinematics(std::size_t link_index,
                          termin::Vec3 point_local) const noexcept;
+        [[nodiscard]] PointKinematics3DResult
+        floating_base_point_kinematics(termin::Vec3 point_local) const noexcept;
 
         [[nodiscard]] Articulation3DDiagnostic
         set_state(Articulation3DState state) noexcept;
+        [[nodiscard]] Articulation3DDiagnostic
+        set_floating_base_state(termin::Pose3 pose_world,
+                                termin::Screw3 velocity_local) noexcept;
         [[nodiscard]] Articulation3DDiagnostic
         set_gravity_world(termin::Vec3 gravity) noexcept;
         [[nodiscard]] double total_energy() const noexcept;
@@ -156,6 +184,7 @@ namespace termin::qopt
       private:
         std::vector<ArticulationLink3D> links_;
         Articulation3DState state_;
+        std::optional<ArticulationFloatingBase3D> floating_base_;
         std::vector<double> accelerations_;
         termin::Vec3 gravity_world_;
         std::string diagnostic_name_;
@@ -178,6 +207,7 @@ namespace termin::qopt
         double unilateral_time_step_ = 0.0;
 
         Articulation3DState state_snapshot_;
+        std::optional<ArticulationFloatingBase3D> floating_base_snapshot_;
         std::vector<double> acceleration_snapshot_;
         std::vector<ArticulationJointLimitState3D> joint_limit_state_snapshot_;
         bool snapshot_ready_ = false;

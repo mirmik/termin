@@ -1,9 +1,11 @@
 #include <termin/qopt/articulation3d.hpp>
+#include <termin/qopt/contact3d.hpp>
 #include <termin/qopt/multibody3d.hpp>
 
 #include "test_check.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <numbers>
@@ -64,7 +66,7 @@ namespace
         std::vector<double> load;
     };
 
-    AssembledSystem assemble(Articulation3DContribution& contribution)
+    AssembledSystem assemble(DynamicsContribution& contribution)
     {
         DynamicsTopology topology;
         TERMIN_QOPT_CHECK(contribution.register_topology(topology) ==
@@ -86,9 +88,16 @@ namespace
             });
         TERMIN_QOPT_CHECK(assembly.valid());
         TERMIN_QOPT_CHECK(assembly.clear() == AssemblyDiagnostic::None);
-        TERMIN_QOPT_CHECK(
-            contribution.assemble(assembly, DynamicsAssemblyPhase::Acceleration) ==
-            AssemblyDiagnostic::None);
+        const AssemblyDiagnostic diagnostic =
+            contribution.assemble(assembly, DynamicsAssemblyPhase::Acceleration);
+        if (diagnostic != AssemblyDiagnostic::None)
+        {
+            std::fprintf(stderr,
+                         "articulation assembly diagnostic=%s dofs=%zu\n",
+                         assembly_diagnostic_name(diagnostic).data(),
+                         dofs);
+        }
+        TERMIN_QOPT_CHECK(diagnostic == AssemblyDiagnostic::None);
         return result;
     }
 
@@ -161,6 +170,210 @@ namespace
                                                      {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_QOPT_CHECK(non_finite_limits.diagnostic() ==
                           Articulation3DDiagnostic::InvalidJointLimits);
+    }
+
+    void test_floating_base_matches_rigid_body()
+    {
+        const SpatialInertia3 inertia{
+            2.0,
+            {0.7, 0.9, 1.1},
+            Pose3::translation(0.1, -0.2, 0.05),
+        };
+        const Pose3 pose{
+            Quat::from_axis_angle(Vec3{1.0, 2.0, -1.0}.normalized(), 0.4),
+            {0.3, -0.5, 1.7},
+        };
+        const Screw3 velocity{{0.2, -0.1, 0.3}, {0.4, 0.25, -0.15}};
+        const Vec3 gravity{0.0, 0.0, -kGravity};
+
+        Articulation3DContribution floating(
+            ArticulationFloatingBase3D{inertia, pose, velocity, "base"},
+            {},
+            {{}, {}},
+            gravity,
+            "floating-only");
+        RigidBody3DContribution rigid(
+            inertia, RigidBody3DState{pose, velocity}, gravity, "rigid-oracle");
+        TERMIN_QOPT_CHECK(floating.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(floating.has_floating_base());
+        TERMIN_QOPT_CHECK(floating.link_count() == 0);
+        TERMIN_QOPT_CHECK(floating.dof_count() == 6);
+
+        const AssembledSystem floating_system = assemble(floating);
+        const AssembledSystem rigid_system = assemble(rigid);
+        TERMIN_QOPT_CHECK(floating_system.mass.size() == rigid_system.mass.size());
+        for (std::size_t index = 0; index < floating_system.mass.size(); ++index)
+        {
+            check_near(floating_system.mass[index], rigid_system.mass[index], 1e-12);
+        }
+        for (std::size_t index = 0; index < floating_system.load.size(); ++index)
+        {
+            check_near(floating_system.load[index], rigid_system.load[index], 1e-12);
+        }
+        check_near(floating.total_energy(), rigid.total_energy(), 1e-12);
+
+        const Vec3 point_local{0.2, -0.3, 0.4};
+        const PointKinematics3DResult floating_point =
+            floating.floating_base_point_kinematics(point_local);
+        const PointKinematics3DResult rigid_point = rigid.point_kinematics(point_local);
+        TERMIN_QOPT_CHECK(floating_point.ok());
+        TERMIN_QOPT_CHECK(rigid_point.ok());
+        check_near(
+            (floating_point.value.position_world - rigid_point.value.position_world)
+                .norm(),
+            0.0,
+            1e-12);
+        check_near(
+            (floating_point.value.velocity_world - rigid_point.value.velocity_world)
+                .norm(),
+            0.0,
+            1e-12);
+        for (std::size_t index = 0;
+             index < floating_point.value.linear_jacobian_world_storage.size();
+             ++index)
+        {
+            check_near(floating_point.value.linear_jacobian_world_storage[index],
+                       rigid_point.value.linear_jacobian_world_storage[index],
+                       1e-12);
+        }
+        const ContactEndpoint3D base_endpoint =
+            ContactEndpoint3D::articulation_base(floating, point_local);
+        TERMIN_QOPT_CHECK(base_endpoint.valid());
+        const PointKinematics3DResult endpoint_point = base_endpoint.point_kinematics();
+        TERMIN_QOPT_CHECK(endpoint_point.ok());
+        check_near(
+            (endpoint_point.value.velocity_world - floating_point.value.velocity_world)
+                .norm(),
+            0.0,
+            1e-12);
+
+        DynamicsTopology rollback_topology;
+        TERMIN_QOPT_CHECK(floating.register_topology(rollback_topology) ==
+                          AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(rollback_topology.finalize() == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(floating.begin_step() == AssemblyDiagnostic::None);
+        const std::array<double, 6> trial_velocity{0.8, -0.4, 0.2, 0.1, 0.3, -0.2};
+        TERMIN_QOPT_CHECK(floating.set_trial_configuration(
+                              rollback_topology,
+                              {trial_velocity.data(), trial_velocity.size(), 1},
+                              0.01) == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK((floating.floating_base()->pose_world.lin - pose.lin).norm() >
+                          1e-5);
+        floating.rollback_step();
+        check_near(
+            (floating.floating_base()->pose_world.lin - pose.lin).norm(), 0.0, 1e-12);
+        check_near(rotation_error(floating.floating_base()->pose_world.ang, pose.ang),
+                   0.0,
+                   1e-12);
+
+        Multibody3DSystem floating_dynamics;
+        auto* floating_state =
+            add(floating_dynamics,
+                std::make_unique<Articulation3DContribution>(
+                    ArticulationFloatingBase3D{inertia, pose, velocity, "base"},
+                    std::vector<ArticulationLink3D>{},
+                    Articulation3DState{{}, {}},
+                    gravity,
+                    "floating-step"));
+        Multibody3DSystem rigid_dynamics;
+        auto* rigid_state =
+            add(rigid_dynamics,
+                std::make_unique<RigidBody3DContribution>(
+                    inertia, RigidBody3DState{pose, velocity}, gravity, "rigid-step"));
+        TERMIN_QOPT_CHECK(floating_dynamics.finalize() ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(rigid_dynamics.finalize() == DynamicsSystemDiagnostic::None);
+        constexpr double time_step = 0.001;
+        for (std::size_t step = 0; step < 10; ++step)
+        {
+            TERMIN_QOPT_CHECK(floating_dynamics.step(options(time_step)).ok());
+            TERMIN_QOPT_CHECK(rigid_dynamics.step(options(time_step)).ok());
+        }
+        const ArticulationFloatingBase3D& result = *floating_state->floating_base();
+        check_near(
+            (result.pose_world.lin - rigid_state->state().pose.lin).norm(), 0.0, 1e-11);
+        check_near(rotation_error(result.pose_world.ang, rigid_state->state().pose.ang),
+                   0.0,
+                   1e-11);
+        check_near((result.velocity_local.ang - rigid_state->state().velocity_local.ang)
+                       .norm(),
+                   0.0,
+                   1e-11);
+        check_near((result.velocity_local.lin - rigid_state->state().velocity_local.lin)
+                       .norm(),
+                   0.0,
+                   1e-11);
+    }
+
+    void test_floating_base_joint_coupling_and_point_jacobian()
+    {
+        const Screw3 base_velocity{{0.1, -0.2, 0.3}, {0.4, -0.1, 0.2}};
+        Articulation3DContribution articulation(
+            ArticulationFloatingBase3D{
+                SpatialInertia3{3.0, {1.0, 1.2, 1.4}, Pose3::identity()},
+                {Quat::from_axis_angle(Vec3::unit_x(), 0.2), {0.3, 0.4, 1.0}},
+                base_velocity,
+                "base",
+            },
+            {
+                {
+                    .parent_link = articulation_world_link,
+                    .parent_to_joint_zero = Pose3::translation(0.4, 0.0, 0.0),
+                    .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
+                    .joint_to_link = Pose3::translation(0.5, 0.0, 0.0),
+                    .inertia = rod_inertia(),
+                    .diagnostic_name = "arm",
+                },
+            },
+            {{0.35}, {-0.6}},
+            {0.0, 0.0, -kGravity},
+            "floating-arm");
+        TERMIN_QOPT_CHECK(articulation.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(articulation.dof_count() == 7);
+        const AssembledSystem system = assemble(articulation);
+        TERMIN_QOPT_CHECK(system.mass.size() == 49);
+        bool coupled = false;
+        for (std::size_t row = 0; row < 7; ++row)
+        {
+            for (std::size_t column = 0; column < 7; ++column)
+            {
+                const double value = system.mass[row * 7 + column];
+                TERMIN_QOPT_CHECK(std::isfinite(value));
+                check_near(value, system.mass[column * 7 + row], 1e-12);
+                if (column == 6 && row < 6 && std::abs(value) > 1e-8)
+                {
+                    coupled = true;
+                }
+            }
+        }
+        TERMIN_QOPT_CHECK(coupled);
+
+        const PointKinematics3DResult point =
+            articulation.point_kinematics(0, {0.2, -0.1, 0.3});
+        TERMIN_QOPT_CHECK(point.ok());
+        TERMIN_QOPT_CHECK(point.value.dof_count() == 7);
+        const std::array<double, 7> generalized_velocity{
+            base_velocity.lin.x,
+            base_velocity.lin.y,
+            base_velocity.lin.z,
+            base_velocity.ang.x,
+            base_velocity.ang.y,
+            base_velocity.ang.z,
+            -0.6,
+        };
+        Vec3 jacobian_velocity = Vec3::zero();
+        for (std::size_t column = 0; column < 7; ++column)
+        {
+            jacobian_velocity.x += point.value.linear_jacobian_world_storage[column] *
+                                   generalized_velocity[column];
+            jacobian_velocity.y +=
+                point.value.linear_jacobian_world_storage[7 + column] *
+                generalized_velocity[column];
+            jacobian_velocity.z +=
+                point.value.linear_jacobian_world_storage[14 + column] *
+                generalized_velocity[column];
+        }
+        check_near((jacobian_velocity - point.value.velocity_world).norm(), 0.0, 1e-12);
     }
 
     void test_double_pendulum_equations()
@@ -351,6 +564,39 @@ namespace
         TERMIN_QOPT_CHECK(unlimited_step.unilateral_constraint_count == 0);
     }
 
+    void test_floating_base_free_motion_conserves_energy_and_momentum()
+    {
+        constexpr double mass = 2.0;
+        const SpatialInertia3 inertia{
+            mass,
+            {1.0, 1.0, 1.0},
+            Pose3::identity(),
+        };
+        const Screw3 velocity{{0.0, 0.0, 0.3}, {0.5, -0.2, 0.1}};
+        Multibody3DSystem dynamics;
+        auto* state = add(dynamics,
+                          std::make_unique<Articulation3DContribution>(
+                              ArticulationFloatingBase3D{
+                                  inertia, Pose3::identity(), velocity, "free-base"},
+                              std::vector<ArticulationLink3D>{},
+                              Articulation3DState{{}, {}},
+                              Vec3::zero(),
+                              "free-floating"));
+        TERMIN_QOPT_CHECK(dynamics.finalize() == DynamicsSystemDiagnostic::None);
+        const double initial_energy = state->total_energy();
+        const Vec3 initial_linear_momentum = velocity.lin * mass;
+        constexpr double time_step = 0.001;
+        for (std::size_t step = 0; step < 1000; ++step)
+        {
+            TERMIN_QOPT_CHECK(dynamics.step(options(time_step)).ok());
+        }
+        const ArticulationFloatingBase3D& result = *state->floating_base();
+        const Vec3 final_linear_momentum =
+            result.pose_world.ang.rotate(result.velocity_local.lin) * mass;
+        check_near(state->total_energy(), initial_energy, 1e-10);
+        check_near((final_linear_momentum - initial_linear_momentum).norm(), 0.0, 1e-8);
+    }
+
     void test_branching_forward_kinematics()
     {
         std::vector<ArticulationLink3D> links = double_pendulum_links();
@@ -482,6 +728,9 @@ namespace
 int main()
 {
     test_model_validation();
+    test_floating_base_matches_rigid_body();
+    test_floating_base_joint_coupling_and_point_jacobian();
+    test_floating_base_free_motion_conserves_energy_and_momentum();
     test_double_pendulum_equations();
     test_velocity_bias();
     test_prismatic_joint_equations();
