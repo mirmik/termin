@@ -8,6 +8,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/qopt/articulation3d.hpp>
 #include <termin/qopt/articulation3d_motor.hpp>
+#include <termin/qopt/contact3d.hpp>
 #include <termin/qopt/multibody3d.hpp>
 
 extern "C"
@@ -36,6 +37,10 @@ namespace termin
         std::size_t reduced_dof_count = 0;
         std::size_t motor_count = 0;
         std::size_t saturated_motor_count = 0;
+        std::size_t contact_count = 0;
+        std::size_t active_contact_count = 0;
+        double minimum_contact_gap = 0.0;
+        double normal_reaction_linf = 0.0;
         double motor_effort_linf = 0.0;
         double motor_power = 0.0;
         double motor_work = 0.0;
@@ -226,6 +231,8 @@ namespace termin
         tc_vec3 gravity = {0.0, 0.0, -9.81};
         double time_step = 0.01;
         int substeps = 1;
+        std::uint64_t collision_layer_mask = ~std::uint64_t{0};
+        bool adjacent_link_collision_enabled = false;
 
         FEMPhysicsWorldComponent();
         ~FEMPhysicsWorldComponent() override = default;
@@ -250,6 +257,8 @@ namespace termin
         std::vector<FEMFixedJointComponent*> fixed_joints_;
         std::vector<FEMRevoluteJointComponent*> revolute_joints_;
         std::vector<FEMArticulationComponent*> articulations_;
+        qopt::ContactSet3DContribution* contacts_ = nullptr;
+        std::vector<const void*> warned_contact_colliders_;
         double accumulated_time_ = 0.0;
         double simulated_time_ = 0.0;
         double initial_total_energy_ = 0.0;
@@ -264,6 +273,7 @@ namespace termin
         bool register_articulation(FEMArticulationComponent& component);
         void synchronize_articulations();
         bool update_motor_commands(double dt);
+        bool refresh_contacts();
         void step_simulation(double dt);
         [[nodiscard]] double total_energy() const noexcept;
         void clear_runtime_links();

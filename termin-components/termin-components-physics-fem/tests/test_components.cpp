@@ -6,13 +6,18 @@ GUARD_TEST_MAIN();
 #include <limits>
 #include <numbers>
 
+#include <components/collider_component.hpp>
 #include <components/rotator_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
+#include <physics/tc_collision_world.h>
+#include <termin/collision/collision_world.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/physics_fem/articulation_scene.hpp>
 #include <termin/physics_fem/components.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin_collision/termin_collision.h>
+#include <termin_scene/internal/tc_scene_extension_registry.h>
 
 namespace
 {
@@ -22,7 +27,10 @@ namespace
         {
             tc_inspect_kind_core_init();
             tc_inspect_component_adapter_init();
+            tc_scene_ext_registry_init();
+            termin_collision_runtime_init();
             termin::register_builtin_scene_component_types();
+            termin::ColliderComponent::register_type();
             termin::KinematicUnitComponent::register_type();
             termin::RotatorComponent::register_type();
             termin::FEMRigidBodyComponent::register_type();
@@ -157,6 +165,46 @@ namespace
         result.world = new FEMPhysicsWorldComponent();
         result.world->time_step = 0.005;
         result.world->substeps = 2;
+        world_entity.add_component(result.world);
+        return result;
+    }
+
+    struct MaximalContactScene
+    {
+        termin::TcSceneRef scene;
+        termin::FEMPhysicsWorldComponent* world = nullptr;
+        termin::FEMRigidBodyComponent* body = nullptr;
+        termin::ColliderComponent* body_collider = nullptr;
+        termin::ColliderComponent* terrain_collider = nullptr;
+    };
+
+    MaximalContactScene make_maximal_contact_scene()
+    {
+        using namespace termin;
+
+        MaximalContactScene result;
+        result.scene = TcSceneRef::create("maximal contact");
+
+        Entity terrain = result.scene.create_entity("Terrain");
+        terrain.transform().set_local_position({0.0, 0.0, -0.5});
+        result.terrain_collider = new ColliderComponent();
+        result.terrain_collider->box_size = {10.0, 10.0, 1.0};
+        terrain.add_component(result.terrain_collider);
+
+        Entity body_entity = result.scene.create_entity("Falling Body");
+        body_entity.transform().set_local_position({0.0, 0.0, 0.45});
+        result.body = new FEMRigidBodyComponent();
+        result.body->mass = 1.0;
+        result.body->inertia_diagonal = {1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0};
+        body_entity.add_component(result.body);
+        result.body_collider = new ColliderComponent();
+        result.body_collider->box_size = {1.0, 1.0, 1.0};
+        body_entity.add_component(result.body_collider);
+
+        Entity world_entity = result.scene.create_entity("Physics World");
+        result.world = new FEMPhysicsWorldComponent();
+        result.world->gravity = {0.0, 0.0, 0.0};
+        result.world->time_step = 0.01;
         world_entity.add_component(result.world);
         return result;
     }
@@ -538,6 +586,134 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     fixture.world->update(0.005f);
     CHECK(std::abs(fixture.servo->integral_effort()) < 1.0e-12);
 
+    fixture.scene.destroy();
+}
+
+TEST_CASE(
+    "FEM routes a CollisionWorld patch from static terrain to a maximal body")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    MaximalContactScene fixture = make_maximal_contact_scene();
+    collision::CollisionWorld* collision_world =
+        collision::CollisionWorld::from_scene(fixture.scene.handle());
+    REQUIRE(collision_world != nullptr);
+    collision_world->update_all();
+    REQUIRE(!collision_world->detect_contacts().empty());
+
+    const double height_before =
+        fixture.body->entity().transform().global_position().z;
+    fixture.world->start();
+    fixture.world->update(0.011F);
+
+    const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.successful_steps >= 1U);
+    CHECK(telemetry.contact_count >= 1U);
+    CHECK(telemetry.active_contact_count >= 1U);
+    CHECK(telemetry.minimum_contact_gap >= -1.0e-8);
+    CHECK(fixture.body->entity().transform().global_position().z >
+          height_before);
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("FEM routes a CollisionWorld patch to an articulation link")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("articulation contact");
+
+    Entity terrain = scene.create_entity("Terrain");
+    terrain.transform().set_local_position({0.0, 0.0, -0.5});
+    auto* terrain_collider = new ColliderComponent();
+    terrain_collider->box_size = {10.0, 10.0, 1.0};
+    terrain.add_component(terrain_collider);
+
+    Entity root = scene.create_entity("Articulation Root");
+    auto* articulation = new FEMArticulationComponent();
+    root.add_component(articulation);
+    Entity joint_entity = root.create_child("Joint");
+    auto* joint = new RotatorComponent();
+    joint_entity.add_component(joint);
+    joint->set_axis(0.0, 1.0, 0.0);
+    joint->set_coordinate_scale(1.0);
+    joint->set_coordinate(0.0);
+    Entity link_entity = joint_entity.create_child("Contact Link");
+    link_entity.transform().set_local_position({1.0, 0.0, 0.45});
+    link_entity.add_component(new FEMRigidBodyComponent());
+    auto* link_collider = new ColliderComponent();
+    link_collider->box_size = {1.0, 1.0, 1.0};
+    link_entity.add_component(link_collider);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = {0.0, 0.0, 0.0};
+    world->time_step = 0.01;
+    world_entity.add_component(world);
+
+    world->start();
+    REQUIRE(articulation->initialized());
+    world->update(0.011F);
+
+    const FEMPhysicsTelemetry telemetry = world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.contact_count >= 1U);
+    CHECK(telemetry.minimum_contact_gap >= -1.0e-8);
+    CHECK(std::abs(joint->coordinate) > 1.0e-8);
+    scene.destroy();
+}
+
+TEST_CASE("FEM contact policy excludes adjacent articulation links")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    DoublePendulumScene fixture = make_double_pendulum_scene();
+    auto* collider_a = new ColliderComponent();
+    collider_a->box_size = {3.0, 3.0, 3.0};
+    fixture.body_a->entity().add_component(collider_a);
+    auto* collider_b = new ColliderComponent();
+    collider_b->box_size = {3.0, 3.0, 3.0};
+    fixture.body_b->entity().add_component(collider_b);
+
+    collision::CollisionWorld* collision_world =
+        collision::CollisionWorld::from_scene(fixture.scene.handle());
+    REQUIRE(collision_world != nullptr);
+    collision_world->update_all();
+    REQUIRE(!collision_world->detect_contacts().empty());
+
+    fixture.world->start();
+    fixture.world->update(0.002F);
+    const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.contact_count == 0U);
+    fixture.scene.destroy();
+}
+
+TEST_CASE("FEM contact mapping follows collider disable and removal lifecycle")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    MaximalContactScene fixture = make_maximal_contact_scene();
+    fixture.world->start();
+    fixture.world->update(0.011F);
+    REQUIRE(fixture.world->telemetry().contact_count >= 1U);
+
+    fixture.body_collider->set_enabled(false);
+    fixture.world->update(0.011F);
+    CHECK(fixture.world->telemetry().initialized);
+    CHECK(fixture.world->telemetry().contact_count == 0U);
+
+    Entity body_entity = fixture.body->entity();
+    body_entity.remove_component(fixture.body_collider);
+    fixture.body_collider = nullptr;
+    fixture.world->update(0.011F);
+    CHECK(fixture.world->telemetry().initialized);
+    CHECK(fixture.world->telemetry().contact_count == 0U);
     fixture.scene.destroy();
 }
 

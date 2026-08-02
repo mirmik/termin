@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <string_view>
 
@@ -28,6 +30,45 @@ namespace termin
         tc_vec3 tcvec3(Vec3 value)
         {
             return {value.x, value.y, value.z};
+        }
+
+        void
+        register_collision_layer_mask_field(tc::InspectFacetBuilder& inspect)
+        {
+            tc::InspectFieldInfo info;
+            info.type_name = "FEMPhysicsWorldComponent";
+            info.path = "collision_layer_mask";
+            info.label = "Collision Layers";
+            info.kind = "layer_mask";
+            info.getter = [](void* object) -> tc_value
+            {
+                auto* world = static_cast<FEMPhysicsWorldComponent*>(object);
+                char buffer[32];
+                std::snprintf(buffer,
+                              sizeof(buffer),
+                              "0x%llx",
+                              static_cast<unsigned long long>(
+                                  world->collision_layer_mask));
+                return tc_value_string(buffer);
+            };
+            info.setter = [](void* object, tc_value value, void*) -> bool
+            {
+                auto* world = static_cast<FEMPhysicsWorldComponent*>(object);
+                if (value.type == TC_VALUE_STRING && value.data.s != nullptr)
+                {
+                    world->collision_layer_mask =
+                        std::strtoull(value.data.s, nullptr, 0);
+                    return true;
+                }
+                if (value.type == TC_VALUE_INT)
+                {
+                    world->collision_layer_mask =
+                        static_cast<std::uint64_t>(value.data.i);
+                    return true;
+                }
+                return false;
+            };
+            (void)inspect.add_field(std::move(info));
         }
 
         template <typename Component>
@@ -558,6 +599,14 @@ namespace termin
                                 1,
                                 100,
                                 1);
+        register_collision_layer_mask_field(inspect);
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsWorldComponent::adjacent_link_collision_enabled,
+            "FEMPhysicsWorldComponent",
+            "adjacent_link_collision_enabled",
+            "Adjacent Link Collision",
+            "bool");
         (void)descriptor.commit();
     }
 
@@ -615,6 +664,8 @@ namespace termin
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;
         motor_work_ = 0.0;
+        contacts_ = nullptr;
+        warned_contact_colliders_.clear();
         CxxComponent::on_destroy();
     }
 
@@ -681,6 +732,51 @@ namespace termin
                     {
                         result +=
                             motor != nullptr && motor->saturated() ? 1U : 0U;
+                    }
+                }
+                return result;
+            }(),
+            .contact_count =
+                contacts_ != nullptr ? contacts_->contacts().size() : 0,
+            .active_contact_count =
+                [this]()
+            {
+                std::size_t result = 0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result += state.active ? 1U : 0U;
+                    }
+                }
+                return result;
+            }(),
+            .minimum_contact_gap =
+                [this]()
+            {
+                if (contacts_ == nullptr || contacts_->states().empty())
+                {
+                    return 0.0;
+                }
+                double result = std::numeric_limits<double>::infinity();
+                for (const qopt::ContactState3D& state : contacts_->states())
+                {
+                    result = std::min(result, state.signed_gap);
+                }
+                return result;
+            }(),
+            .normal_reaction_linf =
+                [this]()
+            {
+                double result = 0.0;
+                if (contacts_ != nullptr)
+                {
+                    for (const qopt::ContactState3D& state :
+                         contacts_->states())
+                    {
+                        result =
+                            std::max(result, std::abs(state.normal_reaction));
                     }
                 }
                 return result;
@@ -839,6 +935,19 @@ namespace termin
                 return false;
             }
         }
+        auto contacts =
+            std::make_unique<qopt::ContactSet3DContribution>("scene_contacts");
+        contacts_ = contacts.get();
+        if (system_.add_contribution(std::move(contacts)) !=
+            qopt::DynamicsSystemDiagnostic::None)
+        {
+            tc::Log::error(
+                "[FEMPhysicsWorldComponent] failed to add scene contact "
+                "contribution");
+            contacts_ = nullptr;
+            clear_runtime_links();
+            return false;
+        }
         const qopt::DynamicsSystemDiagnostic finalized = system_.finalize();
         if (finalized != qopt::DynamicsSystemDiagnostic::None)
         {
@@ -905,6 +1014,7 @@ namespace termin
             return false;
         }
         component.world_ = this;
+        bodies_.push_back(&component);
         return true;
     }
 
@@ -1467,6 +1577,11 @@ namespace termin
             initialized_ = false;
             return;
         }
+        if (!refresh_contacts())
+        {
+            initialized_ = false;
+            return;
+        }
 
         qopt::Multibody3DStepOptions options;
         options.time_step = dt;
@@ -1605,6 +1720,8 @@ namespace termin
         fixed_joints_.clear();
         revolute_joints_.clear();
         articulations_.clear();
+        contacts_ = nullptr;
+        warned_contact_colliders_.clear();
     }
 
     void FEMPhysicsWorldComponent::detach(

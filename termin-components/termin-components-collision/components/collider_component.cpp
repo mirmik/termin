@@ -525,8 +525,19 @@ void ColliderComponent::_add_to_collision_world() {
     if (!_attached) return;
 
     collision::CollisionWorld* cw = _get_collision_world();
+    if (!cw && tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
+        if (!tc_scene_ext_attach(_scene_handle, TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
+            tc::Log::error(
+                "ColliderComponent: failed to attach CollisionWorld to scene");
+            return;
+        }
+        cw = _get_collision_world();
+    }
     if (cw) {
         cw->add(_attached.get());
+    } else {
+        tc::Log::error(
+            "ColliderComponent: scene has no registered CollisionWorld");
     }
 }
 

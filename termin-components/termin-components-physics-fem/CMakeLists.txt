@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt termin_components_kinematic)
+foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt termin_collision termin_components_collision termin_components_kinematic)
     if(COMMAND termin_require_package)
         if(_dep STREQUAL "termin_base")
             termin_require_package(termin_base tcbase::termin_base)
@@ -15,6 +15,10 @@ foreach(_dep IN ITEMS termin_base termin_scene termin_inspect termin_qopt termin
             termin_require_package(termin_inspect termin_inspect::termin_inspect)
         elseif(_dep STREQUAL "termin_qopt")
             termin_require_package(termin_qopt termin_qopt::termin_qopt)
+        elseif(_dep STREQUAL "termin_collision")
+            termin_require_package(termin_collision termin_collision::termin_collision)
+        elseif(_dep STREQUAL "termin_components_collision")
+            termin_require_package(termin_components_collision termin_components_collision::termin_components_collision)
         elseif(_dep STREQUAL "termin_components_kinematic")
             termin_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
         endif()
@@ -30,6 +34,7 @@ termin_add_module(
     NAMESPACE termin_components_physics_fem::
     SOURCES
         src/components.cpp
+        src/collision_contacts.cpp
         src/articulation_scene.cpp
         src/components_bootstrap.cpp
     PUBLIC_DEPS
@@ -40,6 +45,11 @@ termin_add_module(
         termin_components_kinematic::termin_components_kinematic
     FIND_DEPS termin_base termin_scene termin_inspect termin_qopt termin_components_kinematic
     INSTALL_HEADERS include/termin
+)
+
+target_link_libraries(termin_components_physics_fem PRIVATE
+    termin_collision::termin_collision
+    termin_components_collision::termin_components_collision
 )
 
 target_include_directories(termin_components_physics_fem PUBLIC
@@ -60,6 +70,7 @@ if(TERMIN_BUILD_TESTS)
     )
     target_link_libraries(termin_components_physics_fem_component_test PRIVATE
         termin_components_physics_fem
+        termin_components_collision::termin_components_collision
     )
     set_target_properties(termin_components_physics_fem_component_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
