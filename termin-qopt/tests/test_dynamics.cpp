@@ -207,8 +207,9 @@ namespace
             return result.diagnostic;
         }
 
-        AssemblyDiagnostic register_unilateral_constraints(
-            DynamicsUnilateralTopology& topology) noexcept override
+        AssemblyDiagnostic
+        register_unilateral_constraints(DynamicsUnilateralTopology& topology,
+                                        double) noexcept override
         {
             ++registration_count;
             unilateral_ = {};

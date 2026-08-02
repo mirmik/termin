@@ -22,6 +22,7 @@ namespace termin
     class FEMRigidBodyComponent;
     class KinematicUnitComponent;
     class FEMArticulationMotorComponent;
+    class FEMJointLimitComponent;
     class FEMJointServoComponent;
 
     struct FEMPhysicsTelemetry
@@ -93,6 +94,24 @@ namespace termin
         qopt::ArticulationMotorContribution* motor_ = nullptr;
         std::size_t dof_index_ = 0;
         std::size_t channel_index_ = 0;
+    };
+
+    // Optional physical bounds for the reduced DOF authored by the
+    // co-located RotatorComponent or ActuatorComponent. Coordinates use the
+    // kinematic component's authored units and are converted by its explicit
+    // coordinate_scale when the articulation is compiled.
+    class ENTITY_API FEMJointLimitComponent final : public CxxComponent
+    {
+    public:
+        bool minimum_enabled = false;
+        bool maximum_enabled = false;
+        double minimum_coordinate = 0.0;
+        double maximum_coordinate = 0.0;
+
+        FEMJointLimitComponent();
+        ~FEMJointLimitComponent() override = default;
+
+        static void register_type();
     };
 
     // A PID control policy for a co-located articulation motor. Target state is

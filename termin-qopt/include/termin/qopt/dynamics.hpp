@@ -214,11 +214,14 @@ namespace termin::qopt
 
         // Register rows which exist only for the current step. Handles from a
         // previous call are stale by construction and are rejected by the
-        // checked assembly.
+        // checked assembly. The time step lets a contribution convert a
+        // position margin into a velocity-level limit.
         [[nodiscard]] virtual AssemblyDiagnostic
-        register_unilateral_constraints(DynamicsUnilateralTopology& topology) noexcept
+        register_unilateral_constraints(DynamicsUnilateralTopology& topology,
+                                        double time_step) noexcept
         {
             (void)topology;
+            (void)time_step;
             return AssemblyDiagnostic::None;
         }
 

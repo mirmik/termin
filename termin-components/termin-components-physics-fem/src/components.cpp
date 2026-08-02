@@ -193,6 +193,49 @@ namespace termin
         return initialized() && motor_->saturated(channel_index_);
     }
 
+    FEMJointLimitComponent::FEMJointLimitComponent()
+        : CxxComponent("FEMJointLimitComponent")
+    {
+    }
+
+    void FEMJointLimitComponent::register_type()
+    {
+        auto descriptor =
+            ComponentTypeDescriptorBuilder::native<FEMJointLimitComponent>(
+                "FEMJointLimitComponent", module_owner, "Component");
+        descriptor.category("Physics");
+        auto& inspect = descriptor.inspect();
+        tc::stage_inspect_field(inspect,
+                                &FEMJointLimitComponent::minimum_enabled,
+                                "FEMJointLimitComponent",
+                                "minimum_enabled",
+                                "Minimum Enabled",
+                                "bool");
+        stage_double(inspect,
+                     &FEMJointLimitComponent::minimum_coordinate,
+                     "FEMJointLimitComponent",
+                     "minimum_coordinate",
+                     "Minimum Coordinate",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        tc::stage_inspect_field(inspect,
+                                &FEMJointLimitComponent::maximum_enabled,
+                                "FEMJointLimitComponent",
+                                "maximum_enabled",
+                                "Maximum Enabled",
+                                "bool");
+        stage_double(inspect,
+                     &FEMJointLimitComponent::maximum_coordinate,
+                     "FEMJointLimitComponent",
+                     "maximum_coordinate",
+                     "Maximum Coordinate",
+                     -1.0e9,
+                     1.0e9,
+                     0.1);
+        (void)descriptor.commit();
+    }
+
     FEMJointServoComponent::FEMJointServoComponent()
         : CxxComponent("FEMJointServoComponent")
     {

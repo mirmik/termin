@@ -21,6 +21,7 @@ namespace termin
         NonRigidTransform,
         UnsupportedJoint,
         DegenerateJointAxis,
+        InvalidJointLimits,
         MissingBody,
         MultipleBodies,
         DuplicateBody,

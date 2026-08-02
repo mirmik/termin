@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,11 +29,31 @@ namespace termin::qopt
         InvalidMotionTwist,
         InvalidInertia,
         InvalidState,
+        InvalidJointLimits,
         NonFiniteInput,
     };
 
     [[nodiscard]] TERMIN_QOPT_API std::string_view
     articulation3d_diagnostic_name(Articulation3DDiagnostic diagnostic) noexcept;
+
+    struct ArticulationJointLimits3D
+    {
+        std::optional<double> minimum;
+        std::optional<double> maximum;
+    };
+
+    struct ArticulationJointLimitState3D
+    {
+        double minimum_reaction = 0.0;
+        double maximum_reaction = 0.0;
+        bool minimum_active = false;
+        bool maximum_active = false;
+
+        [[nodiscard]] constexpr double signed_effort() const noexcept
+        {
+            return minimum_reaction - maximum_reaction;
+        }
+    };
 
     // One physical link and the one-DOF joint that attaches it to its parent.
     // Links must be stored in topological order. The world parent denotes a
@@ -49,6 +70,7 @@ namespace termin::qopt
         termin::Screw3 motion_twist_at_joint = termin::Screw3::zero();
         termin::Pose3 joint_to_link = termin::Pose3::identity();
         termin::SpatialInertia3 inertia;
+        ArticulationJointLimits3D limits;
         std::string diagnostic_name;
     };
 
@@ -79,6 +101,8 @@ namespace termin::qopt
         link_poses_world() const noexcept;
         [[nodiscard]] const std::vector<termin::Screw3>&
         link_velocities_local() const noexcept;
+        [[nodiscard]] const std::vector<ArticulationJointLimitState3D>&
+        joint_limit_states() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
 
@@ -90,6 +114,9 @@ namespace termin::qopt
 
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
+        AssemblyDiagnostic
+        register_unilateral_constraints(DynamicsUnilateralTopology& topology,
+                                        double time_step) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
                                     DynamicsAssemblyPhase phase) noexcept override;
         AssemblyDiagnostic begin_step() noexcept override;
@@ -100,6 +127,11 @@ namespace termin::qopt
                        const DynamicsTopology& topology,
                        ConstDenseVectorView dof_values,
                        ConstDenseVectorView constraint_reactions) noexcept override;
+        void
+        apply_unilateral_solution(const DynamicsTopology& topology,
+                                  const DynamicsUnilateralTopology& unilateral_topology,
+                                  ConstDenseVectorView reactions,
+                                  ConstDenseVectorView tight_mask) noexcept override;
         AssemblyDiagnostic
         write_velocity(const DynamicsTopology& topology,
                        DenseVectorView destination) const noexcept override;
@@ -131,8 +163,19 @@ namespace termin::qopt
         std::vector<termin::Screw3> motion_twists_at_link_;
         std::vector<termin::Screw3> link_velocities_local_;
 
+        struct JointLimitRows
+        {
+            DynamicsUnilateralConstraintHandle minimum;
+            DynamicsUnilateralConstraintHandle maximum;
+        };
+
+        std::vector<JointLimitRows> joint_limit_rows_;
+        std::vector<ArticulationJointLimitState3D> joint_limit_states_;
+        double unilateral_time_step_ = 0.0;
+
         Articulation3DState state_snapshot_;
         std::vector<double> acceleration_snapshot_;
+        std::vector<ArticulationJointLimitState3D> joint_limit_state_snapshot_;
         bool snapshot_ready_ = false;
 
         [[nodiscard]] Articulation3DDiagnostic validate_model() const noexcept;

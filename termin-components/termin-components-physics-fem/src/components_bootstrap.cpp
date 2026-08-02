@@ -10,6 +10,7 @@ namespace termin
         FEMPhysicsWorldComponent::register_type();
         FEMArticulationComponent::register_type();
         FEMArticulationMotorComponent::register_type();
+        FEMJointLimitComponent::register_type();
         FEMJointServoComponent::register_type();
         FEMRigidBodyComponent::register_type();
         FEMFixedJointComponent::register_type();

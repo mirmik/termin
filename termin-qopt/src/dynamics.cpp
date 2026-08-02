@@ -756,14 +756,15 @@ namespace termin::qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic prepare_unilateral_topology()
+        [[nodiscard]] DynamicsSystemDiagnostic
+        prepare_unilateral_topology(double time_step)
         {
             unilateral_topology = DynamicsUnilateralTopology{};
             for (std::size_t index = 0; index < contributions.size(); ++index)
             {
                 const AssemblyDiagnostic diagnostic =
                     contributions[index]->register_unilateral_constraints(
-                        unilateral_topology);
+                        unilateral_topology, time_step);
                 if (diagnostic != AssemblyDiagnostic::None)
                 {
                     std::fprintf(stderr,
@@ -1193,7 +1194,7 @@ namespace termin::qopt
         try
         {
             const DynamicsSystemDiagnostic unilateral_topology_diagnostic =
-                impl_->prepare_unilateral_topology();
+                impl_->prepare_unilateral_topology(options.time_step);
             if (unilateral_topology_diagnostic != DynamicsSystemDiagnostic::None)
             {
                 rollback();

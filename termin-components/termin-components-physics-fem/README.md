@@ -7,7 +7,8 @@ contributions are stepped by the common `DynamicsSystem` orchestrator.
 
 The module registers the serialized names `FEMPhysicsWorldComponent`,
 `FEMArticulationComponent`, `FEMRigidBodyComponent`,
-`FEMArticulationMotorComponent`, `FEMJointServoComponent`,
+`FEMArticulationMotorComponent`, `FEMJointLimitComponent`,
+`FEMJointServoComponent`,
 `FEMFixedJointComponent`, and
 `FEMRevoluteJointComponent` during core bootstrap. Projects using these types
 do not need a Python module or NumPy at runtime.
@@ -37,6 +38,15 @@ separate `coordinate_scale` converts authored units to radians or metres before
 the coordinate becomes reduced state. The body child's local rigid pose is the
 fixed joint-to-link transform. Branching is represented by placing several
 joint children under one body.
+
+An optional `FEMJointLimitComponent` on a joint entity gives that reduced DOF
+a minimum, a maximum, or both. Bounds use the neighboring kinematic
+component's authored units and pass through the same `coordinate_scale` as its
+coordinate. The articulation activates transient velocity inequalities only
+when a bound is reached or the current velocity predicts a crossing. It
+reports separate non-negative minimum/maximum reactions and active flags; the
+signed generalized effort is `minimum_reaction - maximum_reaction`. Limits do
+not clamp the authored transform after integration.
 
 `compile_fem_articulation_scene()` exposes this translation as a separate,
 testable pass. It produces public `ArticulationLink3D` values and bindings; the
