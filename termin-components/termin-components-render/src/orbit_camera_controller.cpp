@@ -69,6 +69,16 @@ void OrbitCameraController::register_type() {
         1000.0,
         1.0
     );
+    tc::stage_inspect_field(descriptor.inspect(),
+        &OrbitCameraController::orbit_mouse_button,
+        "OrbitCameraController", "orbit_mouse_button", "Orbit Mouse Button", "int",
+        0.0, 2.0, 1.0
+    );
+    tc::stage_inspect_field(descriptor.inspect(),
+        &OrbitCameraController::pan_mouse_button,
+        "OrbitCameraController", "pan_mouse_button", "Pan Mouse Button", "int",
+        0.0, 2.0, 1.0
+    );
     (void)descriptor.commit();
 }
 
@@ -430,12 +440,10 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
     uint64_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
 
-    // Middle mouse = orbit
-    if (e->button == static_cast<int>(MouseButton::MIDDLE)) {
+    if (e->button == orbit_mouse_button) {
         state.orbit_active = (e->action == static_cast<int>(Action::PRESS));
     }
-    // Right mouse = pan
-    else if (e->button == static_cast<int>(MouseButton::RIGHT)) {
+    else if (e->button == pan_mouse_button) {
         state.pan_active = (e->action == static_cast<int>(Action::PRESS));
     }
 

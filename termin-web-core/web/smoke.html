@@ -6,8 +6,9 @@
 <pre id="host-status">idle</pre>
 <pre id="result">TERMIN_WEB_CORE_SMOKE_RUNNING</pre>
 <script type="module">
-import { createTerminCore } from "./termin-web-core.mjs";
-import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs";
+import { createTerminCore } from "./termin-web-core.mjs?v=20260802-input4";
+import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs?v=20260802-input4";
+import { createTerminWebInputAdapter } from "./termin-web-input.mjs?v=20260802-input4";
 
 const result = document.querySelector("#result");
 globalThis.__terminSmokeAsyncError = "";
@@ -24,7 +25,12 @@ try {
     const host = createTerminWebHost(core, {
         statusElement: document.querySelector("#host-status"),
     });
+    const input = createTerminWebInputAdapter(core, {
+        canvas: document.querySelector("#termin-canvas"),
+    }).attach();
     await host.load("./fixtures/render-package/");
+    input.setEnabled(true);
+    globalThis.__terminSmokeInput = input;
     await host.waitForFrames(3);
     if (host.state !== TerminWebHostState.Running || host.entityCount() !== 2) {
         throw new Error("runtime host did not enter running state with two packaged entities");
@@ -44,6 +50,7 @@ try {
         throw new Error("runtime host reload lost the entry scene");
     }
     await host.teardown();
+    input.setEnabled(false);
     if (host.state !== TerminWebHostState.Idle || host.entityCount() !== 0) {
         throw new Error("runtime host teardown did not release the package");
     }
@@ -75,6 +82,7 @@ try {
         }
     }
     await host.teardown();
+    input.detach();
     await core.renderSmoke();
     canvas.width = 800;
     canvas.height = 450;

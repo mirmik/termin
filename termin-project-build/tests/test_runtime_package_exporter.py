@@ -962,9 +962,21 @@ def test_export_runtime_package_emits_multi_scene_closure(tmp_path: Path) -> Non
 
 @full_runtime_package_exporter
 def test_export_runtime_package_includes_project_material_assets(tmp_path: Path) -> None:
+    import numpy as np
+
+    from termin.image import write_png_rgba8_file
+
     project = tmp_path / "DynamicMaterialGame"
     project.mkdir()
     material_uuid = "dynamic-highlight-material"
+    texture_uuid = "dynamic-highlight-texture"
+    texture_path = project / "Textures" / "Highlight.png"
+    texture_path.parent.mkdir()
+    write_png_rgba8_file(
+        texture_path,
+        np.full((1, 1, 4), [255, 230, 26, 255], dtype=np.uint8),
+    )
+    _write_json(Path(f"{texture_path}.meta"), {"uuid": texture_uuid})
     _write_json(project / "Main.scene", {"uuid": "scene-uuid", "entities": []})
     _write_json(
         project / "Materials" / "Highlight.material",
@@ -973,6 +985,9 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
             "shader": "CookTorrancePBR",
             "uniforms": {
                 "u_color": [1.0, 0.9, 0.1, 1.0],
+            },
+            "textures": {
+                "u_albedo_texture": texture_uuid,
             },
         },
     )
@@ -992,6 +1007,20 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         "uuid": material_uuid,
         "path": f"materials/{material_uuid}.tmat.json",
     } in manifest["resources"]
+    material_spec = json.loads(
+        (result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert material_spec["textures"]["u_albedo_texture"]["uuid"] == texture_uuid
+    assert {
+        "type": "texture",
+        "uuid": texture_uuid,
+        "path": f"textures/{texture_uuid}.texture.json",
+    } in manifest["resources"]
+    assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == (
+        texture_path.read_bytes()
+    )
 
 
 @full_runtime_package_exporter

@@ -6,6 +6,10 @@
       {
         "uuid": "web-render-fixture-mesh",
         "name": "Packaged Mesh",
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.1695, 0.0376, 0.2132, 0.9615]
+        },
         "components": [
           {
             "type": "MeshComponent",
@@ -47,6 +51,16 @@
               "far_clip": 100.0,
               "fov_y_degrees": 55.0
             }
+          },
+          {
+            "type": "OrbitCameraController",
+          "data": {
+            "radius": 4.0,
+            "min_radius": 1.5,
+            "max_radius": 12.0,
+            "orbit_mouse_button": 0,
+            "pan_mouse_button": 1
+          }
           }
         ]
       }

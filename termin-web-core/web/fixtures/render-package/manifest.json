@@ -201,6 +201,10 @@
     }
   ],
   "target_requirements": {
+    "platform": {
+      "os": "web",
+      "arch": "wasm32"
+    },
     "backends": [
       "webgpu"
     ]

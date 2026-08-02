@@ -30,6 +30,8 @@
 extern "C" {
 #include <render/tc_display.h>
 #include <render/tc_render_surface.h>
+#include <render/tc_viewport.h>
+#include <render/tc_viewport_input_manager.h>
 }
 
 #include "web_render_shaders.hpp"
@@ -65,6 +67,7 @@ struct WebPlayerState {
     termin::runtime::RuntimePackageLoadResult package;
     std::vector<std::string> registered_scene_names;
     std::vector<tc_viewport_handle> viewports;
+    std::vector<tc_viewport_input_manager*> viewport_input_managers;
     tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
     uint32_t width = 640;
     uint32_t height = 360;
@@ -106,6 +109,11 @@ void unload_web_host_package() {
         return;
     }
     if (web_player->engine) {
+        for (tc_viewport_input_manager* input
+                : web_player->viewport_input_managers) {
+            tc_viewport_input_manager_free(input);
+        }
+        web_player->viewport_input_managers.clear();
         tc_log_info("TerminWebHost unload: shutting down EngineCore");
         if (!web_player->engine->shutdown()) {
             tc_log_error("TerminWebHost: EngineCore shutdown failed");
@@ -429,6 +437,28 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
             throw std::runtime_error(
                 "entry scene render_mount created no browser viewports");
         }
+        for (tc_viewport_handle viewport : web_player->viewports) {
+            if (!tc_viewport_alive(viewport)) continue;
+            const char* mode = tc_viewport_get_input_mode(viewport);
+            if (mode && (std::strcmp(mode, "none") == 0 ||
+                    std::strcmp(mode, "editor") == 0)) {
+                continue;
+            }
+            if (mode && mode[0] != '\0' && std::strcmp(mode, "simple") != 0 &&
+                    std::strcmp(mode, "basic") != 0) {
+                throw std::runtime_error(
+                    std::string("unsupported browser viewport input mode: ") + mode);
+            }
+            tc_viewport_input_manager* input =
+                tc_viewport_input_manager_new(viewport);
+            if (!input) {
+                const char* name = tc_viewport_get_name(viewport);
+                throw std::runtime_error(
+                    std::string("failed to create browser input manager for viewport '") +
+                    (name ? name : "") + "'");
+            }
+            web_player->viewport_input_managers.push_back(input);
+        }
         web_player->presentation_display = manager.get_display_by_name("Main");
         if (!tc_display_handle_valid(web_player->presentation_display)) {
             throw std::runtime_error(
@@ -436,10 +466,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         }
         scene_manager.request_render();
         tc_log_info(
-            "TerminWebHost: attached packaged scene '%s' entities=%zu viewports=%zu",
+            "TerminWebHost: attached packaged scene '%s' entities=%zu viewports=%zu input_managers=%zu",
             web_player->package.entry_scene_identity.c_str(),
             web_player->package.scene.entity_count(),
-            web_player->viewports.size());
+            web_player->viewports.size(),
+            web_player->viewport_input_managers.size());
     } catch (const std::exception& exception) {
         web_host_error = exception.what();
         tc_log_error("TerminWebHost load failed: %s", web_host_error.c_str());
@@ -549,6 +580,93 @@ extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
     return web_player && web_player->package.ok && web_player->package.scene.valid()
         ? web_player->package.scene.entity_count()
         : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(
+    uint32_t width, uint32_t height) {
+    if (!web_player || !web_player->device ||
+            !tc_display_handle_valid(web_player->presentation_display) ||
+            web_player_graphics_status != 2) {
+        return 0;
+    }
+    if (width == 0 || height == 0) {
+        web_host_error = "browser canvas size must be positive";
+        tc_log_error("TerminWebHost resize failed: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (web_player->width == width && web_player->height == height) return 1;
+    try {
+        web_player->device->configure_surface(width, height);
+        if (!tc_display_resize(
+                web_player->presentation_display,
+                static_cast<int>(width),
+                static_cast<int>(height))) {
+            throw std::runtime_error("offscreen display rejected browser resize");
+        }
+        web_player->width = width;
+        web_player->height = height;
+        web_player->engine->scene_manager.request_render();
+        return 1;
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost resize failed: %s", web_host_error.c_str());
+        return 0;
+    }
+}
+
+namespace {
+
+bool web_host_input_ready() {
+    return web_player && web_player->engine &&
+        tc_display_handle_valid(web_player->presentation_display);
+}
+
+} // namespace
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_pointer(
+    uint32_t pointer_id, int device, int phase,
+    double x, double y, double pressure) {
+    return web_host_input_ready() && tc_display_dispatch_pointer(
+        web_player->presentation_display,
+        pointer_id, device, phase, x, y, static_cast<float>(pressure));
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_mouse_move(
+    double x, double y) {
+    return web_host_input_ready() && tc_display_dispatch_pointer_move(
+        web_player->presentation_display, x, y);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_mouse_button(
+    double x, double y, int button, int action, int mods,
+    uint32_t click_count) {
+    return web_host_input_ready() && tc_display_dispatch_pointer_button(
+        web_player->presentation_display,
+        x, y, button, action, mods, click_count);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_wheel(
+    double x, double y, double wheel_x, double wheel_y, int mods) {
+    return web_host_input_ready() && tc_display_dispatch_wheel(
+        web_player->presentation_display,
+        x, y, wheel_x, wheel_y, mods);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_key(
+    int key, int scancode, int action, int mods) {
+    return web_host_input_ready() && tc_display_dispatch_key(
+        web_player->presentation_display, key, scancode, action, mods);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_text(
+    const char* text_utf8) {
+    return web_host_input_ready() && text_utf8 && tc_display_dispatch_text_utf8(
+        web_player->presentation_display, text_utf8);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_focus_lost() {
+    return web_host_input_ready() && tc_display_dispatch_focus_lost(
+        web_player->presentation_display);
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(

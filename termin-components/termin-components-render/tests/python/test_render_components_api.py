@@ -117,6 +117,8 @@ def test_orbit_camera_controller_exposes_target_as_vec3():
     controller = OrbitCameraController()
 
     assert isinstance(controller.target, Vec3)
+    assert controller.orbit_mouse_button == 2
+    assert controller.pan_mouse_button == 1
 
     controller.center_on(Vec3(1.0, 2.0, 3.0))
     assert controller.target == Vec3(1.0, 2.0, 3.0)
