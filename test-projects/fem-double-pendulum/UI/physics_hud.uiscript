@@ -1,0 +1,65 @@
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: physics_overlay
+  safe_area: respect
+  background_color: [0, 0, 0, 0]
+  children:
+    - type: termin.gui.Panel
+      name: card_background
+      anchor: top-right
+      offset: [-18, 18]
+      layout:
+        width: 350
+        height: 214
+      background_color: [0.025, 0.045, 0.075, 0.92]
+    - type: termin.gui.VStack
+      name: telemetry_card
+      anchor: top-right
+      offset: [-18, 18]
+      layout:
+        width: 350
+        height: 214
+      padding: [18, 14, 18, 14]
+      spacing: 5
+      children:
+        - type: termin.gui.Label
+          name: card_title
+          text: QP DYNAMICS
+          font_size: 13
+          color: [0.35, 0.72, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_value
+          text: waiting for solver
+          font_size: 29
+          color: [0.94, 0.98, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_change
+          text: Δ from start
+          font_size: 13
+          color: [0.58, 0.76, 0.90, 1]
+          basis: preferred
+        - type: termin.gui.Panel
+          name: divider
+          background_color: [0.18, 0.34, 0.48, 0.9]
+          basis: 1
+        - type: termin.gui.Label
+          name: simulation_caption
+          text: SIMULATION TIME
+          font_size: 11
+          color: [0.43, 0.58, 0.70, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: simulation_value
+          text: 0.00 s   ·   0 steps
+          font_size: 15
+          color: [0.84, 0.91, 0.96, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: topology_value
+          text: QP multibody   ·   2 bodies   ·   2 joints
+          font_size: 12
+          color: [0.48, 0.67, 0.80, 1]
+          basis: preferred

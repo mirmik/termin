@@ -41,11 +41,18 @@ desktop package is expected to build directly:
   --project test-projects/fem-double-pendulum
 ```
 
+The top-right native HUD displays current mechanical energy, its signed change
+from the initial state, simulated time, successful solver steps, and the
+compiled multibody topology size. `FEMPhysicsHudComponent` refreshes the named
+labels in `UI/physics_hud.uiscript` without introducing Python into either the
+simulation or presentation path.
+
 ## Manual verification
 
 - Enter Play mode and let the scene run for at least 20 seconds.
 - The fixed gold anchor and both touching link endpoints should not separate.
 - The links should remain in the XZ plane in the undisturbed authored setup.
+- The telemetry HUD should update energy, time, and successful step count.
 - Check the log for unknown-component, native-QP step, constraint-projection,
   and FEM transform-contract errors.
 

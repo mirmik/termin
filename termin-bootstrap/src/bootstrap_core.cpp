@@ -5,6 +5,7 @@
 #include <components/components_kinematic_bootstrap.hpp>
 #include <components/components_mesh_bootstrap.hpp>
 #include <termin/physics_fem/components_bootstrap.hpp>
+#include <termin/physics_fem_ui/components_bootstrap.hpp>
 #include <termin/entity/unknown_component.hpp>
 #include <termin/foliage/components_bootstrap.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
@@ -253,6 +254,7 @@ void register_builtin_component_types() {
     register_builtin_collision_component_types();
     register_builtin_kinematic_component_types();
     register_builtin_physics_fem_component_types();
+    register_builtin_physics_fem_ui_component_types();
     register_builtin_skeleton_component_types();
     register_builtin_render_component_types();
     register_builtin_foliage_component_types();

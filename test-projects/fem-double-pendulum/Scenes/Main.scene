@@ -604,6 +604,62 @@
             }
           }
         ]
+      },
+      {
+        "uuid": "fem-double-pendulum-hud",
+        "name": "Physics Telemetry HUD",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": false,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "components": [
+          {
+            "source_id": "fem-double-pendulum-hud-ui",
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": {
+                "type": "uuid",
+                "kind": "ui_document",
+                "role": "ui_document",
+                "uuid": "fem-double-pendulum-physics-hud",
+                "name": "physics_hud"
+              },
+              "priority": 1000.0,
+              "input_source_mask": 1.0
+            }
+          },
+          {
+            "source_id": "fem-double-pendulum-hud-telemetry",
+            "type": "FEMPhysicsHudComponent",
+            "data": {
+              "enabled": true,
+              "world_entity_name": "FEM Physics World",
+              "refresh_interval": 0.1
+            }
+          }
+        ]
       }
     ],
     "layer_names": {},
