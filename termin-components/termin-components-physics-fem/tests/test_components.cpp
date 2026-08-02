@@ -398,6 +398,8 @@ TEST_CASE("FEM servo can disable its position control loop")
     pendulum.world->update(0.001f);
 
     CHECK(std::abs(servo->commanded_effort() - 1.8) < 1.0e-12);
+    CHECK(std::abs(servo->position_effort()) < 1.0e-12);
+    CHECK(std::abs(servo->velocity_effort() - 1.8) < 1.0e-12);
     CHECK(std::abs(servo->integral_effort()) < 1.0e-12);
     CHECK(std::abs(motor->applied_effort() - 1.8) < 1.0e-12);
     CHECK(!motor->saturated());
@@ -451,6 +453,11 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     CHECK(std::abs(fixture.servo->position_error()) < 0.5);
     CHECK(std::isfinite(fixture.servo->integral_effort()));
     CHECK(std::abs(fixture.servo->integral_effort()) > 1.0);
+    CHECK(std::abs(fixture.servo->commanded_effort() -
+                   (fixture.servo->position_effort() +
+                    fixture.servo->integral_effort() +
+                    fixture.servo->velocity_effort() +
+                    fixture.servo->feed_forward_effort)) < 1.0e-10);
     CHECK(!fixture.motor->saturated());
     CHECK(std::isfinite(telemetry.motor_power));
     CHECK(std::isfinite(telemetry.motor_work));

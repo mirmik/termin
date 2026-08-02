@@ -305,6 +305,18 @@ namespace termin
                              : std::numeric_limits<double>::quiet_NaN();
     }
 
+    double FEMJointServoComponent::position_effort() const noexcept
+    {
+        return initialized() ? position_effort_
+                             : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double FEMJointServoComponent::velocity_effort() const noexcept
+    {
+        return initialized() ? velocity_effort_
+                             : std::numeric_limits<double>::quiet_NaN();
+    }
+
     double FEMJointServoComponent::integral_effort() const noexcept
     {
         return initialized() ? integral_effort_
@@ -1156,6 +1168,8 @@ namespace termin
                 binding.servo->articulation_ = component.articulation_;
                 binding.servo->dof_index_ = dof_index;
                 binding.servo->coordinate_scale_ = binding.coordinate_scale;
+                binding.servo->position_effort_ = 0.0;
+                binding.servo->velocity_effort_ = 0.0;
                 binding.servo->integral_effort_ = 0.0;
                 binding.servo->commanded_effort_ = 0.0;
                 component.servos_.push_back(binding.servo);
@@ -1300,6 +1314,10 @@ namespace termin
                     servo->enabled()
                         ? non_integral_effort + servo->integral_effort_
                         : 0.0;
+                servo->position_effort_ =
+                    servo->enabled() ? position_effort : 0.0;
+                servo->velocity_effort_ =
+                    servo->enabled() ? velocity_effort : 0.0;
                 if (!std::isfinite(effort))
                 {
                     tc::Log::error(
@@ -1529,6 +1547,8 @@ namespace termin
                     servo->joint_ = nullptr;
                     servo->motor_component_ = nullptr;
                     servo->articulation_ = nullptr;
+                    servo->position_effort_ = 0.0;
+                    servo->velocity_effort_ = 0.0;
                     servo->integral_effort_ = 0.0;
                     servo->commanded_effort_ = 0.0;
                 }
@@ -1585,6 +1605,8 @@ namespace termin
                 servo->joint_ = nullptr;
                 servo->motor_component_ = nullptr;
                 servo->articulation_ = nullptr;
+                servo->position_effort_ = 0.0;
+                servo->velocity_effort_ = 0.0;
                 servo->integral_effort_ = 0.0;
                 servo->commanded_effort_ = 0.0;
             }
@@ -1620,6 +1642,8 @@ namespace termin
                     servo->joint_ = nullptr;
                     servo->motor_component_ = nullptr;
                     servo->articulation_ = nullptr;
+                    servo->position_effort_ = 0.0;
+                    servo->velocity_effort_ = 0.0;
                     servo->integral_effort_ = 0.0;
                     servo->commanded_effort_ = 0.0;
                 }
@@ -1652,6 +1676,8 @@ namespace termin
         component.joint_ = nullptr;
         component.motor_component_ = nullptr;
         component.articulation_ = nullptr;
+        component.position_effort_ = 0.0;
+        component.velocity_effort_ = 0.0;
         component.integral_effort_ = 0.0;
         component.commanded_effort_ = 0.0;
     }
