@@ -321,10 +321,18 @@ skeleton, voxels, navmesh, FEM, foliage и UI.
 - невозможности честно описать capabilities package;
 - слабому dead stripping из-за явных registration calls.
 
-Нужно ввести feature-based bootstrap или явный `RuntimeFeatureSet` с отдельными
-registration units. Package manifest должен позволять проверить, что host
-поддерживает требуемые component/resource/pass types. Это полезная общая
-архитектурная работа также для Android и будущих headless/embedded profiles.
+На 2026-08-02 граница разрезана явным `RuntimeBootstrapProfile`. Native default
+остаётся `Full`, а `Minimal` регистрирует только core scene domain. Для
+Emscripten `TERMIN_BOOTSTRAP_MINIMAL_ONLY` собирает отдельный implementation
+unit и линкует только `termin-base`, `termin-inspect` и `termin-scene`, поэтому
+desktop domains не просачиваются даже как неиспользуемые зависимости.
+
+`RuntimePackageLoader` принимает выбранный профиль. Minimal package может
+содержать core entities без domain resources; неизвестные resource/component
+types и scene extensions отклоняются до частичной десериализации с точной
+логированной диагностикой. Последующее расширение профиля должно добавлять
+малые registration units вместе с соответствующей manifest capability, не
+возвращать единый обязательный full bootstrap.
 
 ### Shared-library assumptions
 
@@ -366,6 +374,11 @@ assumptions.
 
 Оценка: 1–2 недели после установки и фиксации Emscripten toolchain.
 
+Статус на 2026-08-02: core Wasm и minimal-only bootstrap собираются Emscripten.
+Minimal bootstrap dependency closure ограничен `termin-base`, `termin-inspect`
+и `termin-scene`; native-тест package loader подтверждает загрузку core fixture
+и fail-closed поведение для отсутствующих component/resource domains.
+
 ### Phase 1: WebGPU vertical slice
 
 Цель — пройти весь native render path до canvas.
@@ -378,6 +391,23 @@ assumptions.
 - добавить resize и device-error diagnostics.
 
 Оценка: ещё 2–4 недели.
+
+Статус на 2026-08-02: vertical slice реализован в рабочей ветке карточки
+Kanboard #1240. `WebGpuRenderDevice` является обычным `IRenderDevice`, а не
+scene-specific renderer; adapter/device создаются отдельной async factory без
+Asyncify. Backend принимает prebuilt WGSL и обязательный sidecar v3, строит
+group-0 bind layout/resource set, исполняет render pass, обычный и indexed draw,
+submit/present и повторную конфигурацию canvas surface. Web smoke использует два
+checked-in artifact fixtures и весь draw проходит через public tgfx2 handles и
+descriptors.
+
+Текущая capability boundary намеренно узкая и явная: compute pipeline пока не
+представлен в `PipelineDesc`, geometry shaders отсутствуют в WebGPU, push
+constants, storage textures и synchronous readback отклоняются с логированной
+ошибкой. Wasm build и Node smoke прошли. Browser smoke с Chrome for Testing,
+WebGPU через Vulkan/SwiftShader и настоящим canvas также прошёл: он отрисовал
+оба pipeline, выполнил resize с повторной конфигурацией surface и завершился
+маркером `TERMIN_WEB_CORE_SMOKE_PASSED`.
 
 ### Phase 2: runtime package scene
 

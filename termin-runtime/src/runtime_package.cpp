@@ -33,6 +33,7 @@
 #include <termin/render/tc_pipeline_template.hpp>
 
 extern "C" {
+#include <core/tc_component.h>
 #include <render/tc_pass.h>
 }
 
@@ -1857,13 +1858,52 @@ std::string resource_label(const nos::trent& entry) {
     return type + ":" + path;
 }
 
+void validate_minimal_entity_types(
+    const nos::trent& entity,
+    const std::string& scene_path
+) {
+    const nos::trent* components = dict_get(entity, "components");
+    if (components && components->is_list()) {
+        for (const nos::trent& component : components->as_list()) {
+            const std::string type = string_field(component, "type");
+            if (!type.empty() && !tc_component_registry_has(type.c_str())) {
+                throw std::runtime_error(
+                    "minimal runtime profile does not register component type '" +
+                    type + "' required by packaged scene '" + scene_path + "'"
+                );
+            }
+        }
+    }
+    const nos::trent* children = dict_get(entity, "children");
+    if (children && children->is_list()) {
+        for (const nos::trent& child : children->as_list()) {
+            validate_minimal_entity_types(child, scene_path);
+        }
+    }
+}
+
+void validate_minimal_scene(const nos::trent& scene, const std::string& scene_path) {
+    const nos::trent* extensions = dict_get(scene, "extensions");
+    if (extensions && extensions->is_dict() && !extensions->as_dict().empty()) {
+        throw std::runtime_error(
+            "minimal runtime profile does not register scene extensions required by '" +
+            scene_path + "'"
+        );
+    }
+    const nos::trent* entities = dict_get(scene, "entities");
+    if (!entities || !entities->is_list()) {
+        return;
+    }
+    for (const nos::trent& entity : entities->as_list()) {
+        validate_minimal_entity_types(entity, scene_path);
+    }
+}
+
 TcSceneRef load_runtime_scene(
     const std::filesystem::path& root,
     const std::string& rel_path,
     const RuntimePackageLoadOptions& options
 ) {
-    termin::bootstrap::bootstrap_runtime();
-
     const std::filesystem::path scene_path = package_path(root, rel_path);
     const std::string scene_json = read_text_file(scene_path);
     nos::trent scene_data;
@@ -1873,6 +1913,9 @@ TcSceneRef load_runtime_scene(
         throw std::runtime_error(
             "failed to parse packaged runtime scene '" + rel_path + "': " + ex.what()
         );
+    }
+    if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Minimal) {
+        validate_minimal_scene(scene_data, rel_path);
     }
     TcSceneRef scene = TcSceneRef::create("runtime-scene");
     if (!scene.valid()) {
@@ -1926,7 +1969,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
-        termin::bootstrap::bootstrap_runtime();
+        termin::bootstrap::bootstrap_runtime(options.bootstrap_profile);
         const std::filesystem::path manifest_path = package_path(root, "manifest.json");
         if (!std::filesystem::is_regular_file(manifest_path)) {
             result.message = "manifest.json not found in " + root.string();
@@ -2000,8 +2043,18 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
+        if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Minimal &&
+                !resources->as_list().empty()) {
+            const std::string type = string_field(resources->as_list().front(), "type", "<missing>");
+            result.message =
+                "minimal runtime profile does not register resource type '" + type + "'";
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return result;
+        }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
-        ensure_runtime_builtin_textures();
+        if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Full) {
+            ensure_runtime_builtin_textures();
+        }
         constexpr std::array<const char*, 9> resource_order = {
             "shader", "shader_program", "mesh", "texture", "sprite_asset",
             "material", "pipeline", "foliage_data", "ui_document"

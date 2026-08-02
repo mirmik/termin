@@ -4,12 +4,27 @@ if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "termin-web-core can only be built with Emscripten")
 endif()
 
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/web_triangle.wgsl" TRIANGLE_WGSL)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/web_triangle.layout.json" TRIANGLE_LAYOUT)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/web_textured_mesh.wgsl" TEXTURED_MESH_WGSL)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shaders/web_textured_mesh.layout.json" TEXTURED_MESH_LAYOUT)
+configure_file(
+    src/web_render_shaders.hpp.in
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/web_render_shaders.hpp"
+    @ONLY
+)
+
 add_executable(termin_web_core src/web_core.cpp)
+target_include_directories(termin_web_core PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+)
 target_link_libraries(termin_web_core PRIVATE
     tcbase::termin_base
     termin_inspect::termin_inspect
+    termin_bootstrap::termin_bootstrap
     tmesh::termin_mesh
     termin_scene::termin_scene
+    tgfx::termin_graphics2
 )
 target_link_options(termin_web_core PRIVATE
     "--no-entry"
@@ -19,7 +34,8 @@ target_link_options(termin_web_core PRIVATE
     "-sENVIRONMENT=web,node"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sFILESYSTEM=0"
-    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke']"
+    "-sEXPORTED_FUNCTIONS=['_termin_web_core_smoke','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString']"
 )
 set_target_properties(termin_web_core PROPERTIES
     OUTPUT_NAME "termin_web_core"
