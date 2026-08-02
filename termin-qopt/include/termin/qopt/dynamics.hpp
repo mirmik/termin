@@ -5,6 +5,7 @@
 #include <memory>
 #include <string_view>
 
+#include <termin/qopt/active_set_qp.hpp>
 #include <termin/qopt/block_assembly.hpp>
 #include <termin/qopt/equality_qp.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
@@ -236,6 +237,22 @@ namespace termin::qopt
             (void)constraint_reactions;
         }
 
+        // Unilateral reactions are non-negative QP multipliers for C*v <= d.
+        // Their physical generalized impulse is -C^T*reaction. The tight mask
+        // contains 1 for rows at their limit and 0 otherwise, and can be kept
+        // by a persistent-contact contribution as a later warm-start hint.
+        virtual void
+        apply_unilateral_solution(const DynamicsTopology& topology,
+                                  const DynamicsUnilateralTopology& unilateral_topology,
+                                  ConstDenseVectorView reactions,
+                                  ConstDenseVectorView tight_mask) noexcept
+        {
+            (void)topology;
+            (void)unilateral_topology;
+            (void)reactions;
+            (void)tight_mask;
+        }
+
         // State-owning contributions write their generalized velocity block.
         // The collector initializes the destination with NaNs, so every
         // registered DOF must have exactly one owner that supplies finite
@@ -318,7 +335,6 @@ namespace termin::qopt
         DynamicsFailure,
         PositionProjectionFailure,
         VelocityProjectionFailure,
-        UnilateralSolveUnavailable,
         InternalFailure,
     };
 
@@ -340,6 +356,7 @@ namespace termin::qopt
         DynamicsSystemDiagnostic diagnostic =
             DynamicsSystemDiagnostic::ModelNotFinalized;
         QpSolveResult dynamics;
+        QpSolveResult velocity_projection;
         double position_constraint_linf = 0.0;
         double velocity_constraint_linf = 0.0;
         std::size_t position_iterations = 0;
@@ -393,5 +410,34 @@ namespace termin::qopt
     solve_constrained_dynamics(ConstDynamicsSystemView system,
                                DynamicsSolutionView solution,
                                QpTolerance tolerance = {}) noexcept;
+
+    struct DynamicsVelocitySolutionView
+    {
+        DenseVectorView velocity;
+        // Physical generalized equality impulse is J^T*reaction.
+        DenseVectorView constraint_reaction;
+        // Non-negative multiplier for C*v <= d. The physical generalized
+        // unilateral impulse is -C^T*reaction.
+        DenseVectorView unilateral_reaction;
+        // Optional 0/1 output. A row is tight when |C*v-d| is within the
+        // active tolerance. Empty means that the caller does not need it.
+        DenseVectorView tight_unilateral_mask;
+    };
+
+    // Mass-metric velocity projection:
+    //
+    //   minimize 0.5*v^T*M*v - load^T*v
+    //   subject to J*v = rhs
+    //              C*v <= d
+    //
+    // For an unconstrained trial velocity v*, contributions normally assemble
+    // load=M*v*. Optional warm-start storage is borrowed and contact-agnostic.
+    // Outputs are transactional and are modified only for an Optimal result.
+    [[nodiscard]] TERMIN_QOPT_API QpSolveResult
+    solve_unilateral_velocity(ConstDynamicsSystemView system,
+                              ConstDynamicsUnilateralView unilateral,
+                              DynamicsVelocitySolutionView solution,
+                              ActiveSetQpWarmStartView warm_start = {},
+                              ActiveSetQpOptions options = {}) noexcept;
 
 } // namespace termin::qopt
