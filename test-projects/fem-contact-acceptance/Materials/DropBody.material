@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-contact-drop-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.12, 0.65, 0.95, 1.0],
+    "u_metallic": 0.18,
+    "u_roughness": 0.3,
+    "u_diffuse_mul": 1.0
+  }
+}

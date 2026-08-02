@@ -146,6 +146,21 @@ namespace termin
             return stream.str();
         }
 
+        std::string format_contacts(const FEMPhysicsTelemetry& telemetry)
+        {
+            std::ostringstream stream;
+            stream << telemetry.contact_count << " contacts   ·   "
+                   << telemetry.active_contact_count << " active   ·   "
+                   << telemetry.cached_contact_count << " cached / "
+                   << telemetry.warm_started_contact_count << " warm   ·   gap "
+                   << std::fixed << std::setprecision(3)
+                   << telemetry.minimum_contact_gap * 1000.0
+                   << " mm   ·   impulse " << telemetry.normal_impulse_sum
+                   << " N·s   ·   reaction " << telemetry.normal_reaction_sum
+                   << " N";
+            return stream.str();
+        }
+
         std::string format_servo(const FEMJointServoComponent& servo,
                                  const FEMArticulationMotorComponent& motor)
         {
@@ -219,6 +234,20 @@ namespace termin
             "effort_plot_widget_name",
             "Effort Plot Widget",
             "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::contact_gap_plot_widget_name,
+            "FEMPhysicsHudComponent",
+            "contact_gap_plot_widget_name",
+            "Contact Gap Plot Widget",
+            "string");
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsHudComponent::contact_reaction_plot_widget_name,
+            "FEMPhysicsHudComponent",
+            "contact_reaction_plot_widget_name",
+            "Contact Reaction Plot Widget",
+            "string");
         tc::stage_inspect_field(inspect,
                                 &FEMPhysicsHudComponent::plot_history,
                                 "FEMPhysicsHudComponent",
@@ -253,6 +282,9 @@ namespace termin
         plot_velocity_effort_.clear();
         plot_commanded_effort_.clear();
         plot_applied_effort_.clear();
+        contact_plot_time_.clear();
+        contact_plot_gap_.clear();
+        contact_plot_reaction_.clear();
         refresh();
     }
 
@@ -290,6 +322,9 @@ namespace termin
         plot_velocity_effort_.clear();
         plot_commanded_effort_.clear();
         plot_applied_effort_.clear();
+        contact_plot_time_.clear();
+        contact_plot_gap_.clear();
+        contact_plot_reaction_.clear();
         CxxComponent::on_destroy();
     }
 
@@ -342,6 +377,69 @@ namespace termin
         {
             (void)set_label(document, "motor_value", format_motors(telemetry));
         }
+        if (find_label(document, "contact_value") != nullptr)
+        {
+            (void)set_label(
+                document, "contact_value", format_contacts(telemetry));
+        }
+#ifdef TERMIN_PHYSICS_FEM_UI_HAS_TCPLOT
+        tcplot::gui_native::Plot2D* contact_gap_plot =
+            find_plot(document, contact_gap_plot_widget_name);
+        tcplot::gui_native::Plot2D* contact_reaction_plot =
+            find_plot(document, contact_reaction_plot_widget_name);
+        if ((contact_gap_plot != nullptr || contact_reaction_plot != nullptr) &&
+            telemetry.initialized)
+        {
+            if (!contact_plot_time_.empty() &&
+                telemetry.simulated_time < contact_plot_time_.back())
+            {
+                contact_plot_time_.clear();
+                contact_plot_gap_.clear();
+                contact_plot_reaction_.clear();
+            }
+            contact_plot_time_.push_back(telemetry.simulated_time);
+            contact_plot_gap_.push_back(telemetry.minimum_contact_gap);
+            contact_plot_reaction_.push_back(telemetry.normal_reaction_sum);
+
+            const double first_time =
+                telemetry.simulated_time - std::max(plot_history, 1.0);
+            const auto first = std::lower_bound(contact_plot_time_.begin(),
+                                                contact_plot_time_.end(),
+                                                first_time);
+            const std::size_t erase_count =
+                static_cast<std::size_t>(first - contact_plot_time_.begin());
+            if (erase_count > 0)
+            {
+                contact_plot_time_.erase(contact_plot_time_.begin(), first);
+                contact_plot_gap_.erase(contact_plot_gap_.begin(),
+                                        contact_plot_gap_.begin() +
+                                            erase_count);
+                contact_plot_reaction_.erase(contact_plot_reaction_.begin(),
+                                             contact_plot_reaction_.begin() +
+                                                 erase_count);
+            }
+            if (contact_gap_plot != nullptr)
+            {
+                if (contact_gap_plot->line_count() != 1)
+                {
+                    contact_gap_plot->clear_lines();
+                    contact_gap_plot->add_line();
+                }
+                (void)contact_gap_plot->set_line_data(
+                    0, contact_plot_time_, contact_plot_gap_);
+            }
+            if (contact_reaction_plot != nullptr)
+            {
+                if (contact_reaction_plot->line_count() != 1)
+                {
+                    contact_reaction_plot->clear_lines();
+                    contact_reaction_plot->add_line();
+                }
+                (void)contact_reaction_plot->set_line_data(
+                    0, contact_plot_time_, contact_plot_reaction_);
+            }
+        }
+#endif
         if (!servo_entity_name.empty())
         {
             Entity servo_entity = scene.find_entity_by_name(servo_entity_name);
@@ -417,21 +515,21 @@ namespace termin
                                                erase_count);
                     plot_target_.erase(plot_target_.begin(),
                                        plot_target_.begin() + erase_count);
-                    plot_position_effort_.erase(
-                        plot_position_effort_.begin(),
-                        plot_position_effort_.begin() + erase_count);
-                    plot_integral_effort_.erase(
-                        plot_integral_effort_.begin(),
-                        plot_integral_effort_.begin() + erase_count);
-                    plot_velocity_effort_.erase(
-                        plot_velocity_effort_.begin(),
-                        plot_velocity_effort_.begin() + erase_count);
+                    plot_position_effort_.erase(plot_position_effort_.begin(),
+                                                plot_position_effort_.begin() +
+                                                    erase_count);
+                    plot_integral_effort_.erase(plot_integral_effort_.begin(),
+                                                plot_integral_effort_.begin() +
+                                                    erase_count);
+                    plot_velocity_effort_.erase(plot_velocity_effort_.begin(),
+                                                plot_velocity_effort_.begin() +
+                                                    erase_count);
                     plot_commanded_effort_.erase(
                         plot_commanded_effort_.begin(),
                         plot_commanded_effort_.begin() + erase_count);
-                    plot_applied_effort_.erase(
-                        plot_applied_effort_.begin(),
-                        plot_applied_effort_.begin() + erase_count);
+                    plot_applied_effort_.erase(plot_applied_effort_.begin(),
+                                               plot_applied_effort_.begin() +
+                                                   erase_count);
                 }
 
                 if (coordinate_plot != nullptr)

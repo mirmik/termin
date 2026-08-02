@@ -1,0 +1,81 @@
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: physics_overlay
+  safe_area: respect
+  background_color: [0, 0, 0, 0]
+  children:
+    - type: termin.gui.Panel
+      name: card_background
+      anchor: top-right
+      offset: [-18, 18]
+      layout: {width: 570, height: 660}
+      background_color: [0.02, 0.04, 0.075, 0.94]
+    - type: termin.gui.VStack
+      name: telemetry_card
+      anchor: top-right
+      offset: [-18, 18]
+      layout: {width: 570, height: 660}
+      padding: [18, 14, 18, 14]
+      spacing: 6
+      children:
+        - type: termin.gui.Label
+          name: card_title
+          text: FRICTIONLESS NATIVE CONTACT ACCEPTANCE
+          font_size: 13
+          color: [0.35, 0.74, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_value
+          text: waiting for solver
+          font_size: 25
+          color: [0.94, 0.98, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: energy_change
+          text: mechanical energy change
+          font_size: 12
+          color: [0.58, 0.76, 0.90, 1]
+          basis: preferred
+        - type: termin.gui.Panel
+          name: divider
+          background_color: [0.18, 0.34, 0.48, 0.9]
+          basis: 1
+        - type: termin.gui.Label
+          name: simulation_value
+          text: 0.00 s   ·   0 steps
+          font_size: 13
+          color: [0.84, 0.91, 0.96, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: topology_value
+          text: waiting for topology
+          font_size: 12
+          color: [0.48, 0.67, 0.80, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: motor_value
+          text: waiting for articulation motor
+          font_size: 12
+          color: [0.96, 0.68, 0.28, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          name: contact_value
+          text: waiting for contacts
+          font_size: 12
+          color: [0.48, 0.92, 0.70, 1]
+          basis: preferred
+        - type: termin.gui.Plot2D
+          name: contact_gap_plot
+          title: MINIMUM SIGNED GAP
+          x_label: time, s
+          y_label: gap, m
+          auto_fit: true
+          basis: 245
+        - type: termin.gui.Plot2D
+          name: contact_reaction_plot
+          title: TOTAL NORMAL REACTION
+          x_label: time, s
+          y_label: reaction, N
+          auto_fit: true
+          basis: 245

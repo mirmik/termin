@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -14,6 +15,21 @@
 
 namespace termin
 {
+    namespace
+    {
+        std::uint64_t nonzero_key(std::uint64_t key) noexcept
+        {
+            return key != 0 ? key : 0x9e3779b97f4a7c15ULL;
+        }
+
+        std::uint64_t combine_key(std::uint64_t seed,
+                                  std::uint64_t value) noexcept
+        {
+            return nonzero_key(seed ^ (value + 0x9e3779b97f4a7c15ULL +
+                                       (seed << 6U) + (seed >> 2U)));
+        }
+    } // namespace
+
     bool FEMPhysicsWorldComponent::refresh_contacts()
     {
         if (contacts_ == nullptr)
@@ -257,6 +273,43 @@ namespace termin
             return qopt::ContactEndpoint3D{};
         };
 
+        std::vector<std::pair<colliders::Collider*, const EndpointOwner*>>
+            live_endpoints;
+        live_endpoints.reserve(endpoint_owners.size());
+        for (const auto& [collider, endpoint] : endpoint_owners)
+        {
+            live_endpoints.emplace_back(collider, &endpoint);
+        }
+        std::sort(
+            live_endpoints.begin(),
+            live_endpoints.end(),
+            [](const auto& a, const auto& b)
+            { return std::less<colliders::Collider*>{}(a.first, b.first); });
+        std::vector<std::uint64_t> live_groups;
+        for (std::size_t first = 0; first < live_endpoints.size(); ++first)
+        {
+            const EndpointOwner& a = *live_endpoints[first].second;
+            for (std::size_t second = first + 1; second < live_endpoints.size();
+                 ++second)
+            {
+                const EndpointOwner& b = *live_endpoints[second].second;
+                if (a.kind == EndpointKind::Ignored ||
+                    b.kind == EndpointKind::Ignored ||
+                    (a.kind == EndpointKind::Static &&
+                     b.kind == EndpointKind::Static) ||
+                    same_dynamic_endpoint(a, b) ||
+                    adjacent_articulation_links(a, b) ||
+                    connected_maximal_bodies(a, b))
+                {
+                    continue;
+                }
+                collision::ContactPatch pair;
+                pair.collider_a = live_endpoints[first].first;
+                pair.collider_b = live_endpoints[second].first;
+                live_groups.push_back(nonzero_key(pair.pair_key()));
+            }
+        }
+
         for (const collision::ContactPatch& patch : patches)
         {
             const auto owner_a = endpoint_owners.find(patch.collider_a);
@@ -290,16 +343,30 @@ namespace termin
             {
                 const collision::ContactCandidate& point =
                     patch.points[point_index];
-                std::uint64_t key =
-                    patch.pair_key() ^
-                    (0x9e3779b97f4a7c15ULL + point_index +
-                     (patch.pair_key() << 6U) + (patch.pair_key() >> 2U));
+                const std::uint64_t group_key = nonzero_key(patch.pair_key());
+                std::uint32_t feature_a = point.features.feature_a;
+                std::uint32_t feature_b = point.features.feature_b;
+                if (std::less<colliders::Collider*>{}(patch.collider_b,
+                                                      patch.collider_a))
+                {
+                    std::swap(feature_a, feature_b);
+                }
+                std::uint64_t feature_key = (std::uint64_t{feature_a} << 32U) |
+                                            std::uint64_t{feature_b};
+                if (feature_a ==
+                        collision::ContactFeaturePair::INVALID_FEATURE &&
+                    feature_b == collision::ContactFeaturePair::INVALID_FEATURE)
+                {
+                    feature_key = point_index;
+                }
+                std::uint64_t key = combine_key(group_key, feature_key);
                 while (!contact_keys.insert(key).second)
                 {
                     ++key;
                 }
                 contacts.push_back({
                     .key = key,
+                    .group_key = group_key,
                     .endpoint_a = make_endpoint(a, point.point_on_a_world),
                     .endpoint_b = make_endpoint(b, point.point_on_b_world),
                     .normal_from_a_to_b_world = patch.normal_world,
@@ -308,8 +375,8 @@ namespace termin
             }
         }
 
-        const qopt::Contact3DDiagnostic diagnostic =
-            contacts_->set_contacts(std::move(contacts));
+        const qopt::Contact3DDiagnostic diagnostic = contacts_->set_contacts(
+            std::move(contacts), std::move(live_groups));
         if (diagnostic != qopt::Contact3DDiagnostic::None)
         {
             tc::Log::error(

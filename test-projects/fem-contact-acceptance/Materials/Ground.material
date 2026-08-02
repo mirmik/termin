@@ -1,0 +1,10 @@
+{
+  "uuid": "fem-contact-ground-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.045, 0.075, 0.12, 1.0],
+    "u_metallic": 0.08,
+    "u_roughness": 0.82,
+    "u_diffuse_mul": 1.0
+  }
+}

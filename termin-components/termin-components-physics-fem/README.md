@@ -88,7 +88,8 @@ model error.
 The world also exposes a UI-neutral `FEMPhysicsTelemetry` snapshot containing
 simulation time, successful step count, topology size, initial/current
 mechanical energy, motor effort, power, accumulated work, saturation, contact
-count, active normal rows, minimum gap, and maximum normal reaction.
+count, cached and warm-started contact count, active normal rows, minimum gap,
+normal impulse sum, normal reaction sum, and maximum normal reaction.
 Motor work is a per-step diagnostic integral, not an additional conserved
 state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.
@@ -102,6 +103,16 @@ co-located `ColliderComponent` to either a maximal body, an articulation link,
 or the static world. Collider rebuild, disable, removal, and scene teardown are
 therefore observed before a patch is converted to `ContactEndpoint3D` values,
 without retaining collider pointers in `termin-qopt` across substeps.
+
+The adapter derives deterministic contact keys from the canonical collider
+pair and collision feature IDs. It supplies all currently live collider-pair
+group keys even when narrow phase returns no penetrating patch. This lets the
+solver-side `ContactSet3DContribution` retain only positive-impulse support
+points across the exact-surface query gap, while collider removal, disable, or
+filter changes still expire the group immediately. A fresh patch for a pair
+replaces its old feature set. Persistence distance, cached impulses, and
+active-set hints remain solver policy; collision owns only geometry and stable
+feature identity.
 
 `collision_layer_mask` selects entity layers accepted by the FEM world.
 Same-body contacts are always discarded. Contacts between directly connected

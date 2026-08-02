@@ -705,6 +705,8 @@ namespace termin::qopt
         std::vector<double> unilateral_limit;
         std::vector<double> unilateral_reaction;
         std::vector<double> unilateral_tight_mask;
+        std::vector<double> unilateral_warm_mask;
+        std::vector<double> velocity_warm_primal;
         std::vector<double> dof_solution;
         std::vector<double> constraint_reaction;
         std::vector<double> velocity;
@@ -714,6 +716,7 @@ namespace termin::qopt
         std::vector<double> corrected_configuration_velocity;
         std::size_t step_contribution_count = 0;
         bool finalized = false;
+        bool velocity_warm_primal_valid = false;
 
         [[nodiscard]] DynamicsSystemDiagnostic
         assemble(DynamicsAssembly& assembly, DynamicsAssemblyPhase phase) noexcept
@@ -801,7 +804,40 @@ namespace termin::qopt
             unilateral_limit.assign(constraints, 0.0);
             unilateral_reaction.assign(constraints, 0.0);
             unilateral_tight_mask.assign(constraints, 0.0);
+            unilateral_warm_mask.assign(constraints, 0.0);
             return DynamicsSystemDiagnostic::None;
+        }
+
+        [[nodiscard]] ActiveSetQpWarmStartView unilateral_warm_start() noexcept
+        {
+            if (!velocity_warm_primal_valid ||
+                velocity_warm_primal.size() != topology.dof_count() ||
+                unilateral_warm_mask.size() != unilateral_topology.constraint_count())
+            {
+                return {};
+            }
+            std::fill(unilateral_warm_mask.begin(), unilateral_warm_mask.end(), 0.0);
+            bool has_hint = false;
+            const DenseVectorView mask{
+                unilateral_warm_mask.data(),
+                unilateral_warm_mask.size(),
+                1,
+            };
+            for (const auto& contribution : contributions)
+            {
+                has_hint |= contribution->write_unilateral_warm_start(
+                    unilateral_topology, mask);
+            }
+            if (!has_hint)
+            {
+                return {};
+            }
+            return {
+                {velocity_warm_primal.data(), velocity_warm_primal.size(), 1},
+                {unilateral_warm_mask.data(), unilateral_warm_mask.size(), 1},
+                {},
+                {},
+            };
         }
 
         void commit_step() noexcept
@@ -1137,6 +1173,8 @@ namespace termin::qopt
             impl_->corrected_midpoint_velocity.assign(dofs, 0.0);
             impl_->configuration_velocity.assign(dofs, 0.0);
             impl_->corrected_configuration_velocity.assign(dofs, 0.0);
+            impl_->velocity_warm_primal.assign(dofs, 0.0);
+            impl_->velocity_warm_primal_valid = false;
             impl_->finalized = true;
             return DynamicsSystemDiagnostic::None;
         }
@@ -1525,7 +1563,9 @@ namespace termin::qopt
                         DynamicsSystemDiagnostic::AssemblyFailure,
                         second_dynamics);
                 }
-                const QpSolveResult velocity_projection = solve_unilateral_velocity(
+                const ActiveSetQpWarmStartView warm_start =
+                    impl_->unilateral_warm_start();
+                QpSolveResult velocity_projection = solve_unilateral_velocity(
                     assembly.system(),
                     assembly.unilateral_constraints(),
                     {
@@ -1550,8 +1590,30 @@ namespace termin::qopt
                             1,
                         },
                     },
-                    {},
+                    warm_start,
                     {.tolerance = options.qp_tolerance});
+                if (velocity_projection.status != QpStatus::Optimal &&
+                    velocity_projection.diagnostic == QpDiagnostic::InvalidWarmStart &&
+                    !warm_start.primal.empty())
+                {
+                    velocity_projection = solve_unilateral_velocity(
+                        assembly.system(),
+                        assembly.unilateral_constraints(),
+                        {
+                            {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                            {impl_->constraint_reaction.data(),
+                             impl_->constraint_reaction.size(),
+                             1},
+                            {impl_->unilateral_reaction.data(),
+                             impl_->unilateral_reaction.size(),
+                             1},
+                            {impl_->unilateral_tight_mask.data(),
+                             impl_->unilateral_tight_mask.size(),
+                             1},
+                        },
+                        {},
+                        {.tolerance = options.qp_tolerance});
+                }
                 result.velocity_projection = velocity_projection;
                 if (velocity_projection.status != QpStatus::Optimal)
                 {
@@ -1579,6 +1641,9 @@ namespace termin::qopt
                 failure.velocity_projection = result.velocity_projection;
                 return failure;
             }
+
+            impl_->velocity_warm_primal = impl_->dof_solution;
+            impl_->velocity_warm_primal_valid = true;
 
             impl_->commit_step();
             step_open = false;

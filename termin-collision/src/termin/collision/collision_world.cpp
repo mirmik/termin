@@ -352,8 +352,10 @@ namespace termin::collision
         auto clip_planes = build_clip_planes(ref_verts, ref_normal);
         auto clipped = sutherland_hodgman_clip(inc_verts, clip_planes);
         ClipPlane ref_plane{ref_normal, -ref_normal.dot(ref_verts[0])};
-        for (const auto& p : clipped)
+        for (std::size_t clipped_index = 0; clipped_index < clipped.size();
+             ++clipped_index)
         {
+            const Vec3& p = clipped[clipped_index];
             double depth = ref_plane.signed_distance(p);
             if (depth < 0)
             {
@@ -364,7 +366,8 @@ namespace termin::collision
                 candidate.features.feature_a =
                     static_cast<uint32_t>(ref_face_idx);
                 candidate.features.feature_b =
-                    static_cast<uint32_t>(inc_face_idx);
+                    (static_cast<uint32_t>(inc_face_idx) << 16U) |
+                    static_cast<uint32_t>(clipped_index);
                 patch.points.push_back(candidate);
             }
         }

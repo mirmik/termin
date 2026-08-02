@@ -89,22 +89,39 @@ diagnostics.
 Frictionless normal contact is the next implemented native slice.
 `ContactSet3DContribution` accepts caller-keyed pairs of static, maximal-body,
 or articulation-link endpoints together with a unit world normal and signed
-gap. It registers transient `C v <= d` rows each step, exposes the resulting
-normal impulse/reaction and tight-row state, and has no dependency on scene
-entities, colliders, or Eigen. Penetration uses split position projection:
+gap. Contact keys identify material feature pairs; an optional group key
+identifies their collider pair. The two-argument `set_contacts()` overload also
+accepts the complete set of live groups, allowing a previously supporting
+point to survive a narrow-phase miss while its recomputed gap remains within
+the configured persistence distance. A fresh manifold for the same group
+replaces the old one deterministically, and removal of the group expires it
+immediately. Cache size is explicitly bounded.
+
+The contribution registers transient `C v <= d` rows each step, exposes the
+resulting normal impulse/reaction and tight-row state, and has no dependency on
+scene entities, colliders, or Eigen. Only points with a positive cached normal
+impulse are persisted or advertised as active-set hints; geometrically tight
+zero-effort points must not turn a statically indeterminate manifold into an
+overconstrained one. `DynamicsSystem` combines those row hints with its prior
+projected velocity, rejects an invalid warm start through the QP contract, and
+retries cold. A failed transactional step clears contact cache state rather
+than leaking uncommitted impulses into the next step.
+
+Penetration uses split position projection:
 configuration correction is solved in the mass metric, while the physical
 midpoint velocity is preserved until the separate unilateral velocity solve.
 Consequently correction does not manufacture rebound energy. Native tests
 cover exact Jacobian signs, mixed endpoint formulations, penetration recovery,
 impact, resting support, separation, contact removal, and invalid transactional
-input. Collision-world adaptation, persistent manifold matching, warm starts,
-and friction remain later integration slices.
+input, deterministic cache order and capacity, persistence, warm start, feature
+replacement, and rollback. Coulomb friction remains a later integration slice.
 
 The separate
 `termin-components-physics-fem` layer now compiles
 an explicit root/joint/body entity hierarchy into this public model and keeps
 solved joint coordinates synchronized with `RotatorComponent` or
-`ActuatorComponent`. Floating bases, collision-world contact adaptation, and a
+`ActuatorComponent`. The FEM adapter also translates solver-neutral collision
+patches into the keyed contact-set contract. Floating articulation bases and a
 linear-time dynamics backend remain subsequent slices.
 
 The language-neutral solver contract lives in

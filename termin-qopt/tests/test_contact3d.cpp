@@ -58,11 +58,14 @@ namespace
         return result;
     }
 
-    Contact3D
-    ground_contact(std::uint64_t key, RigidBody3DContribution& body, double gap)
+    Contact3D ground_contact(std::uint64_t key,
+                             RigidBody3DContribution& body,
+                             double gap,
+                             std::uint64_t group_key = 0)
     {
         return {
             .key = key,
+            .group_key = group_key,
             .endpoint_a = ContactEndpoint3D::static_world(Vec3::zero()),
             .endpoint_b = ContactEndpoint3D::rigid_body(body, Vec3::zero()),
             .normal_from_a_to_b_world = Vec3::unit_y(),
@@ -285,6 +288,95 @@ namespace
         TERMIN_QOPT_CHECK(!contact_set->states()[0].active);
     }
 
+    void test_persistent_contact_cache_and_warm_start()
+    {
+        DynamicsSystem system;
+        auto* body =
+            add(system,
+                std::make_unique<RigidBody3DContribution>(
+                    unit_inertia(), RigidBody3DState{}, Vec3{0.0, -9.81, 0.0}));
+        auto contacts = std::make_unique<ContactSet3DContribution>("persistent");
+        ContactSet3DContribution* contact_set = contacts.get();
+        TERMIN_QOPT_CHECK(contacts->set_contacts({ground_contact(9, *body, 0.0, 77)},
+                                                 {77}) == Contact3DDiagnostic::None);
+        add(system, std::move(contacts));
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+
+        const DynamicsSystemStepResult first = system.step(step_options());
+        TERMIN_QOPT_CHECK(first.ok());
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 1);
+        TERMIN_QOPT_CHECK(contact_set->states()[0].active);
+
+        // The geometric query missed the exactly touching pair, but the pair
+        // itself remains live. The cached material points keep the row alive.
+        TERMIN_QOPT_CHECK(contact_set->set_contacts({}, {77}) ==
+                          Contact3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(contact_set->contacts().size() == 1);
+        const DynamicsSystemStepResult second = system.step(step_options());
+        TERMIN_QOPT_CHECK(second.ok());
+        TERMIN_QOPT_CHECK(contact_set->warm_started_contact_count() == 1);
+        TERMIN_QOPT_CHECK(second.velocity_projection.iterations <=
+                          first.velocity_projection.iterations);
+        check_near(contact_set->states()[0].normal_reaction, 9.81, 2e-8);
+
+        // A fresh feature in the same live group replaces, rather than
+        // accumulating with, the old feature.
+        TERMIN_QOPT_CHECK(
+            contact_set->set_contacts({ground_contact(10, *body, 0.0, 77)}, {77}) ==
+            Contact3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(contact_set->contacts().size() == 1);
+        TERMIN_QOPT_CHECK(contact_set->contacts()[0].key == 10);
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 0);
+
+        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 1);
+        TERMIN_QOPT_CHECK(contact_set->set_contacts({}, {}) ==
+                          Contact3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(contact_set->contacts().empty());
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 0);
+    }
+
+    void test_contact_cache_order_capacity_and_rollback()
+    {
+        RigidBody3DContribution body(unit_inertia());
+        ContactSet3DContribution ordered;
+        TERMIN_QOPT_CHECK(ordered.set_contacts({ground_contact(30, body, 0.0),
+                                                ground_contact(10, body, 0.0),
+                                                ground_contact(20, body, 0.0)}) ==
+                          Contact3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(ordered.contacts()[0].key == 10);
+        TERMIN_QOPT_CHECK(ordered.contacts()[1].key == 20);
+        TERMIN_QOPT_CHECK(ordered.contacts()[2].key == 30);
+        TERMIN_QOPT_CHECK(ordered.set_maximum_cached_contacts(3));
+        TERMIN_QOPT_CHECK(ordered.set_contacts({ground_contact(1, body, 0.0),
+                                                ground_contact(2, body, 0.0),
+                                                ground_contact(3, body, 0.0),
+                                                ground_contact(4, body, 0.0)}) ==
+                          Contact3DDiagnostic::CacheCapacityExceeded);
+
+        DynamicsSystem system;
+        auto* dynamic_body =
+            add(system,
+                std::make_unique<RigidBody3DContribution>(
+                    unit_inertia(), RigidBody3DState{}, Vec3{0.0, -9.81, 0.0}));
+        auto contacts = std::make_unique<ContactSet3DContribution>("rollback-cache");
+        ContactSet3DContribution* contact_set = contacts.get();
+        TERMIN_QOPT_CHECK(
+            contacts->set_contacts({ground_contact(1, *dynamic_body, 0.0, 99)}, {99}) ==
+            Contact3DDiagnostic::None);
+        add(system, std::move(contacts));
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 1);
+
+        Contact3D invalid = ground_contact(1, *dynamic_body, 0.0, 99);
+        invalid.normal_from_a_to_b_world = {0.0, 2.0, 0.0};
+        TERMIN_QOPT_CHECK(contact_set->set_contacts({invalid}, {99}) ==
+                          Contact3DDiagnostic::InvalidNormal);
+        TERMIN_QOPT_CHECK(!system.step(step_options()).ok());
+        TERMIN_QOPT_CHECK(contact_set->cached_contact_count() == 0);
+    }
+
     void test_articulation_endpoint()
     {
         std::vector<ArticulationLink3D> links{
@@ -437,6 +529,8 @@ int main()
     test_split_position_correction();
     test_impact_and_removal();
     test_resting_support_and_separation();
+    test_persistent_contact_cache_and_warm_start();
+    test_contact_cache_order_capacity_and_rollback();
     test_articulation_endpoint();
     test_articulation_contact_rows();
     test_validation();

@@ -39,7 +39,11 @@ namespace termin
         std::size_t saturated_motor_count = 0;
         std::size_t contact_count = 0;
         std::size_t active_contact_count = 0;
+        std::size_t cached_contact_count = 0;
+        std::size_t warm_started_contact_count = 0;
         double minimum_contact_gap = 0.0;
+        double normal_impulse_sum = 0.0;
+        double normal_reaction_sum = 0.0;
         double normal_reaction_linf = 0.0;
         double motor_effort_linf = 0.0;
         double motor_power = 0.0;
@@ -174,6 +178,10 @@ namespace termin
 
         static void register_type();
         void on_destroy() override;
+
+        [[nodiscard]] bool initialized() const noexcept;
+        [[nodiscard]] Screw3 velocity_local() const noexcept;
+        bool set_velocity_local(Screw3 velocity) noexcept;
 
     private:
         friend class FEMPhysicsWorldComponent;

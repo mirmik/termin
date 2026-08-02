@@ -317,8 +317,11 @@ future persistent contact contribution rather than `DynamicsSystem`.
 7. Validate the frictionless vertical slice in a separate acceptance project:
    a maximal body and an articulation link contact static terrain, with gap,
    reaction, active-set and energy telemetry.
-8. Add deterministic persistent manifold matching and warm start in the contact
-   contribution, then add a documented convex Coulomb-friction approximation.
+8. Deterministic persistent manifold matching and warm start are implemented
+   in the contact contribution. Geometry remains stateless and solver-neutral:
+   collision supplies stable pair/feature identities, while the contribution
+   owns bounded temporal state, supporting-point selection and active-set hints.
+   A documented convex Coulomb-friction approximation remains the next slice.
 
 Floating-base dynamics and standing or locomotion demos follow this contact
 foundation. They are not prerequisites for frictionless contact correctness.

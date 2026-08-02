@@ -2,6 +2,7 @@
 
 GUARD_TEST_MAIN();
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -178,7 +179,10 @@ namespace
         termin::ColliderComponent* terrain_collider = nullptr;
     };
 
-    MaximalContactScene make_maximal_contact_scene()
+    MaximalContactScene
+    make_maximal_contact_scene(double initial_height = 0.45,
+                               termin::Vec3 gravity = termin::Vec3::zero(),
+                               double time_step = 0.01)
     {
         using namespace termin;
 
@@ -192,7 +196,7 @@ namespace
         terrain.add_component(result.terrain_collider);
 
         Entity body_entity = result.scene.create_entity("Falling Body");
-        body_entity.transform().set_local_position({0.0, 0.0, 0.45});
+        body_entity.transform().set_local_position({0.0, 0.0, initial_height});
         result.body = new FEMRigidBodyComponent();
         result.body->mass = 1.0;
         result.body->inertia_diagonal = {1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0};
@@ -203,8 +207,8 @@ namespace
 
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
-        result.world->gravity = {0.0, 0.0, 0.0};
-        result.world->time_step = 0.01;
+        result.world->gravity = gravity;
+        result.world->time_step = time_step;
         world_entity.add_component(result.world);
         return result;
     }
@@ -617,6 +621,165 @@ TEST_CASE(
           height_before);
 
     fixture.scene.destroy();
+}
+
+TEST_CASE("FEM frictionless contact arrests a falling maximal body")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    MaximalContactScene fixture =
+        make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
+    fixture.world->start();
+    REQUIRE(fixture.body->initialized());
+    REQUIRE(fixture.body->set_velocity_local(
+        Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
+
+    const double initial_x =
+        fixture.body->entity().transform().global_position().x;
+    double minimum_height = 2.0;
+    double maximum_height_after_contact = 0.0;
+    double reaction_sum = 0.0;
+    double minimum_reaction_in_window = std::numeric_limits<double>::infinity();
+    std::size_t minimum_contacts_in_window =
+        std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_cached_contacts_in_window =
+        std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_warm_contacts_in_window =
+        std::numeric_limits<std::size_t>::max();
+    bool contact_seen = false;
+    constexpr int step_count = 1500;
+    constexpr int reaction_window = 500;
+    for (int step = 0; step < step_count; ++step)
+    {
+        fixture.world->update(0.002F);
+        const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+        const double height =
+            fixture.body->entity().transform().global_position().z;
+        minimum_height = std::min(minimum_height, height);
+        if (telemetry.contact_count > 0)
+        {
+            contact_seen = true;
+        }
+        if (contact_seen)
+        {
+            maximum_height_after_contact =
+                std::max(maximum_height_after_contact, height);
+        }
+        if (step >= step_count - reaction_window)
+        {
+            reaction_sum += telemetry.normal_reaction_sum;
+            minimum_reaction_in_window = std::min(
+                minimum_reaction_in_window, telemetry.normal_reaction_sum);
+            minimum_contacts_in_window =
+                std::min(minimum_contacts_in_window, telemetry.contact_count);
+            minimum_cached_contacts_in_window =
+                std::min(minimum_cached_contacts_in_window,
+                         telemetry.cached_contact_count);
+            minimum_warm_contacts_in_window =
+                std::min(minimum_warm_contacts_in_window,
+                         telemetry.warm_started_contact_count);
+        }
+    }
+
+    const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+    const Vec3 final_position =
+        fixture.body->entity().transform().global_position();
+    CHECK(telemetry.initialized);
+    CHECK(contact_seen);
+    // At dt=2 ms the first impact may advance about 5.5 mm into the plane;
+    // split position projection then restores the exact resting pose.
+    CHECK(minimum_height >= 0.49);
+    CHECK(maximum_height_after_contact <= 0.5 + 1.0e-5);
+    CHECK(std::abs(final_position.z - 0.5) < 1.0e-5);
+    CHECK(std::abs(final_position.x - initial_x - 0.75 * 3.0) < 2.0e-3);
+    CHECK(std::abs(fixture.body->velocity_local().lin.x - 0.75) < 1.0e-6);
+    CHECK(std::abs(reaction_sum / reaction_window - 9.81) < 2.0e-3);
+    CHECK(minimum_reaction_in_window > 9.80);
+    CHECK(minimum_contacts_in_window > 0);
+    CHECK(minimum_cached_contacts_in_window > 0);
+    CHECK(minimum_warm_contacts_in_window > 0);
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("FEM articulation contact supplies the expected generalized support")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("articulation support acceptance");
+
+    Entity terrain = scene.create_entity("Terrain");
+    terrain.transform().set_local_position({0.0, 0.0, -0.5});
+    auto* terrain_collider = new ColliderComponent();
+    terrain_collider->box_size = {10.0, 10.0, 1.0};
+    terrain.add_component(terrain_collider);
+
+    Entity root = scene.create_entity("Articulation Root");
+    root.transform().set_local_position({0.0, 0.0, 0.5});
+    auto* articulation = new FEMArticulationComponent();
+    root.add_component(articulation);
+    Entity joint_entity = root.create_child("Support Joint");
+    auto* joint = new RotatorComponent();
+    joint_entity.add_component(joint);
+    joint->set_axis(0.0, 1.0, 0.0);
+    joint->set_coordinate_scale(1.0);
+    joint->set_coordinate(0.0);
+    Entity link_entity = joint_entity.create_child("Supported Link");
+    link_entity.transform().set_local_position({1.0, 0.0, 0.0});
+    auto* link_body = new FEMRigidBodyComponent();
+    link_body->mass = 1.0;
+    link_body->inertia_diagonal = {1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0};
+    link_entity.add_component(link_body);
+    auto* link_collider = new ColliderComponent();
+    // A single sphere-plane point keeps this test about the generalized
+    // contact equation, without the statically indeterminate box manifold.
+    link_collider->collider_type = "Sphere";
+    link_entity.add_component(link_collider);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = {0.0, 0.0, -9.81};
+    world->time_step = 0.002;
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(articulation->initialized());
+
+    double reaction_sum = 0.0;
+    std::size_t minimum_contacts_in_window =
+        std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_warm_contacts_in_window =
+        std::numeric_limits<std::size_t>::max();
+    constexpr int step_count = 1000;
+    constexpr int reaction_window = 500;
+    for (int step = 0; step < step_count; ++step)
+    {
+        world->update(0.002F);
+        if (step >= step_count - reaction_window)
+        {
+            const FEMPhysicsTelemetry step_telemetry = world->telemetry();
+            reaction_sum += step_telemetry.normal_reaction_sum;
+            minimum_contacts_in_window = std::min(minimum_contacts_in_window,
+                                                  step_telemetry.contact_count);
+            minimum_warm_contacts_in_window =
+                std::min(minimum_warm_contacts_in_window,
+                         step_telemetry.warm_started_contact_count);
+        }
+    }
+
+    const FEMPhysicsTelemetry telemetry = world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.contact_count > 0);
+    CHECK(std::abs(joint->coordinate) < 1.0e-5);
+    // The contact point is one metre from the revolute axis, so its normal
+    // reaction supplies the 9.81 N*m generalized gravity effort directly.
+    constexpr double support_lever = 1.0;
+    CHECK(std::abs(reaction_sum / reaction_window * support_lever - 9.81) <
+          2.0e-3);
+    CHECK(minimum_contacts_in_window > 0);
+    CHECK(minimum_warm_contacts_in_window > 0);
+    scene.destroy();
 }
 
 TEST_CASE("FEM routes a CollisionWorld patch to an articulation link")

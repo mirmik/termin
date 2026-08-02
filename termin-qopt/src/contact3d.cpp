@@ -20,6 +20,7 @@ namespace termin::qopt
     {
 
         constexpr double kNormalTolerance = 1e-8;
+        constexpr double kWarmImpulseTolerance = 1e-12;
 
         AssemblyDiagnostic assembly_failure(Contact3DDiagnostic diagnostic) noexcept
         {
@@ -54,6 +55,8 @@ namespace termin::qopt
             return "non_finite_gap";
         case Contact3DDiagnostic::DuplicateKey:
             return "duplicate_key";
+        case Contact3DDiagnostic::CacheCapacityExceeded:
+            return "cache_capacity_exceeded";
         case Contact3DDiagnostic::InvalidState:
             return "invalid_state";
         case Contact3DDiagnostic::InternalFailure:
@@ -140,12 +143,91 @@ namespace termin::qopt
     Contact3DDiagnostic
     ContactSet3DContribution::set_contacts(std::vector<Contact3D> contacts) noexcept
     {
+        return set_contacts(std::move(contacts), {});
+    }
+
+    Contact3DDiagnostic ContactSet3DContribution::set_contacts(
+        std::vector<Contact3D> contacts,
+        std::vector<std::uint64_t> live_groups) noexcept
+    {
         try
         {
-            contacts_ = std::move(contacts);
+            const auto contact_less = [](const Contact3D& a, const Contact3D& b)
+            { return a.key < b.key; };
+            const auto state_less = [](const ContactState3D& state, std::uint64_t key)
+            { return state.key < key; };
+            std::sort(contacts.begin(), contacts.end(), contact_less);
+            std::sort(live_groups.begin(), live_groups.end());
+            live_groups.erase(std::unique(live_groups.begin(), live_groups.end()),
+                              live_groups.end());
+            if (contacts.size() > maximum_cached_contacts_)
+            {
+                diagnostic_ = Contact3DDiagnostic::CacheCapacityExceeded;
+                std::fprintf(stderr,
+                             "[termin-qopt] contact set '%s' exceeds cache "
+                             "capacity (%zu > %zu)\n",
+                             diagnostic_name_.c_str(),
+                             contacts.size(),
+                             maximum_cached_contacts_);
+                return diagnostic_;
+            }
+
+            std::vector<Contact3D> merged = contacts;
+            for (const Contact3D& previous : contacts_)
+            {
+                const bool key_present = std::binary_search(
+                    contacts.begin(), contacts.end(), previous, contact_less);
+                if (key_present || previous.group_key == 0 ||
+                    !std::binary_search(
+                        live_groups.begin(), live_groups.end(), previous.group_key))
+                {
+                    continue;
+                }
+                const bool group_has_fresh_contacts =
+                    std::any_of(contacts.begin(),
+                                contacts.end(),
+                                [&](const Contact3D& candidate)
+                                { return candidate.group_key == previous.group_key; });
+                if (group_has_fresh_contacts)
+                {
+                    continue;
+                }
+                const auto cached = std::lower_bound(
+                    state_cache_.begin(), state_cache_.end(), previous.key, state_less);
+                if (cached == state_cache_.end() || cached->key != previous.key ||
+                    !cached->active || cached->normal_impulse <= kWarmImpulseTolerance)
+                {
+                    continue;
+                }
+                const PointKinematics3DResult endpoint_a =
+                    previous.endpoint_a.point_kinematics();
+                const PointKinematics3DResult endpoint_b =
+                    previous.endpoint_b.point_kinematics();
+                if (!endpoint_a.ok() || !endpoint_b.ok())
+                {
+                    continue;
+                }
+                const double current_gap = previous.normal_from_a_to_b_world.dot(
+                    endpoint_b.value.position_world - endpoint_a.value.position_world);
+                if (!std::isfinite(current_gap) || current_gap > persistence_distance_)
+                {
+                    continue;
+                }
+                Contact3D retained = previous;
+                retained.signed_gap = current_gap;
+                merged.push_back(std::move(retained));
+                if (merged.size() > maximum_cached_contacts_)
+                {
+                    diagnostic_ = Contact3DDiagnostic::CacheCapacityExceeded;
+                    return diagnostic_;
+                }
+            }
+            std::sort(merged.begin(), merged.end(), contact_less);
+            contacts_ = std::move(merged);
             states_.clear();
             states_snapshot_.clear();
             step_contacts_.clear();
+            warm_started_contact_count_ = 0;
             diagnostic_ = validate_contacts();
             if (diagnostic_ != Contact3DDiagnostic::None)
             {
@@ -153,7 +235,19 @@ namespace termin::qopt
                              "[termin-qopt] rejected contact set '%s': %s\n",
                              diagnostic_name_.c_str(),
                              contact3d_diagnostic_name(diagnostic_).data());
+                return diagnostic_;
             }
+            state_cache_.erase(std::remove_if(state_cache_.begin(),
+                                              state_cache_.end(),
+                                              [&](const ContactState3D& state)
+                                              {
+                                                  return !std::binary_search(
+                                                      contacts_.begin(),
+                                                      contacts_.end(),
+                                                      Contact3D{.key = state.key},
+                                                      contact_less);
+                                              }),
+                               state_cache_.end());
             return diagnostic_;
         }
         catch (const std::exception& error)
@@ -169,6 +263,61 @@ namespace termin::qopt
         }
         diagnostic_ = Contact3DDiagnostic::InternalFailure;
         return diagnostic_;
+    }
+
+    std::size_t ContactSet3DContribution::cached_contact_count() const noexcept
+    {
+        return state_cache_.size();
+    }
+
+    std::size_t ContactSet3DContribution::warm_started_contact_count() const noexcept
+    {
+        return warm_started_contact_count_;
+    }
+
+    double ContactSet3DContribution::persistence_distance() const noexcept
+    {
+        return persistence_distance_;
+    }
+
+    std::size_t ContactSet3DContribution::maximum_cached_contacts() const noexcept
+    {
+        return maximum_cached_contacts_;
+    }
+
+    bool ContactSet3DContribution::set_persistence_distance(double distance) noexcept
+    {
+        if (!std::isfinite(distance) || distance < 0.0)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] invalid contact persistence distance\n");
+            return false;
+        }
+        persistence_distance_ = distance;
+        return true;
+    }
+
+    bool
+    ContactSet3DContribution::set_maximum_cached_contacts(std::size_t maximum) noexcept
+    {
+        if (maximum == 0 || maximum < contacts_.size() || maximum < state_cache_.size())
+        {
+            std::fprintf(stderr, "[termin-qopt] invalid contact cache capacity\n");
+            return false;
+        }
+        maximum_cached_contacts_ = maximum;
+        return true;
+    }
+
+    void ContactSet3DContribution::clear_cache() noexcept
+    {
+        contacts_.clear();
+        states_.clear();
+        state_cache_.clear();
+        states_snapshot_.clear();
+        step_contacts_.clear();
+        warm_started_contact_count_ = 0;
+        diagnostic_ = Contact3DDiagnostic::None;
     }
 
     const std::vector<Contact3D>& ContactSet3DContribution::contacts() const noexcept
@@ -250,10 +399,25 @@ namespace termin::qopt
             time_step_ = time_step;
             states_.assign(contacts_.size(), {});
             step_contacts_.assign(contacts_.size(), {});
+            warm_started_contact_count_ = 0;
             const std::string prefix =
                 diagnostic_name_.empty() ? "contacts" : diagnostic_name_;
             for (std::size_t index = 0; index < contacts_.size(); ++index)
             {
+                const auto cached =
+                    std::lower_bound(state_cache_.begin(),
+                                     state_cache_.end(),
+                                     contacts_[index].key,
+                                     [](const ContactState3D& state, std::uint64_t key)
+                                     { return state.key < key; });
+                if (cached != state_cache_.end() && cached->key == contacts_[index].key)
+                {
+                    states_[index] = *cached;
+                    warm_started_contact_count_ +=
+                        cached->active && cached->normal_impulse > kWarmImpulseTolerance
+                            ? 1U
+                            : 0U;
+                }
                 PointKinematics3DResult endpoint_a =
                     contacts_[index].endpoint_a.point_kinematics();
                 PointKinematics3DResult endpoint_b =
@@ -287,6 +451,7 @@ namespace termin::qopt
                         endpoint_b.value.velocity_world -
                         endpoint_a.value.velocity_world);
             }
+            state_cache_ = states_;
             return AssemblyDiagnostic::None;
         }
         catch (const std::exception& error)
@@ -446,6 +611,7 @@ namespace termin::qopt
     void ContactSet3DContribution::commit_step() noexcept
     {
         snapshot_ready_ = false;
+        states_snapshot_.clear();
     }
 
     void ContactSet3DContribution::rollback_step() noexcept
@@ -453,6 +619,8 @@ namespace termin::qopt
         if (snapshot_ready_)
         {
             states_.swap(states_snapshot_);
+            state_cache_.clear();
+            warm_started_contact_count_ = 0;
             snapshot_ready_ = false;
         }
     }
@@ -490,7 +658,37 @@ namespace termin::qopt
             states_[index].normal_impulse = reactions[info.offset];
             states_[index].normal_reaction = reactions[info.offset] / time_step_;
             states_[index].active = tight_mask[info.offset] == 1.0;
+            state_cache_[index] = states_[index];
         }
+    }
+
+    bool ContactSet3DContribution::write_unilateral_warm_start(
+        const DynamicsUnilateralTopology& topology,
+        DenseVectorView active_mask) const noexcept
+    {
+        if (states_.size() != step_contacts_.size())
+        {
+            return false;
+        }
+        bool wrote_hint = false;
+        for (std::size_t index = 0; index < states_.size(); ++index)
+        {
+            if (!states_[index].active ||
+                states_[index].normal_impulse <= kWarmImpulseTolerance)
+            {
+                continue;
+            }
+            const DenseBlockInfo info = topology.constraint_topology().block_info(
+                step_contacts_[index].row.block);
+            if (!info.ok() || info.size != 1 || info.offset >= active_mask.size)
+            {
+                std::fprintf(stderr, "[termin-qopt] invalid contact warm-start row\n");
+                return false;
+            }
+            active_mask[info.offset] = 1.0;
+            wrote_hint = true;
+        }
+        return wrote_hint;
     }
 
     double ContactSet3DContribution::position_error_linf() const noexcept

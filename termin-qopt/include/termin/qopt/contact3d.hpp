@@ -25,6 +25,7 @@ namespace termin::qopt
         InvalidNormal,
         NonFiniteGap,
         DuplicateKey,
+        CacheCapacityExceeded,
         InvalidState,
         InternalFailure,
     };
@@ -72,6 +73,10 @@ namespace termin::qopt
     struct TERMIN_QOPT_API Contact3D
     {
         std::uint64_t key = 0;
+        // Optional caller-owned pair/manifold identity. Contacts from a live
+        // group may survive a complete geometric query miss while their
+        // material points remain within the persistence distance.
+        std::uint64_t group_key = 0;
         ContactEndpoint3D endpoint_a;
         ContactEndpoint3D endpoint_b;
         // Unit vector from endpoint A toward endpoint B. Positive signed_gap
@@ -101,9 +106,19 @@ namespace termin::qopt
 
         [[nodiscard]] Contact3DDiagnostic
         set_contacts(std::vector<Contact3D> contacts) noexcept;
+        [[nodiscard]] Contact3DDiagnostic
+        set_contacts(std::vector<Contact3D> contacts,
+                     std::vector<std::uint64_t> live_groups) noexcept;
         [[nodiscard]] const std::vector<Contact3D>& contacts() const noexcept;
         [[nodiscard]] const std::vector<ContactState3D>& states() const noexcept;
         [[nodiscard]] Contact3DDiagnostic diagnostic() const noexcept;
+        [[nodiscard]] std::size_t cached_contact_count() const noexcept;
+        [[nodiscard]] std::size_t warm_started_contact_count() const noexcept;
+        [[nodiscard]] double persistence_distance() const noexcept;
+        [[nodiscard]] std::size_t maximum_cached_contacts() const noexcept;
+        [[nodiscard]] bool set_persistence_distance(double distance) noexcept;
+        [[nodiscard]] bool set_maximum_cached_contacts(std::size_t maximum) noexcept;
+        void clear_cache() noexcept;
 
         AssemblyDiagnostic
         register_topology(DynamicsTopology& topology) noexcept override;
@@ -120,6 +135,9 @@ namespace termin::qopt
                                   const DynamicsUnilateralTopology& unilateral_topology,
                                   ConstDenseVectorView reactions,
                                   ConstDenseVectorView tight_mask) noexcept override;
+        [[nodiscard]] bool write_unilateral_warm_start(
+            const DynamicsUnilateralTopology& topology,
+            DenseVectorView active_mask) const noexcept override;
         [[nodiscard]] double position_error_linf() const noexcept override;
         [[nodiscard]] double velocity_error_linf() const noexcept override;
 
@@ -137,10 +155,14 @@ namespace termin::qopt
 
         std::vector<Contact3D> contacts_;
         std::vector<ContactState3D> states_;
+        std::vector<ContactState3D> state_cache_;
         std::vector<ContactState3D> states_snapshot_;
         std::vector<StepContact> step_contacts_;
         std::string diagnostic_name_;
         double time_step_ = 0.0;
+        double persistence_distance_ = 1.0e-4;
+        std::size_t maximum_cached_contacts_ = 4096;
+        std::size_t warm_started_contact_count_ = 0;
         Contact3DDiagnostic diagnostic_ = Contact3DDiagnostic::None;
         bool snapshot_ready_ = false;
     };
