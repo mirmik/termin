@@ -371,6 +371,7 @@ namespace termin
                     .endpoint_b = make_endpoint(b, point.point_on_b_world),
                     .normal_from_a_to_b_world = patch.normal_world,
                     .signed_gap = point.signed_gap,
+                    .friction_coefficient = contact_friction_coefficient,
                 });
             }
         }

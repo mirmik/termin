@@ -703,6 +703,45 @@ TEST_CASE("FEM frictionless contact arrests a falling maximal body")
     fixture.scene.destroy();
 }
 
+TEST_CASE("FEM multi-point box contact dissipates tangential slip")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    MaximalContactScene fixture =
+        make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
+    fixture.world->contact_friction_coefficient = 0.5;
+    fixture.world->start();
+    REQUIRE(fixture.body->initialized());
+    REQUIRE(fixture.body->set_velocity_local(
+        Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
+
+    double maximum_tangent_impulse = 0.0;
+    double accumulated_friction_work = 0.0;
+    for (int step = 0; step < 1500; ++step)
+    {
+        fixture.world->update(0.002F);
+        const FEMPhysicsTelemetry step_telemetry = fixture.world->telemetry();
+        maximum_tangent_impulse = std::max(maximum_tangent_impulse,
+                                           step_telemetry.tangent_impulse_sum);
+        accumulated_friction_work += step_telemetry.friction_work;
+    }
+
+    const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
+    const Vec3 position = fixture.body->entity().transform().global_position();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.contact_count >= 1U);
+    CHECK(telemetry.active_contact_count >= 1U);
+    CHECK(std::abs(position.z - 0.5) < 1.0e-5);
+    CHECK(std::abs(fixture.body->velocity_local().lin.x) < 1.0e-6);
+    CHECK(maximum_tangent_impulse > 0.0);
+    CHECK(accumulated_friction_work < 0.0);
+    CHECK(position.x > 0.0);
+    CHECK(position.x < 0.75 * 3.0);
+
+    fixture.scene.destroy();
+}
+
 TEST_CASE("FEM articulation contact supplies the expected generalized support")
 {
     using namespace termin;

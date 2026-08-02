@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <exception>
 #include <limits>
+#include <numbers>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -21,6 +22,7 @@ namespace termin::qopt
 
         constexpr double kNormalTolerance = 1e-8;
         constexpr double kWarmImpulseTolerance = 1e-12;
+        constexpr double kFrictionBoundaryTolerance = 1e-8;
 
         AssemblyDiagnostic assembly_failure(Contact3DDiagnostic diagnostic) noexcept
         {
@@ -35,6 +37,24 @@ namespace termin::qopt
         {
             return normal.x * jacobian(0, column) + normal.y * jacobian(1, column) +
                    normal.z * jacobian(2, column);
+        }
+
+        std::array<termin::Vec3, 2> tangent_basis(const termin::Vec3& normal) noexcept
+        {
+            const double ax = std::abs(normal.x);
+            const double ay = std::abs(normal.y);
+            const double az = std::abs(normal.z);
+            termin::Vec3 reference = termin::Vec3::unit_x();
+            if (ay <= ax && ay <= az)
+            {
+                reference = termin::Vec3::unit_y();
+            }
+            else if (az <= ax && az <= ay)
+            {
+                reference = termin::Vec3::unit_z();
+            }
+            const termin::Vec3 first = normal.cross(reference).normalized();
+            return {first, normal.cross(first)};
         }
 
     } // namespace
@@ -53,6 +73,8 @@ namespace termin::qopt
             return "invalid_normal";
         case Contact3DDiagnostic::NonFiniteGap:
             return "non_finite_gap";
+        case Contact3DDiagnostic::InvalidFrictionCoefficient:
+            return "invalid_friction_coefficient";
         case Contact3DDiagnostic::DuplicateKey:
             return "duplicate_key";
         case Contact3DDiagnostic::CacheCapacityExceeded:
@@ -361,6 +383,11 @@ namespace termin::qopt
                 {
                     return Contact3DDiagnostic::NonFiniteGap;
                 }
+                if (!std::isfinite(contact.friction_coefficient) ||
+                    contact.friction_coefficient < 0.0)
+                {
+                    return Contact3DDiagnostic::InvalidFrictionCoefficient;
+                }
                 if (!keys.insert(contact.key).second)
                 {
                     return Contact3DDiagnostic::DuplicateKey;
@@ -440,6 +467,10 @@ namespace termin::qopt
                     return registration.diagnostic;
                 }
                 step_contacts_[index].row = registration.handle;
+                const auto tangents =
+                    tangent_basis(contacts_[index].normal_from_a_to_b_world);
+                step_contacts_[index].tangent_1_world = tangents[0];
+                step_contacts_[index].tangent_2_world = tangents[1];
                 step_contacts_[index].reference_separation =
                     contacts_[index].normal_from_a_to_b_world.dot(
                         endpoint_b.value.position_world -
@@ -465,6 +496,55 @@ namespace termin::qopt
             std::fprintf(stderr,
                          "[termin-qopt] contact row registration failed with an "
                          "unknown exception\n");
+        }
+        diagnostic_ = Contact3DDiagnostic::InternalFailure;
+        return AssemblyDiagnostic::InternalFailure;
+    }
+
+    AssemblyDiagnostic ContactSet3DContribution::register_friction_contacts(
+        DynamicsFrictionTopology& topology, double time_step) noexcept
+    {
+        if (diagnostic_ != Contact3DDiagnostic::None || !std::isfinite(time_step) ||
+            time_step <= 0.0 || step_contacts_.size() != contacts_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] contact set '%s' cannot register "
+                         "friction rows\n",
+                         diagnostic_name_.c_str());
+            return AssemblyDiagnostic::NonFiniteContribution;
+        }
+
+        try
+        {
+            const std::string prefix =
+                diagnostic_name_.empty() ? "contacts" : diagnostic_name_;
+            for (std::size_t index = 0; index < contacts_.size(); ++index)
+            {
+                if (contacts_[index].friction_coefficient == 0.0)
+                {
+                    continue;
+                }
+                const auto registration = topology.register_contact(
+                    prefix + ".friction." + std::to_string(contacts_[index].key));
+                if (!registration.ok())
+                {
+                    return registration.diagnostic;
+                }
+                step_contacts_[index].friction = registration.handle;
+            }
+            return AssemblyDiagnostic::None;
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] contact friction registration failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] contact friction registration failed with "
+                         "an unknown exception\n");
         }
         diagnostic_ = Contact3DDiagnostic::InternalFailure;
         return AssemblyDiagnostic::InternalFailure;
@@ -586,6 +666,119 @@ namespace termin::qopt
         return AssemblyDiagnostic::InternalFailure;
     }
 
+    AssemblyDiagnostic ContactSet3DContribution::assemble_friction(
+        DynamicsFrictionAssembly& assembly) noexcept
+    {
+        if (diagnostic_ != Contact3DDiagnostic::None ||
+            step_contacts_.size() != contacts_.size() ||
+            states_.size() != contacts_.size())
+        {
+            return AssemblyDiagnostic::NonFiniteContribution;
+        }
+
+        try
+        {
+            for (std::size_t index = 0; index < contacts_.size(); ++index)
+            {
+                const DynamicsFrictionContactHandle handle =
+                    step_contacts_[index].friction;
+                if (!handle.valid())
+                {
+                    continue;
+                }
+                PointKinematics3D endpoint_a;
+                PointKinematics3D endpoint_b;
+                if (!update_state(index, endpoint_a, endpoint_b))
+                {
+                    diagnostic_ = Contact3DDiagnostic::InvalidState;
+                    std::fprintf(stderr,
+                                 "[termin-qopt] contact %llu produced invalid "
+                                 "friction kinematics\n",
+                                 static_cast<unsigned long long>(contacts_[index].key));
+                    return AssemblyDiagnostic::NonFiniteContribution;
+                }
+
+                const auto add_endpoint =
+                    [&](const PointKinematics3D& endpoint, double sign) noexcept
+                {
+                    if (endpoint.is_static())
+                    {
+                        return AssemblyDiagnostic::None;
+                    }
+                    const ConstDenseMatrixView jacobian =
+                        endpoint.linear_jacobian_world();
+                    std::vector<double> normal_row(endpoint.dof_count());
+                    std::vector<double> rows(2 * endpoint.dof_count());
+                    for (std::size_t column = 0; column < endpoint.dof_count();
+                         ++column)
+                    {
+                        normal_row[column] =
+                            sign * projected(contacts_[index].normal_from_a_to_b_world,
+                                             jacobian,
+                                             column);
+                        rows[column] =
+                            sign * projected(step_contacts_[index].tangent_1_world,
+                                             jacobian,
+                                             column);
+                        rows[endpoint.dof_count() + column] =
+                            sign * projected(step_contacts_[index].tangent_2_world,
+                                             jacobian,
+                                             column);
+                    }
+                    AssemblyDiagnostic result = assembly.add_contact_normal_jacobian(
+                        handle,
+                        endpoint.dofs,
+                        ConstDenseMatrixView::row_major(
+                            normal_row.data(), 1, endpoint.dof_count()));
+                    if (result != AssemblyDiagnostic::None)
+                    {
+                        return result;
+                    }
+                    return assembly.add_tangent_jacobian(
+                        handle,
+                        endpoint.dofs,
+                        ConstDenseMatrixView::row_major(
+                            rows.data(), 2, endpoint.dof_count()));
+                };
+
+                AssemblyDiagnostic result = add_endpoint(endpoint_a, -1.0);
+                if (result == AssemblyDiagnostic::None)
+                {
+                    result = add_endpoint(endpoint_b, 1.0);
+                }
+                if (result == AssemblyDiagnostic::None)
+                {
+                    result = assembly.add_normal_impulse(handle,
+                                                         states_[index].normal_impulse);
+                }
+                if (result == AssemblyDiagnostic::None)
+                {
+                    result = assembly.add_friction_coefficient(
+                        handle, contacts_[index].friction_coefficient);
+                }
+                if (result != AssemblyDiagnostic::None)
+                {
+                    return result;
+                }
+            }
+            return AssemblyDiagnostic::None;
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] contact friction assembly failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] contact friction assembly failed with an "
+                         "unknown exception\n");
+        }
+        diagnostic_ = Contact3DDiagnostic::InternalFailure;
+        return AssemblyDiagnostic::InternalFailure;
+    }
+
     AssemblyDiagnostic ContactSet3DContribution::begin_step() noexcept
     {
         try
@@ -689,6 +882,70 @@ namespace termin::qopt
             wrote_hint = true;
         }
         return wrote_hint;
+    }
+
+    void ContactSet3DContribution::apply_friction_solution(
+        const DynamicsFrictionTopology& topology,
+        ConstDenseVectorView normal_impulses,
+        ConstDenseVectorView tangent_impulses,
+        ConstDenseVectorView friction_work) noexcept
+    {
+        if (states_.size() != step_contacts_.size())
+        {
+            return;
+        }
+        for (std::size_t index = 0; index < states_.size(); ++index)
+        {
+            const DynamicsFrictionContactHandle handle = step_contacts_[index].friction;
+            if (!handle.valid())
+            {
+                states_[index].tangent_impulse_world = termin::Vec3::zero();
+                states_[index].friction_work = 0.0;
+                states_[index].sliding = false;
+                state_cache_[index] = states_[index];
+                continue;
+            }
+            const DenseBlockInfo contact_info =
+                topology.contact_topology().block_info(handle.contact_block);
+            const DenseBlockInfo tangent_info =
+                topology.tangent_topology().block_info(handle.tangent_block);
+            if (!contact_info.ok() || contact_info.size != 1 ||
+                contact_info.offset >= friction_work.size || !tangent_info.ok() ||
+                contact_info.offset >= normal_impulses.size || tangent_info.size != 2 ||
+                tangent_info.offset + 1 >= tangent_impulses.size)
+            {
+                diagnostic_ = Contact3DDiagnostic::InvalidState;
+                std::fprintf(stderr, "[termin-qopt] invalid contact friction output\n");
+                continue;
+            }
+            const double first = tangent_impulses[tangent_info.offset];
+            const double second = tangent_impulses[tangent_info.offset + 1];
+            states_[index].tangent_impulse_world =
+                step_contacts_[index].tangent_1_world * first +
+                step_contacts_[index].tangent_2_world * second;
+            states_[index].normal_impulse = normal_impulses[contact_info.offset];
+            states_[index].normal_reaction = states_[index].normal_impulse / time_step_;
+            const PointKinematics3DResult endpoint_a =
+                contacts_[index].endpoint_a.point_kinematics();
+            const PointKinematics3DResult endpoint_b =
+                contacts_[index].endpoint_b.point_kinematics();
+            if (endpoint_a.ok() && endpoint_b.ok())
+            {
+                const termin::Vec3 relative_velocity =
+                    endpoint_b.value.velocity_world - endpoint_a.value.velocity_world;
+                const termin::Vec3& normal = contacts_[index].normal_from_a_to_b_world;
+                states_[index].tangent_velocity_world =
+                    relative_velocity - normal * normal.dot(relative_velocity);
+            }
+            states_[index].friction_work = friction_work[contact_info.offset];
+            const double capacity =
+                contacts_[index].friction_coefficient * states_[index].normal_impulse;
+            states_[index].sliding =
+                capacity > 0.0 && states_[index].tangent_impulse_world.norm() >=
+                                      capacity * std::cos(std::numbers::pi / 32.0) *
+                                          (1.0 - kFrictionBoundaryTolerance);
+            state_cache_[index] = states_[index];
+        }
     }
 
     double ContactSet3DContribution::position_error_linf() const noexcept

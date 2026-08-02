@@ -288,6 +288,43 @@ namespace
         TERMIN_QOPT_CHECK(!contact_set->states()[0].active);
     }
 
+    void test_ground_coulomb_friction()
+    {
+        DynamicsSystem system;
+        auto* body = add(system,
+                         std::make_unique<RigidBody3DContribution>(
+                             unit_inertia(),
+                             RigidBody3DState{Pose3::identity(), {{}, {1.0, 0.0, 0.0}}},
+                             Vec3{0.0, -9.81, 0.0}));
+        auto contacts = std::make_unique<ContactSet3DContribution>("friction");
+        ContactSet3DContribution* contact_set = contacts.get();
+        Contact3D contact = ground_contact(40, *body, 0.0);
+        contact.friction_coefficient = 0.5;
+        TERMIN_QOPT_CHECK(contacts->set_contacts({contact}) ==
+                          Contact3DDiagnostic::None);
+        add(system, std::move(contacts));
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+
+        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        const double normal_impulse = 9.81 * 0.01;
+        check_near(contact_set->states()[0].normal_impulse, normal_impulse, 2e-8);
+        check_near(
+            body->state().velocity_local.lin.x, 1.0 - 0.5 * normal_impulse, 2e-8);
+        check_near(contact_set->states()[0].tangent_impulse_world.x,
+                   -0.5 * normal_impulse,
+                   2e-8);
+        TERMIN_QOPT_CHECK(contact_set->states()[0].friction_work < 0.0);
+        TERMIN_QOPT_CHECK(contact_set->states()[0].sliding);
+
+        RigidBody3DState slow = body->state();
+        slow.velocity_local.lin = {0.01, 0.0, 0.0};
+        TERMIN_QOPT_CHECK(body->set_state(slow) == Multibody3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        check_near(body->state().velocity_local.lin.x, 0.0, 2e-8);
+        check_near(contact_set->states()[0].tangent_impulse_world.x, -0.01, 2e-8);
+        TERMIN_QOPT_CHECK(!contact_set->states()[0].sliding);
+    }
+
     void test_persistent_contact_cache_and_warm_start()
     {
         DynamicsSystem system;
@@ -499,6 +536,11 @@ namespace
         contact.endpoint_b = ContactEndpoint3D::static_world(Vec3::unit_y());
         TERMIN_QOPT_CHECK(contacts.set_contacts({contact}) ==
                           Contact3DDiagnostic::InvalidEndpointPair);
+
+        contact = ground_contact(1, body, 0.0);
+        contact.friction_coefficient = -0.1;
+        TERMIN_QOPT_CHECK(contacts.set_contacts({contact}) ==
+                          Contact3DDiagnostic::InvalidFrictionCoefficient);
     }
 
     void test_invalid_contact_step_is_transactional()
@@ -529,6 +571,7 @@ int main()
     test_split_position_correction();
     test_impact_and_removal();
     test_resting_support_and_separation();
+    test_ground_coulomb_friction();
     test_persistent_contact_cache_and_warm_start();
     test_contact_cache_order_capacity_and_rollback();
     test_articulation_endpoint();

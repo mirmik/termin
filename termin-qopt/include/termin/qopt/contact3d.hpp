@@ -24,6 +24,7 @@ namespace termin::qopt
         InvalidEndpointPair,
         InvalidNormal,
         NonFiniteGap,
+        InvalidFrictionCoefficient,
         DuplicateKey,
         CacheCapacityExceeded,
         InvalidState,
@@ -83,6 +84,9 @@ namespace termin::qopt
         // means separation; negative signed_gap means penetration.
         termin::Vec3 normal_from_a_to_b_world = termin::Vec3::unit_y();
         double signed_gap = 0.0;
+        // Coulomb coefficient for this already combined material pair. Zero
+        // preserves the exact frictionless path.
+        double friction_coefficient = 0.0;
     };
 
     struct TERMIN_QOPT_API ContactState3D
@@ -92,7 +96,11 @@ namespace termin::qopt
         double normal_velocity = 0.0;
         double normal_impulse = 0.0;
         double normal_reaction = 0.0;
+        termin::Vec3 tangent_velocity_world = termin::Vec3::zero();
+        termin::Vec3 tangent_impulse_world = termin::Vec3::zero();
+        double friction_work = 0.0;
         bool active = false;
+        bool sliding = false;
     };
 
     // Frictionless transient contact rows. For n pointing A -> B, the
@@ -125,8 +133,13 @@ namespace termin::qopt
         AssemblyDiagnostic
         register_unilateral_constraints(DynamicsUnilateralTopology& topology,
                                         double time_step) noexcept override;
+        AssemblyDiagnostic
+        register_friction_contacts(DynamicsFrictionTopology& topology,
+                                   double time_step) noexcept override;
         AssemblyDiagnostic assemble(DynamicsAssembly& assembly,
                                     DynamicsAssemblyPhase phase) noexcept override;
+        AssemblyDiagnostic
+        assemble_friction(DynamicsFrictionAssembly& assembly) noexcept override;
         AssemblyDiagnostic begin_step() noexcept override;
         void commit_step() noexcept override;
         void rollback_step() noexcept override;
@@ -138,6 +151,11 @@ namespace termin::qopt
         [[nodiscard]] bool write_unilateral_warm_start(
             const DynamicsUnilateralTopology& topology,
             DenseVectorView active_mask) const noexcept override;
+        void
+        apply_friction_solution(const DynamicsFrictionTopology& topology,
+                                ConstDenseVectorView normal_impulses,
+                                ConstDenseVectorView tangent_impulses,
+                                ConstDenseVectorView friction_work) noexcept override;
         [[nodiscard]] double position_error_linf() const noexcept override;
         [[nodiscard]] double velocity_error_linf() const noexcept override;
 
@@ -145,6 +163,9 @@ namespace termin::qopt
         struct StepContact
         {
             DynamicsUnilateralConstraintHandle row;
+            DynamicsFrictionContactHandle friction;
+            termin::Vec3 tangent_1_world = termin::Vec3::zero();
+            termin::Vec3 tangent_2_world = termin::Vec3::zero();
             double reference_separation = 0.0;
         };
 

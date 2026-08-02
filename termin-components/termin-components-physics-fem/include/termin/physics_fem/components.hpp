@@ -39,12 +39,17 @@ namespace termin
         std::size_t saturated_motor_count = 0;
         std::size_t contact_count = 0;
         std::size_t active_contact_count = 0;
+        std::size_t sliding_contact_count = 0;
         std::size_t cached_contact_count = 0;
         std::size_t warm_started_contact_count = 0;
         double minimum_contact_gap = 0.0;
         double normal_impulse_sum = 0.0;
         double normal_reaction_sum = 0.0;
         double normal_reaction_linf = 0.0;
+        double tangent_impulse_sum = 0.0;
+        double tangent_speed_linf = 0.0;
+        double friction_capacity_sum = 0.0;
+        double friction_work = 0.0;
         double motor_effort_linf = 0.0;
         double motor_power = 0.0;
         double motor_work = 0.0;
@@ -239,6 +244,10 @@ namespace termin
         tc_vec3 gravity = {0.0, 0.0, -9.81};
         double time_step = 0.01;
         int substeps = 1;
+        // Default remains frictionless for scene compatibility. This is the
+        // combined coefficient assigned to every generated contact; collider
+        // material mixing can replace this policy later without changing qopt.
+        double contact_friction_coefficient = 0.0;
         std::uint64_t collision_layer_mask = ~std::uint64_t{0};
         bool adjacent_link_collision_enabled = false;
 

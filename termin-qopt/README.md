@@ -86,7 +86,7 @@ formulation. Native tests verify `J qdot`, finite-difference columns on a
 branching tree, the virtual-work identity, static zero-DOF behavior, and error
 diagnostics.
 
-Frictionless normal contact is the next implemented native slice.
+Normal and Coulomb-friction contact are implemented native slices.
 `ContactSet3DContribution` accepts caller-keyed pairs of static, maximal-body,
 or articulation-link endpoints together with a unit world normal and signed
 gap. Contact keys identify material feature pairs; an optional group key
@@ -114,7 +114,22 @@ Consequently correction does not manufacture rebound energy. Native tests
 cover exact Jacobian signs, mixed endpoint formulations, penetration recovery,
 impact, resting support, separation, contact removal, and invalid transactional
 input, deterministic cache order and capacity, persistence, warm start, feature
-replacement, and rollback. Coulomb friction remains a later integration slice.
+replacement, and rollback.
+
+Friction is a second global maximum-dissipation QP after the frictionless
+normal projection. Every persistent contact receives a deterministic orthonormal
+tangent basis. A regular 32-sided polygon inscribed in the circular Coulomb
+disk bounds its two tangent impulse components. The second pass may redistribute
+the already solved normal impulses among tight supporting contacts, while
+preserving all unilateral velocity inequalities and keeping every resulting
+normal impulse non-negative; this is necessary for a multi-point patch to
+balance the moment caused by a tangential load. Bilateral-compatible inverse
+mass responses are included in the same global solve. `mu == 0` bypasses the
+pass exactly. The approximation is intentionally dissipative: sliding friction
+does non-positive work, polygon orientation introduces at most the documented
+half-facet directional quantization, and restitution remains separate scope.
+Per-contact state exposes final normal and world tangent impulses, tangent
+velocity, friction work, and a sticking/sliding diagnostic.
 
 The separate
 `termin-components-physics-fem` layer now compiles
