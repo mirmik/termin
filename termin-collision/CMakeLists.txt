@@ -48,6 +48,7 @@ set(TERMIN_COLLISION_SOURCES
     src/termin_collision_runtime.c
     src/termin/tc_collision_c_api.cpp
     src/termin/collision/collision_world_c.cpp
+    src/termin/collision/contact_patch.cpp
     src/termin/collision/collision_world.cpp
     src/termin/collision/tc_collision_world_ext.c
 )
@@ -120,6 +121,7 @@ if(TERMIN_COLLISION_BUILD_TESTS)
         tests/main.cpp
         tests/tests_colliders.cpp
         tests/tests_collision.cpp
+        tests/test_contact_patch.cpp
         tests/tests_gjk.cpp
         tests/tests_quickhull.cpp
         tests/tests_convex_hull_collider.cpp

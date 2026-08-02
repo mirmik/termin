@@ -29,46 +29,49 @@ CollisionWorld не владеет коллайдерами — хранит raw
 ## Детекция контактов
 
 ```cpp
-std::vector<ContactManifold> manifolds = world.detect_contacts();
+std::vector<ContactPatch> patches = world.detect_contacts();
 ```
 
 Поток:
 1. **Broad-phase**: `BVH::query_all_pairs()` — все пары с пересекающимися AABB.
 2. **Narrow-phase**: `Collider::closest_to_collider()` — точная проверка.
-3. Для box-box: дополнительно Sutherland-Hodgman clipping для множественных контактных точек.
+3. Для box-box: дополнительно Sutherland-Hodgman clipping создаёт кандидаты.
+4. Общий reducer выбирает не более четырёх репрезентативных точек: самую глубокую, затем точки с максимальным пространственным покрытием.
 
-## ContactManifold
+## ContactPatch
 
 ```cpp
-struct ContactManifold {
-    static constexpr int MAX_POINTS = 4;
-
+struct ContactPatch {
     Collider* collider_a;
     Collider* collider_b;
-    Vec3 normal;                          // от A к B
-    std::array<ContactPoint, MAX_POINTS> points;
-    int point_count;
-
-    void* body_a;   // пользовательские данные (для физики)
-    void* body_b;
+    Vec3 normal_world;                    // единичная нормаль от A к B
+    std::vector<ContactCandidate> points;
 };
 ```
 
-## ContactPoint
+`ContactPatch` содержит только геометрию. Ссылки на динамические тела, импульсы,
+active-set и warm-start state принадлежат конкретному решателю.
+
+## ContactCandidate
 
 ```cpp
-struct ContactPoint {
-    Vec3 position;       // мировые координаты
-    Vec3 local_a;        // на коллайдере A
-    Vec3 local_b;        // на коллайдере B
-    double penetration;  // < 0 = пенетрация, > 0 = разделение
-
-    ContactID id;                // для матчинга между кадрами
-    double normal_impulse;       // для warm-starting (заполняется солвером)
-    double tangent1_impulse;
-    double tangent2_impulse;
+struct ContactCandidate {
+    Vec3 point_on_a_world;
+    Vec3 point_on_b_world;
+    double signed_gap;            // < 0 — проникновение
+    ContactFeaturePair features;
 };
 ```
+
+Контракт знака и координат явный:
+
+```cpp
+dot(point_on_b_world - point_on_a_world, normal_world) == signed_gap
+```
+
+`reduce_contact_candidates()` не зависит от порядка входных кандидатов и
+инвариантен к общему жёсткому преобразованию сцены. Максимальное число точек и
+допуски задаются через `ContactPatchReductionConfig`.
 
 ## Raycast
 

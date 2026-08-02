@@ -7,10 +7,11 @@
  * detection requires the C++ CollisionWorld class.
  */
 
-#include <termin/collision/collision_world.hpp>
-#include <termin/colliders/attached_collider.hpp>
 #include "physics/tc_collision.h"
 #include "physics/tc_collision_world.h"
+#include <algorithm>
+#include <termin/colliders/attached_collider.hpp>
+#include <termin/collision/collision_world.hpp>
 #include <vector>
 
 using namespace termin;
@@ -24,8 +25,10 @@ static size_t s_cached_manifold_count = 0;
 // Internal helper functions
 // ============================================================================
 
-static size_t detect_and_cache_contacts(void* cw) {
-    if (!cw) {
+static size_t detect_and_cache_contacts(void* cw)
+{
+    if (!cw)
+    {
         s_cached_manifolds.clear();
         s_cached_manifold_count = 0;
         return 0;
@@ -40,35 +43,47 @@ static size_t detect_and_cache_contacts(void* cw) {
     s_cached_manifolds.clear();
     s_cached_manifolds.reserve(manifolds.size());
 
-    for (const auto& m : manifolds) {
+    for (const auto& m : manifolds)
+    {
         tc_contact_manifold cm = {};
 
         // Get entity IDs from AttachedCollider if available
-        if (auto* attached_a = dynamic_cast<colliders::AttachedCollider*>(m.collider_a)) {
+        if (auto* attached_a =
+                dynamic_cast<colliders::AttachedCollider*>(m.collider_a))
+        {
             cm.entity_a = attached_a->owner_entity_id();
-        } else {
+        }
+        else
+        {
             cm.entity_a = TC_ENTITY_ID_INVALID;
         }
 
-        if (auto* attached_b = dynamic_cast<colliders::AttachedCollider*>(m.collider_b)) {
+        if (auto* attached_b =
+                dynamic_cast<colliders::AttachedCollider*>(m.collider_b))
+        {
             cm.entity_b = attached_b->owner_entity_id();
-        } else {
+        }
+        else
+        {
             cm.entity_b = TC_ENTITY_ID_INVALID;
         }
 
         // Normal
-        cm.normal[0] = m.normal.x;
-        cm.normal[1] = m.normal.y;
-        cm.normal[2] = m.normal.z;
+        cm.normal[0] = m.normal_world.x;
+        cm.normal[1] = m.normal_world.y;
+        cm.normal[2] = m.normal_world.z;
 
         // Contact points
-        cm.point_count = m.point_count;
-        for (int i = 0; i < cm.point_count && i < 4; ++i) {
+        cm.point_count =
+            static_cast<int>(std::min<std::size_t>(m.points.size(), 4));
+        for (int i = 0; i < cm.point_count && i < 4; ++i)
+        {
             const auto& p = m.points[i];
-            cm.points[i].position[0] = p.position.x;
-            cm.points[i].position[1] = p.position.y;
-            cm.points[i].position[2] = p.position.z;
-            cm.points[i].penetration = p.penetration;
+            const Vec3 position = p.representative_point_world();
+            cm.points[i].position[0] = position.x;
+            cm.points[i].position[1] = position.y;
+            cm.points[i].position[2] = position.z;
+            cm.points[i].penetration = p.signed_gap;
         }
 
         s_cached_manifolds.push_back(cm);
@@ -78,22 +93,29 @@ static size_t detect_and_cache_contacts(void* cw) {
     return s_cached_manifold_count;
 }
 
-extern "C" {
+extern "C"
+{
 
-TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
-    void* cw = tc_collision_world_get_scene(scene);
-    if (!cw) return;
+    TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene)
+    {
+        void* cw = tc_collision_world_get_scene(scene);
+        if (!cw)
+            return;
 
-    auto* world = static_cast<CollisionWorld*>(cw);
-    world->update_all();
-}
+        auto* world = static_cast<CollisionWorld*>(cw);
+        world->update_all();
+    }
 
-TERMIN_COLLISION_API void tc_scene_collision_set_broad_phase_mode(tc_scene_handle scene, int mode) {
-    void* cw = tc_collision_world_get_scene(scene);
-    if (!cw) return;
+    TERMIN_COLLISION_API void
+    tc_scene_collision_set_broad_phase_mode(tc_scene_handle scene, int mode)
+    {
+        void* cw = tc_collision_world_get_scene(scene);
+        if (!cw)
+            return;
 
-    auto* world = static_cast<CollisionWorld*>(cw);
-    switch (mode) {
+        auto* world = static_cast<CollisionWorld*>(cw);
+        switch (mode)
+        {
         case TC_COLLISION_BROAD_PHASE_NAIVE:
             world->set_broad_phase_mode(BroadPhaseMode::Naive);
             break;
@@ -101,48 +123,62 @@ TERMIN_COLLISION_API void tc_scene_collision_set_broad_phase_mode(tc_scene_handl
         default:
             world->set_broad_phase_mode(BroadPhaseMode::BVH);
             break;
+        }
     }
-}
 
-TERMIN_COLLISION_API int tc_scene_collision_get_broad_phase_mode(tc_scene_handle scene) {
-    void* cw = tc_collision_world_get_scene(scene);
-    if (!cw) return TC_COLLISION_BROAD_PHASE_BVH;
+    TERMIN_COLLISION_API int
+    tc_scene_collision_get_broad_phase_mode(tc_scene_handle scene)
+    {
+        void* cw = tc_collision_world_get_scene(scene);
+        if (!cw)
+            return TC_COLLISION_BROAD_PHASE_BVH;
 
-    auto* world = static_cast<CollisionWorld*>(cw);
-    return world->broad_phase_mode() == BroadPhaseMode::Naive
-        ? TC_COLLISION_BROAD_PHASE_NAIVE
-        : TC_COLLISION_BROAD_PHASE_BVH;
-}
+        auto* world = static_cast<CollisionWorld*>(cw);
+        return world->broad_phase_mode() == BroadPhaseMode::Naive
+                   ? TC_COLLISION_BROAD_PHASE_NAIVE
+                   : TC_COLLISION_BROAD_PHASE_BVH;
+    }
 
-TERMIN_COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
-    void* cw = tc_collision_world_get_scene(scene);
-    if (!cw) return 0;
+    TERMIN_COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene)
+    {
+        void* cw = tc_collision_world_get_scene(scene);
+        if (!cw)
+            return 0;
 
-    size_t count = detect_and_cache_contacts(cw);
-    return count > 0 ? 1 : 0;
-}
+        size_t count = detect_and_cache_contacts(cw);
+        return count > 0 ? 1 : 0;
+    }
 
-TERMIN_COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene) {
-    (void)scene;  // The count is from the last detect call
-    return s_cached_manifold_count;
-}
+    TERMIN_COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene)
+    {
+        (void)scene; // The count is from the last detect call
+        return s_cached_manifold_count;
+    }
 
-TERMIN_COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count) {
-    if (out_count) *out_count = 0;
+    TERMIN_COLLISION_API tc_contact_manifold*
+    tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count)
+    {
+        if (out_count)
+            *out_count = 0;
 
-    void* cw = tc_collision_world_get_scene(scene);
-    if (!cw) return nullptr;
+        void* cw = tc_collision_world_get_scene(scene);
+        if (!cw)
+            return nullptr;
 
-    size_t count = detect_and_cache_contacts(cw);
+        size_t count = detect_and_cache_contacts(cw);
 
-    if (out_count) *out_count = count;
-    return s_cached_manifolds.empty() ? nullptr : s_cached_manifolds.data();
-}
+        if (out_count)
+            *out_count = count;
+        return s_cached_manifolds.empty() ? nullptr : s_cached_manifolds.data();
+    }
 
-TERMIN_COLLISION_API tc_contact_manifold* tc_scene_get_collision(tc_scene_handle scene, size_t index) {
-    (void)scene;
-    if (index >= s_cached_manifold_count) return nullptr;
-    return &s_cached_manifolds[index];
-}
+    TERMIN_COLLISION_API tc_contact_manifold*
+    tc_scene_get_collision(tc_scene_handle scene, size_t index)
+    {
+        (void)scene;
+        if (index >= s_cached_manifold_count)
+            return nullptr;
+        return &s_cached_manifolds[index];
+    }
 
 } // extern "C"
