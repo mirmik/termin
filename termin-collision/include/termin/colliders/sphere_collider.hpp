@@ -63,30 +63,6 @@ public:
         return center() + direction * (effective_radius() / len);
     }
 
-    // ==================== Специфичные методы ====================
-
-    /**
-     * Коллизия с плоскостью земли (z = ground_height).
-     */
-    struct GroundContact {
-        Vec3 point;
-        Vec3 normal;
-        double penetration;
-    };
-
-    GroundContact collide_ground(double ground_height) const {
-        GroundContact result;
-        Vec3 c = center();
-        double r = effective_radius();
-        double bottom = c.z - r;
-
-        result.normal = Vec3(0, 0, 1);
-        result.point = Vec3(c.x, c.y, ground_height);
-        result.penetration = (bottom < ground_height) ? (ground_height - bottom) : 0.0;
-
-        return result;
-    }
-
     // Double dispatch implementations
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override;
     ColliderHit closest_to_sphere_impl(const SphereCollider& sphere) const override;

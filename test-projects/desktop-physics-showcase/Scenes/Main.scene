@@ -1229,9 +1229,7 @@
               ],
               "iterations": 16.0,
               "restitution": 0.38,
-              "friction": 0.58,
-              "ground_enabled": false,
-              "ground_height": 0.0
+              "friction": 0.58
             }
           }
         ]

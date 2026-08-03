@@ -124,31 +124,6 @@ public:
         };
     }
 
-    // ==================== Специфичные методы ====================
-
-    /**
-     * Коллизия с плоскостью земли (z = ground_height).
-     */
-    struct GroundContact {
-        Vec3 point;
-        double penetration;
-    };
-
-    std::vector<GroundContact> collide_ground(double ground_height) const {
-        std::vector<GroundContact> contacts;
-        auto corners = get_corners_world();
-
-        for (const auto& corner : corners) {
-            if (corner.z < ground_height) {
-                contacts.push_back({
-                    Vec3(corner.x, corner.y, ground_height),
-                    ground_height - corner.z
-                });
-            }
-        }
-        return contacts;
-    }
-
     // Double dispatch implementations
     ColliderHit closest_to_box_impl(const BoxCollider& box) const override;
     ColliderHit closest_to_sphere_impl(const SphereCollider& sphere) const override;

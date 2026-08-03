@@ -137,55 +137,5 @@ namespace termin::physics
                     contacts_.push_back(c);
                 }
             }
-        if (ground_enabled)
-            for (size_t i = 0; i < bodies_.size(); ++i)
-                if (!bodies_[i].is_static)
-                {
-                    auto it = body_to_collider_.find(i);
-                    if (it != body_to_collider_.end())
-                        add_ground_contacts(bodies_[i], it->second);
-                }
-    }
-    void PhysicsWorld::add_ground_contacts(RigidBody& b, Collider* c)
-    {
-        std::unique_ptr<colliders::ColliderPrimitive> world_primitive;
-        Collider* ground_collider = c;
-        if (auto* attached = dynamic_cast<colliders::AttachedCollider*>(c))
-        {
-            world_primitive =
-                attached->collider()->clone_at(attached->world_transform());
-            ground_collider = world_primitive.get();
-        }
-
-        Vec3 n(0, 0, 1);
-        if (auto* box = dynamic_cast<BoxCollider*>(ground_collider))
-        {
-            for (const auto& p : box->get_corners_world())
-                if (p.z < ground_height)
-                {
-                    Contact x;
-                    x.body_b = &b;
-                    x.collider_b = c;
-                    x.point = Vec3(p.x, p.y, ground_height);
-                    x.normal = n;
-                    x.penetration = ground_height - p.z;
-                    contacts_.push_back(x);
-                }
-        }
-        else if (auto* s = dynamic_cast<SphereCollider*>(ground_collider))
-        {
-            Vec3 p = s->center();
-            double d = p.z - s->effective_radius();
-            if (d < ground_height)
-            {
-                Contact x;
-                x.body_b = &b;
-                x.collider_b = c;
-                x.point = Vec3(p.x, p.y, ground_height);
-                x.normal = n;
-                x.penetration = ground_height - d;
-                contacts_.push_back(x);
-            }
-        }
     }
 } // namespace termin::physics

@@ -18,8 +18,6 @@ def test_physics_world_settings_are_serializable_scene_fields() -> None:
         "iterations",
         "restitution",
         "friction",
-        "ground_enabled",
-        "ground_height",
     ):
         assert PhysicsWorldComponent.inspect_fields[field_name].is_serializable
 
