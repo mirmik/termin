@@ -52,17 +52,6 @@ class PhysicsWorldComponent(PythonComponent):
             max=2.0,
             step=0.05,
         ),
-        "ground_enabled": InspectField(
-            path="ground_enabled",
-            label="Ground Enabled",
-            kind="bool",
-        ),
-        "ground_height": InspectField(
-            path="ground_height",
-            label="Ground Height",
-            kind="float",
-            step=0.1,
-        ),
     }
 
     def __init__(
@@ -71,8 +60,6 @@ class PhysicsWorldComponent(PythonComponent):
         iterations: int = 10,
         restitution: float = 0.3,
         friction: float = 0.5,
-        ground_height: float = 0.0,
-        ground_enabled: bool = False,
     ):
         super().__init__(enabled=True)
 
@@ -84,8 +71,6 @@ class PhysicsWorldComponent(PythonComponent):
         self._physics_world.solver_iterations = iterations
         self._physics_world.restitution = restitution
         self._physics_world.friction = friction
-        self._physics_world.ground_height = ground_height
-        self._physics_world.ground_enabled = ground_enabled
 
         self._rigid_body_components: List["RigidBodyComponent"] = []
         self._initialized = False
@@ -125,22 +110,6 @@ class PhysicsWorldComponent(PythonComponent):
     @friction.setter
     def friction(self, value: float):
         self._physics_world.friction = value
-
-    @property
-    def ground_enabled(self) -> bool:
-        return self._physics_world.ground_enabled
-
-    @ground_enabled.setter
-    def ground_enabled(self, value: bool):
-        self._physics_world.ground_enabled = value
-
-    @property
-    def ground_height(self) -> float:
-        return self._physics_world.ground_height
-
-    @ground_height.setter
-    def ground_height(self, value: float):
-        self._physics_world.ground_height = value
 
     def start(self):
         super().start()
