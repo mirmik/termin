@@ -30,25 +30,8 @@ namespace termin
         }
     } // namespace
 
-    bool FEMPhysicsWorldComponent::refresh_contacts()
+    struct FEMPhysicsWorldComponent::ContactRefreshState
     {
-        if (contacts_ == nullptr)
-        {
-            tc::Log::error(
-                "[FEMPhysicsWorldComponent] contact contribution is missing");
-            return false;
-        }
-
-        Entity owner_entity = entity();
-        const TcSceneRef scene = owner_entity.scene();
-        collision::CollisionWorld* collision_world =
-            collision::CollisionWorld::from_scene(scene.handle());
-        if (collision_world == nullptr)
-        {
-            return contacts_->set_contacts({}) ==
-                   qopt::Contact3DDiagnostic::None;
-        }
-
         enum class EndpointKind
         {
             Ignored,
@@ -57,14 +40,15 @@ namespace termin
             ArticulationBase,
             ArticulationLink,
         };
+
         struct EndpointOwner
         {
             EndpointKind kind = EndpointKind::Ignored;
-            Entity entity;
             qopt::RigidBody3DContribution* body = nullptr;
             qopt::Articulation3DContribution* articulation = nullptr;
             std::size_t link_index = 0;
         };
+
         struct ArticulationBinding
         {
             qopt::Articulation3DContribution* articulation = nullptr;
@@ -72,154 +56,109 @@ namespace termin
             bool base = false;
         };
 
-        std::unordered_map<FEMRigidBodyComponent*, ArticulationBinding>
-            articulation_bindings;
-        for (FEMArticulationComponent* articulation : articulations_)
+        using EndpointMap =
+            std::unordered_map<colliders::Collider*, EndpointOwner>;
+
+        explicit ContactRefreshState(bool allow_adjacent_link_collision,
+                                     double friction_coefficient)
+            : allow_adjacent_link_collision(allow_adjacent_link_collision),
+              friction_coefficient(friction_coefficient)
         {
-            if (articulation == nullptr ||
-                articulation->articulation_ == nullptr)
+        }
+
+        [[nodiscard]] bool accepts_pair(const EndpointOwner& a,
+                                        const EndpointOwner& b) const
+        {
+            if (a.kind == EndpointKind::Ignored ||
+                b.kind == EndpointKind::Ignored)
             {
-                continue;
-            }
-            if (articulation->base_body_ != nullptr &&
-                !articulation_bindings
-                     .emplace(articulation->base_body_,
-                              ArticulationBinding{
-                                  .articulation = articulation->articulation_,
-                                  .base = true,
-                              })
-                     .second)
-            {
-                tc::Log::error(
-                    "[FEMPhysicsWorldComponent] ambiguous floating-base "
-                    "contact ownership");
                 return false;
             }
-            for (std::size_t link_index = 0;
-                 link_index < articulation->bodies_.size();
-                 ++link_index)
+            if (a.kind == EndpointKind::Static &&
+                b.kind == EndpointKind::Static)
             {
-                FEMRigidBodyComponent* body = articulation->bodies_[link_index];
-                if (body == nullptr ||
-                    !articulation_bindings
-                         .emplace(
-                             body,
-                             ArticulationBinding{
-                                 .articulation = articulation->articulation_,
-                                 .link_index = link_index,
-                             })
-                         .second)
+                return false;
+            }
+            return !is_same_dynamic_endpoint(a, b) &&
+                   !are_adjacent_articulation_links(a, b) &&
+                   !are_connected_maximal_bodies(a, b);
+        }
+
+        void collect_live_groups()
+        {
+            using LiveEndpoint =
+                std::pair<colliders::Collider*, const EndpointOwner*>;
+            std::vector<LiveEndpoint> live_endpoints;
+            live_endpoints.reserve(endpoint_owners.size());
+            for (const auto& [collider, endpoint] : endpoint_owners)
+            {
+                live_endpoints.emplace_back(collider, &endpoint);
+            }
+            std::sort(live_endpoints.begin(),
+                      live_endpoints.end(),
+                      [](const LiveEndpoint& a, const LiveEndpoint& b) {
+                          return std::less<colliders::Collider*>{}(a.first,
+                                                                   b.first);
+                      });
+
+            for (std::size_t first = 0; first < live_endpoints.size(); ++first)
+            {
+                for (std::size_t second = first + 1;
+                     second < live_endpoints.size();
+                     ++second)
                 {
-                    tc::Log::error(
-                        "[FEMPhysicsWorldComponent] ambiguous articulation "
-                        "contact ownership");
-                    return false;
+                    if (!accepts_pair(*live_endpoints[first].second,
+                                      *live_endpoints[second].second))
+                    {
+                        continue;
+                    }
+                    live_groups.push_back(
+                        group_key(live_endpoints[first].first,
+                                  live_endpoints[second].first));
                 }
             }
         }
 
-        const auto warn_once = [this](const void* collider,
-                                      const char* message,
-                                      const char* entity_name)
+        void append_contacts(const collision::ContactPatch& patch,
+                             const EndpointOwner& a,
+                             const EndpointOwner& b)
         {
-            if (std::find(warned_contact_colliders_.begin(),
-                          warned_contact_colliders_.end(),
-                          collider) != warned_contact_colliders_.end())
+            if (!accepts_pair(a, b))
             {
                 return;
             }
-            warned_contact_colliders_.push_back(collider);
-            tc::Log::error("[FEMPhysicsWorldComponent] %s for collider on '%s'",
-                           message,
-                           entity_name != nullptr ? entity_name : "<invalid>");
-        };
 
-        std::unordered_map<colliders::Collider*, EndpointOwner> endpoint_owners;
-        for (Entity candidate : scene.get_all_entities())
-        {
-            ColliderComponent* collider_component =
-                candidate.get_component<ColliderComponent>();
-            if (collider_component == nullptr ||
-                collider_component->attached_collider() == nullptr)
+            const std::uint64_t patch_group_key = nonzero_key(patch.pair_key());
+            for (std::size_t point_index = 0; point_index < patch.points.size();
+                 ++point_index)
             {
-                continue;
+                const collision::ContactCandidate& point =
+                    patch.points[point_index];
+                contacts.push_back({
+                    .key = contact_key(
+                        patch, point.features, point_index, patch_group_key),
+                    .group_key = patch_group_key,
+                    .endpoint_a = make_endpoint(a, point.point_on_a_world),
+                    .endpoint_b = make_endpoint(b, point.point_on_b_world),
+                    .normal_from_a_to_b_world = patch.normal_world,
+                    .signed_gap = point.signed_gap,
+                    .friction_coefficient = friction_coefficient,
+                });
             }
-
-            colliders::Collider* collider =
-                collider_component->attached_collider();
-            EndpointOwner endpoint;
-            endpoint.entity = candidate;
-            const std::uint64_t layer = candidate.layer();
-            const bool selected_layer =
-                layer < 64 &&
-                (collision_layer_mask & (std::uint64_t{1} << layer)) != 0;
-            if (!candidate.enabled() || !collider_component->enabled() ||
-                !selected_layer)
-            {
-                endpoint_owners.emplace(collider, endpoint);
-                continue;
-            }
-
-            FEMRigidBodyComponent* body = nullptr;
-            Entity body_entity = candidate;
-            while (body_entity.valid() && body == nullptr)
-            {
-                body = body_entity.get_component<FEMRigidBodyComponent>();
-                body_entity = body_entity.parent();
-            }
-            if (body == nullptr || !body->enabled())
-            {
-                endpoint.kind = EndpointKind::Static;
-                endpoint_owners.emplace(collider, endpoint);
-                continue;
-            }
-            if (body->world_ != this)
-            {
-                warn_once(collider,
-                          "enabled FEM body is not registered in this world",
-                          candidate.name());
-                endpoint_owners.emplace(collider, endpoint);
-                continue;
-            }
-
-            const auto articulation_binding = articulation_bindings.find(body);
-            const bool owns_maximal_body = body->body_ != nullptr;
-            const bool owns_articulation_link =
-                articulation_binding != articulation_bindings.end();
-            if (owns_maximal_body == owns_articulation_link)
-            {
-                warn_once(collider,
-                          "dynamic collider has ambiguous or missing endpoint "
-                          "ownership",
-                          candidate.name());
-                endpoint_owners.emplace(collider, endpoint);
-                continue;
-            }
-            if (owns_maximal_body)
-            {
-                endpoint.kind = EndpointKind::RigidBody;
-                endpoint.body = body->body_;
-            }
-            else
-            {
-                endpoint.kind = articulation_binding->second.base
-                                    ? EndpointKind::ArticulationBase
-                                    : EndpointKind::ArticulationLink;
-                endpoint.articulation =
-                    articulation_binding->second.articulation;
-                endpoint.link_index = articulation_binding->second.link_index;
-            }
-            endpoint_owners.emplace(collider, endpoint);
         }
 
-        collision_world->update_all();
-        const std::vector<collision::ContactPatch> patches =
-            collision_world->detect_contacts();
+        std::unordered_map<FEMRigidBodyComponent*, ArticulationBinding>
+            articulation_bindings;
+        EndpointMap endpoint_owners;
+        std::vector<std::pair<qopt::RigidBody3DContribution*,
+                              qopt::RigidBody3DContribution*>>
+            connected_maximal_body_pairs;
         std::vector<qopt::Contact3D> contacts;
-        std::unordered_set<std::uint64_t> contact_keys;
+        std::vector<std::uint64_t> live_groups;
 
-        const auto same_dynamic_endpoint =
-            [](const EndpointOwner& a, const EndpointOwner& b)
+    private:
+        [[nodiscard]] static bool
+        is_same_dynamic_endpoint(const EndpointOwner& a, const EndpointOwner& b)
         {
             if (a.kind != b.kind)
             {
@@ -239,63 +178,66 @@ namespace termin
                        a.link_index == b.link_index;
             }
             return false;
-        };
-        const auto adjacent_articulation_links =
-            [this](const EndpointOwner& a, const EndpointOwner& b)
+        }
+
+        [[nodiscard]] bool
+        are_adjacent_articulation_links(const EndpointOwner& a,
+                                        const EndpointOwner& b) const
         {
-            const bool a_articulation =
+            const bool a_belongs_to_articulation =
                 a.kind == EndpointKind::ArticulationBase ||
                 a.kind == EndpointKind::ArticulationLink;
-            const bool b_articulation =
+            const bool b_belongs_to_articulation =
                 b.kind == EndpointKind::ArticulationBase ||
                 b.kind == EndpointKind::ArticulationLink;
-            if (adjacent_link_collision_enabled || !a_articulation ||
-                !b_articulation || a.articulation != b.articulation ||
-                a.articulation == nullptr)
+            if (allow_adjacent_link_collision || !a_belongs_to_articulation ||
+                !b_belongs_to_articulation ||
+                a.articulation != b.articulation || a.articulation == nullptr)
             {
                 return false;
             }
+
+            const auto& links = a.articulation->links();
             if (a.kind == EndpointKind::ArticulationBase ||
                 b.kind == EndpointKind::ArticulationBase)
             {
                 const EndpointOwner& link =
                     a.kind == EndpointKind::ArticulationLink ? a : b;
-                const auto& links = a.articulation->links();
                 return link.kind == EndpointKind::ArticulationLink &&
                        link.link_index < links.size() &&
                        links[link.link_index].parent_link ==
                            qopt::articulation_root_frame;
             }
-            const auto& links = a.articulation->links();
             if (a.link_index >= links.size() || b.link_index >= links.size())
             {
                 return false;
             }
             return links[a.link_index].parent_link == b.link_index ||
                    links[b.link_index].parent_link == a.link_index;
-        };
-        const auto connected_maximal_bodies =
-            [this](const EndpointOwner& a, const EndpointOwner& b)
+        }
+
+        [[nodiscard]] bool
+        are_connected_maximal_bodies(const EndpointOwner& a,
+                                     const EndpointOwner& b) const
         {
-            if (adjacent_link_collision_enabled ||
+            if (allow_adjacent_link_collision ||
                 a.kind != EndpointKind::RigidBody ||
                 b.kind != EndpointKind::RigidBody)
             {
                 return false;
             }
-            for (const FEMRevoluteJointComponent* joint : revolute_joints_)
-            {
-                if (joint != nullptr &&
-                    ((joint->body_a_ == a.body && joint->body_b_ == b.body) ||
-                     (joint->body_a_ == b.body && joint->body_b_ == a.body)))
+            return std::any_of(
+                connected_maximal_body_pairs.begin(),
+                connected_maximal_body_pairs.end(),
+                [&a, &b](const auto& pair)
                 {
-                    return true;
-                }
-            }
-            return false;
-        };
-        const auto make_endpoint =
-            [](const EndpointOwner& endpoint, const Vec3& point_world)
+                    return (pair.first == a.body && pair.second == b.body) ||
+                           (pair.first == b.body && pair.second == a.body);
+                });
+        }
+
+        [[nodiscard]] static qopt::ContactEndpoint3D
+        make_endpoint(const EndpointOwner& endpoint, const Vec3& point_world)
         {
             switch (endpoint.kind)
             {
@@ -322,113 +264,258 @@ namespace termin
                 return qopt::ContactEndpoint3D{};
             }
             return qopt::ContactEndpoint3D{};
-        };
-
-        std::vector<std::pair<colliders::Collider*, const EndpointOwner*>>
-            live_endpoints;
-        live_endpoints.reserve(endpoint_owners.size());
-        for (const auto& [collider, endpoint] : endpoint_owners)
-        {
-            live_endpoints.emplace_back(collider, &endpoint);
         }
-        std::sort(
-            live_endpoints.begin(),
-            live_endpoints.end(),
-            [](const auto& a, const auto& b)
-            { return std::less<colliders::Collider*>{}(a.first, b.first); });
-        std::vector<std::uint64_t> live_groups;
-        for (std::size_t first = 0; first < live_endpoints.size(); ++first)
+
+        [[nodiscard]] static std::uint64_t
+        group_key(colliders::Collider* collider_a,
+                  colliders::Collider* collider_b)
         {
-            const EndpointOwner& a = *live_endpoints[first].second;
-            for (std::size_t second = first + 1; second < live_endpoints.size();
-                 ++second)
+            collision::ContactPatch pair;
+            pair.collider_a = collider_a;
+            pair.collider_b = collider_b;
+            return nonzero_key(pair.pair_key());
+        }
+
+        [[nodiscard]] std::uint64_t
+        contact_key(const collision::ContactPatch& patch,
+                    collision::ContactFeaturePair features,
+                    std::size_t point_index,
+                    std::uint64_t patch_group_key)
+        {
+            if (std::less<colliders::Collider*>{}(patch.collider_b,
+                                                  patch.collider_a))
             {
-                const EndpointOwner& b = *live_endpoints[second].second;
-                if (a.kind == EndpointKind::Ignored ||
-                    b.kind == EndpointKind::Ignored ||
-                    (a.kind == EndpointKind::Static &&
-                     b.kind == EndpointKind::Static) ||
-                    same_dynamic_endpoint(a, b) ||
-                    adjacent_articulation_links(a, b) ||
-                    connected_maximal_bodies(a, b))
+                std::swap(features.feature_a, features.feature_b);
+            }
+
+            std::uint64_t feature_key =
+                (std::uint64_t{features.feature_a} << 32U) |
+                std::uint64_t{features.feature_b};
+            if (features.feature_a ==
+                    collision::ContactFeaturePair::INVALID_FEATURE &&
+                features.feature_b ==
+                    collision::ContactFeaturePair::INVALID_FEATURE)
+            {
+                feature_key = point_index;
+            }
+
+            std::uint64_t key = combine_key(patch_group_key, feature_key);
+            while (!contact_keys.insert(key).second)
+            {
+                ++key;
+            }
+            return key;
+        }
+
+        bool allow_adjacent_link_collision = false;
+        double friction_coefficient = 0.0;
+        std::unordered_set<std::uint64_t> contact_keys;
+    };
+
+    void FEMPhysicsWorldComponent::warn_contact_collider_once(
+        const void* collider, const char* message, const char* entity_name)
+    {
+        if (std::find(warned_contact_colliders_.begin(),
+                      warned_contact_colliders_.end(),
+                      collider) != warned_contact_colliders_.end())
+        {
+            return;
+        }
+        warned_contact_colliders_.push_back(collider);
+        tc::Log::error("[FEMPhysicsWorldComponent] %s for collider on '%s'",
+                       message,
+                       entity_name != nullptr ? entity_name : "<invalid>");
+    }
+
+    bool FEMPhysicsWorldComponent::collect_contact_endpoints(
+        const TcSceneRef& scene, ContactRefreshState& state)
+    {
+        for (FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation == nullptr ||
+                articulation->articulation_ == nullptr)
+            {
+                continue;
+            }
+            if (articulation->base_body_ != nullptr &&
+                !state.articulation_bindings
+                     .emplace(articulation->base_body_,
+                              ContactRefreshState::ArticulationBinding{
+                                  .articulation = articulation->articulation_,
+                                  .base = true,
+                              })
+                     .second)
+            {
+                tc::Log::error(
+                    "[FEMPhysicsWorldComponent] ambiguous floating-base "
+                    "contact ownership");
+                return false;
+            }
+            for (std::size_t link_index = 0;
+                 link_index < articulation->bodies_.size();
+                 ++link_index)
+            {
+                FEMRigidBodyComponent* body = articulation->bodies_[link_index];
+                if (body == nullptr ||
+                    !state.articulation_bindings
+                         .emplace(
+                             body,
+                             ContactRefreshState::ArticulationBinding{
+                                 .articulation = articulation->articulation_,
+                                 .link_index = link_index,
+                             })
+                         .second)
                 {
-                    continue;
+                    tc::Log::error(
+                        "[FEMPhysicsWorldComponent] ambiguous articulation "
+                        "contact ownership");
+                    return false;
                 }
-                collision::ContactPatch pair;
-                pair.collider_a = live_endpoints[first].first;
-                pair.collider_b = live_endpoints[second].first;
-                live_groups.push_back(nonzero_key(pair.pair_key()));
             }
         }
+
+        for (const FEMRevoluteJointComponent* joint : revolute_joints_)
+        {
+            if (joint != nullptr)
+            {
+                state.connected_maximal_body_pairs.emplace_back(joint->body_a_,
+                                                                joint->body_b_);
+            }
+        }
+
+        for (Entity candidate : scene.get_all_entities())
+        {
+            ColliderComponent* collider_component =
+                candidate.get_component<ColliderComponent>();
+            if (collider_component == nullptr ||
+                collider_component->attached_collider() == nullptr)
+            {
+                continue;
+            }
+
+            colliders::Collider* collider =
+                collider_component->attached_collider();
+            ContactRefreshState::EndpointOwner endpoint;
+            const std::uint64_t layer = candidate.layer();
+            const bool selected_layer =
+                layer < 64 &&
+                (collision_layer_mask & (std::uint64_t{1} << layer)) != 0;
+            if (!candidate.enabled() || !collider_component->enabled() ||
+                !selected_layer)
+            {
+                state.endpoint_owners.emplace(collider, endpoint);
+                continue;
+            }
+
+            FEMRigidBodyComponent* body = nullptr;
+            Entity body_entity = candidate;
+            while (body_entity.valid() && body == nullptr)
+            {
+                body = body_entity.get_component<FEMRigidBodyComponent>();
+                body_entity = body_entity.parent();
+            }
+            if (body == nullptr || !body->enabled())
+            {
+                endpoint.kind = ContactRefreshState::EndpointKind::Static;
+                state.endpoint_owners.emplace(collider, endpoint);
+                continue;
+            }
+            if (body->world_ != this)
+            {
+                warn_contact_collider_once(
+                    collider,
+                    "enabled FEM body is not registered in this world",
+                    candidate.name());
+                state.endpoint_owners.emplace(collider, endpoint);
+                continue;
+            }
+
+            const auto articulation_binding =
+                state.articulation_bindings.find(body);
+            const bool owns_maximal_body = body->body_ != nullptr;
+            const bool owns_articulation_link =
+                articulation_binding != state.articulation_bindings.end();
+            if (owns_maximal_body == owns_articulation_link)
+            {
+                warn_contact_collider_once(
+                    collider,
+                    "dynamic collider has ambiguous or missing endpoint "
+                    "ownership",
+                    candidate.name());
+                state.endpoint_owners.emplace(collider, endpoint);
+                continue;
+            }
+            if (owns_maximal_body)
+            {
+                endpoint.kind = ContactRefreshState::EndpointKind::RigidBody;
+                endpoint.body = body->body_;
+            }
+            else
+            {
+                endpoint.kind =
+                    articulation_binding->second.base
+                        ? ContactRefreshState::EndpointKind::ArticulationBase
+                        : ContactRefreshState::EndpointKind::ArticulationLink;
+                endpoint.articulation =
+                    articulation_binding->second.articulation;
+                endpoint.link_index = articulation_binding->second.link_index;
+            }
+            state.endpoint_owners.emplace(collider, endpoint);
+        }
+        return true;
+    }
+
+    bool FEMPhysicsWorldComponent::refresh_contacts()
+    {
+        if (contacts_ == nullptr)
+        {
+            tc::Log::error(
+                "[FEMPhysicsWorldComponent] contact contribution is missing");
+            return false;
+        }
+
+        const TcSceneRef scene = entity().scene();
+        collision::CollisionWorld* collision_world =
+            collision::CollisionWorld::from_scene(scene.handle());
+        if (collision_world == nullptr)
+        {
+            return contacts_->set_contacts({}) ==
+                   qopt::Contact3DDiagnostic::None;
+        }
+
+        ContactRefreshState state{adjacent_link_collision_enabled,
+                                  contact_friction_coefficient};
+        if (!collect_contact_endpoints(scene, state))
+        {
+            return false;
+        }
+
+        collision_world->update_all();
+        const std::vector<collision::ContactPatch> patches =
+            collision_world->detect_contacts();
+        state.collect_live_groups();
 
         for (const collision::ContactPatch& patch : patches)
         {
-            const auto owner_a = endpoint_owners.find(patch.collider_a);
-            const auto owner_b = endpoint_owners.find(patch.collider_b);
-            if (owner_a == endpoint_owners.end() ||
-                owner_b == endpoint_owners.end())
+            const auto owner_a = state.endpoint_owners.find(patch.collider_a);
+            const auto owner_b = state.endpoint_owners.find(patch.collider_b);
+            if (owner_a == state.endpoint_owners.end() ||
+                owner_b == state.endpoint_owners.end())
             {
-                const void* unmapped = owner_a == endpoint_owners.end()
+                const void* unmapped = owner_a == state.endpoint_owners.end()
                                            ? patch.collider_a
                                            : patch.collider_b;
-                warn_once(unmapped,
-                          "CollisionWorld returned an unmapped collider",
-                          "<no ColliderComponent>");
+                warn_contact_collider_once(
+                    unmapped,
+                    "CollisionWorld returned an unmapped collider",
+                    "<no ColliderComponent>");
                 continue;
             }
-            const EndpointOwner& a = owner_a->second;
-            const EndpointOwner& b = owner_b->second;
-            if (a.kind == EndpointKind::Ignored ||
-                b.kind == EndpointKind::Ignored ||
-                (a.kind == EndpointKind::Static &&
-                 b.kind == EndpointKind::Static) ||
-                same_dynamic_endpoint(a, b) ||
-                adjacent_articulation_links(a, b) ||
-                connected_maximal_bodies(a, b))
-            {
-                continue;
-            }
-
-            for (std::size_t point_index = 0; point_index < patch.points.size();
-                 ++point_index)
-            {
-                const collision::ContactCandidate& point =
-                    patch.points[point_index];
-                const std::uint64_t group_key = nonzero_key(patch.pair_key());
-                std::uint32_t feature_a = point.features.feature_a;
-                std::uint32_t feature_b = point.features.feature_b;
-                if (std::less<colliders::Collider*>{}(patch.collider_b,
-                                                      patch.collider_a))
-                {
-                    std::swap(feature_a, feature_b);
-                }
-                std::uint64_t feature_key = (std::uint64_t{feature_a} << 32U) |
-                                            std::uint64_t{feature_b};
-                if (feature_a ==
-                        collision::ContactFeaturePair::INVALID_FEATURE &&
-                    feature_b == collision::ContactFeaturePair::INVALID_FEATURE)
-                {
-                    feature_key = point_index;
-                }
-                std::uint64_t key = combine_key(group_key, feature_key);
-                while (!contact_keys.insert(key).second)
-                {
-                    ++key;
-                }
-                contacts.push_back({
-                    .key = key,
-                    .group_key = group_key,
-                    .endpoint_a = make_endpoint(a, point.point_on_a_world),
-                    .endpoint_b = make_endpoint(b, point.point_on_b_world),
-                    .normal_from_a_to_b_world = patch.normal_world,
-                    .signed_gap = point.signed_gap,
-                    .friction_coefficient = contact_friction_coefficient,
-                });
-            }
+            state.append_contacts(patch, owner_a->second, owner_b->second);
         }
 
         const qopt::Contact3DDiagnostic diagnostic = contacts_->set_contacts(
-            std::move(contacts), std::move(live_groups));
+            std::move(state.contacts), std::move(state.live_groups));
         if (diagnostic != qopt::Contact3DDiagnostic::None)
         {
             tc::Log::error(
