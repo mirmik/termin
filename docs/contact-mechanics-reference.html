@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Контакты Termin: от narrow phase до физических решателей</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #526079;
+      --line: #d9e0eb;
+      --accent: #2856b6;
+      --accent-soft: #eaf0ff;
+      --good: #16704b;
+      --warn: #9b5b00;
+      --code: #eef1f6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #10141d;
+        --panel: #181e29;
+        --text: #e8edf7;
+        --muted: #aeb9cb;
+        --line: #30394a;
+        --accent: #8eb1ff;
+        --accent-soft: #202e4e;
+        --good: #74d4aa;
+        --warn: #f0bd72;
+        --code: #232a37;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.62 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1050px; margin: 0 auto; padding: 30px 20px 70px; }
+    header, section, nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 22px 26px;
+      margin: 0 0 18px;
+    }
+    header { border-top: 5px solid var(--accent); }
+    h1 { font-size: clamp(1.75rem, 5vw, 2.65rem); line-height: 1.15; margin: 0 0 12px; }
+    h2 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 14px; }
+    h3 { font-size: 1.12rem; margin: 24px 0 8px; }
+    p { margin: 8px 0 13px; }
+    a { color: var(--accent); text-decoration-thickness: .08em; text-underline-offset: .16em; }
+    code, .formula {
+      background: var(--code);
+      border-radius: 5px;
+      padding: .08em .35em;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .formula {
+      display: block;
+      overflow-x: auto;
+      padding: 11px 13px;
+      margin: 10px 0 15px;
+      white-space: nowrap;
+    }
+    .lead { color: var(--muted); font-size: 1.08rem; }
+    .meta { color: var(--muted); font-size: .9rem; }
+    .tag {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 2px 9px;
+      margin: 2px 5px 2px 0;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+    nav ol { columns: 2; column-gap: 34px; margin: 8px 0 0; padding-left: 24px; }
+    nav li { break-inside: avoid; margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 17px; }
+    th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+    th { background: var(--accent-soft); }
+    ul, ol { padding-left: 25px; }
+    li { margin: 5px 0; }
+    .note, .warning, .summary {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 15px;
+      margin: 14px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .warning { border-left-color: var(--warn); }
+    .flow { overflow-x: auto; padding: 8px 0 4px; }
+    .flow svg { min-width: 850px; width: 100%; height: auto; }
+    .flow rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+    .flow text { fill: var(--text); font: 13px system-ui, sans-serif; }
+    .flow > svg > path { stroke: var(--accent); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; }
+    .card h3 { margin-top: 0; }
+    .ok { color: var(--good); }
+    .warn { color: var(--warn); }
+    .small { font-size: .91rem; }
+    @media (max-width: 720px) {
+      main { padding: 14px 10px 45px; }
+      header, section, nav { padding: 18px 16px; border-radius: 10px; }
+      nav ol { columns: 1; }
+      .two-col { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+    @media print {
+      body { background: #fff; color: #111; }
+      main { max-width: none; padding: 0; }
+      header, section, nav { box-shadow: none; break-inside: avoid; }
+      a { color: #17449b; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <span class="tag">termin-collision</span>
+      <span class="tag">termin-physics</span>
+      <span class="tag">termin-qopt / FEM</span>
+    </div>
+    <h1>Механика контактов Termin</h1>
+    <p class="lead">Путь от подтверждённой коллизии до данных, с которыми работают два физических решателя: построение контактного patch, box-box clipping, детерминированное сокращение точек, адаптация и персистентность.</p>
+    <p class="meta">Состояние кода: commit <a href="https://github.com/mirmik/termin/tree/231e4f11ff759427790cea125532ed4dea39f683"><code>231e4f11</code></a>, ветка <code>master</code>. Документ самодостаточен; ссылки ведут на зафиксированные строки GitHub.</p>
+  </header>
+
+  <nav aria-label="Содержание">
+    <h2>Содержание</h2>
+    <ol>
+      <li><a href="#scope">Граница рассмотрения и термины</a></li>
+      <li><a href="#pipeline">Общий конвейер</a></li>
+      <li><a href="#hit">Вход: подтверждённый ColliderHit</a></li>
+      <li><a href="#generation">Генерация контактных кандидатов</a></li>
+      <li><a href="#reduction">Сокращённый набор точек</a></li>
+      <li><a href="#classic">Классический PhysicsWorld</a></li>
+      <li><a href="#fem">FEM/qopt: ключи, persistence, constraints</a></li>
+      <li><a href="#c-api">C API</a></li>
+      <li><a href="#invariants">Инварианты и жизненный цикл</a></li>
+      <li><a href="#limits">Ограничения и технические хвосты</a></li>
+      <li><a href="#map">Карта реализаций и тестов</a></li>
+    </ol>
+  </nav>
+
+  <section id="scope">
+    <h2>1. Граница рассмотрения и термины</h2>
+    <p>Начальная точка документа — narrow phase уже вернул <code>ColliderHit</code> с отрицательной дистанцией. Broad phase (BVH/AABB) здесь нужен только для контекста: он даёт пары, но не контактную геометрию. Конец пути — создание контактов игрового импульсного решателя либо передача <code>Contact3D</code> в qopt и сборка односторонних строк.</p>
+    <div class="note"><strong>Manifold или patch?</strong> Канонический C++ тип сейчас — <code>ContactPatch</code>. Заголовок <code>contact_manifold.hpp</code> является только compatibility include. Старое слово «manifold» ещё живёт в комментариях, именах локальных переменных и C API. Это не библиотека <code>termin-thirdparty/manifold</code>: та относится к CSG/мешам.</div>
+    <table>
+      <thead><tr><th>Понятие</th><th>Смысл в текущем коде</th></tr></thead>
+      <tbody>
+        <tr><td><code>ColliderHit</code></td><td>Один результат narrow phase: две точки, нормаль A→B и signed distance.</td></tr>
+        <tr><td><code>ContactCandidate</code></td><td>Одна solver-neutral пара контактных точек в world space, signed gap и необязательные feature IDs.</td></tr>
+        <tr><td><code>ContactPatch</code></td><td>Одна пара коллайдеров, общая нормаль и сокращённый набор кандидатов (обычно ≤ 4).</td></tr>
+        <tr><td><code>physics::Contact</code></td><td>Точка для sequential-impulse solver: midpoint, penetration, тела и коллайдеры.</td></tr>
+        <tr><td><code>qopt::Contact3D</code></td><td>Материальные endpoints, стабильные runtime-ключи, normal/gap и коэффициент трения.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="pipeline">
+    <h2>2. Общий конвейер</h2>
+    <div class="flow" aria-label="Схема движения контактных данных">
+      <svg viewBox="0 0 1000 275" role="img">
+        <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+        <rect x="10" y="25" width="145" height="58" rx="8"/><text x="82" y="48" text-anchor="middle">BVH / AABB pair</text><text x="82" y="68" text-anchor="middle">Collider A, B</text>
+        <path d="M155 54 H185"/>
+        <rect x="185" y="25" width="155" height="58" rx="8"/><text x="262" y="47" text-anchor="middle">closest_to_collider</text><text x="262" y="68" text-anchor="middle">ColliderHit, d &lt; 0</text>
+        <path d="M340 54 H370"/>
+        <rect x="370" y="12" width="170" height="84" rx="8"/><text x="455" y="37" text-anchor="middle">candidate generation</text><text x="455" y="58" text-anchor="middle">box-box: clipping</text><text x="455" y="78" text-anchor="middle">остальные: 1 point</text>
+        <path d="M540 54 H570"/>
+        <rect x="570" y="25" width="170" height="58" rx="8"/><text x="655" y="48" text-anchor="middle">reduce_contact_patch</text><text x="655" y="68" text-anchor="middle">dedup + coverage ≤ 4</text>
+        <path d="M740 54 H770"/>
+        <rect x="770" y="25" width="215" height="58" rx="8"/><text x="877" y="48" text-anchor="middle">solver-neutral ContactPatch</text><text x="877" y="68" text-anchor="middle">normal + endpoint pairs</text>
+        <path d="M877 83 V130 H270 V155"/>
+        <path d="M877 83 V130 H735 V155"/>
+        <rect x="145" y="155" width="250" height="92" rx="8"/><text x="270" y="179" text-anchor="middle">termin-physics</text><text x="270" y="201" text-anchor="middle">midpoint + penetration</text><text x="270" y="222" text-anchor="middle">sequential impulses</text>
+        <rect x="595" y="155" width="280" height="92" rx="8"/><text x="735" y="179" text-anchor="middle">FEM adapter → termin-qopt</text><text x="735" y="201" text-anchor="middle">material endpoints + stable keys</text><text x="735" y="222" text-anchor="middle">persistence + unilateral QP rows</text>
+      </svg>
+    </div>
+    <p><code>CollisionWorld::detect_contacts()</code> выбирает пары через BVH либо наивный двойной цикл и вызывает <code>test_contact_pair()</code>. Patch создаётся только при <code>hit.distance &lt; 0</code>, затем всегда проходит общий reducer. См. <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L73-L122">collision_world.cpp:73–122</a>.</p>
+  </section>
+
+  <section id="hit">
+    <h2>3. Вход: подтверждённый <code>ColliderHit</code></h2>
+    <p>Контракт narrow phase задаёт:</p>
+    <div class="formula">n = normal(A → B), &nbsp; d = distance, &nbsp; collision ⇔ d &lt; 0</div>
+    <p>Вместе с <code>n</code> возвращаются <code>p<sub>A</sub></code> и <code>p<sub>B</sub></code> — точки на соответствующих коллайдерах. Определение находится в <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/termin/colliders/collider.hpp#L35-L45">collider.hpp:35–45</a>.</p>
+    <p>Источник hit зависит от пары:</p>
+    <ul>
+      <li>box-box: SAT по 15 осям; минимальный overlap становится глубиной <code>δ</code>, а <code>d = −δ</code> — <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/termin/colliders/box_collider.hpp#L275-L342">box_collider.hpp:275–342</a>;</li>
+      <li>convex hull и пары через support mapping: GJK подтверждает пересечение, EPA даёт нормаль, глубину и барицентрически восстановленные точки — <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/colliders/gjk.cpp#L308-L392">gjk.cpp:308–392</a>, <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/colliders/gjk.cpp#L466-L489">466–489</a>;</li>
+      <li>sphere/capsule и смешанные примитивы: аналитические closest-point формулы.</li>
+    </ul>
+    <p>Дальше collision layer нормализует результат в единый геометрический контракт кандидата:</p>
+    <div class="formula">g = n · (p<sub>B</sub> − p<sub>A</sub>), &nbsp; g &lt; 0 — penetration, &nbsp; p̄ = ½(p<sub>A</sub> + p<sub>B</sub>)</div>
+    <p>Он записан непосредственно у <code>ContactCandidate</code>: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/termin/collision/contact_patch.hpp#L28-L47">contact_patch.hpp:28–47</a>.</p>
+  </section>
+
+  <section id="generation">
+    <h2>4. Генерация контактных кандидатов</h2>
+    <h3>Все пары, кроме box-box</h3>
+    <p>Путь прямой: <code>ColliderHit</code> превращается ровно в один <code>ContactCandidate</code>. Обе точки и signed distance копируются без потери; feature IDs остаются <code>INVALID_FEATURE</code>. Реализация: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L97-L122">collision_world.cpp:97–122</a>.</p>
+
+    <h3>Box-box: Sutherland–Hodgman clipping</h3>
+    <ol>
+      <li>На A выбирается reference face с максимальным <span class="formula">arg max<sub>f∈faces(A)</sub> n<sub>f</sub> · n</span></li>
+      <li>На B выбирается incident face с минимальным <span class="formula">arg min<sub>f∈faces(B)</sub> n<sub>f</sub> · n<sub>ref</sub></span></li>
+      <li>Четыре ребра reference face задают внутренние clip-полупространства <span class="formula">s<sub>k</sub>(x) = q<sub>k</sub> · x + c<sub>k</sub> ≤ 0</span></li>
+      <li>Incident quad последовательно обрезается каждой плоскостью. Для пересекающего плоскость ребра <code>a→b</code>: <span class="formula">x = a + t(b−a), &nbsp; t = s(a) / (s(a) − s(b))</span></li>
+      <li>Для каждой оставшейся вершины <code>p</code> считается signed distance до reference plane: <span class="formula">d<sub>ref</sub> = n<sub>ref</sub> · p + c<sub>ref</sub></span> Берутся только точки с <code>d<sub>ref</sub> &lt; 0</code>.</li>
+      <li>Строится пара endpoints: <span class="formula">p<sub>B</sub> = p, &nbsp; p<sub>A</sub> = p − n d<sub>ref</sub>, &nbsp; g = d<sub>ref</sub></span></li>
+    </ol>
+    <p>Выбор граней и clip-плоскостей: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L180-L249">collision_world.cpp:180–249</a>; сам clipping: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L251-L290">251–290</a>; сбор кандидатов: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L292-L376">292–376</a>.</p>
+    <p>Feature identity кодируется как <code>feature_a = ref_face</code> и <code>feature_b = (incident_face &lt;&lt; 16) | clipped_index</code>. Если clipping не дал ни одной точки, используется одиночный <code>ColliderHit</code>.</p>
+  </section>
+
+  <section id="reduction">
+    <h2>5. Построение сокращённого набора</h2>
+    <p>Reducer solver-neutral и применяется к каждому patch независимо от его происхождения. Значения по умолчанию: максимум 4 точки, duplicate tolerance <code>10⁻⁹</code>, tolerance сравнения метрик <code>10⁻¹²</code>. Конфигурация: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/termin/collision/contact_patch.hpp#L60-L65">contact_patch.hpp:60–65</a>.</p>
+
+    <h3>5.1. Канонизация и dedup</h3>
+    <p>Кандидаты сначала сортируются по <code>(signed_gap, feature_a, feature_b, pA.xyz, pB.xyz)</code>. Поэтому первый элемент — самый глубокий (наиболее отрицательный gap), а результат не зависит от порядка обхода BVH или clipping.</p>
+    <p>Два кандидата считаются дубликатами, только если близки обе endpoint-точки:</p>
+    <div class="formula">‖p<sub>A,i</sub> − p<sub>A,j</sub>‖² ≤ ε² &nbsp; ∧ &nbsp; ‖p<sub>B,i</sub> − p<sub>B,j</sub>‖² ≤ ε²</div>
+    <p>Код сортировки и dedup: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L12-L57">contact_patch.cpp:12–57</a>, <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L107-L143">107–143</a>.</p>
+
+    <h3>5.2. Проекция в контактную плоскость</h3>
+    <p>Для spatial coverage берётся midpoint и удаляется нормальная компонента:</p>
+    <div class="formula">m<sub>i</sub> = ½(p<sub>A,i</sub> + p<sub>B,i</sub>), &nbsp; q<sub>i</sub> = m<sub>i</sub> − n(n · m<sub>i</sub>)</div>
+    <p>Нормаль предварительно нормализуется; при почти нулевой нормали используется <code>+Z</code>. Проекция сохраняет расстояния в контактной плоскости и делает выбор инвариантным к общему rigid transform сцены.</p>
+
+    <h3>5.3. Жадный выбор покрытия</h3>
+    <table>
+      <thead><tr><th>Номер выбираемой точки</th><th>Критерий максимизации</th><th>Геометрический смысл</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Не максимизация: первый элемент canonical sort</td><td>Самая глубокая точка.</td></tr>
+        <tr><td>2</td><td><code>‖q − q₁‖²</code></td><td>Самая далёкая от глубокой точки.</td></tr>
+        <tr><td>3</td><td><code>‖(q₁−q) × (q₂−q)‖²</code></td><td>Максимальная площадь треугольника (в квадрате).</td></tr>
+        <tr><td>4 и далее</td><td><code>min<sub>j∈selected</sub> ‖q−qⱼ‖²</code></td><td>Farthest-point sampling: максимально далеко от ближайшей выбранной.</td></tr>
+      </tbody>
+    </table>
+    <p>При равных score побеждает canonical comparator, что обеспечивает детерминизм. Реализация score: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L60-L84">contact_patch.cpp:60–84</a>; цикл выбора: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L146-L198">146–198</a>.</p>
+    <div class="summary"><strong>Результат:</strong> collision layer отдаёт небольшой, детерминированный набор с приоритетом глубины и пространственного покрытия. Он не хранит impulses, active set или warm-start state — это политика потребителя.</div>
+  </section>
+
+  <section id="classic">
+    <h2>6. Потребитель №1: классический <code>PhysicsWorld</code></h2>
+    <p>На каждом fixed step мир синхронизирует позы, вызывает <code>detect_contacts()</code>, отбрасывает пары без динамических тел и static-static, а затем разворачивает каждую точку patch в отдельный <code>physics::Contact</code>:</p>
+    <div class="formula">contact.point = ½(p<sub>A</sub> + p<sub>B</sub>), &nbsp; contact.normal = n, &nbsp; penetration = −g</div>
+    <p>Адаптация находится в <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-physics/src/physics_world.cpp#L115-L139">physics_world.cpp:115–139</a>. Последовательность step — forces → collision → solve velocities → positions → position correction: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-physics/src/physics_world.cpp#L66-L81">66–81</a>.</p>
+
+    <h3>Что решатель делает с контактом</h3>
+    <p>Для направления <code>d</code> (нормали или tangent) вычисляется скалярная effective mass:</p>
+    <div class="formula">w(d) = Σ<sub>body∈{A,B}</sub> [m⁻¹ + d · ((I<sub>world</sub>⁻¹(r × d)) × r)], &nbsp; M<sub>eff</sub>(d) = 1 / w(d)</div>
+    <p>Нормальная относительная скорость:</p>
+    <div class="formula">v<sub>n</sub> = n · (v<sub>B</sub>(p̄) − v<sub>A</sub>(p̄))</div>
+    <p>Целевая скорость включает restitution при начальном <code>v<sub>n</sub> &lt; −1</code> и Baumgarte bias при penetration больше slop:</p>
+    <div class="formula">b = β max(penetration − slop, 0) / Δt</div>
+    <div class="formula">Δλ<sub>n</sub> = M<sub>eff</sub>(n) [v<sub>target</sub> − v<sub>n</sub> + b], &nbsp; λ<sub>n</sub> ← max(0, λ<sub>n</sub> + Δλ<sub>n</sub>)</div>
+    <p>Импульсы <code>−nΔλ</code> и <code>+nΔλ</code> прикладываются к A и B. По двум ортогональным tangent-направлениям импульсы независимо clamp-ятся в <code>[−μλ<sub>n</sub>, +μλ<sub>n</sub>]</code>. Это квадратная аппроксимация кулоновского диска, а не общий cone solve.</p>
+    <p>Формулы реализованы inline в <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-physics/include/termin/physics/contact_solver.hpp#L60-L220">contact_solver.hpp:60–220</a>.</p>
+    <div class="warning"><strong>Жизненный цикл:</strong> <code>contacts_</code> очищается перед каждой детекцией, поэтому накопленные normal/tangent impulses не переживают следующий fixed step. Feature IDs из collision layer этот движок не использует; межкадрового manifold cache/warm start здесь нет.</div>
+  </section>
+
+  <section id="fem">
+    <h2>7. Потребитель №2: FEM adapter → qopt</h2>
+    <p>FEM-мир не создаёт gameplay <code>PhysicsWorld</code>. Перед каждым native substep он обновляет broad-phase позы, получает те же <code>ContactPatch</code> и отдельно преобразует их в <code>qopt::Contact3D</code>. Вызов находится непосредственно перед <code>system_.step()</code>: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/src/components.cpp#L1858-L1875">components.cpp:1858–1875</a>.</p>
+
+    <h3>7.1. Фильтрация и ownership endpoints</h3>
+    <p>Каждый <code>AttachedCollider</code> сопоставляется с одним из видов endpoint: static world, maximal rigid body, floating articulation base или articulation link. Точка из world space переводится в локальную систему соответствующего тела/звена; qopt получает material point и больше не хранит collider/entity pointer. Реализация owner resolution: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/src/collision_contacts.cpp#L137-L213">collision_contacts.cpp:137–213</a>; world→local endpoints: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/src/collision_contacts.cpp#L297-L325">297–325</a>.</p>
+    <p>До передачи отбрасываются disabled/layer-filtered colliders, static-static, self-collision одного dynamic endpoint, а по умолчанию также непосредственно соединённые bodies и соседние articulation links.</p>
+
+    <h3>7.2. Runtime identity: group key и contact key</h3>
+    <ul>
+      <li><code>group_key</code> строится из канонически упорядоченной пары адресов коллайдеров (<code>ContactPatch::pair_key()</code>).</li>
+      <li><code>feature_key = feature_a&lt;&lt;32 | feature_b</code>; если feature IDs отсутствуют, используется индекс точки.</li>
+      <li><code>contact.key = hash(group_key, feature_key)</code>; локальные дубликаты разрешаются инкрементом ключа.</li>
+    </ul>
+    <p>Ключ пары: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L88-L105">contact_patch.cpp:88–105</a>. Создание Contact3D: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/src/collision_contacts.cpp#L392-L431">collision_contacts.cpp:392–431</a>.</p>
+
+    <h3>7.3. Persistence при временном geometric miss</h3>
+    <p>Adapter передаёт qopt не только найденные контакты, но и список всех ещё допустимых <code>live_groups</code>. Если narrow phase на текущем substep полностью не вернул patch для живой пары, прежний контакт может быть временно удержан, когда одновременно выполнены условия:</p>
+    <ul>
+      <li>его group всё ещё live и для группы нет свежих контактов;</li>
+      <li>предыдущий state был active и имел положительный normal impulse;</li>
+      <li>текущий gap материальных точек конечен и не превышает <code>persistence_distance = 10⁻⁴</code>.</li>
+    </ul>
+    <div class="formula">g<sub>current</sub> = n · (x<sub>B,current</sub> − x<sub>A,current</sub>) ≤ 10⁻⁴</div>
+    <p>Если свежий patch для этой группы появился, старый feature set не примешивается. Логика merge/persistence: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L189-L290">contact3d.cpp:189–290</a>; значение по умолчанию: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/include/termin/qopt/contact3d.hpp#L181-L191">contact3d.hpp:181–191</a>.</p>
+
+    <h3>7.4. Геометрия превращается в constraint row</h3>
+    <p>При регистрации qopt фиксирует reference separation текущих material points. На последующих position/velocity итерациях gap обновляется без нового collision query:</p>
+    <div class="formula">g = g₀ + n · [(x<sub>B</sub> − x<sub>A</sub>) − (x<sub>B,ref</sub> − x<sub>A,ref</sub>)]</div>
+    <div class="formula">v<sub>n</sub> = n · (v<sub>B</sub> − v<sub>A</sub>)</div>
+    <p>Для generalized velocities <code>v = Jq̇</code> нормальная строка собирается проекцией linear Jacobian каждого endpoint на <code>n</code>. Физический односторонний контракт:</p>
+    <div class="formula">n · (v<sub>B</sub> − v<sub>A</sub>) ≥ v<sub>min</sub>, &nbsp; λ<sub>n</sub> ≥ 0</div>
+    <p>QP хранит эквивалентную строку <code>Cv ≤ d</code>, чтобы неотрицательный multiplier создавал <code>−n</code> на A и <code>+n</code> на B. В position projection limit равен signed gap; в velocity phase используется <code>max(g,0)/Δt</code> в принятой знаковой форме матрицы. Регистрация/reference separation: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L428-L503">contact3d.cpp:428–503</a>; обновление gap и сборка row: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L571-L668">571–668</a>.</p>
+
+    <h3>7.5. Warm start и friction</h3>
+    <p>Состояние индексируется стабильным contact key. Предыдущий active contact с положительным impulse помечает соответствующую unilateral row как стартово активную; после solve сохраняются impulse, reaction и active flag. См. <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L839-L902">contact3d.cpp:839–902</a>.</p>
+    <p>При <code>μ &gt; 0</code> для нормали строится детерминированный tangent basis, а friction assembly передаёт normal/tangent Jacobians, normal impulse и коэффициент <code>μ</code>. QP аппроксимирует кулоновский конус многоугольником; адаптер задаёт один уже скомбинированный коэффициент для всех scene contacts. Структура входа: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/include/termin/qopt/contact3d.hpp#L78-L114">contact3d.hpp:78–114</a>; friction assembly: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L687-L780">contact3d.cpp:687–780</a>.</p>
+  </section>
+
+  <section id="c-api">
+    <h2>8. Параллельный выход через C API</h2>
+    <p><code>tc_collision_world_detect_contacts()</code> также вызывает C++ <code>detect_contacts()</code>, но преобразует patch в более бедный <code>tc_contact_manifold</code>:</p>
+    <ul>
+      <li>collider pointers заменяются entity IDs, если это <code>AttachedCollider</code>;</li>
+      <li>передаётся общая normal A→B;</li>
+      <li>каждая пара endpoints схлопывается в midpoint;</li>
+      <li>feature IDs и отдельные <code>pA/pB</code> теряются;</li>
+      <li>не более четырёх точек.</li>
+    </ul>
+    <p>Структура: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/physics/tc_collision.h#L67-L97">tc_collision.h:67–97</a>; конвертация: <a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world_c.cpp#L74-L135">collision_world_c.cpp:74–135</a>.</p>
+  </section>
+
+  <section id="invariants">
+    <h2>9. Инварианты и владельцы состояния</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3 class="ok">Collision layer владеет</h3>
+        <ul>
+          <li>world-space contact geometry;</li>
+          <li>normal A→B и signed-gap convention;</li>
+          <li>геометрическими feature IDs;</li>
+          <li>детерминированной редукцией patch.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Solver layer владеет</h3>
+        <ul>
+          <li>привязкой коллайдера к dynamic DOFs;</li>
+          <li>материалами, restitution/friction;</li>
+          <li>constraint rows и impulses;</li>
+          <li>active set, cache, warm start, persistence.</li>
+        </ul>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Инвариант</th><th>Где проверяется/обеспечивается</th></tr></thead>
+      <tbody>
+        <tr><td><code>n</code> направлена A→B</td><td>Narrow-phase contract; qopt дополнительно требует unit norm с допуском <code>10⁻⁸</code>.</td></tr>
+        <tr><td><code>g = n·(pB−pA)</code></td><td><code>ContactCandidate</code> contract; покрыто box-box тестом.</td></tr>
+        <tr><td><code>g &lt; 0</code> означает penetration</td><td>Collision и qopt; gameplay solver меняет знак в положительную <code>penetration</code>.</td></tr>
+        <tr><td>Patch reduction не зависит от input order</td><td>Canonical sort и deterministic tie-break.</td></tr>
+        <tr><td>Collision не хранит solver state</td><td>Patch — value object; qopt cache и gameplay accumulators находятся у решателей.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="limits">
+    <h2>10. Ограничения и замеченные технические хвосты</h2>
+    <ol>
+      <li><strong>Многоточечный patch сейчас только у box-box.</strong> Sphere, capsule, convex hull и смешанные пары получают единственную точку, даже если физически контакт имеет площадь. Для qopt у них также нет настоящего feature ID.</li>
+      <li><strong>Box-box clipping не получает provenance лучшей SAT-оси.</strong> Генератор всегда выбирает reference face на A и incident face на B, хотя minimum-overlap axis может происходить от грани B или cross product рёбер. При edge-edge/face-B конфигурациях patch может быть менее точным; fallback возвращает одну SAT-точку. Кроме того, depth берётся относительно <code>n_ref</code>, а endpoint A сдвигается вдоль SAT normal. Signed-gap контракт сохраняется алгебраически, но <code>pA</code> не обязательно точно лежит на reference face, если направления различаются.</li>
+      <li><strong>Gameplay solver не использует feature identity и не делает межкадровый warm start.</strong> Это проще, но повышает jitter/число итераций по сравнению с qopt path.</li>
+      <li><strong>FEM contact identity процесс-локальна.</strong> <code>pair_key()</code> основан на адресах коллайдеров: подходит для runtime cache, но не для сериализации, воспроизводимых логов между запусками или сетевой идентичности.</li>
+      <li><strong>C API содержит терминологическую ловушку.</strong> Поле называется <code>penetration</code>, однако в него копируется <code>signed_gap</code>, то есть penetration имеет отрицательный знак. Комментарий это признаёт, но имя легко прочитать наоборот.</li>
+      <li><strong>C API storage глобален.</strong> <code>s_manifold_storage</code> — один static vector, поэтому результаты живут лишь до следующего вызова и API не рассчитан на параллельные независимые worlds.</li>
+    </ol>
+    <div class="warning">Пункты 2, 5 и 6 — не утверждение о воспроизведённом баге в конкретной сцене, а архитектурные риски, непосредственно следующие из реализации. Пункт 2 особенно стоит проверять отдельными edge-edge и «best axis belongs to B» тестами перед развитием устойчивых box manifolds.</div>
+  </section>
+
+  <section id="map">
+    <h2>11. Карта реализаций и тестов</h2>
+    <table class="small">
+      <thead><tr><th>Участок</th><th>Основной код</th><th>Проверки / пояснения</th></tr></thead>
+      <tbody>
+        <tr><td>Контракт patch/candidate</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/termin/collision/contact_patch.hpp#L17-L106">contact_patch.hpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/docs/collision-world.md#L29-L74">collision-world.md</a></td></tr>
+        <tr><td>Pair → patch</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L73-L122">collision_world.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/tests/tests_collision.cpp#L218-L261">tests_collision.cpp</a></td></tr>
+        <tr><td>Box clipping</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world.cpp#L180-L376">collision_world.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/docs/algorithms.md#L86-L99">algorithms.md</a></td></tr>
+        <tr><td>Reducer</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/contact_patch.cpp#L107-L208">contact_patch.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/tests/test_contact_patch.cpp#L54-L225">test_contact_patch.cpp</a></td></tr>
+        <tr><td>Gameplay conversion</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-physics/src/physics_world.cpp#L115-L139">physics_world.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-physics/include/termin/physics/contact_solver.hpp#L23-L220">contact_solver.hpp</a></td></tr>
+        <tr><td>FEM scene adapter</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/src/collision_contacts.cpp#L33-L440">collision_contacts.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-components/termin-components-physics-fem/README.md#L118-L153">README: Scene contacts</a></td></tr>
+        <tr><td>qopt contact cache/rows</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/src/contact3d.cpp#L183-L780">contact3d.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-qopt/include/termin/qopt/contact3d.hpp#L37-L193">contact3d.hpp</a></td></tr>
+        <tr><td>C representation</td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/src/termin/collision/collision_world_c.cpp#L74-L135">collision_world_c.cpp</a></td><td><a href="https://github.com/mirmik/termin/blob/231e4f11ff759427790cea125532ed4dea39f683/termin-collision/include/physics/tc_collision.h#L67-L106">tc_collision.h</a></td></tr>
+      </tbody>
+    </table>
+    <p class="meta">Документ описывает фактическую реализацию указанного commit, включая различия между двумя решателями. При изменении contact identity, box clipping или qopt persistence ссылки и формулы следует пересмотреть.</p>
+  </section>
+</main>
+</body>
+</html>
