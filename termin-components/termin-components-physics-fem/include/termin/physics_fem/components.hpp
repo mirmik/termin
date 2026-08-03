@@ -276,6 +276,8 @@ namespace termin
         [[nodiscard]] FEMPhysicsTelemetry telemetry() const noexcept;
 
     private:
+        struct ContactRefreshState;
+
         friend class FEMArticulationComponent;
         friend class FEMArticulationMotorComponent;
         friend class FEMJointServoComponent;
@@ -303,6 +305,11 @@ namespace termin
         bool register_articulation(FEMArticulationComponent& component);
         void synchronize_articulations();
         bool update_motor_commands(double dt);
+        bool collect_contact_endpoints(const TcSceneRef& scene,
+                                       ContactRefreshState& state);
+        void warn_contact_collider_once(const void* collider,
+                                        const char* message,
+                                        const char* entity_name);
         bool refresh_contacts();
         void step_simulation(double dt);
         [[nodiscard]] double total_energy() const noexcept;
