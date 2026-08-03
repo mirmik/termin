@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": []
+}

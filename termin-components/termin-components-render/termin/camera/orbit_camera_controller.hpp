@@ -32,8 +32,8 @@ namespace termin {
  *   - Elevation raises/lowers the camera
  *
  * Controls:
- *   - Middle mouse button + drag: Orbit (rotate around target)
- *   - Right mouse button + drag: Pan (move target)
+ *   - Configured orbit mouse button + drag: Orbit (middle by default)
+ *   - Configured pan mouse button + drag: Pan (right by default)
  *   - Scroll wheel: Zoom (change radius or ortho size)
  */
 class ENTITY_API OrbitCameraController : public CxxComponent, public InputHandler {
@@ -44,6 +44,8 @@ public:
     double min_radius = 1.0;
     double max_radius = 100.0;
     bool horizon_lock = true;  // Z always up, clamp roll
+    int orbit_mouse_button = static_cast<int>(MouseButton::MIDDLE);
+    int pan_mouse_button = static_cast<int>(MouseButton::RIGHT);
 
 private:
     // === Internal state (derived from transform) ===
@@ -73,7 +75,7 @@ private:
         };
         std::unordered_map<uint64_t, TouchPoint> touch_points;
     };
-    std::unordered_map<uintptr_t, ViewportState> _viewport_states;
+    std::unordered_map<uint64_t, ViewportState> _viewport_states;
     // === Camera component reference (CmpRef validates entity liveness) ===
     CmpRef<CameraComponent> _camera;
 
@@ -169,7 +171,7 @@ private:
 
     void _ensure_camera();
     bool _event_targets_this_camera(tc_viewport_handle viewport);
-    ViewportState& _get_viewport_state(uintptr_t viewport_id);
+    ViewportState& _get_viewport_state(uint64_t viewport_id);
 
     // Clamp value to range
     static double _clamp(double v, double lo, double hi) {

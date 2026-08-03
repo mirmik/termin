@@ -25,14 +25,19 @@
 #include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
+#endif
 #include <termin/image/image_decode.hpp>
 #include <termin/render/render_pipeline.hpp>
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/render/sprite_asset.hpp>
+#endif
 #include <termin/render/tc_pipeline_template.hpp>
 
 extern "C" {
+#include <core/tc_component.h>
 #include <render/tc_pass.h>
 }
 
@@ -44,10 +49,16 @@ struct RuntimePackageResourceKeepalive {
     std::vector<TcTexture> textures;
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<TcFoliageData> foliage_data;
+#endif
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<TcSpriteAsset> sprites;
+#endif
     std::vector<TcPipelineTemplate> pipeline_templates;
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
     std::vector<gui_native::TcUiDocumentAsset> ui_documents;
+#endif
 };
 
 namespace {
@@ -1619,6 +1630,7 @@ bool load_mesh_resource(
     return true;
 }
 
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 bool load_foliage_data_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -1649,7 +1661,9 @@ bool load_foliage_data_resource(
     keepalive.foliage_data.push_back(std::move(foliage));
     return true;
 }
+#endif
 
+#ifndef TERMIN_RUNTIME_RENDER_ONLY
 bool load_sprite_asset_resource(
     const nos::trent& entry,
     const nos::trent& spec,
@@ -1733,6 +1747,7 @@ bool load_sprite_asset_resource(
     keepalive.sprites.push_back(std::move(sprite));
     return true;
 }
+#endif
 
 bool load_pipeline_resource(
     const std::filesystem::path& root,
@@ -1802,7 +1817,13 @@ bool load_resource(
         return load_pipeline_resource(root, entry, keepalive, error);
     }
     if (type == "foliage_data") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support foliage_data resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         return load_foliage_data_resource(root, entry, keepalive, error);
+#endif
     }
 
     const std::filesystem::path spec_path = package_path(root, rel_path);
@@ -1824,9 +1845,20 @@ bool load_resource(
         return load_mesh_resource(spec, keepalive, error);
     }
     if (type == "sprite_asset") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support sprite_asset resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         return load_sprite_asset_resource(entry, spec, keepalive, error);
+#endif
     }
     if (type == "ui_document") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+        error = "render runtime profile does not support ui_document resources";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+#else
         const std::string uuid = string_field(entry, "uuid");
         if (uuid.empty()) {
             error = "ui_document resource requires a UUID";
@@ -1844,6 +1876,7 @@ bool load_resource(
         }
         keepalive.ui_documents.push_back(asset);
         return true;
+#endif
     }
 
     error = "unsupported resource type '" + type + "'";
@@ -1857,13 +1890,52 @@ std::string resource_label(const nos::trent& entry) {
     return type + ":" + path;
 }
 
+void validate_minimal_entity_types(
+    const nos::trent& entity,
+    const std::string& scene_path
+) {
+    const nos::trent* components = dict_get(entity, "components");
+    if (components && components->is_list()) {
+        for (const nos::trent& component : components->as_list()) {
+            const std::string type = string_field(component, "type");
+            if (!type.empty() && !tc_component_registry_has(type.c_str())) {
+                throw std::runtime_error(
+                    "minimal runtime profile does not register component type '" +
+                    type + "' required by packaged scene '" + scene_path + "'"
+                );
+            }
+        }
+    }
+    const nos::trent* children = dict_get(entity, "children");
+    if (children && children->is_list()) {
+        for (const nos::trent& child : children->as_list()) {
+            validate_minimal_entity_types(child, scene_path);
+        }
+    }
+}
+
+void validate_minimal_scene(const nos::trent& scene, const std::string& scene_path) {
+    const nos::trent* extensions = dict_get(scene, "extensions");
+    if (extensions && extensions->is_dict() && !extensions->as_dict().empty()) {
+        throw std::runtime_error(
+            "minimal runtime profile does not register scene extensions required by '" +
+            scene_path + "'"
+        );
+    }
+    const nos::trent* entities = dict_get(scene, "entities");
+    if (!entities || !entities->is_list()) {
+        return;
+    }
+    for (const nos::trent& entity : entities->as_list()) {
+        validate_minimal_entity_types(entity, scene_path);
+    }
+}
+
 TcSceneRef load_runtime_scene(
     const std::filesystem::path& root,
     const std::string& rel_path,
     const RuntimePackageLoadOptions& options
 ) {
-    termin::bootstrap::bootstrap_runtime();
-
     const std::filesystem::path scene_path = package_path(root, rel_path);
     const std::string scene_json = read_text_file(scene_path);
     nos::trent scene_data;
@@ -1873,6 +1945,9 @@ TcSceneRef load_runtime_scene(
         throw std::runtime_error(
             "failed to parse packaged runtime scene '" + rel_path + "': " + ex.what()
         );
+    }
+    if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Minimal) {
+        validate_minimal_scene(scene_data, rel_path);
     }
     TcSceneRef scene = TcSceneRef::create("runtime-scene");
     if (!scene.valid()) {
@@ -1926,7 +2001,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
-        termin::bootstrap::bootstrap_runtime();
+        termin::bootstrap::bootstrap_runtime(options.bootstrap_profile);
         const std::filesystem::path manifest_path = package_path(root, "manifest.json");
         if (!std::filesystem::is_regular_file(manifest_path)) {
             result.message = "manifest.json not found in " + root.string();
@@ -2000,8 +2075,18 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
+        if (options.bootstrap_profile == bootstrap::RuntimeBootstrapProfile::Minimal &&
+                !resources->as_list().empty()) {
+            const std::string type = string_field(resources->as_list().front(), "type", "<missing>");
+            result.message =
+                "minimal runtime profile does not register resource type '" + type + "'";
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return result;
+        }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
-        ensure_runtime_builtin_textures();
+        if (options.bootstrap_profile != bootstrap::RuntimeBootstrapProfile::Minimal) {
+            ensure_runtime_builtin_textures();
+        }
         constexpr std::array<const char*, 9> resource_order = {
             "shader", "shader_program", "mesh", "texture", "sprite_asset",
             "material", "pipeline", "foliage_data", "ui_document"

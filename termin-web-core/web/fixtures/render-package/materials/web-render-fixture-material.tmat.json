@@ -1,0 +1,27 @@
+{
+  "uuid": "web-render-fixture-material",
+  "name": "WebTextured",
+  "phases": [
+    {
+      "mark": "opaque",
+      "shader": "shader-phase-3324b40c23af7090",
+      "priority": 0
+    }
+  ],
+  "shader_program": "web-render-fixture-textured-shader",
+  "uniforms": {
+    "u_tint_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "textures": {
+    "u_tint_texture": {
+      "kind": "asset",
+      "uuid": "web-render-fixture-checker-texture",
+      "name": "Checker"
+    }
+  }
+}

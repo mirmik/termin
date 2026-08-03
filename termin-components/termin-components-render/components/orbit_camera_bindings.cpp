@@ -26,6 +26,8 @@ void bind_orbit_camera_controller(nb::module_& m) {
         .def_rw("radius", &OrbitCameraController::radius)
         .def_rw("min_radius", &OrbitCameraController::min_radius)
         .def_rw("max_radius", &OrbitCameraController::max_radius)
+        .def_rw("orbit_mouse_button", &OrbitCameraController::orbit_mouse_button)
+        .def_rw("pan_mouse_button", &OrbitCameraController::pan_mouse_button)
 
         // Camera operations
         .def("orbit", &OrbitCameraController::orbit,

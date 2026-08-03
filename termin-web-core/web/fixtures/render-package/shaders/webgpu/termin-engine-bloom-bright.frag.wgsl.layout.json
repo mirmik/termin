@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "fragment",
+  "resources": [
+    {"name": "u_params", "kind": "constant_buffer", "scope": "pass", "set": 0, "binding": 7, "stage_mask": 2, "size": 16, "webgpu": {"group": 0, "binding": 7}, "fields": [{"name":"texel_size","type":"Vec2","offset":0,"size":8}, {"name":"threshold","type":"Float","offset":8,"size":4}, {"name":"soft_threshold","type":"Float","offset":12,"size":4}]},
+    {"name": "u_texture", "kind": "texture", "scope": "transient", "set": 0, "binding": 188, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 188, "sampler_binding": 190}}
+  ]
+}

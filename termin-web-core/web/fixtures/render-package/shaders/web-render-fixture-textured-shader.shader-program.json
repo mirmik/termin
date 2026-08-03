@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "uuid": "web-render-fixture-textured-shader",
+  "name": "WebTextured",
+  "source_path": "/home/mirmik/project/termin-aurora/termin-web-core/tests/fixtures/render-source/Shaders/WebTextured.shader",
+  "language": "slang",
+  "features": 0,
+  "properties": [
+    {
+      "name": "u_tint_color",
+      "property_type": "Color",
+      "label": "",
+      "default": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "u_tint_texture",
+      "property_type": "Texture",
+      "label": "",
+      "expected_encoding": "srgb",
+      "default": "white"
+    }
+  ],
+  "phases": [
+    {
+      "phase_mark": "opaque",
+      "priority": 0,
+      "shader": "shader-phase-3324b40c23af7090",
+      "state": {
+        "polygon_mode": 0,
+        "cull": false,
+        "depth_test": true,
+        "depth_write": true,
+        "blend": false,
+        "blend_src": 2,
+        "blend_dst": 3,
+        "depth_func": 0
+      }
+    }
+  ]
+}

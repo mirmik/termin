@@ -3,26 +3,9 @@
 include(CMakeFindDependencyMacro)
 
 find_dependency(termin_base REQUIRED)
-find_dependency(termin_audio REQUIRED)
 find_dependency(termin_inspect REQUIRED)
 find_dependency(termin_scene REQUIRED)
-find_dependency(termin_prefab REQUIRED)
-find_dependency(termin_render REQUIRED)
-find_dependency(termin_render_passes REQUIRED)
-find_dependency(termin_collision REQUIRED)
-find_dependency(termin_mesh REQUIRED)
-find_dependency(termin_graphics REQUIRED)
-find_dependency(termin_skeleton REQUIRED)
-find_dependency(termin_voxels REQUIRED)
-find_dependency(termin_navmesh REQUIRED)
-find_dependency(termin_components_mesh REQUIRED)
-find_dependency(termin_components_collision REQUIRED)
-find_dependency(termin_components_kinematic REQUIRED)
-find_dependency(termin_components_physics_fem REQUIRED)
-find_dependency(termin_components_skeleton REQUIRED)
-find_dependency(termin_components_render REQUIRED)
-find_dependency(termin_components_foliage REQUIRED)
-find_dependency(termin_components_ui REQUIRED)
+@TERMIN_BOOTSTRAP_CONFIG_FIND_FULL_DEPS@
 @TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION@
 @TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION_COMPONENTS@
 @TERMIN_BOOTSTRAP_CONFIG_FIND_TCPLOT_GUI_NATIVE@

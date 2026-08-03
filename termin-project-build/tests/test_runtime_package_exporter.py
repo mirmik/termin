@@ -38,6 +38,8 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
         "import json, pathlib, sys\n"
         "inp = pathlib.Path(sys.argv[sys.argv.index('--input') + 1])\n"
         "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "stage = sys.argv[sys.argv.index('--stage') + 1]\n"
         "out.parent.mkdir(parents=True, exist_ok=True)\n"
         "out.write_bytes(b'SPIRV')\n"
         "source = inp.read_text(encoding='utf-8') if inp.exists() else ''\n"
@@ -50,7 +52,8 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
         "    resources.append({'name': 'material', 'kind': 'constant_buffer', 'scope': 'material'})\n"
         "if 'Sampler2D u_input' in source:\n"
         "    resources.append({'name': 'u_input', 'kind': 'texture', 'scope': 'transient'})\n"
-        "layout = {'version': 1, 'resources': resources}\n"
+        "layout = {'version': 3 if target == 'webgpu' else 1, "
+        "          'target': target, 'stage': stage, 'resources': resources}\n"
         "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps(layout, indent=2), encoding='utf-8')\n",
         encoding="utf-8",
     )
@@ -645,16 +648,26 @@ def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> 
         [],
         shader,
         _write_fake_shader_compiler(tmp_path),
-        ("vulkan", "opengl", "d3d11"),
+        ("vulkan", "opengl", "d3d11", "webgpu"),
     )
 
-    assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11"]
+    assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11", "webgpu"]
     assert all(
         (package / path).is_file()
         for target in spec["artifacts"].values()
         for path in target.values()
     )
     assert resources == []
+    assert spec["artifacts"]["webgpu"] == {
+        "vertex": "shaders/webgpu/shv_synthetic_surface.vert.wgsl",
+        "fragment": "shaders/webgpu/shv_synthetic_surface.frag.wgsl",
+    }
+    for artifact in spec["artifacts"]["webgpu"].values():
+        layout = json.loads(
+            Path(f"{package / artifact}.layout.json").read_text(encoding="utf-8")
+        )
+        assert layout["version"] == 3
+        assert layout["target"] == "webgpu"
 
 
 @full_runtime_package_exporter
@@ -949,9 +962,21 @@ def test_export_runtime_package_emits_multi_scene_closure(tmp_path: Path) -> Non
 
 @full_runtime_package_exporter
 def test_export_runtime_package_includes_project_material_assets(tmp_path: Path) -> None:
+    import numpy as np
+
+    from termin.image import write_png_rgba8_file
+
     project = tmp_path / "DynamicMaterialGame"
     project.mkdir()
     material_uuid = "dynamic-highlight-material"
+    texture_uuid = "dynamic-highlight-texture"
+    texture_path = project / "Textures" / "Highlight.png"
+    texture_path.parent.mkdir()
+    write_png_rgba8_file(
+        texture_path,
+        np.full((1, 1, 4), [255, 230, 26, 255], dtype=np.uint8),
+    )
+    _write_json(Path(f"{texture_path}.meta"), {"uuid": texture_uuid})
     _write_json(project / "Main.scene", {"uuid": "scene-uuid", "entities": []})
     _write_json(
         project / "Materials" / "Highlight.material",
@@ -960,6 +985,9 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
             "shader": "CookTorrancePBR",
             "uniforms": {
                 "u_color": [1.0, 0.9, 0.1, 1.0],
+            },
+            "textures": {
+                "u_albedo_texture": texture_uuid,
             },
         },
     )
@@ -979,6 +1007,20 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         "uuid": material_uuid,
         "path": f"materials/{material_uuid}.tmat.json",
     } in manifest["resources"]
+    material_spec = json.loads(
+        (result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert material_spec["textures"]["u_albedo_texture"]["uuid"] == texture_uuid
+    assert {
+        "type": "texture",
+        "uuid": texture_uuid,
+        "path": f"textures/{texture_uuid}.texture.json",
+    } in manifest["resources"]
+    assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == (
+        texture_path.read_bytes()
+    )
 
 
 @full_runtime_package_exporter

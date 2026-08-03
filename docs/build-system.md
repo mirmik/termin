@@ -998,8 +998,12 @@ MSVC-специфичные warnings (C4251 — STL-члены в dllexport-кл
 ## WebAssembly core profile
 
 Браузерный runtime начинается с намеренно небольшой статической композиции:
-`termin-base`, `termin-inspect`, `termin-mesh` и `termin-scene`. Профиль CMake
-`TERMIN_PLATFORM_WEB` исключает desktop graphics, windowing,
+`termin-base`, `termin-inspect`, `termin-mesh`, `termin-scene`, minimal-only
+`termin-bootstrap`, minimal-only `termin-runtime` и минимального среза
+`termin-graphics`. Профиль CMake
+`TERMIN_PLATFORM_WEB` включает
+`tgfx2` WebGPU через закреплённый Emscripten port `emdawnwebgpu`, но исключает
+desktop renderer stack, windowing,
 Python, editor и launcher targets, чтобы платформенные зависимости не
 просачивались в WebAssembly-граф.
 
@@ -1018,11 +1022,75 @@ Python, editor и launcher targets, чтобы платформенные зав
 ./build-web-core.sh --browser-smoke
 ```
 
+Этот запуск является обязательным Chromium gate и сохраняет machine-readable
+отчёт `build/web-core/bin/browser-gate-report.json` с версиями окружения,
+raw/gzip-размерами artifacts и package, startup/frame/input/resize metrics.
+CI запускает тот же wrapper в job `web-runtime-chromium`. Полный contract,
+Firefox manual scenario и правила deployment описаны в
+[Web Runtime Browser Gate](./web-runtime-browser-gate.md). Safari в текущую
+compatibility matrix не входит.
+
 Если Chromium отсутствует в `PATH`, `TERMIN_WEB_BROWSER` должен указывать на
 его executable. `build/web-core/bin/termin-web-core.mjs` — стабильная внешняя
 ESM-точка входа; `termin_web_core.mjs` и `termin_web_core.wasm` являются
-генерируемыми деталями. Пока loader экспортирует только smoke-level core API и
-намеренно не является rendering или editor API.
+генерируемыми деталями. Рядом устанавливается `termin-web-host.mjs`: он
+загружает directory-shaped package v2 по HTTP, переносит manifest и scene files
+в изолированный каталог MEMFS, вызывает native `RuntimePackageLoader` и ведёт
+явные состояния `idle/loading/ready/running/stopped/error`. Кадры исполняются
+через настоящий `requestAnimationFrame`; `reload()` и `teardown()` останавливают
+цикл, уничтожают native scenes и удаляют MEMFS tree.
+
+Node smoke детерминированно проверяет этот lifecycle поверх настоящего Wasm,
+включая repeated load, cleanup, HTTP 404/path traversal и fail-closed отказ
+неподдерживаемых component/resource domains. Browser smoke управляет живой
+страницей через Chrome DevTools и принимает только фактический terminal marker
+из DOM; наличие marker-текста в исходнике страницы не считается успехом. После
+host lifecycle он асинхронно создаёт WebGPU adapter/device для
+`#termin-canvas`, загружает strict-export package с camera/mesh/texture/material,
+рендерит его через `EngineCore`/`RenderingManager` и проверяет пиксели canvas,
+reload, teardown и resize. В Emscripten показ выполняется browser в конце RAF
+callback, зарегистрированного через HTML5 API; `wgpuSurfacePresent` там вызывать
+нельзя. Render registry bootstrap живёт всё время жизни Wasm-модуля, тогда как
+reload освобождает package, EngineCore, display и WebGPU device state.
+
+Для ручной проверки рядом с smoke harness устанавливается `viewer.html` —
+полноэкранная пользовательская оболочка над тем же host и strict package:
+
+```bash
+cd build/web-core/bin
+python3 -m http.server 8062 --bind 127.0.0.1
+# открыть http://127.0.0.1:8062/viewer.html
+```
+
+`termin-web-input.mjs` является отдельным browser adapter, а не частью scene
+domain. Он переводит pointer/mouse/wheel/keyboard/text events в существующий
+Termin display input contract, управляет pointer capture и синхронизирует
+canvas backing size с CSS-размером и `devicePixelRatio`. В web fixture левая
+кнопка мыши вращает камеру, правая перемещает target, колесо меняет дистанцию;
+обычный desktop default контроллера сохраняет вращение средней кнопкой.
+Web host, как и desktop player, создаёт и владеет
+`tc_viewport_input_manager` для каждого runtime viewport с input mode
+`simple`/`basic`. Одного display router недостаточно: без viewport manager
+события принимаются adapter-ом и учитываются в метриках, но не доходят до
+scene input handlers.
+ResizeObserver и window resize ведут к повторной конфигурации WebGPU surface и
+offscreen display; blur/visibility loss сбрасывают зажатые кнопки и клавиши.
+Browser smoke проверяет этот путь сквозным жестом: кадр обязан измениться после
+orbit/wheel input, а backing surface — после CSS resize. При проверке viewer
+HUD скрывается, поэтому изменение счётчика событий не может дать
+ложноположительный результат вместо изменения самой сцены.
+
+`TERMIN_PLATFORM_WEB` принудительно включает render-only варианты bootstrap,
+runtime, render components, render passes и default pipeline. Web closure
+содержит scene, mesh, image codecs, texture/material/shader loaders, display и
+engine, но исключает editor/app/Python, audio, prefab, foliage, UI, voxels,
+navmesh и FEM. Runtime сохраняет тот же публичный `RuntimePackageLoader` и
+package-v2 contract; offline export обязан приложить WGSL artifacts и sidecar
+v3. Обычная native-сборка сохраняет full profile по умолчанию. Host выбирает
+профиль явно через `RuntimePackageLoadOptions::bootstrap_profile`; minimal
+profile принимает core-only package-v2 scene и до десериализации отклоняет
+неподдерживаемые resources, components и scene extensions с логированной
+ошибкой.
 
 ### Offline WGSL audit
 
@@ -1041,3 +1109,42 @@ built-in Slang shaders проверяется одной командой:
 `@group`/`@binding`, std140 lowering для uniform buffers, валидного matrix
 lowering и отдельных texture/sampler bindings. Текущий полный отчёт лежит в
 [Built-in Slang → WGSL audit](analysis/2026-08-02-builtin-slang-wgsl-audit.md).
+
+### Offline WebGPU shader artifacts
+
+Audit проверяет совместимость исходников и upstream-компиляторов, а production
+artifact path проходит через `termin_shaderc --target webgpu`. Компилятор
+принимает Slang vertex, fragment и compute stages, нормализует все ресурсы в
+WebGPU bind group 0, разделяет combined texture/sampler placement, записывает
+sidecar contract version 3 и только затем принимает WGSL после независимой
+проверки Naga. Geometry stages завершаются явной ошибкой.
+
+Пути к инструментам разрешаются через `--slangc` / `TERMIN_SLANGC` и
+`--wgsl-validator` / `TERMIN_WGSL_VALIDATOR`; fallback в runtime-компиляцию не
+предусмотрен. После `./audit-webgpu-shaders.sh --setup` полный built-in набор
+можно сгенерировать напрямую:
+
+```bash
+sdk/bin/termin_python termin-graphics/cmake/compile_builtin_shader_artifacts.py \
+  --shaderc build/Release/bin/termin_shaderc \
+  --slangc build/toolchains/slang-2026.5.2/bin/slangc \
+  --wgsl-validator build/toolchains/naga-30.0.0/bin/naga \
+  --source-dir termin-graphics/resources/builtin_shaders \
+  --output-root build/webgpu-builtin-artifacts \
+  --target webgpu
+```
+
+Для SDK staging тот же target включается на configure:
+
+```bash
+TERMIN_SLANGC="$PWD/build/toolchains/slang-2026.5.2/bin/slangc" \
+TERMIN_WGSL_VALIDATOR="$PWD/build/toolchains/naga-30.0.0/bin/naga" \
+cmake -S . -B build/webgpu-sdk \
+  -DTERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=ON \
+  -DTERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS=webgpu
+```
+
+Project runtime package exporter также принимает явный `webgpu` в
+`shader_targets` и пишет `.wgsl` вместе с обязательным соседним
+`.layout.json`. WebGPU backend потребляет WGSL и sidecar v3 напрямую; runtime
+Slang compiler и скрытый reflection fallback в браузер не входят.

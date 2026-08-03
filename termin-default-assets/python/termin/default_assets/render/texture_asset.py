@@ -230,7 +230,12 @@ class TextureAsset(DataAsset[TcTexture]):
     # --- Factory methods ---
 
     @classmethod
-    def from_file(cls, path: str | Path, name: str | None = None) -> "TextureAsset":
+    def from_file(
+        cls,
+        path: str | Path,
+        name: str | None = None,
+        uuid: str | None = None,
+    ) -> "TextureAsset":
         """Create TextureAsset from image file."""
         from termin.default_assets.render.texture_spec import TextureSpec
         from termin.image import decode_rgba8_file
@@ -244,6 +249,7 @@ class TextureAsset(DataAsset[TcTexture]):
             texture_data=None,
             name=texture_name,
             source_path=path,
+            uuid=uuid,
         )
         asset._flip_x = spec.flip_x
         asset._flip_y = spec.flip_y

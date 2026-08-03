@@ -321,10 +321,18 @@ skeleton, voxels, navmesh, FEM, foliage и UI.
 - невозможности честно описать capabilities package;
 - слабому dead stripping из-за явных registration calls.
 
-Нужно ввести feature-based bootstrap или явный `RuntimeFeatureSet` с отдельными
-registration units. Package manifest должен позволять проверить, что host
-поддерживает требуемые component/resource/pass types. Это полезная общая
-архитектурная работа также для Android и будущих headless/embedded profiles.
+На 2026-08-02 граница разрезана явным `RuntimeBootstrapProfile`. Native default
+остаётся `Full`, а `Minimal` регистрирует только core scene domain. Для
+Emscripten `TERMIN_BOOTSTRAP_MINIMAL_ONLY` собирает отдельный implementation
+unit и линкует только `termin-base`, `termin-inspect` и `termin-scene`, поэтому
+desktop domains не просачиваются даже как неиспользуемые зависимости.
+
+`RuntimePackageLoader` принимает выбранный профиль. Minimal package может
+содержать core entities без domain resources; неизвестные resource/component
+types и scene extensions отклоняются до частичной десериализации с точной
+логированной диагностикой. Последующее расширение профиля должно добавлять
+малые registration units вместе с соответствующей manifest capability, не
+возвращать единый обязательный full bootstrap.
 
 ### Shared-library assumptions
 
@@ -366,6 +374,11 @@ assumptions.
 
 Оценка: 1–2 недели после установки и фиксации Emscripten toolchain.
 
+Статус на 2026-08-02: core Wasm и minimal-only bootstrap собираются Emscripten.
+Minimal bootstrap dependency closure ограничен `termin-base`, `termin-inspect`
+и `termin-scene`; native-тест package loader подтверждает загрузку core fixture
+и fail-closed поведение для отсутствующих component/resource domains.
+
 ### Phase 1: WebGPU vertical slice
 
 Цель — пройти весь native render path до canvas.
@@ -379,6 +392,23 @@ assumptions.
 
 Оценка: ещё 2–4 недели.
 
+Статус на 2026-08-02: vertical slice реализован в рабочей ветке карточки
+Kanboard #1240. `WebGpuRenderDevice` является обычным `IRenderDevice`, а не
+scene-specific renderer; adapter/device создаются отдельной async factory без
+Asyncify. Backend принимает prebuilt WGSL и обязательный sidecar v3, строит
+group-0 bind layout/resource set, исполняет render pass, обычный и indexed draw,
+submit/present и повторную конфигурацию canvas surface. Web smoke использует два
+checked-in artifact fixtures и весь draw проходит через public tgfx2 handles и
+descriptors.
+
+Текущая capability boundary намеренно узкая и явная: compute pipeline пока не
+представлен в `PipelineDesc`, geometry shaders отсутствуют в WebGPU, push
+constants, storage textures и synchronous readback отклоняются с логированной
+ошибкой. Wasm build и Node smoke прошли. Browser smoke с Chrome for Testing,
+WebGPU через Vulkan/SwiftShader и настоящим canvas также прошёл: он отрисовал
+оба pipeline, выполнил resize с повторной конфигурацией surface и завершился
+маркером `TERMIN_WEB_CORE_SMOKE_PASSED`.
+
 ### Phase 2: runtime package scene
 
 Цель — загрузить не hard-coded geometry, а экспортированный package v2.
@@ -391,6 +421,77 @@ assumptions.
 - проверить cleanup и repeated load.
 
 Оценка: ещё 4–8 недель, сильно зависит от shader matrix и bootstrap slicing.
+
+Статус на 2026-08-02: первый core-only host slice реализован в карточке
+Kanboard #1241. Web build включает отдельный minimal-only implementation
+`RuntimePackageLoader` без desktop resource domains. ESM host скачивает
+package-v2 manifest и scene files, монтирует их в generation-specific MEMFS,
+запускает entry scene и обслуживает update через `requestAnimationFrame`.
+Состояния загрузки и ошибки опубликованы наружу; repeated load и teardown
+уничтожают сцены и очищают MEMFS.
+
+Детерминированный Node/Wasm smoke проверяет load/update/reload/cleanup и
+отрицательные случаи: неверную версию, отсутствующий manifest, выход пути за
+package root, `MeshComponent` и resource типа `Texture`. Строгий browser smoke
+через Chrome DevTools проходит тот же host lifecycle на живой странице, затем
+рисует WebGPU-кадр и проверяет resize. В ходе проверки устранён ложноположительный
+старый `--dump-dom` gate и исправлена browser semantics `present()`: Emdawnwebgpu
+не допускает `wgpuSurfacePresent`, canvas публикуется самим браузером в конце
+RAF callback.
+
+Это ещё не вся Phase 2: остаются package provider/archive и расширение scene
+renderer composition за пределы текущего render-only профиля.
+
+Статус карточки Kanboard #1242 на 2026-08-02: первый настоящий scene/render
+vertical slice завершён. Web profile теперь композитит render-only bootstrap,
+`RuntimePackageLoader`, `EngineCore`, `RenderingManager`, offscreen display и
+`WebGpuRenderDevice`. Backend реализует общий bridge для `tc_texture`,
+`tc_mesh` и `tc_shader`, включая per-device cache, prebuilt WGSL sidecar v3,
+default sampler, GPU-first render targets и depth-stencil render passes.
+
+Acceptance fixture экспортируется штатным strict resource policy из source
+project и содержит scene, camera, OBJ mesh, PNG texture, material и Slang
+shader; browser скачивает обычный package v2 graph. Chrome/SwiftShader smoke
+проверяет пиксели canvas, затем выполняет reload, teardown, отрицательные
+package cases и прежний direct-backend smoke. Кадровый callback принадлежит
+Emscripten HTML5 main loop: emdawnwebgpu публикует canvas только на его RAF
+boundary; JS host наблюдает состояния и метрики.
+
+Измеренный Release baseline на локальном headless Chrome/SwiftShader:
+
+- `termin_web_core.wasm`: 1 896 467 bytes;
+- generated Emscripten module: 122 573 bytes;
+- ESM host: 17 884 bytes;
+- strict render fixture: 104 208 bytes в 87 файлах;
+- package fetch: примерно 90–92 ms;
+- WebGPU init: примерно 12 ms;
+- native load/composition: примерно 20–23 ms;
+- startup до running: примерно 122–126 ms;
+- first presented frame: примерно 142–153 ms;
+- steady RAF interval на SwiftShader: около 16.7 ms (60 Hz).
+
+Это несжатые локальные размеры и synthetic software-GPU timings, поэтому они
+служат regression baseline, а не production budget. Не закрыты: archive/cache
+transport, device-loss recovery, partial/scaled blit, полная PBR/shadow shader
+matrix и Safari/Firefox CI.
+
+Статус карточки Kanboard #1243 на 2026-08-02: добавлен самостоятельный browser
+input/canvas adapter и полноэкранный `viewer.html`. Adapter переводит
+pointer/mouse/wheel/keyboard/text events в native display contract, учитывает
+CSS coordinates, DPR, pointer capture, focus loss и resize canvas surface.
+Render-only bootstrap включает `OrbitCameraController`; fixture теперь является
+текстурированным кубом, которым в web viewer можно управлять левой/правой
+кнопками мыши и колесом. Mouse buttons контроллера сериализуются в сцене, а его
+desktop default остаётся DCC-подобным с orbit на средней кнопке. Web host
+владеет viewport input managers симметрично desktop player: display router сам
+по себе принимает события, но без manager не передаёт их scene input handlers.
+Именно отсутствие этого lifecycle-звена ранее давало наблюдаемое состояние,
+когда browser event counter рос, а камера не двигалась. Browser smoke
+через Chrome/SwiftShader воспроизводит orbit и wheel как на smoke harness, так
+и непосредственно на полноэкранной viewer page,
+скрывает HUD перед сравнением, проверяет изменение пикселей самой сцены и
+повторную конфигурацию backing surface.
+Firefox и аппаратные Chrome/Safari конфигурации этой проверкой пока не покрыты.
 
 ### Phase 3: production runtime
 
@@ -425,7 +526,8 @@ runtime parity. Three.js viewer можно довести до полезног�
 6. Web-specific ветвления не проникают в scene/component domain.
 7. Input и resize проходят через явный browser adapter.
 8. Ошибки package, shader, adapter/device и device loss видны в логах и host UI.
-9. Chrome и Safari проходят smoke; Firefox запускается там, где WebGPU включён.
+9. Обязательный Chromium gate проходит автоматически; Firefox проверяется
+   вручную там, где WebGPU включён. Safari отложен за пределы первого milestone.
 10. Зафиксированы compressed Wasm size, package size, startup stages и frame
     timing, чтобы последующие решения принимались по измерениям.
 
@@ -473,8 +575,10 @@ runtime parity. Three.js viewer можно довести до полезног�
 
 ## Board status
 
-На момент анализа поиск по проектной доске по словам `web`, `wasm` и `browser`
-не нашёл существующих карточек. Создавать implementation card до выбора
-продуктовой цели не следует. После принятия направления первая карточка должна
-описывать ограниченный Phase 0/Phase 1 spike, а не обещать полный browser
-editor.
+Направление принято и ведётся отдельным swimlane Web Runtime. Phase 0 bootstrap,
+Phase 1 WebGPU vertical slice, core-only package host и первый packaged
+scene/render slice завершены карточками #1238, #1240, #1241 и #1242. Browser
+input/resize vertical slice #1243 реализован, прошёл ручную проверку в Chromium
+и закрыт. Chromium runtime gate #1245 оформляется как отдельный CI job с
+machine-readable отчётом; production-хвосты ведутся отдельно и не смешиваются
+с полным browser editor.
