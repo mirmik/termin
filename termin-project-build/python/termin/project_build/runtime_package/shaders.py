@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -35,7 +36,7 @@ DEFAULT_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
 
 SUPPORTED_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
     "glsl": ("vulkan",),
-    "slang": ("vulkan", "opengl", "d3d11"),
+    "slang": ("vulkan", "opengl", "d3d11", "webgpu"),
     "hlsl": ("d3d11",),
 }
 
@@ -65,7 +66,7 @@ def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str,
         text = str(target).strip().lower()
         if text == "":
             raise ValueError("Runtime package shader target must be a non-empty string")
-        if text not in {"vulkan", "opengl", "d3d11"}:
+        if text not in {"vulkan", "opengl", "d3d11", "webgpu"}:
             raise ValueError(f"Unsupported runtime package shader target: {target}")
         if text not in normalized:
             normalized.append(text)
@@ -106,6 +107,8 @@ def artifact_extension_for_target(target: str) -> str:
         return "glsl"
     if target == "d3d11":
         return "cso"
+    if target == "webgpu":
+        return "wgsl"
     raise ValueError(f"Unsupported shader target: {target}")
 
 
@@ -850,6 +853,28 @@ def compile_shader_stage(
         raise RuntimeError(f"Shader compilation failed for {input_path.name}: {message}")
     if not output_path.exists():
         raise RuntimeError(f"Shader compiler did not produce expected output: {output_path}")
+    layout_path = Path(f"{output_path}.layout.json")
+    if not layout_path.exists():
+        raise RuntimeError(
+            f"Shader compiler did not produce expected layout sidecar: {layout_path}"
+        )
+    if target == "webgpu":
+        try:
+            layout = json.loads(layout_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"WebGPU shader layout sidecar is invalid: {layout_path}: {exc}"
+            ) from exc
+        if (
+            not isinstance(layout, dict)
+            or layout.get("version") != 3
+            or layout.get("target") != "webgpu"
+            or layout.get("stage") != stage
+            or not isinstance(layout.get("resources"), list)
+        ):
+            raise RuntimeError(
+                f"WebGPU shader layout sidecar has an incompatible contract: {layout_path}"
+            )
 
 
 def executable_command(path: Path) -> list[str]:

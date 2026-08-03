@@ -85,7 +85,9 @@ NB_MODULE(_bootstrap_native, m) {
         nb::arg("entity") = true);
     m.def("init_pointer_extractors", &termin::bootstrap::init_pointer_extractors);
     m.def("init_python_component_callbacks", &termin::bootstrap::init_python_component_callbacks);
-    m.def("bootstrap_runtime", &termin::bootstrap::bootstrap_runtime);
+    m.def(
+        "bootstrap_runtime",
+        static_cast<void (*)()>(&termin::bootstrap::bootstrap_runtime));
     m.def("bootstrap_player", &termin::bootstrap::bootstrap_player);
     m.def("bootstrap_editor", &termin::bootstrap::bootstrap_editor);
     m.def("shutdown_runtime", &termin::bootstrap::shutdown_runtime);

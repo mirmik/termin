@@ -1114,6 +1114,7 @@ enum class BackendType {
     Vulkan,
     Metal,
     D3D11,
+    WebGPU,
     Null
 };
 }

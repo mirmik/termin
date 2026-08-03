@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "vertex",
+  "resources": [
+    {"name": "canvas_draw", "kind": "constant_buffer", "scope": "draw", "set": 0, "binding": 20, "stage_mask": 1, "size": 80, "webgpu": {"group": 0, "binding": 20}, "fields": [{"name":"u_projection","type":"Mat4","offset":0,"size":64}, {"name":"u_color","type":"Vec4","offset":64,"size":16}]}
+  ]
+}

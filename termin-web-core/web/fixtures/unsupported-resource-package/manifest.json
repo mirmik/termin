@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": [
+    {"identity": "Textures/Checker", "path": "checker.png", "type": "Texture"}
+  ]
+}

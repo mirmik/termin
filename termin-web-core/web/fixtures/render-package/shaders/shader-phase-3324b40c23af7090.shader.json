@@ -1,0 +1,19 @@
+{
+  "uuid": "shader-phase-3324b40c23af7090",
+  "name": "WebTextured/opaque",
+  "language": "slang",
+  "vertex_source_path": "shaders/vulkan/shader-phase-3324b40c23af7090.vert.slang",
+  "fragment_source_path": "shaders/vulkan/shader-phase-3324b40c23af7090.frag.slang",
+  "vertex_entry": "main",
+  "fragment_entry": "main",
+  "source_path": "/home/mirmik/project/termin-aurora/termin-web-core/tests/fixtures/render-source/Shaders/WebTextured.shader",
+  "features": 0,
+  "artifact_role": "executable",
+  "source_identity": "sha256:d88a0f11b9a39d9c40aa9dec6261ab636d73cf996ac5eedc72589dd5a993708c",
+  "artifacts": {
+    "webgpu": {
+      "vertex": "shaders/webgpu/shader-phase-3324b40c23af7090.vert.wgsl",
+      "fragment": "shaders/webgpu/shader-phase-3324b40c23af7090.frag.wgsl"
+    }
+  }
+}

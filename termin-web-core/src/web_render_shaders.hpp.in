@@ -1,0 +1,10 @@
+#pragma once
+
+namespace termin_web_shaders {
+
+inline constexpr const char* triangle_wgsl = R"termin_wgsl(@TRIANGLE_WGSL@)termin_wgsl";
+inline constexpr const char* triangle_layout = R"termin_json(@TRIANGLE_LAYOUT@)termin_json";
+inline constexpr const char* textured_mesh_wgsl = R"termin_wgsl(@TEXTURED_MESH_WGSL@)termin_wgsl";
+inline constexpr const char* textured_mesh_layout = R"termin_json(@TEXTURED_MESH_LAYOUT@)termin_json";
+
+} // namespace termin_web_shaders

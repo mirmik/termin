@@ -1,12 +1,337 @@
 #include <cstring>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
 
 #include <core/tc_scene.h>
+#include <core/tc_component.h>
 #include <inspect/tc_kind.h>
 #include <tcbase/tc_version.h>
+#include <termin/bootstrap/bootstrap.hpp>
+#include <termin/engine/engine_core.hpp>
+#include <termin/platform/offscreen_render_surface.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
+#include <termin/runtime/runtime_package.hpp>
 #include <termin_scene/termin_scene.h>
+#include <tgfx2/graphics_host.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx2/webgpu/webgpu_render_device.hpp>
+
+extern "C" {
+#include <render/tc_display.h>
+#include <render/tc_render_surface.h>
+#include <render/tc_viewport.h>
+#include <render/tc_viewport_input_manager.h>
+}
+
+#include "web_render_shaders.hpp"
+
+namespace {
+
+struct WebVertex {
+    float position[2];
+    float uv[2];
+};
+
+struct WebRenderState {
+    std::unique_ptr<tgfx::WebGpuRenderDevice> device;
+    tgfx::PipelineHandle triangle_pipeline;
+    tgfx::PipelineHandle mesh_pipeline;
+    tgfx::BufferHandle vertex_buffer;
+    tgfx::BufferHandle index_buffer;
+    tgfx::TextureHandle texture;
+    tgfx::SamplerHandle sampler;
+    tgfx::ResourceSetHandle resource_set;
+    uint32_t width = 640;
+    uint32_t height = 360;
+};
+
+std::unique_ptr<WebRenderState> web_render_state;
+int web_render_status = 0;
+std::string web_render_error;
+
+struct WebPlayerState {
+    std::unique_ptr<tgfx::GraphicsHost> graphics_host;
+    tgfx::WebGpuRenderDevice* device = nullptr;
+    std::unique_ptr<termin::EngineCore> engine;
+    termin::runtime::RuntimePackageLoadResult package;
+    std::vector<std::string> registered_scene_names;
+    std::vector<tc_viewport_handle> viewports;
+    std::vector<tc_viewport_input_manager*> viewport_input_managers;
+    tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    uint32_t width = 640;
+    uint32_t height = 360;
+};
+
+std::unique_ptr<WebPlayerState> web_player;
+termin::runtime::RuntimePackageLoadResult web_headless_package;
+int web_player_graphics_status = 0;
+std::string web_player_graphics_error;
+std::string web_host_error;
+std::uint32_t web_host_frame_count = 0;
+bool web_host_loop_running = false;
+double web_host_loop_last_timestamp = -1.0;
+
+extern "C" int termin_web_host_tick(double delta_seconds);
+
+EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
+    if (!web_host_loop_running) return EM_FALSE;
+    const double delta_seconds = web_host_loop_last_timestamp < 0.0
+        ? 0.0
+        : (timestamp_ms - web_host_loop_last_timestamp) / 1000.0;
+    web_host_loop_last_timestamp = timestamp_ms;
+    if (!termin_web_host_tick(delta_seconds)) {
+        web_host_loop_running = false;
+        return EM_FALSE;
+    }
+    return EM_TRUE;
+}
+
+void unload_web_host_package() {
+    web_host_loop_running = false;
+    web_host_loop_last_timestamp = -1.0;
+    for (termin::runtime::RuntimePackageScene& packaged : web_headless_package.scenes) {
+        if (packaged.scene.valid()) packaged.scene.destroy();
+    }
+    web_headless_package = {};
+    if (!web_player) {
+        web_host_frame_count = 0;
+        return;
+    }
+    if (web_player->engine) {
+        for (tc_viewport_input_manager* input
+                : web_player->viewport_input_managers) {
+            tc_viewport_input_manager_free(input);
+        }
+        web_player->viewport_input_managers.clear();
+        tc_log_info("TerminWebHost unload: shutting down EngineCore");
+        if (!web_player->engine->shutdown()) {
+            tc_log_error("TerminWebHost: EngineCore shutdown failed");
+        }
+        web_player->engine.reset();
+        tc_log_info("TerminWebHost unload: EngineCore released");
+    }
+    tc_log_info("TerminWebHost unload: destroying packaged scenes");
+    for (termin::runtime::RuntimePackageScene& packaged : web_player->package.scenes) {
+        if (packaged.scene.valid()) {
+            packaged.scene.destroy();
+        }
+    }
+    web_player->package = {};
+    web_player->viewports.clear();
+    web_player->presentation_display = TC_DISPLAY_HANDLE_INVALID;
+    web_player->registered_scene_names.clear();
+    if (web_player->graphics_host) {
+        tc_log_info("TerminWebHost unload: closing GraphicsHost");
+        web_player->graphics_host->close();
+        web_player->graphics_host.reset();
+        tc_log_info("TerminWebHost unload: GraphicsHost released");
+    }
+    web_player.reset();
+    web_player_graphics_status = 0;
+    web_host_frame_count = 0;
+}
+
+tc_display_handle create_web_player_display(const std::string& requested_name) {
+    if (!web_player || !web_player->device) {
+        tc_log_error("TerminWebHost: display requested without WebGPU device");
+        return TC_DISPLAY_HANDLE_INVALID;
+    }
+    const std::string name = requested_name.empty() ? "Main" : requested_name;
+    return termin::create_offscreen_display(
+        web_player->device,
+        static_cast<int>(web_player->width),
+        static_cast<int>(web_player->height),
+        name.c_str());
+}
+
+bool present_web_player_canvas() {
+    if (!web_player || !web_player->device ||
+            !tc_display_handle_valid(web_player->presentation_display)) {
+        return false;
+    }
+    tc_render_surface* display_surface =
+        tc_display_get_surface(web_player->presentation_display);
+    uint32_t output_texture_id = 0;
+    if (!display_surface || !tc_render_surface_validate_output(
+            display_surface,
+            reinterpret_cast<uintptr_t>(web_player->device),
+            &output_texture_id)) {
+        tc_log_error("TerminWebHost: rendered display output is invalid");
+        return false;
+    }
+    tgfx::TextureHandle canvas = web_player->device->acquire_surface_texture();
+    std::unique_ptr<tgfx::ICommandList> commands =
+        web_player->device->create_command_list();
+    commands->begin();
+    commands->copy_texture(tgfx::TextureHandle{output_texture_id}, canvas);
+    commands->end();
+    web_player->device->submit(*commands);
+    web_player->device->present();
+    return true;
+}
+
+tgfx::ShaderHandle create_web_shader(
+    tgfx::WebGpuRenderDevice& device,
+    tgfx::ShaderStage stage,
+    const char* source,
+    const char* layout,
+    const char* entry,
+    const char* name) {
+    tgfx::ShaderDesc desc;
+    desc.stage = stage;
+    desc.source = source;
+    desc.resource_layout_json = layout;
+    desc.entry_point = entry;
+    desc.debug_name = name;
+    return device.create_shader(desc);
+}
+
+tgfx::PipelineHandle create_web_pipeline(
+    tgfx::WebGpuRenderDevice& device,
+    const char* source,
+    const char* layout,
+    bool textured) {
+    tgfx::PipelineDesc desc;
+    desc.vertex_shader = create_web_shader(
+        device, tgfx::ShaderStage::Vertex, source, layout, "vs_main",
+        textured ? "web-textured-vs" : "web-triangle-vs");
+    desc.fragment_shader = create_web_shader(
+        device, tgfx::ShaderStage::Fragment, source, layout, "fs_main",
+        textured ? "web-textured-fs" : "web-triangle-fs");
+    desc.color_formats = {device.surface_pixel_format()};
+    desc.depth_format = tgfx::PixelFormat::Undefined;
+    desc.raster.cull = tgfx::CullMode::None;
+    if (textured) {
+        tgfx::VertexLayoutDesc vertex_layout;
+        vertex_layout.stride = sizeof(WebVertex);
+        vertex_layout.attribute_count = 2;
+        vertex_layout.attributes[0].location = 0;
+        vertex_layout.attributes[0].format = tgfx::VertexFormat::Float2;
+        vertex_layout.attributes[0].offset = offsetof(WebVertex, position);
+        vertex_layout.attributes[1].location = 1;
+        vertex_layout.attributes[1].format = tgfx::VertexFormat::Float2;
+        vertex_layout.attributes[1].offset = offsetof(WebVertex, uv);
+        desc.vertex_layouts.push_back(vertex_layout);
+    }
+    return device.create_pipeline(desc);
+}
+
+void render_web_smoke(WebRenderState& state) {
+    tgfx::TextureHandle surface = state.device->acquire_surface_texture();
+    tgfx::RenderPassDesc pass;
+    tgfx::ColorAttachmentDesc color;
+    color.texture = surface;
+    color.clear_color[0] = 0.035f;
+    color.clear_color[1] = 0.055f;
+    color.clear_color[2] = 0.09f;
+    color.clear_color[3] = 1.0f;
+    pass.colors.push_back(color);
+
+    std::unique_ptr<tgfx::ICommandList> commands = state.device->create_command_list();
+    commands->begin();
+    commands->begin_render_pass(pass);
+    commands->set_viewport(0, 0, state.width / 2, state.height);
+    commands->set_scissor(0, 0, state.width / 2, state.height);
+    commands->bind_pipeline(state.triangle_pipeline);
+    commands->draw(3);
+
+    commands->set_viewport(state.width / 2, 0, state.width - state.width / 2, state.height);
+    commands->set_scissor(state.width / 2, 0, state.width - state.width / 2, state.height);
+    commands->bind_pipeline(state.mesh_pipeline);
+    commands->bind_resource_set(state.resource_set);
+    commands->bind_vertex_buffer(0, state.vertex_buffer);
+    commands->bind_index_buffer(state.index_buffer, tgfx::IndexType::Uint16);
+    commands->draw_indexed(6);
+    commands->end_render_pass();
+    commands->end();
+    state.device->submit(*commands);
+    state.device->present();
+}
+
+void initialize_web_render(std::unique_ptr<tgfx::WebGpuRenderDevice> device) {
+    auto state = std::make_unique<WebRenderState>();
+    state->device = std::move(device);
+    state->triangle_pipeline = create_web_pipeline(
+        *state->device, termin_web_shaders::triangle_wgsl,
+        termin_web_shaders::triangle_layout, false);
+    state->mesh_pipeline = create_web_pipeline(
+        *state->device, termin_web_shaders::textured_mesh_wgsl,
+        termin_web_shaders::textured_mesh_layout, true);
+
+    constexpr std::array<WebVertex, 4> vertices{{
+        {{-0.72f, -0.72f}, {0.0f, 0.0f}},
+        {{ 0.72f, -0.72f}, {1.0f, 0.0f}},
+        {{ 0.72f,  0.72f}, {1.0f, 1.0f}},
+        {{-0.72f,  0.72f}, {0.0f, 1.0f}},
+    }};
+    constexpr std::array<uint16_t, 6> indices{{0, 1, 2, 0, 2, 3}};
+    tgfx::BufferDesc vertex_desc;
+    vertex_desc.size = sizeof(vertices);
+    vertex_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+    state->vertex_buffer = state->device->create_buffer(vertex_desc);
+    state->device->upload_buffer(state->vertex_buffer,
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(vertices.data()),
+                                 sizeof(vertices)));
+    tgfx::BufferDesc index_desc;
+    index_desc.size = sizeof(indices);
+    index_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
+    state->index_buffer = state->device->create_buffer(index_desc);
+    state->device->upload_buffer(state->index_buffer,
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(indices.data()),
+                                 sizeof(indices)));
+
+    constexpr std::array<uint8_t, 16> pixels{{
+        255, 230, 55, 255,  30, 150, 255, 255,
+         30, 150, 255, 255, 255, 230, 55, 255,
+    }};
+    tgfx::TextureDesc texture_desc;
+    texture_desc.width = 2;
+    texture_desc.height = 2;
+    texture_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+    texture_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopyDst;
+    state->texture = state->device->create_texture(texture_desc);
+    state->device->upload_texture(state->texture, pixels);
+    state->sampler = state->device->create_sampler({});
+
+    tgfx::BoundResourceBinding texture_binding;
+    texture_binding.slot.kind = tgfx::ShaderResourceKind::Texture;
+    texture_binding.slot.scope = tgfx::ShaderResourceScope::Material;
+    texture_binding.slot.stage_mask = 2;
+    texture_binding.slot.placement.kind = tgfx::BackendPlacementKind::WebGPU;
+    texture_binding.slot.placement.webgpu.binding = 0;
+    texture_binding.slot.placement.webgpu.has_sampler_binding = true;
+    texture_binding.slot.placement.webgpu.sampler_binding = 1;
+    texture_binding.slot.debug_name = "mesh_texture";
+    texture_binding.value.kind = tgfx::BoundResourceKind::SampledTexture;
+    texture_binding.value.texture = state->texture;
+    texture_binding.value.sampler = state->sampler;
+    tgfx::BoundResourceGroupView group;
+    group.scope = tgfx::ShaderResourceScope::Material;
+    group.bindings = &texture_binding;
+    group.binding_count = 1;
+    tgfx::BoundResourceSetDesc set_desc;
+    set_desc.resource_layout_token =
+        state->device->pipeline_resource_layout_token(state->mesh_pipeline);
+    set_desc.groups = &group;
+    set_desc.group_count = 1;
+    state->resource_set = state->device->create_bound_resource_set(set_desc);
+
+    render_web_smoke(*state);
+    web_render_state = std::move(state);
+}
+
+} // namespace
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     if (tc_version_int() <= 0 || termin_scene_version_int() <= 0) {
@@ -15,12 +340,21 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     if (tc_kind_get_lang_registry(TC_KIND_LANG_RUST) != nullptr) {
         return 2;
     }
+    termin::bootstrap::bootstrap_runtime(
+        termin::bootstrap::RuntimeBootstrapProfile::Minimal
+    );
+    if (!tc_component_registry_has("UnknownComponent") ||
+            tc_component_registry_has("MeshComponent")) {
+        termin::bootstrap::shutdown_runtime();
+        return 3;
+    }
 
     tc_mesh_init();
     tc_mesh_handle mesh = tc_mesh_declare("web-smoke-mesh", "Web smoke mesh");
     if (!tc_mesh_is_valid(mesh) || tc_mesh_count() != 1) {
         tc_mesh_shutdown();
-        return 3;
+        termin::bootstrap::shutdown_runtime();
+        return 4;
     }
     tc_mesh_destroy(mesh);
     tc_mesh_shutdown();
@@ -29,9 +363,427 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     const char* scene_name = tc_scene_get_name(scene);
     if (scene_name == nullptr || std::strcmp(scene_name, "Web smoke scene") != 0) {
         tc_scene_free(scene);
-        return 4;
+        termin::bootstrap::shutdown_runtime();
+        return 5;
     }
     tc_scene_update(scene, 1.0 / 60.0);
     tc_scene_free(scene);
+    termin::bootstrap::shutdown_runtime();
     return 0x5443;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) {
+    web_host_error.clear();
+    if (!web_player || web_player_graphics_status != 2 ||
+            !web_player->graphics_host || !web_player->device) {
+        web_host_error = "WebGPU player is not initialized";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (root_path == nullptr || root_path[0] == '\0') {
+        web_host_error = "runtime package root must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.bootstrap_profile =
+        termin::bootstrap::RuntimeBootstrapProfile::Render;
+    options.scene_extensions = termin::default_scene_extension_ids();
+    try {
+        termin::runtime::RuntimePackageLoader loader;
+        web_player->package = loader.load(root_path, options);
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error(
+            "TerminWebHost package load threw: %s", web_host_error.c_str());
+        unload_web_host_package();
+        return 0;
+    }
+    if (!web_player->package.ok || !web_player->package.scene.valid()) {
+        web_host_error = web_player->package.message;
+        unload_web_host_package();
+        return 0;
+    }
+    try {
+        web_player->engine = std::make_unique<termin::EngineCore>();
+        termin::RenderEngine* render_engine =
+            web_player->engine->rendering_manager.render_engine();
+        render_engine->set_graphics_host(*web_player->graphics_host);
+        render_engine->configure_shader_artifacts(
+            web_player->package.shader_runtime.artifact_root,
+            web_player->package.shader_runtime.cache_root,
+            web_player->package.shader_runtime.compiler_path,
+            false);
+
+        termin::SceneManager& scene_manager = web_player->engine->scene_manager;
+        for (const termin::runtime::RuntimePackageScene& packaged
+                : web_player->package.scenes) {
+            scene_manager.register_scene(packaged.identity, packaged.scene.handle());
+            scene_manager.set_scene_path(packaged.identity, packaged.scene.source_path());
+            scene_manager.set_mode(packaged.identity, TC_SCENE_MODE_INACTIVE);
+            web_player->registered_scene_names.push_back(packaged.identity);
+        }
+        scene_manager.set_mode(
+            web_player->package.entry_scene_identity,
+            TC_SCENE_MODE_PLAY);
+
+        termin::RenderingManager& manager = web_player->engine->rendering_manager;
+        manager.set_display_factory([](const std::string& name) {
+            return create_web_player_display(name);
+        });
+        web_player->viewports = manager.attach_scene_full(
+            web_player->package.scene.handle());
+        if (web_player->viewports.empty()) {
+            throw std::runtime_error(
+                "entry scene render_mount created no browser viewports");
+        }
+        for (tc_viewport_handle viewport : web_player->viewports) {
+            if (!tc_viewport_alive(viewport)) continue;
+            const char* mode = tc_viewport_get_input_mode(viewport);
+            if (mode && (std::strcmp(mode, "none") == 0 ||
+                    std::strcmp(mode, "editor") == 0)) {
+                continue;
+            }
+            if (mode && mode[0] != '\0' && std::strcmp(mode, "simple") != 0 &&
+                    std::strcmp(mode, "basic") != 0) {
+                throw std::runtime_error(
+                    std::string("unsupported browser viewport input mode: ") + mode);
+            }
+            tc_viewport_input_manager* input =
+                tc_viewport_input_manager_new(viewport);
+            if (!input) {
+                const char* name = tc_viewport_get_name(viewport);
+                throw std::runtime_error(
+                    std::string("failed to create browser input manager for viewport '") +
+                    (name ? name : "") + "'");
+            }
+            web_player->viewport_input_managers.push_back(input);
+        }
+        web_player->presentation_display = manager.get_display_by_name("Main");
+        if (!tc_display_handle_valid(web_player->presentation_display)) {
+            throw std::runtime_error(
+                "entry scene render_mount has no 'Main' display");
+        }
+        scene_manager.request_render();
+        tc_log_info(
+            "TerminWebHost: attached packaged scene '%s' entities=%zu viewports=%zu input_managers=%zu",
+            web_player->package.entry_scene_identity.c_str(),
+            web_player->package.scene.entity_count(),
+            web_player->viewports.size(),
+            web_player->viewport_input_managers.size());
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost load failed: %s", web_host_error.c_str());
+        unload_web_host_package();
+        return 0;
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load_headless(
+    const char* root_path) {
+    unload_web_host_package();
+    web_host_error.clear();
+    if (root_path == nullptr || root_path[0] == '\0') {
+        web_host_error = "runtime package root must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    termin::runtime::RuntimePackageLoadOptions options;
+    options.bootstrap_profile = termin::bootstrap::RuntimeBootstrapProfile::Minimal;
+    termin::runtime::RuntimePackageLoader loader;
+    web_headless_package = loader.load(root_path, options);
+    if (!web_headless_package.ok) {
+        web_host_error = web_headless_package.message;
+        unload_web_host_package();
+        termin::bootstrap::shutdown_runtime();
+        return 0;
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
+    if (web_headless_package.ok && web_headless_package.scene.valid()) {
+        try {
+            web_headless_package.scene.update(delta_seconds);
+            ++web_host_frame_count;
+            return 1;
+        } catch (const std::exception& exception) {
+            web_host_error = exception.what();
+            tc_log_error("TerminWebHost headless update failed: %s", web_host_error.c_str());
+            return 0;
+        }
+    }
+    if (!web_player || !web_player->package.ok ||
+            !web_player->package.scene.valid() || !web_player->engine) {
+        web_host_error = "runtime package is not loaded";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (!(delta_seconds >= 0.0) || delta_seconds > 1.0) {
+        web_host_error = "invalid browser frame delta";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    try {
+        if (web_player->device && web_player->device->has_device_error()) {
+            web_player_graphics_error = web_player->device->device_error_message();
+            web_player_graphics_status = -4;
+            throw std::runtime_error(
+                web_player_graphics_error.empty()
+                    ? "WebGPU device lost"
+                    : web_player_graphics_error);
+        }
+        web_player->engine->scene_manager.request_render();
+        const bool rendered = web_player->engine->tick_and_render(delta_seconds);
+        if (rendered && !present_web_player_canvas()) {
+            throw std::runtime_error("failed to present Termin render output to canvas");
+        }
+        ++web_host_frame_count;
+        return 1;
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost update failed: %s", web_host_error.c_str());
+        return 0;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_loop_start() {
+    if (!web_player || !web_player->engine || web_player_graphics_status != 2) {
+        web_host_error = "cannot start browser frame loop before the render host is ready";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (web_host_loop_running) return 1;
+    web_host_loop_running = true;
+    web_host_loop_last_timestamp = -1.0;
+    emscripten_request_animation_frame_loop(
+        &web_host_animation_frame,
+        nullptr);
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_loop_stop() {
+    web_host_loop_running = false;
+    web_host_loop_last_timestamp = -1.0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_unload() {
+    unload_web_host_package();
+    web_host_error.clear();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_error() {
+    return web_host_error.c_str();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE std::uint32_t termin_web_host_frame_count() {
+    return web_host_frame_count;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
+    if (web_headless_package.ok && web_headless_package.scene.valid()) {
+        return web_headless_package.scene.entity_count();
+    }
+    return web_player && web_player->package.ok && web_player->package.scene.valid()
+        ? web_player->package.scene.entity_count()
+        : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(
+    uint32_t width, uint32_t height) {
+    if (!web_player || !web_player->device ||
+            !tc_display_handle_valid(web_player->presentation_display) ||
+            web_player_graphics_status != 2) {
+        return 0;
+    }
+    if (width == 0 || height == 0) {
+        web_host_error = "browser canvas size must be positive";
+        tc_log_error("TerminWebHost resize failed: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (web_player->width == width && web_player->height == height) return 1;
+    try {
+        web_player->device->configure_surface(width, height);
+        if (!tc_display_resize(
+                web_player->presentation_display,
+                static_cast<int>(width),
+                static_cast<int>(height))) {
+            throw std::runtime_error("offscreen display rejected browser resize");
+        }
+        web_player->width = width;
+        web_player->height = height;
+        web_player->engine->scene_manager.request_render();
+        return 1;
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost resize failed: %s", web_host_error.c_str());
+        return 0;
+    }
+}
+
+namespace {
+
+bool web_host_input_ready() {
+    return web_player && web_player->engine &&
+        tc_display_handle_valid(web_player->presentation_display);
+}
+
+} // namespace
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_pointer(
+    uint32_t pointer_id, int device, int phase,
+    double x, double y, double pressure) {
+    return web_host_input_ready() && tc_display_dispatch_pointer(
+        web_player->presentation_display,
+        pointer_id, device, phase, x, y, static_cast<float>(pressure));
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_mouse_move(
+    double x, double y) {
+    return web_host_input_ready() && tc_display_dispatch_pointer_move(
+        web_player->presentation_display, x, y);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_mouse_button(
+    double x, double y, int button, int action, int mods,
+    uint32_t click_count) {
+    return web_host_input_ready() && tc_display_dispatch_pointer_button(
+        web_player->presentation_display,
+        x, y, button, action, mods, click_count);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_wheel(
+    double x, double y, double wheel_x, double wheel_y, int mods) {
+    return web_host_input_ready() && tc_display_dispatch_wheel(
+        web_player->presentation_display,
+        x, y, wheel_x, wheel_y, mods);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_key(
+    int key, int scancode, int action, int mods) {
+    return web_host_input_ready() && tc_display_dispatch_key(
+        web_player->presentation_display, key, scancode, action, mods);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_text(
+    const char* text_utf8) {
+    return web_host_input_ready() && text_utf8 && tc_display_dispatch_text_utf8(
+        web_player->presentation_display, text_utf8);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_focus_lost() {
+    return web_host_input_ready() && tc_display_dispatch_focus_lost(
+        web_player->presentation_display);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(
+    uint32_t width, uint32_t height) {
+    if (web_player_graphics_status != 0) return web_player_graphics_status;
+    if (width == 0 || height == 0) {
+        web_player_graphics_error = "browser canvas size must be positive";
+        web_player_graphics_status = -1;
+        return web_player_graphics_status;
+    }
+    web_player = std::make_unique<WebPlayerState>();
+    web_player->width = width;
+    web_player->height = height;
+    web_player_graphics_status = 1;
+    tgfx::WebGpuDeviceRequest request;
+    request.canvas_selector = "#termin-canvas";
+    request.width = width;
+    request.height = height;
+    tgfx::WebGpuRenderDevice::request_async(
+        request,
+        [](std::unique_ptr<tgfx::WebGpuRenderDevice> device, std::string error) {
+            if (!device || !web_player) {
+                web_player_graphics_error = error.empty()
+                    ? "WebGPU device initialization failed"
+                    : std::move(error);
+                web_player_graphics_status = -2;
+                tc_log_error(
+                    "TerminWebHost: %s", web_player_graphics_error.c_str());
+                return;
+            }
+            try {
+                web_player->device = device.get();
+                web_player->graphics_host =
+                    tgfx::GraphicsHost::adopt_application_device(std::move(device));
+                web_player_graphics_status = 2;
+            } catch (const std::exception& exception) {
+                web_player_graphics_error = exception.what();
+                web_player_graphics_status = -3;
+                tc_log_error(
+                    "TerminWebHost graphics initialization failed: %s",
+                    web_player_graphics_error.c_str());
+            }
+        });
+    return web_player_graphics_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_status() {
+    if (web_player && web_player->device &&
+            web_player->device->has_device_error()) {
+        web_player_graphics_error = web_player->device->device_error_message();
+        web_player_graphics_status = -4;
+    }
+    return web_player_graphics_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_graphics_error() {
+    return web_player_graphics_error.c_str();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_render_smoke_start() {
+    if (web_render_status != 0) return web_render_status;
+    web_render_status = 1;
+    tgfx::WebGpuDeviceRequest request;
+    request.canvas_selector = "#termin-canvas";
+    request.width = 640;
+    request.height = 360;
+    tgfx::WebGpuRenderDevice::request_async(
+        request,
+        [](std::unique_ptr<tgfx::WebGpuRenderDevice> device, std::string error) {
+            if (!device) {
+                web_render_error = std::move(error);
+                web_render_status = -1;
+                return;
+            }
+            try {
+                initialize_web_render(std::move(device));
+                web_render_status = 2;
+            } catch (const std::exception& exception) {
+                web_render_error = exception.what();
+                web_render_status = -2;
+            }
+        });
+    return web_render_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_render_smoke_status() {
+    if (web_render_state && web_render_state->device->has_device_error()) {
+        web_render_error = web_render_state->device->device_error_message();
+        web_render_status = -4;
+    }
+    return web_render_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_render_smoke_error() {
+    return web_render_error.c_str();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_render_smoke_resize(
+    uint32_t width, uint32_t height) {
+    if (!web_render_state || width == 0 || height == 0) return 0;
+    try {
+        web_render_state->device->configure_surface(width, height);
+        web_render_state->width = width;
+        web_render_state->height = height;
+        render_web_smoke(*web_render_state);
+        return 1;
+    } catch (const std::exception& exception) {
+        web_render_error = exception.what();
+        web_render_status = -3;
+        return 0;
+    }
 }

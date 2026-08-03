@@ -767,6 +767,14 @@ def _validate_shader_resource(
                 )
                 continue
             _validate_relative_existing_path(package_root, artifact_path, stage_context, diagnostics)
+            if target_name == "webgpu":
+                _validate_webgpu_shader_layout(
+                    package_root,
+                    artifact_path,
+                    stage_name,
+                    stage_context,
+                    diagnostics,
+                )
     _validate_shader_stage_sources(package_root, resource_path, shader_spec, diagnostics)
     return shader_spec
 
@@ -1212,6 +1220,33 @@ def _validate_required_shader_artifact_stages(
                     f"Runtime shader artifact target must contain '{required_stage}' stage",
                 )
             )
+
+
+def _validate_webgpu_shader_layout(
+    package_root: Path,
+    artifact_path: str,
+    stage_name: str,
+    stage_context: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    layout_rel = f"{artifact_path}.layout.json"
+    layout_path = package_root / layout_rel
+    layout = _read_json_file(layout_path, layout_rel, diagnostics)
+    if layout is None:
+        return
+    if (
+        layout.get("version") != 3
+        or layout.get("target") != "webgpu"
+        or layout.get("stage") != stage_name
+        or not isinstance(layout.get("resources"), list)
+    ):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                stage_context,
+                "WebGPU shader artifact requires a version 3 webgpu layout sidecar for the same stage",
+            )
+        )
 
 
 def _validate_shader_stage_sources(

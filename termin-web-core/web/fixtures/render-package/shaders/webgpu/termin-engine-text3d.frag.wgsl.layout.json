@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "language": "slang",
+  "target": "webgpu",
+  "stage": "fragment",
+  "resources": [
+    {"name": "text3d_draw", "kind": "constant_buffer", "scope": "draw", "set": 0, "binding": 28, "stage_mask": 2, "size": 128, "webgpu": {"group": 0, "binding": 28}, "fields": [{"name":"u_mvp","type":"Mat4","offset":0,"size":64}, {"name":"u_color","type":"Vec4","offset":64,"size":16}, {"name":"u_cam_right","type":"Vec4","offset":80,"size":16}, {"name":"u_cam_up","type":"Vec4","offset":96,"size":16}, {"name":"u_flags","type":"Vec4","offset":112,"size":16}]},
+    {"name": "u_font_atlas", "kind": "texture", "scope": "transient", "set": 0, "binding": 156, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 156, "sampler_binding": 190}}
+  ]
+}

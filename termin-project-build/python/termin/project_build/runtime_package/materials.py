@@ -14,7 +14,10 @@ from termin.project_build.runtime_package.models import (
 from termin.project_build.runtime_package.package_files import write_json
 from termin.project_build.runtime_package.package_files import project_relative_path
 from termin.project_build.runtime_package.shaders import shader_program_to_spec
-from termin.project_build.runtime_package.textures import collect_material_texture_refs
+from termin.project_build.runtime_package.textures import (
+    collect_material_texture_refs,
+    index_project_texture_sources,
+)
 from termin.project_build.common import find_project_or_standard_shader
 
 
@@ -28,9 +31,12 @@ def prepare_project_material_resources(
 
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
+    from termin.default_assets.render.texture_asset import TextureAsset
     from termin.default_assets.resource_manager import DefaultResourceManager
     resource_manager = DefaultResourceManager.instance()
     material_paths: dict[str, Path] = {}
+    material_documents: dict[str, dict[str, Any]] = {}
+    texture_uuids: set[str] = set()
     for path in project_root.rglob("*.material"):
         rel = path.relative_to(project_root)
         if any(part in {".git", "__pycache__", "build", "dist"} for part in rel.parts):
@@ -41,13 +47,49 @@ def prepare_project_material_resources(
             continue
         if isinstance(document, dict) and document.get("uuid") in materials:
             material_paths[document["uuid"]] = path
+            material_documents[document["uuid"]] = document
+            texture_bindings = document.get("textures")
+            if isinstance(texture_bindings, dict):
+                texture_uuids.update(
+                    value for value in texture_bindings.values()
+                    if isinstance(value, str) and value
+                )
+
+    texture_sources, _rejected_texture_uuids = index_project_texture_sources(
+        project_root,
+        texture_uuids,
+        diagnostics,
+    )
+    for texture_uuid, texture_path in sorted(texture_sources.items()):
+        if resource_manager.get_asset_by_uuid(texture_uuid) is not None:
+            continue
+        try:
+            texture_asset = TextureAsset.from_file(
+                texture_path,
+                name=texture_path.stem,
+                uuid=texture_uuid,
+            )
+            resource_manager.register_texture_asset(
+                texture_path.stem,
+                texture_asset,
+                source_path=str(texture_path),
+                uuid=texture_uuid,
+            )
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=project_relative_path(project_root, texture_path),
+                    message=f"Runtime exporter failed to prepare project texture: {exc}",
+                )
+            )
 
     for uuid_value, name in sorted(materials.items()):
         material_path = material_paths.get(uuid_value)
         if material_path is None:
             continue
         try:
-            document = json.loads(material_path.read_text(encoding="utf-8"))
+            document = material_documents[uuid_value]
             shader_name = document.get("shader")
             if not isinstance(shader_name, str) or not shader_name:
                 raise ValueError("material has no canonical shader name")

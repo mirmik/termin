@@ -9,6 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(TERMIN_RENDER_PASSES_BUILD_SHARED "Build shared library" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-render-passes" OFF)
 option(TERMIN_RENDER_PASSES_BUILD_TESTS "Build termin-render-passes tests" ON)
+option(TERMIN_RENDER_PASSES_CORE_ONLY
+    "Build the portable color/resolve/present pass slice"
+    OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -45,9 +48,9 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_mesh REQUIRED)
 endif()
-if(COMMAND termin_require_package)
+if(NOT TERMIN_RENDER_PASSES_CORE_ONLY AND COMMAND termin_require_package)
     termin_require_package(termin_components_collision termin_components_collision::termin_components_collision)
-else()
+elseif(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
     find_package(termin_components_collision REQUIRED)
 endif()
 if(COMMAND termin_require_package)
@@ -55,18 +58,18 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_lighting REQUIRED)
 endif()
-if(COMMAND termin_require_package)
+if(NOT TERMIN_RENDER_PASSES_CORE_ONLY AND COMMAND termin_require_package)
     termin_require_package(
         termin_gui_native
         termin_gui_native::document_renderer)
-else()
+elseif(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
     find_package(termin_gui_native REQUIRED)
 endif()
-if(COMMAND termin_require_package)
+if(NOT TERMIN_RENDER_PASSES_CORE_ONLY AND COMMAND termin_require_package)
     termin_require_package(
         termin_components_ui
         termin_components_ui::termin_components_ui)
-else()
+elseif(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
     find_package(termin_components_ui REQUIRED)
 endif()
 
@@ -94,6 +97,17 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/ui_widget_pass.cpp
     src/world2d_pass.cpp
 )
+
+if(TERMIN_RENDER_PASSES_CORE_ONLY)
+    set(TERMIN_RENDER_PASSES_SOURCES
+        src/termin_render_passes_version.c
+        src/bootstrap_core.cpp
+        src/color_pass.cpp
+        src/present_pass.cpp
+        src/resolve_pass.cpp
+        src/lighting_ubo.cpp
+    )
+endif()
 
 set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render_passes/export.h
@@ -154,12 +168,19 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_components_render::termin_components_render
     termin_components_mesh::termin_components_mesh
     termin_lighting::termin_lighting
-    termin_gui_native::document_renderer
-    termin_components_ui::termin_components_ui
 )
-target_link_libraries(termin_render_passes PRIVATE
-    termin_components_collision::termin_components_collision
-)
+if(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
+    target_link_libraries(termin_render_passes PUBLIC
+        termin_gui_native::document_renderer
+        termin_components_ui::termin_components_ui
+    )
+    target_link_libraries(termin_render_passes PRIVATE
+        termin_components_collision::termin_components_collision
+    )
+endif()
+if(TERMIN_RENDER_PASSES_CORE_ONLY)
+    target_compile_definitions(termin_render_passes PUBLIC TERMIN_RENDER_PASSES_CORE_ONLY)
+endif()
 target_compile_definitions(termin_render_passes PRIVATE
     TERMIN_RENDER_PASSES_EXPORTS
     TERMIN_RENDER_EXPORTS
