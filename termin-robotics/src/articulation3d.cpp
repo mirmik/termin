@@ -307,6 +307,12 @@ namespace termin::robotics
             value.pose_world = floating_base_->pose_world;
             value.velocity_world = floating_base_->velocity_local.rotated_by(
                 floating_base_->pose_world.ang);
+            value.bias_acceleration_world = {
+                termin::Vec3::zero(),
+                floating_base_->pose_world.transform_vector(
+                    floating_base_->velocity_local.ang.cross(
+                        floating_base_->velocity_local.lin)),
+            };
             const std::size_t generalized_count = dof_count();
             value.spatial_jacobian_world_storage.assign(6 * generalized_count,
                                                         0.0);
@@ -377,6 +383,20 @@ namespace termin::robotics
             value.velocity_world =
                 link_velocities_local_[link_index].rotated_by(
                     value.pose_world.ang);
+            std::vector<termin::Screw3> bias_local;
+            if (!bias_accelerations_local(bias_local))
+            {
+                return {{}, Articulation3DDiagnostic::InvalidModel};
+            }
+            const termin::Screw3& velocity_local =
+                link_velocities_local_[link_index];
+            const termin::Screw3& acceleration_local = bias_local[link_index];
+            value.bias_acceleration_world = {
+                value.pose_world.transform_vector(acceleration_local.ang),
+                value.pose_world.transform_vector(
+                    acceleration_local.lin +
+                    velocity_local.ang.cross(velocity_local.lin)),
+            };
             const std::size_t generalized_count = dof_count();
             const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
             value.spatial_jacobian_world_storage.assign(6 * generalized_count,
@@ -471,6 +491,12 @@ namespace termin::robotics
                 floating_base_->velocity_local.velocity_at_offset(point_local)
                     .rotated_by(floating_base_->pose_world.ang)
                     .lin;
+            const termin::Screw3 point_velocity_local =
+                floating_base_->velocity_local.velocity_at_offset(point_local);
+            value.bias_acceleration_world =
+                floating_base_->pose_world.transform_vector(
+                    floating_base_->velocity_local.ang.cross(
+                        point_velocity_local.lin));
             const std::size_t generalized_count = dof_count();
             value.linear_jacobian_world_storage.assign(3 * generalized_count,
                                                        0.0);
@@ -553,6 +579,21 @@ namespace termin::robotics
                     .velocity_at_offset(point_local)
                     .rotated_by(link_poses_world_[link_index].ang)
                     .lin;
+            std::vector<termin::Screw3> bias_local;
+            if (!bias_accelerations_local(bias_local))
+            {
+                return {{}, Articulation3DDiagnostic::InvalidModel};
+            }
+            const termin::Screw3 point_velocity_local =
+                link_velocities_local_[link_index].velocity_at_offset(
+                    point_local);
+            const termin::Screw3 point_acceleration_local =
+                bias_local[link_index].velocity_at_offset(point_local);
+            value.bias_acceleration_world =
+                link_poses_world_[link_index].transform_vector(
+                    point_acceleration_local.lin +
+                    link_velocities_local_[link_index].ang.cross(
+                        point_velocity_local.lin));
             const std::size_t generalized_count = dof_count();
             const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
             value.linear_jacobian_world_storage.assign(3 * generalized_count,
@@ -699,6 +740,35 @@ namespace termin::robotics
                 !link_poses_world_[index].is_finite() ||
                 !motion_twists_at_link_[index].is_finite() ||
                 !link_velocities_local_[index].is_finite())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool Articulation3D::bias_accelerations_local(
+        std::vector<termin::Screw3>& accelerations) const
+    {
+        if (parent_to_link_.size() != links_.size() ||
+            motion_twists_at_link_.size() != links_.size() ||
+            link_velocities_local_.size() != links_.size())
+        {
+            return false;
+        }
+        accelerations.assign(links_.size(), termin::Screw3::zero());
+        for (std::size_t index = 0; index < links_.size(); ++index)
+        {
+            const std::size_t parent = links_[index].parent_link;
+            const termin::Screw3 parent_acceleration =
+                parent == articulation_root_frame ? termin::Screw3::zero()
+                                                  : accelerations[parent];
+            const termin::Screw3 joint_velocity =
+                motion_twists_at_link_[index] * state_.velocities[index];
+            accelerations[index] =
+                parent_acceleration.adjoint_inv(parent_to_link_[index]) +
+                link_velocities_local_[index].cross_motion(joint_velocity);
+            if (!accelerations[index].is_finite())
             {
                 return false;
             }

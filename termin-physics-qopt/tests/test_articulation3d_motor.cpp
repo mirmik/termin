@@ -113,6 +113,50 @@ int main()
     TERMIN_QOPT_CHECK(apply_inverse_dynamics_motor_commands(motor, reordered) ==
                       RoboticsControlAdapterDiagnostic3D::DofMismatch);
 
+    ArticulationFloatingBase3D floating_base{
+        .inertia = SpatialInertia3{2.0, {1.0, 1.1, 1.2}, Pose3::identity()},
+        .pose_world = Pose3::identity(),
+        .velocity_local = Screw3::zero(),
+        .diagnostic_name = "contact-base",
+    };
+    Articulation3D floating_model(floating_base, {}, {{}, {}}, "contact-plant");
+    Articulation3DDynamicsContribution floating_articulation(
+        floating_model, Vec3::zero(), "contact-dynamics");
+    const ContactEndpoint3D contact_endpoint =
+        ContactEndpoint3D::articulation_base(floating_articulation,
+                                             {1.0, 0.0, 0.0});
+    const ContactForceVariableBlock3DResult contact_block =
+        inverse_dynamics_contact_force_block(floating_articulation,
+                                             contact_endpoint,
+                                             {0.0, 0.0, 3.0},
+                                             0.5,
+                                             20.0,
+                                             "ground-contact");
+    TERMIN_QOPT_CHECK(contact_block.ok());
+    TERMIN_QOPT_CHECK(contact_block.block.variable_count == 3);
+    TERMIN_QOPT_CHECK(contact_block.block.inequality_row_count == 6);
+    TERMIN_QOPT_CHECK(
+        std::abs(contact_block.normal_force_direction_world.z - 1.0) < 1e-12);
+    // A +Z force at r=(1,0,0) transfers +Fz and -My to the floating base.
+    TERMIN_QOPT_CHECK(
+        std::abs(contact_block.block.generalized_force_basis_storage[2 * 3] -
+                 1.0) < 1e-12);
+    TERMIN_QOPT_CHECK(
+        std::abs(contact_block.block.generalized_force_basis_storage[4 * 3] +
+                 1.0) < 1e-12);
+    TERMIN_QOPT_CHECK(contact_block.block.inequality_matrix_storage[0] == -1.0);
+    TERMIN_QOPT_CHECK(contact_block.block.inequality_matrix_storage[3] == -0.5);
+    TERMIN_QOPT_CHECK(contact_block.block.inequality_matrix_storage[5 * 3] ==
+                      1.0);
+    TERMIN_QOPT_CHECK(contact_block.block.inequality_target_storage[5] == 20.0);
+    const ContactEndpoint3D static_endpoint =
+        ContactEndpoint3D::static_world(Vec3::zero());
+    TERMIN_QOPT_CHECK(
+        inverse_dynamics_contact_force_block(
+            floating_articulation, static_endpoint, Vec3::unit_z(), 0.5)
+            .diagnostic ==
+        RoboticsControlAdapterDiagnostic3D::InvalidContactEndpoint);
+
     // Dependency binding is a second pass: contribution insertion order does
     // not have to match ownership order.
     Articulation3D owned_model(

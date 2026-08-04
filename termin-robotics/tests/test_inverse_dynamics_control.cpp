@@ -194,6 +194,40 @@ namespace
             result.diagnostic ==
             InverseDynamicsControlDiagnostic3D::DuplicateActuator);
     }
+
+    void test_environmental_force_decision_variable()
+    {
+        Articulation3D articulation = fixed_model();
+        InverseDynamicsHqpController3D controller(
+            articulation,
+            std::vector<InverseDynamicsActuator3D>{},
+            Vec3::zero());
+        JointVelocityTask3D hold({0}, {0.0}, 1.0);
+        const std::array<const ArticulationTask3D*, 1> tasks{&hold};
+        InverseDynamicsForceVariableBlock3D force{
+            .variable_count = 1,
+            .generalized_force_basis_storage = {1.0},
+            .inequality_row_count = 2,
+            .inequality_matrix_storage = {-1.0, 1.0},
+            .inequality_target_storage = {0.0, 2.0},
+            .diagnostic_name = "support",
+        };
+        InverseDynamicsControlOptions3D options;
+        options.external_generalized_effort = {-1.0};
+        options.force_variable_blocks = {force};
+        const InverseDynamicsControlResult3D result =
+            controller.solve(tasks, options);
+        TERMIN_ROBOTICS_CHECK(result.ok());
+        TERMIN_ROBOTICS_CHECK(result.force_variable_values.size() == 1);
+        TERMIN_ROBOTICS_CHECK(std::abs(result.force_variable_values[0] - 1.0) <
+                              tolerance);
+        TERMIN_ROBOTICS_CHECK(
+            std::abs(result.force_variable_generalized_effort[0] - 1.0) <
+            tolerance);
+        TERMIN_ROBOTICS_CHECK(std::abs(result.generalized_acceleration[0]) <
+                              tolerance);
+        TERMIN_ROBOTICS_CHECK(result.unactuated_residual_linf < tolerance);
+    }
 } // namespace
 
 int main()
@@ -203,5 +237,6 @@ int main()
     test_closed_loop_joint_tracking();
     test_floating_base_unactuated_dynamics();
     test_invalid_actuator_diagnostics();
+    test_environmental_force_decision_variable();
     return 0;
 }

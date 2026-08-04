@@ -108,6 +108,45 @@ namespace termin::robotics
             return InverseDynamicsControlDiagnostic3D::None;
         }
 
+        InverseDynamicsControlDiagnostic3D validate_force_blocks(
+            const std::vector<InverseDynamicsForceVariableBlock3D>& blocks,
+            std::size_t dof_count) noexcept
+        {
+            for (const InverseDynamicsForceVariableBlock3D& block : blocks)
+            {
+                if (block.variable_count == 0 ||
+                    block.generalized_force_basis_storage.size() !=
+                        dof_count * block.variable_count ||
+                    block.inequality_matrix_storage.size() !=
+                        block.inequality_row_count * block.variable_count ||
+                    block.inequality_target_storage.size() !=
+                        block.inequality_row_count ||
+                    !finite(block.generalized_force_basis_storage) ||
+                    !finite(block.inequality_matrix_storage) ||
+                    !finite(block.inequality_target_storage))
+                {
+                    return InverseDynamicsControlDiagnostic3D::
+                        InvalidForceVariableBlock;
+                }
+            }
+            return InverseDynamicsControlDiagnostic3D::None;
+        }
+
+        std::vector<double> lift_task_matrix(const TaskLinearization3D& task,
+                                             std::size_t decision_count)
+        {
+            const std::size_t rows = task.target_storage.size();
+            std::vector<double> lifted(rows * decision_count, 0.0);
+            for (std::size_t row = 0; row < rows; ++row)
+            {
+                std::copy_n(task.matrix_storage.data() +
+                                row * task.variable_count,
+                            task.variable_count,
+                            lifted.data() + row * decision_count);
+            }
+            return lifted;
+        }
+
         std::vector<double>
         generalized_velocity(const Articulation3D& articulation)
         {
@@ -172,6 +211,8 @@ namespace termin::robotics
             return "dimension-mismatch";
         case InverseDynamicsControlDiagnostic3D::NonFiniteInput:
             return "non-finite-input";
+        case InverseDynamicsControlDiagnostic3D::InvalidForceVariableBlock:
+            return "invalid-force-variable-block";
         case InverseDynamicsControlDiagnostic3D::DynamicsFailure:
             return "dynamics-failure";
         case InverseDynamicsControlDiagnostic3D::RegistrationFailure:
@@ -265,6 +306,22 @@ namespace termin::robotics
                 return failure(actuator_diagnostic,
                                "invalid actuator declaration");
             }
+            const InverseDynamicsControlDiagnostic3D force_diagnostic =
+                validate_force_blocks(options.force_variable_blocks, count);
+            if (force_diagnostic != InverseDynamicsControlDiagnostic3D::None)
+            {
+                return failure(force_diagnostic,
+                               "invalid environmental force variable block");
+            }
+            std::size_t force_variable_count = 0;
+            std::size_t force_inequality_count = 0;
+            for (const InverseDynamicsForceVariableBlock3D& block :
+                 options.force_variable_blocks)
+            {
+                force_variable_count += block.variable_count;
+                force_inequality_count += block.inequality_row_count;
+            }
+            const std::size_t decision_count = count + force_variable_count;
             if (!options.external_generalized_effort.empty() &&
                 options.external_generalized_effort.size() != count)
             {
@@ -306,6 +363,18 @@ namespace termin::robotics
             InverseDynamicsControlResult3D result;
             result.generalized_acceleration.assign(count, 0.0);
             result.required_generalized_effort.assign(count, 0.0);
+            result.force_variable_values.assign(force_variable_count, 0.0);
+            result.force_variable_generalized_effort.assign(count, 0.0);
+            result.force_variable_block_offsets.reserve(
+                options.force_variable_blocks.size() + 1);
+            result.force_variable_block_offsets.push_back(0);
+            for (const InverseDynamicsForceVariableBlock3D& block :
+                 options.force_variable_blocks)
+            {
+                result.force_variable_block_offsets.push_back(
+                    result.force_variable_block_offsets.back() +
+                    block.variable_count);
+            }
             result.actuator_dofs.reserve(actuators_.size());
             result.actuator_effort.assign(actuators_.size(), 0.0);
             for (const InverseDynamicsActuator3D& actuator : actuators_)
@@ -364,6 +433,40 @@ namespace termin::robotics
                 levels[0] = {};
             }
 
+            std::vector<double> force_basis(count * force_variable_count, 0.0);
+            std::vector<double> force_inequality_matrix(
+                force_inequality_count * decision_count, 0.0);
+            std::vector<double> force_inequality_target;
+            force_inequality_target.reserve(force_inequality_count);
+            std::size_t force_offset = 0;
+            std::size_t force_row_offset = 0;
+            for (const InverseDynamicsForceVariableBlock3D& block :
+                 options.force_variable_blocks)
+            {
+                for (std::size_t row = 0; row < count; ++row)
+                {
+                    std::copy_n(block.generalized_force_basis_storage.data() +
+                                    row * block.variable_count,
+                                block.variable_count,
+                                force_basis.data() +
+                                    row * force_variable_count + force_offset);
+                }
+                for (std::size_t row = 0; row < block.inequality_row_count;
+                     ++row)
+                {
+                    std::copy_n(block.inequality_matrix_storage.data() +
+                                    row * block.variable_count,
+                                block.variable_count,
+                                force_inequality_matrix.data() +
+                                    (force_row_offset + row) * decision_count +
+                                    count + force_offset);
+                    force_inequality_target.push_back(
+                        block.inequality_target_storage[row]);
+                }
+                force_offset += block.variable_count;
+                force_row_offset += block.inequality_row_count;
+            }
+
             std::vector<bool> actuated(count, false);
             for (const InverseDynamicsActuator3D& actuator : actuators_)
             {
@@ -374,7 +477,8 @@ namespace termin::robotics
             {
                 unactuated_rows += value ? 0 : 1;
             }
-            std::vector<double> unactuated_matrix(unactuated_rows * count, 0.0);
+            std::vector<double> unactuated_matrix(
+                unactuated_rows * decision_count, 0.0);
             std::vector<double> unactuated_target(unactuated_rows, 0.0);
             std::size_t unactuated_row = 0;
             for (std::size_t dof = 0; dof < count; ++dof)
@@ -385,7 +489,15 @@ namespace termin::robotics
                 }
                 std::copy_n(mass.data() + dof * count,
                             count,
-                            unactuated_matrix.data() + unactuated_row * count);
+                            unactuated_matrix.data() +
+                                unactuated_row * decision_count);
+                for (std::size_t variable = 0; variable < force_variable_count;
+                     ++variable)
+                {
+                    unactuated_matrix[unactuated_row * decision_count + count +
+                                      variable] =
+                        -force_basis[dof * force_variable_count + variable];
+                }
                 unactuated_target[unactuated_row] = external[dof] - bias[dof];
                 ++unactuated_row;
             }
@@ -396,7 +508,8 @@ namespace termin::robotics
                 effort_rows += actuator.maximum_effort.has_value() ? 1 : 0;
                 effort_rows += actuator.minimum_effort.has_value() ? 1 : 0;
             }
-            std::vector<double> effort_matrix(effort_rows * count, 0.0);
+            std::vector<double> effort_matrix(effort_rows * decision_count,
+                                              0.0);
             std::vector<double> effort_target(effort_rows, 0.0);
             std::size_t effort_row = 0;
             for (const InverseDynamicsActuator3D& actuator : actuators_)
@@ -406,7 +519,16 @@ namespace termin::robotics
                 {
                     std::copy_n(mass.data() + dof * count,
                                 count,
-                                effort_matrix.data() + effort_row * count);
+                                effort_matrix.data() +
+                                    effort_row * decision_count);
+                    for (std::size_t variable = 0;
+                         variable < force_variable_count;
+                         ++variable)
+                    {
+                        effort_matrix[effort_row * decision_count + count +
+                                      variable] =
+                            -force_basis[dof * force_variable_count + variable];
+                    }
                     effort_target[effort_row] =
                         *actuator.maximum_effort - bias[dof] + external[dof];
                     ++effort_row;
@@ -415,8 +537,16 @@ namespace termin::robotics
                 {
                     for (std::size_t column = 0; column < count; ++column)
                     {
-                        effort_matrix[effort_row * count + column] =
+                        effort_matrix[effort_row * decision_count + column] =
                             -mass[dof * count + column];
+                    }
+                    for (std::size_t variable = 0;
+                         variable < force_variable_count;
+                         ++variable)
+                    {
+                        effort_matrix[effort_row * decision_count + count +
+                                      variable] =
+                            force_basis[dof * force_variable_count + variable];
                     }
                     effort_target[effort_row] =
                         -*actuator.minimum_effort + bias[dof] - external[dof];
@@ -424,7 +554,7 @@ namespace termin::robotics
                 }
             }
 
-            qopt::HierarchicalQpSolver solver(count);
+            qopt::HierarchicalQpSolver solver(decision_count);
             bool first_level = true;
             for (const auto& [priority, linearizations] : levels)
             {
@@ -450,7 +580,7 @@ namespace termin::robotics
                                 {qopt::ConstDenseMatrixView::row_major(
                                      unactuated_matrix.data(),
                                      unactuated_rows,
-                                     count),
+                                     decision_count),
                                  {unactuated_target.data(),
                                   unactuated_target.size()}});
                         if (diagnostic != qopt::HqpDiagnostic::None)
@@ -469,7 +599,9 @@ namespace termin::robotics
                             solver.add_inequality(
                                 level.handle,
                                 {qopt::ConstDenseMatrixView::row_major(
-                                     effort_matrix.data(), effort_rows, count),
+                                     effort_matrix.data(),
+                                     effort_rows,
+                                     decision_count),
                                  {effort_target.data(), effort_target.size()}});
                         if (diagnostic != qopt::HqpDiagnostic::None)
                         {
@@ -481,25 +613,54 @@ namespace termin::robotics
                             return result;
                         }
                     }
+                    if (force_inequality_count != 0)
+                    {
+                        const qopt::HqpDiagnostic diagnostic =
+                            solver.add_inequality(
+                                level.handle,
+                                {qopt::ConstDenseMatrixView::row_major(
+                                     force_inequality_matrix.data(),
+                                     force_inequality_count,
+                                     decision_count),
+                                 {force_inequality_target.data(),
+                                  force_inequality_target.size()}});
+                        if (diagnostic != qopt::HqpDiagnostic::None)
+                        {
+                            result =
+                                failure(InverseDynamicsControlDiagnostic3D::
+                                            RegistrationFailure,
+                                        "force variable constraint "
+                                        "registration failed");
+                            result.hqp_diagnostic = diagnostic;
+                            return result;
+                        }
+                    }
                 }
 
                 for (const TaskLinearization3D& value : linearizations)
                 {
+                    const std::vector<double> lifted =
+                        lift_task_matrix(value, decision_count);
+                    const qopt::ConstDenseMatrixView lifted_view =
+                        qopt::ConstDenseMatrixView::row_major(
+                            lifted.data(),
+                            value.target_storage.size(),
+                            decision_count);
                     qopt::HqpDiagnostic diagnostic = qopt::HqpDiagnostic::None;
                     switch (value.relation)
                     {
                     case TaskRelation3D::Objective:
                         diagnostic = solver.add_task(
                             level.handle,
-                            {value.matrix(), value.target(), value.weight()});
+                            {lifted_view, value.target(), value.weight()});
                         break;
                     case TaskRelation3D::Equality:
                         diagnostic = solver.add_equality(
-                            level.handle, {value.matrix(), value.target()});
+                            level.handle, {lifted_view, value.target()});
                         break;
                     case TaskRelation3D::Inequality:
                         diagnostic = solver.add_inequality(
-                            level.handle, {value.matrix(), value.target()});
+                            level.handle, {lifted_view, value.target()});
                         break;
                     }
                     if (diagnostic != qopt::HqpDiagnostic::None)
@@ -516,15 +677,16 @@ namespace termin::robotics
             }
 
             result.level_task_residual_l2.assign(levels.size(), 0.0);
+            std::vector<double> decision(decision_count, 0.0);
             qopt::ConstDenseVectorView initial_primal;
             if (options.use_primal_warm_start && primal_warm_start_valid_ &&
-                primal_warm_start_.size() == count)
+                primal_warm_start_.size() == decision_count)
             {
-                initial_primal = {primal_warm_start_.data(), count};
+                initial_primal = {primal_warm_start_.data(), decision_count};
                 result.primal_warm_start_used = true;
             }
             result.hqp_result =
-                solver.solve({{result.generalized_acceleration.data(), count},
+                solver.solve({{decision.data(), decision_count},
                               {result.level_task_residual_l2.data(),
                                result.level_task_residual_l2.size()}},
                              initial_primal,
@@ -543,12 +705,30 @@ namespace termin::robotics
                 return result;
             }
 
+            std::copy_n(
+                decision.data(), count, result.generalized_acceleration.data());
+            if (force_variable_count != 0)
+            {
+                std::copy_n(decision.data() + count,
+                            force_variable_count,
+                            result.force_variable_values.data());
+                for (std::size_t dof = 0; dof < count; ++dof)
+                {
+                    result.force_variable_generalized_effort[dof] =
+                        matrix_row_dot(force_basis,
+                                       force_variable_count,
+                                       dof,
+                                       result.force_variable_values);
+                }
+            }
+
             for (std::size_t dof = 0; dof < count; ++dof)
             {
                 result.required_generalized_effort[dof] =
                     matrix_row_dot(
                         mass, count, dof, result.generalized_acceleration) +
-                    bias[dof] - external[dof];
+                    bias[dof] - external[dof] -
+                    result.force_variable_generalized_effort[dof];
                 if (!actuated[dof])
                 {
                     result.unactuated_residual_linf = std::max(
@@ -562,7 +742,7 @@ namespace termin::robotics
                     result.required_generalized_effort[actuators_[index]
                                                            .dof_index];
             }
-            primal_warm_start_ = result.generalized_acceleration;
+            primal_warm_start_ = std::move(decision);
             primal_warm_start_valid_ = true;
             return result;
         }

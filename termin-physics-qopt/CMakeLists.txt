@@ -119,6 +119,13 @@ if(TERMIN_PHYSICS_QOPT_BUILD_TESTS)
         termin_physics_qopt)
     add_test(NAME termin_physics_qopt_double_pendulum2d_example
         COMMAND termin_physics_qopt_double_pendulum2d_example)
+
+    add_executable(termin_physics_qopt_dynamic_joint_control_example
+        examples/dynamic_joint_control.cpp)
+    target_link_libraries(termin_physics_qopt_dynamic_joint_control_example
+        PRIVATE termin_physics_qopt)
+    add_test(NAME termin_physics_qopt_dynamic_joint_control_example
+        COMMAND termin_physics_qopt_dynamic_joint_control_example)
 endif()
 
 include(GNUInstallDirs)

@@ -4,9 +4,9 @@ Status: fixed- and floating-base robotics articulation core and scene authoring,
 bounded servo, unilateral joint limits, solver-neutral point kinematics,
 collision-world adaptation, persistent contact, and convex Coulomb-friction
 slices and standing-robot acceptance implemented. Native velocity HQP and the
-joint-space inverse-dynamics HQP foundation are implemented as of 2026-08-04;
-Cartesian acceleration bias, contact-force control variables, restitution and
-material mixing remain future work.
+inverse-dynamics HQP, exact Cartesian acceleration bias tasks and explicit
+contact-force control variables are implemented as of 2026-08-04; restitution
+and material mixing remain future work.
 
 ## Goal
 

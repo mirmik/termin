@@ -101,6 +101,10 @@ namespace termin::robotics
     {
         termin::Vec3 position_world = termin::Vec3::zero();
         termin::Vec3 velocity_world = termin::Vec3::zero();
+        // Jdot(q, qdot) * qdot in the inertial world frame. Consequently a
+        // commanded point acceleration satisfies
+        // J * qdd = acceleration_world - bias_acceleration_world.
+        termin::Vec3 bias_acceleration_world = termin::Vec3::zero();
         std::vector<double> linear_jacobian_world_storage;
 
         [[nodiscard]] std::size_t dof_count() const noexcept;
@@ -123,6 +127,9 @@ namespace termin::robotics
     {
         termin::Pose3 pose_world = termin::Pose3::identity();
         termin::Screw3 velocity_world = termin::Screw3::zero();
+        // Spatial Jdot(q, qdot) * qdot at the frame origin, expressed in the
+        // inertial world frame and using the same vw convention as velocity.
+        termin::Screw3 bias_acceleration_world = termin::Screw3::zero();
         std::vector<double> spatial_jacobian_world_storage;
 
         [[nodiscard]] std::size_t dof_count() const noexcept;
@@ -216,6 +223,8 @@ namespace termin::robotics
 
         [[nodiscard]] Articulation3DDiagnostic validate_model() const noexcept;
         [[nodiscard]] bool update_kinematics() noexcept;
+        [[nodiscard]] bool bias_accelerations_local(
+            std::vector<termin::Screw3>& accelerations) const;
     };
 
 } // namespace termin::robotics

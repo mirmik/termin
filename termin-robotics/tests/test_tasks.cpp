@@ -158,6 +158,66 @@ namespace
         check_near(floating_result.value.matrix()(0, 6), 1.0);
     }
 
+    void test_cartesian_acceleration_objectives()
+    {
+        Articulation3D articulation = model();
+        const TaskLinearizationContext3D context{
+            .articulation = &articulation,
+            .derivative_order = TaskDerivativeOrder3D::Acceleration,
+        };
+        const auto point = articulation.point_kinematics(0, Vec3::zero());
+        PointAccelerationTask3D point_task(
+            0,
+            Vec3::zero(),
+            point.value.position_world + Vec3{0.1, -0.2, 0.3},
+            point.value.velocity_world + Vec3{0.4, 0.5, -0.6},
+            {0.7, -0.8, 0.9},
+            2.0,
+            3.0,
+            {.diagnostic_name = "point-acceleration"});
+        const TaskLinearization3DResult point_result =
+            point_task.linearize(context);
+        TERMIN_ROBOTICS_CHECK(point_result.ok());
+        const Vec3 expected_point =
+            Vec3{0.7, -0.8, 0.9} + Vec3{0.1, -0.2, 0.3} * 2.0 +
+            Vec3{0.4, 0.5, -0.6} * 3.0 - point.value.bias_acceleration_world;
+        check_near(point_result.value.target()[0], expected_point.x);
+        check_near(point_result.value.target()[1], expected_point.y);
+        check_near(point_result.value.target()[2], expected_point.z);
+
+        const auto frame = articulation.frame_kinematics(0);
+        const Screw3 local_error{{0.0, 0.0, 0.1}, {0.2, -0.1, 0.3}};
+        const Screw3 velocity_delta{{0.1, 0.2, -0.1}, {-0.2, 0.3, 0.1}};
+        const Screw3 feedforward{{-0.4, 0.5, 0.6}, {0.7, -0.8, 0.9}};
+        PoseAccelerationTask3D pose_task(
+            0,
+            frame.value.pose_world * se3_exp(local_error),
+            frame.value.velocity_world + velocity_delta,
+            feedforward,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            {.diagnostic_name = "pose-acceleration"});
+        const TaskLinearization3DResult pose_result =
+            pose_task.linearize(context);
+        TERMIN_ROBOTICS_CHECK(pose_result.ok());
+        const Screw3 error_world =
+            local_error.rotated_by(frame.value.pose_world.ang);
+        const Vec3 expected_linear = feedforward.lin + error_world.lin * 2.0 +
+                                     velocity_delta.lin * 4.0 -
+                                     frame.value.bias_acceleration_world.lin;
+        const Vec3 expected_angular = feedforward.ang + error_world.ang * 3.0 +
+                                      velocity_delta.ang * 5.0 -
+                                      frame.value.bias_acceleration_world.ang;
+        check_near(pose_result.value.target()[0], expected_linear.x);
+        check_near(pose_result.value.target()[1], expected_linear.y);
+        check_near(pose_result.value.target()[2], expected_linear.z);
+        check_near(pose_result.value.target()[3], expected_angular.x);
+        check_near(pose_result.value.target()[4], expected_angular.y);
+        check_near(pose_result.value.target()[5], expected_angular.z);
+    }
+
     void test_joint_limit_inequality_signs()
     {
         Articulation3D articulation = model();
@@ -320,6 +380,7 @@ int main()
     test_frame_jacobian();
     test_point_and_pose_objectives();
     test_joint_objectives_and_floating_offset();
+    test_cartesian_acceleration_objectives();
     test_joint_limit_inequality_signs();
     test_joint_velocity_limit_inequality_signs();
     test_avoidance_inequality_sign();

@@ -83,6 +83,13 @@ if(TERMIN_ROBOTICS_BUILD_TESTS)
     )
     add_test(NAME termin_robotics_inverse_dynamics_control_test
         COMMAND termin_robotics_inverse_dynamics_control_test)
+
+    add_executable(termin_robotics_kinematic_point_control_example
+        examples/kinematic_point_control.cpp)
+    target_link_libraries(termin_robotics_kinematic_point_control_example
+        PRIVATE termin_robotics)
+    add_test(NAME termin_robotics_kinematic_point_control_example
+        COMMAND termin_robotics_kinematic_point_control_example)
 endif()
 
 include(GNUInstallDirs)

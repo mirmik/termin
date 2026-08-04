@@ -421,6 +421,228 @@ namespace termin::robotics
                        "pose linearization failed");
     }
 
+    PointAccelerationTask3D::PointAccelerationTask3D(
+        std::size_t link_index,
+        termin::Vec3 point_local,
+        termin::Vec3 target_position_world,
+        termin::Vec3 target_velocity_world,
+        termin::Vec3 feedforward_acceleration_world,
+        double position_gain,
+        double velocity_gain,
+        TaskSettings3D settings)
+        : link_index_(link_index), point_local_(point_local),
+          target_position_world_(target_position_world),
+          target_velocity_world_(target_velocity_world),
+          feedforward_acceleration_world_(feedforward_acceleration_world),
+          position_gain_(position_gain), velocity_gain_(velocity_gain),
+          settings_(std::move(settings))
+    {
+    }
+
+    TaskLinearization3DResult PointAccelerationTask3D::linearize(
+        const TaskLinearizationContext3D& context) const noexcept
+    {
+        const TaskDiagnostic3D context_diagnostic = validate_context(context);
+        if (context_diagnostic != TaskDiagnostic3D::None)
+        {
+            return failure(context_diagnostic, settings_, "invalid context");
+        }
+        if (!settings_.enabled)
+        {
+            return {make_linearization(
+                        context, settings_, TaskRelation3D::Objective, 0),
+                    TaskDiagnostic3D::None};
+        }
+        if (context.derivative_order != TaskDerivativeOrder3D::Acceleration)
+        {
+            return failure(
+                TaskDiagnostic3D::UnsupportedDerivativeOrder,
+                settings_,
+                "point acceleration requires acceleration variables");
+        }
+        if (!point_local_.is_finite() || !target_position_world_.is_finite() ||
+            !target_velocity_world_.is_finite() ||
+            !feedforward_acceleration_world_.is_finite())
+        {
+            return failure(TaskDiagnostic3D::NonFiniteInput,
+                           settings_,
+                           "non-finite point acceleration input");
+        }
+        if (!std::isfinite(position_gain_) || position_gain_ < 0.0 ||
+            !std::isfinite(velocity_gain_) || velocity_gain_ < 0.0)
+        {
+            return failure(TaskDiagnostic3D::InvalidGain,
+                           settings_,
+                           "invalid point acceleration gain");
+        }
+        try
+        {
+            const ArticulationPointKinematics3DResult point =
+                context.articulation->point_kinematics(link_index_,
+                                                       point_local_);
+            if (!point.ok())
+            {
+                return failure(frame_diagnostic(point.diagnostic),
+                               settings_,
+                               "point kinematics unavailable");
+            }
+            const termin::Vec3 desired =
+                feedforward_acceleration_world_ +
+                (target_position_world_ - point.value.position_world) *
+                    position_gain_ +
+                (target_velocity_world_ - point.value.velocity_world) *
+                    velocity_gain_ -
+                point.value.bias_acceleration_world;
+            TaskLinearization3D value = make_linearization(
+                context, settings_, TaskRelation3D::Objective, 3);
+            value.matrix_storage = point.value.linear_jacobian_world_storage;
+            write_vec3(value.target_storage, 0, desired);
+            const TaskDiagnostic3D weight = apply_weight(value, settings_);
+            if (weight != TaskDiagnostic3D::None)
+            {
+                return failure(weight, settings_, "invalid objective weight");
+            }
+            return {std::move(value), TaskDiagnostic3D::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(
+                stderr,
+                "[termin-robotics] point acceleration task failed: %s\n",
+                error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] point acceleration task failed "
+                         "with an unknown exception\n");
+        }
+        return failure(TaskDiagnostic3D::InternalFailure,
+                       settings_,
+                       "point acceleration linearization failed");
+    }
+
+    PoseAccelerationTask3D::PoseAccelerationTask3D(
+        std::size_t link_index,
+        termin::Pose3 target_pose_world,
+        termin::Screw3 target_velocity_world,
+        termin::Screw3 feedforward_acceleration_world,
+        double linear_position_gain,
+        double angular_position_gain,
+        double linear_velocity_gain,
+        double angular_velocity_gain,
+        TaskSettings3D settings)
+        : link_index_(link_index), target_pose_world_(target_pose_world),
+          target_velocity_world_(target_velocity_world),
+          feedforward_acceleration_world_(feedforward_acceleration_world),
+          linear_position_gain_(linear_position_gain),
+          angular_position_gain_(angular_position_gain),
+          linear_velocity_gain_(linear_velocity_gain),
+          angular_velocity_gain_(angular_velocity_gain),
+          settings_(std::move(settings))
+    {
+    }
+
+    TaskLinearization3DResult PoseAccelerationTask3D::linearize(
+        const TaskLinearizationContext3D& context) const noexcept
+    {
+        const TaskDiagnostic3D context_diagnostic = validate_context(context);
+        if (context_diagnostic != TaskDiagnostic3D::None)
+        {
+            return failure(context_diagnostic, settings_, "invalid context");
+        }
+        if (!settings_.enabled)
+        {
+            return {make_linearization(
+                        context, settings_, TaskRelation3D::Objective, 0),
+                    TaskDiagnostic3D::None};
+        }
+        if (context.derivative_order != TaskDerivativeOrder3D::Acceleration)
+        {
+            return failure(TaskDiagnostic3D::UnsupportedDerivativeOrder,
+                           settings_,
+                           "pose acceleration requires acceleration variables");
+        }
+        if (!target_pose_world_.is_finite() ||
+            target_pose_world_.ang.norm() <= 1e-12 ||
+            !target_velocity_world_.is_finite() ||
+            !feedforward_acceleration_world_.is_finite())
+        {
+            return failure(TaskDiagnostic3D::NonFiniteInput,
+                           settings_,
+                           "non-finite pose acceleration input");
+        }
+        if (!std::isfinite(linear_position_gain_) ||
+            linear_position_gain_ < 0.0 ||
+            !std::isfinite(angular_position_gain_) ||
+            angular_position_gain_ < 0.0 ||
+            !std::isfinite(linear_velocity_gain_) ||
+            linear_velocity_gain_ < 0.0 ||
+            !std::isfinite(angular_velocity_gain_) ||
+            angular_velocity_gain_ < 0.0)
+        {
+            return failure(TaskDiagnostic3D::InvalidGain,
+                           settings_,
+                           "invalid pose acceleration gain");
+        }
+        try
+        {
+            const ArticulationFrameKinematics3DResult frame =
+                context.articulation->frame_kinematics(link_index_);
+            if (!frame.ok())
+            {
+                return failure(frame_diagnostic(frame.diagnostic),
+                               settings_,
+                               "frame kinematics unavailable");
+            }
+            const termin::Screw3 error_world =
+                termin::se3_log(frame.value.pose_world.inverse() *
+                                target_pose_world_)
+                    .rotated_by(frame.value.pose_world.ang);
+            const termin::Screw3 desired{
+                feedforward_acceleration_world_.ang +
+                    error_world.ang * angular_position_gain_ +
+                    (target_velocity_world_.ang -
+                     frame.value.velocity_world.ang) *
+                        angular_velocity_gain_ -
+                    frame.value.bias_acceleration_world.ang,
+                feedforward_acceleration_world_.lin +
+                    error_world.lin * linear_position_gain_ +
+                    (target_velocity_world_.lin -
+                     frame.value.velocity_world.lin) *
+                        linear_velocity_gain_ -
+                    frame.value.bias_acceleration_world.lin,
+            };
+            TaskLinearization3D value = make_linearization(
+                context, settings_, TaskRelation3D::Objective, 6);
+            value.matrix_storage = frame.value.spatial_jacobian_world_storage;
+            write_vec3(value.target_storage, 0, desired.lin);
+            write_vec3(value.target_storage, 3, desired.ang);
+            const TaskDiagnostic3D weight = apply_weight(value, settings_);
+            if (weight != TaskDiagnostic3D::None)
+            {
+                return failure(weight, settings_, "invalid objective weight");
+            }
+            return {std::move(value), TaskDiagnostic3D::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(
+                stderr,
+                "[termin-robotics] pose acceleration task failed: %s\n",
+                error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] pose acceleration task failed with "
+                         "an unknown exception\n");
+        }
+        return failure(TaskDiagnostic3D::InternalFailure,
+                       settings_,
+                       "pose acceleration linearization failed");
+    }
+
     JointPositionTask3D::JointPositionTask3D(
         std::vector<std::size_t> joint_indices,
         std::vector<double> target_positions,

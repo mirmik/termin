@@ -149,6 +149,14 @@ namespace termin::physics_qopt
         return kind_ == Kind::StaticWorld;
     }
 
+    bool ContactEndpoint3D::belongs_to(
+        const Articulation3DDynamicsContribution& articulation) const noexcept
+    {
+        return articulation_ == &articulation &&
+               (kind_ == Kind::ArticulationBase ||
+                kind_ == Kind::ArticulationLink);
+    }
+
     PointKinematics3DResult ContactEndpoint3D::point_kinematics() const noexcept
     {
         switch (kind_)
