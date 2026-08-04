@@ -8,7 +8,13 @@ from tcbase import log
 from termin.geombase import Vec3
 from termin.inspect import InspectField
 from termin.kinematic import ArticulationComponent
-from termin.robotics import Articulation3D, VelocityHqpController3D
+from termin.robotics import (
+    Articulation3D,
+    JointLimitConstraint3D,
+    JointVelocityLimitConstraint3D,
+    PointVelocityTask3D,
+    VelocityHqpController3D,
+)
 from termin.scene import Entity, PythonComponent
 
 
@@ -110,12 +116,41 @@ class PointTrackingControllerComponent(PythonComponent):
             (target_position.y - current_position[1]) * self.position_gain,
             (target_position.z - current_position[2]) * self.position_gain,
         )
-        result = controller.solve_point_velocity(
-            self.end_unit,
-            tuple(self.point_local),
-            desired_velocity,
-            dt,
-            self.maximum_joint_velocity,
+        # Priority 0 protects horizontal tracking. Priority 1 then uses only
+        # the remaining null space to improve vertical tracking, so it cannot
+        # trade horizontal accuracy for height. Joint limits are hard
+        # constraints introduced at the highest level.
+        tasks = [
+            JointLimitConstraint3D(
+                priority=0, diagnostic_name="joint position limits"
+            ),
+            JointVelocityLimitConstraint3D(
+                [],
+                [-self.maximum_joint_velocity] * articulation.unit_count,
+                [self.maximum_joint_velocity] * articulation.unit_count,
+                priority=0,
+                diagnostic_name="joint velocity limits",
+            ),
+            PointVelocityTask3D(
+                self.end_unit,
+                tuple(self.point_local),
+                desired_velocity,
+                priority=0,
+                diagonal_weight=[1.0, 1.0, 0.0],
+                diagnostic_name="horizontal point tracking",
+            ),
+            PointVelocityTask3D(
+                self.end_unit,
+                tuple(self.point_local),
+                desired_velocity,
+                priority=1,
+                diagonal_weight=[0.0, 0.0, 1.0],
+                diagnostic_name="vertical point tracking",
+            ),
+        ]
+        result = controller.solve(
+            tasks,
+            time_step=dt,
         )
         if not result.ok:
             log.error(

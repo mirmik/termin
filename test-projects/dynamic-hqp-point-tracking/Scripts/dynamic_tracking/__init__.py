@@ -8,7 +8,13 @@ from tcbase import log
 from termin.geombase import Vec3
 from termin.inspect import InspectField
 from termin.physics_fem import FEMArticulationComponent
-from termin.robotics import Articulation3D, InverseDynamicsHqpController3D
+from termin.robotics import (
+    Articulation3D,
+    InverseDynamicsHqpController3D,
+    JointLimitConstraint3D,
+    JointVelocityLimitConstraint3D,
+    PointAccelerationTask3D,
+)
 from termin.scene import (
     FIXED_UPDATE_PRIORITY_CONTROL,
     Entity,
@@ -121,9 +127,10 @@ class DynamicPointTrackingControllerComponent(PythonComponent):
             self.enabled = False
             return
         plant = self._plant
+        articulation = self._articulation
         controller = self._controller
         target = self.target
-        if plant is None or controller is None:
+        if plant is None or articulation is None or controller is None:
             return
         if target is None or not target.valid():
             log.error("[DynamicPointTrackingController] target entity is missing")
@@ -131,14 +138,50 @@ class DynamicPointTrackingControllerComponent(PythonComponent):
             return
 
         target_position = target.transform.global_position
-        result = controller.solve_point_acceleration(
-            self.end_unit,
-            tuple(self.point_local),
-            (target_position.x, target_position.y, target_position.z),
+        target_position_world = (
+            target_position.x,
+            target_position.y,
+            target_position.z,
+        )
+        # Effort bounds and unactuated dynamics are hard controller
+        # constraints. These explicit tasks add a genuine lexicographic
+        # hierarchy: vertical tracking may use the null space left by the
+        # protected horizontal objective, but may never degrade it.
+        tasks = [
+            JointLimitConstraint3D(
+                priority=0, diagnostic_name="joint position limits"
+            ),
+            JointVelocityLimitConstraint3D(
+                [],
+                [-self.maximum_joint_velocity] * articulation.unit_count,
+                [self.maximum_joint_velocity] * articulation.unit_count,
+                priority=0,
+                diagnostic_name="joint velocity limits",
+            ),
+            PointAccelerationTask3D(
+                self.end_unit,
+                tuple(self.point_local),
+                target_position_world,
+                position_gain=self.position_gain,
+                velocity_gain=self.velocity_gain,
+                priority=0,
+                diagonal_weight=[1.0, 1.0, 0.0],
+                diagnostic_name="horizontal point tracking",
+            ),
+            PointAccelerationTask3D(
+                self.end_unit,
+                tuple(self.point_local),
+                target_position_world,
+                position_gain=self.position_gain,
+                velocity_gain=self.velocity_gain,
+                priority=1,
+                diagonal_weight=[0.0, 0.0, 1.0],
+                diagnostic_name="vertical point tracking",
+            ),
+        ]
+        result = controller.solve(
+            tasks,
             time_step=dt,
-            position_gain=self.position_gain,
-            velocity_gain=self.velocity_gain,
-            maximum_joint_velocity=self.maximum_joint_velocity,
         )
         if not result.ok:
             log.error(
