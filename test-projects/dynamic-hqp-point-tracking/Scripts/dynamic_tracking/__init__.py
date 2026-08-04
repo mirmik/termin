@@ -163,7 +163,7 @@ class OrbitingTargetComponent(PythonComponent):
     def __init__(self) -> None:
         super().__init__()
         self.radius = 0.8
-        self.angular_speed = 0.4
+        self.angular_speed = 0.8
         self.vertical_amplitude = 0.3
         self._time = 0.0
         self._center = Vec3(0.0, 0.0, 0.0)
