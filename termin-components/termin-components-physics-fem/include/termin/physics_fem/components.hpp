@@ -2,14 +2,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <termin/entity/component.hpp>
-#include <termin/qopt/articulation3d.hpp>
-#include <termin/qopt/articulation3d_motor.hpp>
-#include <termin/qopt/contact3d.hpp>
-#include <termin/qopt/multibody3d.hpp>
+#include <termin/physics_qopt/articulation3d_motor.hpp>
+#include <termin/physics_qopt/contact3d.hpp>
+#include <termin/physics_qopt/multibody3d.hpp>
+#include <termin/robotics/articulation3d.hpp>
 
 extern "C"
 {
@@ -77,16 +78,20 @@ namespace termin
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] std::size_t link_count() const noexcept;
         [[nodiscard]] double total_energy() const noexcept;
+        [[nodiscard]] robotics::Articulation3D* articulation() noexcept;
+        [[nodiscard]] const robotics::Articulation3D*
+        articulation() const noexcept;
 
     private:
         friend class FEMPhysicsWorldComponent;
-        qopt::Articulation3DContribution* articulation_ = nullptr;
+        std::unique_ptr<robotics::Articulation3D> articulation_;
+        physics_qopt::Articulation3DDynamicsContribution* dynamics_ = nullptr;
         FEMPhysicsWorldComponent* world_ = nullptr;
         FEMRigidBodyComponent* base_body_ = nullptr;
         std::vector<FEMRigidBodyComponent*> bodies_;
         std::vector<Entity> joint_entities_;
         std::vector<double> joint_coordinate_scales_;
-        qopt::ArticulationMotorContribution* motor_ = nullptr;
+        physics_qopt::ArticulationMotorContribution* motor_ = nullptr;
         std::vector<FEMArticulationMotorComponent*> motors_;
         std::vector<FEMJointServoComponent*> servos_;
     };
@@ -113,8 +118,9 @@ namespace termin
     private:
         friend class FEMPhysicsWorldComponent;
         FEMPhysicsWorldComponent* world_ = nullptr;
-        qopt::Articulation3DContribution* articulation_ = nullptr;
-        qopt::ArticulationMotorContribution* motor_ = nullptr;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
+            nullptr;
+        physics_qopt::ArticulationMotorContribution* motor_ = nullptr;
         std::size_t dof_index_ = 0;
         std::size_t joint_index_ = 0;
         std::size_t channel_index_ = 0;
@@ -171,7 +177,8 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
         KinematicUnitComponent* joint_ = nullptr;
         FEMArticulationMotorComponent* motor_component_ = nullptr;
-        qopt::Articulation3DContribution* articulation_ = nullptr;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
+            nullptr;
         std::size_t dof_index_ = 0;
         double coordinate_scale_ = 1.0;
         double position_effort_ = 0.0;
@@ -200,10 +207,12 @@ namespace termin
 
     private:
         friend class FEMPhysicsWorldComponent;
-        qopt::RigidBody3DContribution* body_ = nullptr;
-        qopt::ForceOnBody3DContribution* force_ = nullptr;
-        qopt::Articulation3DContribution* articulation_ = nullptr;
-        std::size_t articulation_link_index_ = qopt::articulation_root_frame;
+        physics_qopt::RigidBody3DContribution* body_ = nullptr;
+        physics_qopt::ForceOnBody3DContribution* force_ = nullptr;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
+            nullptr;
+        std::size_t articulation_link_index_ =
+            robotics::articulation_root_frame;
         bool articulation_base_ = false;
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
@@ -223,8 +232,8 @@ namespace termin
 
     private:
         friend class FEMPhysicsWorldComponent;
-        qopt::FixedRevoluteJoint3DContribution* joint_ = nullptr;
-        qopt::RigidBody3DContribution* body_ = nullptr;
+        physics_qopt::FixedRevoluteJoint3DContribution* joint_ = nullptr;
+        physics_qopt::RigidBody3DContribution* body_ = nullptr;
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
@@ -245,9 +254,9 @@ namespace termin
 
     private:
         friend class FEMPhysicsWorldComponent;
-        qopt::RevoluteJoint3DContribution* joint_ = nullptr;
-        qopt::RigidBody3DContribution* body_a_ = nullptr;
-        qopt::RigidBody3DContribution* body_b_ = nullptr;
+        physics_qopt::RevoluteJoint3DContribution* joint_ = nullptr;
+        physics_qopt::RigidBody3DContribution* body_a_ = nullptr;
+        physics_qopt::RigidBody3DContribution* body_b_ = nullptr;
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
@@ -284,12 +293,12 @@ namespace termin
         friend class FEMRigidBodyComponent;
         friend class FEMFixedJointComponent;
         friend class FEMRevoluteJointComponent;
-        qopt::Multibody3DSystem system_;
+        physics_qopt::Multibody3DSystem system_;
         std::vector<FEMRigidBodyComponent*> bodies_;
         std::vector<FEMFixedJointComponent*> fixed_joints_;
         std::vector<FEMRevoluteJointComponent*> revolute_joints_;
         std::vector<FEMArticulationComponent*> articulations_;
-        qopt::ContactSet3DContribution* contacts_ = nullptr;
+        physics_qopt::ContactSet3DContribution* contacts_ = nullptr;
         std::vector<const void*> warned_contact_colliders_;
         double accumulated_time_ = 0.0;
         double simulated_time_ = 0.0;

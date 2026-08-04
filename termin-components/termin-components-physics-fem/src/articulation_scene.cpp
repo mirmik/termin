@@ -207,7 +207,7 @@ namespace termin
         {
             result.base_body = root_body;
             result.base_entity = root;
-            result.floating_base = qopt::ArticulationFloatingBase3D{
+            result.floating_base = robotics::ArticulationFloatingBase3D{
                 .inertia = body_inertia(*root_body),
                 .pose_world = *root_pose,
                 .velocity_local = Screw3::zero(),
@@ -258,7 +258,8 @@ namespace termin
                          joint_entity);
                     return;
                 }
-                if (!floating && parent_link == qopt::articulation_root_frame)
+                if (!floating &&
+                    parent_link == robotics::articulation_root_frame)
                 {
                     parent_to_joint_zero =
                         (*root_pose * parent_to_joint_zero).normalized();
@@ -328,7 +329,7 @@ namespace termin
                          joint_entity);
                     return;
                 }
-                qopt::ArticulationJointLimits3D limits;
+                robotics::ArticulationJointLimits3D limits;
                 FEMJointLimitComponent* authored_limits =
                     joint_entity.get_component<FEMJointLimitComponent>();
                 if (authored_limits != nullptr && authored_limits->enabled())
@@ -387,7 +388,7 @@ namespace termin
             }
         };
 
-        compile_children(root, qopt::articulation_root_frame);
+        compile_children(root, robotics::articulation_root_frame);
         if (result.diagnostic == FEMArticulationSceneDiagnostic::None &&
             result.links.empty())
         {

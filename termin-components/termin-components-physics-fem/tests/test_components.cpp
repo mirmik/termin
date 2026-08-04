@@ -562,7 +562,7 @@ TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
     REQUIRE(compiled.ok());
     REQUIRE_EQ(compiled.links.size(), 2U);
     REQUIRE_EQ(compiled.bindings.size(), 2U);
-    CHECK(compiled.links[0].parent_link == qopt::articulation_world_link);
+    CHECK(compiled.links[0].parent_link == robotics::articulation_world_link);
     CHECK(compiled.links[1].parent_link == 0U);
     CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.z - 4.0) <
           1.0e-12);
@@ -593,8 +593,8 @@ TEST_CASE("scene articulation compiler maps a floating base and branches")
         (compiled.floating_base->pose_world.lin - Vec3{1.0, 0.0, 2.0}).norm() <
         1.0e-12);
     REQUIRE_EQ(compiled.links.size(), 2U);
-    CHECK(compiled.links[0].parent_link == qopt::articulation_root_frame);
-    CHECK(compiled.links[1].parent_link == qopt::articulation_root_frame);
+    CHECK(compiled.links[0].parent_link == robotics::articulation_root_frame);
+    CHECK(compiled.links[1].parent_link == robotics::articulation_root_frame);
     CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.x + 0.75) <
           1.0e-12);
     CHECK(std::abs(compiled.links[1].parent_to_joint_zero.lin.x - 0.75) <
@@ -693,6 +693,7 @@ TEST_CASE("FEM world advances a compiled reduced double pendulum")
     pendulum.world->start();
 
     REQUIRE(pendulum.articulation->initialized());
+    REQUIRE(pendulum.articulation->articulation() != nullptr);
     const FEMPhysicsTelemetry initial = pendulum.world->telemetry();
     CHECK(initial.initialized);
     CHECK(initial.body_count == 2U);
@@ -854,14 +855,14 @@ TEST_CASE("FEM floating robot survives an asymmetric high tilted landing")
     using namespace termin;
 
     register_test_component_types();
-    StandingRobotScene fixture = make_standing_robot_scene(
-        {0.0, 0.0, 3.3596982955932617},
-        Quat{
-            -0.03302609427971528,
-            -0.0715192083359704,
-            -0.002369370458237609,
-            0.9968894953901635,
-        });
+    StandingRobotScene fixture =
+        make_standing_robot_scene({0.0, 0.0, 3.3596982955932617},
+                                  Quat{
+                                      -0.03302609427971528,
+                                      -0.0715192083359704,
+                                      -0.002369370458237609,
+                                      0.9968894953901635,
+                                  });
     fixture.world->start();
 
     bool contact_seen = false;

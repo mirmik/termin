@@ -1,163 +1,40 @@
 # termin-qopt
 
-Quadratic optimization, FEM, multibody dynamics, and robotics helpers for Termin.
+`termin-qopt` is Termin's solver-neutral dense quadratic-optimization
+foundation. Its public C++ API contains no Eigen types; Eigen remains a private
+backend dependency.
 
-The native `termin_qopt::termin_qopt` library is the current runtime foundation
-for dense optimization and contribution-based multibody dynamics. The
-`termin.fem`, `termin.linalg`, and `termin.robot` Python namespaces remain in
-this package as research/reference implementations; the native FEM scene
-components do not import them or NumPy at runtime.
+The native library exports:
 
-The native migration foundation provides the shared C++ target
-`termin_qopt::termin_qopt`, private Eigen integration, and caller-owned dense
-vector/matrix views. Native equality and active-set QP APIs cover convex dense
-problems, semantic statuses, rank diagnostics, KKT residuals, inequalities,
-bounds, checked warm starts, and Phase I infeasibility detection.
+- caller-owned dense vector and matrix views;
+- deterministic dense block assembly;
+- equality-constrained convex QP;
+- active-set convex QP with equalities, inequalities and variable bounds;
+- QR/SVD nullspace basis and projector helpers;
+- strict lexicographic `HierarchicalQpSolver` levels.
 
-Native subspace helpers expose QR-first orthonormal nullspace bases and
-projectors through fixed-capacity caller-owned matrices; SVD is an explicit
-rank-deficient policy rather than an implicit ABI choice. The native
-`HierarchicalQpSolver` owns copied task/constraint data, solves priorities in
-ascending order through the active-set API, accumulates hard constraints, and
-restricts each lower level to directions preserving higher-level task values.
-Rank exhaustion and incompatible lower levels return explicit statuses.
-The implementation is usable as a tested foundation, but is not yet integrated
-into a robot controller or the multibody step. Its exact scope and remaining
-gaps are recorded in [HQP_STATUS.md](HQP_STATUS.md).
+It deliberately contains no rigid bodies, contacts, motors, integration or
+scene components. Those live in `termin-physics-qopt`. The solver-neutral
+articulation tree and future task-based control APIs live in
+`termin-robotics`.
 
-The first end-to-end multibody slice is also native: deterministic dense block
-assembly, typed dynamics assembly for `M a = f + Jᵀ λ`, and a maximal-coordinate
-2D rigid-body system with fixed-point and revolute joints. Its public model API
-uses `termin-base` value types and does not expose either Eigen or assembled
-matrices. The double-pendulum example and tests exercise assembly, constrained
-solve, semi-implicit integration, position/velocity projection, reactions,
-constraint drift, and energy drift.
+```text
+termin-qopt
+    ↑                 ↑
+termin-robotics   termin-physics-qopt
+    ↑                 ↑
+task control      physical simulation
+```
 
-The native 3D foundation uses the same pipeline with right-trivialized,
-body-local `[linear, angular]` velocities and accelerations, constant local
-spatial inertia, SE(3) exponential updates, and fixed/two-body point joints.
-`termin::SpatialInertia3`, `termin::se3_exp()`, and `termin::se3_log()` are
-shared `termin-base` primitives; qopt owns only their dense assembly boundary
-and the equations of its concrete contributions.
-Twists, accelerations, wrenches, and joint reactions use the common
-`termin::Screw3` pair. Frame and origin changes operate on that pair through
-adjoint/coadjoint transforms; the dense assembler alone maps it explicitly to
-its internal `[linear, angular]` row order.
-The public names include the reference point: body velocity is exposed as
-`velocity_at_body_origin_world()`, external load as
-`wrench_at_body_origin_world()`, and a constraint reaction as
-`reaction_at_joint_anchor_world()`. These are not spatial twists or wrenches
-reduced to the world origin.
-Gravity, external wrenches, poses, joint anchors, constraint rows, and reactions
-cross the model boundary in their explicitly named world or local frames. A
-point joint constrains only coincident anchors and intentionally leaves three
-relative rotational degrees of freedom. Fixed and two-body revolute joints add
-two axis-alignment rows, leaving exactly one relative twist DOF, and expose the
-anchor force plus the axis-orthogonal reaction torque. The legacy Python
-`RevoluteJoint3D` remains reference-only and is retired as a model name because
-that class is only a point joint; the native revolute contract is intentionally
-stricter. Native solver/model Python bindings have not migrated; see
+`HierarchicalQpSolver` is a tested dense foundation rather than a complete
+robot controller. Its implemented semantics and known gaps are recorded in
+[HQP_STATUS.md](HQP_STATUS.md).
+
+The language-neutral QP/HQP oracle is
+[`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). The
+legacy Python `termin.fem`, `termin.linalg` and `termin.robot` namespaces remain
+in this distribution as research/reference implementations; native runtime
+physics does not import them.
+
+The migration history and numerical contracts are documented in
 [CPP_MIGRATION.md](CPP_MIGRATION.md).
-
-The reduced-coordinate articulation path is native as well.
-`Articulation3DContribution` represents either a fixed-base tree with one
-scalar coordinate per link joint, or a floating-base tree whose explicit root
-rigid body contributes six local spatial DOFs before the joint coordinates.
-The floating root owns a world pose, right-trivialized local velocity and
-spatial inertia; it is not encoded as a fictitious six-coordinate joint. Each
-link stores the parent-to-zero-joint pose, a local one-DOF motion twist, the
-joint-to-link pose, and spatial inertia. Forward kinematics uses `Exp(S q)` and inverse dynamics
-uses a recursive Newton-Euler pass. The current correctness backend obtains the
-dense reduced mass matrix by repeated inverse-dynamics passes, so it already
-fits the generic `DynamicsSystem` contract while leaving CRBA as an internal
-optimization. Internal tree joints need no constraint rows or projection.
-Analytic revolute/prismatic equations, branching, energy, and a
-double-pendulum comparison against the maximal-coordinate model are covered by
-native tests. Floating-root RNEA, mass/bias assembly, SE(3) midpoint
-integration, energy, rollback, base/link point Jacobians and contact endpoints
-are checked against the independent `RigidBody3DContribution` oracle and a
-coupled `6 + N` tree. Optional per-link minimum and maximum coordinates become
-transient velocity inequalities only when reached or predictively crossed;
-their public state reports separate reactions and active flags without
-clamping the coordinate after integration.
-
-The solver-neutral `PointKinematics3D` contract now gives a static world point,
-a material point on `RigidBody3DContribution`, or a material point on an
-`Articulation3DContribution` base/link the same representation: world position,
-world linear velocity, the owning DOF block, and a row-major `3 x n` generalized
-Jacobian. `map_force_to_generalized_effort()` applies `J^T` without exposing
-Eigen. The model owner keeps local spatial-vector conventions internal; contact
-contributions can consume the result without knowing the coordinate
-formulation. Native tests verify `J qdot`, finite-difference columns on a
-branching tree, the virtual-work identity, static zero-DOF behavior, and error
-diagnostics.
-
-Normal and Coulomb-friction contact are implemented native slices.
-`ContactSet3DContribution` accepts caller-keyed pairs of static, maximal-body,
-or articulation-link endpoints together with a unit world normal and signed
-gap. Contact keys identify material feature pairs; an optional group key
-identifies their collider pair. The two-argument `set_contacts()` overload also
-accepts the complete set of live groups, allowing a previously supporting
-point to survive a narrow-phase miss while its recomputed gap remains within
-the configured persistence distance. A fresh manifold for the same group
-replaces the old one deterministically, and removal of the group expires it
-immediately. Cache size is explicitly bounded.
-
-The contribution registers transient `C v <= d` rows each step, exposes the
-resulting normal impulse/reaction and tight-row state, and has no dependency on
-scene entities, colliders, or Eigen. Only points with a positive cached normal
-impulse are persisted or advertised as active-set hints; geometrically tight
-zero-effort points must not turn a statically indeterminate manifold into an
-overconstrained one. `DynamicsSystem` combines those row hints with its prior
-projected velocity, rejects an invalid warm start through the QP contract, and
-retries cold. A failed transactional step clears contact cache state rather
-than leaking uncommitted impulses into the next step.
-
-Penetration uses split position projection:
-configuration correction is solved in the mass metric, while the physical
-midpoint velocity is preserved until the separate unilateral velocity solve.
-Consequently correction does not manufacture rebound energy. Native tests
-cover exact Jacobian signs, mixed endpoint formulations, penetration recovery,
-impact, resting support, separation, contact removal, and invalid transactional
-input, deterministic cache order and capacity, persistence, warm start, feature
-replacement, and rollback.
-
-Friction is a second global maximum-dissipation QP after the frictionless
-normal projection. Every persistent contact receives a deterministic orthonormal
-tangent basis. A regular 32-sided polygon inscribed in the circular Coulomb
-disk bounds its two tangent impulse components. The second pass may redistribute
-the already solved normal impulses among tight supporting contacts, while
-preserving all unilateral velocity inequalities and keeping every resulting
-normal impulse non-negative; this is necessary for a multi-point patch to
-balance the moment caused by a tangential load. Bilateral-compatible inverse
-mass responses are included in the same global solve. `mu == 0` bypasses the
-pass exactly. The approximation is intentionally dissipative: sliding friction
-does non-positive work, polygon orientation introduces at most the documented
-half-facet directional quantization, and restitution remains separate scope.
-Per-contact state exposes final normal and world tangent impulses, tangent
-velocity, friction work, and a sticking/sliding diagnostic.
-
-The separate
-`termin-components-physics-fem` layer now compiles explicit fixed- or
-floating-root joint/body entity hierarchies into this public model. It keeps
-the floating base pose and solved joint coordinates synchronized with scene
-entities and `RotatorComponent` or `ActuatorComponent`. The FEM adapter also
-translates solver-neutral collision patches on maximal bodies, floating bases
-and links into the keyed contact-set contract. A linear-time dynamics backend
-remains a subsequent optimization slice.
-
-The language-neutral solver contract lives in
-[`tests/oracle/solver_oracle.json`](tests/oracle/solver_oracle.json). It records
-analytic solutions, KKT bounds, infeasibility/unboundedness certificates,
-nullspace invariants, and HQP priority outcomes without freezing Python
-iteration counts or implementation details.
-
-The multibody migration contract lives in
-[`tests/oracle/multibody_oracle.json`](tests/oracle/multibody_oracle.json).
-It fixes coordinate and constraint conventions, classifies the legacy Python
-models, and supplies free-fall, anchored-body, fixed-hinge, and 2D/3D
-double-pendulum fixtures shared by Python and native tests.
-
-`termin.robot.conditions` owns `SymCondition` and `ConditionCollection` because
-they depend on the qopt linear-algebra stack. Base `termin.kinematic` remains
-independent of `termin-qopt` and SciPy.

@@ -44,14 +44,16 @@ namespace termin
         struct EndpointOwner
         {
             EndpointKind kind = EndpointKind::Ignored;
-            qopt::RigidBody3DContribution* body = nullptr;
-            qopt::Articulation3DContribution* articulation = nullptr;
+            physics_qopt::RigidBody3DContribution* body = nullptr;
+            physics_qopt::Articulation3DDynamicsContribution* articulation =
+                nullptr;
             std::size_t link_index = 0;
         };
 
         struct ArticulationBinding
         {
-            qopt::Articulation3DContribution* articulation = nullptr;
+            physics_qopt::Articulation3DDynamicsContribution* articulation =
+                nullptr;
             std::size_t link_index = 0;
             bool base = false;
         };
@@ -150,10 +152,10 @@ namespace termin
         std::unordered_map<FEMRigidBodyComponent*, ArticulationBinding>
             articulation_bindings;
         EndpointMap endpoint_owners;
-        std::vector<std::pair<qopt::RigidBody3DContribution*,
-                              qopt::RigidBody3DContribution*>>
+        std::vector<std::pair<physics_qopt::RigidBody3DContribution*,
+                              physics_qopt::RigidBody3DContribution*>>
             connected_maximal_body_pairs;
-        std::vector<qopt::Contact3D> contacts;
+        std::vector<physics_qopt::Contact3D> contacts;
         std::vector<std::uint64_t> live_groups;
 
     private:
@@ -206,7 +208,7 @@ namespace termin
                 return link.kind == EndpointKind::ArticulationLink &&
                        link.link_index < links.size() &&
                        links[link.link_index].parent_link ==
-                           qopt::articulation_root_frame;
+                           robotics::articulation_root_frame;
             }
             if (a.link_index >= links.size() || b.link_index >= links.size())
             {
@@ -236,34 +238,35 @@ namespace termin
                 });
         }
 
-        [[nodiscard]] static qopt::ContactEndpoint3D
+        [[nodiscard]] static physics_qopt::ContactEndpoint3D
         make_endpoint(const EndpointOwner& endpoint, const Vec3& point_world)
         {
             switch (endpoint.kind)
             {
             case EndpointKind::Static:
-                return qopt::ContactEndpoint3D::static_world(point_world);
+                return physics_qopt::ContactEndpoint3D::static_world(
+                    point_world);
             case EndpointKind::RigidBody:
-                return qopt::ContactEndpoint3D::rigid_body(
+                return physics_qopt::ContactEndpoint3D::rigid_body(
                     *endpoint.body,
                     endpoint.body->state().pose.inverse_transform_point(
                         point_world));
             case EndpointKind::ArticulationBase:
-                return qopt::ContactEndpoint3D::articulation_base(
+                return physics_qopt::ContactEndpoint3D::articulation_base(
                     *endpoint.articulation,
                     endpoint.articulation->floating_base()
                         ->pose_world.inverse_transform_point(point_world));
             case EndpointKind::ArticulationLink:
-                return qopt::ContactEndpoint3D::articulation_link(
+                return physics_qopt::ContactEndpoint3D::articulation_link(
                     *endpoint.articulation,
                     endpoint.link_index,
                     endpoint.articulation
                         ->link_poses_world()[endpoint.link_index]
                         .inverse_transform_point(point_world));
             case EndpointKind::Ignored:
-                return qopt::ContactEndpoint3D{};
+                return physics_qopt::ContactEndpoint3D{};
             }
-            return qopt::ContactEndpoint3D{};
+            return physics_qopt::ContactEndpoint3D{};
         }
 
         [[nodiscard]] static std::uint64_t
@@ -332,8 +335,7 @@ namespace termin
     {
         for (FEMArticulationComponent* articulation : articulations_)
         {
-            if (articulation == nullptr ||
-                articulation->articulation_ == nullptr)
+            if (articulation == nullptr || articulation->dynamics_ == nullptr)
             {
                 continue;
             }
@@ -341,7 +343,7 @@ namespace termin
                 !state.articulation_bindings
                      .emplace(articulation->base_body_,
                               ContactRefreshState::ArticulationBinding{
-                                  .articulation = articulation->articulation_,
+                                  .articulation = articulation->dynamics_,
                                   .base = true,
                               })
                      .second)
@@ -358,12 +360,11 @@ namespace termin
                 FEMRigidBodyComponent* body = articulation->bodies_[link_index];
                 if (body == nullptr ||
                     !state.articulation_bindings
-                         .emplace(
-                             body,
-                             ContactRefreshState::ArticulationBinding{
-                                 .articulation = articulation->articulation_,
-                                 .link_index = link_index,
-                             })
+                         .emplace(body,
+                                  ContactRefreshState::ArticulationBinding{
+                                      .articulation = articulation->dynamics_,
+                                      .link_index = link_index,
+                                  })
                          .second)
                 {
                     tc::Log::error(
@@ -480,7 +481,7 @@ namespace termin
         if (collision_world == nullptr)
         {
             return contacts_->set_contacts({}) ==
-                   qopt::Contact3DDiagnostic::None;
+                   physics_qopt::Contact3DDiagnostic::None;
         }
 
         ContactRefreshState state{adjacent_link_collision_enabled,
@@ -514,14 +515,15 @@ namespace termin
             state.append_contacts(patch, owner_a->second, owner_b->second);
         }
 
-        const qopt::Contact3DDiagnostic diagnostic = contacts_->set_contacts(
-            std::move(state.contacts), std::move(state.live_groups));
-        if (diagnostic != qopt::Contact3DDiagnostic::None)
+        const physics_qopt::Contact3DDiagnostic diagnostic =
+            contacts_->set_contacts(std::move(state.contacts),
+                                    std::move(state.live_groups));
+        if (diagnostic != physics_qopt::Contact3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] scene contact conversion failed: "
                 "%s",
-                qopt::contact3d_diagnostic_name(diagnostic).data());
+                physics_qopt::contact3d_diagnostic_name(diagnostic).data());
             return false;
         }
         return true;

@@ -1,12 +1,20 @@
 # termin-qopt C++ migration intent
 
 Дата: 2026-05-27
-Обновлено: 2026-08-02
+Обновлено: 2026-08-04
 
 Статус: native foundation добавлен. Это не финальная спецификация solver API, а
 рабочая рамка для переноса `termin-qopt` из Python/NumPy/SciPy в C++.
 
 Текущее состояние:
+
+- native стек разделён на три устанавливаемые библиотеки:
+  `termin-qopt` содержит только общую QP/HQP и dense-assembly математику,
+  `termin-robotics` владеет solver-neutral `Articulation3D`, а
+  `termin-physics-qopt` содержит физический `DynamicsSystem`, contributions,
+  contacts, motors и интегрирование;
+- физические public headers удалены из `<termin/qopt/...>` и публикуются как
+  `<termin/physics_qopt/...>`; compatibility wrappers намеренно не оставлены;
 
 - добавлен native shared target `termin_qopt`;
 - Eigen подключён только как private dependency target;
@@ -48,11 +56,13 @@
 - FEM scene components перенесены в native модуль
   `termin_components_physics_fem`; существующий double-pendulum проект не
   загружает Python-модуль и NumPy во время исполнения;
-- добавлен первый reduced-coordinate `Articulation3DContribution`: fixed-base
-  дерево из one-DOF screw joints регистрируется как единый блок из `N` степеней
-  свободы, вычисляет кинематику через `Exp(S q)`, mass/bias через RNEA и не
-  создаёт внутренних constraint-строк; аналитические revolute/prismatic
-  уравнения, ветвление и двойной маятник сверены с maximal-coordinate моделью;
+- добавлен solver-neutral `Articulation3D`, владеющий reduced-coordinate
+  деревом, состоянием, инерциями и кинематическим кешем; отдельный
+  `Articulation3DDynamicsContribution` подключает ту же модель к динамике как
+  единый блок из `N` или `6 + N` степеней свободы, вычисляет mass/bias через
+  RNEA и не создаёт внутренних constraint-строк; аналитические
+  revolute/prismatic уравнения, ветвление и двойной маятник сверены с
+  maximal-coordinate моделью;
 - native scene compiler переводит строгую иерархию articulation root →
   kinematic joint entity → rigid body entity в публичные `ArticulationLink3D`,
   а тестовый double-pendulum уже использует две reduced coordinates без

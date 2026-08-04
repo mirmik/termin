@@ -1,6 +1,6 @@
 # Hierarchical multibody authoring
 
-Status: fixed- and floating-base qopt articulation core and scene authoring,
+Status: fixed- and floating-base robotics articulation core and scene authoring,
 bounded servo, unilateral joint limits, solver-neutral point kinematics,
 collision-world adaptation, persistent contact, and convex Coulomb-friction
 slices implemented, 2026-08-02. Standing-robot acceptance remains next;
@@ -14,7 +14,7 @@ simulation, inertial links are marked explicitly, and existing
 `RotatorComponent` / `ActuatorComponent` nodes describe the one-degree-of-
 freedom transform between adjacent links. The scene graph is compiled once as
 a reduced-coordinate articulation inside the native
-`termin::qopt::Multibody3DSystem` topology when play starts.
+`termin::physics_qopt::Multibody3DSystem` topology when play starts.
 
 The authoring hierarchy is the source description, not the numerical model.
 The compiled multibody graph owns runtime body state, joint handles, motor
@@ -196,11 +196,13 @@ stop, as for other simulated components.
 
 ## Native model additions
 
-The existing native 3D multibody slice supplies maximal-coordinate bodies,
+The `termin-physics-qopt` 3D multibody slice supplies maximal-coordinate bodies,
 point joints, true revolute constraints, reactions, equality-QP dynamics and
 constraint projection. It remains intact, including the current pendulum
-model. The common `Multibody3DSystem` contains an articulated-tree contribution
-whose implemented state has one scalar coordinate per revolute or prismatic
+model. The solver-neutral tree model lives in
+`termin::robotics::Articulation3D`; the common
+`termin::physics_qopt::Multibody3DSystem` contains its dynamics adapter
+contribution, whose implemented state has one scalar coordinate per revolute or prismatic
 joint plus, when floating, a world pose and six body-local base velocity
 coordinates.
 
