@@ -203,6 +203,63 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert tgfx.TcShader.from_uuid(phase_uuid).source_hash == published_hash
 
 
+def test_shader_reload_recovers_material_after_initial_shader_parse_failure(
+    tmp_path: Path,
+) -> None:
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.default_assets.render.shader_plugin import ShaderImportPlugin
+    from termin.default_assets.resource_manager import DefaultResourceManager
+
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    plugin = ShaderImportPlugin()
+
+    shader_path = tmp_path / "Recoverable.shader"
+    shader_path.write_text("@program Recoverable\n@language slang\n", encoding="utf-8")
+    shader_path.with_suffix(".shader.meta").write_text(
+        '{"uuid": "recoverable-shader"}\n',
+        encoding="utf-8",
+    )
+    initial_shader = plugin.preload(str(shader_path))
+    assert initial_shader is not None
+    rm.register_file(initial_shader)
+    assert rm.get_shader("Recoverable") is None
+
+    material_path = tmp_path / "Recoverable.material"
+    material_path.write_text(
+        '{"uuid": "recoverable-material", "shader": "Recoverable", '
+        '"shader_uuid": "recoverable-shader"}\n',
+        encoding="utf-8",
+    )
+    material_asset = MaterialAsset.from_file(
+        material_path,
+        name="RecoverableMaterial",
+    )
+    rm.register_material_asset("RecoverableMaterial", material_asset)
+    material = material_asset.material
+    assert material is not None
+    assert material.phase_count == 0
+
+    shader_path.write_text(
+        _shader_source("float4(0.0, 1.0, 0.0, 1.0)").replace(
+            "@program HotReload",
+            "@program Recoverable",
+        ),
+        encoding="utf-8",
+    )
+    recovered_shader = plugin.preload(str(shader_path))
+    assert recovered_shader is not None
+    assert rm.reload_file(recovered_shader)
+
+    program = rm.get_shader("Recoverable")
+    assert program is not None
+    assert program.uuid == "recoverable-shader"
+    assert material.phase_count == 1
+    assert material.default_phase().shader.is_valid
+    assert material.shader_program_uuid == program.uuid
+    assert material.shader_program_version == program.version
+
+
 def test_shader_asset_round_trips_and_applies_matrix_defaults(tmp_path: Path) -> None:
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_plugin import ShaderImportPlugin
