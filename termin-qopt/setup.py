@@ -21,7 +21,6 @@ setup(
     },
     install_requires=[
         "numpy",
-        "scipy",
         "tcbase",
         "termin-components-kinematic",
     ],
