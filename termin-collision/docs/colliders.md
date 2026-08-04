@@ -67,7 +67,6 @@ Collider (абстрактный)
 Специфичные методы:
 - `get_corners_world()` — 8 вершин в мировых координатах
 - `get_axes_world()` — 3 оси (нормали граней)
-- `collide_ground(height)` — коллизия с плоскостью земли (z = height)
 - `support(direction)` — support-функция для GJK
 
 Алгоритм box-box: **SAT (Separating Axis Theorem)** по 15 осям (3+3+9 кросс-произведений).

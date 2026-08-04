@@ -23,9 +23,6 @@ from ._colliders_native import (
     ColliderHit,
     RayHit,
     ColliderType,
-    # Ground contact helpers
-    SphereGroundContact,
-    BoxGroundContact,
     # Geometry primitives
     Sphere,
     Box,
@@ -43,8 +40,6 @@ __all__ = [
     'RayHit',
     'ColliderType',
     'Ray3',
-    'SphereGroundContact',
-    'BoxGroundContact',
     'Sphere',
     'Box',
     'Capsule',

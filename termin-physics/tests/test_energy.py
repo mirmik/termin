@@ -54,7 +54,6 @@ def test_free_fall_energy():
     world.solver_iterations = 10
     world.restitution = 0.0
     world.friction = 0.0
-    world.ground_enabled = False
 
     # Кубик падает свободно
     pose = Pose3()
@@ -88,7 +87,6 @@ def test_spinning_cube_energy():
     world = PhysicsWorld()
     world.gravity = Vec3(0, 0, 0)
     world.solver_iterations = 10
-    world.ground_enabled = False
 
     pose = Pose3()
     pose.lin = Vec3(0, 0, 5.0)
@@ -119,7 +117,6 @@ def test_multiple_cubes_energy():
     world = PhysicsWorld()
     world.gravity = Vec3(0, 0, -9.81)
     world.solver_iterations = 10
-    world.ground_enabled = False
 
     # Несколько кубиков на разных высотах
     indices = []

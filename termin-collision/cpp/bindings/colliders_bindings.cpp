@@ -103,14 +103,7 @@ NB_MODULE(_colliders_native, m) {
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
             size_t shape[2] = {3, 3};
             return nb::ndarray<nb::numpy, double, nb::shape<3, 3>>(data, 2, shape, owner);
-        })
-        .def("collide_ground", &BoxCollider::collide_ground, nb::arg("ground_height"));
-
-    // BoxCollider::GroundContact
-    nb::class_<BoxCollider::GroundContact>(m, "BoxGroundContact")
-        .def(nb::init<>())
-        .def_rw("point", &BoxCollider::GroundContact::point)
-        .def_rw("penetration", &BoxCollider::GroundContact::penetration);
+        });
 
     // ==================== SphereCollider ====================
 
@@ -121,15 +114,7 @@ NB_MODULE(_colliders_native, m) {
             new (self) SphereCollider{radius, transform.value_or(GeneralPose3{})};
         }, nb::arg("radius"), nb::arg("transform").none() = nb::none())
         .def_rw("radius", &SphereCollider::radius)
-        .def("effective_radius", &SphereCollider::effective_radius)
-        .def("collide_ground", &SphereCollider::collide_ground, nb::arg("ground_height"));
-
-    // SphereCollider::GroundContact
-    nb::class_<SphereCollider::GroundContact>(m, "SphereGroundContact")
-        .def(nb::init<>())
-        .def_rw("point", &SphereCollider::GroundContact::point)
-        .def_rw("normal", &SphereCollider::GroundContact::normal)
-        .def_rw("penetration", &SphereCollider::GroundContact::penetration);
+        .def("effective_radius", &SphereCollider::effective_radius);
 
     // ==================== CapsuleCollider ====================
 

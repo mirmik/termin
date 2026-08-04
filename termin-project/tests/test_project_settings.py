@@ -4,7 +4,12 @@ import pytest
 
 from termin.project.application_identity import ProjectApplicationIdentity
 from termin.project.ignored_paths import project_ignored_roots
-from termin.project.settings import ProjectPlayerWindowSettings, ProjectSettings, RenderSyncMode
+from termin.project.settings import (
+    ProjectPlayerWindowSettings,
+    ProjectSettings,
+    ProjectSettingsManager,
+    RenderSyncMode,
+)
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
 from termin.render import (
@@ -183,6 +188,61 @@ def test_project_application_identity_defaults_and_round_trips() -> None:
         custom.to_dict(),
         project_name="Ignored Default",
     ).application == custom.application
+
+
+def test_last_scene_is_stored_relative_to_project_root(tmp_path) -> None:
+    project_root = tmp_path / "Game"
+    scene = project_root / "Scenes" / "Main.scene"
+    scene.parent.mkdir(parents=True)
+    scene.write_text("{}", encoding="utf-8")
+    manager = ProjectSettingsManager()
+    manager.set_project_path(project_root)
+
+    manager.set_last_scene(str(scene))
+
+    state_path = project_root / "project_settings" / ".editor_state.json"
+    assert json.loads(state_path.read_text(encoding="utf-8"))["last_scene"] == (
+        "Scenes/Main.scene"
+    )
+    assert manager.get_last_scene() == str(scene.resolve())
+
+
+def test_legacy_absolute_last_scene_migrates_to_current_checkout(tmp_path) -> None:
+    old_root = tmp_path / "old-checkout" / "Game"
+    old_scene = old_root / "Scenes" / "Main.scene"
+    old_scene.parent.mkdir(parents=True)
+    old_scene.write_text("{}", encoding="utf-8")
+
+    project_root = tmp_path / "new-checkout" / "Game"
+    current_scene = project_root / "Scenes" / "Main.scene"
+    current_scene.parent.mkdir(parents=True)
+    current_scene.write_text("{}", encoding="utf-8")
+    state_path = project_root / "project_settings" / ".editor_state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(
+        json.dumps({"last_scene": str(old_scene)}),
+        encoding="utf-8",
+    )
+    manager = ProjectSettingsManager()
+    manager.set_project_path(project_root)
+
+    assert manager.get_last_scene() == str(current_scene.resolve())
+    assert json.loads(state_path.read_text(encoding="utf-8"))["last_scene"] == (
+        "Scenes/Main.scene"
+    )
+
+
+def test_last_scene_outside_project_is_not_persisted(tmp_path) -> None:
+    project_root = tmp_path / "Game"
+    project_root.mkdir()
+    outside_scene = tmp_path / "Outside.scene"
+    outside_scene.write_text("{}", encoding="utf-8")
+    manager = ProjectSettingsManager()
+    manager.set_project_path(project_root)
+
+    manager.set_last_scene(str(outside_scene))
+
+    assert not (project_root / "project_settings" / ".editor_state.json").exists()
 
 
 @pytest.mark.parametrize(
