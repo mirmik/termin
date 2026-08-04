@@ -116,6 +116,29 @@ namespace termin::robotics
         return diagnostic == Articulation3DDiagnostic::None;
     }
 
+    std::size_t ArticulationFrameKinematics3D::dof_count() const noexcept
+    {
+        return spatial_jacobian_world_storage.size() / 6;
+    }
+
+    qopt::ConstDenseMatrixView
+    ArticulationFrameKinematics3D::spatial_jacobian_world() const noexcept
+    {
+        const std::size_t columns = dof_count();
+        if (columns == 0 ||
+            spatial_jacobian_world_storage.size() != 6 * columns)
+        {
+            return {};
+        }
+        return qopt::ConstDenseMatrixView::row_major(
+            spatial_jacobian_world_storage.data(), 6, columns);
+    }
+
+    bool ArticulationFrameKinematics3DResult::ok() const noexcept
+    {
+        return diagnostic == Articulation3DDiagnostic::None;
+    }
+
     Articulation3D::Articulation3D(std::vector<ArticulationLink3D> links,
                                    Articulation3DState initial_state,
                                    std::string_view diagnostic_name)
@@ -265,6 +288,158 @@ namespace termin::robotics
         return link_velocities_local_;
     }
 
+    ArticulationFrameKinematics3DResult
+    Articulation3D::floating_base_frame_kinematics() const noexcept
+    {
+        if (diagnostic_ != Articulation3DDiagnostic::None ||
+            !floating_base_.has_value())
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation '%s' has no valid "
+                         "floating base frame\n",
+                         diagnostic_name_.c_str());
+            return {{}, Articulation3DDiagnostic::InvalidModel};
+        }
+
+        try
+        {
+            ArticulationFrameKinematics3D value;
+            value.pose_world = floating_base_->pose_world;
+            value.velocity_world = floating_base_->velocity_local.rotated_by(
+                floating_base_->pose_world.ang);
+            const std::size_t generalized_count = dof_count();
+            value.spatial_jacobian_world_storage.assign(6 * generalized_count,
+                                                        0.0);
+            for (std::size_t column = 0; column < 6; ++column)
+            {
+                std::vector<double> unit(6, 0.0);
+                unit[column] = 1.0;
+                const termin::Screw3 response = read_screw_vw(unit).rotated_by(
+                    floating_base_->pose_world.ang);
+                value.spatial_jacobian_world_storage[column] = response.lin.x;
+                value.spatial_jacobian_world_storage[generalized_count +
+                                                     column] = response.lin.y;
+                value.spatial_jacobian_world_storage[2 * generalized_count +
+                                                     column] = response.lin.z;
+                value.spatial_jacobian_world_storage[3 * generalized_count +
+                                                     column] = response.ang.x;
+                value.spatial_jacobian_world_storage[4 * generalized_count +
+                                                     column] = response.ang.y;
+                value.spatial_jacobian_world_storage[5 * generalized_count +
+                                                     column] = response.ang.z;
+            }
+            return {std::move(value), Articulation3DDiagnostic::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] floating-base frame kinematics "
+                         "failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] floating-base frame kinematics "
+                         "failed with an unknown exception\n");
+        }
+        return {{}, Articulation3DDiagnostic::InternalFailure};
+    }
+
+    ArticulationFrameKinematics3DResult
+    Articulation3D::frame_kinematics(std::size_t link_index) const noexcept
+    {
+        if (diagnostic_ != Articulation3DDiagnostic::None ||
+            link_poses_world_.size() != links_.size() ||
+            parent_to_link_.size() != links_.size() ||
+            motion_twists_at_link_.size() != links_.size() ||
+            link_velocities_local_.size() != links_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] cannot query frame kinematics of "
+                         "invalid articulation '%s'\n",
+                         diagnostic_name_.c_str());
+            return {{}, Articulation3DDiagnostic::InvalidModel};
+        }
+        if (link_index >= links_.size())
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation frame references "
+                         "invalid link %zu\n",
+                         link_index);
+            return {{}, Articulation3DDiagnostic::InvalidLink};
+        }
+
+        try
+        {
+            ArticulationFrameKinematics3D value;
+            value.pose_world = link_poses_world_[link_index];
+            value.velocity_world =
+                link_velocities_local_[link_index].rotated_by(
+                    value.pose_world.ang);
+            const std::size_t generalized_count = dof_count();
+            const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+            value.spatial_jacobian_world_storage.assign(6 * generalized_count,
+                                                        0.0);
+
+            std::vector<termin::Screw3> unit_velocities(link_index + 1);
+            for (std::size_t column = 0; column < generalized_count; ++column)
+            {
+                termin::Screw3 base_velocity = termin::Screw3::zero();
+                if (floating_base_.has_value() && column < 6)
+                {
+                    std::vector<double> unit_base(6, 0.0);
+                    unit_base[column] = 1.0;
+                    base_velocity = read_screw_vw(unit_base);
+                }
+                for (std::size_t index = 0; index <= link_index; ++index)
+                {
+                    const std::size_t parent = links_[index].parent_link;
+                    const termin::Screw3 parent_velocity =
+                        parent == articulation_root_frame
+                            ? base_velocity
+                            : unit_velocities[parent];
+                    unit_velocities[index] =
+                        parent_velocity.adjoint_inv(parent_to_link_[index]);
+                    if (column >= joint_offset &&
+                        index == column - joint_offset)
+                    {
+                        unit_velocities[index] += motion_twists_at_link_[index];
+                    }
+                }
+
+                const termin::Screw3 response =
+                    unit_velocities[link_index].rotated_by(
+                        value.pose_world.ang);
+                value.spatial_jacobian_world_storage[column] = response.lin.x;
+                value.spatial_jacobian_world_storage[generalized_count +
+                                                     column] = response.lin.y;
+                value.spatial_jacobian_world_storage[2 * generalized_count +
+                                                     column] = response.lin.z;
+                value.spatial_jacobian_world_storage[3 * generalized_count +
+                                                     column] = response.ang.x;
+                value.spatial_jacobian_world_storage[4 * generalized_count +
+                                                     column] = response.ang.y;
+                value.spatial_jacobian_world_storage[5 * generalized_count +
+                                                     column] = response.ang.z;
+            }
+            return {std::move(value), Articulation3DDiagnostic::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] frame kinematics failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] frame kinematics failed with an "
+                         "unknown exception\n");
+        }
+        return {{}, Articulation3DDiagnostic::InternalFailure};
+    }
+
     ArticulationPointKinematics3DResult
     Articulation3D::floating_base_point_kinematics(
         termin::Vec3 point_local) const noexcept
@@ -274,7 +449,7 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] articulation '%s' has no valid floating "
+                "[termin-robotics] articulation '%s' has no valid floating "
                 "base point\n",
                 diagnostic_name_.c_str());
             return {{}, Articulation3DDiagnostic::InvalidModel};
@@ -283,7 +458,7 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] rejected non-finite floating-base point\n");
+                "[termin-robotics] rejected non-finite floating-base point\n");
             return {{}, Articulation3DDiagnostic::NonFinitePoint};
         }
 
@@ -321,14 +496,15 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] floating-base point kinematics failed: %s\n",
+                "[termin-robotics] floating-base point kinematics failed: %s\n",
                 error.what());
         }
         catch (...)
         {
-            std::fprintf(stderr,
-                         "[termin-qopt] floating-base point kinematics failed "
-                         "with an unknown exception\n");
+            std::fprintf(
+                stderr,
+                "[termin-robotics] floating-base point kinematics failed "
+                "with an unknown exception\n");
         }
         return {{}, Articulation3DDiagnostic::InternalFailure};
     }
@@ -345,7 +521,7 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] cannot query point kinematics of invalid "
+                "[termin-robotics] cannot query point kinematics of invalid "
                 "articulation '%s'\n",
                 diagnostic_name_.c_str());
             return {{}, Articulation3DDiagnostic::InvalidModel};
@@ -354,7 +530,7 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] articulation point references invalid link "
+                "[termin-robotics] articulation point references invalid link "
                 "%zu\n",
                 link_index);
             return {{}, Articulation3DDiagnostic::InvalidLink};
@@ -363,7 +539,7 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] rejected non-finite articulation point\n");
+                "[termin-robotics] rejected non-finite articulation point\n");
             return {{}, Articulation3DDiagnostic::NonFinitePoint};
         }
 
@@ -430,14 +606,14 @@ namespace termin::robotics
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] articulation point kinematics failed: %s\n",
+                "[termin-robotics] articulation point kinematics failed: %s\n",
                 error.what());
         }
         catch (...)
         {
             std::fprintf(
                 stderr,
-                "[termin-qopt] articulation point kinematics failed with "
+                "[termin-robotics] articulation point kinematics failed with "
                 "an unknown exception\n");
         }
         return {{}, Articulation3DDiagnostic::InternalFailure};
@@ -450,8 +626,9 @@ namespace termin::robotics
             value.velocities.size() != links_.size() ||
             !finite(value.coordinates) || !finite(value.velocities))
         {
-            std::fprintf(stderr,
-                         "[termin-qopt] rejected invalid articulation state\n");
+            std::fprintf(
+                stderr,
+                "[termin-robotics] rejected invalid articulation state\n");
             return Articulation3DDiagnostic::InvalidState;
         }
         state_ = std::move(value);
@@ -469,7 +646,8 @@ namespace termin::robotics
             pose_world.ang.norm() <= 1e-10 || !velocity_local.is_finite())
         {
             std::fprintf(
-                stderr, "[termin-qopt] rejected invalid floating-base state\n");
+                stderr,
+                "[termin-robotics] rejected invalid floating-base state\n");
             return Articulation3DDiagnostic::InvalidState;
         }
         floating_base_->pose_world = pose_world.normalized();
@@ -630,11 +808,12 @@ namespace termin::robotics
             if (!inverse_dynamics(
                     zero, unit_acceleration, termin::Vec3::zero(), column))
             {
-                std::fprintf(stderr,
-                             "[termin-qopt] articulation '%s' inverse dynamics "
-                             "failed for mass column %zu\n",
-                             diagnostic_name_.c_str(),
-                             column_index);
+                std::fprintf(
+                    stderr,
+                    "[termin-robotics] articulation '%s' inverse dynamics "
+                    "failed for mass column %zu\n",
+                    diagnostic_name_.c_str(),
+                    column_index);
                 return false;
             }
             for (std::size_t row = 0; row < count; ++row)
