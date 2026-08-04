@@ -53,6 +53,8 @@ The standard task layer currently provides:
 - `JointPositionTask3D` with optional velocity feed-forward;
 - `JointVelocityTask3D`;
 - `JointLimitConstraint3D`, using one-step position prediction;
+- `JointVelocityLimitConstraint3D`, usable as velocity bounds or as one-step
+  acceleration bounds;
 - `PointAvoidanceConstraint3D`, consuming a signed-distance sample and its
   outward world normal without depending on a collision world.
 
@@ -75,8 +77,9 @@ tasks (implemented)
 ├── joint posture and limits
 └── collision avoidance
 
-velocity_control
-└── kinematic HQP formulation
+velocity_control (implemented)
+├── kinematic HQP formulation
+└── explicit articulation-state integration boundary
 
 inverse_dynamics
 └── dynamic HQP formulation
@@ -85,6 +88,20 @@ inverse_dynamics
 Velocity and inverse-dynamics formulations share the task linearization
 contract but produce different equations and decision-variable layouts.
 Neither formulation integrates the physical scene directly.
+
+`VelocityHqpController3D` relinearizes the supplied task list on every call,
+groups active objectives and constraints by ascending integer priority, and
+builds a `termin-qopt` hierarchical QP over generalized velocity. It supports
+fixed and floating bases and exposes solver, task and per-level diagnostics.
+The previous optimal generalized velocity is retained as an optional primal
+warm start. The current `termin-qopt` HQP API does not retain an active set
+between calls.
+
+Solving does not mutate the articulation. A caller that wants to advance the
+model must explicitly call `integrate_articulation_velocity()`. Scalar joints
+use explicit Euler integration. A floating root uses the right-trivialized
+local base twist and a right SE(3) exponential update. The integrator does not
+silently clamp coordinates; joint and velocity limits belong in the task set.
 
 Closed chains are expected to be represented above `Articulation3D` as one or
 more spanning trees plus explicit frame-to-frame closure constraints. The tree
