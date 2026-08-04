@@ -95,6 +95,20 @@ TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
           != std::string::npos);
 }
 
+TEST_CASE("shadow helper keeps filtering methods and cascade blending in Slang") {
+    const std::string source = read_text(
+        repo_root_from_test_file()
+        / "termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+
+    CHECK(source.find("SHADOW_METHOD_HARD") != std::string::npos);
+    CHECK(source.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
+    CHECK(source.find("visibility / 25.0") != std::string::npos);
+    CHECK(source.find("get_shadow_softness()") != std::string::npos);
+    CHECK(source.find("get_light_cascade_blend(light_index)") != std::string::npos);
+    CHECK(source.find("u_camera_view_depth") != std::string::npos);
+    CHECK(source.find("return lerp(primary, secondary, blend)") != std::string::npos);
+}
+
 TEST_CASE("built-in fragment shader registration reads source file from resource root") {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path root =

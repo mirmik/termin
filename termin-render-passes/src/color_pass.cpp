@@ -280,7 +280,7 @@ MaterialPipelinePassContract build_color_material_pass_contract()
             ShaderAbiResourceId::ShadowBlock,
             TC_SHADER_STAGE_FRAGMENT,
             MaterialPipelineResourceOwner::Pass,
-            2064u),
+            SHADOW_BLOCK_STD140_SIZE),
         material_pipeline_abi_resource_decl(
             ShaderAbiResourceId::ShadowMaps,
             TC_SHADER_STAGE_FRAGMENT,
@@ -738,10 +738,11 @@ void ColorPass::execute_with_data(
         int   u_shadow_cascade_index[SHADOW_UBO_MAX][4];
         float u_shadow_split_near[SHADOW_UBO_MAX][4];
         float u_shadow_split_far[SHADOW_UBO_MAX][4];
+        float u_camera_view_depth[4];
+        float u_shadow_texel_size[SHADOW_UBO_MAX][4];
     };
-    static_assert(sizeof(ShadowBlockStd140) ==
-                  16 + 1024 + 256 + 256 + 256 + 256,
-                  "ShadowBlockStd140 must match std140 layout (2064 B)");
+    static_assert(sizeof(ShadowBlockStd140) == SHADOW_BLOCK_STD140_SIZE,
+                  "ShadowBlockStd140 must match the shared shadow ABI size");
 
     ShadowBlockStd140 sb{};
     {
@@ -761,6 +762,13 @@ void ColorPass::execute_with_data(
             sb.u_shadow_cascade_index[i][0] = e.cascade_index;
             sb.u_shadow_split_near[i][0]    = e.cascade_split_near;
             sb.u_shadow_split_far[i][0]     = e.cascade_split_far;
+            sb.u_shadow_texel_size[i][0] =
+                e.width > 0 ? 1.0f / static_cast<float>(e.width) : 0.0f;
+            sb.u_shadow_texel_size[i][1] =
+                e.height > 0 ? 1.0f / static_cast<float>(e.height) : 0.0f;
+        }
+        for (int col = 0; col < 4; ++col) {
+            sb.u_camera_view_depth[col] = data.view(col, 1);
         }
     }
 
@@ -994,8 +1002,8 @@ void ColorPass::execute_with_data(
 
     if (!render_tasks.empty() && !shadow_sampler_) {
         tgfx::SamplerDesc sd;
-        sd.min_filter = tgfx::FilterMode::Nearest;
-        sd.mag_filter = tgfx::FilterMode::Nearest;
+        sd.min_filter = tgfx::FilterMode::Linear;
+        sd.mag_filter = tgfx::FilterMode::Linear;
         sd.mip_filter = tgfx::FilterMode::Nearest;
         // ClampToEdge + clear-depth 1.0 gives the same "outside
         // frustum = not in shadow" behaviour as GL's ClampToBorder
