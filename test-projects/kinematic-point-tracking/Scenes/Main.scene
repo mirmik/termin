@@ -2,68 +2,7 @@
   "version": "1.0",
   "scene": {
     "uuid": "",
-    "extensions": {
-      "render_mount": {
-        "pipeline_templates": [],
-        "viewport_configs": [
-          {
-            "name": "Main Viewport",
-            "display_name": "Main",
-            "render_target": {
-              "name": "Main Target"
-            },
-            "region": [0.0, 0.0, 1.0, 1.0],
-            "depth": 0.0,
-            "input_mode": "simple",
-            "block_input_in_editor": false,
-            "enabled": true
-          }
-        ],
-        "render_target_configs": [
-          {
-            "name": "Main Target",
-            "camera_uuid": "kinematic-point-tracking-camera",
-            "dynamic_resolution": true,
-            "color_format": "rgba8",
-            "depth_format": "depth24",
-            "clear_color": [0.008, 0.012, 0.028, 1.0],
-            "clear_depth": 1.0,
-            "pipeline_name": "Default",
-            "layer_mask": 4294967295.0,
-            "enabled": true
-          }
-        ]
-      },
-      "render_state": {
-        "background_color": [0.008, 0.012, 0.028, 1.0],
-        "lighting": {
-          "ambient_color": [0.3, 0.38, 0.58],
-          "ambient_intensity": 0.24,
-          "shadow_settings": {
-            "method": 1.0,
-            "softness": 1.4,
-            "bias": 0.001
-          }
-        },
-        "skybox": {
-          "type": 1.0,
-          "color": [0.008, 0.012, 0.028],
-          "top_color": [0.12, 0.2, 0.42],
-          "bottom_color": [0.12, 0.08, 0.1]
-        }
-      },
-      "collision_world": {}
-    },
-    "metadata": {
-      "termin": {
-        "editor": {
-          "entities_data": null,
-          "viewport_camera_name": "camera"
-        }
-      }
-    },
-    "layer_names": {},
-    "flag_names": {},
+    "fixed_timestep": 0.016666666666666666,
     "entities": [
       {
         "uuid": "kinematic-point-tracking-backdrop",
@@ -76,16 +15,33 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, -0.1],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            -0.1
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [8.0, 8.0, 0.2],
+        "scale": [
+          8.0,
+          8.0,
+          0.2
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-backdrop-mesh",
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "mesh_generated": false,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000001",
@@ -94,9 +50,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": false,
-              "mesh_offset_position": [0.0, 0.0, 0.0],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [1.0, 1.0, 1.0]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
@@ -104,6 +72,10 @@
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "material": {
                 "uuid": "kinematic-point-tracking-backdrop-material",
                 "name": "Backdrop",
@@ -128,24 +100,54 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [0.0, 0.0, 0.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-articulation",
             "type": "ArticulationComponent",
-            "data": {"enabled": true}
+            "data": {
+              "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0
+            }
           },
           {
             "source_id": "kinematic-point-tracking-controller",
             "type": "PointTrackingControllerComponent",
             "data": {
               "enabled": true,
-              "target": {"uuid": "kinematic-point-tracking-target"},
-              "end_unit": 2,
-              "point_local": [1.35, 0.0, 0.0],
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
+              "target": {
+                "uuid": "kinematic-point-tracking-target",
+                "name": "Moving Target"
+              },
+              "end_unit": 2.0,
+              "point_local": [
+                1.35,
+                0.0,
+                0.0
+              ],
               "position_gain": 6.0,
               "maximum_joint_velocity": 3.5
             }
@@ -155,6 +157,10 @@
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "mesh_generated": false,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000004",
@@ -163,9 +169,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": true,
-              "mesh_offset_position": [0.0, 0.0, 0.12],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [0.55, 0.55, 0.24]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.12
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                0.55,
+                0.55,
+                0.24
+              ]
             }
           },
           {
@@ -173,6 +191,10 @@
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "material": {
                 "uuid": "kinematic-point-tracking-arm-a-material",
                 "name": "ArmA",
@@ -197,24 +219,65 @@
             "layer": 0.0,
             "flags": 0.0,
             "pose": {
-              "position": [0.0, 0.0, 0.0],
-              "rotation": [0.0, 0.0, 0.0, 1.0]
+              "position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
             },
-            "scale": [1.0, 1.0, 1.0],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
             "components": [
               {
                 "source_id": "kinematic-point-tracking-azimuth-unit",
                 "type": "RotatorComponent",
                 "data": {
                   "enabled": true,
-                  "axis": [0.0, 0.0, 1.0],
-                  "coordinate_scale": "1.0",
-                  "coordinate": [0.0, -3.141592653589793, 3.141592653589793],
-                  "origin_position": [0.0, 0.0, 0.0],
-                  "origin_rotation": [0.0, 0.0, 0.0],
+                  "update_priority": 0.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "before_render_priority": 0.0,
+                  "axis": [
+                    0.0,
+                    0.0,
+                    1.0
+                  ],
+                  "coordinate": [
+                    0.0,
+                    -3.141592653589793,
+                    3.141592653589793
+                  ],
+                  "origin_position": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "origin_rotation": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
                   "mass": 2.5,
-                  "inertia_diagonal": [0.24, 0.24, 0.12],
-                  "center_of_mass": [0.0, 0.0, 0.5]
+                  "inertia_diagonal": [
+                    0.24,
+                    0.24,
+                    0.12
+                  ],
+                  "center_of_mass": [
+                    0.0,
+                    0.0,
+                    0.5
+                  ],
+                  "coordinate_scale": "1.0"
                 }
               },
               {
@@ -222,6 +285,10 @@
                 "type": "MeshComponent",
                 "data": {
                   "enabled": true,
+                  "update_priority": 0.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "before_render_priority": 0.0,
                   "mesh_generated": false,
                   "mesh": {
                     "uuid": "00000000-0000-0000-0003-000000000004",
@@ -230,9 +297,21 @@
                     "kind": "tc_mesh"
                   },
                   "mesh_offset_enabled": true,
-                  "mesh_offset_position": [0.0, 0.0, 0.5],
-                  "mesh_offset_euler": [0.0, 0.0, 0.0],
-                  "mesh_offset_scale": [0.28, 0.28, 1.0]
+                  "mesh_offset_position": [
+                    0.0,
+                    0.0,
+                    0.5
+                  ],
+                  "mesh_offset_euler": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "mesh_offset_scale": [
+                    0.28,
+                    0.28,
+                    1.0
+                  ]
                 }
               },
               {
@@ -240,6 +319,10 @@
                 "type": "MeshRenderer",
                 "data": {
                   "enabled": true,
+                  "update_priority": 0.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "before_render_priority": 0.0,
                   "material": {
                     "uuid": "kinematic-point-tracking-arm-a-material",
                     "name": "ArmA",
@@ -264,24 +347,65 @@
                 "layer": 0.0,
                 "flags": 0.0,
                 "pose": {
-                  "position": [0.0, 0.0, 0.9],
-                  "rotation": [0.0, -0.22310636213174545, 0.0, 0.9747941070689433]
+                  "position": [
+                    0.0,
+                    0.0,
+                    0.9
+                  ],
+                  "rotation": [
+                    0.0,
+                    -0.22310636213174545,
+                    0.0,
+                    0.9747941070689433
+                  ]
                 },
-                "scale": [1.0, 1.0, 1.0],
+                "scale": [
+                  1.0,
+                  1.0,
+                  1.0
+                ],
                 "components": [
                   {
                     "source_id": "kinematic-point-tracking-shoulder-unit",
                     "type": "RotatorComponent",
                     "data": {
                       "enabled": true,
-                      "axis": [0.0, 1.0, 0.0],
-                      "coordinate_scale": "1.0",
-                      "coordinate": [-0.45, -2.8, 2.8],
-                      "origin_position": [0.0, 0.0, 0.9],
-                      "origin_rotation": [0.0, 0.0, 0.0],
+                      "update_priority": 0.0,
+                      "fixed_update_priority": 0.0,
+                      "late_update_priority": 0.0,
+                      "before_render_priority": 0.0,
+                      "axis": [
+                        0.0,
+                        1.0,
+                        0.0
+                      ],
+                      "coordinate": [
+                        -0.45,
+                        -2.8,
+                        2.8
+                      ],
+                      "origin_position": [
+                        0.0,
+                        0.0,
+                        0.9
+                      ],
+                      "origin_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
                       "mass": 1.0,
-                      "inertia_diagonal": [0.04, 0.2, 0.2],
-                      "center_of_mass": [0.75, 0.0, 0.0]
+                      "inertia_diagonal": [
+                        0.04,
+                        0.2,
+                        0.2
+                      ],
+                      "center_of_mass": [
+                        0.75,
+                        0.0,
+                        0.0
+                      ],
+                      "coordinate_scale": "1.0"
                     }
                   },
                   {
@@ -289,6 +413,10 @@
                     "type": "MeshComponent",
                     "data": {
                       "enabled": true,
+                      "update_priority": 0.0,
+                      "fixed_update_priority": 0.0,
+                      "late_update_priority": 0.0,
+                      "before_render_priority": 0.0,
                       "mesh_generated": false,
                       "mesh": {
                         "uuid": "00000000-0000-0000-0003-000000000001",
@@ -297,9 +425,21 @@
                         "kind": "tc_mesh"
                       },
                       "mesh_offset_enabled": true,
-                      "mesh_offset_position": [0.75, 0.0, 0.0],
-                      "mesh_offset_euler": [0.0, 0.0, 0.0],
-                      "mesh_offset_scale": [1.5, 0.16, 0.16]
+                      "mesh_offset_position": [
+                        0.75,
+                        0.0,
+                        0.0
+                      ],
+                      "mesh_offset_euler": [
+                        0.0,
+                        0.0,
+                        0.0
+                      ],
+                      "mesh_offset_scale": [
+                        1.5,
+                        0.16,
+                        0.16
+                      ]
                     }
                   },
                   {
@@ -307,6 +447,10 @@
                     "type": "MeshRenderer",
                     "data": {
                       "enabled": true,
+                      "update_priority": 0.0,
+                      "fixed_update_priority": 0.0,
+                      "late_update_priority": 0.0,
+                      "before_render_priority": 0.0,
                       "material": {
                         "uuid": "kinematic-point-tracking-arm-a-material",
                         "name": "ArmA",
@@ -331,24 +475,65 @@
                     "layer": 0.0,
                     "flags": 0.0,
                     "pose": {
-                      "position": [1.5, 0.0, 0.0],
-                      "rotation": [0.0, 0.31930878585700095, 0.0, 0.9476507264148157]
+                      "position": [
+                        1.5,
+                        0.0,
+                        0.0
+                      ],
+                      "rotation": [
+                        0.0,
+                        0.31930878585700095,
+                        0.0,
+                        0.9476507264148157
+                      ]
                     },
-                    "scale": [1.0, 1.0, 1.0],
+                    "scale": [
+                      1.0,
+                      1.0,
+                      1.0
+                    ],
                     "components": [
                       {
                         "source_id": "kinematic-point-tracking-elbow-unit",
                         "type": "RotatorComponent",
                         "data": {
                           "enabled": true,
-                          "axis": [0.0, 1.0, 0.0],
-                          "coordinate_scale": "1.0",
-                          "coordinate": [0.65, -2.8, 2.8],
-                          "origin_position": [1.5, 0.0, 0.0],
-                          "origin_rotation": [0.0, 0.0, 0.0],
+                          "update_priority": 0.0,
+                          "fixed_update_priority": 0.0,
+                          "late_update_priority": 0.0,
+                          "before_render_priority": 0.0,
+                          "axis": [
+                            0.0,
+                            1.0,
+                            0.0
+                          ],
+                          "coordinate": [
+                            0.65,
+                            -2.8,
+                            2.8
+                          ],
+                          "origin_position": [
+                            1.5,
+                            0.0,
+                            0.0
+                          ],
+                          "origin_rotation": [
+                            0.0,
+                            0.0,
+                            0.0
+                          ],
                           "mass": 0.8,
-                          "inertia_diagonal": [0.03, 0.13, 0.13],
-                          "center_of_mass": [0.675, 0.0, 0.0]
+                          "inertia_diagonal": [
+                            0.03,
+                            0.13,
+                            0.13
+                          ],
+                          "center_of_mass": [
+                            0.675,
+                            0.0,
+                            0.0
+                          ],
+                          "coordinate_scale": "1.0"
                         }
                       },
                       {
@@ -356,6 +541,10 @@
                         "type": "MeshComponent",
                         "data": {
                           "enabled": true,
+                          "update_priority": 0.0,
+                          "fixed_update_priority": 0.0,
+                          "late_update_priority": 0.0,
+                          "before_render_priority": 0.0,
                           "mesh_generated": false,
                           "mesh": {
                             "uuid": "00000000-0000-0000-0003-000000000001",
@@ -364,9 +553,21 @@
                             "kind": "tc_mesh"
                           },
                           "mesh_offset_enabled": true,
-                          "mesh_offset_position": [0.675, 0.0, 0.0],
-                          "mesh_offset_euler": [0.0, 0.0, 0.0],
-                          "mesh_offset_scale": [1.35, 0.14, 0.14]
+                          "mesh_offset_position": [
+                            0.675,
+                            0.0,
+                            0.0
+                          ],
+                          "mesh_offset_euler": [
+                            0.0,
+                            0.0,
+                            0.0
+                          ],
+                          "mesh_offset_scale": [
+                            1.35,
+                            0.14,
+                            0.14
+                          ]
                         }
                       },
                       {
@@ -374,6 +575,10 @@
                         "type": "MeshRenderer",
                         "data": {
                           "enabled": true,
+                          "update_priority": 0.0,
+                          "fixed_update_priority": 0.0,
+                          "late_update_priority": 0.0,
+                          "before_render_priority": 0.0,
                           "material": {
                             "uuid": "kinematic-point-tracking-arm-b-material",
                             "name": "ArmB",
@@ -398,16 +603,33 @@
                         "layer": 0.0,
                         "flags": 0.0,
                         "pose": {
-                          "position": [1.35, 0.0, 0.0],
-                          "rotation": [0.0, 0.0, 0.0, 1.0]
+                          "position": [
+                            1.35,
+                            0.0,
+                            0.0
+                          ],
+                          "rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                          ]
                         },
-                        "scale": [0.18, 0.18, 0.18],
+                        "scale": [
+                          0.18,
+                          0.18,
+                          0.18
+                        ],
                         "components": [
                           {
                             "source_id": "kinematic-point-tracking-tip-mesh",
                             "type": "MeshComponent",
                             "data": {
                               "enabled": true,
+                              "update_priority": 0.0,
+                              "fixed_update_priority": 0.0,
+                              "late_update_priority": 0.0,
+                              "before_render_priority": 0.0,
                               "mesh_generated": false,
                               "mesh": {
                                 "uuid": "00000000-0000-0000-0003-000000000002",
@@ -416,9 +638,21 @@
                                 "kind": "tc_mesh"
                               },
                               "mesh_offset_enabled": false,
-                              "mesh_offset_position": [0.0, 0.0, 0.0],
-                              "mesh_offset_euler": [0.0, 0.0, 0.0],
-                              "mesh_offset_scale": [1.0, 1.0, 1.0]
+                              "mesh_offset_position": [
+                                0.0,
+                                0.0,
+                                0.0
+                              ],
+                              "mesh_offset_euler": [
+                                0.0,
+                                0.0,
+                                0.0
+                              ],
+                              "mesh_offset_scale": [
+                                1.0,
+                                1.0,
+                                1.0
+                              ]
                             }
                           },
                           {
@@ -426,6 +660,10 @@
                             "type": "MeshRenderer",
                             "data": {
                               "enabled": true,
+                              "update_priority": 0.0,
+                              "fixed_update_priority": 0.0,
+                              "late_update_priority": 0.0,
+                              "before_render_priority": 0.0,
                               "material": {
                                 "uuid": "kinematic-point-tracking-arm-b-material",
                                 "name": "ArmB",
@@ -458,16 +696,33 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [1.9, 0.0, 1.3],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            1.9,
+            0.0,
+            1.3
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [0.24, 0.24, 0.24],
+        "scale": [
+          0.24,
+          0.24,
+          0.24
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-target-motion",
             "type": "OrbitingTargetComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "radius": 0.55,
               "angular_speed": 0.55,
               "vertical_amplitude": 0.35
@@ -478,6 +733,10 @@
             "type": "MeshComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "mesh_generated": false,
               "mesh": {
                 "uuid": "00000000-0000-0000-0003-000000000002",
@@ -486,9 +745,21 @@
                 "kind": "tc_mesh"
               },
               "mesh_offset_enabled": false,
-              "mesh_offset_position": [0.0, 0.0, 0.0],
-              "mesh_offset_euler": [0.0, 0.0, 0.0],
-              "mesh_offset_scale": [1.0, 1.0, 1.0]
+              "mesh_offset_position": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_euler": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "mesh_offset_scale": [
+                1.0,
+                1.0,
+                1.0
+              ]
             }
           },
           {
@@ -496,6 +767,10 @@
             "type": "MeshRenderer",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "material": {
                 "uuid": "kinematic-point-tracking-target-material",
                 "name": "Target",
@@ -520,18 +795,39 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [5.0, -6.0, 11.0],
-          "rotation": [-0.2519347273868741, -0.8749107385769198, 0.39038704341297775, 0.13659446912142464]
+          "position": [
+            5.0,
+            -6.0,
+            11.0
+          ],
+          "rotation": [
+            -0.2519347273868741,
+            -0.8749107385769198,
+            0.39038704341297775,
+            0.13659446912142464
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-key-light-component",
             "type": "LightComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "light_type": "directional",
-              "color": [1.0, 0.86, 0.68],
+              "color": [
+                1.0,
+                0.86,
+                0.68
+              ],
               "intensity": 1.55,
               "shadows_enabled": true,
               "shadows_bias": 0.001,
@@ -539,7 +835,7 @@
               "shadows_map_resolution": 1024.0,
               "cascade_count": 3.0,
               "max_distance": 50.0,
-              "split_lambda": 0.7,
+              "split_lambda": 0.699999988079071,
               "cascade_blend": true
             }
           }
@@ -556,18 +852,39 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [-5.0, -3.0, 6.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0]
+          "position": [
+            -5.0,
+            -3.0,
+            6.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-fill-light-component",
             "type": "LightComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "light_type": "point",
-              "color": [0.2, 0.42, 1.0],
+              "color": [
+                0.2,
+                0.42,
+                1.0
+              ],
               "intensity": 3.2,
               "shadows_enabled": false,
               "shadows_bias": 0.001,
@@ -592,20 +909,37 @@
         "layer": 0.0,
         "flags": 0.0,
         "pose": {
-          "position": [5.2, -8.5, 4.4],
-          "rotation": [-0.150695, -0.037429, 0.238128, 0.958741]
+          "position": [
+            5.2,
+            -8.5,
+            4.4
+          ],
+          "rotation": [
+            -0.150695,
+            -0.037429,
+            0.238128,
+            0.958741
+          ]
         },
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
         "components": [
           {
             "source_id": "kinematic-point-tracking-camera-component",
             "type": "CameraComponent",
             "data": {
               "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "before_render_priority": 0.0,
               "near_clip": 0.1,
               "far_clip": 100.0,
               "ortho_size": 5.0,
-              "fov_x_degrees": 60.0,
+              "fov_x_degrees": 59.99999999999999,
               "fov_y_degrees": 48.0,
               "fov_mode": "FixHorizontal",
               "layer_mask": "0xffffffffffffffff",
@@ -614,6 +948,171 @@
           }
         ]
       }
-    ]
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": null,
+          "viewport_camera_name": "camera"
+        }
+      }
+    },
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0.0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "kinematic-point-tracking-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [
+              0.00800000037997961,
+              0.012000000104308128,
+              0.02800000086426735,
+              1.0
+            ],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295.0,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [
+          0.00800000037997961,
+          0.012000000104308128,
+          0.02800000086426735,
+          1.0
+        ],
+        "lighting": {
+          "ambient_color": [
+            0.30000001192092896,
+            0.3799999952316284,
+            0.5799999833106995
+          ],
+          "ambient_intensity": 0.23999999463558197,
+          "shadow_settings": {
+            "method": 1.0,
+            "softness": 1.399999976158142,
+            "bias": 0.0010000000474974513
+          }
+        },
+        "skybox": {
+          "type": 1.0,
+          "color": [
+            0.00800000037997961,
+            0.012000000104308128,
+            0.02800000086426735
+          ],
+          "top_color": [
+            0.11999999731779099,
+            0.20000000298023224,
+            0.41999998688697815
+          ],
+          "bottom_color": [
+            0.11999999731779099,
+            0.07999999821186066,
+            0.10000000149011612
+          ]
+        }
+      },
+      "collision_world": {}
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [
+        -8.327507239205488,
+        3.8981554842209976,
+        5.219948452238576
+      ],
+      "rotation": [
+        0.13252644533736074,
+        -0.22231518030495437,
+        0.8296915481919246,
+        -0.4945954273455292
+      ],
+      "radius": 8.5,
+      "editor_entities": {
+        "camera": [
+          {
+            "source_id": "e83e0037-d5ee-46eb-acc2-a4ebb6e6cdac",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "update_priority": 0,
+              "fixed_update_priority": 0,
+              "late_update_priority": 0,
+              "before_render_priority": 0,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 59.99999999999999,
+              "fov_y_degrees": 45.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xfffffffffffffffe"
+            }
+          },
+          {
+            "source_id": "5a6b3aa3-31f9-4f1f-961f-cfce71bfb759",
+            "type": "OrbitCameraController",
+            "data": {
+              "enabled": true,
+              "update_priority": 0,
+              "fixed_update_priority": 0,
+              "late_update_priority": 0,
+              "before_render_priority": 0,
+              "radius": 8.5,
+              "min_radius": 1.0,
+              "max_radius": 100.0,
+              "orbit_mouse_button": 2,
+              "pan_mouse_button": 1,
+              "horizon_lock": true
+            }
+          },
+          {
+            "source_id": "fdb890d3-a616-4ed2-9862-bd8f488b3ba2",
+            "type": "EditorCameraUIController",
+            "data": {
+              "enabled": true,
+              "update_priority": 0,
+              "fixed_update_priority": 0,
+              "late_update_priority": 0,
+              "before_render_priority": 0,
+              "colliders_enabled": false,
+              "wireframe_enabled": false,
+              "navmesh_enabled": true,
+              "ortho_enabled": false,
+              "gizmo_world_orientation_enabled": false
+            }
+          }
+        ]
+      }
+    }
   }
 }
