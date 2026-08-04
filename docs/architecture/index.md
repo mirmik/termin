@@ -24,6 +24,7 @@
 - [Graphics host and window session](2026-07-21-graphics-host-and-window-session.md) - каноническое владение application graphics domain через `GraphicsHost` и композиционный lifetime `WindowedGraphicsSession`.
 - [Extensible material surface contracts](2026-07-28-extensible-material-surface-contracts.md) - versioned shader-side surface producer/consumer contracts, standard PBR v1 и граница plugin-owned G-buffer/deferred pipelines.
 - [Backend-neutral MRT contract](2026-07-28-backend-neutral-mrt-contract.md) - pass-local ordered color attachments из независимых framegraph textures, pipeline identity, validation и cross-backend semantics.
+- [Backend-neutral layered shadow pool](2026-08-04-layered-shadow-pool.md) - целевая общая модель array textures и subresource views в tgfx2, renderer-owned `ShadowPool`, layer allocations и отображение shadow sampling на WebGPU, Vulkan, D3D11 и OpenGL.
 - [Graded world transform](2026-07-29-graded-world-transform.md) - accepted graded `Rigid -> Similarity -> AxisScaled -> Affine` world cache, exact hierarchical composition and separate logical quaternion orientation.
 
 ## Historical Notes
