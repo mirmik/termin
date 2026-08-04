@@ -21,6 +21,7 @@ from termin.kinematic.kinematic import (
 )
 from termin.kinematic.kinchain import KinematicChain3
 from termin.kinematic.kinematic_components import (
+    ArticulationComponent,
     KinematicUnitComponent,
     ActuatorComponent,
     RotatorComponent,
@@ -35,6 +36,7 @@ __all__ = [
     "Rotator3",
     "Actuator3",
     "KinematicChain3",
+    "ArticulationComponent",
     "KinematicUnitComponent",
     "ActuatorComponent",
     "RotatorComponent",

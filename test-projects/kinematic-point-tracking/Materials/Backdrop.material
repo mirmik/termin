@@ -1,0 +1,10 @@
+{
+  "uuid": "kinematic-point-tracking-backdrop-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.035, 0.055, 0.09, 1.0],
+    "u_metallic": 0.05,
+    "u_roughness": 0.85,
+    "u_diffuse_mul": 1.0
+  }
+}

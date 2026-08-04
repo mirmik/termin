@@ -65,6 +65,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
 | `termin-csg` | `termin-csg` | `termin.csg` | CSG API. |
 | `termin-modules` | `termin-modules` | `termin_modules` | Module runtime API. |
+| `termin-robotics` | `termin-robotics` | `termin.robotics` | Articulation models and control algorithms. |
 | `termin-components/termin-components-kinematic` | `termin-components-kinematic` | `termin.kinematic`, `termin_kinematic_component_specs` | Kinematic components. |
 | `termin-lighting` | `termin-lighting` | `termin.lighting` | Lighting API. |
 | `termin-components/termin-components-mesh` | `termin-components-mesh` | `termin.mesh`, `termin_mesh_component_specs` | Scene mesh components. |

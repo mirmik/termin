@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_ROBOTICS_BUILD_TESTS "Build termin-robotics native tests" OFF)
+option(TERMIN_ROBOTICS_BUILD_PYTHON "Build termin-robotics Python bindings" OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -90,6 +91,18 @@ if(TERMIN_ROBOTICS_BUILD_TESTS)
         PRIVATE termin_robotics)
     add_test(NAME termin_robotics_kinematic_point_control_example
         COMMAND termin_robotics_kinematic_point_control_example)
+endif()
+
+if(TERMIN_ROBOTICS_BUILD_PYTHON)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+    nanobind_add_module(_robotics_native NB_SHARED python/robotics_bindings.cpp)
+    target_link_libraries(_robotics_native PRIVATE termin_robotics)
+    install(TARGETS _robotics_native DESTINATION lib/python/termin/robotics)
+    install(DIRECTORY python/termin/robotics/
+        DESTINATION lib/python/termin/robotics
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE)
 endif()
 
 include(GNUInstallDirs)
