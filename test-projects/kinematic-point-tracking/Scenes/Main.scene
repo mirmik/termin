@@ -1,0 +1,515 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "",
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Main",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [0.0, 0.0, 1.0, 1.0],
+            "depth": 0.0,
+            "input_mode": "simple",
+            "block_input_in_editor": false,
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "kinematic-point-tracking-camera",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [0.008, 0.012, 0.028, 1.0],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "layer_mask": 4294967295.0,
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [0.008, 0.012, 0.028, 1.0],
+        "lighting": {
+          "ambient_color": [0.3, 0.38, 0.58],
+          "ambient_intensity": 0.24,
+          "shadow_settings": {
+            "method": 1.0,
+            "softness": 1.4,
+            "bias": 0.001
+          }
+        },
+        "skybox": {
+          "type": 1.0,
+          "color": [0.008, 0.012, 0.028],
+          "top_color": [0.12, 0.2, 0.42],
+          "bottom_color": [0.12, 0.08, 0.1]
+        }
+      },
+      "collision_world": {}
+    },
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": null,
+          "viewport_camera_name": "camera"
+        }
+      }
+    },
+    "layer_names": {},
+    "flag_names": {},
+    "entities": [
+      {
+        "uuid": "kinematic-point-tracking-backdrop",
+        "name": "Backdrop",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 1.2, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [8.0, 0.2, 6.0],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-backdrop-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001",
+                "name": "Cube",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [1.0, 1.0, 1.0]
+            }
+          },
+          {
+            "source_id": "kinematic-point-tracking-backdrop-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "kinematic-point-tracking-backdrop-material",
+                "name": "Backdrop",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "kinematic-point-tracking-arm-root",
+        "name": "Arm Root",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-0.8, 0.0, 2.4],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-articulation",
+            "type": "ArticulationComponent",
+            "data": {"enabled": true}
+          },
+          {
+            "source_id": "kinematic-point-tracking-controller",
+            "type": "PointTrackingControllerComponent",
+            "data": {
+              "enabled": true,
+              "target": {"uuid": "kinematic-point-tracking-target"},
+              "end_unit": 1,
+              "point_local": [1.35, 0.0, 0.0],
+              "position_gain": 4.0,
+              "maximum_joint_velocity": 2.5
+            }
+          }
+        ],
+        "children": [
+          {
+            "uuid": "kinematic-point-tracking-shoulder",
+            "name": "Shoulder Unit",
+            "priority": 0.0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0.0,
+            "flags": 0.0,
+            "pose": {
+              "position": [0.0, 0.0, 0.0],
+              "rotation": [0.0, -0.27154693695611287, 0.0, 0.962425197628238]
+            },
+            "scale": [1.0, 1.0, 1.0],
+            "components": [
+              {
+                "source_id": "kinematic-point-tracking-shoulder-unit",
+                "type": "RotatorComponent",
+                "data": {
+                  "enabled": true,
+                  "axis": [0.0, 1.0, 0.0],
+                  "coordinate_scale": "1.0",
+                  "coordinate": [-0.55, -2.8, 2.8],
+                  "origin_position": [0.0, 0.0, 0.0],
+                  "origin_rotation": [0.0, 0.0, 0.0],
+                  "mass": 1.0,
+                  "inertia_diagonal": [0.04, 0.2, 0.2],
+                  "center_of_mass": [0.75, 0.0, 0.0]
+                }
+              },
+              {
+                "source_id": "kinematic-point-tracking-arm-a-mesh",
+                "type": "MeshComponent",
+                "data": {
+                  "enabled": true,
+                  "mesh_generated": false,
+                  "mesh": {
+                    "uuid": "00000000-0000-0000-0003-000000000001",
+                    "name": "Cube",
+                    "type": "uuid",
+                    "kind": "tc_mesh"
+                  },
+                  "mesh_offset_enabled": true,
+                  "mesh_offset_position": [0.75, 0.0, 0.0],
+                  "mesh_offset_euler": [0.0, 0.0, 0.0],
+                  "mesh_offset_scale": [1.5, 0.16, 0.16]
+                }
+              },
+              {
+                "source_id": "kinematic-point-tracking-arm-a-renderer",
+                "type": "MeshRenderer",
+                "data": {
+                  "enabled": true,
+                  "material": {
+                    "uuid": "kinematic-point-tracking-arm-a-material",
+                    "name": "ArmA",
+                    "type": "uuid",
+                    "kind": "tc_material"
+                  },
+                  "cast_shadow": true,
+                  "_override_material": false,
+                  "materials": []
+                }
+              }
+            ],
+            "children": [
+              {
+                "uuid": "kinematic-point-tracking-elbow",
+                "name": "Elbow Unit",
+                "priority": 0.0,
+                "visible": true,
+                "enabled": true,
+                "pickable": true,
+                "selectable": true,
+                "layer": 0.0,
+                "flags": 0.0,
+                "pose": {
+                  "position": [1.5, 0.0, 0.0],
+                  "rotation": [0.0, 0.5438347906836426, 0.0, 0.8391923024206541]
+                },
+                "scale": [1.0, 1.0, 1.0],
+                "components": [
+                  {
+                    "source_id": "kinematic-point-tracking-elbow-unit",
+                    "type": "RotatorComponent",
+                    "data": {
+                      "enabled": true,
+                      "axis": [0.0, 1.0, 0.0],
+                      "coordinate_scale": "1.0",
+                      "coordinate": [1.15, -2.8, 2.8],
+                      "origin_position": [1.5, 0.0, 0.0],
+                      "origin_rotation": [0.0, 0.0, 0.0],
+                      "mass": 0.8,
+                      "inertia_diagonal": [0.03, 0.13, 0.13],
+                      "center_of_mass": [0.675, 0.0, 0.0]
+                    }
+                  },
+                  {
+                    "source_id": "kinematic-point-tracking-arm-b-mesh",
+                    "type": "MeshComponent",
+                    "data": {
+                      "enabled": true,
+                      "mesh_generated": false,
+                      "mesh": {
+                        "uuid": "00000000-0000-0000-0003-000000000001",
+                        "name": "Cube",
+                        "type": "uuid",
+                        "kind": "tc_mesh"
+                      },
+                      "mesh_offset_enabled": true,
+                      "mesh_offset_position": [0.675, 0.0, 0.0],
+                      "mesh_offset_euler": [0.0, 0.0, 0.0],
+                      "mesh_offset_scale": [1.35, 0.14, 0.14]
+                    }
+                  },
+                  {
+                    "source_id": "kinematic-point-tracking-arm-b-renderer",
+                    "type": "MeshRenderer",
+                    "data": {
+                      "enabled": true,
+                      "material": {
+                        "uuid": "kinematic-point-tracking-arm-b-material",
+                        "name": "ArmB",
+                        "type": "uuid",
+                        "kind": "tc_material"
+                      },
+                      "cast_shadow": true,
+                      "_override_material": false,
+                      "materials": []
+                    }
+                  }
+                ],
+                "children": [
+                  {
+                    "uuid": "kinematic-point-tracking-tip",
+                    "name": "Tracked Tip",
+                    "priority": 0.0,
+                    "visible": true,
+                    "enabled": true,
+                    "pickable": true,
+                    "selectable": true,
+                    "layer": 0.0,
+                    "flags": 0.0,
+                    "pose": {
+                      "position": [1.35, 0.0, 0.0],
+                      "rotation": [0.0, 0.0, 0.0, 1.0]
+                    },
+                    "scale": [0.18, 0.18, 0.18],
+                    "components": [
+                      {
+                        "source_id": "kinematic-point-tracking-tip-mesh",
+                        "type": "MeshComponent",
+                        "data": {
+                          "enabled": true,
+                          "mesh_generated": false,
+                          "mesh": {
+                            "uuid": "00000000-0000-0000-0003-000000000002",
+                            "name": "Sphere",
+                            "type": "uuid",
+                            "kind": "tc_mesh"
+                          },
+                          "mesh_offset_enabled": false,
+                          "mesh_offset_position": [0.0, 0.0, 0.0],
+                          "mesh_offset_euler": [0.0, 0.0, 0.0],
+                          "mesh_offset_scale": [1.0, 1.0, 1.0]
+                        }
+                      },
+                      {
+                        "source_id": "kinematic-point-tracking-tip-renderer",
+                        "type": "MeshRenderer",
+                        "data": {
+                          "enabled": true,
+                          "material": {
+                            "uuid": "kinematic-point-tracking-arm-b-material",
+                            "name": "ArmB",
+                            "type": "uuid",
+                            "kind": "tc_material"
+                          },
+                          "cast_shadow": true,
+                          "_override_material": false,
+                          "materials": []
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "kinematic-point-tracking-target",
+        "name": "Moving Target",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [1.3, 0.0, 2.8],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [0.24, 0.24, 0.24],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-target-motion",
+            "type": "OrbitingTargetComponent",
+            "data": {
+              "enabled": true,
+              "radius": 0.55,
+              "angular_speed": 0.55
+            }
+          },
+          {
+            "source_id": "kinematic-point-tracking-target-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000002",
+                "name": "Sphere",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [1.0, 1.0, 1.0]
+            }
+          },
+          {
+            "source_id": "kinematic-point-tracking-target-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "material": {
+                "uuid": "kinematic-point-tracking-target-material",
+                "name": "Target",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "kinematic-point-tracking-key-light",
+        "name": "Directional Key Light",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [5.0, -6.0, 11.0],
+          "rotation": [-0.2519347273868741, -0.8749107385769198, 0.39038704341297775, 0.13659446912142464]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-key-light-component",
+            "type": "LightComponent",
+            "data": {
+              "enabled": true,
+              "light_type": "directional",
+              "color": [1.0, 0.86, 0.68],
+              "intensity": 1.55,
+              "shadows_enabled": true,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.02,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 3.0,
+              "max_distance": 50.0,
+              "split_lambda": 0.7,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "kinematic-point-tracking-fill-light",
+        "name": "Blue Fill Light",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [-5.0, -3.0, 6.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-fill-light-component",
+            "type": "LightComponent",
+            "data": {
+              "enabled": true,
+              "light_type": "point",
+              "color": [0.2, 0.42, 1.0],
+              "intensity": 3.2,
+              "shadows_enabled": false,
+              "shadows_bias": 0.001,
+              "shadows_normal_bias": 0.0,
+              "shadows_map_resolution": 1024.0,
+              "cascade_count": 1.0,
+              "max_distance": 100.0,
+              "split_lambda": 0.5,
+              "cascade_blend": true
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "kinematic-point-tracking-camera",
+        "name": "Main Camera",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, -10.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "kinematic-point-tracking-camera-component",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0,
+              "fov_x_degrees": 60.0,
+              "fov_y_degrees": 48.0,
+              "fov_mode": "FixHorizontal",
+              "layer_mask": "0xffffffffffffffff",
+              "render_category_mask": "0xffffffffffffffff"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

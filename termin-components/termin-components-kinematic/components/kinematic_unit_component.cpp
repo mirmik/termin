@@ -212,6 +212,35 @@ namespace termin
             (void)inspect.add_field(std::move(info));
         }
 
+        if (!inspect.find_field("KinematicUnitComponent", "mass"))
+        {
+            (void)tc::stage_inspect_field(inspect,
+                                          &KinematicUnitComponent::mass,
+                                          "KinematicUnitComponent",
+                                          "mass",
+                                          "Mass",
+                                          "double");
+        }
+        if (!inspect.find_field("KinematicUnitComponent", "inertia_diagonal"))
+        {
+            (void)tc::stage_inspect_field(
+                inspect,
+                &KinematicUnitComponent::inertia_diagonal,
+                "KinematicUnitComponent",
+                "inertia_diagonal",
+                "Inertia (diagonal)",
+                "vec3");
+        }
+        if (!inspect.find_field("KinematicUnitComponent", "center_of_mass"))
+        {
+            (void)tc::stage_inspect_field(inspect,
+                                          &KinematicUnitComponent::center_of_mass,
+                                          "KinematicUnitComponent",
+                                          "center_of_mass",
+                                          "Center of Mass",
+                                          "vec3");
+        }
+
         if (!inspect.find_field("KinematicUnitComponent", "recalculate_origin"))
         {
             (void)inspect.add_button(
@@ -305,6 +334,16 @@ namespace termin
     double KinematicUnitComponent::physical_coordinate() const noexcept
     {
         return coordinate * coordinate_scale_;
+    }
+
+    SpatialInertia3 KinematicUnitComponent::spatial_inertia() const noexcept
+    {
+        return {
+            mass,
+            {inertia_diagonal.x, inertia_diagonal.y, inertia_diagonal.z},
+            Pose3::translation(
+                center_of_mass.x, center_of_mass.y, center_of_mass.z),
+        };
     }
 
     void KinematicUnitComponent::set_coordinate(double value)

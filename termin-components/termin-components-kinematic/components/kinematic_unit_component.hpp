@@ -4,6 +4,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/quat.hpp>
+#include <termin/geom/spatial_inertia3.hpp>
 #include <termin/geom/vec3.hpp>
 
 extern "C"
@@ -39,6 +40,12 @@ namespace termin
         tc_vec3 origin_position = {0, 0, 0};
         tc_quat origin_rotation = {0, 0, 0, 1};
 
+        // Spatial inertia rigidly attached to this unit's moving output frame.
+        // These are model data, not a separate body/link object.
+        double mass = 1.0;
+        tc_vec3 inertia_diagonal = {0.1, 0.1, 0.1};
+        tc_vec3 center_of_mass = {0.0, 0.0, 0.0};
+
     public:
         ~KinematicUnitComponent() override = default;
 
@@ -59,6 +66,7 @@ namespace termin
         void set_coordinate_scale(double value);
         [[nodiscard]] double get_coordinate_scale() const noexcept;
         [[nodiscard]] double physical_coordinate() const noexcept;
+        [[nodiscard]] SpatialInertia3 spatial_inertia() const noexcept;
 
         // Coordinate
         void set_coordinate(double value);

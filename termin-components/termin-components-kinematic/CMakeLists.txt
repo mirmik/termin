@@ -5,12 +5,15 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(TERMIN_BUILD_PYTHON "Build Python binding for kinematic components" OFF)
+option(TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS
+    "Build termin-components-kinematic native tests" OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
 else()
     find_package(termin_base REQUIRED)
 endif()
+
 if(COMMAND termin_require_package)
     termin_require_package(termin_scene termin_scene::termin_scene)
 else()
@@ -21,6 +24,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_inspect REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_robotics termin_robotics::termin_robotics)
+else()
+    find_package(termin_robotics REQUIRED)
+endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 
@@ -30,15 +38,32 @@ termin_add_module(
     SOURCES
         components/components_kinematic_bootstrap.cpp
         components/kinematic_unit_component.cpp
+        components/articulation_component.cpp
         components/actuator_component.cpp
         components/rotator_component.cpp
-    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect
-    FIND_DEPS termin_base termin_scene termin_inspect
+    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect termin_robotics::termin_robotics
+    FIND_DEPS termin_base termin_scene termin_inspect termin_robotics
     INSTALL_HEADERS components
 )
 
 if(MSVC)
     target_compile_options(termin_components_kinematic PRIVATE /wd4251 /wd4275)
+endif()
+
+if(TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS)
+    add_executable(termin_components_kinematic_articulation_component_test
+        tests/test_articulation_component.cpp)
+    target_include_directories(
+        termin_components_kinematic_articulation_component_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard)
+    target_link_libraries(
+        termin_components_kinematic_articulation_component_test PRIVATE
+        termin_components_kinematic)
+    set_target_properties(
+        termin_components_kinematic_articulation_component_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    add_test(NAME termin_components_kinematic_articulation_component_test
+        COMMAND termin_components_kinematic_articulation_component_test)
 endif()
 
 if(TERMIN_BUILD_PYTHON)
@@ -68,3 +93,5 @@ if(TERMIN_BUILD_PYTHON)
         PATTERN "*.pyc" EXCLUDE
     )
 endif()
+
+termin_label_tests_in_directory("termin-components-kinematic")

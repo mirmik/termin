@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 COMPONENT_SPECS: tuple[tuple[str, str], ...] = (
+    ("termin.kinematic.kinematic_components", "ArticulationComponent"),
     ("termin.kinematic.kinematic_components", "ActuatorComponent"),
     ("termin.kinematic.kinematic_components", "RotatorComponent"),
 )
