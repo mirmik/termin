@@ -29,22 +29,15 @@ target_include_directories(termin_qopt_eigen SYSTEM INTERFACE
 
 add_library(termin_qopt SHARED
     src/active_set_qp.cpp
-    src/articulation3d.cpp
-    src/articulation3d_motor.cpp
     src/block_assembly.cpp
-    src/contact_friction.cpp
-    src/contact3d.cpp
-    src/dynamics.cpp
     src/equality_qp.cpp
     src/hqp.cpp
-    src/multibody2d.cpp
-    src/multibody3d_contributions.cpp
-    src/point_kinematics3d.cpp
     src/qp_types.cpp
     src/subspaces.cpp
     src/termin_qopt.cpp
 )
 add_library(termin_qopt::termin_qopt ALIAS termin_qopt)
+target_compile_features(termin_qopt PUBLIC cxx_std_20)
 
 target_compile_definitions(termin_qopt PRIVATE TERMIN_QOPT_EXPORTS)
 target_include_directories(termin_qopt PUBLIC
@@ -80,9 +73,6 @@ if(TERMIN_QOPT_BUILD_TESTS)
     set(TERMIN_QOPT_ORACLE_HEADER
         "${TERMIN_QOPT_GENERATED_TEST_DIR}/qp_oracle_cases.hpp"
     )
-    set(TERMIN_QOPT_MULTIBODY_ORACLE_HEADER
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}/multibody_oracle_case.hpp"
-    )
     add_custom_command(
         OUTPUT "${TERMIN_QOPT_ORACLE_HEADER}"
         COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -99,203 +89,25 @@ if(TERMIN_QOPT_BUILD_TESTS)
     add_custom_target(termin_qopt_generate_oracle_header
         DEPENDS "${TERMIN_QOPT_ORACLE_HEADER}"
     )
-    add_custom_command(
-        OUTPUT "${TERMIN_QOPT_MULTIBODY_ORACLE_HEADER}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory
+
+    function(termin_qopt_add_test target source)
+        add_executable(${target} ${source})
+        target_link_libraries(${target} PRIVATE termin_qopt)
+        add_test(NAME ${target} COMMAND ${target})
+    endfunction()
+
+    termin_qopt_add_test(termin_qopt_dense_views_test tests/test_dense_views.cpp)
+    termin_qopt_add_test(termin_qopt_public_headers_test tests/test_public_headers.cpp)
+    termin_qopt_add_test(termin_qopt_block_assembly_test tests/test_block_assembly.cpp)
+
+    foreach(_target IN ITEMS equality_qp active_set_qp hqp)
+        set(_test_target "termin_qopt_${_target}_test")
+        termin_qopt_add_test(${_test_target} "tests/test_${_target}.cpp")
+        add_dependencies(${_test_target} termin_qopt_generate_oracle_header)
+        target_include_directories(${_test_target} PRIVATE
             "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-        COMMAND ${Python_EXECUTABLE}
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_multibody_oracle_header.py"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/oracle/multibody_oracle.json"
-            "${TERMIN_QOPT_MULTIBODY_ORACLE_HEADER}"
-        DEPENDS
-            tests/generate_multibody_oracle_header.py
-            tests/oracle/multibody_oracle.json
-        VERBATIM
-    )
-    add_custom_target(termin_qopt_generate_multibody_oracle_header
-        DEPENDS "${TERMIN_QOPT_MULTIBODY_ORACLE_HEADER}"
-    )
-
-    add_executable(termin_qopt_dense_views_test
-        tests/test_dense_views.cpp
-    )
-    target_link_libraries(termin_qopt_dense_views_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_dense_views_test COMMAND termin_qopt_dense_views_test)
-
-    add_executable(termin_qopt_public_headers_test
-        tests/test_public_headers.cpp
-    )
-    target_link_libraries(termin_qopt_public_headers_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_public_headers_test COMMAND termin_qopt_public_headers_test)
-
-    add_executable(termin_qopt_block_assembly_test
-        tests/test_block_assembly.cpp
-    )
-    target_link_libraries(termin_qopt_block_assembly_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_block_assembly_test COMMAND termin_qopt_block_assembly_test)
-
-    add_executable(termin_qopt_dynamics_test
-        tests/test_dynamics.cpp
-    )
-    target_link_libraries(termin_qopt_dynamics_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_dynamics_test COMMAND termin_qopt_dynamics_test)
-
-    add_executable(termin_qopt_contact_friction_test
-        tests/test_contact_friction.cpp
-    )
-    target_link_libraries(termin_qopt_contact_friction_test PRIVATE termin_qopt)
-    add_test(
-        NAME termin_qopt_contact_friction_test
-        COMMAND termin_qopt_contact_friction_test
-    )
-
-    add_executable(termin_qopt_multibody2d_test
-        tests/test_multibody2d.cpp
-    )
-    target_link_libraries(termin_qopt_multibody2d_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_multibody2d_test COMMAND termin_qopt_multibody2d_test)
-
-    add_executable(termin_qopt_multibody3d_test
-        tests/test_multibody3d.cpp
-    )
-    add_dependencies(
-        termin_qopt_multibody3d_test
-        termin_qopt_generate_multibody_oracle_header
-    )
-    target_include_directories(termin_qopt_multibody3d_test PRIVATE
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-    )
-    target_link_libraries(termin_qopt_multibody3d_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_multibody3d_test COMMAND termin_qopt_multibody3d_test)
-
-    add_executable(termin_qopt_multibody3d_assembly_test
-        tests/test_multibody3d_assembly.cpp
-    )
-    target_link_libraries(
-        termin_qopt_multibody3d_assembly_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_multibody3d_assembly_test
-        COMMAND termin_qopt_multibody3d_assembly_test
-    )
-
-    add_executable(termin_qopt_multibody3d_energy_test
-        tests/test_multibody3d_energy.cpp
-    )
-    target_link_libraries(
-        termin_qopt_multibody3d_energy_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_multibody3d_energy_test
-        COMMAND termin_qopt_multibody3d_energy_test
-    )
-
-    add_executable(termin_qopt_articulation3d_test
-        tests/test_articulation3d.cpp
-    )
-    target_link_libraries(
-        termin_qopt_articulation3d_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_articulation3d_test
-        COMMAND termin_qopt_articulation3d_test
-    )
-
-    add_executable(termin_qopt_articulation3d_motor_test
-        tests/test_articulation3d_motor.cpp
-    )
-    target_link_libraries(
-        termin_qopt_articulation3d_motor_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_articulation3d_motor_test
-        COMMAND termin_qopt_articulation3d_motor_test
-    )
-
-    add_executable(termin_qopt_point_kinematics3d_test
-        tests/test_point_kinematics3d.cpp
-    )
-    target_link_libraries(
-        termin_qopt_point_kinematics3d_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_point_kinematics3d_test
-        COMMAND termin_qopt_point_kinematics3d_test
-    )
-
-    add_executable(termin_qopt_contact3d_test
-        tests/test_contact3d.cpp
-    )
-    target_link_libraries(
-        termin_qopt_contact3d_test PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_contact3d_test
-        COMMAND termin_qopt_contact3d_test
-    )
-
-    add_executable(termin_qopt_double_pendulum2d_test
-        tests/test_double_pendulum2d.cpp
-    )
-    add_dependencies(
-        termin_qopt_double_pendulum2d_test
-        termin_qopt_generate_multibody_oracle_header
-    )
-    target_include_directories(termin_qopt_double_pendulum2d_test PRIVATE
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-    )
-    target_link_libraries(termin_qopt_double_pendulum2d_test PRIVATE termin_qopt)
-    add_test(
-        NAME termin_qopt_double_pendulum2d_test
-        COMMAND termin_qopt_double_pendulum2d_test
-    )
-
-    add_executable(termin_qopt_double_pendulum2d_example
-        examples/double_pendulum2d.cpp
-    )
-    target_link_libraries(
-        termin_qopt_double_pendulum2d_example PRIVATE termin_qopt
-    )
-    add_test(
-        NAME termin_qopt_double_pendulum2d_example
-        COMMAND termin_qopt_double_pendulum2d_example
-    )
-
-    add_executable(termin_qopt_equality_qp_test
-        tests/test_equality_qp.cpp
-    )
-    add_dependencies(termin_qopt_equality_qp_test
-        termin_qopt_generate_oracle_header
-    )
-    target_include_directories(termin_qopt_equality_qp_test PRIVATE
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-    )
-    target_link_libraries(termin_qopt_equality_qp_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_equality_qp_test COMMAND termin_qopt_equality_qp_test)
-
-    add_executable(termin_qopt_active_set_qp_test
-        tests/test_active_set_qp.cpp
-    )
-    add_dependencies(termin_qopt_active_set_qp_test
-        termin_qopt_generate_oracle_header
-    )
-    target_include_directories(termin_qopt_active_set_qp_test PRIVATE
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-    )
-    target_link_libraries(termin_qopt_active_set_qp_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_active_set_qp_test COMMAND termin_qopt_active_set_qp_test)
-
-    add_executable(termin_qopt_hqp_test
-        tests/test_hqp.cpp
-    )
-    add_dependencies(termin_qopt_hqp_test
-        termin_qopt_generate_oracle_header
-    )
-    target_include_directories(termin_qopt_hqp_test PRIVATE
-        "${TERMIN_QOPT_GENERATED_TEST_DIR}"
-    )
-    target_link_libraries(termin_qopt_hqp_test PRIVATE termin_qopt)
-    add_test(NAME termin_qopt_hqp_test COMMAND termin_qopt_hqp_test)
+        )
+    endforeach()
 endif()
 
 include(GNUInstallDirs)
@@ -306,11 +118,7 @@ install(TARGETS termin_qopt
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-
-install(DIRECTORY include/termin
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
+install(DIRECTORY include/termin DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT termin_qoptTargets
     FILE termin_qoptTargets.cmake
     NAMESPACE termin_qopt::
@@ -318,19 +126,16 @@ install(EXPORT termin_qoptTargets
 )
 
 include(CMakePackageConfigHelpers)
-
 configure_package_config_file(
     cmake/termin_qoptConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/termin_qoptConfig.cmake
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_qopt
 )
-
 write_basic_package_version_file(
     ${CMAKE_CURRENT_BINARY_DIR}/termin_qoptConfigVersion.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
-
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_qoptConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/termin_qoptConfigVersion.cmake

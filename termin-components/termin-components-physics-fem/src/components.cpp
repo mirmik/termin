@@ -155,7 +155,7 @@ namespace termin
 
     bool FEMArticulationComponent::initialized() const noexcept
     {
-        return articulation_ != nullptr;
+        return articulation_ != nullptr && dynamics_ != nullptr;
     }
 
     std::size_t FEMArticulationComponent::link_count() const noexcept
@@ -165,9 +165,19 @@ namespace termin
 
     double FEMArticulationComponent::total_energy() const noexcept
     {
-        return articulation_ != nullptr
-                   ? articulation_->total_energy()
-                   : std::numeric_limits<double>::quiet_NaN();
+        return dynamics_ != nullptr ? dynamics_->total_energy()
+                                    : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    robotics::Articulation3D* FEMArticulationComponent::articulation() noexcept
+    {
+        return articulation_.get();
+    }
+
+    const robotics::Articulation3D*
+    FEMArticulationComponent::articulation() const noexcept
+    {
+        return articulation_.get();
     }
 
     FEMArticulationMotorComponent::FEMArticulationMotorComponent()
@@ -228,7 +238,7 @@ namespace termin
         {
             return std::numeric_limits<double>::quiet_NaN();
         }
-        const qopt::Articulation3DState& state = articulation_->state();
+        const robotics::Articulation3DState& state = articulation_->state();
         if (joint_index_ >= state.velocities.size())
         {
             return std::numeric_limits<double>::quiet_NaN();
@@ -499,15 +509,16 @@ namespace termin
     {
         if (body_ != nullptr)
         {
-            qopt::RigidBody3DState state = body_->state();
+            physics_qopt::RigidBody3DState state = body_->state();
             state.velocity_local = velocity;
-            const qopt::Multibody3DDiagnostic diagnostic =
+            const physics_qopt::Multibody3DDiagnostic diagnostic =
                 body_->set_state(state);
-            if (diagnostic != qopt::Multibody3DDiagnostic::None)
+            if (diagnostic != physics_qopt::Multibody3DDiagnostic::None)
             {
                 tc::Log::error(
                     "[FEMRigidBodyComponent] rejected local velocity: %s",
-                    qopt::multibody3d_diagnostic_name(diagnostic).data());
+                    physics_qopt::multibody3d_diagnostic_name(diagnostic)
+                        .data());
                 return false;
             }
             return true;
@@ -522,15 +533,16 @@ namespace termin
                     "base state");
                 return false;
             }
-            const qopt::Articulation3DDiagnostic diagnostic =
+            const robotics::Articulation3DDiagnostic diagnostic =
                 articulation_->set_floating_base_state(base->pose_world,
                                                        velocity);
-            if (diagnostic != qopt::Articulation3DDiagnostic::None)
+            if (diagnostic != robotics::Articulation3DDiagnostic::None)
             {
                 tc::Log::error(
                     "[FEMRigidBodyComponent] rejected floating-base local "
                     "velocity: %s",
-                    qopt::articulation3d_diagnostic_name(diagnostic).data());
+                    robotics::articulation3d_diagnostic_name(diagnostic)
+                        .data());
                 return false;
             }
             return true;
@@ -755,8 +767,8 @@ namespace termin
     void FEMPhysicsWorldComponent::on_destroy()
     {
         initialized_ = false;
+        system_ = physics_qopt::Multibody3DSystem();
         clear_runtime_links();
-        system_ = qopt::Multibody3DSystem();
         accumulated_time_ = 0.0;
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
@@ -845,7 +857,7 @@ namespace termin
                 std::size_t result = 0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += state.active ? 1U : 0U;
@@ -859,7 +871,7 @@ namespace termin
                 std::size_t result = 0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += state.sliding ? 1U : 0U;
@@ -880,7 +892,8 @@ namespace termin
                     return 0.0;
                 }
                 double result = std::numeric_limits<double>::infinity();
-                for (const qopt::ContactState3D& state : contacts_->states())
+                for (const physics_qopt::ContactState3D& state :
+                     contacts_->states())
                 {
                     result = std::min(result, state.signed_gap);
                 }
@@ -892,7 +905,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += std::max(state.normal_impulse, 0.0);
@@ -906,7 +919,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += std::max(state.normal_reaction, 0.0);
@@ -920,7 +933,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result =
@@ -935,7 +948,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += state.tangent_impulse_world.norm();
@@ -949,7 +962,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result = std::max(result,
@@ -982,7 +995,7 @@ namespace termin
                 double result = 0.0;
                 if (contacts_ != nullptr)
                 {
-                    for (const qopt::ContactState3D& state :
+                    for (const physics_qopt::ContactState3D& state :
                          contacts_->states())
                     {
                         result += state.friction_work;
@@ -1047,8 +1060,8 @@ namespace termin
 
     bool FEMPhysicsWorldComponent::rebuild_simulation()
     {
+        system_ = physics_qopt::Multibody3DSystem();
         clear_runtime_links();
-        system_ = qopt::Multibody3DSystem();
         accumulated_time_ = 0.0;
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
@@ -1154,10 +1167,11 @@ namespace termin
             }
         }
         auto contacts =
-            std::make_unique<qopt::ContactSet3DContribution>("scene_contacts");
+            std::make_unique<physics_qopt::ContactSet3DContribution>(
+                "scene_contacts");
         contacts_ = contacts.get();
         if (system_.add_contribution(std::move(contacts)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+            physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] failed to add scene contact "
@@ -1166,12 +1180,14 @@ namespace termin
             clear_runtime_links();
             return false;
         }
-        const qopt::DynamicsSystemDiagnostic finalized = system_.finalize();
-        if (finalized != qopt::DynamicsSystemDiagnostic::None)
+        const physics_qopt::DynamicsSystemDiagnostic finalized =
+            system_.finalize();
+        if (finalized != physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] native model finalize failed: %s",
-                qopt::dynamics_system_diagnostic_name(finalized).data());
+                physics_qopt::dynamics_system_diagnostic_name(finalized)
+                    .data());
             clear_runtime_links();
             return false;
         }
@@ -1196,35 +1212,36 @@ namespace termin
         inertia.mass = component.mass;
         inertia.principal_moments = vec3(component.inertia_diagonal);
         inertia.inertia_frame = Pose3::identity();
-        qopt::RigidBody3DState state;
+        physics_qopt::RigidBody3DState state;
         state.pose = *pose;
-        auto body = std::make_unique<qopt::RigidBody3DContribution>(
+        auto body = std::make_unique<physics_qopt::RigidBody3DContribution>(
             inertia,
             state,
             vec3(gravity),
             body_entity.name() ? body_entity.name() : "body");
-        if (body->diagnostic() != qopt::Multibody3DDiagnostic::None)
+        if (body->diagnostic() != physics_qopt::Multibody3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] body '%s' registration failed: %s",
                 body_entity.name(),
-                qopt::multibody3d_diagnostic_name(body->diagnostic()).data());
+                physics_qopt::multibody3d_diagnostic_name(body->diagnostic())
+                    .data());
             return false;
         }
         component.body_ = body.get();
         if (system_.add_contribution(std::move(body)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+            physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] failed to add body contribution");
             component.body_ = nullptr;
             return false;
         }
-        auto force =
-            std::make_unique<qopt::ForceOnBody3DContribution>(*component.body_);
+        auto force = std::make_unique<physics_qopt::ForceOnBody3DContribution>(
+            *component.body_);
         component.force_ = force.get();
         if (system_.add_contribution(std::move(force)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+            physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] failed to add force contribution");
@@ -1261,24 +1278,26 @@ namespace termin
         }
         const Vec3 world_axis = body->entity().transform().transform_direction(
             local_axis.normalized());
-        auto joint = std::make_unique<qopt::FixedRevoluteJoint3DContribution>(
-            *body->body_,
-            local_anchor,
-            local_axis,
-            world_anchor,
-            world_axis,
-            component.entity().name() ? component.entity().name()
-                                      : "fixed_joint");
-        if (joint->diagnostic() != qopt::Multibody3DDiagnostic::None)
+        auto joint =
+            std::make_unique<physics_qopt::FixedRevoluteJoint3DContribution>(
+                *body->body_,
+                local_anchor,
+                local_axis,
+                world_anchor,
+                world_axis,
+                component.entity().name() ? component.entity().name()
+                                          : "fixed_joint");
+        if (joint->diagnostic() != physics_qopt::Multibody3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMFixedJointComponent] registration failed: %s",
-                qopt::multibody3d_diagnostic_name(joint->diagnostic()).data());
+                physics_qopt::multibody3d_diagnostic_name(joint->diagnostic())
+                    .data());
             return false;
         }
         component.joint_ = joint.get();
         if (system_.add_contribution(std::move(joint)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+            physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMFixedJointComponent] failed to add contribution");
@@ -1324,25 +1343,27 @@ namespace termin
         const Vec3 local_axis_b =
             body_b->entity().transform().transform_direction_inverse(
                 world_axis);
-        auto joint = std::make_unique<qopt::RevoluteJoint3DContribution>(
-            *body_a->body_,
-            local_anchor_a,
-            local_axis_a,
-            *body_b->body_,
-            local_anchor_b,
-            local_axis_b,
-            component.entity().name() ? component.entity().name()
-                                      : "revolute_joint");
-        if (joint->diagnostic() != qopt::Multibody3DDiagnostic::None)
+        auto joint =
+            std::make_unique<physics_qopt::RevoluteJoint3DContribution>(
+                *body_a->body_,
+                local_anchor_a,
+                local_axis_a,
+                *body_b->body_,
+                local_anchor_b,
+                local_axis_b,
+                component.entity().name() ? component.entity().name()
+                                          : "revolute_joint");
+        if (joint->diagnostic() != physics_qopt::Multibody3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMRevoluteJointComponent] registration failed: %s",
-                qopt::multibody3d_diagnostic_name(joint->diagnostic()).data());
+                physics_qopt::multibody3d_diagnostic_name(joint->diagnostic())
+                    .data());
             return false;
         }
         component.joint_ = joint.get();
         if (system_.add_contribution(std::move(joint)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+            physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMRevoluteJointComponent] failed to add contribution");
@@ -1410,36 +1431,36 @@ namespace termin
             }
         }
 
-        std::unique_ptr<qopt::Articulation3DContribution> articulation;
+        std::unique_ptr<robotics::Articulation3D> articulation;
         if (compiled.floating_base.has_value())
         {
-            articulation = std::make_unique<qopt::Articulation3DContribution>(
+            articulation = std::make_unique<robotics::Articulation3D>(
                 std::move(*compiled.floating_base),
                 std::move(compiled.links),
                 std::move(compiled.state),
-                vec3(gravity),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
         }
         else
         {
-            articulation = std::make_unique<qopt::Articulation3DContribution>(
+            articulation = std::make_unique<robotics::Articulation3D>(
                 std::move(compiled.links),
                 std::move(compiled.state),
-                vec3(gravity),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
         }
-        if (articulation->diagnostic() != qopt::Articulation3DDiagnostic::None)
+        if (articulation->diagnostic() !=
+            robotics::Articulation3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMArticulationComponent] reduced model is invalid: %s",
-                qopt::articulation3d_diagnostic_name(articulation->diagnostic())
+                robotics::articulation3d_diagnostic_name(
+                    articulation->diagnostic())
                     .data());
             return false;
         }
 
-        std::vector<qopt::ArticulationMotorChannel> motor_channels;
+        std::vector<physics_qopt::ArticulationMotorChannel> motor_channels;
         const std::size_t joint_dof_offset =
             articulation->has_floating_base() ? 6U : 0U;
         for (std::size_t joint_index = 0;
@@ -1507,49 +1528,70 @@ namespace termin
             });
         }
 
-        component.articulation_ = articulation.get();
-        if (system_.add_contribution(std::move(articulation)) !=
-            qopt::DynamicsSystemDiagnostic::None)
+        auto dynamics =
+            std::make_unique<physics_qopt::Articulation3DDynamicsContribution>(
+                *articulation,
+                vec3(gravity),
+                component.entity().name() ? component.entity().name()
+                                          : "articulation");
+        if (dynamics->diagnostic() != robotics::Articulation3DDiagnostic::None)
         {
             tc::Log::error(
-                "[FEMArticulationComponent] failed to add contribution");
-            component.articulation_ = nullptr;
+                "[FEMArticulationComponent] dynamics adapter is invalid: %s",
+                robotics::articulation3d_diagnostic_name(dynamics->diagnostic())
+                    .data());
             return false;
         }
+        physics_qopt::Articulation3DDynamicsContribution* dynamics_ptr =
+            dynamics.get();
+        std::unique_ptr<physics_qopt::ArticulationMotorContribution> motor;
+        physics_qopt::ArticulationMotorContribution* motor_ptr = nullptr;
         if (!motor_channels.empty())
         {
-            auto motor = std::make_unique<qopt::ArticulationMotorContribution>(
-                *component.articulation_,
-                std::move(motor_channels),
-                component.entity().name() ? component.entity().name()
-                                          : "articulation-motors");
-            if (motor->diagnostic() != qopt::ArticulationMotorDiagnostic::None)
+            motor =
+                std::make_unique<physics_qopt::ArticulationMotorContribution>(
+                    *dynamics_ptr,
+                    std::move(motor_channels),
+                    component.entity().name() ? component.entity().name()
+                                              : "articulation-motors");
+            if (motor->diagnostic() !=
+                physics_qopt::ArticulationMotorDiagnostic::None)
             {
                 tc::Log::error(
                     "[FEMArticulationComponent] motor model is invalid: %s",
-                    qopt::articulation_motor_diagnostic_name(
+                    physics_qopt::articulation_motor_diagnostic_name(
                         motor->diagnostic())
                         .data());
                 return false;
             }
-            component.motor_ = motor.get();
-            if (system_.add_contribution(std::move(motor)) !=
-                qopt::DynamicsSystemDiagnostic::None)
-            {
-                tc::Log::error("[FEMArticulationComponent] failed to add motor "
-                               "contribution");
-                component.motor_ = nullptr;
-                return false;
-            }
+            motor_ptr = motor.get();
         }
+        if (system_.add_contribution(std::move(dynamics)) !=
+            physics_qopt::DynamicsSystemDiagnostic::None)
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] failed to add contribution");
+            return false;
+        }
+        if (motor != nullptr &&
+            system_.add_contribution(std::move(motor)) !=
+                physics_qopt::DynamicsSystemDiagnostic::None)
+        {
+            tc::Log::error("[FEMArticulationComponent] failed to add motor "
+                           "contribution");
+            return false;
+        }
+        component.articulation_ = std::move(articulation);
+        component.dynamics_ = dynamics_ptr;
+        component.motor_ = motor_ptr;
         component.world_ = this;
         component.base_body_ = compiled.base_body;
         if (component.base_body_ != nullptr)
         {
             component.base_body_->world_ = this;
-            component.base_body_->articulation_ = component.articulation_;
+            component.base_body_->articulation_ = component.dynamics_;
             component.base_body_->articulation_link_index_ =
-                qopt::articulation_root_frame;
+                robotics::articulation_root_frame;
             component.base_body_->articulation_base_ = true;
         }
         component.bodies_.reserve(compiled.bindings.size());
@@ -1569,13 +1611,13 @@ namespace termin
             component.joint_coordinate_scales_.push_back(
                 binding.coordinate_scale);
             binding.body->world_ = this;
-            binding.body->articulation_ = component.articulation_;
+            binding.body->articulation_ = component.dynamics_;
             binding.body->articulation_link_index_ = joint_index;
             binding.body->articulation_base_ = false;
             if (binding.motor != nullptr && binding.motor->enabled())
             {
                 binding.motor->world_ = this;
-                binding.motor->articulation_ = component.articulation_;
+                binding.motor->articulation_ = component.dynamics_;
                 binding.motor->motor_ = component.motor_;
                 binding.motor->dof_index_ = joint_dof_offset + joint_index;
                 binding.motor->joint_index_ = joint_index;
@@ -1587,7 +1629,7 @@ namespace termin
                 binding.servo->world_ = this;
                 binding.servo->joint_ = binding.joint;
                 binding.servo->motor_component_ = binding.motor;
-                binding.servo->articulation_ = component.articulation_;
+                binding.servo->articulation_ = component.dynamics_;
                 binding.servo->dof_index_ = joint_index;
                 binding.servo->coordinate_scale_ = binding.coordinate_scale;
                 binding.servo->position_effort_ = 0.0;
@@ -1608,7 +1650,7 @@ namespace termin
             {
                 continue;
             }
-            const qopt::Articulation3DState& state =
+            const robotics::Articulation3DState& state =
                 component->articulation_->state();
             if (component->base_body_ != nullptr)
             {
@@ -1679,7 +1721,7 @@ namespace termin
             {
                 continue;
             }
-            const qopt::Articulation3DState& state =
+            const robotics::Articulation3DState& state =
                 component->articulation_->state();
             for (FEMJointServoComponent* servo : component->servos_)
             {
@@ -1772,11 +1814,11 @@ namespace termin
                     motor->maximum_effort < 0.0 ||
                     motor->motor_->set_effort_limit(motor->channel_index_,
                                                     motor->maximum_effort) !=
-                        qopt::ArticulationMotorDiagnostic::None ||
+                        physics_qopt::ArticulationMotorDiagnostic::None ||
                     motor->motor_->set_command(
                         motor->channel_index_,
                         motor->enabled() ? motor->commanded_effort : 0.0) !=
-                        qopt::ArticulationMotorDiagnostic::None)
+                        physics_qopt::ArticulationMotorDiagnostic::None)
                 {
                     tc::Log::error(
                         "[FEMArticulationMotorComponent] failed to update "
@@ -1792,7 +1834,7 @@ namespace termin
     {
         std::vector<Screw3> wrenches_world(bodies_.size());
         const auto body_index =
-            [this](qopt::RigidBody3DContribution* contribution)
+            [this](physics_qopt::RigidBody3DContribution* contribution)
         {
             for (std::size_t index = 0; index < bodies_.size(); ++index)
             {
@@ -1866,20 +1908,22 @@ namespace termin
             return;
         }
 
-        qopt::Multibody3DStepOptions options;
+        physics_qopt::Multibody3DStepOptions options;
         options.time_step = dt;
         options.position_tolerance = 1.0e-8;
         options.velocity_tolerance = 1.0e-8;
         options.max_position_iterations = 8;
-        const qopt::Multibody3DStepResult result = system_.step(options);
-        if (result.status != qopt::QpStatus::Optimal ||
-            result.diagnostic != qopt::DynamicsSystemDiagnostic::None)
+        const physics_qopt::Multibody3DStepResult result =
+            system_.step(options);
+        if (result.status != physics_qopt::QpStatus::Optimal ||
+            result.diagnostic != physics_qopt::DynamicsSystemDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMPhysicsWorldComponent] native step failed: status=%s "
                 "diagnostic=%s position_error=%g position_iterations=%zu",
-                qopt::qp_status_name(result.status).data(),
-                qopt::dynamics_system_diagnostic_name(result.diagnostic).data(),
+                physics_qopt::qp_status_name(result.status).data(),
+                physics_qopt::dynamics_system_diagnostic_name(result.diagnostic)
+                    .data(),
                 result.position_constraint_linf,
                 result.position_iterations);
             initialized_ = false;
@@ -1914,10 +1958,9 @@ namespace termin
         }
         for (const FEMArticulationComponent* articulation : articulations_)
         {
-            if (articulation != nullptr &&
-                articulation->articulation_ != nullptr)
+            if (articulation != nullptr && articulation->dynamics_ != nullptr)
             {
-                result += articulation->articulation_->total_energy();
+                result += articulation->dynamics_->total_energy();
             }
         }
         return result;
@@ -1933,7 +1976,8 @@ namespace termin
                 body->body_ = nullptr;
                 body->force_ = nullptr;
                 body->articulation_ = nullptr;
-                body->articulation_link_index_ = qopt::articulation_root_frame;
+                body->articulation_link_index_ =
+                    robotics::articulation_root_frame;
                 body->articulation_base_ = false;
             }
         }
@@ -1970,7 +2014,7 @@ namespace termin
                 articulation->base_body_->force_ = nullptr;
                 articulation->base_body_->articulation_ = nullptr;
                 articulation->base_body_->articulation_link_index_ =
-                    qopt::articulation_root_frame;
+                    robotics::articulation_root_frame;
                 articulation->base_body_->articulation_base_ = false;
             }
             articulation->base_body_ = nullptr;
@@ -1983,7 +2027,7 @@ namespace termin
                     body->force_ = nullptr;
                     body->articulation_ = nullptr;
                     body->articulation_link_index_ =
-                        qopt::articulation_root_frame;
+                        robotics::articulation_root_frame;
                     body->articulation_base_ = false;
                 }
             }
@@ -2016,7 +2060,7 @@ namespace termin
             }
             articulation->servos_.clear();
             articulation->motor_ = nullptr;
-            articulation->articulation_ = nullptr;
+            articulation->dynamics_ = nullptr;
             articulation->world_ = nullptr;
         }
         bodies_.clear();
@@ -2027,72 +2071,15 @@ namespace termin
         warned_contact_colliders_.clear();
     }
 
-    void FEMPhysicsWorldComponent::detach(
-        FEMArticulationComponent& component) noexcept
+    void FEMPhysicsWorldComponent::detach(FEMArticulationComponent&) noexcept
     {
+        // Dynamics contributions borrow their Articulation3D from the scene
+        // component. Destroy the complete solver before that component can
+        // release its model; a partially detached finalized system is not a
+        // valid runtime state.
         initialized_ = false;
-        for (FEMArticulationComponent*& candidate : articulations_)
-        {
-            if (candidate == &component)
-            {
-                candidate = nullptr;
-            }
-        }
-        for (FEMRigidBodyComponent* body : component.bodies_)
-        {
-            if (body != nullptr && body->world_ == this)
-            {
-                body->world_ = nullptr;
-                body->body_ = nullptr;
-                body->force_ = nullptr;
-                body->articulation_ = nullptr;
-                body->articulation_link_index_ = qopt::articulation_root_frame;
-                body->articulation_base_ = false;
-            }
-        }
-        if (component.base_body_ != nullptr &&
-            component.base_body_->world_ == this)
-        {
-            component.base_body_->world_ = nullptr;
-            component.base_body_->body_ = nullptr;
-            component.base_body_->force_ = nullptr;
-            component.base_body_->articulation_ = nullptr;
-            component.base_body_->articulation_link_index_ =
-                qopt::articulation_root_frame;
-            component.base_body_->articulation_base_ = false;
-        }
-        component.base_body_ = nullptr;
-        component.bodies_.clear();
-        component.joint_entities_.clear();
-        component.joint_coordinate_scales_.clear();
-        for (FEMArticulationMotorComponent* motor : component.motors_)
-        {
-            if (motor != nullptr && motor->world_ == this)
-            {
-                motor->world_ = nullptr;
-                motor->articulation_ = nullptr;
-                motor->motor_ = nullptr;
-            }
-        }
-        component.motors_.clear();
-        for (FEMJointServoComponent* servo : component.servos_)
-        {
-            if (servo != nullptr && servo->world_ == this)
-            {
-                servo->world_ = nullptr;
-                servo->joint_ = nullptr;
-                servo->motor_component_ = nullptr;
-                servo->articulation_ = nullptr;
-                servo->position_effort_ = 0.0;
-                servo->velocity_effort_ = 0.0;
-                servo->integral_effort_ = 0.0;
-                servo->commanded_effort_ = 0.0;
-            }
-        }
-        component.servos_.clear();
-        component.motor_ = nullptr;
-        component.articulation_ = nullptr;
-        component.world_ = nullptr;
+        system_ = physics_qopt::Multibody3DSystem();
+        clear_runtime_links();
     }
 
     void FEMPhysicsWorldComponent::detach(
@@ -2192,7 +2179,7 @@ namespace termin
         component.body_ = nullptr;
         component.force_ = nullptr;
         component.articulation_ = nullptr;
-        component.articulation_link_index_ = qopt::articulation_root_frame;
+        component.articulation_link_index_ = robotics::articulation_root_frame;
         component.articulation_base_ = false;
         component.world_ = nullptr;
     }

@@ -8,7 +8,7 @@
 
 #include <termin/entity/entity.hpp>
 #include <termin/physics_fem/components.hpp>
-#include <termin/qopt/articulation3d.hpp>
+#include <termin/robotics/articulation3d.hpp>
 
 namespace termin
 {
@@ -54,9 +54,9 @@ namespace termin
         FEMArticulationSceneDiagnostic diagnostic =
             FEMArticulationSceneDiagnostic::None;
         std::string diagnostic_entity;
-        std::vector<qopt::ArticulationLink3D> links;
-        qopt::Articulation3DState state;
-        std::optional<qopt::ArticulationFloatingBase3D> floating_base;
+        std::vector<robotics::ArticulationLink3D> links;
+        robotics::Articulation3DState state;
+        std::optional<robotics::ArticulationFloatingBase3D> floating_base;
         FEMRigidBodyComponent* base_body = nullptr;
         Entity base_entity;
         std::vector<FEMArticulationSceneBinding> bindings;
