@@ -8,6 +8,12 @@ inverse-dynamics HQP, exact Cartesian acceleration bias tasks and explicit
 contact-force control variables are implemented as of 2026-08-04; restitution
 and material mixing remain future work.
 
+> This document describes the current FEM scene-authoring grammar, including
+> its transitional joint/body entities. The compiled `Articulation3D` runtime
+> model does not preserve that split: it is a tree of moving output frames with
+> inertia stored directly on each unit. See
+> [Articulation3D as a chain of moving frames](2026-08-04-articulation3d-moving-frame-chain.md).
+
 ## Goal
 
 Author an articulated mechanism as an ordinary scene hierarchy instead of
