@@ -7,53 +7,18 @@ from pathlib import Path
 
 from tcbase import log
 
-from termin.editor_core.settings import EditorSettings
-from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
-
-
-def _configured_tool(env_name: str, label: str) -> Path | None:
-    configured = os.environ.get(env_name)
-    if configured:
-        path = Path(configured)
-        resolved = existing_executable(path)
-        if resolved is not None:
-            return resolved
-        log.error(f"[ShaderRuntime] {env_name} points to missing {label}: {configured}")
-        return None
-    return None
+from termin.shader_runtime import (
+    resolve_slangc as resolve_shared_slangc,
+    resolve_termin_shaderc as resolve_shared_termin_shaderc,
+)
 
 
 def resolve_termin_shaderc() -> Path | None:
-    configured = _configured_tool("TERMIN_SHADERC", "file")
-    if configured is not None:
-        return configured
-
-    sdk_tool = resolve_sdk_tool("termin_shaderc", Path(__file__))
-    if sdk_tool is not None:
-        return sdk_tool
-
-    return resolve_path_tool("termin_shaderc")
+    return resolve_shared_termin_shaderc(Path(__file__))
 
 
 def resolve_slangc() -> Path | None:
-    settings_path = EditorSettings.instance().get_slang_compiler()
-    if settings_path:
-        path = Path(settings_path)
-        resolved = existing_executable(path)
-        if resolved is not None:
-            return resolved
-        log.error(f"[ShaderRuntime] configured Slang compiler is missing: {settings_path}")
-        return None
-
-    configured = _configured_tool("TERMIN_SLANGC", "slangc")
-    if configured is not None:
-        return configured
-
-    sdk_tool = resolve_sdk_tool("slangc", Path(__file__))
-    if sdk_tool is not None:
-        return sdk_tool
-
-    return resolve_path_tool("slangc")
+    return resolve_shared_slangc(Path(__file__))
 
 
 def _sdk_shader_cache_root() -> Path:

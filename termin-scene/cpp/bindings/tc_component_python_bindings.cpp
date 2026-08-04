@@ -391,6 +391,40 @@ public:
         }
     }
 
+    int get_lifecycle_priority(tc_component_lifecycle_stage stage) const {
+        return tc_component_get_lifecycle_priority(_c, stage);
+    }
+    void set_lifecycle_priority(tc_component_lifecycle_stage stage, int value) {
+        if (_c && !tc_component_set_lifecycle_priority(_c, stage, value)) {
+            throw nb::value_error("invalid lifecycle stage");
+        }
+    }
+
+    int get_update_priority() const {
+        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE);
+    }
+    void set_update_priority(int value) {
+        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE, value);
+    }
+    int get_fixed_update_priority() const {
+        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE);
+    }
+    void set_fixed_update_priority(int value) {
+        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, value);
+    }
+    int get_late_update_priority() const {
+        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE);
+    }
+    void set_late_update_priority(int value) {
+        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE, value);
+    }
+    int get_before_render_priority() const {
+        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_BEFORE_RENDER);
+    }
+    void set_before_render_priority(int value) {
+        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_BEFORE_RENDER, value);
+    }
+
     void set_lifecycle_capabilities(
         bool update,
         bool fixed_update,
@@ -450,6 +484,10 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
         .def_prop_rw("has_late_update", &TcComponent::get_has_late_update, &TcComponent::set_has_late_update)
         .def_prop_rw("has_before_render", &TcComponent::get_has_before_render, &TcComponent::set_has_before_render)
+        .def_prop_rw("update_priority", &TcComponent::get_update_priority, &TcComponent::set_update_priority)
+        .def_prop_rw("fixed_update_priority", &TcComponent::get_fixed_update_priority, &TcComponent::set_fixed_update_priority)
+        .def_prop_rw("late_update_priority", &TcComponent::get_late_update_priority, &TcComponent::set_late_update_priority)
+        .def_prop_rw("before_render_priority", &TcComponent::get_before_render_priority, &TcComponent::set_before_render_priority)
         .def("set_lifecycle_capabilities", &TcComponent::set_lifecycle_capabilities,
              nb::arg("update"), nb::arg("fixed_update"), nb::arg("late_update"),
              nb::arg("before_render"))

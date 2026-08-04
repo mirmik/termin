@@ -109,7 +109,7 @@ namespace
         // component-to-world detach contract during scene teardown.
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
-        result.world->time_step = 0.001;
+        result.scene.set_fixed_timestep(0.001);
         world_entity.add_component(result.world);
         return result;
     }
@@ -172,7 +172,7 @@ namespace
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
         result.world->gravity = {0.0, 0.0, 0.0};
-        result.world->time_step = 0.001;
+        result.scene.set_fixed_timestep(0.001);
         world_entity.add_component(result.world);
         return result;
     }
@@ -319,7 +319,7 @@ namespace
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
         result.world->gravity = {0.0, 0.0, -9.81};
-        result.world->time_step = 0.002;
+        result.scene.set_fixed_timestep(0.002);
         result.world->contact_friction_coefficient = 0.8;
         world_entity.add_component(result.world);
         return result;
@@ -376,8 +376,7 @@ namespace
 
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
-        result.world->time_step = 0.005;
-        result.world->substeps = 2;
+        result.scene.set_fixed_timestep(0.005);
         world_entity.add_component(result.world);
         return result;
     }
@@ -420,7 +419,7 @@ namespace
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
         result.world->gravity = gravity;
-        result.world->time_step = time_step;
+        result.scene.set_fixed_timestep(time_step);
         world_entity.add_component(result.world);
         return result;
     }
@@ -447,12 +446,10 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     tc_value_free(&body_data);
 
     FEMPhysicsWorldComponent world;
-    world.time_step = 0.005;
     tc_value world_data = world.serialize_data();
 
     FEMPhysicsWorldComponent restored_world;
     restored_world.deserialize_data(&world_data);
-    CHECK(std::abs(restored_world.time_step - 0.005) < 1.0e-12);
     tc_value_free(&world_data);
 
     FEMArticulationComponent articulation;
@@ -705,7 +702,7 @@ TEST_CASE("FEM world advances a compiled reduced double pendulum")
 
     for (int step = 0; step < 20; ++step)
     {
-        pendulum.world->update(0.001F);
+        pendulum.world->fixed_update(0.001F);
     }
     const FEMPhysicsTelemetry advanced = pendulum.world->telemetry();
     CHECK(advanced.initialized);
@@ -740,7 +737,7 @@ TEST_CASE("FEM world advances and synchronizes a floating articulation root")
     REQUIRE(
         fixture.base->set_velocity_local(Screw3{Vec3::zero(), Vec3::unit_x()}));
     const double x_before = fixture.root.transform().global_position().x;
-    fixture.world->update(0.001F);
+    fixture.world->fixed_update(0.001F);
     CHECK(fixture.world->telemetry().successful_steps == 1U);
     CHECK(fixture.root.transform().global_position().x > x_before);
     CHECK(fixture.base->velocity_local().lin.x > 0.9);
@@ -770,7 +767,7 @@ TEST_CASE("FEM routes contacts to a floating articulation base")
 
     fixture.world->start();
     REQUIRE(fixture.world->telemetry().initialized);
-    fixture.world->update(0.001F);
+    fixture.world->fixed_update(0.001F);
 
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
     CHECK(telemetry.initialized);
@@ -805,7 +802,7 @@ TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
     constexpr int reaction_window = 500;
     for (int step = 0; step < standing_steps; ++step)
     {
-        fixture.world->update(0.002F);
+        fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
         contact_seen = contact_seen || telemetry.active_contact_count > 0U;
         accumulated_friction_work += telemetry.friction_work;
@@ -840,7 +837,7 @@ TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
     while (collapse_steps < maximum_collapse_steps &&
            fixture.root.transform().global_position().z >= collapse_height)
     {
-        fixture.world->update(0.002F);
+        fixture.world->fixed_update(0.002F);
         ++collapse_steps;
     }
     const Vec3 fallen_position = fixture.root.transform().global_position();
@@ -870,7 +867,7 @@ TEST_CASE("FEM floating robot survives an asymmetric high tilted landing")
     constexpr int landing_steps = 25000;
     for (int step = 0; step < landing_steps; ++step)
     {
-        fixture.world->update(0.002F);
+        fixture.world->fixed_update(0.002F);
         contact_seen = contact_seen ||
                        fixture.world->telemetry().active_contact_count > 0U;
     }
@@ -903,7 +900,7 @@ TEST_CASE("FEM motor accepts a direct reduced-coordinate effort command")
     REQUIRE(motor->initialized());
     CHECK(pendulum.world->telemetry().motor_count == 1U);
 
-    pendulum.world->update(0.001f);
+    pendulum.world->fixed_update(0.001f);
 
     CHECK(std::abs(motor->applied_effort()) <= motor->maximum_effort + 1.0e-12);
     CHECK(motor->saturated());
@@ -932,7 +929,7 @@ TEST_CASE("FEM servo drives a separate articulation motor in physical units")
 
     for (int index = 0; index < 40; ++index)
     {
-        pendulum.world->update(0.001f);
+        pendulum.world->fixed_update(0.001f);
     }
 
     const FEMPhysicsTelemetry telemetry = pendulum.world->telemetry();
@@ -966,7 +963,7 @@ TEST_CASE("FEM servo can disable its position control loop")
 
     pendulum.world->start();
     REQUIRE(servo->initialized());
-    pendulum.world->update(0.001f);
+    pendulum.world->fixed_update(0.001f);
 
     CHECK(std::abs(servo->commanded_effort() - 1.8) < 1.0e-12);
     CHECK(std::abs(servo->position_effort()) < 1.0e-12);
@@ -1006,20 +1003,19 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     REQUIRE(fixture.motor->initialized());
     REQUIRE(fixture.servo->initialized());
 
-    fixture.world->update(0.005f);
+    fixture.world->fixed_update(0.005f);
     CHECK(fixture.motor->saturated());
     CHECK(std::abs(fixture.servo->integral_effort()) < 1.0e-12);
 
     for (int index = 0; index < 1000; ++index)
     {
-        fixture.world->update(0.005f);
+        fixture.world->fixed_update(0.005f);
     }
 
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
     CHECK(telemetry.initialized);
     CHECK(telemetry.motor_count == 1U);
-    CHECK(telemetry.successful_steps >= 2000U);
-    CHECK(telemetry.successful_steps <= 2002U);
+    CHECK(telemetry.successful_steps == 1001U);
     CHECK(std::abs(fixture.joint->coordinate - 90.0) < 0.5);
     CHECK(std::abs(fixture.servo->position_error()) < 0.5);
     CHECK(std::isfinite(fixture.servo->integral_effort()));
@@ -1034,7 +1030,7 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     CHECK(std::isfinite(telemetry.motor_work));
 
     fixture.servo->position_control_enabled = false;
-    fixture.world->update(0.005f);
+    fixture.world->fixed_update(0.005f);
     CHECK(std::abs(fixture.servo->integral_effort()) < 1.0e-12);
 
     fixture.scene.destroy();
@@ -1056,7 +1052,7 @@ TEST_CASE(
     const double height_before =
         fixture.body->entity().transform().global_position().z;
     fixture.world->start();
-    fixture.world->update(0.011F);
+    fixture.world->fixed_update(0.011F);
 
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
     CHECK(telemetry.initialized);
@@ -1099,7 +1095,7 @@ TEST_CASE("FEM frictionless contact arrests a falling maximal body")
     constexpr int reaction_window = 500;
     for (int step = 0; step < step_count; ++step)
     {
-        fixture.world->update(0.002F);
+        fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
         const double height =
             fixture.body->entity().transform().global_position().z;
@@ -1167,7 +1163,7 @@ TEST_CASE("FEM multi-point box contact dissipates tangential slip")
     double accumulated_friction_work = 0.0;
     for (int step = 0; step < 1500; ++step)
     {
-        fixture.world->update(0.002F);
+        fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry step_telemetry = fixture.world->telemetry();
         maximum_tangent_impulse = std::max(maximum_tangent_impulse,
                                            step_telemetry.tangent_impulse_sum);
@@ -1227,7 +1223,7 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support")
     Entity world_entity = scene.create_entity("Physics World");
     auto* world = new FEMPhysicsWorldComponent();
     world->gravity = {0.0, 0.0, -9.81};
-    world->time_step = 0.002;
+    scene.set_fixed_timestep(0.002);
     world_entity.add_component(world);
     world->start();
     REQUIRE(articulation->initialized());
@@ -1241,7 +1237,7 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support")
     constexpr int reaction_window = 500;
     for (int step = 0; step < step_count; ++step)
     {
-        world->update(0.002F);
+        world->fixed_update(0.002F);
         if (step >= step_count - reaction_window)
         {
             const FEMPhysicsTelemetry step_telemetry = world->telemetry();
@@ -1300,12 +1296,12 @@ TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit")
     Entity world_entity = scene.create_entity("Physics World");
     auto* world = new FEMPhysicsWorldComponent();
     world->gravity = {0.0, 0.0, 0.0};
-    world->time_step = 0.01;
+    scene.set_fixed_timestep(0.01);
     world_entity.add_component(world);
 
     world->start();
     REQUIRE(articulation->initialized());
-    world->update(0.011F);
+    world->fixed_update(0.011F);
 
     const FEMPhysicsTelemetry telemetry = world->telemetry();
     CHECK(telemetry.initialized);
@@ -1335,7 +1331,7 @@ TEST_CASE("FEM contact policy excludes adjacent articulation units")
     REQUIRE(!collision_world->detect_contacts().empty());
 
     fixture.world->start();
-    fixture.world->update(0.002F);
+    fixture.world->fixed_update(0.002F);
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
     CHECK(telemetry.initialized);
     CHECK(telemetry.contact_count == 0U);
@@ -1349,18 +1345,18 @@ TEST_CASE("FEM contact mapping follows collider disable and removal lifecycle")
     register_test_component_types();
     MaximalContactScene fixture = make_maximal_contact_scene();
     fixture.world->start();
-    fixture.world->update(0.011F);
+    fixture.world->fixed_update(0.011F);
     REQUIRE(fixture.world->telemetry().contact_count >= 1U);
 
     fixture.body_collider->set_enabled(false);
-    fixture.world->update(0.011F);
+    fixture.world->fixed_update(0.011F);
     CHECK(fixture.world->telemetry().initialized);
     CHECK(fixture.world->telemetry().contact_count == 0U);
 
     Entity body_entity = fixture.body->entity();
     body_entity.remove_component(fixture.body_collider);
     fixture.body_collider = nullptr;
-    fixture.world->update(0.011F);
+    fixture.world->fixed_update(0.011F);
     CHECK(fixture.world->telemetry().initialized);
     CHECK(fixture.world->telemetry().contact_count == 0U);
     fixture.scene.destroy();

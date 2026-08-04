@@ -6,6 +6,7 @@
 #include "core/tc_scene_extension.h"
 #include <tcbase/tc_value_trent.hpp>
 #include <tcbase/tc_log.hpp>
+#include <cmath>
 #include <functional>
 
 namespace termin {
@@ -420,6 +421,7 @@ nos::trent TcSceneRef::serialize() const {
     nos::trent result;
 
     result["uuid"] = uuid();
+    result["fixed_timestep"] = fixed_timestep();
 
     // Root entities (no parent)
     nos::trent entities;
@@ -477,6 +479,16 @@ int TcSceneRef::load_from_data(const nos::trent& data,
                                const UnknownUpgradeStrategy& strategy,
                                bool auto_upgrade_unknown) {
     if (update_settings) {
+        if (data.contains("fixed_timestep")) {
+            const double dt = data["fixed_timestep"].as_numer();
+            if (std::isfinite(dt) && dt > 0.0) {
+                set_fixed_timestep(dt);
+            } else {
+                tc::Log::error(
+                    "[TcSceneRef] invalid serialized fixed_timestep=%g", dt);
+            }
+        }
+
         // Layer names
         if (data.contains("layer_names") && data["layer_names"].is_dict()) {
             for (const auto& [k, v] : data["layer_names"].as_dict()) {

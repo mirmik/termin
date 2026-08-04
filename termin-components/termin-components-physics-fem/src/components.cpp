@@ -668,7 +668,8 @@ namespace termin
     FEMPhysicsWorldComponent::FEMPhysicsWorldComponent()
         : CxxComponent("FEMPhysicsWorldComponent")
     {
-        set_has_update(true);
+        set_has_fixed_update(true);
+        (void)set_fixed_update_priority(fixed_update_priority::physics);
     }
 
     void FEMPhysicsWorldComponent::register_type()
@@ -684,23 +685,6 @@ namespace termin
                                 "gravity",
                                 "Gravity",
                                 "vec3");
-        stage_double(inspect,
-                     &FEMPhysicsWorldComponent::time_step,
-                     "FEMPhysicsWorldComponent",
-                     "time_step",
-                     "Time Step",
-                     0.000001,
-                     1.0,
-                     0.001);
-        tc::stage_inspect_field(inspect,
-                                &FEMPhysicsWorldComponent::substeps,
-                                "FEMPhysicsWorldComponent",
-                                "substeps",
-                                "Substeps",
-                                "int",
-                                1,
-                                100,
-                                1);
         stage_double(inspect,
                      &FEMPhysicsWorldComponent::contact_friction_coefficient,
                      "FEMPhysicsWorldComponent",
@@ -731,37 +715,21 @@ namespace termin
         }
     }
 
-    void FEMPhysicsWorldComponent::update(float dt)
+    void FEMPhysicsWorldComponent::fixed_update(float dt)
     {
         if (!initialized_ || !enabled())
         {
             return;
         }
-        if (!std::isfinite(dt) || dt < 0.0f)
+        if (!std::isfinite(dt) || dt <= 0.0f)
         {
             tc::Log::error(
-                "[FEMPhysicsWorldComponent] received invalid frame dt=%g",
+                "[FEMPhysicsWorldComponent] received invalid fixed dt=%g",
                 static_cast<double>(dt));
             initialized_ = false;
             return;
         }
-        const int step_count = std::max(substeps, 1);
-        const double step_dt = time_step / static_cast<double>(step_count);
-        if (!std::isfinite(step_dt) || step_dt <= 0.0)
-        {
-            tc::Log::error(
-                "[FEMPhysicsWorldComponent] invalid time_step=%g substeps=%d",
-                time_step,
-                substeps);
-            initialized_ = false;
-            return;
-        }
-        accumulated_time_ += static_cast<double>(dt);
-        while (initialized_ && accumulated_time_ >= step_dt)
-        {
-            step_simulation(step_dt);
-            accumulated_time_ -= step_dt;
-        }
+        step_simulation(static_cast<double>(dt));
     }
 
     void FEMPhysicsWorldComponent::on_destroy()
@@ -769,7 +737,6 @@ namespace termin
         initialized_ = false;
         system_ = physics_qopt::Multibody3DSystem();
         clear_runtime_links();
-        accumulated_time_ = 0.0;
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;
@@ -1062,7 +1029,6 @@ namespace termin
     {
         system_ = physics_qopt::Multibody3DSystem();
         clear_runtime_links();
-        accumulated_time_ = 0.0;
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;

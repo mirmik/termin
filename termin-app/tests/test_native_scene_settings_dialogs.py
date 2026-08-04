@@ -111,9 +111,12 @@ def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
     root = dialog.dialog.widget.children[0]
     assert root.children[0].children[0].bounds.width == EDITOR_UI_METRICS.form_label
     assert root.children[-1].bounds.height == EDITOR_UI_METRICS.field_row
+    dialog.fixed_update_frequency.value = 250.0
+    dialog.set_fixed_update_frequency(250.0)
     dialog.set_intensity(0.875)
     dialog.set_skybox_type(1)
     assert controller.load().ambient_intensity == pytest.approx(0.875)
+    assert scene.fixed_timestep == pytest.approx(0.004)
     assert dialog.dialog.activate("close")
     assert dialog.show()
 

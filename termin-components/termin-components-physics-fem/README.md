@@ -16,9 +16,24 @@ do not need a Python module or NumPy at runtime.
 
 The current native slice supports rigid transforms, diagonal body-local
 inertia, fixed point joints, true axial revolute joints, damping wrenches,
-fixed-step accumulation, constraint projection, and solver-to-scene pose
+fixed-step scheduling, constraint projection, and solver-to-scene pose
 synchronization. It intentionally remains separate from the gameplay physics
 world in `termin-physics`.
+
+## Fixed-step scheduling
+
+`FEMPhysicsWorldComponent` participates in the scene's `fixed_update` scheduler
+at `FIXED_UPDATE_PRIORITY_PHYSICS`. The serialized scene `fixed_timestep`
+defines the control period; the scene owns the only elapsed-time accumulator.
+
+```text
+controller fixed_update (EARLY)
+    -> FEM fixed_update (DEFAULT)
+        -> system.step(fixed_dt)
+```
+
+The FEM world neither discovers nor invokes a controller and does not configure
+the scene scheduler.
 
 ## Reduced articulation hierarchy
 
@@ -123,7 +138,7 @@ state. Optional presentation belongs to the separate
 
 The FEM scene adapter consumes solver-neutral `ContactPatch` values from the
 scene's single `CollisionWorld`; it never creates a gameplay `PhysicsWorld`.
-At every native substep it refreshes broad-phase poses and maps each enabled
+At every fixed step it refreshes broad-phase poses and maps each enabled
 `ColliderComponent` to the nearest `FEMRigidBodyComponent` on its own entity or
 an ancestor. This lets end-effector entities own their collision geometry while
 the parent link owns mass and inertia. A collider without such an owner belongs
@@ -131,8 +146,7 @@ to the static world. The resolved body becomes either a maximal body, a floating
 articulation base, or an articulation unit. Collider rebuild, disable, removal,
 and scene teardown are therefore observed before a patch is converted to
 `ContactEndpoint3D` values, without retaining collider pointers in
-`termin-physics-qopt`
-across substeps.
+`termin-physics-qopt` across fixed steps.
 
 The adapter derives deterministic contact keys from the canonical collider
 pair and collision feature IDs. It supplies all currently live collider-pair

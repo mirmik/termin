@@ -19,6 +19,12 @@ typedef struct {
     int count;
 } component_order;
 
+static void append_component_order(component_order* order, tc_component* c) {
+    if (order && order->count < 4) {
+        order->items[order->count++] = c;
+    }
+}
+
 static bool collect_component_order(tc_component* c, void* user_data) {
     component_order* order = (component_order*)user_data;
     if (order->count < 4) {
@@ -61,6 +67,10 @@ typedef struct {
     int* order_counter;
     int late_update_order;
     int before_render_order;
+    component_order* update_log;
+    component_order* fixed_update_log;
+    component_order* late_update_log;
+    component_order* before_render_log;
 } scheduler_probe_component;
 
 static void scheduler_probe_start(tc_component* component) {
@@ -69,18 +79,23 @@ static void scheduler_probe_start(tc_component* component) {
 
 static void scheduler_probe_update(tc_component* component, float dt) {
     (void)dt;
-    ((scheduler_probe_component*)component)->update_count++;
+    scheduler_probe_component* probe = (scheduler_probe_component*)component;
+    probe->update_count++;
+    append_component_order(probe->update_log, component);
 }
 
 static void scheduler_probe_fixed_update(tc_component* component, float dt) {
     (void)dt;
-    ((scheduler_probe_component*)component)->fixed_update_count++;
+    scheduler_probe_component* probe = (scheduler_probe_component*)component;
+    probe->fixed_update_count++;
+    append_component_order(probe->fixed_update_log, component);
 }
 
 static void scheduler_probe_late_update(tc_component* component, float dt) {
     (void)dt;
     scheduler_probe_component* probe = (scheduler_probe_component*)component;
     probe->late_update_count++;
+    append_component_order(probe->late_update_log, component);
     if (probe->order_counter) {
         probe->late_update_order = ++(*probe->order_counter);
     }
@@ -89,6 +104,7 @@ static void scheduler_probe_late_update(tc_component* component, float dt) {
 static void scheduler_probe_before_render(tc_component* component) {
     scheduler_probe_component* probe = (scheduler_probe_component*)component;
     probe->before_render_count++;
+    append_component_order(probe->before_render_log, component);
     if (probe->order_counter) {
         probe->before_render_order = ++(*probe->order_counter);
     }
@@ -479,6 +495,112 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     return 0;
 }
 
+GUARD_C_TEST(test_lifecycle_priorities_are_per_component_and_per_stage) {
+    tc_scene_handle scene = tc_scene_new_named("lifecycle-priority-scene");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_scene_set_fixed_timestep(scene, 1.0);
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "shared-owner");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
+
+    scheduler_probe_component first;
+    scheduler_probe_component second;
+    scheduler_probe_component third;
+    scheduler_probe_init(&first);
+    scheduler_probe_init(&second);
+    scheduler_probe_init(&third);
+
+    tc_component_set_lifecycle_capabilities(&first.component, true, true, true, true);
+    tc_component_set_lifecycle_capabilities(&second.component, true, true, true, true);
+    tc_component_set_lifecycle_capabilities(&third.component, true, true, true, true);
+
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &second.component, TC_COMPONENT_LIFECYCLE_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &third.component, TC_COMPONENT_LIFECYCLE_UPDATE, 0));
+
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &second.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &third.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 0));
+
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_BEFORE_RENDER, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &third.component, TC_COMPONENT_LIFECYCLE_BEFORE_RENDER, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &second.component, TC_COMPONENT_LIFECYCLE_BEFORE_RENDER, 0));
+
+    component_order update_log = {0};
+    component_order fixed_log = {0};
+    component_order late_log = {0};
+    component_order render_log = {0};
+    scheduler_probe_component* probes[] = {&first, &second, &third};
+    for (size_t i = 0; i < 3; i++) {
+        probes[i]->update_log = &update_log;
+        probes[i]->fixed_update_log = &fixed_log;
+        probes[i]->late_update_log = &late_log;
+        probes[i]->before_render_log = &render_log;
+        tc_entity_pool_add_component(pool, entity, &probes[i]->component);
+    }
+
+    tc_scene_update(scene, 1.0);
+    tc_scene_before_render(scene);
+    GUARD_C_CHECK_PTR_EQ(&first.component, update_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, update_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, update_log.items[2]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, fixed_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, fixed_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&first.component, fixed_log.items[2]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, late_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&first.component, late_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, late_log.items[2]);
+    GUARD_C_CHECK_PTR_EQ(&first.component, render_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, render_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, render_log.items[2]);
+
+    // A live change reindexes only the selected stage.
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 30));
+    fixed_log = (component_order){0};
+    update_log = (component_order){0};
+    tc_scene_update(scene, 1.0);
+    GUARD_C_CHECK_PTR_EQ(&first.component, fixed_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&first.component, update_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, update_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, update_log.items[2]);
+
+    // Returning to an equal-priority group restores registration order rather
+    // than the order in which setters happened to run.
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
+        &second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    fixed_log = (component_order){0};
+    tc_scene_update(scene, 1.0);
+    GUARD_C_CHECK_PTR_EQ(&first.component, fixed_log.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&second.component, fixed_log.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&third.component, fixed_log.items[2]);
+
+    tc_scene_free(scene);
+    return 0;
+}
+
 GUARD_C_TEST(test_late_update_precedes_before_render_after_reregistration) {
     tc_scene_handle scene = tc_scene_new_named("late-update-order");
     GUARD_C_REQUIRE(tc_scene_alive(scene));
@@ -773,6 +895,7 @@ int main(int argc, char** argv) {
     GUARD_C_RUN(test_scene_capability_priority_iteration);
     GUARD_C_RUN(test_component_removal_lifecycle_runs_once_in_order);
     GUARD_C_RUN(test_attached_lifecycle_capabilities_reindex_scene_scheduler);
+    GUARD_C_RUN(test_lifecycle_priorities_are_per_component_and_per_stage);
     GUARD_C_RUN(test_late_update_precedes_before_render_after_reregistration);
     GUARD_C_RUN(test_scene_update_profiles_lifecycle_phase_and_component_instance);
     GUARD_C_RUN(test_component_reorder_preserves_attachment_and_lifecycle);

@@ -2,6 +2,7 @@
   "version": "1.0",
   "scene": {
     "uuid": "",
+    "fixed_timestep": 0.002,
     "entities": [
       {
         "uuid": "fem-standing-ground",
@@ -2604,8 +2605,6 @@
                 0.0,
                 -9.81
               ],
-              "time_step": 0.002,
-              "substeps": 1.0,
               "contact_friction_coefficient": 0.8,
               "collision_layer_mask": "0xffffffffffffffff",
               "adjacent_unit_collision_enabled": false

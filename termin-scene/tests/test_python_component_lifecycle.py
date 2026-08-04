@@ -56,6 +56,11 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
         assert scene.late_update_list_count == 1
         assert scene.before_render_list_count == 1
 
+        full.update_priority = 40
+        full.fixed_update_priority = 30
+        full.late_update_priority = 20
+        full.before_render_priority = 10
+
         scene.update(1.0)
         scene.before_render()
         assert calls == {"update": 1, "fixed": 1, "late": 1, "before": 1}
@@ -82,6 +87,10 @@ def test_python_lifecycle_overrides_and_class_replacement_reindex_scene() -> Non
 
         full.__class__ = ReloadedLifecycleProbe
         full.refresh_lifecycle_capabilities()
+        assert full.update_priority == 40
+        assert full.fixed_update_priority == 30
+        assert full.late_update_priority == 20
+        assert full.before_render_priority == 10
         assert scene.update_list_count == 0
         assert scene.fixed_update_list_count == 0
         assert scene.late_update_list_count == 1

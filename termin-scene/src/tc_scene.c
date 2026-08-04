@@ -46,10 +46,48 @@ static void list_push(ComponentList* list, tc_component* c) {
     list->items[list->count++] = c;
 }
 
+static void list_insert_lifecycle_priority(
+    ComponentList* list,
+    tc_component* c,
+    tc_component_lifecycle_stage stage
+) {
+    if (list->count >= list->capacity) {
+        size_t new_cap = list->capacity == 0 ? INITIAL_CAPACITY : list->capacity * 2;
+        list->items = realloc(list->items, new_cap * sizeof(tc_component*));
+        list->capacity = new_cap;
+    }
+
+    const int priority = c->lifecycle_priorities[stage];
+    size_t index = 0;
+    while (index < list->count) {
+        const tc_component* existing = list->items[index];
+        const int existing_priority = existing->lifecycle_priorities[stage];
+        if (existing_priority < priority) break;
+        if (existing_priority == priority &&
+            existing->lifecycle_registration_order >
+                c->lifecycle_registration_order) {
+            break;
+        }
+        index++;
+    }
+    memmove(
+        &list->items[index + 1],
+        &list->items[index],
+        (list->count - index) * sizeof(tc_component*)
+    );
+    list->items[index] = c;
+    list->count++;
+}
+
 static void list_remove(ComponentList* list, tc_component* c) {
     for (size_t i = 0; i < list->count; i++) {
         if (list->items[i] == c) {
-            list->items[i] = list->items[--list->count];
+            memmove(
+                &list->items[i],
+                &list->items[i + 1],
+                (list->count - i - 1) * sizeof(tc_component*)
+            );
+            list->count--;
             return;
         }
     }
@@ -62,10 +100,15 @@ static bool list_contains(ComponentList* list, tc_component* c) {
     return false;
 }
 
-static void list_set_membership(ComponentList* list, tc_component* c, bool present) {
+static void list_set_lifecycle_membership(
+    ComponentList* list,
+    tc_component* c,
+    bool present,
+    tc_component_lifecycle_stage stage
+) {
     bool contains = list_contains(list, c);
     if (present && !contains) {
-        list_push(list, c);
+        list_insert_lifecycle_priority(list, c, stage);
     } else if (!present && contains) {
         list_remove(list, c);
     }
@@ -103,6 +146,7 @@ typedef struct tc_scene_slot {
     const char* uuid;
     tc_component* capability_heads[TC_COMPONENT_MAX_CAPABILITIES];
     size_t capability_counts[TC_COMPONENT_MAX_CAPABILITIES];
+    uint64_t next_lifecycle_registration_order;
     tc_event_bus* event_bus;
 
     // Layer and flag names (64 each per scene, interned strings)
@@ -587,6 +631,10 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
 
     uint32_t idx = h.index;
     c->lifecycle_scene = h;
+    if (c->lifecycle_registration_order == 0) {
+        c->lifecycle_registration_order =
+            ++g_pool->slots[idx].next_lifecycle_registration_order;
+    }
     scene_capability_sync_legacy_bridges(c);
 
     // Add to pending_start if not started
@@ -597,16 +645,32 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
 
     // Add to update lists based on flags
     if (c->has_update && !list_contains(&g_pool->slots[idx].update_list, c)) {
-        list_push(&g_pool->slots[idx].update_list, c);
+        list_insert_lifecycle_priority(
+            &g_pool->slots[idx].update_list,
+            c,
+            TC_COMPONENT_LIFECYCLE_UPDATE
+        );
     }
     if (c->has_fixed_update && !list_contains(&g_pool->slots[idx].fixed_update_list, c)) {
-        list_push(&g_pool->slots[idx].fixed_update_list, c);
+        list_insert_lifecycle_priority(
+            &g_pool->slots[idx].fixed_update_list,
+            c,
+            TC_COMPONENT_LIFECYCLE_FIXED_UPDATE
+        );
     }
     if (c->has_late_update && !list_contains(&g_pool->slots[idx].late_update_list, c)) {
-        list_push(&g_pool->slots[idx].late_update_list, c);
+        list_insert_lifecycle_priority(
+            &g_pool->slots[idx].late_update_list,
+            c,
+            TC_COMPONENT_LIFECYCLE_LATE_UPDATE
+        );
     }
     if (c->has_before_render && !list_contains(&g_pool->slots[idx].before_render_list, c)) {
-        list_push(&g_pool->slots[idx].before_render_list, c);
+        list_insert_lifecycle_priority(
+            &g_pool->slots[idx].before_render_list,
+            c,
+            TC_COMPONENT_LIFECYCLE_BEFORE_RENDER
+        );
     }
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
@@ -651,6 +715,7 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     list_remove(&g_pool->slots[idx].fixed_update_list, c);
     list_remove(&g_pool->slots[idx].late_update_list, c);
     list_remove(&g_pool->slots[idx].before_render_list, c);
+    c->lifecycle_registration_order = 0;
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
         scene_capability_detach(idx, c, slot);
@@ -695,10 +760,79 @@ void tc_component_set_lifecycle_capabilities(
     if (!handle_alive(scene)) return;
 
     uint32_t idx = scene.index;
-    list_set_membership(&g_pool->slots[idx].update_list, c, has_update);
-    list_set_membership(&g_pool->slots[idx].fixed_update_list, c, has_fixed_update);
-    list_set_membership(&g_pool->slots[idx].late_update_list, c, has_late_update);
-    list_set_membership(&g_pool->slots[idx].before_render_list, c, has_before_render);
+    list_set_lifecycle_membership(
+        &g_pool->slots[idx].update_list,
+        c,
+        has_update,
+        TC_COMPONENT_LIFECYCLE_UPDATE
+    );
+    list_set_lifecycle_membership(
+        &g_pool->slots[idx].fixed_update_list,
+        c,
+        has_fixed_update,
+        TC_COMPONENT_LIFECYCLE_FIXED_UPDATE
+    );
+    list_set_lifecycle_membership(
+        &g_pool->slots[idx].late_update_list,
+        c,
+        has_late_update,
+        TC_COMPONENT_LIFECYCLE_LATE_UPDATE
+    );
+    list_set_lifecycle_membership(
+        &g_pool->slots[idx].before_render_list,
+        c,
+        has_before_render,
+        TC_COMPONENT_LIFECYCLE_BEFORE_RENDER
+    );
+}
+
+int tc_component_get_lifecycle_priority(
+    const tc_component* c,
+    tc_component_lifecycle_stage stage
+) {
+    if (!c || stage < 0 || stage >= TC_COMPONENT_LIFECYCLE_STAGE_COUNT) return 0;
+    return c->lifecycle_priorities[stage];
+}
+
+bool tc_component_set_lifecycle_priority(
+    tc_component* c,
+    tc_component_lifecycle_stage stage,
+    int priority
+) {
+    if (!c || stage < 0 || stage >= TC_COMPONENT_LIFECYCLE_STAGE_COUNT) return false;
+    if (c->lifecycle_priorities[stage] == priority) return true;
+
+    c->lifecycle_priorities[stage] = priority;
+    if (!handle_alive(c->lifecycle_scene)) return true;
+
+    ComponentList* list = NULL;
+    bool present = false;
+    tc_scene_slot* scene = &g_pool->slots[c->lifecycle_scene.index];
+    switch (stage) {
+        case TC_COMPONENT_LIFECYCLE_UPDATE:
+            list = &scene->update_list;
+            present = c->has_update;
+            break;
+        case TC_COMPONENT_LIFECYCLE_FIXED_UPDATE:
+            list = &scene->fixed_update_list;
+            present = c->has_fixed_update;
+            break;
+        case TC_COMPONENT_LIFECYCLE_LATE_UPDATE:
+            list = &scene->late_update_list;
+            present = c->has_late_update;
+            break;
+        case TC_COMPONENT_LIFECYCLE_BEFORE_RENDER:
+            list = &scene->before_render_list;
+            present = c->has_before_render;
+            break;
+        default:
+            return false;
+    }
+    if (present && list_contains(list, c)) {
+        list_remove(list, c);
+        list_insert_lifecycle_priority(list, c, stage);
+    }
+    return true;
 }
 
 // ============================================================================

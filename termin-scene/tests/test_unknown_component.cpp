@@ -338,9 +338,13 @@ int test_cpp_inspect_registry_roundtrip() {
     std::cout << "Testing InspectRegistry roundtrip for test components...\n";
 
     auto& reg = tc::InspectRegistry::instance();
-    TEST_ASSERT(reg.all_fields_count("ReloadableComponent") == 3,
+    TEST_ASSERT(reg.all_fields_count("ReloadableComponent") == 7,
                 "ReloadableComponent own and inherited fields registered");
     TEST_ASSERT(reg.find_field("ReloadableComponent", "value") != nullptr, "ReloadableComponent.value field registered");
+    TEST_ASSERT(reg.find_field("ReloadableComponent", "update_priority") != nullptr,
+                "ReloadableComponent inherits update priority");
+    TEST_ASSERT(reg.find_field("ReloadableComponent", "fixed_update_priority") != nullptr,
+                "ReloadableComponent inherits fixed-update priority");
 
     ReloadableComponent component;
     component.value = 321;
