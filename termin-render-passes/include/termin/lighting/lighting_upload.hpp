@@ -6,6 +6,7 @@
 // Stage 8.1 — nothing calls them any more, and the ctx2 path binds
 // shadow textures directly via reflected resource names.
 
+#include <cstdint>
 #include <vector>
 #include <string>
 
@@ -16,6 +17,7 @@ namespace termin {
 constexpr int MAX_SHADOW_MAPS = 16;  // 4 lights * 4 cascades
 constexpr int MAX_CASCADES = 4;
 constexpr int SHADOW_MAP_TEXTURE_UNIT_START = 8;
+constexpr uint32_t SHADOW_BLOCK_STD140_SIZE = 2336u;
 
 // Static uniform names to avoid allocations
 namespace detail {

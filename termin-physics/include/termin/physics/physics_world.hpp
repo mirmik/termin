@@ -41,8 +41,6 @@ namespace termin
             int solver_iterations = 10;
             double restitution = 0.3;
             double friction = 0.5;
-            bool ground_enabled = false;
-            double ground_height = 0.0;
 
         private:
             std::vector<RigidBody> bodies_;
@@ -114,7 +112,6 @@ namespace termin
             RigidBody* find_body(Collider* collider);
 
             void detect_collisions();
-            void add_ground_contacts(RigidBody& body, Collider* collider);
         };
 
     } // namespace physics

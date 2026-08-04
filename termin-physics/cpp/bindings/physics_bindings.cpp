@@ -96,8 +96,6 @@ NB_MODULE(_physics_native, m) {
         .def_rw("solver_iterations", &PhysicsWorld::solver_iterations)
         .def_rw("restitution", &PhysicsWorld::restitution)
         .def_rw("friction", &PhysicsWorld::friction)
-        .def_rw("ground_enabled", &PhysicsWorld::ground_enabled)
-        .def_rw("ground_height", &PhysicsWorld::ground_height)
         .def("set_collision_world", &PhysicsWorld::set_collision_world,
             nb::arg("collision_world"), nb::keep_alive<1, 2>())
         .def("collision_world", &PhysicsWorld::collision_world, nb::rv_policy::reference)
