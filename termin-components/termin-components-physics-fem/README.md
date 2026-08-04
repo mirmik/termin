@@ -162,13 +162,14 @@ state. Optional presentation belongs to the separate
 `FEMArticulationComponent` exposes ordered actuator DOF indices, physical
 effort limits, solver gravity and a validated
 `apply_inverse_dynamics_control()` command sink. The same surface is available
-to Python together with `InverseDynamicsHqpController3D` and bounded Cartesian
-point-acceleration control.
+to Python together with `InverseDynamicsHqpController3D`, explicit
+solver-neutral acceleration tasks, priorities and hard constraints.
 
 The controller calculates and submits efforts at the fixed control priority;
 the FEM world applies them and integrates once at the later physics priority.
 `test-projects/dynamic-hqp-point-tracking` demonstrates this boundary with a
-three-dimensional azimuth/shoulder/elbow manipulator.
+three-dimensional azimuth/shoulder/elbow manipulator and a two-level Cartesian
+task hierarchy assembled visibly in Python.
 
 ## Scene contacts
 

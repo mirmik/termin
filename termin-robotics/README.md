@@ -128,6 +128,17 @@ provides `inverse_dynamics_actuators_from_motor()` and
 `apply_inverse_dynamics_motor_commands()` to preserve motor-channel DOF identity
 and effort limits without introducing physical handles into this module.
 
+The Python API exposes the same solver-neutral composition boundary. Create
+`PointVelocityTask3D` or `PointAccelerationTask3D` objectives with explicit
+integer priorities and diagonal weights, add `JointLimitConstraint3D` and
+`JointVelocityLimitConstraint3D` hard constraints, then pass the task list to
+`VelocityHqpController3D.solve()` or
+`InverseDynamicsHqpController3D.solve()`. Lower integer values have higher
+lexicographic priority. The older `solve_point_velocity()` and
+`solve_point_acceleration()` convenience methods remain available for simple
+single-objective callers, but examples intended to teach HQP should use the
+explicit task API.
+
 Solving does not mutate the articulation. A caller that wants to advance the
 model must explicitly call `integrate_articulation_velocity()`. Scalar joints
 use explicit Euler integration. A floating root uses the right-trivialized
