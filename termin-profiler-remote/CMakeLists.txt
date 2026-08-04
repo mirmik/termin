@@ -69,6 +69,15 @@ if(TERMIN_BUILD_TESTS)
         COMMAND termin_profiler_remote_target_service_test)
 
     if(NOT ANDROID)
+        add_executable(termin_profiler_remote_smoke_target
+            tests/remote_smoke_target.cpp
+        )
+        target_link_libraries(termin_profiler_remote_smoke_target PRIVATE
+            termin_profiler_remote
+            tcbase::termin_base
+        )
+        termin_set_rpath_test(termin_profiler_remote_smoke_target)
+
         add_executable(termin_profiler_remote_smoke_client
             tests/remote_smoke_client.cpp
         )

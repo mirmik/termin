@@ -41,3 +41,30 @@ adb forward tcp:46051 tcp:46051
 Enter `46051` and the target's per-launch token in the window. The editor keeps
 the last bounded remote history visible across a disconnect, marks the gap, and
 can switch back to the still-live local source with **Use local**.
+
+## Reciprocal desktop smoke
+
+Test builds provide a standalone target and client that exercise the complete
+handshake, capture controls, cadence frames and detailed section frames:
+
+```bash
+build/Release-tests/bin/termin_profiler_remote_smoke_target 46123 smoke-token
+build/Release-tests/bin/termin_profiler_remote_smoke_client 46123 smoke-token
+```
+
+Start the target first. The client starts and pauses a cadence capture, then
+repeats the sequence with section profiling enabled. Both programs exit with a
+non-zero status on timeout or protocol failure.
+
+The target deliberately listens only on loopback. To test two desktop machines,
+run the target on the machine being profiled and create a local SSH forward on
+the machine running the client:
+
+```bash
+ssh -N -L 46124:127.0.0.1:46123 user@target-machine
+build/Release-tests/bin/termin_profiler_remote_smoke_client 46124 smoke-token
+```
+
+This smoke verifies the transport independently of an editor integration. A
+desktop editor or player must instantiate and pump `RemoteProfilerTarget`
+before its real frames can be inspected remotely.

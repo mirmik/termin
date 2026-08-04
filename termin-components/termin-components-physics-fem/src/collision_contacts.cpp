@@ -359,8 +359,11 @@ namespace termin
                  ++unit_index)
             {
                 FEMRigidBodyComponent* body = articulation->bodies_[unit_index];
-                if (body == nullptr ||
-                    !state.articulation_bindings
+                if (body == nullptr)
+                {
+                    continue;
+                }
+                if (!state.articulation_bindings
                          .emplace(body,
                                   ContactRefreshState::ArticulationBinding{
                                       .articulation = articulation->dynamics_,

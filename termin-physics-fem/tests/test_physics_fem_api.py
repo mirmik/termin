@@ -1,7 +1,9 @@
 import termin.physics_fem as physics_fem
 
 
-def test_python_package_exports_reference_classes_only() -> None:
+def test_python_package_exports_native_articulation_control_bridge() -> None:
+    assert hasattr(physics_fem, "FEMArticulationComponent")
+    assert hasattr(physics_fem, "FEMArticulationMotorComponent")
     assert hasattr(physics_fem, "ReferenceFEMRigidBodyComponent")
     assert hasattr(physics_fem, "ReferenceFEMFixedJointComponent")
     assert hasattr(physics_fem, "ReferenceFEMRevoluteJointComponent")

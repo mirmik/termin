@@ -37,6 +37,27 @@ the scene scheduler.
 
 ## Reduced articulation hierarchy
 
+The native path places `ArticulationComponent` and
+`FEMArticulationComponent` on the same root. `ArticulationComponent` owns the
+solver-neutral `Articulation3D`; the FEM marker borrows that exact model and
+contributes dynamics and bounded motor channels:
+
+```text
+root (ArticulationComponent, FEMArticulationComponent)
+└── KinematicUnit + optional FEMArticulationMotorComponent
+    └── KinematicUnit + optional FEMArticulationMotorComponent
+        └── ...
+```
+
+Mass, centre of mass and inertia are authored on each unit. Visual children
+are presentation and do not become runtime links. The alternating hierarchy
+below remains a transitional compiler input for existing FEM scenes; new
+scenes should use the shared model path.
+
+The shared-model compiler currently supports a fixed base. Floating-base
+authoring remains available only through the transitional body hierarchy until
+its ownership contract is migrated too.
+
 `FEMArticulationComponent` marks an articulation root and exposes an explicit
 `Base Mode` choice. In `Fixed` mode the root entity is only an inertial-world
 frame. In `Floating` mode that same entity must also own one enabled
@@ -73,9 +94,11 @@ signed generalized effort is `minimum_reaction - maximum_reaction`. Limits do
 not clamp the authored transform after integration.
 
 `compile_fem_articulation_scene()` exposes this translation as a separate,
-testable pass. It produces public `ArticulationUnit3D` values and bindings; the
-`FEMArticulationComponent` owns the resulting solver-neutral `Articulation3D`.
-The physics world inserts a borrowing `Articulation3DDynamicsContribution` into
+testable pass. It produces public `ArticulationUnit3D` values and bindings.
+For transitional scenes `FEMArticulationComponent` retains the resulting
+model. On the shared native path it borrows the model owned by
+`ArticulationComponent`. The physics world inserts a borrowing
+`Articulation3DDynamicsContribution` into
 the generic system, copies solved SI coordinates back to the authored units,
 and writes a floating base pose back to the root entity. Floating generalized coordinates
 are ordered as `[base local twist vw (6), joints (N)]`; joint motor channels
@@ -133,6 +156,19 @@ collapse after runtime servo disable.
 Motor work is a per-step diagnostic integral, not an additional conserved
 state. Optional presentation belongs to the separate
 `termin-components-physics-fem-ui` adapter module.
+
+## Dynamic controller bridge
+
+`FEMArticulationComponent` exposes ordered actuator DOF indices, physical
+effort limits, solver gravity and a validated
+`apply_inverse_dynamics_control()` command sink. The same surface is available
+to Python together with `InverseDynamicsHqpController3D` and bounded Cartesian
+point-acceleration control.
+
+The controller calculates and submits efforts at the fixed control priority;
+the FEM world applies them and integrates once at the later physics priority.
+`test-projects/dynamic-hqp-point-tracking` demonstrates this boundary with a
+three-dimensional azimuth/shoulder/elbow manipulator.
 
 ## Scene contacts
 

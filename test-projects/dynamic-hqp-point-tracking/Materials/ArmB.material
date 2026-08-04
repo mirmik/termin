@@ -1,0 +1,10 @@
+{
+  "uuid": "kinematic-point-tracking-arm-b-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.95, 0.38, 0.12, 1.0],
+    "u_metallic": 0.1,
+    "u_roughness": 0.36,
+    "u_diffuse_mul": 1.0
+  }
+}

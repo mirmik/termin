@@ -9,6 +9,7 @@ GUARD_TEST_MAIN();
 #include <numbers>
 
 #include <components/collider_component.hpp>
+#include <components/articulation_component.hpp>
 #include <components/rotator_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
@@ -17,6 +18,7 @@ GUARD_TEST_MAIN();
 #include <termin/geom/general_pose3.hpp>
 #include <termin/physics_fem/articulation_scene.hpp>
 #include <termin/physics_fem/components.hpp>
+#include <termin/robotics/inverse_dynamics_control.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin_collision/termin_collision.h>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
@@ -35,6 +37,7 @@ namespace
             termin::ColliderComponent::register_type();
             termin::KinematicUnitComponent::register_type();
             termin::RotatorComponent::register_type();
+            termin::ArticulationComponent::register_type();
             termin::FEMRigidBodyComponent::register_type();
             termin::FEMFixedJointComponent::register_type();
             termin::FEMRevoluteJointComponent::register_type();
@@ -475,6 +478,92 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     CHECK(std::abs(restored_limits.minimum_coordinate + 30.0) < 1.0e-12);
     CHECK(std::abs(restored_limits.maximum_coordinate - 45.0) < 1.0e-12);
     tc_value_free(&limit_data);
+}
+
+TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts")
+{
+    using namespace termin;
+    using namespace termin::robotics;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared articulation control");
+    Entity root = scene.create_entity("Arm Root");
+    auto* owner = new ArticulationComponent();
+    auto* fem = new FEMArticulationComponent();
+    root.add_component(owner);
+    root.add_component(fem);
+
+    Entity shoulder_entity = root.create_child("Shoulder");
+    auto* shoulder = new RotatorComponent();
+    shoulder->set_axis(0.0, 1.0, 0.0);
+    shoulder->mass = 1.0;
+    shoulder->inertia_diagonal = {0.2, 0.2, 0.1};
+    shoulder_entity.add_component(shoulder);
+    auto* shoulder_motor = new FEMArticulationMotorComponent();
+    shoulder_motor->maximum_effort = 8.0;
+    shoulder_entity.add_component(shoulder_motor);
+
+    Entity elbow_entity = shoulder_entity.create_child("Elbow");
+    auto* elbow = new RotatorComponent();
+    elbow->set_axis(0.0, 1.0, 0.0);
+    elbow->origin_position = {0.8, 0.0, 0.0};
+    elbow->mass = 0.7;
+    elbow->inertia_diagonal = {0.1, 0.1, 0.05};
+    elbow_entity.add_component(elbow);
+    auto* elbow_motor = new FEMArticulationMotorComponent();
+    elbow_motor->maximum_effort = 5.0;
+    elbow_entity.add_component(elbow_motor);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = {0.0, 0.0, 0.0};
+    world_entity.add_component(world);
+    world->start();
+
+    REQUIRE(owner->initialized());
+    REQUIRE(fem->initialized());
+    CHECK(fem->articulation() == owner->articulation());
+    const std::vector<std::size_t> dofs = fem->actuator_dof_indices();
+    const std::vector<double> limits = fem->actuator_effort_limits();
+    REQUIRE(dofs.size() == 2U);
+    REQUIRE(dofs[0] == 0U);
+    REQUIRE(dofs[1] == 1U);
+    REQUIRE(limits.size() == 2U);
+    REQUIRE(limits[0] == 8.0);
+    REQUIRE(limits[1] == 5.0);
+
+    std::vector<InverseDynamicsActuator3D> actuators;
+    for (std::size_t index = 0; index < dofs.size(); ++index)
+    {
+        actuators.push_back({
+            .dof_index = dofs[index],
+            .minimum_effort = -limits[index],
+            .maximum_effort = limits[index],
+        });
+    }
+    InverseDynamicsHqpController3D controller(
+        *owner->articulation(), std::move(actuators), Vec3::zero());
+    JointPostureTask3D posture(
+        {}, {0.3, -0.2}, {0.0, 0.0}, 20.0, 8.0);
+    const std::array<const ArticulationTask3D*, 1> tasks{&posture};
+    const InverseDynamicsControlResult3D control =
+        controller.solve(tasks, {.time_step = 0.002});
+    REQUIRE(control.ok());
+    REQUIRE(fem->apply_inverse_dynamics_control(control));
+
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().successful_steps == 1U);
+    CHECK(std::abs(owner->articulation()->state().velocities[0]) > 1.0e-9);
+    CHECK(std::abs(shoulder_motor->commanded_effort) > 1.0e-9);
+
+    Articulation3D* active_model = fem->articulation();
+    REQUIRE(owner->rebuild());
+    CHECK(owner->articulation() != active_model);
+    CHECK(fem->articulation() == active_model);
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().successful_steps == 1U);
+
+    scene.destroy();
 }
 
 TEST_CASE("rotator attachment distinguishes fresh and deserialized state")

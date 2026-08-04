@@ -1,9 +1,17 @@
-"""Reference implementation of the retired Python FEM scene bridge.
+"""Native FEM scene-control API and retired reference implementation.
 
 Runtime component names are owned by the native ``termin_components_physics_fem``
-module. These aliases remain available for algorithmic comparison and tests;
-they must not be published into the runtime component registry.
+module. The reference aliases remain available for algorithmic comparison.
 """
+
+from termin_nanobind.runtime import preload_sdk_libs
+
+preload_sdk_libs("nanobind", "termin_components_physics_fem")
+
+from termin.physics_fem._components_physics_fem_native import (  # noqa: E402
+    FEMArticulationComponent,
+    FEMArticulationMotorComponent,
+)
 
 from termin.physics_fem.fem_fixed_joint_component import (
     FEMFixedJointComponent as ReferenceFEMFixedJointComponent,
@@ -19,6 +27,8 @@ from termin.physics_fem.fem_rigid_body_component import (
 )
 
 __all__ = [
+    "FEMArticulationComponent",
+    "FEMArticulationMotorComponent",
     "ReferenceFEMFixedJointComponent",
     "ReferenceFEMPhysicsWorldComponent",
     "ReferenceFEMRevoluteJointComponent",

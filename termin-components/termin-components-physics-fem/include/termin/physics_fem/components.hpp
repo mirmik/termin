@@ -11,6 +11,7 @@
 #include <termin/physics_qopt/contact3d.hpp>
 #include <termin/physics_qopt/multibody3d.hpp>
 #include <termin/robotics/articulation3d.hpp>
+#include <termin/robotics/inverse_dynamics_control.hpp>
 
 extern "C"
 {
@@ -23,6 +24,7 @@ namespace termin
     class FEMPhysicsWorldComponent;
     class FEMRigidBodyComponent;
     class KinematicUnitComponent;
+    class ArticulationComponent;
     class FEMArticulationMotorComponent;
     class FEMJointLimitComponent;
     class FEMJointServoComponent;
@@ -81,10 +83,21 @@ namespace termin
         [[nodiscard]] robotics::Articulation3D* articulation() noexcept;
         [[nodiscard]] const robotics::Articulation3D*
         articulation() const noexcept;
+        [[nodiscard]] Vec3 gravity_world() const noexcept;
+        [[nodiscard]] std::vector<std::size_t>
+        actuator_dof_indices() const;
+        [[nodiscard]] std::vector<double> actuator_effort_limits() const;
+        [[nodiscard]] bool apply_inverse_dynamics_control(
+            const robotics::InverseDynamicsControlResult3D& control) noexcept;
 
     private:
         friend class FEMPhysicsWorldComponent;
-        std::unique_ptr<robotics::Articulation3D> articulation_;
+        // ArticulationComponent owns the target model. legacy_articulation_
+        // exists only while old joint/body scenes are being migrated.
+        ArticulationComponent* articulation_owner_ = nullptr;
+        std::shared_ptr<robotics::Articulation3D> shared_articulation_;
+        std::unique_ptr<robotics::Articulation3D> legacy_articulation_;
+        robotics::Articulation3D* articulation_ = nullptr;
         physics_qopt::Articulation3DDynamicsContribution* dynamics_ = nullptr;
         FEMPhysicsWorldComponent* world_ = nullptr;
         FEMRigidBodyComponent* base_body_ = nullptr;

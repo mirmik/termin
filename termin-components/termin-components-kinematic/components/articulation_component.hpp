@@ -58,14 +58,22 @@ namespace termin
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] std::size_t unit_count() const noexcept;
+        [[nodiscard]] KinematicUnitComponent*
+        unit_component(std::size_t unit_index) noexcept;
+        [[nodiscard]] const KinematicUnitComponent*
+        unit_component(std::size_t unit_index) const noexcept;
+        [[nodiscard]] double
+        unit_coordinate_scale(std::size_t unit_index) const noexcept;
         [[nodiscard]] ArticulationComponentDiagnostic diagnostic() const noexcept;
         [[nodiscard]] std::string_view diagnostic_entity() const noexcept;
         [[nodiscard]] robotics::Articulation3D* articulation() noexcept;
         [[nodiscard]] const robotics::Articulation3D*
         articulation() const noexcept;
+        [[nodiscard]] std::shared_ptr<robotics::Articulation3D>
+        articulation_shared() const noexcept;
 
     private:
-        std::unique_ptr<robotics::Articulation3D> articulation_;
+        std::shared_ptr<robotics::Articulation3D> articulation_;
         std::vector<KinematicUnitComponent*> bindings_;
         std::vector<double> coordinate_scales_;
         ArticulationComponentDiagnostic diagnostic_ =
