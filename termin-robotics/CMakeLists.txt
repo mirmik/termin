@@ -15,7 +15,10 @@ else()
     find_package(termin_qopt CONFIG REQUIRED)
 endif()
 
-add_library(termin_robotics SHARED src/articulation3d.cpp)
+add_library(termin_robotics SHARED
+    src/articulation3d.cpp
+    src/tasks.cpp
+)
 add_library(termin_robotics::termin_robotics ALIAS termin_robotics)
 target_compile_features(termin_robotics PUBLIC cxx_std_20)
 target_compile_definitions(termin_robotics PRIVATE TERMIN_ROBOTICS_EXPORTS)
@@ -51,6 +54,15 @@ if(TERMIN_ROBOTICS_BUILD_TESTS)
     )
     add_test(NAME termin_robotics_articulation3d_test
         COMMAND termin_robotics_articulation3d_test)
+
+    add_executable(termin_robotics_tasks_test
+        tests/test_tasks.cpp
+    )
+    target_link_libraries(termin_robotics_tasks_test PRIVATE
+        termin_robotics
+    )
+    add_test(NAME termin_robotics_tasks_test
+        COMMAND termin_robotics_tasks_test)
 endif()
 
 include(GNUInstallDirs)

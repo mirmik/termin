@@ -116,6 +116,28 @@ namespace termin::robotics
         [[nodiscard]] bool ok() const noexcept;
     };
 
+    // Differential kinematics of a link frame. World spatial velocity and
+    // Jacobian use vw row order: linear velocity first, angular velocity
+    // second. Both are taken at the link-frame origin.
+    struct TERMIN_ROBOTICS_API ArticulationFrameKinematics3D
+    {
+        termin::Pose3 pose_world = termin::Pose3::identity();
+        termin::Screw3 velocity_world = termin::Screw3::zero();
+        std::vector<double> spatial_jacobian_world_storage;
+
+        [[nodiscard]] std::size_t dof_count() const noexcept;
+        [[nodiscard]] qopt::ConstDenseMatrixView
+        spatial_jacobian_world() const noexcept;
+    };
+
+    struct TERMIN_ROBOTICS_API ArticulationFrameKinematics3DResult
+    {
+        ArticulationFrameKinematics3D value;
+        Articulation3DDiagnostic diagnostic = Articulation3DDiagnostic::None;
+
+        [[nodiscard]] bool ok() const noexcept;
+    };
+
     // Solver-neutral reduced-coordinate tree. It owns the mechanism topology,
     // configuration, velocity and kinematic cache. Inertial data stays on the
     // links, so dynamics algorithms can operate on the same compiled model
@@ -155,6 +177,10 @@ namespace termin::robotics
                          termin::Vec3 point_local) const noexcept;
         [[nodiscard]] ArticulationPointKinematics3DResult
         floating_base_point_kinematics(termin::Vec3 point_local) const noexcept;
+        [[nodiscard]] ArticulationFrameKinematics3DResult
+        frame_kinematics(std::size_t link_index) const noexcept;
+        [[nodiscard]] ArticulationFrameKinematics3DResult
+        floating_base_frame_kinematics() const noexcept;
 
         [[nodiscard]] Articulation3DDiagnostic
         set_state(Articulation3DState state) noexcept;
