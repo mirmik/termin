@@ -56,35 +56,46 @@ class ShaderRuntimePlugin:
         asset.parse_spec(result.spec_data)
         rm.register_shader_asset(name, asset, source_path=result.path)
 
-    def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
+    def reload(self, context: "AssetContext", result: "PreLoadResult") -> bool:
+        from tcbase import log
+
         rm = context.resource_manager
         name = context.name
         asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
-            return
-
-        if not asset.is_loaded:
-            return
+            log.error(
+                f"[ShaderAssetPlugin] Cannot reload unregistered shader '{name}' "
+                f"({context.uuid})"
+            )
+            return False
 
         if not asset.should_reload_from_file():
-            return
+            return True
 
         from termin.default_assets.render.shader_interface import (
             shader_graph_input_signature,
             shader_material_interface_signature,
         )
 
-        program = asset.program
-        old_material_signature = shader_material_interface_signature(program)
-        old_graph_signature = shader_graph_input_signature(program)
+        was_loaded = asset.is_loaded
+        program = asset.cached_data if was_loaded else None
+        old_material_signature = (
+            shader_material_interface_signature(program) if program is not None else ()
+        )
+        old_graph_signature = (
+            shader_graph_input_signature(program) if program is not None else ()
+        )
         asset.parse_spec(result.spec_data)
         if not asset.reload():
-            from tcbase import log
-
             log.error(f"[ShaderAssetPlugin] Failed to reload shader '{name}'")
-            return
+            return False
 
         program = asset.program
+        if program is None:
+            log.error(
+                f"[ShaderAssetPlugin] Reloaded shader '{name}' has no canonical program"
+            )
+            return False
         material_changed = old_material_signature != shader_material_interface_signature(program)
         if not material_changed:
             from termin.default_assets.render.pipeline_dependencies import (
@@ -92,7 +103,7 @@ class ShaderRuntimePlugin:
             )
 
             sync_loaded_material_shader_version(rm, name, program)
-            return
+            return True
 
         from termin.default_assets.render.pipeline_dependencies import (
             refresh_loaded_materials_for_shader,
@@ -103,6 +114,7 @@ class ShaderRuntimePlugin:
         graph_changed = old_graph_signature != shader_graph_input_signature(program)
         if material_names and graph_changed:
             reload_pipelines_for_material_dependencies(rm, material_names)
+        return True
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
