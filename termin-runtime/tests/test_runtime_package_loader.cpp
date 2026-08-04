@@ -18,6 +18,7 @@ GUARD_TEST_MAIN();
 #include <components/collider_component.hpp>
 #include <termin/scene/scene_manager.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
@@ -545,6 +546,53 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     CHECK_FALSE(unsupported_resource.ok);
     CHECK(unsupported_resource.message.find("resource type 'mesh'") != std::string::npos);
 
+    termin::bootstrap::shutdown_runtime();
+}
+
+TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
+    termin::bootstrap::shutdown_runtime();
+    const std::filesystem::path root = make_package_root();
+    write_text(root / "manifest.json", R"({
+  "version": 2,
+  "entry_scene": "Scenes/Main.scene",
+  "scenes": [
+    {"identity": "Scenes/Main.scene", "path": "scene.json"}
+  ],
+  "resources": []
+}
+)"
+    );
+    write_text(root / "scene.json", R"({
+  "uuid": "orbit-camera-runtime-scene",
+  "entities": [
+    {
+      "uuid": "orbit-camera-runtime-entity",
+      "name": "RuntimeCamera",
+      "components": [
+        {"type": "CameraComponent", "data": {}},
+        {"type": "OrbitCameraController", "data": {"horizon_lock": false}}
+      ]
+    }
+  ]
+}
+)"
+    );
+
+    termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    termin::Entity camera = result.scene.find_entity_by_name("RuntimeCamera");
+    REQUIRE(camera.valid());
+    termin::OrbitCameraController* controller =
+        camera.get_component<termin::OrbitCameraController>();
+    REQUIRE(controller != nullptr);
+    CHECK_FALSE(controller->horizon_lock);
+
+    for (auto& scene : result.scenes) {
+        scene.scene.destroy();
+    }
+    result.scene = {};
+    result.resources.reset();
     termin::bootstrap::shutdown_runtime();
 }
 
