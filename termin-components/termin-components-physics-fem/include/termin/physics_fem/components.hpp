@@ -76,7 +76,7 @@ namespace termin
         void on_destroy() override;
 
         [[nodiscard]] bool initialized() const noexcept;
-        [[nodiscard]] std::size_t link_count() const noexcept;
+        [[nodiscard]] std::size_t unit_count() const noexcept;
         [[nodiscard]] double total_energy() const noexcept;
         [[nodiscard]] robotics::Articulation3D* articulation() noexcept;
         [[nodiscard]] const robotics::Articulation3D*
@@ -211,7 +211,7 @@ namespace termin
         physics_qopt::ForceOnBody3DContribution* force_ = nullptr;
         physics_qopt::Articulation3DDynamicsContribution* articulation_ =
             nullptr;
-        std::size_t articulation_link_index_ =
+        std::size_t articulation_unit_index_ =
             robotics::articulation_root_frame;
         bool articulation_base_ = false;
         FEMPhysicsWorldComponent* world_ = nullptr;
@@ -271,7 +271,7 @@ namespace termin
         // material mixing can replace this policy later without changing qopt.
         double contact_friction_coefficient = 0.0;
         std::uint64_t collision_layer_mask = ~std::uint64_t{0};
-        bool adjacent_link_collision_enabled = false;
+        bool adjacent_unit_collision_enabled = false;
 
         FEMPhysicsWorldComponent();
         ~FEMPhysicsWorldComponent() override = default;

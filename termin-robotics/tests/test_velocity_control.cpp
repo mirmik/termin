@@ -13,30 +13,31 @@ namespace
 {
     constexpr double tolerance = 1e-8;
 
-    SpatialInertia3 link_inertia()
+    SpatialInertia3 unit_inertia()
     {
         return {1.0, {0.2, 0.3, 0.4}, Pose3::identity()};
     }
 
-    ArticulationLink3D revolute_link(std::size_t parent, std::string name)
+    ArticulationUnit3D revolute_unit(std::size_t parent, std::string name)
     {
         return {
-            .parent_link = parent,
-            .parent_to_joint_zero = Pose3::identity(),
-            .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-            .joint_to_link = Pose3::translation(1.0, 0.0, 0.0),
-            .inertia = link_inertia(),
+            .parent_unit = parent,
+            .parent_to_unit_zero = Pose3::translation(1.0, 0.0, 0.0),
+            .motion_twist_at_unit =
+                Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                    Pose3::translation(1.0, 0.0, 0.0)),
+            .inertia = unit_inertia(),
             .limits = {.minimum = -2.5, .maximum = 2.5},
             .diagnostic_name = std::move(name),
         };
     }
 
-    Articulation3D two_link_model()
+    Articulation3D two_unit_model()
     {
-        std::vector<ArticulationLink3D> links;
-        links.push_back(revolute_link(articulation_root_frame, "shoulder"));
-        links.push_back(revolute_link(0, "elbow"));
-        return Articulation3D(std::move(links),
+        std::vector<ArticulationUnit3D> units;
+        units.push_back(revolute_unit(articulation_root_frame, "shoulder"));
+        units.push_back(revolute_unit(0, "elbow"));
+        return Articulation3D(std::move(units),
                               {{0.35, -0.6}, {0.0, 0.0}},
                               "velocity-control-test");
     }
@@ -49,7 +50,7 @@ namespace
 
     void test_priority_and_primal_warm_start()
     {
-        Articulation3D articulation = two_link_model();
+        Articulation3D articulation = two_unit_model();
         VelocityHqpController3D controller(articulation);
         JointVelocityTask3D primary(
             {0}, {0.7}, 1.0, {.priority = 0, .diagnostic_name = "primary"});
@@ -81,7 +82,7 @@ namespace
 
     void test_hard_velocity_and_position_limits()
     {
-        Articulation3D articulation = two_link_model();
+        Articulation3D articulation = two_unit_model();
         Articulation3DState near_limit = articulation.state();
         near_limit.coordinates[0] = 2.49;
         TERMIN_ROBOTICS_CHECK(articulation.set_state(std::move(near_limit)) ==
@@ -107,7 +108,7 @@ namespace
 
     void test_fixed_and_floating_integration()
     {
-        Articulation3D fixed = two_link_model();
+        Articulation3D fixed = two_unit_model();
         const std::array<double, 2> fixed_velocity{0.2, -0.4};
         const VelocityIntegrationResult3D fixed_result =
             integrate_articulation_velocity(
@@ -121,14 +122,14 @@ namespace
                               tolerance);
 
         ArticulationFloatingBase3D base{
-            .inertia = link_inertia(),
+            .inertia = unit_inertia(),
             .pose_world = Pose3::identity(),
             .velocity_local = Screw3::zero(),
             .diagnostic_name = "base",
         };
         Articulation3D floating(
             base,
-            {revolute_link(articulation_root_frame, "joint")},
+            {revolute_unit(articulation_root_frame, "joint")},
             {{0.0}, {0.0}},
             "floating");
         VelocityHqpController3D controller(floating);
@@ -163,7 +164,7 @@ namespace
 
     void test_active_avoidance_constraint()
     {
-        Articulation3D articulation = two_link_model();
+        Articulation3D articulation = two_unit_model();
         const ArticulationPointKinematics3DResult point =
             articulation.point_kinematics(1, Vec3::zero());
         TERMIN_ROBOTICS_CHECK(point.ok());
@@ -210,16 +211,16 @@ namespace
 
     void test_end_effector_tracking_and_avoidance()
     {
-        Articulation3D articulation = two_link_model();
+        Articulation3D articulation = two_unit_model();
         VelocityHqpController3D controller(articulation);
         const Vec3 target{1.3, 0.7, 0.0};
         const double initial_distance =
-            (articulation.link_poses_world()[1].lin - target).norm();
+            (articulation.unit_poses_world()[1].lin - target).norm();
         double distance = initial_distance;
 
         for (std::size_t step = 0; step < 120; ++step)
         {
-            const Vec3 point = articulation.link_poses_world()[1].lin;
+            const Vec3 point = articulation.unit_poses_world()[1].lin;
             const Vec3 tracking_velocity = (target - point) * 3.0;
             PointVelocityTask3D tracking(
                 1,
@@ -274,9 +275,9 @@ namespace
             TERMIN_ROBOTICS_CHECK(integrated.ok());
         }
 
-        distance = (articulation.link_poses_world()[1].lin - target).norm();
+        distance = (articulation.unit_poses_world()[1].lin - target).norm();
         TERMIN_ROBOTICS_CHECK(distance < initial_distance * 0.15);
-        TERMIN_ROBOTICS_CHECK(articulation.link_poses_world()[1].lin.y > 0.05);
+        TERMIN_ROBOTICS_CHECK(articulation.unit_poses_world()[1].lin.y > 0.05);
     }
 } // namespace
 

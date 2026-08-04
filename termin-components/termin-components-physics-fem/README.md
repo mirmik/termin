@@ -42,9 +42,11 @@ the fixed parent-to-joint transform. For a fixed root, the root world pose is
 folded into each top-level joint transform; for a floating root, top-level
 joint transforms remain base-local. The axis is always a unit direction; the
 separate `coordinate_scale` converts authored units to radians or metres before
-the coordinate becomes reduced state. The body child's local rigid pose is the
-fixed joint-to-link transform. Branching is represented by placing several
-joint children under the root or one body.
+the coordinate becomes reduced state. The compiler folds the body child's
+local rigid pose into the same articulation unit: it composes the offset into
+`parent_to_unit_zero` and transports the motion twist to the unit output frame.
+Branching is represented by placing several joint children under the root or
+one authored body.
 
 An optional `FEMJointLimitComponent` on a joint entity gives that reduced DOF
 a minimum, a maximum, or both. Bounds use the neighboring kinematic
@@ -56,7 +58,7 @@ signed generalized effort is `minimum_reaction - maximum_reaction`. Limits do
 not clamp the authored transform after integration.
 
 `compile_fem_articulation_scene()` exposes this translation as a separate,
-testable pass. It produces public `ArticulationLink3D` values and bindings; the
+testable pass. It produces public `ArticulationUnit3D` values and bindings; the
 `FEMArticulationComponent` owns the resulting solver-neutral `Articulation3D`.
 The physics world inserts a borrowing `Articulation3DDynamicsContribution` into
 the generic system, copies solved SI coordinates back to the authored units,
@@ -126,7 +128,7 @@ At every native substep it refreshes broad-phase poses and maps each enabled
 an ancestor. This lets end-effector entities own their collision geometry while
 the parent link owns mass and inertia. A collider without such an owner belongs
 to the static world. The resolved body becomes either a maximal body, a floating
-articulation base, or an articulation link. Collider rebuild, disable, removal,
+articulation base, or an articulation unit. Collider rebuild, disable, removal,
 and scene teardown are therefore observed before a patch is converted to
 `ContactEndpoint3D` values, without retaining collider pointers in
 `termin-physics-qopt`
@@ -152,7 +154,7 @@ already accepts a coefficient per contact.
 `collision_layer_mask` selects entity layers accepted by the FEM world.
 Same-body contacts are always discarded. Contacts between directly connected
 maximal bodies and adjacent links of one articulation are discarded by
-default; `adjacent_link_collision_enabled` opts those pairs back in. A dynamic
+default; `adjacent_unit_collision_enabled` opts those pairs back in. A dynamic
 collider whose enabled `FEMRigidBodyComponent` is not registered by this FEM
 world is an error rather than an implicit static obstacle.
 

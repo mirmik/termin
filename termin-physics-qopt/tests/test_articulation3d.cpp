@@ -33,23 +33,25 @@ namespace
         };
     }
 
-    std::vector<ArticulationLink3D> double_pendulum_links()
+    std::vector<ArticulationUnit3D> double_pendulum_units()
     {
         return {
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(kHalfLength, 0.0, 0.0),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero =
+                    Pose3::translation(kHalfLength, 0.0, 0.0),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_y(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(kHalfLength, 0.0, 0.0)),
                 .inertia = rod_inertia(),
                 .diagnostic_name = "upper",
             },
             {
-                .parent_link = 0,
-                .parent_to_joint_zero =
-                    Pose3::translation(kHalfLength, 0.0, 0.0),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(kHalfLength, 0.0, 0.0),
+                .parent_unit = 0,
+                .parent_to_unit_zero = Pose3::translation(kLength, 0.0, 0.0),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_y(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(kHalfLength, 0.0, 0.0)),
                 .inertia = rod_inertia(),
                 .diagnostic_name = "lower",
             },
@@ -148,26 +150,26 @@ namespace
         TERMIN_QOPT_CHECK(empty.diagnostic() ==
                           Articulation3DDiagnostic::EmptyModel);
 
-        auto links = double_pendulum_links();
-        links[0].parent_link = 0;
-        Articulation3D invalid_parent(std::move(links),
+        auto units = double_pendulum_units();
+        units[0].parent_unit = 0;
+        Articulation3D invalid_parent(std::move(units),
                                       {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_QOPT_CHECK(invalid_parent.diagnostic() ==
                           Articulation3DDiagnostic::InvalidParent);
 
-        links = double_pendulum_links();
-        links[0].limits = {.minimum = 1.0, .maximum = -1.0};
-        Articulation3D invalid_limits(std::move(links),
+        units = double_pendulum_units();
+        units[0].limits = {.minimum = 1.0, .maximum = -1.0};
+        Articulation3D invalid_limits(std::move(units),
                                       {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_QOPT_CHECK(invalid_limits.diagnostic() ==
-                          Articulation3DDiagnostic::InvalidJointLimits);
+                          Articulation3DDiagnostic::InvalidUnitLimits);
 
-        links = double_pendulum_links();
-        links[0].limits.minimum = std::numeric_limits<double>::quiet_NaN();
-        Articulation3D non_finite_limits(std::move(links),
+        units = double_pendulum_units();
+        units[0].limits.minimum = std::numeric_limits<double>::quiet_NaN();
+        Articulation3D non_finite_limits(std::move(units),
                                          {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_QOPT_CHECK(non_finite_limits.diagnostic() ==
-                          Articulation3DDiagnostic::InvalidJointLimits);
+                          Articulation3DDiagnostic::InvalidUnitLimits);
     }
 
     void test_floating_base_matches_rigid_body()
@@ -196,7 +198,7 @@ namespace
         TERMIN_QOPT_CHECK(floating.diagnostic() ==
                           Articulation3DDiagnostic::None);
         TERMIN_QOPT_CHECK(floating.has_floating_base());
-        TERMIN_QOPT_CHECK(floating.link_count() == 0);
+        TERMIN_QOPT_CHECK(floating.unit_count() == 0);
         TERMIN_QOPT_CHECK(floating.dof_count() == 6);
 
         const AssembledSystem floating_system = assemble(floating);
@@ -340,10 +342,11 @@ namespace
             },
             {
                 {
-                    .parent_link = articulation_world_link,
-                    .parent_to_joint_zero = Pose3::translation(0.4, 0.0, 0.0),
-                    .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                    .joint_to_link = Pose3::translation(0.5, 0.0, 0.0),
+                    .parent_unit = articulation_root_frame,
+                    .parent_to_unit_zero = Pose3::translation(0.9, 0.0, 0.0),
+                    .motion_twist_at_unit =
+                        Screw3{Vec3::unit_y(), Vec3::zero()}.adjoint_inv(
+                            Pose3::translation(0.5, 0.0, 0.0)),
                     .inertia = rod_inertia(),
                     .diagnostic_name = "arm",
                 },
@@ -408,7 +411,7 @@ namespace
     {
         constexpr double upper_angle = 0.4;
         constexpr double relative_angle = -0.3;
-        Articulation3D model(double_pendulum_links(),
+        Articulation3D model(double_pendulum_units(),
                              {{upper_angle, relative_angle}, {0.0, 0.0}},
                              "reduced-double-pendulum");
         Articulation3DDynamicsContribution contribution(model,
@@ -444,7 +447,7 @@ namespace
         constexpr double relative_angle = -0.3;
         constexpr double upper_velocity = 1.2;
         constexpr double relative_velocity = -0.7;
-        Articulation3D model(double_pendulum_links(),
+        Articulation3D model(double_pendulum_units(),
                              {{upper_angle, relative_angle},
                               {upper_velocity, relative_velocity}},
                              "reduced-double-pendulum");
@@ -471,10 +474,9 @@ namespace
         Articulation3D model(
             {
                 {
-                    .parent_link = articulation_world_link,
-                    .parent_to_joint_zero = Pose3::identity(),
-                    .motion_twist_at_joint = {Vec3::zero(), Vec3::unit_z()},
-                    .joint_to_link = Pose3::identity(),
+                    .parent_unit = articulation_root_frame,
+                    .parent_to_unit_zero = Pose3::identity(),
+                    .motion_twist_at_unit = {Vec3::zero(), Vec3::unit_z()},
                     .inertia = rod_inertia(),
                     .diagnostic_name = "slider",
                 },
@@ -486,19 +488,18 @@ namespace
         const AssembledSystem system = assemble(contribution);
         check_near(system.mass[0], kMass, 1e-12);
         check_near(system.load[0], -kMass * kGravity, 1e-12);
-        check_near(contribution.link_poses_world()[0].lin.z, 0.7, 1e-12);
+        check_near(contribution.unit_poses_world()[0].lin.z, 0.7, 1e-12);
     }
 
-    std::vector<ArticulationLink3D> limited_link(bool prismatic)
+    std::vector<ArticulationUnit3D> limited_unit(bool prismatic)
     {
         return {
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint =
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::identity(),
+                .motion_twist_at_unit =
                     prismatic ? Screw3{Vec3::zero(), Vec3::unit_z()}
                               : Screw3{Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::identity(),
                 .inertia = rod_inertia(),
                 .limits = {.minimum = 0.0, .maximum = 1.0},
                 .diagnostic_name =
@@ -510,7 +511,7 @@ namespace
     void test_joint_limits()
     {
         Articulation3D model(
-            limited_link(false), {{0.0}, {-2.0}}, "limited-revolute");
+            limited_unit(false), {{0.0}, {-2.0}}, "limited-revolute");
         Multibody3DSystem system;
         auto contribution =
             std::make_unique<Articulation3DDynamicsContribution>(
@@ -525,12 +526,11 @@ namespace
         TERMIN_QOPT_CHECK(lower_hit.ok());
         TERMIN_QOPT_CHECK(lower_hit.unilateral_constraint_count == 1);
         TERMIN_QOPT_CHECK(std::abs(state->state().velocities[0]) < 1e-10);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_reaction >
-                          0.0);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_active);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].minimum_reaction > 0.0);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].minimum_active);
         TERMIN_QOPT_CHECK(
-            std::abs(state->joint_limit_states()[0].maximum_reaction) < 1e-12);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].signed_effort() > 0.0);
+            std::abs(state->unit_limit_states()[0].maximum_reaction) < 1e-12);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].signed_effort() > 0.0);
         TERMIN_QOPT_CHECK(state->total_energy() <= energy_before + 1e-12);
 
         TERMIN_QOPT_CHECK(state->set_state({{0.0}, {1.0}}) ==
@@ -541,8 +541,8 @@ namespace
         TERMIN_QOPT_CHECK(lower_release.unilateral_constraint_count == 1);
         TERMIN_QOPT_CHECK(state->state().velocities[0] > 0.9);
         TERMIN_QOPT_CHECK(
-            std::abs(state->joint_limit_states()[0].minimum_reaction) < 1e-12);
-        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].minimum_active);
+            std::abs(state->unit_limit_states()[0].minimum_reaction) < 1e-12);
+        TERMIN_QOPT_CHECK(!state->unit_limit_states()[0].minimum_active);
 
         TERMIN_QOPT_CHECK(state->set_state({{1.0}, {2.0}}) ==
                           Articulation3DDiagnostic::None);
@@ -551,10 +551,9 @@ namespace
         TERMIN_QOPT_CHECK(upper_hit.ok());
         TERMIN_QOPT_CHECK(upper_hit.unilateral_constraint_count == 1);
         TERMIN_QOPT_CHECK(std::abs(state->state().velocities[0]) < 1e-10);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].maximum_reaction >
-                          0.0);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].maximum_active);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].signed_effort() < 0.0);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].maximum_reaction > 0.0);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].maximum_active);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].signed_effort() < 0.0);
         TERMIN_QOPT_CHECK(state->total_energy() <= upper_energy_before + 1e-12);
 
         TERMIN_QOPT_CHECK(state->set_state({{0.5}, {0.1}}) ==
@@ -562,8 +561,8 @@ namespace
         const DynamicsSystemStepResult inactive = system.step(options(0.01));
         TERMIN_QOPT_CHECK(inactive.ok());
         TERMIN_QOPT_CHECK(inactive.unilateral_constraint_count == 0);
-        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].minimum_active);
-        TERMIN_QOPT_CHECK(!state->joint_limit_states()[0].maximum_active);
+        TERMIN_QOPT_CHECK(!state->unit_limit_states()[0].minimum_active);
+        TERMIN_QOPT_CHECK(!state->unit_limit_states()[0].maximum_active);
 
         TERMIN_QOPT_CHECK(state->set_state({{0.05}, {-10.0}}) ==
                           Articulation3DDiagnostic::None);
@@ -572,11 +571,10 @@ namespace
         TERMIN_QOPT_CHECK(predicted_hit.ok());
         TERMIN_QOPT_CHECK(predicted_hit.unilateral_constraint_count == 1);
         check_near(state->state().velocities[0], -5.0, 1e-10);
-        TERMIN_QOPT_CHECK(state->joint_limit_states()[0].minimum_reaction >
-                          0.0);
+        TERMIN_QOPT_CHECK(state->unit_limit_states()[0].minimum_reaction > 0.0);
 
         Articulation3D prismatic_model(
-            limited_link(true), {{1.0}, {1.5}}, "limited-prismatic");
+            limited_unit(true), {{1.0}, {1.5}}, "limited-prismatic");
         Multibody3DSystem prismatic_system;
         auto prismatic = std::make_unique<Articulation3DDynamicsContribution>(
             prismatic_model, Vec3::zero(), "limited-prismatic");
@@ -589,9 +587,9 @@ namespace
         TERMIN_QOPT_CHECK(std::abs(prismatic_state->state().velocities[0]) <
                           1e-10);
         TERMIN_QOPT_CHECK(
-            prismatic_state->joint_limit_states()[0].maximum_reaction > 0.0);
+            prismatic_state->unit_limit_states()[0].maximum_reaction > 0.0);
 
-        auto no_limits = limited_link(false);
+        auto no_limits = limited_unit(false);
         no_limits[0].limits = {};
         Articulation3D unlimited_model(
             std::move(no_limits), {{0.0}, {-2.0}}, "unlimited");
@@ -647,24 +645,26 @@ namespace
 
     void test_branching_forward_kinematics()
     {
-        std::vector<ArticulationLink3D> links = double_pendulum_links();
-        links.push_back({
-            .parent_link = 0,
-            .parent_to_joint_zero = Pose3::translation(kHalfLength, 0.0, 0.0),
-            .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-            .joint_to_link = Pose3::translation(0.0, kHalfLength, 0.0),
+        std::vector<ArticulationUnit3D> units = double_pendulum_units();
+        units.push_back({
+            .parent_unit = 0,
+            .parent_to_unit_zero =
+                Pose3::translation(kHalfLength, kHalfLength, 0.0),
+            .motion_twist_at_unit =
+                Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                    Pose3::translation(0.0, kHalfLength, 0.0)),
             .inertia = rod_inertia(),
             .diagnostic_name = "branch",
         });
-        Articulation3D model(std::move(links),
+        Articulation3D model(std::move(units),
                              {{0.2, -0.1, 0.3}, {0.4, -0.2, 0.1}},
                              "branched-articulation");
         Articulation3DDynamicsContribution contribution(model,
                                                         {0.0, 0.0, -kGravity});
         TERMIN_QOPT_CHECK(contribution.diagnostic() ==
                           Articulation3DDiagnostic::None);
-        TERMIN_QOPT_CHECK(contribution.link_count() == 3);
-        const std::vector<Pose3>& poses = contribution.link_poses_world();
+        TERMIN_QOPT_CHECK(contribution.unit_count() == 3);
+        const std::vector<Pose3>& poses = contribution.unit_poses_world();
         TERMIN_QOPT_CHECK(poses.size() == 3);
         const Vec3 common_joint =
             poses[0].transform_point({kHalfLength, 0.0, 0.0});
@@ -702,7 +702,7 @@ namespace
         };
 
         Articulation3D reduced_model(
-            double_pendulum_links(), initial_state, "reduced-double-pendulum");
+            double_pendulum_units(), initial_state, "reduced-double-pendulum");
         Multibody3DSystem reduced_system;
         auto reduced = std::make_unique<Articulation3DDynamicsContribution>(
             reduced_model,
@@ -715,7 +715,7 @@ namespace
                           DynamicsSystemDiagnostic::None);
 
         const std::vector<Pose3> initial_poses =
-            reduced_state->link_poses_world();
+            reduced_state->unit_poses_world();
         Multibody3DSystem maximal_system;
         auto* upper =
             add(maximal_system,
@@ -765,7 +765,7 @@ namespace
         }
 
         const std::vector<Pose3>& reduced_poses =
-            reduced_state->link_poses_world();
+            reduced_state->unit_poses_world();
         check_near(
             (reduced_poses[0].lin - upper->state().pose.lin).norm(), 0.0, 2e-5);
         check_near(

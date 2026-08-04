@@ -54,7 +54,7 @@ namespace termin
         FEMArticulationSceneDiagnostic diagnostic =
             FEMArticulationSceneDiagnostic::None;
         std::string diagnostic_entity;
-        std::vector<robotics::ArticulationLink3D> links;
+        std::vector<robotics::ArticulationUnit3D> units;
         robotics::Articulation3DState state;
         std::optional<robotics::ArticulationFloatingBase3D> floating_base;
         FEMRigidBodyComponent* base_body = nullptr;

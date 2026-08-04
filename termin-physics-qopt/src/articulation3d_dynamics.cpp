@@ -40,8 +40,8 @@ namespace termin::physics_qopt
             {
             case robotics::Articulation3DDiagnostic::None:
                 return PointKinematics3DDiagnostic::None;
-            case robotics::Articulation3DDiagnostic::InvalidLink:
-                return PointKinematics3DDiagnostic::InvalidLink;
+            case robotics::Articulation3DDiagnostic::InvalidUnit:
+                return PointKinematics3DDiagnostic::InvalidUnit;
             case robotics::Articulation3DDiagnostic::NonFinitePoint:
                 return PointKinematics3DDiagnostic::NonFinitePoint;
             case robotics::Articulation3DDiagnostic::InternalFailure:
@@ -89,9 +89,9 @@ namespace termin::physics_qopt
     using robotics::Articulation3DDiagnostic;
     using robotics::Articulation3DState;
     using robotics::ArticulationFloatingBase3D;
-    using robotics::ArticulationJointLimits3D;
-    using robotics::ArticulationLink3D;
     using robotics::ArticulationPointKinematics3DResult;
+    using robotics::ArticulationUnit3D;
+    using robotics::ArticulationUnitLimits3D;
     using ArticulationAccess = robotics::detail::Articulation3DMutableAccess;
 
     Articulation3DDynamicsContribution::Articulation3DDynamicsContribution(
@@ -110,12 +110,12 @@ namespace termin::physics_qopt
             diagnostic_ = Articulation3DDiagnostic::NonFiniteInput;
         }
         accelerations_.assign(dof_count(), 0.0);
-        joint_limit_rows_.resize(link_count());
-        joint_limit_states_.resize(link_count());
-        state_snapshot_.coordinates.assign(link_count(), 0.0);
-        state_snapshot_.velocities.assign(link_count(), 0.0);
+        unit_limit_rows_.resize(unit_count());
+        unit_limit_states_.resize(unit_count());
+        state_snapshot_.coordinates.assign(unit_count(), 0.0);
+        state_snapshot_.velocities.assign(unit_count(), 0.0);
         acceleration_snapshot_.assign(dof_count(), 0.0);
-        joint_limit_state_snapshot_.resize(link_count());
+        unit_limit_state_snapshot_.resize(unit_count());
     }
 
     Articulation3D& Articulation3DDynamicsContribution::articulation() noexcept
@@ -135,9 +135,9 @@ namespace termin::physics_qopt
         return diagnostic_;
     }
 
-    std::size_t Articulation3DDynamicsContribution::link_count() const noexcept
+    std::size_t Articulation3DDynamicsContribution::unit_count() const noexcept
     {
-        return articulation_.link_count();
+        return articulation_.unit_count();
     }
 
     std::size_t Articulation3DDynamicsContribution::dof_count() const noexcept
@@ -145,10 +145,10 @@ namespace termin::physics_qopt
         return articulation_.dof_count();
     }
 
-    const std::vector<ArticulationLink3D>&
-    Articulation3DDynamicsContribution::links() const noexcept
+    const std::vector<ArticulationUnit3D>&
+    Articulation3DDynamicsContribution::units() const noexcept
     {
-        return articulation_.links();
+        return articulation_.units();
     }
 
     const Articulation3DState&
@@ -175,21 +175,21 @@ namespace termin::physics_qopt
     }
 
     const std::vector<termin::Pose3>&
-    Articulation3DDynamicsContribution::link_poses_world() const noexcept
+    Articulation3DDynamicsContribution::unit_poses_world() const noexcept
     {
-        return articulation_.link_poses_world();
+        return articulation_.unit_poses_world();
     }
 
     const std::vector<termin::Screw3>&
-    Articulation3DDynamicsContribution::link_velocities_local() const noexcept
+    Articulation3DDynamicsContribution::unit_velocities_local() const noexcept
     {
-        return articulation_.link_velocities_local();
+        return articulation_.unit_velocities_local();
     }
 
-    const std::vector<ArticulationJointLimitState3D>&
-    Articulation3DDynamicsContribution::joint_limit_states() const noexcept
+    const std::vector<ArticulationUnitLimitState3D>&
+    Articulation3DDynamicsContribution::unit_limit_states() const noexcept
     {
-        return joint_limit_states_;
+        return unit_limit_states_;
     }
 
     DynamicsDofHandle Articulation3DDynamicsContribution::dofs() const noexcept
@@ -224,10 +224,10 @@ namespace termin::physics_qopt
 
     PointKinematics3DResult
     Articulation3DDynamicsContribution::point_kinematics(
-        std::size_t link_index, termin::Vec3 point_local) const noexcept
+        std::size_t unit_index, termin::Vec3 point_local) const noexcept
     {
         ArticulationPointKinematics3DResult source =
-            articulation_.point_kinematics(link_index, point_local);
+            articulation_.point_kinematics(unit_index, point_local);
         if (!source.ok())
         {
             return {{}, point_diagnostic(source.diagnostic)};
@@ -280,7 +280,7 @@ namespace termin::physics_qopt
             return false;
         }
         std::vector<double> generalized_velocity(count, 0.0);
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             articulation_.has_floating_base() ? 6 : 0;
         if (ArticulationAccess::floating_base(articulation_).has_value())
         {
@@ -290,7 +290,7 @@ namespace termin::physics_qopt
         }
         std::copy(ArticulationAccess::state(articulation_).velocities.begin(),
                   ArticulationAccess::state(articulation_).velocities.end(),
-                  generalized_velocity.begin() + joint_offset);
+                  generalized_velocity.begin() + unit_offset);
         if (!articulation_.inverse_dynamics(
                 generalized_velocity, zero, gravity_world_, bias))
         {
@@ -332,8 +332,8 @@ namespace termin::physics_qopt
     {
         if (diagnostic_ != Articulation3DDiagnostic::None ||
             !std::isfinite(time_step) || time_step <= 0.0 ||
-            joint_limit_rows_.size() != articulation_.links().size() ||
-            joint_limit_states_.size() != articulation_.links().size())
+            unit_limit_rows_.size() != articulation_.units().size() ||
+            unit_limit_states_.size() != articulation_.units().size())
         {
             std::fprintf(stderr,
                          "[termin-qopt] articulation '%s' cannot register "
@@ -343,21 +343,20 @@ namespace termin::physics_qopt
         }
 
         unilateral_time_step_ = time_step;
-        std::fill(joint_limit_rows_.begin(),
-                  joint_limit_rows_.end(),
-                  JointLimitRows{});
-        std::fill(joint_limit_states_.begin(),
-                  joint_limit_states_.end(),
-                  ArticulationJointLimitState3D{});
+        std::fill(
+            unit_limit_rows_.begin(), unit_limit_rows_.end(), UnitLimitRows{});
+        std::fill(unit_limit_states_.begin(),
+                  unit_limit_states_.end(),
+                  ArticulationUnitLimitState3D{});
         try
         {
             const std::string prefix =
                 diagnostic_name_.empty() ? "articulation" : diagnostic_name_;
-            for (std::size_t index = 0; index < articulation_.links().size();
+            for (std::size_t index = 0; index < articulation_.units().size();
                  ++index)
             {
-                const ArticulationJointLimits3D& limits =
-                    articulation_.links()[index].limits;
+                const ArticulationUnitLimits3D& limits =
+                    articulation_.units()[index].limits;
                 const double coordinate =
                     ArticulationAccess::state(articulation_).coordinates[index];
                 const double predicted_coordinate =
@@ -376,7 +375,7 @@ namespace termin::physics_qopt
                     {
                         return result.diagnostic;
                     }
-                    joint_limit_rows_[index].minimum = result.handle;
+                    unit_limit_rows_[index].minimum = result.handle;
                 }
                 if (limits.maximum.has_value() &&
                     (coordinate >= *limits.maximum ||
@@ -390,7 +389,7 @@ namespace termin::physics_qopt
                     {
                         return result.diagnostic;
                     }
-                    joint_limit_rows_[index].maximum = result.handle;
+                    unit_limit_rows_[index].maximum = result.handle;
                 }
             }
             return AssemblyDiagnostic::None;
@@ -436,7 +435,7 @@ namespace termin::physics_qopt
             }
 
             const std::size_t generalized_count = dof_count();
-            const std::size_t joint_offset =
+            const std::size_t unit_offset =
                 ArticulationAccess::floating_base(articulation_).has_value()
                     ? 6
                     : 0;
@@ -463,7 +462,7 @@ namespace termin::physics_qopt
                 std::copy(
                     ArticulationAccess::state(articulation_).velocities.begin(),
                     ArticulationAccess::state(articulation_).velocities.end(),
-                    generalized_velocity.begin() + joint_offset);
+                    generalized_velocity.begin() + unit_offset);
                 std::fill(load.begin(), load.end(), 0.0);
                 for (std::size_t row = 0; row < generalized_count; ++row)
                 {
@@ -496,13 +495,13 @@ namespace termin::physics_qopt
             }
 
             std::vector<double> row(generalized_count, 0.0);
-            for (std::size_t index = 0; index < articulation_.links().size();
+            for (std::size_t index = 0; index < articulation_.units().size();
                  ++index)
             {
-                const ArticulationJointLimits3D& limits =
-                    articulation_.links()[index].limits;
-                row[joint_offset + index] = -1.0;
-                if (joint_limit_rows_[index].minimum.valid())
+                const ArticulationUnitLimits3D& limits =
+                    articulation_.units()[index].limits;
+                row[unit_offset + index] = -1.0;
+                if (unit_limit_rows_[index].minimum.valid())
                 {
                     const double coordinate =
                         snapshot_ready_
@@ -516,14 +515,14 @@ namespace termin::physics_qopt
                     };
                     AssemblyDiagnostic result =
                         assembly.add_unilateral_jacobian(
-                            joint_limit_rows_[index].minimum,
+                            unit_limit_rows_[index].minimum,
                             dofs_,
                             ConstDenseMatrixView::row_major(
                                 row.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
-                            joint_limit_rows_[index].minimum,
+                            unit_limit_rows_[index].minimum,
                             {limit.data(), limit.size(), 1});
                     }
                     if (result != AssemblyDiagnostic::None)
@@ -531,8 +530,8 @@ namespace termin::physics_qopt
                         return result;
                     }
                 }
-                row[joint_offset + index] = 1.0;
-                if (joint_limit_rows_[index].maximum.valid())
+                row[unit_offset + index] = 1.0;
+                if (unit_limit_rows_[index].maximum.valid())
                 {
                     const double coordinate =
                         snapshot_ready_
@@ -546,14 +545,14 @@ namespace termin::physics_qopt
                     };
                     AssemblyDiagnostic result =
                         assembly.add_unilateral_jacobian(
-                            joint_limit_rows_[index].maximum,
+                            unit_limit_rows_[index].maximum,
                             dofs_,
                             ConstDenseMatrixView::row_major(
                                 row.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
-                            joint_limit_rows_[index].maximum,
+                            unit_limit_rows_[index].maximum,
                             {limit.data(), limit.size(), 1});
                     }
                     if (result != AssemblyDiagnostic::None)
@@ -561,7 +560,7 @@ namespace termin::physics_qopt
                         return result;
                     }
                 }
-                row[joint_offset + index] = 0.0;
+                row[unit_offset + index] = 0.0;
             }
             return AssemblyDiagnostic::None;
         }
@@ -591,9 +590,9 @@ namespace termin::physics_qopt
         std::copy(accelerations_.begin(),
                   accelerations_.end(),
                   acceleration_snapshot_.begin());
-        std::copy(joint_limit_states_.begin(),
-                  joint_limit_states_.end(),
-                  joint_limit_state_snapshot_.begin());
+        std::copy(unit_limit_states_.begin(),
+                  unit_limit_states_.end(),
+                  unit_limit_state_snapshot_.begin());
         floating_base_snapshot_ =
             ArticulationAccess::floating_base(articulation_);
         snapshot_ready_ = true;
@@ -620,9 +619,9 @@ namespace termin::physics_qopt
             std::copy(acceleration_snapshot_.begin(),
                       acceleration_snapshot_.end(),
                       accelerations_.begin());
-            std::copy(joint_limit_state_snapshot_.begin(),
-                      joint_limit_state_snapshot_.end(),
-                      joint_limit_states_.begin());
+            std::copy(unit_limit_state_snapshot_.begin(),
+                      unit_limit_state_snapshot_.end(),
+                      unit_limit_states_.begin());
             ArticulationAccess::floating_base(articulation_) =
                 floating_base_snapshot_;
             (void)ArticulationAccess::update_kinematics(articulation_);
@@ -636,15 +635,15 @@ namespace termin::physics_qopt
         ConstDenseVectorView reactions,
         ConstDenseVectorView tight_mask) noexcept
     {
-        if (joint_limit_rows_.size() != articulation_.links().size() ||
-            joint_limit_states_.size() != articulation_.links().size())
+        if (unit_limit_rows_.size() != articulation_.units().size() ||
+            unit_limit_states_.size() != articulation_.units().size())
         {
             return;
         }
-        for (std::size_t index = 0; index < articulation_.links().size();
+        for (std::size_t index = 0; index < articulation_.units().size();
              ++index)
         {
-            ArticulationJointLimitState3D& state = joint_limit_states_[index];
+            ArticulationUnitLimitState3D& state = unit_limit_states_[index];
             const auto read = [&](DynamicsUnilateralConstraintHandle handle,
                                   double& reaction,
                                   bool& active)
@@ -665,10 +664,10 @@ namespace termin::physics_qopt
                 reaction = reactions[info.offset];
                 active = tight_mask[info.offset] == 1.0;
             };
-            read(joint_limit_rows_[index].minimum,
+            read(unit_limit_rows_[index].minimum,
                  state.minimum_reaction,
                  state.minimum_active);
-            read(joint_limit_rows_[index].maximum,
+            read(unit_limit_rows_[index].maximum,
                  state.maximum_reaction,
                  state.maximum_active);
         }
@@ -683,7 +682,7 @@ namespace termin::physics_qopt
         const DenseBlockInfo info =
             topology.dof_topology().block_info(dofs_.block);
         const std::size_t generalized_count = dof_count();
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             ArticulationAccess::floating_base(articulation_).has_value() ? 6
                                                                          : 0;
         if (!info.ok() || info.size != generalized_count)
@@ -704,11 +703,11 @@ namespace termin::physics_qopt
                 ArticulationAccess::floating_base(articulation_)
                     ->velocity_local = read_screw_vw(values, info.offset);
             }
-            for (std::size_t index = 0; index < articulation_.links().size();
+            for (std::size_t index = 0; index < articulation_.units().size();
                  ++index)
             {
                 ArticulationAccess::state(articulation_).velocities[index] =
-                    values[info.offset + joint_offset + index];
+                    values[info.offset + unit_offset + index];
             }
             (void)ArticulationAccess::update_kinematics(articulation_);
         }
@@ -720,7 +719,7 @@ namespace termin::physics_qopt
     {
         const DenseBlockInfo info =
             topology.dof_topology().block_info(dofs_.block);
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             ArticulationAccess::floating_base(articulation_).has_value() ? 6
                                                                          : 0;
         if (!info.ok() || info.size != dof_count())
@@ -734,10 +733,10 @@ namespace termin::physics_qopt
                            destination,
                            info.offset);
         }
-        for (std::size_t index = 0; index < articulation_.links().size();
+        for (std::size_t index = 0; index < articulation_.units().size();
              ++index)
         {
-            destination[info.offset + joint_offset + index] =
+            destination[info.offset + unit_offset + index] =
                 ArticulationAccess::state(articulation_).velocities[index];
         }
         return AssemblyDiagnostic::None;
@@ -748,7 +747,7 @@ namespace termin::physics_qopt
     {
         const DenseBlockInfo info =
             topology.dof_topology().block_info(dofs_.block);
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             ArticulationAccess::floating_base(articulation_).has_value() ? 6
                                                                          : 0;
         if (!info.ok() || info.size != dof_count())
@@ -760,11 +759,11 @@ namespace termin::physics_qopt
             ArticulationAccess::floating_base(articulation_)->velocity_local =
                 read_screw_vw(source, info.offset);
         }
-        for (std::size_t index = 0; index < articulation_.links().size();
+        for (std::size_t index = 0; index < articulation_.units().size();
              ++index)
         {
             ArticulationAccess::state(articulation_).velocities[index] =
-                source[info.offset + joint_offset + index];
+                source[info.offset + unit_offset + index];
         }
         return finite(ArticulationAccess::state(articulation_).velocities) &&
                        (!ArticulationAccess::floating_base(articulation_)
@@ -788,7 +787,7 @@ namespace termin::physics_qopt
         }
         const DenseBlockInfo info =
             topology.dof_topology().block_info(dofs_.block);
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             ArticulationAccess::floating_base(articulation_).has_value() ? 6
                                                                          : 0;
         if (!info.ok() || info.size != dof_count())
@@ -806,11 +805,11 @@ namespace termin::physics_qopt
             ArticulationAccess::floating_base(articulation_)->velocity_local =
                 velocity;
         }
-        for (std::size_t index = 0; index < articulation_.links().size();
+        for (std::size_t index = 0; index < articulation_.units().size();
              ++index)
         {
             const double velocity =
-                midpoint_velocity[info.offset + joint_offset + index];
+                midpoint_velocity[info.offset + unit_offset + index];
             ArticulationAccess::state(articulation_).coordinates[index] =
                 state_snapshot_.coordinates[index] + time_step * velocity;
             ArticulationAccess::state(articulation_).velocities[index] =
@@ -838,7 +837,7 @@ namespace termin::physics_qopt
         }
         const DenseBlockInfo info =
             topology.dof_topology().block_info(dofs_.block);
-        const std::size_t joint_offset =
+        const std::size_t unit_offset =
             ArticulationAccess::floating_base(articulation_).has_value() ? 6
                                                                          : 0;
         if (!info.ok() || info.size != dof_count())
@@ -857,12 +856,12 @@ namespace termin::physics_qopt
                 destination,
                 info.offset);
         }
-        for (std::size_t index = 0; index < articulation_.links().size();
+        for (std::size_t index = 0; index < articulation_.units().size();
              ++index)
         {
-            destination[info.offset + joint_offset + index] =
-                midpoint_velocity[info.offset + joint_offset + index] +
-                correction[info.offset + joint_offset + index] / time_step;
+            destination[info.offset + unit_offset + index] =
+                midpoint_velocity[info.offset + unit_offset + index] +
+                correction[info.offset + unit_offset + index] / time_step;
         }
         return AssemblyDiagnostic::None;
     }

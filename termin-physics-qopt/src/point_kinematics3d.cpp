@@ -15,8 +15,8 @@ namespace termin::physics_qopt
             return "none";
         case PointKinematics3DDiagnostic::InvalidModel:
             return "invalid_model";
-        case PointKinematics3DDiagnostic::InvalidLink:
-            return "invalid_link";
+        case PointKinematics3DDiagnostic::InvalidUnit:
+            return "invalid_unit";
         case PointKinematics3DDiagnostic::NonFinitePoint:
             return "non_finite_point";
         case PointKinematics3DDiagnostic::NonFiniteForce:

@@ -441,23 +441,22 @@ namespace
 
     void test_articulation_endpoint()
     {
-        std::vector<ArticulationLink3D> links{
+        std::vector<ArticulationUnit3D> units{
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::zero(), Vec3::unit_y()},
-                .joint_to_link = Pose3::identity(),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::identity(),
+                .motion_twist_at_unit = {Vec3::zero(), Vec3::unit_y()},
                 .inertia = unit_inertia(),
             },
         };
-        Articulation3D model(std::move(links), {{0.2}, {-0.3}});
+        Articulation3D model(std::move(units), {{0.2}, {-0.3}});
         Articulation3DDynamicsContribution articulation(model);
         DynamicsTopology topology;
         TERMIN_QOPT_CHECK(articulation.register_topology(topology) ==
                           AssemblyDiagnostic::None);
         TERMIN_QOPT_CHECK(topology.finalize() == AssemblyDiagnostic::None);
         const ContactEndpoint3D endpoint =
-            ContactEndpoint3D::articulation_link(articulation, 0, Vec3::zero());
+            ContactEndpoint3D::articulation_unit(articulation, 0, Vec3::zero());
         const PointKinematics3DResult result = endpoint.point_kinematics();
         TERMIN_QOPT_CHECK(result.ok());
         TERMIN_QOPT_CHECK(result.value.dof_count() == 1);
@@ -468,16 +467,15 @@ namespace
     void test_articulation_contact_rows()
     {
         RigidBody3DContribution body(unit_inertia());
-        std::vector<ArticulationLink3D> links{
+        std::vector<ArticulationUnit3D> units{
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::zero(), Vec3::unit_y()},
-                .joint_to_link = Pose3::identity(),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::identity(),
+                .motion_twist_at_unit = {Vec3::zero(), Vec3::unit_y()},
                 .inertia = unit_inertia(),
             },
         };
-        Articulation3D model(std::move(links), {{0.0}, {0.0}});
+        Articulation3D model(std::move(units), {{0.0}, {0.0}});
         Articulation3DDynamicsContribution articulation(model);
         ContactSet3DContribution contacts("mixed-rows");
         TERMIN_QOPT_CHECK(
@@ -485,7 +483,7 @@ namespace
                 {
                     .key = 20,
                     .endpoint_a = ContactEndpoint3D::static_world(Vec3::zero()),
-                    .endpoint_b = ContactEndpoint3D::articulation_link(
+                    .endpoint_b = ContactEndpoint3D::articulation_unit(
                         articulation, 0, Vec3::zero()),
                     .normal_from_a_to_b_world = Vec3::unit_y(),
                     .signed_gap = 0.0,
@@ -494,7 +492,7 @@ namespace
                     .key = 21,
                     .endpoint_a =
                         ContactEndpoint3D::rigid_body(body, Vec3::zero()),
-                    .endpoint_b = ContactEndpoint3D::articulation_link(
+                    .endpoint_b = ContactEndpoint3D::articulation_unit(
                         articulation, 0, Vec3::zero()),
                     .normal_from_a_to_b_world = Vec3::unit_y(),
                     .signed_gap = 0.0,

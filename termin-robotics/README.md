@@ -2,20 +2,22 @@
 
 `termin-robotics` owns solver-neutral models and task semantics used by robot
 control. The first implemented layer is `Articulation3D`: one fixed- or
-floating-base kinematic tree with reduced joint coordinates.
+floating-base tree of one-DOF kinematic units.
 
 ## Current articulation layer
 
 `Articulation3D` owns topology, configuration, velocity and kinematic caches.
-Each link stores its parent joint transform, one-DOF motion twist, link frame,
-limits and spatial inertia. The floating root is an explicit six-DOF body, not
-a fictitious joint.
+Each `ArticulationUnit3D` stores its parent unit, zero-coordinate transform,
+one-DOF motion twist, limits and spatial inertia. Its moving output frame is
+also the frame in which the twist and inertia are expressed; there is no
+separate joint/link topology or constant joint-to-link transform. The floating
+root is an explicit six-DOF base frame, not a fictitious unit.
 
 The current API provides:
 
 - forward kinematics for branching trees;
-- body-local link velocities;
-- link-frame world twists and spatial generalized Jacobians in `vw` order;
+- unit-local output-frame velocities;
+- unit-frame world twists and spatial generalized Jacobians in `vw` order;
 - material-point world positions, velocities and linear generalized Jacobians;
 - exact frame/point bias acceleration `Jdot(q,qdot) qdot` in world coordinates;
 - recursive inverse dynamics;
@@ -139,7 +141,7 @@ itself intentionally remains acyclic so its recursive algorithms stay simple.
 ## Executable example
 
 `examples/kinematic_point_control.cpp` is a complete public-API loop for a
-two-link arm. It relinearizes a point-velocity objective, solves bounded
+two-unit arm. It relinearizes a point-velocity objective, solves bounded
 kinematic HQP, and explicitly integrates the returned generalized velocity.
 When native tests are enabled it is built and run as
 `termin_robotics_kinematic_point_control_example`.

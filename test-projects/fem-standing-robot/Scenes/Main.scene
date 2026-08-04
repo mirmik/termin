@@ -2608,7 +2608,7 @@
               "substeps": 1.0,
               "contact_friction_coefficient": 0.8,
               "collision_layer_mask": "0xffffffffffffffff",
-              "adjacent_link_collision_enabled": false
+              "adjacent_unit_collision_enabled": false
             }
           }
         ]

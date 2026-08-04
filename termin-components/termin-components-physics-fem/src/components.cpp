@@ -73,7 +73,7 @@ namespace termin
 
         template <typename Component>
         void stage_double(tc::InspectFacetBuilder& inspect,
-                          double Component::*member,
+                          double Component::* member,
                           const char* type_name,
                           const char* path,
                           const char* label,
@@ -158,9 +158,9 @@ namespace termin
         return articulation_ != nullptr && dynamics_ != nullptr;
     }
 
-    std::size_t FEMArticulationComponent::link_count() const noexcept
+    std::size_t FEMArticulationComponent::unit_count() const noexcept
     {
-        return articulation_ != nullptr ? articulation_->link_count() : 0;
+        return articulation_ != nullptr ? articulation_->unit_count() : 0;
     }
 
     double FEMArticulationComponent::total_energy() const noexcept
@@ -499,9 +499,9 @@ namespace termin
             const auto& base = articulation_->floating_base();
             return base.has_value() ? base->velocity_local : Screw3::zero();
         }
-        const auto& velocities = articulation_->link_velocities_local();
-        return articulation_link_index_ < velocities.size()
-                   ? velocities[articulation_link_index_]
+        const auto& velocities = articulation_->unit_velocities_local();
+        return articulation_unit_index_ < velocities.size()
+                   ? velocities[articulation_unit_index_]
                    : Screw3::zero();
     }
 
@@ -550,7 +550,7 @@ namespace termin
         if (articulation_ != nullptr)
         {
             tc::Log::error(
-                "[FEMRigidBodyComponent] articulation link velocity is "
+                "[FEMRigidBodyComponent] articulation unit velocity is "
                 "determined by reduced coordinates");
             return false;
         }
@@ -712,9 +712,9 @@ namespace termin
         register_collision_layer_mask_field(inspect);
         tc::stage_inspect_field(
             inspect,
-            &FEMPhysicsWorldComponent::adjacent_link_collision_enabled,
+            &FEMPhysicsWorldComponent::adjacent_unit_collision_enabled,
             "FEMPhysicsWorldComponent",
-            "adjacent_link_collision_enabled",
+            "adjacent_unit_collision_enabled",
             "Adjacent Link Collision",
             "bool");
         (void)descriptor.commit();
@@ -794,7 +794,7 @@ namespace termin
                 {
                     if (articulation != nullptr)
                     {
-                        result += articulation->link_count();
+                        result += articulation->unit_count();
                         result += articulation->base_body_ != nullptr ? 1U : 0U;
                     }
                 }
@@ -1436,7 +1436,7 @@ namespace termin
         {
             articulation = std::make_unique<robotics::Articulation3D>(
                 std::move(*compiled.floating_base),
-                std::move(compiled.links),
+                std::move(compiled.units),
                 std::move(compiled.state),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
@@ -1444,7 +1444,7 @@ namespace termin
         else
         {
             articulation = std::make_unique<robotics::Articulation3D>(
-                std::move(compiled.links),
+                std::move(compiled.units),
                 std::move(compiled.state),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
@@ -1590,7 +1590,7 @@ namespace termin
         {
             component.base_body_->world_ = this;
             component.base_body_->articulation_ = component.dynamics_;
-            component.base_body_->articulation_link_index_ =
+            component.base_body_->articulation_unit_index_ =
                 robotics::articulation_root_frame;
             component.base_body_->articulation_base_ = true;
         }
@@ -1612,7 +1612,7 @@ namespace termin
                 binding.coordinate_scale);
             binding.body->world_ = this;
             binding.body->articulation_ = component.dynamics_;
-            binding.body->articulation_link_index_ = joint_index;
+            binding.body->articulation_unit_index_ = joint_index;
             binding.body->articulation_base_ = false;
             if (binding.motor != nullptr && binding.motor->enabled())
             {
@@ -1976,7 +1976,7 @@ namespace termin
                 body->body_ = nullptr;
                 body->force_ = nullptr;
                 body->articulation_ = nullptr;
-                body->articulation_link_index_ =
+                body->articulation_unit_index_ =
                     robotics::articulation_root_frame;
                 body->articulation_base_ = false;
             }
@@ -2013,7 +2013,7 @@ namespace termin
                 articulation->base_body_->body_ = nullptr;
                 articulation->base_body_->force_ = nullptr;
                 articulation->base_body_->articulation_ = nullptr;
-                articulation->base_body_->articulation_link_index_ =
+                articulation->base_body_->articulation_unit_index_ =
                     robotics::articulation_root_frame;
                 articulation->base_body_->articulation_base_ = false;
             }
@@ -2026,7 +2026,7 @@ namespace termin
                     body->body_ = nullptr;
                     body->force_ = nullptr;
                     body->articulation_ = nullptr;
-                    body->articulation_link_index_ =
+                    body->articulation_unit_index_ =
                         robotics::articulation_root_frame;
                     body->articulation_base_ = false;
                 }
@@ -2179,7 +2179,7 @@ namespace termin
         component.body_ = nullptr;
         component.force_ = nullptr;
         component.articulation_ = nullptr;
-        component.articulation_link_index_ = robotics::articulation_root_frame;
+        component.articulation_unit_index_ = robotics::articulation_root_frame;
         component.articulation_base_ = false;
         component.world_ = nullptr;
     }

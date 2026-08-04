@@ -227,7 +227,7 @@ namespace termin
         };
 
         std::function<void(Entity, std::size_t)> compile_children;
-        compile_children = [&](Entity parent_entity, std::size_t parent_link)
+        compile_children = [&](Entity parent_entity, std::size_t parent_unit)
         {
             for (Entity joint_entity : parent_entity.children())
             {
@@ -249,20 +249,20 @@ namespace termin
                     return;
                 }
 
-                Pose3 parent_to_joint_zero;
+                Pose3 parent_to_unit_zero;
                 Pose3 current_joint_pose;
                 if (!local_rigid_pose(joint_entity, current_joint_pose) ||
-                    !joint_zero_pose(*joint, parent_to_joint_zero))
+                    !joint_zero_pose(*joint, parent_to_unit_zero))
                 {
                     fail(FEMArticulationSceneDiagnostic::NonRigidTransform,
                          joint_entity);
                     return;
                 }
                 if (!floating &&
-                    parent_link == robotics::articulation_root_frame)
+                    parent_unit == robotics::articulation_root_frame)
                 {
-                    parent_to_joint_zero =
-                        (*root_pose * parent_to_joint_zero).normalized();
+                    parent_to_unit_zero =
+                        (*root_pose * parent_to_unit_zero).normalized();
                 }
 
                 const Screw3 motion_twist = joint_motion_twist(*joint);
@@ -314,8 +314,8 @@ namespace termin
                     return;
                 }
 
-                Pose3 joint_to_link;
-                if (!local_rigid_pose(body_entity, joint_to_link))
+                Pose3 joint_to_unit;
+                if (!local_rigid_pose(body_entity, joint_to_unit))
                 {
                     fail(FEMArticulationSceneDiagnostic::NonRigidTransform,
                          body_entity);
@@ -329,7 +329,7 @@ namespace termin
                          joint_entity);
                     return;
                 }
-                robotics::ArticulationJointLimits3D limits;
+                robotics::ArticulationUnitLimits3D limits;
                 FEMJointLimitComponent* authored_limits =
                     joint_entity.get_component<FEMJointLimitComponent>();
                 if (authored_limits != nullptr && authored_limits->enabled())
@@ -359,12 +359,13 @@ namespace termin
                     }
                 }
 
-                const std::size_t link_index = result.links.size();
-                result.links.push_back({
-                    .parent_link = parent_link,
-                    .parent_to_joint_zero = parent_to_joint_zero,
-                    .motion_twist_at_joint = motion_twist,
-                    .joint_to_link = joint_to_link,
+                const std::size_t unit_index = result.units.size();
+                result.units.push_back({
+                    .parent_unit = parent_unit,
+                    .parent_to_unit_zero =
+                        (parent_to_unit_zero * joint_to_unit).normalized(),
+                    .motion_twist_at_unit =
+                        motion_twist.adjoint_inv(joint_to_unit),
                     .inertia = body_inertia(*body),
                     .limits = limits,
                     .diagnostic_name = entity_name(body_entity),
@@ -384,13 +385,13 @@ namespace termin
                     .body_entity = body_entity,
                     .coordinate_scale = coordinate_scale,
                 });
-                compile_children(body_entity, link_index);
+                compile_children(body_entity, unit_index);
             }
         };
 
         compile_children(root, robotics::articulation_root_frame);
         if (result.diagnostic == FEMArticulationSceneDiagnostic::None &&
-            result.links.empty())
+            result.units.empty())
         {
             result.diagnostic =
                 FEMArticulationSceneDiagnostic::EmptyArticulation;

@@ -14,19 +14,18 @@ namespace
 {
     constexpr double tolerance = 1e-8;
 
-    SpatialInertia3 link_inertia()
+    SpatialInertia3 unit_inertia()
     {
         return {1.2, {0.35, 0.45, 0.55}, Pose3::translation(0.35, 0.0, 0.0)};
     }
 
-    ArticulationLink3D revolute_link(std::size_t parent, std::string name)
+    ArticulationUnit3D revolute_unit(std::size_t parent, std::string name)
     {
         return {
-            .parent_link = parent,
-            .parent_to_joint_zero = Pose3::identity(),
-            .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-            .joint_to_link = Pose3::identity(),
-            .inertia = link_inertia(),
+            .parent_unit = parent,
+            .parent_to_unit_zero = Pose3::identity(),
+            .motion_twist_at_unit = {Vec3::unit_y(), Vec3::zero()},
+            .inertia = unit_inertia(),
             .limits = {.minimum = -2.0, .maximum = 2.0},
             .diagnostic_name = std::move(name),
         };
@@ -34,7 +33,7 @@ namespace
 
     Articulation3D fixed_model(double coordinate = 0.0, double velocity = 0.0)
     {
-        return Articulation3D({revolute_link(articulation_root_frame, "joint")},
+        return Articulation3D({revolute_unit(articulation_root_frame, "joint")},
                               {{coordinate}, {velocity}},
                               "inverse-dynamics-test");
     }
@@ -160,7 +159,7 @@ namespace
         };
         Articulation3D articulation(
             base,
-            {revolute_link(articulation_root_frame, "joint")},
+            {revolute_unit(articulation_root_frame, "joint")},
             {{0.2}, {0.0}},
             "floating-test");
         InverseDynamicsHqpController3D controller(articulation,
