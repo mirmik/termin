@@ -8,6 +8,7 @@ from termin.project import (
     ProjectCreationError,
     create_project,
     create_project_file,
+    initialize_project,
     make_default_scene,
 )
 from termin.project import creation as creation_module
@@ -146,6 +147,73 @@ def test_create_project_does_not_overwrite_existing_directory(tmp_path):
 
     assert project_file == str(tmp_path / "Sample" / "Sample.terminproj")
     assert scene_file.read_text(encoding="utf-8") == "preserve this scene"
+
+
+def test_initialize_project_writes_into_existing_directory_and_preserves_unrelated_files(
+    tmp_path,
+):
+    project_dir = tmp_path / "Sample"
+    project_dir.mkdir()
+    readme = project_dir / "README.md"
+    readme.write_text("keep me", encoding="utf-8")
+
+    project_file = initialize_project(project_dir)
+
+    assert project_file == str(project_dir / "Sample.terminproj")
+    assert json.loads((project_dir / "Sample.terminproj").read_text(encoding="utf-8")) == {
+        "version": 1,
+        "name": "Sample",
+    }
+    assert (project_dir / "project_settings" / "project.json").is_file()
+    assert (project_dir / "scene.scene").is_file()
+    assert readme.read_text(encoding="utf-8") == "keep me"
+
+
+def test_initialize_project_accepts_explicit_name(tmp_path):
+    project_dir = tmp_path / "directory-name"
+    project_dir.mkdir()
+
+    project_file = initialize_project(project_dir, "Game")
+
+    assert project_file == str(project_dir / "Game.terminproj")
+
+
+@pytest.mark.parametrize("conflict", ["Existing.terminproj", "scene.scene", "project_settings"])
+def test_initialize_project_does_not_overwrite_project_paths(tmp_path, conflict):
+    project_dir = tmp_path / "Sample"
+    project_dir.mkdir()
+    path = project_dir / conflict
+    if conflict == "project_settings":
+        path.mkdir()
+    else:
+        path.write_text("preserve", encoding="utf-8")
+
+    with pytest.raises(ProjectAlreadyExistsError):
+        initialize_project(project_dir)
+
+    assert path.exists()
+    assert not (project_dir / "Sample.terminproj").exists()
+
+
+def test_initialize_project_rolls_back_published_targets_on_failure(tmp_path, monkeypatch):
+    project_dir = tmp_path / "Sample"
+    project_dir.mkdir()
+    original_publish = creation_module._publish_staged_path
+    publish_count = 0
+
+    def fail_second_publish(staging_path, target_path):
+        nonlocal publish_count
+        publish_count += 1
+        if publish_count == 2:
+            raise ProjectCreationError("injected publication failure")
+        original_publish(staging_path, target_path)
+
+    monkeypatch.setattr(creation_module, "_publish_staged_path", fail_second_publish)
+
+    with pytest.raises(ProjectCreationError, match="injected publication failure"):
+        initialize_project(project_dir)
+
+    assert list(project_dir.iterdir()) == []
 
 
 def test_create_project_cleans_up_staging_when_template_generation_fails(tmp_path, monkeypatch):

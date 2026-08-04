@@ -7,6 +7,7 @@ dedicated executable.
 ## Commands
 
 ```bash
+termin init [--name NAME]
 termin editor [project]
 termin launcher
 termin shaderc ...
@@ -19,6 +20,33 @@ termin stdlib [sync] [--project path/to/project] [--clean] [--dry-run]
 termin runner ...
 termin builder ...
 ```
+
+`termin init` initializes a starter project directly in the current directory.
+The project name defaults to the directory name and can be overridden with
+`--name`. Existing unrelated files are preserved, while `.terminproj`,
+`scene.scene`, and `project_settings` conflicts are rejected without
+overwriting them:
+
+```bash
+mkdir MyGame
+cd MyGame
+termin init
+termin editor .
+```
+
+## Adding the checkout SDK to Bash PATH
+
+From a source checkout, run:
+
+```bash
+./setup-sdk-path.sh
+```
+
+The helper writes one managed, idempotent block to `~/.bashrc` using the
+checkout's absolute `sdk/bin` path. It preserves the rest of the file and
+updates the same block when run again. Open a new Bash shell afterwards, or
+apply it immediately with `source ~/.bashrc`. Set `TERMIN_BASHRC` to target a
+different Bash startup file.
 
 Unknown commands are resolved in a git-like form:
 
