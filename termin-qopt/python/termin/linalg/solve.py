@@ -1,9 +1,15 @@
 import logging
+from typing import List, Optional, Tuple
+
 import numpy as np
-from scipy.linalg import cho_factor, cho_solve
-from typing import Optional, Tuple, List
 
 _logger = logging.getLogger(__name__)
+
+
+def _solve_cholesky(lower_factor: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+    intermediate = np.linalg.solve(lower_factor, rhs)
+    return np.linalg.solve(lower_factor.conj().T, intermediate)
+
 
 def solve_qp_equalities(H, g, A, b):
     """
@@ -35,13 +41,13 @@ def solve_qp_equalities(H, g, A, b):
 
     try:
         # --- 1) Cholesky разложение: H = L L^T ---
-        L, lower = cho_factor(H)
+        L = np.linalg.cholesky(H)
 
         # --- 2) Вычислить H^{-1} g и H^{-1} A^T ---
         # здесь считаем два объекта, входящие в формулы Шура:
         # H^{-1} g  и  H^{-1} A^T
-        y_g = cho_solve((L, lower), g)     # = H^{-1} g
-        Y   = cho_solve((L, lower), A.T)   # = H^{-1} A^T
+        y_g = _solve_cholesky(L, g)     # = H^{-1} g
+        Y = _solve_cholesky(L, A.T)     # = H^{-1} A^T
 
         # --- 3) Построить систему Шура ---
         # S = A H^{-1} A^T
@@ -54,7 +60,7 @@ def solve_qp_equalities(H, g, A, b):
 
         # --- 5) Восстановить x: H x = -g - A^T λ ---
         w = -g - A.T @ λ
-        x = cho_solve((L, lower), w)
+        x = _solve_cholesky(L, w)
     except np.linalg.LinAlgError as e:
         # H может быть лишь положительно полуопределённой.
         _logger.warning("Cholesky failed in solve_qp_equalities (%s), falling back to lstsq", e)

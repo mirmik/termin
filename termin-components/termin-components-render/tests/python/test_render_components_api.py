@@ -12,6 +12,7 @@ from termin.geombase import Vec3
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,
+    CameraComponent,
     CameraController,
     CameraProjection,
     DepthOnlyPass,
@@ -125,6 +126,40 @@ def test_orbit_camera_controller_exposes_target_as_vec3():
 
     controller._target = Vec3(4.0, 5.0, 6.0)
     assert controller._target == Vec3(4.0, 5.0, 6.0)
+
+
+@pytest.mark.parametrize("horizon_lock", [True, False])
+def test_orbit_camera_controller_horizon_lock_survives_scene_roundtrip(horizon_lock):
+    from termin.scene import Entity, TcScene
+
+    source_scene = TcScene.create("orbit-camera-horizon-lock-source")
+    restored_scene = TcScene.create("orbit-camera-horizon-lock-restored")
+    try:
+        entity = source_scene.create_entity("camera")
+        entity.add_component(CameraComponent())
+        controller = OrbitCameraController()
+        controller.horizon_lock = horizon_lock
+        entity.add_component(controller)
+
+        hierarchy = entity.serialize_hierarchy()
+        component_data = next(
+            item["data"]
+            for item in hierarchy["components"]
+            if item["type"] == "OrbitCameraController"
+        )
+        assert component_data["horizon_lock"] is horizon_lock
+
+        restored_entity = Entity.deserialize_hierarchy(
+            hierarchy,
+            restored_scene,
+            None,
+        )
+        restored = restored_entity.get_component(OrbitCameraController)
+        assert restored is not None
+        assert restored.horizon_lock is horizon_lock
+    finally:
+        source_scene.destroy()
+        restored_scene.destroy()
 
 
 def test_skinned_mesh_renderer_computes_bones_in_renderer_space():

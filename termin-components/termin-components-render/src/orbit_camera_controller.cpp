@@ -79,6 +79,10 @@ void OrbitCameraController::register_type() {
         "OrbitCameraController", "pan_mouse_button", "Pan Mouse Button", "int",
         0.0, 2.0, 1.0
     );
+    tc::stage_inspect_field(descriptor.inspect(),
+        &OrbitCameraController::horizon_lock,
+        "OrbitCameraController", "horizon_lock", "Horizon Lock", "bool"
+    );
     (void)descriptor.commit();
 }
 
