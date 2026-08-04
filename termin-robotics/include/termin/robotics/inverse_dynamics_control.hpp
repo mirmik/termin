@@ -23,6 +23,20 @@ namespace termin::robotics
         std::string diagnostic_name;
     };
 
+    // A solver-neutral block of unknown environmental forces. The row-major
+    // generalized-force basis G maps block variables lambda to effort G*lambda.
+    // Optional inequalities use C*lambda <= d and may express unilateral
+    // bounds or a polyhedral friction cone without introducing physics types.
+    struct InverseDynamicsForceVariableBlock3D
+    {
+        std::size_t variable_count = 0;
+        std::vector<double> generalized_force_basis_storage;
+        std::size_t inequality_row_count = 0;
+        std::vector<double> inequality_matrix_storage;
+        std::vector<double> inequality_target_storage;
+        std::string diagnostic_name;
+    };
+
     enum class InverseDynamicsControlDiagnostic3D : std::uint8_t
     {
         None,
@@ -36,6 +50,7 @@ namespace termin::robotics
         UnsupportedDerivativeOrder,
         DimensionMismatch,
         NonFiniteInput,
+        InvalidForceVariableBlock,
         DynamicsFailure,
         RegistrationFailure,
         SolveFailure,
@@ -51,9 +66,10 @@ namespace termin::robotics
         double time_step = 1.0 / 60.0;
         // Known generalized effort applied by the environment, in the same
         // vw layout as Articulation3D. Empty means zero. Contact-force decision
-        // variables belong to a later physics adapter; this value is only for
-        // already known loads.
+        // layout. This value is for already known loads; unknown contact loads
+        // belong in force_variable_blocks.
         std::vector<double> external_generalized_effort;
+        std::vector<InverseDynamicsForceVariableBlock3D> force_variable_blocks;
         bool use_primal_warm_start = true;
         qopt::HqpOptions hqp;
     };
@@ -61,8 +77,13 @@ namespace termin::robotics
     struct TERMIN_ROBOTICS_API InverseDynamicsControlResult3D
     {
         std::vector<double> generalized_acceleration;
-        // M*qdd + bias - external. Unactuated entries are constrained to zero.
+        // M*qdd + bias - known_external - G*lambda. Unactuated entries are
+        // constrained to zero.
         std::vector<double> required_generalized_effort;
+        std::vector<double> force_variable_values;
+        // One offset per declared block, followed by the final total size.
+        std::vector<std::size_t> force_variable_block_offsets;
+        std::vector<double> force_variable_generalized_effort;
         // One entry per controller actuator, in actuator declaration order.
         std::vector<std::size_t> actuator_dofs;
         std::vector<double> actuator_effort;

@@ -149,6 +149,71 @@ namespace termin::robotics
         TaskSettings3D settings_;
     };
 
+    // Acceleration-level Cartesian point tracking:
+    // a_ff + kp * (p_target - p) + kd * (v_target - v). The kinematic bias
+    // Jdot*qdot is subtracted from the right-hand side explicitly.
+    class TERMIN_ROBOTICS_API PointAccelerationTask3D final
+        : public ArticulationTask3D
+    {
+    public:
+        PointAccelerationTask3D(
+            std::size_t link_index,
+            termin::Vec3 point_local,
+            termin::Vec3 target_position_world,
+            termin::Vec3 target_velocity_world = termin::Vec3::zero(),
+            termin::Vec3 feedforward_acceleration_world = termin::Vec3::zero(),
+            double position_gain = 1.0,
+            double velocity_gain = 1.0,
+            TaskSettings3D settings = {});
+
+        [[nodiscard]] TaskLinearization3DResult linearize(
+            const TaskLinearizationContext3D& context) const noexcept override;
+
+    private:
+        std::size_t link_index_;
+        termin::Vec3 point_local_;
+        termin::Vec3 target_position_world_;
+        termin::Vec3 target_velocity_world_;
+        termin::Vec3 feedforward_acceleration_world_;
+        double position_gain_;
+        double velocity_gain_;
+        TaskSettings3D settings_;
+    };
+
+    // Acceleration-level SE(3) tracking at a link-frame origin. Linear and
+    // angular feedback use world-frame errors; target acceleration uses vw
+    // Screw3 semantics, matching ArticulationFrameKinematics3D.
+    class TERMIN_ROBOTICS_API PoseAccelerationTask3D final
+        : public ArticulationTask3D
+    {
+    public:
+        PoseAccelerationTask3D(
+            std::size_t link_index,
+            termin::Pose3 target_pose_world,
+            termin::Screw3 target_velocity_world = termin::Screw3::zero(),
+            termin::Screw3 feedforward_acceleration_world =
+                termin::Screw3::zero(),
+            double linear_position_gain = 1.0,
+            double angular_position_gain = 1.0,
+            double linear_velocity_gain = 1.0,
+            double angular_velocity_gain = 1.0,
+            TaskSettings3D settings = {});
+
+        [[nodiscard]] TaskLinearization3DResult linearize(
+            const TaskLinearizationContext3D& context) const noexcept override;
+
+    private:
+        std::size_t link_index_;
+        termin::Pose3 target_pose_world_;
+        termin::Screw3 target_velocity_world_;
+        termin::Screw3 feedforward_acceleration_world_;
+        double linear_position_gain_;
+        double angular_position_gain_;
+        double linear_velocity_gain_;
+        double angular_velocity_gain_;
+        TaskSettings3D settings_;
+    };
+
     class TERMIN_ROBOTICS_API JointPositionTask3D final
         : public ArticulationTask3D
     {

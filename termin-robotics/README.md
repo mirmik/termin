@@ -17,6 +17,7 @@ The current API provides:
 - body-local link velocities;
 - link-frame world twists and spatial generalized Jacobians in `vw` order;
 - material-point world positions, velocities and linear generalized Jacobians;
+- exact frame/point bias acceleration `Jdot(q,qdot) qdot` in world coordinates;
 - recursive inverse dynamics;
 - dense reduced mass matrix construction;
 - mechanical energy evaluation.
@@ -42,16 +43,20 @@ Relations have one canonical meaning:
 Tasks reject an unsupported order explicitly instead of silently applying a
 velocity equation to accelerations. Joint velocity tracking and predictive
 joint limits support both orders. `JointPostureTask3D` provides an explicit
-acceleration-level joint PD law with optional acceleration feed-forward. Pose
-tracking, point velocity and current
-signed-distance avoidance are velocity-level tasks until their acceleration
-bias (`Jdot qdot` and curvature terms) is represented explicitly.
+acceleration-level joint PD law with optional acceleration feed-forward.
+`PointAccelerationTask3D` and `PoseAccelerationTask3D` apply Cartesian PD plus
+feed-forward acceleration and subtract the exact kinematic bias.
+Signed-distance avoidance remains a velocity-level task.
 
 The standard task layer currently provides:
 
 - `PoseTrackingTask3D`, using an SE(3) logarithmic pose error expressed in the
   world frame;
 - `PointVelocityTask3D`;
+- `PointAccelerationTask3D`, with world position/velocity feedback and
+  acceleration feed-forward;
+- `PoseAccelerationTask3D`, with world-frame SE(3) feedback and spatial
+  acceleration feed-forward;
 - `JointPositionTask3D` with optional velocity feed-forward;
 - `JointVelocityTask3D`;
 - `JointPostureTask3D`, with position/velocity feedback and acceleration
@@ -88,7 +93,8 @@ velocity_control (implemented)
 inverse_dynamics_control (implemented foundation)
 ├── acceleration-level HQP formulation
 ├── floating-base underactuation equations
-└── actuator effort bounds and inverse-dynamics output
+├── actuator effort bounds and inverse-dynamics output
+└── generic environmental-force decision blocks
 ```
 
 Velocity and inverse-dynamics formulations share the task linearization
@@ -109,9 +115,11 @@ articulation, enforces zero required effort on unactuated DOFs, applies optional
 per-actuator effort bounds inside the HQP, and returns both generalized
 acceleration and the corresponding inverse-dynamics effort. By default every
 scalar joint is actuated and the six floating-base DOFs are not. Known external
-generalized loads may be supplied explicitly; contact-force decision variables
-and Cartesian acceleration tasks remain separate future adapters because their
-`Jdot*qdot` and contact-frame semantics must be represented exactly.
+generalized loads may be supplied explicitly. Unknown environmental forces are
+declared as solver-neutral `InverseDynamicsForceVariableBlock3D` objects with a
+generalized-force basis and optional linear inequalities. The physics adapter
+uses this contract for unilateral point-contact normal/tangent variables while
+keeping contact ownership out of `termin-robotics`.
 
 The controller does not mutate or integrate the plant. `termin-physics-qopt`
 provides `inverse_dynamics_actuators_from_motor()` and
@@ -127,3 +135,11 @@ silently clamp coordinates; joint and velocity limits belong in the task set.
 Closed chains are expected to be represented above `Articulation3D` as one or
 more spanning trees plus explicit frame-to-frame closure constraints. The tree
 itself intentionally remains acyclic so its recursive algorithms stay simple.
+
+## Executable example
+
+`examples/kinematic_point_control.cpp` is a complete public-API loop for a
+two-link arm. It relinearizes a point-velocity objective, solves bounded
+kinematic HQP, and explicitly integrates the returned generalized velocity.
+When native tests are enabled it is built and run as
+`termin_robotics_kinematic_point_control_example`.

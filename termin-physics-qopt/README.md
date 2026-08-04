@@ -13,6 +13,7 @@ The native library contains:
 - bounded articulation motor efforts;
 - a validated bridge from robotics inverse-dynamics actuator/result contracts
   to articulation motor channels;
+- a point-contact force adapter for inverse-dynamics normal/tangent variables;
 - unilateral contacts, persistence and warm-start state;
 - the Coulomb-friction approximation;
 - acceleration solve, integration, position/velocity projection and
@@ -52,9 +53,30 @@ const auto step = system.step({.time_step = time_step});
 ```
 
 The motor adapter validates channel count and reduced-DOF order before writing
-commands. Contact-force decision variables are intentionally not inferred from
-the simulation state; they require the explicit contact adapter described in
-the robotics roadmap.
+commands. Contact-force variables are likewise explicit:
+
+```cpp
+const auto support = inverse_dynamics_contact_force_block(
+    articulation_dynamics,
+    ContactEndpoint3D::articulation_link(
+        articulation_dynamics, foot_link, foot_point_local),
+    ground_normal_world, friction_coefficient, maximum_normal_force,
+    "left-foot");
+InverseDynamicsControlOptions3D options;
+options.time_step = time_step;
+options.force_variable_blocks = {support.block};
+const auto control = controller.solve(tasks, options);
+```
+
+Positive normal force acts along the explicitly supplied world direction on
+the controlled articulation. Variables are ordered `[normal, tangent_1,
+tangent_2]`; the adapter supplies `normal >= 0`, an optional normal maximum,
+and the conservative pyramid `|t1| + |t2| <= mu * normal`.
+
+`examples/dynamic_joint_control.cpp` demonstrates the complete plant loop:
+inverse-dynamics HQP, validated motor command transfer and `DynamicsSystem`
+stepping. With native tests enabled it is built and run as
+`termin_physics_qopt_dynamic_joint_control_example`.
 
 The multibody oracle and native regression corpus live under `tests/`. The
 separate scene-component module compiles authored entities into these physical

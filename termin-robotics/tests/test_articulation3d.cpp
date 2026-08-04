@@ -1,3 +1,4 @@
+#include <termin/geom/se3.hpp>
 #include <termin/robotics/articulation3d.hpp>
 
 #include "test_check.hpp"
@@ -85,11 +86,102 @@ namespace
         TERMIN_ROBOTICS_CHECK(
             std::isfinite(model.total_energy({0.0, 0.0, -9.81})));
     }
+
+    void check_vec_near(Vec3 actual, Vec3 expected, double tolerance)
+    {
+        TERMIN_ROBOTICS_CHECK((actual - expected).norm() < tolerance);
+    }
+
+    void test_bias_acceleration_against_finite_difference()
+    {
+        constexpr double step = 1.0e-7;
+        const Vec3 point_local{0.2, -0.1, 0.3};
+        const Articulation3DState initial{{0.3, -0.4}, {0.7, -0.2}};
+
+        Articulation3D fixed(links(), initial, "fixed-bias");
+        const auto fixed_point_before = fixed.point_kinematics(1, point_local);
+        const auto fixed_frame_before = fixed.frame_kinematics(1);
+        TERMIN_ROBOTICS_CHECK(fixed_point_before.ok());
+        TERMIN_ROBOTICS_CHECK(fixed_frame_before.ok());
+        Articulation3DState advanced = initial;
+        for (std::size_t joint = 0; joint < advanced.coordinates.size();
+             ++joint)
+        {
+            advanced.coordinates[joint] += advanced.velocities[joint] * step;
+        }
+        TERMIN_ROBOTICS_CHECK(fixed.set_state(advanced) ==
+                              Articulation3DDiagnostic::None);
+        const auto fixed_point_after = fixed.point_kinematics(1, point_local);
+        const auto fixed_frame_after = fixed.frame_kinematics(1);
+        check_vec_near((fixed_point_after.value.velocity_world -
+                        fixed_point_before.value.velocity_world) /
+                           step,
+                       fixed_point_before.value.bias_acceleration_world,
+                       2.0e-6);
+        check_vec_near((fixed_frame_after.value.velocity_world.lin -
+                        fixed_frame_before.value.velocity_world.lin) /
+                           step,
+                       fixed_frame_before.value.bias_acceleration_world.lin,
+                       2.0e-6);
+        check_vec_near((fixed_frame_after.value.velocity_world.ang -
+                        fixed_frame_before.value.velocity_world.ang) /
+                           step,
+                       fixed_frame_before.value.bias_acceleration_world.ang,
+                       2.0e-6);
+
+        ArticulationFloatingBase3D base{
+            .inertia = link_inertia(),
+            .pose_world = se3_exp({{0.2, -0.1, 0.3}, {0.4, -0.2, 0.1}}),
+            .velocity_local = {{0.4, -0.3, 0.2}, {0.7, 0.1, -0.2}},
+            .diagnostic_name = "base",
+        };
+        Articulation3D floating(base, links(), initial, "floating-bias");
+        const auto floating_point_before =
+            floating.point_kinematics(1, point_local);
+        const auto floating_frame_before = floating.frame_kinematics(1);
+        const auto base_point_before =
+            floating.floating_base_point_kinematics(point_local);
+        TERMIN_ROBOTICS_CHECK(floating_point_before.ok());
+        TERMIN_ROBOTICS_CHECK(floating_frame_before.ok());
+        TERMIN_ROBOTICS_CHECK(base_point_before.ok());
+        TERMIN_ROBOTICS_CHECK(floating.set_state(advanced) ==
+                              Articulation3DDiagnostic::None);
+        TERMIN_ROBOTICS_CHECK(
+            floating.set_floating_base_state(
+                base.pose_world * se3_exp(base.velocity_local * step),
+                base.velocity_local) == Articulation3DDiagnostic::None);
+        const auto floating_point_after =
+            floating.point_kinematics(1, point_local);
+        const auto floating_frame_after = floating.frame_kinematics(1);
+        const auto base_point_after =
+            floating.floating_base_point_kinematics(point_local);
+        check_vec_near((floating_point_after.value.velocity_world -
+                        floating_point_before.value.velocity_world) /
+                           step,
+                       floating_point_before.value.bias_acceleration_world,
+                       3.0e-6);
+        check_vec_near((floating_frame_after.value.velocity_world.lin -
+                        floating_frame_before.value.velocity_world.lin) /
+                           step,
+                       floating_frame_before.value.bias_acceleration_world.lin,
+                       3.0e-6);
+        check_vec_near((floating_frame_after.value.velocity_world.ang -
+                        floating_frame_before.value.velocity_world.ang) /
+                           step,
+                       floating_frame_before.value.bias_acceleration_world.ang,
+                       3.0e-6);
+        check_vec_near((base_point_after.value.velocity_world -
+                        base_point_before.value.velocity_world) /
+                           step,
+                       base_point_before.value.bias_acceleration_world,
+                       2.0e-6);
+    }
 }
 
 int main()
 {
     test_validation();
     test_kinematics_and_inertial_model();
+    test_bias_acceleration_against_finite_difference();
     return 0;
 }

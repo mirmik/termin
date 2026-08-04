@@ -57,6 +57,8 @@ namespace termin::physics_qopt
 
         [[nodiscard]] bool valid() const noexcept;
         [[nodiscard]] bool is_static() const noexcept;
+        [[nodiscard]] bool belongs_to(const Articulation3DDynamicsContribution&
+                                          articulation) const noexcept;
         [[nodiscard]] PointKinematics3DResult point_kinematics() const noexcept;
 
     private:
