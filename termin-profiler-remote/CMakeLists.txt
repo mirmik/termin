@@ -28,6 +28,7 @@ target_include_directories(termin_profiler_remote PUBLIC
 )
 target_link_libraries(termin_profiler_remote PRIVATE tcbase::termin_base Threads::Threads)
 if(WIN32)
+    target_compile_definitions(termin_profiler_remote PRIVATE NOMINMAX)
     target_link_libraries(termin_profiler_remote PRIVATE ws2_32)
 endif()
 termin_set_rpath_lib(termin_profiler_remote)
@@ -60,6 +61,9 @@ if(TERMIN_BUILD_TESTS)
         termin_profiler_remote
         tcbase::termin_base
     )
+    if(WIN32)
+        target_link_libraries(termin_profiler_remote_target_service_test PRIVATE ws2_32)
+    endif()
     termin_set_rpath_test(termin_profiler_remote_target_service_test)
     add_test(NAME termin_profiler_remote_target_service_test
         COMMAND termin_profiler_remote_target_service_test)

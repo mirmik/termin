@@ -150,7 +150,7 @@ namespace
         // Two arbitrarily rotated regular N-gons can quantize the opposing
         // impulse directions by at most one facet angle relative to each
         // other. Both impulses remain inside the true Coulomb disk.
-        constexpr double polygon_bound =
+        const double polygon_bound =
             2.0 * 0.45 * std::sin(std::numbers::pi / 32.0);
         TERMIN_QOPT_CHECK(physical_difference <= polygon_bound + 1e-10);
         TERMIN_QOPT_CHECK(rotated.work[0] <= 1e-12);
