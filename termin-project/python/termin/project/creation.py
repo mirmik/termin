@@ -477,6 +477,69 @@ def create_project(name: str, location: str | os.PathLike[str]) -> str:
     return str(project_file)
 
 
+def initialize_project(
+    location: str | os.PathLike[str],
+    name: str | None = None,
+) -> str:
+    """Initialize a starter project directly inside an existing directory.
+
+    Unrelated directory contents are preserved.  Every project-owned target is
+    staged first and then published without replacement.  If publication of a
+    later target fails, targets already published by this call are removed so
+    callers never observe a knowingly partial project.
+    """
+    root = _resolve_creation_root(location)
+    project_name = validate_project_name(root.name if name is None else name)
+    project_file = root / f"{project_name}.terminproj"
+    targets = [project_file, root / "project_settings", root / "scene.scene"]
+
+    existing_manifests = sorted(root.glob("*.terminproj"))
+    if existing_manifests:
+        raise ProjectAlreadyExistsError(
+            f"Project directory already contains a .terminproj file: {existing_manifests[0]}"
+        )
+    for target in targets:
+        if target.exists():
+            raise ProjectAlreadyExistsError(f"Project path already exists: {target}")
+
+    try:
+        staging_dir = Path(tempfile.mkdtemp(prefix=".termin-project-", dir=root))
+    except OSError as exc:
+        raise ProjectCreationError(f"Failed to stage project in {root}: {exc}") from exc
+
+    published: list[Path] = []
+
+    def roll_back_published_targets() -> None:
+        for target in reversed(published):
+            try:
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            except OSError:
+                _LOGGER.exception("Failed to roll back partially initialized project path %s", target)
+
+    try:
+        _write_project_contents(staging_dir, project_name, root / "scene.scene")
+        for target in targets:
+            staged_target = staging_dir / target.relative_to(root)
+            _publish_staged_path(staged_target, target)
+            published.append(target)
+    except ProjectCreationError:
+        roll_back_published_targets()
+        raise
+    except OSError as exc:
+        roll_back_published_targets()
+        raise ProjectCreationError(f"Failed to initialize project in {root}: {exc}") from exc
+    except Exception:
+        roll_back_published_targets()
+        raise
+    finally:
+        _remove_staging_directory(staging_dir)
+
+    return str(project_file)
+
+
 def create_project_file(name: str, location: str | os.PathLike[str]) -> str:
     """Create one empty project descriptor without replacing an existing file.
 
