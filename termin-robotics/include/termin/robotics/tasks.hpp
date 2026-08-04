@@ -36,6 +36,7 @@ namespace termin::robotics
         DuplicateJoint,
         DimensionMismatch,
         NonFiniteInput,
+        InvalidBounds,
         InvalidWeight,
         InvalidGain,
         InvalidTimeStep,
@@ -198,6 +199,25 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
+        TaskSettings3D settings_;
+    };
+
+    class TERMIN_ROBOTICS_API JointVelocityLimitConstraint3D final
+        : public ArticulationTask3D
+    {
+    public:
+        JointVelocityLimitConstraint3D(std::vector<std::size_t> joint_indices,
+                                       std::vector<double> minimum_velocities,
+                                       std::vector<double> maximum_velocities,
+                                       TaskSettings3D settings = {});
+
+        [[nodiscard]] TaskLinearization3DResult linearize(
+            const TaskLinearizationContext3D& context) const noexcept override;
+
+    private:
+        std::vector<std::size_t> joint_indices_;
+        std::vector<double> minimum_velocities_;
+        std::vector<double> maximum_velocities_;
         TaskSettings3D settings_;
     };
 

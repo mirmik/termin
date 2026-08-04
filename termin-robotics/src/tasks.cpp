@@ -32,7 +32,11 @@ namespace termin::robotics
                 message.data(),
                 static_cast<int>(task_diagnostic_name(diagnostic).size()),
                 task_diagnostic_name(diagnostic).data());
-            return {{}, diagnostic};
+            TaskLinearization3D value;
+            value.priority = settings.priority;
+            value.active = false;
+            value.diagnostic_name = settings.diagnostic_name;
+            return {std::move(value), diagnostic};
         }
 
         TaskDiagnostic3D
@@ -185,6 +189,8 @@ namespace termin::robotics
             return "dimension_mismatch";
         case TaskDiagnostic3D::NonFiniteInput:
             return "non_finite_input";
+        case TaskDiagnostic3D::InvalidBounds:
+            return "invalid_bounds";
         case TaskDiagnostic3D::InvalidWeight:
             return "invalid_weight";
         case TaskDiagnostic3D::InvalidGain:
@@ -704,6 +710,136 @@ namespace termin::robotics
         return failure(TaskDiagnostic3D::InternalFailure,
                        settings_,
                        "joint limit linearization failed");
+    }
+
+    JointVelocityLimitConstraint3D::JointVelocityLimitConstraint3D(
+        std::vector<std::size_t> joint_indices,
+        std::vector<double> minimum_velocities,
+        std::vector<double> maximum_velocities,
+        TaskSettings3D settings)
+        : joint_indices_(std::move(joint_indices)),
+          minimum_velocities_(std::move(minimum_velocities)),
+          maximum_velocities_(std::move(maximum_velocities)),
+          settings_(std::move(settings))
+    {
+    }
+
+    TaskLinearization3DResult JointVelocityLimitConstraint3D::linearize(
+        const TaskLinearizationContext3D& context) const noexcept
+    {
+        const TaskDiagnostic3D context_diagnostic = validate_context(context);
+        if (context_diagnostic != TaskDiagnostic3D::None)
+        {
+            return failure(context_diagnostic, settings_, "invalid context");
+        }
+        if (!settings_.enabled)
+        {
+            return {make_linearization(
+                        context, settings_, TaskRelation3D::Inequality, 0),
+                    TaskDiagnostic3D::None};
+        }
+        if (context.derivative_order == TaskDerivativeOrder3D::Acceleration &&
+            (!std::isfinite(context.time_step) || context.time_step <= 0.0))
+        {
+            return failure(TaskDiagnostic3D::InvalidTimeStep,
+                           settings_,
+                           "acceleration velocity limits require a positive "
+                           "time step");
+        }
+        if (!finite(minimum_velocities_) || !finite(maximum_velocities_))
+        {
+            return failure(TaskDiagnostic3D::NonFiniteInput,
+                           settings_,
+                           "non-finite velocity limit");
+        }
+
+        try
+        {
+            const std::vector<std::size_t> joints =
+                resolve_joints(*context.articulation, joint_indices_);
+            const TaskDiagnostic3D joints_diagnostic =
+                validate_joints(*context.articulation, joints);
+            if (joints_diagnostic != TaskDiagnostic3D::None)
+            {
+                return failure(
+                    joints_diagnostic, settings_, "invalid joint selection");
+            }
+            if ((minimum_velocities_.empty() && maximum_velocities_.empty()) ||
+                (!minimum_velocities_.empty() &&
+                 minimum_velocities_.size() != joints.size()) ||
+                (!maximum_velocities_.empty() &&
+                 maximum_velocities_.size() != joints.size()))
+            {
+                return failure(TaskDiagnostic3D::DimensionMismatch,
+                               settings_,
+                               "velocity limit size mismatch");
+            }
+            if (!minimum_velocities_.empty() && !maximum_velocities_.empty())
+            {
+                for (std::size_t index = 0; index < joints.size(); ++index)
+                {
+                    if (minimum_velocities_[index] > maximum_velocities_[index])
+                    {
+                        return failure(TaskDiagnostic3D::InvalidBounds,
+                                       settings_,
+                                       "minimum velocity exceeds maximum");
+                    }
+                }
+            }
+
+            const std::size_t rows_per_joint =
+                (maximum_velocities_.empty() ? 0 : 1) +
+                (minimum_velocities_.empty() ? 0 : 1);
+            TaskLinearization3D value =
+                make_linearization(context,
+                                   settings_,
+                                   TaskRelation3D::Inequality,
+                                   rows_per_joint * joints.size());
+            const std::size_t offset = joint_offset(*context.articulation);
+            const bool acceleration =
+                context.derivative_order == TaskDerivativeOrder3D::Acceleration;
+            const double coefficient = acceleration ? context.time_step : 1.0;
+            std::size_t row = 0;
+            for (std::size_t index = 0; index < joints.size(); ++index)
+            {
+                const std::size_t joint = joints[index];
+                const double velocity =
+                    context.articulation->state().velocities[joint];
+                if (!maximum_velocities_.empty())
+                {
+                    value.matrix_storage[row * value.variable_count + offset +
+                                         joint] = coefficient;
+                    value.target_storage[row] = maximum_velocities_[index] -
+                                                (acceleration ? velocity : 0.0);
+                    ++row;
+                }
+                if (!minimum_velocities_.empty())
+                {
+                    value.matrix_storage[row * value.variable_count + offset +
+                                         joint] = -coefficient;
+                    value.target_storage[row] = -minimum_velocities_[index] +
+                                                (acceleration ? velocity : 0.0);
+                    ++row;
+                }
+            }
+            return {std::move(value), TaskDiagnostic3D::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] joint velocity limit task failed: "
+                         "%s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] joint velocity limit task failed "
+                         "with an unknown exception\n");
+        }
+        return failure(TaskDiagnostic3D::InternalFailure,
+                       settings_,
+                       "joint velocity limit linearization failed");
     }
 
     PointAvoidanceConstraint3D::PointAvoidanceConstraint3D(

@@ -186,6 +186,33 @@ namespace
         check_near(acceleration.value.target()[1], 1.27);
     }
 
+    void test_joint_velocity_limit_inequality_signs()
+    {
+        Articulation3D articulation = model();
+        JointVelocityLimitConstraint3D limits(
+            {0}, {-0.2}, {0.3}, {.diagnostic_name = "velocity-limits"});
+        TaskLinearizationContext3D context{
+            .articulation = &articulation,
+            .derivative_order = TaskDerivativeOrder3D::Velocity,
+            .time_step = 0.5,
+        };
+        const TaskLinearization3DResult velocity = limits.linearize(context);
+        TERMIN_ROBOTICS_CHECK(velocity.ok());
+        check_near(velocity.value.matrix()(0, 0), 1.0);
+        check_near(velocity.value.target()[0], 0.3);
+        check_near(velocity.value.matrix()(1, 0), -1.0);
+        check_near(velocity.value.target()[1], 0.2);
+
+        context.derivative_order = TaskDerivativeOrder3D::Acceleration;
+        const TaskLinearization3DResult acceleration =
+            limits.linearize(context);
+        TERMIN_ROBOTICS_CHECK(acceleration.ok());
+        check_near(acceleration.value.matrix()(0, 0), 0.5);
+        check_near(acceleration.value.target()[0], 0.2);
+        check_near(acceleration.value.matrix()(1, 0), -0.5);
+        check_near(acceleration.value.target()[1], 0.3);
+    }
+
     void test_avoidance_inequality_sign()
     {
         Articulation3D articulation = model();
@@ -294,6 +321,7 @@ int main()
     test_point_and_pose_objectives();
     test_joint_objectives_and_floating_offset();
     test_joint_limit_inequality_signs();
+    test_joint_velocity_limit_inequality_signs();
     test_avoidance_inequality_sign();
     test_activation_and_diagnostics();
     return 0;
