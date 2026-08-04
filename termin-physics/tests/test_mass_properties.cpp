@@ -6,9 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <termin/colliders/box_collider.hpp>
-#include <termin/colliders/capsule_collider.hpp>
-#include <termin/colliders/convex_hull_collider.hpp>
+#include <termin/colliders/colliders.hpp>
 #include <termin/physics/mass_properties.hpp>
 #include <termin/physics/rigid_body.hpp>
 

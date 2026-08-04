@@ -46,7 +46,7 @@ namespace termin::collision
         }
     };
 
-    struct ContactPatch
+    struct TERMIN_COLLISION_API ContactPatch
     {
         Collider* collider_a = nullptr;
         Collider* collider_b = nullptr;

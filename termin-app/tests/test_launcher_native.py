@@ -72,7 +72,9 @@ def test_native_launcher_main_projection_has_stable_actions_and_selection() -> N
 
 def test_native_launcher_activation_and_all_main_actions_use_controller(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path))
     launched: list[str] = []
     controller = make_controller(
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),
@@ -148,7 +150,9 @@ def test_native_launcher_new_project_form_preserves_state_and_shows_errors(
 
 def test_native_launcher_file_dialog_cancel_and_projection_close_release_overlays(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path))
     launched: list[str] = []
     controller = make_controller(
         launch_editor=lambda path: launched.append(path) or LaunchResult(started=True),

@@ -20,6 +20,7 @@
 #else
 #include <arpa/inet.h>
 #include <cerrno>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -74,6 +75,59 @@ WaitResult wait_readable(Socket socket, std::chrono::milliseconds timeout) {
   if (result > 0)
     return WaitResult::ready;
   return result == 0 ? WaitResult::timeout : WaitResult::failed;
+}
+
+WaitResult wait_writable(Socket socket, std::chrono::milliseconds timeout) {
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(socket, &set);
+  timeval value{};
+  value.tv_sec = static_cast<long>(timeout.count() / 1000);
+  value.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
+#if defined(_WIN32)
+  const int result = select(0, nullptr, &set, nullptr, &value);
+#else
+  const int result = select(socket + 1, nullptr, &set, nullptr, &value);
+#endif
+  if (result > 0)
+    return WaitResult::ready;
+  return result == 0 ? WaitResult::timeout : WaitResult::failed;
+}
+
+bool set_socket_blocking(Socket socket, bool blocking) {
+#if defined(_WIN32)
+  u_long mode = blocking ? 0UL : 1UL;
+  return ioctlsocket(socket, FIONBIO, &mode) == 0;
+#else
+  const int flags = fcntl(socket, F_GETFL, 0);
+  if (flags < 0)
+    return false;
+  const int updated = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+  return fcntl(socket, F_SETFL, updated) == 0;
+#endif
+}
+
+bool connect_is_in_progress() {
+#if defined(_WIN32)
+  const int error = WSAGetLastError();
+  return error == WSAEWOULDBLOCK || error == WSAEINPROGRESS;
+#else
+  return errno == EINPROGRESS;
+#endif
+}
+
+bool socket_has_no_error(Socket socket) {
+  int error = 0;
+#if defined(_WIN32)
+  int length = sizeof(error);
+  return getsockopt(socket, SOL_SOCKET, SO_ERROR,
+                    reinterpret_cast<char *>(&error), &length) == 0 &&
+         error == 0;
+#else
+  socklen_t length = sizeof(error);
+  return getsockopt(socket, SOL_SOCKET, SO_ERROR, &error, &length) == 0 &&
+         error == 0;
+#endif
 }
 
 template <typename Bytes, typename Transfer>
@@ -206,13 +260,36 @@ public:
     const Socket socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (socket == invalid_socket)
       return invalid_socket;
+    active_socket.store(socket, std::memory_order_release);
+    if (!set_socket_blocking(socket, false)) {
+      release(socket);
+      return invalid_socket;
+    }
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_port = htons(config.port);
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (connect(socket, reinterpret_cast<const sockaddr *>(&address),
-                sizeof(address)) != 0) {
-      close_socket(socket);
+    bool connected =
+        connect(socket, reinterpret_cast<const sockaddr *>(&address),
+                sizeof(address)) == 0;
+    if (!connected && connect_is_in_progress()) {
+      const auto deadline = std::chrono::steady_clock::now() +
+                            std::chrono::milliseconds(500);
+      while (running.load(std::memory_order_acquire) &&
+             std::chrono::steady_clock::now() < deadline) {
+        const WaitResult wait =
+            wait_writable(socket, std::chrono::milliseconds(20));
+        if (wait == WaitResult::ready) {
+          connected = socket_has_no_error(socket);
+          break;
+        }
+        if (wait == WaitResult::failed)
+          break;
+      }
+    }
+    if (!connected || !running.load(std::memory_order_acquire) ||
+        !set_socket_blocking(socket, true)) {
+      release(socket);
       return invalid_socket;
     }
     return socket;

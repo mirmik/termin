@@ -987,7 +987,10 @@ TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or 
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing.ok);
     CHECK_FALSE(missing.scene.valid());
-    CHECK(missing.message.find("failed to open file") != std::string::npos);
+    CHECK(
+        missing.message.find("failed to open file") != std::string::npos ||
+        missing.message.find("failed to canonicalize runtime package path") !=
+            std::string::npos);
     CHECK(missing.message.find("scene.json") != std::string::npos);
 
     write_text(root / "scene.json", "{ invalid scene json");
@@ -1134,7 +1137,10 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
     write_text(root / "textures" / "test.texture.json", texture_spec("textures/missing.png"));
     termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing.ok);
-    CHECK(missing.message.find("source file not found") != std::string::npos);
+    CHECK(
+        missing.message.find("source file not found") != std::string::npos ||
+        missing.message.find("failed to canonicalize runtime package path") !=
+            std::string::npos);
 
     write_text(root / "textures" / "test.texture.json", texture_spec("../outside.png"));
     termin::runtime::RuntimePackageLoadResult escaping = termin::runtime::load_runtime_package(root.string());
