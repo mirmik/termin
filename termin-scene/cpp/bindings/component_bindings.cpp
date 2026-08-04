@@ -45,6 +45,10 @@ void bind_cxx_component(nb::module_& m) {
         .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def_prop_rw("has_late_update", &CxxComponent::has_late_update, &CxxComponent::set_has_late_update)
         .def_prop_rw("has_before_render", &CxxComponent::has_before_render, &CxxComponent::set_has_before_render)
+        .def_prop_rw("update_priority", &CxxComponent::update_priority, &CxxComponent::set_update_priority)
+        .def_prop_rw("fixed_update_priority", &CxxComponent::fixed_update_priority, &CxxComponent::set_fixed_update_priority)
+        .def_prop_rw("late_update_priority", &CxxComponent::late_update_priority, &CxxComponent::set_late_update_priority)
+        .def_prop_rw("before_render_priority", &CxxComponent::before_render_priority, &CxxComponent::set_before_render_priority)
         .def_prop_ro("entity",
             [](CxxComponent& c) -> nb::object {
                 Entity ent = c.entity();

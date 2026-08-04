@@ -38,6 +38,44 @@ void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder) {
         return true;
     };
     (void)builder.add_field(std::move(enabled_field));
+
+    const auto add_priority_field = [&builder](
+                                        const char* path,
+                                        const char* label,
+                                        LifecycleStage stage)
+    {
+        tc::InspectFieldInfo field;
+        field.type_name = "Component";
+        field.path = path;
+        field.label = label;
+        field.kind = "int";
+        field.getter = [stage](void* object) -> tc_value
+        {
+            return tc_value_int(
+                static_cast<CxxComponent*>(object)->lifecycle_priority(stage));
+        };
+        field.setter = [stage](void* object, tc_value value, void*) -> bool
+        {
+            if (value.type != TC_VALUE_INT)
+            {
+                return false;
+            }
+            return static_cast<CxxComponent*>(object)->set_lifecycle_priority(
+                stage, static_cast<int>(value.data.i));
+        };
+        (void)builder.add_field(std::move(field));
+    };
+    add_priority_field(
+        "update_priority", "Update Priority", LifecycleStage::Update);
+    add_priority_field("fixed_update_priority",
+                       "Fixed Update Priority",
+                       LifecycleStage::FixedUpdate);
+    add_priority_field("late_update_priority",
+                       "Late Update Priority",
+                       LifecycleStage::LateUpdate);
+    add_priority_field("before_render_priority",
+                       "Before Render Priority",
+                       LifecycleStage::BeforeRender);
 }
 
 // C++ ref_vtable: retain/release use internal _ref_count, drop deletes

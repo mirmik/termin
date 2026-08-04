@@ -277,9 +277,10 @@ def markdown_report(report: dict[str, Any]) -> str:
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     repo_root = pathlib.Path(__file__).resolve().parents[1]
-    lock = json.loads((repo_root / "build-system/web-shader-toolchain-lock.json").read_text(encoding="utf-8"))
-    slang_version = tool_version(args.slangc, lock["slang"]["version"])
-    naga_version = tool_version(args.naga, lock["naga_cli"]["version"])
+    web_lock = json.loads((repo_root / "build-system/web-shader-toolchain-lock.json").read_text(encoding="utf-8"))
+    slang_lock = json.loads((repo_root / "build-system/slang-toolchain-lock.json").read_text(encoding="utf-8"))
+    slang_version = tool_version(args.slangc, slang_lock["version"])
+    naga_version = tool_version(args.naga, web_lock["naga_cli"]["version"])
     catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
     source_root = args.catalog.parent
 

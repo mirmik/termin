@@ -25,6 +25,23 @@ typedef enum tc_component_kind {
     TC_CSHARP_COMPONENT = 2     // C# component
 } tc_component_kind;
 
+typedef enum tc_component_lifecycle_stage {
+    TC_COMPONENT_LIFECYCLE_UPDATE = 0,
+    TC_COMPONENT_LIFECYCLE_FIXED_UPDATE = 1,
+    TC_COMPONENT_LIFECYCLE_LATE_UPDATE = 2,
+    TC_COMPONENT_LIFECYCLE_BEFORE_RENDER = 3,
+    TC_COMPONENT_LIFECYCLE_STAGE_COUNT = 4
+} tc_component_lifecycle_stage;
+
+// Conventional ordering points within one lifecycle stage. Subsystems may
+// publish more specific aliases, but these values remain ordinary priorities,
+// not additional scheduler phases. Larger priorities execute first.
+typedef enum tc_component_lifecycle_priority {
+    TC_COMPONENT_LIFECYCLE_PRIORITY_EARLY = 100,
+    TC_COMPONENT_LIFECYCLE_PRIORITY_DEFAULT = 0,
+    TC_COMPONENT_LIFECYCLE_PRIORITY_LATE = -100
+} tc_component_lifecycle_priority;
+
 // Opaque, call-scoped render attachment context. Its concrete API is owned by
 // termin-engine; termin-scene only transports it through lifecycle dispatch.
 typedef struct tc_render_attachment_context tc_render_attachment_context;
@@ -123,6 +140,8 @@ struct tc_component {
     bool has_fixed_update;
     bool has_late_update;
     bool has_before_render;
+    int lifecycle_priorities[TC_COMPONENT_LIFECYCLE_STAGE_COUNT];
+    uint64_t lifecycle_registration_order;
     tc_scene_handle lifecycle_scene;
 
     // If true, factory already did retain - entity should NOT retain again on add_component.
@@ -168,6 +187,8 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_late_update = (vtable && vtable->late_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
+    memset(c->lifecycle_priorities, 0, sizeof(c->lifecycle_priorities));
+    c->lifecycle_registration_order = 0;
     c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
     c->factory_retained = false;
     c->type_prev = NULL;
@@ -189,6 +210,19 @@ TC_API void tc_component_set_lifecycle_capabilities(
     bool has_fixed_update,
     bool has_late_update,
     bool has_before_render
+);
+
+TC_API int tc_component_get_lifecycle_priority(
+    const tc_component* c,
+    tc_component_lifecycle_stage stage
+);
+
+// Updates one stage independently. Attached components are synchronously
+// reindexed in that stage's scene list before this function returns.
+TC_API bool tc_component_set_lifecycle_priority(
+    tc_component* c,
+    tc_component_lifecycle_stage stage,
+    int priority
 );
 
 // ============================================================================

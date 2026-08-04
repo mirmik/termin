@@ -21,6 +21,13 @@ from tcbase import log
 
 _registered_python_component_types: list[str] = []
 
+LIFECYCLE_PRIORITY_EARLY = 100
+LIFECYCLE_PRIORITY_DEFAULT = 0
+LIFECYCLE_PRIORITY_LATE = -100
+FIXED_UPDATE_PRIORITY_CONTROL = LIFECYCLE_PRIORITY_EARLY
+FIXED_UPDATE_PRIORITY_PHYSICS = LIFECYCLE_PRIORITY_DEFAULT
+FIXED_UPDATE_PRIORITY_POST_PHYSICS = LIFECYCLE_PRIORITY_LATE
+
 
 @dataclass(frozen=True)
 class _PythonComponentRegistration:
@@ -353,6 +360,18 @@ class PythonComponent:
             is_inspectable=False,
         ),
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
+        "update_priority": InspectField(
+            path="update_priority", label="Update Priority", kind="int"
+        ),
+        "fixed_update_priority": InspectField(
+            path="fixed_update_priority", label="Fixed Update Priority", kind="int"
+        ),
+        "late_update_priority": InspectField(
+            path="late_update_priority", label="Late Update Priority", kind="int"
+        ),
+        "before_render_priority": InspectField(
+            path="before_render_priority", label="Before Render Priority", kind="int"
+        ),
     }
 
     def __init__(self, enabled: bool = True, display_name: str = ""):
@@ -461,6 +480,38 @@ class PythonComponent:
     @has_before_render.setter
     def has_before_render(self, value: bool) -> None:
         self._tc.has_before_render = value
+
+    @property
+    def update_priority(self) -> int:
+        return self._tc.update_priority
+
+    @update_priority.setter
+    def update_priority(self, value: int) -> None:
+        self._tc.update_priority = value
+
+    @property
+    def fixed_update_priority(self) -> int:
+        return self._tc.fixed_update_priority
+
+    @fixed_update_priority.setter
+    def fixed_update_priority(self, value: int) -> None:
+        self._tc.fixed_update_priority = value
+
+    @property
+    def late_update_priority(self) -> int:
+        return self._tc.late_update_priority
+
+    @late_update_priority.setter
+    def late_update_priority(self, value: int) -> None:
+        self._tc.late_update_priority = value
+
+    @property
+    def before_render_priority(self) -> int:
+        return self._tc.before_render_priority
+
+    @before_render_priority.setter
+    def before_render_priority(self, value: int) -> None:
+        self._tc.before_render_priority = value
 
     def refresh_lifecycle_capabilities(self) -> None:
         """Recompute lifecycle scheduling after construction or class replacement."""

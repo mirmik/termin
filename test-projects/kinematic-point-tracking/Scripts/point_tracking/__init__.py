@@ -48,8 +48,8 @@ class PointTrackingControllerComponent(PythonComponent):
         self.target: Entity | None = None
         self.end_unit = 1
         self.point_local = (1.35, 0.0, 0.0)
-        self.position_gain = 4.0
-        self.maximum_joint_velocity = 2.5
+        self.position_gain = 6.0
+        self.maximum_joint_velocity = 3.5
         self._owner: ArticulationComponent | None = None
         self._articulation: Articulation3D | None = None
         self._controller: VelocityHqpController3D | None = None
@@ -133,7 +133,7 @@ class PointTrackingControllerComponent(PythonComponent):
 
 
 class OrbitingTargetComponent(PythonComponent):
-    """Move the target in the arm's XZ plane so tracking stays visible."""
+    """Move the target along a spatial orbit around the robot."""
 
     component_category = "Kinematic"
     inspect_fields = {
@@ -147,12 +147,20 @@ class OrbitingTargetComponent(PythonComponent):
             min=-5.0,
             max=5.0,
         ),
+        "vertical_amplitude": InspectField(
+            path="vertical_amplitude",
+            label="Vertical Amplitude",
+            kind="float",
+            min=0.0,
+            max=2.0,
+        ),
     }
 
     def __init__(self) -> None:
         super().__init__()
         self.radius = 0.55
         self.angular_speed = 0.55
+        self.vertical_amplitude = 0.35
         self._time = 0.0
         self._center = Vec3(0.0, 0.0, 0.0)
 
@@ -174,8 +182,9 @@ class OrbitingTargetComponent(PythonComponent):
         entity.transform.set_global_position(
             Vec3(
                 self._center.x + self.radius * math.cos(phase),
-                self._center.y,
-                self._center.z + self.radius * math.sin(phase),
+                self._center.y + self.radius * math.sin(phase),
+                self._center.z
+                + self.vertical_amplitude * math.sin(phase * 1.7),
             )
         )
 

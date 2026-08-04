@@ -5,7 +5,7 @@ from the scene `CollisionWorld` into `ContactSet3DContribution`. It deliberately
 does not use the game-physics `PhysicsWorld`.
 
 The blue maximal body falls onto the static ground. At the documented
-`time_step = 0.002 s` it may penetrate by roughly 5.5 mm during the first impact
+scene `fixed_timestep = 0.002 s` it may penetrate by roughly 5.5 mm during the first impact
 step, then split position projection restores the surface pose without adding
 restitution. Its zero-friction tangential-velocity preservation is covered by
 the headless native component test.

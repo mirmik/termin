@@ -25,7 +25,6 @@ print(value)
 PY
 }
 
-SLANG_VERSION="$(read_lock slang.version)"
 NAGA_VERSION="$(read_lock naga_cli.version)"
 TOOLCHAIN_ROOT="${TERMIN_WEB_SHADER_TOOLCHAIN_DIR:-$SCRIPT_DIR/build/toolchains}"
 
@@ -33,7 +32,9 @@ if [[ "$SETUP" -eq 1 ]]; then
     "$SCRIPT_DIR/setup-web-shader-toolchain.sh"
 fi
 
+SLANGC_PATH="$("$SCRIPT_DIR/setup-slang-toolchain.sh" --require-installed --print-path)"
+
 exec python3 "$SCRIPT_DIR/scripts/audit_webgpu_shaders.py" \
-    --slangc "$TOOLCHAIN_ROOT/slang-$SLANG_VERSION/bin/slangc" \
+    --slangc "$SLANGC_PATH" \
     --naga "$TOOLCHAIN_ROOT/naga-$NAGA_VERSION/bin/naga" \
     "$@"

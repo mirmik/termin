@@ -264,8 +264,6 @@ namespace termin
     {
     public:
         tc_vec3 gravity = {0.0, 0.0, -9.81};
-        double time_step = 0.01;
-        int substeps = 1;
         // Default remains frictionless for scene compatibility. This is the
         // combined coefficient assigned to every generated contact; collider
         // material mixing can replace this policy later without changing qopt.
@@ -279,7 +277,7 @@ namespace termin
         static void register_type();
 
         void start() override;
-        void update(float dt) override;
+        void fixed_update(float dt) override;
         void on_destroy() override;
 
         [[nodiscard]] FEMPhysicsTelemetry telemetry() const noexcept;
@@ -300,7 +298,6 @@ namespace termin
         std::vector<FEMArticulationComponent*> articulations_;
         physics_qopt::ContactSet3DContribution* contacts_ = nullptr;
         std::vector<const void*> warned_contact_colliders_;
-        double accumulated_time_ = 0.0;
         double simulated_time_ = 0.0;
         double initial_total_energy_ = 0.0;
         double motor_work_ = 0.0;

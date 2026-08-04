@@ -27,7 +27,7 @@ from termin.editor_core.prefab_override_capture import (
 _logger = logging.getLogger(__name__)
 
 
-_SCENE_RENDER_STATE_PROPERTIES = {
+_SCENE_PROPERTIES = {
     "background_color",
     "ambient_color",
     "ambient_intensity",
@@ -35,6 +35,7 @@ _SCENE_RENDER_STATE_PROPERTIES = {
     "skybox_top_color",
     "skybox_bottom_color",
     "skybox_type",
+    "fixed_timestep",
 }
 
 
@@ -63,7 +64,10 @@ def _clone_value(value: Any) -> Any:
     return value
 
 
-def _set_scene_render_state_property(scene, property_name: str, value: Any) -> None:
+def _set_scene_property(scene, property_name: str, value: Any) -> None:
+    if property_name == "fixed_timestep":
+        scene.fixed_timestep = float(value)
+        return
     rs = scene_render_state(scene)
     if property_name == "background_color":
         rs.background_color = _coerce_scene_vector_value(rs.background_color, value)
@@ -839,7 +843,7 @@ class RemoveSoAComponentCommand(UndoCommand):
 
 
 class ScenePropertyEditCommand(UndoCommand):
-    """Команда изменения поля scene render state."""
+    """Команда изменения сериализуемого свойства сцены."""
 
     def __init__(
         self,
@@ -849,9 +853,9 @@ class ScenePropertyEditCommand(UndoCommand):
         new_value: Any,
         text: str | None = None,
     ) -> None:
-        if property_name not in _SCENE_RENDER_STATE_PROPERTIES:
-            _logger.error("Unsupported scene render state property: %s", property_name)
-            raise RuntimeError(f"Unsupported scene render state property: {property_name}")
+        if property_name not in _SCENE_PROPERTIES:
+            _logger.error("Unsupported scene property: %s", property_name)
+            raise RuntimeError(f"Unsupported scene property: {property_name}")
         if text is None:
             text = f"Edit scene {property_name}"
         super().__init__(text)
@@ -861,10 +865,10 @@ class ScenePropertyEditCommand(UndoCommand):
         self._new_value = _clone_value(new_value)
 
     def do(self) -> None:
-        _set_scene_render_state_property(self._scene, self._property_name, self._new_value)
+        _set_scene_property(self._scene, self._property_name, self._new_value)
 
     def undo(self) -> None:
-        _set_scene_render_state_property(self._scene, self._property_name, self._old_value)
+        _set_scene_property(self._scene, self._property_name, self._old_value)
 
     def merge_with(self, other: UndoCommand) -> bool:
         if not isinstance(other, ScenePropertyEditCommand):

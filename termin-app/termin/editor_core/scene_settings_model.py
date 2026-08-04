@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Callable
 
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
@@ -121,6 +122,7 @@ class ScenePipelineSnapshot:
 
 @dataclass(frozen=True)
 class ScenePropertiesSnapshot:
+    fixed_update_frequency: float
     background_color: tuple[float, float, float, float]
     ambient_color: tuple[float, float, float]
     ambient_intensity: float
@@ -160,6 +162,7 @@ class ScenePropertiesController:
             for handle in handles
         )
         return ScenePropertiesSnapshot(
+            fixed_update_frequency=1.0 / float(self._scene.fixed_timestep),
             background_color=_color(state.background_color, alpha=True),
             ambient_color=_color(state.ambient_color, alpha=False),
             ambient_intensity=float(state.ambient_intensity),
@@ -169,6 +172,26 @@ class ScenePropertiesController:
             skybox_bottom_color=_color(state.skybox_bottom_color, alpha=False),
             pipelines=pipelines,
         )
+
+    def set_fixed_update_frequency(self, value: float) -> ScenePropertiesSnapshot:
+        frequency = float(value)
+        if not math.isfinite(frequency) or frequency <= 0.0:
+            raise ValueError("fixed update frequency must be finite and positive")
+        old_timestep = float(self._scene.fixed_timestep)
+        new_timestep = 1.0 / frequency
+        command = ScenePropertyEditCommand(
+            self._scene,
+            "fixed_timestep",
+            old_timestep,
+            new_timestep,
+            "Edit fixed update frequency",
+        )
+
+        def apply_direct() -> None:
+            self._scene.fixed_timestep = new_timestep
+
+        self._apply_command(command, apply_direct, True)
+        return self._published()
 
     def set_background_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)

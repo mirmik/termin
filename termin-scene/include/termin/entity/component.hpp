@@ -14,6 +14,25 @@
 
 namespace termin {
 
+enum class LifecycleStage : int {
+    Update = TC_COMPONENT_LIFECYCLE_UPDATE,
+    FixedUpdate = TC_COMPONENT_LIFECYCLE_FIXED_UPDATE,
+    LateUpdate = TC_COMPONENT_LIFECYCLE_LATE_UPDATE,
+    BeforeRender = TC_COMPONENT_LIFECYCLE_BEFORE_RENDER,
+};
+
+namespace lifecycle_priority {
+inline constexpr int early = TC_COMPONENT_LIFECYCLE_PRIORITY_EARLY;
+inline constexpr int normal = TC_COMPONENT_LIFECYCLE_PRIORITY_DEFAULT;
+inline constexpr int late = TC_COMPONENT_LIFECYCLE_PRIORITY_LATE;
+} // namespace lifecycle_priority
+
+namespace fixed_update_priority {
+inline constexpr int control = lifecycle_priority::early;
+inline constexpr int physics = lifecycle_priority::normal;
+inline constexpr int post_physics = lifecycle_priority::late;
+} // namespace fixed_update_priority
+
 class RenderAttachmentContext;
 
 // Base class for all C++ components.
@@ -129,6 +148,42 @@ public:
     void set_has_before_render(bool v) {
         set_lifecycle_capabilities(
             _c.has_update, _c.has_fixed_update, _c.has_late_update, v);
+    }
+
+    int lifecycle_priority(LifecycleStage stage) const {
+        return tc_component_get_lifecycle_priority(
+            &_c, static_cast<tc_component_lifecycle_stage>(stage));
+    }
+    bool set_lifecycle_priority(LifecycleStage stage, int priority) {
+        return tc_component_set_lifecycle_priority(
+            &_c,
+            static_cast<tc_component_lifecycle_stage>(stage),
+            priority);
+    }
+
+    int update_priority() const {
+        return lifecycle_priority(LifecycleStage::Update);
+    }
+    bool set_update_priority(int priority) {
+        return set_lifecycle_priority(LifecycleStage::Update, priority);
+    }
+    int fixed_update_priority() const {
+        return lifecycle_priority(LifecycleStage::FixedUpdate);
+    }
+    bool set_fixed_update_priority(int priority) {
+        return set_lifecycle_priority(LifecycleStage::FixedUpdate, priority);
+    }
+    int late_update_priority() const {
+        return lifecycle_priority(LifecycleStage::LateUpdate);
+    }
+    bool set_late_update_priority(int priority) {
+        return set_lifecycle_priority(LifecycleStage::LateUpdate, priority);
+    }
+    int before_render_priority() const {
+        return lifecycle_priority(LifecycleStage::BeforeRender);
+    }
+    bool set_before_render_priority(int priority) {
+        return set_lifecycle_priority(LifecycleStage::BeforeRender, priority);
     }
 
     void set_lifecycle_capabilities(

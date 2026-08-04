@@ -149,6 +149,7 @@ class NativeScenePropertiesDialog:
     controller: ScenePropertiesController
     dialog_service: NativeDialogService
     dialog: object
+    fixed_update_frequency: object
     background: object
     ambient: object
     intensity: object
@@ -179,6 +180,7 @@ class NativeScenePropertiesDialog:
         self.snapshot = snapshot
         self._updating = True
         try:
+            self.fixed_update_frequency.value = snapshot.fixed_update_frequency
             self.background.set_text(_color_text(snapshot.background_color))
             self.ambient.set_text(_color_text(snapshot.ambient_color))
             self.intensity.value = snapshot.ambient_intensity
@@ -231,6 +233,10 @@ class NativeScenePropertiesDialog:
     def set_intensity(self, value: float) -> None:
         if not self._updating:
             self.apply_snapshot(self.controller.set_ambient_intensity(value))
+
+    def set_fixed_update_frequency(self, value: float) -> None:
+        if not self._updating:
+            self.apply_snapshot(self.controller.set_fixed_update_frequency(value))
 
     def set_skybox_type(self, index: int) -> None:
         if not self._updating and 0 <= index < len(SKYBOX_TYPES):
@@ -339,9 +345,13 @@ def build_native_scene_properties_dialog(
 ):
     root = document.create_vstack("native-scene-properties")
     root.stable_id = "editor.scene-properties"
-    root.preferred_size = Size(600.0, 570.0)
+    root.preferred_size = Size(600.0, 620.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
+    fixed_update_frequency = document.create_spin_box()
+    fixed_update_frequency.set_range(0.1, 10000.0)
+    fixed_update_frequency.step = 1.0
+    fixed_update_frequency.decimals = 2
     background = document.create_button("Background")
     ambient = document.create_button("Ambient")
     intensity = document.create_spin_box()
@@ -353,6 +363,7 @@ def build_native_scene_properties_dialog(
     skybox_top = document.create_button("Skybox Top")
     skybox_bottom = document.create_button("Skybox Bottom")
     for label, control in (
+        ("Fixed Update, Hz", fixed_update_frequency),
         ("Background", background),
         ("Ambient", ambient),
         ("Ambient Intensity", intensity),
@@ -378,6 +389,7 @@ def build_native_scene_properties_dialog(
         controller,
         dialog_service,
         dialog,
+        fixed_update_frequency,
         background,
         ambient,
         intensity,
@@ -407,6 +419,11 @@ def build_native_scene_properties_dialog(
         )
     intensity.connect_changed(
         lambda value: owner().set_intensity(value) if owner() is not None else None
+    )
+    fixed_update_frequency.connect_changed(
+        lambda value: owner().set_fixed_update_frequency(value)
+        if owner() is not None
+        else None
     )
     skybox_type.connect_changed(
         lambda index, _text: owner().set_skybox_type(index) if owner() is not None else None
