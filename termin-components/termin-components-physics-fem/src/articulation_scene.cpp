@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include <components/actuator_component.hpp>
+#include <components/articulation_component.hpp>
 #include <components/kinematic_unit_component.hpp>
 #include <components/rotator_component.hpp>
 #include <termin/geom/general_pose3.hpp>
@@ -167,6 +168,70 @@ namespace termin
         {
             result.diagnostic = FEMArticulationSceneDiagnostic::InvalidBaseMode;
             result.diagnostic_entity = entity_name(root);
+            return result;
+        }
+
+        // The native authoring path shares the exact Articulation3D compiled
+        // by ArticulationComponent. FEM contributes dynamics and actuation but
+        // does not compile or own a parallel kinematic model.
+        ArticulationComponent* owner =
+            root.get_component<ArticulationComponent>();
+        if (owner != nullptr && owner->enabled())
+        {
+            if (floating)
+            {
+                result.diagnostic =
+                    FEMArticulationSceneDiagnostic::InvalidBaseMode;
+                result.diagnostic_entity = entity_name(root);
+                return result;
+            }
+            if (!owner->initialized() && !owner->rebuild())
+            {
+                result.diagnostic =
+                    FEMArticulationSceneDiagnostic::EmptyArticulation;
+                result.diagnostic_entity = entity_name(root);
+                return result;
+            }
+            std::shared_ptr<robotics::Articulation3D> model =
+                owner->articulation_shared();
+            if (model == nullptr || model->unit_count() == 0)
+            {
+                result.diagnostic =
+                    FEMArticulationSceneDiagnostic::EmptyArticulation;
+                result.diagnostic_entity = entity_name(root);
+                return result;
+            }
+
+            result.articulation_owner = owner;
+            result.borrowed_articulation = model;
+            result.bindings.reserve(model->unit_count());
+            for (std::size_t index = 0; index < model->unit_count(); ++index)
+            {
+                KinematicUnitComponent* unit = owner->unit_component(index);
+                const double coordinate_scale =
+                    owner->unit_coordinate_scale(index);
+                if (unit == nullptr || !std::isfinite(coordinate_scale) ||
+                    coordinate_scale <= 0.0)
+                {
+                    result.diagnostic =
+                        FEMArticulationSceneDiagnostic::DegenerateJointAxis;
+                    result.diagnostic_entity = entity_name(root);
+                    return result;
+                }
+                Entity unit_entity = unit->entity();
+                result.bindings.push_back({
+                    .joint = unit,
+                    .body = nullptr,
+                    .motor = unit_entity
+                                 .get_component<
+                                     FEMArticulationMotorComponent>(),
+                    .servo = unit_entity
+                                 .get_component<FEMJointServoComponent>(),
+                    .joint_entity = unit_entity,
+                    .body_entity = {},
+                    .coordinate_scale = coordinate_scale,
+                });
+            }
             return result;
         }
 

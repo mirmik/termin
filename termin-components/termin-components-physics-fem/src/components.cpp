@@ -9,10 +9,12 @@
 #include <string_view>
 
 #include <components/kinematic_unit_component.hpp>
+#include <components/articulation_component.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/geom/general_transform3.hpp>
+#include <termin/physics_qopt/robotics_control.hpp>
 #include <termin/tc_scene.hpp>
 
 namespace termin
@@ -150,6 +152,8 @@ namespace termin
         {
             world_->detach(*this);
         }
+        shared_articulation_.reset();
+        legacy_articulation_.reset();
         CxxComponent::on_destroy();
     }
 
@@ -171,13 +175,92 @@ namespace termin
 
     robotics::Articulation3D* FEMArticulationComponent::articulation() noexcept
     {
-        return articulation_.get();
+        return articulation_;
     }
 
     const robotics::Articulation3D*
     FEMArticulationComponent::articulation() const noexcept
     {
-        return articulation_.get();
+        return articulation_;
+    }
+
+    Vec3 FEMArticulationComponent::gravity_world() const noexcept
+    {
+        return dynamics_ != nullptr ? dynamics_->gravity_world()
+                                    : Vec3::zero();
+    }
+
+    std::vector<std::size_t>
+    FEMArticulationComponent::actuator_dof_indices() const
+    {
+        std::vector<std::size_t> result;
+        if (motor_ == nullptr)
+        {
+            return result;
+        }
+        result.reserve(motor_->channel_count());
+        for (const physics_qopt::ArticulationMotorChannel& channel :
+             motor_->channels())
+        {
+            result.push_back(channel.dof_index);
+        }
+        return result;
+    }
+
+    std::vector<double>
+    FEMArticulationComponent::actuator_effort_limits() const
+    {
+        std::vector<double> result;
+        if (motor_ == nullptr)
+        {
+            return result;
+        }
+        result.reserve(motor_->channel_count());
+        for (const physics_qopt::ArticulationMotorChannel& channel :
+             motor_->channels())
+        {
+            result.push_back(channel.effort_limit);
+        }
+        return result;
+    }
+
+    bool FEMArticulationComponent::apply_inverse_dynamics_control(
+        const robotics::InverseDynamicsControlResult3D& control) noexcept
+    {
+        if (motor_ == nullptr ||
+            motor_->channel_count() != motors_.size() ||
+            control.actuator_effort.size() != motors_.size())
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] rejected inverse-dynamics "
+                "motor commands");
+            return false;
+        }
+        for (std::size_t index = 0; index < motors_.size(); ++index)
+        {
+            FEMArticulationMotorComponent* motor = motors_[index];
+            if (motor == nullptr ||
+                !std::isfinite(control.actuator_effort[index]))
+            {
+                tc::Log::error(
+                    "[FEMArticulationComponent] invalid actuator binding");
+                return false;
+            }
+        }
+        if (physics_qopt::apply_inverse_dynamics_motor_commands(
+                *motor_, control) !=
+            physics_qopt::RoboticsControlAdapterDiagnostic3D::None)
+        {
+            tc::Log::error(
+                "[FEMArticulationComponent] rejected inverse-dynamics "
+                "motor commands");
+            return false;
+        }
+        for (std::size_t index = 0; index < motors_.size(); ++index)
+        {
+            motors_[index]->commanded_effort = control.actuator_effort[index];
+        }
+        return true;
     }
 
     FEMArticulationMotorComponent::FEMArticulationMotorComponent()
@@ -729,6 +812,22 @@ namespace termin
             initialized_ = false;
             return;
         }
+        for (const FEMArticulationComponent* articulation : articulations_)
+        {
+            if (articulation != nullptr &&
+                articulation->articulation_owner_ != nullptr &&
+                articulation->articulation_owner_->articulation() !=
+                    articulation->articulation_)
+            {
+                tc::Log::error(
+                    "[FEMPhysicsWorldComponent] ArticulationComponent on "
+                    "'%s' was rebuilt while its FEM model was active; rebuild "
+                    "the physics world before continuing",
+                    articulation->entity().name());
+                initialized_ = false;
+                return;
+            }
+        }
         step_simulation(static_cast<double>(dt));
     }
 
@@ -1084,10 +1183,11 @@ namespace termin
                 revolute_joints_.push_back(joint);
             }
         }
-        if (discovered_bodies.empty())
+        if (discovered_bodies.empty() && articulations_.empty())
         {
             tc::Log::error(
-                "[FEMPhysicsWorldComponent] scene contains no FEM bodies");
+                "[FEMPhysicsWorldComponent] scene contains no FEM bodies or "
+                "articulations");
             clear_runtime_links();
             return false;
         }
@@ -1378,7 +1478,7 @@ namespace termin
         }
         for (const FEMArticulationSceneBinding& binding : compiled.bindings)
         {
-            if (binding.body->world_ != nullptr)
+            if (binding.body != nullptr && binding.body->world_ != nullptr)
             {
                 tc::Log::error(
                     "[FEMArticulationComponent] body '%s' belongs to more than "
@@ -1386,8 +1486,9 @@ namespace termin
                     binding.body_entity.name());
                 return false;
             }
-            if (binding.body->linear_damping != 0.0 ||
-                binding.body->angular_damping != 0.0)
+            if (binding.body != nullptr &&
+                (binding.body->linear_damping != 0.0 ||
+                 binding.body->angular_damping != 0.0))
             {
                 tc::Log::error(
                     "[FEMArticulationComponent] body '%s' uses damping, which "
@@ -1397,31 +1498,38 @@ namespace termin
             }
         }
 
-        std::unique_ptr<robotics::Articulation3D> articulation;
-        if (compiled.floating_base.has_value())
+        std::unique_ptr<robotics::Articulation3D> legacy_articulation;
+        std::shared_ptr<robotics::Articulation3D> shared_articulation =
+            std::move(compiled.borrowed_articulation);
+        robotics::Articulation3D* articulation = shared_articulation.get();
+        if (articulation == nullptr && compiled.floating_base.has_value())
         {
-            articulation = std::make_unique<robotics::Articulation3D>(
+            legacy_articulation = std::make_unique<robotics::Articulation3D>(
                 std::move(*compiled.floating_base),
                 std::move(compiled.units),
                 std::move(compiled.state),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
+            articulation = legacy_articulation.get();
         }
-        else
+        else if (articulation == nullptr)
         {
-            articulation = std::make_unique<robotics::Articulation3D>(
+            legacy_articulation = std::make_unique<robotics::Articulation3D>(
                 std::move(compiled.units),
                 std::move(compiled.state),
                 component.entity().name() ? component.entity().name()
                                           : "articulation");
+            articulation = legacy_articulation.get();
         }
-        if (articulation->diagnostic() !=
+        if (articulation == nullptr || articulation->diagnostic() !=
             robotics::Articulation3DDiagnostic::None)
         {
             tc::Log::error(
                 "[FEMArticulationComponent] reduced model is invalid: %s",
                 robotics::articulation3d_diagnostic_name(
-                    articulation->diagnostic())
+                    articulation != nullptr
+                        ? articulation->diagnostic()
+                        : robotics::Articulation3DDiagnostic::InvalidState)
                     .data());
             return false;
         }
@@ -1547,7 +1655,10 @@ namespace termin
                            "contribution");
             return false;
         }
-        component.articulation_ = std::move(articulation);
+        component.articulation_owner_ = compiled.articulation_owner;
+        component.shared_articulation_ = std::move(shared_articulation);
+        component.legacy_articulation_ = std::move(legacy_articulation);
+        component.articulation_ = articulation;
         component.dynamics_ = dynamics_ptr;
         component.motor_ = motor_ptr;
         component.world_ = this;
@@ -1576,10 +1687,13 @@ namespace termin
             component.joint_entities_.push_back(binding.joint_entity);
             component.joint_coordinate_scales_.push_back(
                 binding.coordinate_scale);
-            binding.body->world_ = this;
-            binding.body->articulation_ = component.dynamics_;
-            binding.body->articulation_unit_index_ = joint_index;
-            binding.body->articulation_base_ = false;
+            if (binding.body != nullptr)
+            {
+                binding.body->world_ = this;
+                binding.body->articulation_ = component.dynamics_;
+                binding.body->articulation_unit_index_ = joint_index;
+                binding.body->articulation_base_ = false;
+            }
             if (binding.motor != nullptr && binding.motor->enabled())
             {
                 binding.motor->world_ = this;
@@ -2027,6 +2141,8 @@ namespace termin
             articulation->servos_.clear();
             articulation->motor_ = nullptr;
             articulation->dynamics_ = nullptr;
+            articulation->articulation_ = nullptr;
+            articulation->articulation_owner_ = nullptr;
             articulation->world_ = nullptr;
         }
         bodies_.clear();

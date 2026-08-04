@@ -6,12 +6,16 @@ preload_sdk_libs("nanobind", "termin_robotics")
 
 from ._robotics_native import (  # noqa: E402
     Articulation3D,
+    InverseDynamicsControlResult3D,
+    InverseDynamicsHqpController3D,
     VelocityControlResult3D,
     VelocityHqpController3D,
 )
 
 __all__ = [
     "Articulation3D",
+    "InverseDynamicsControlResult3D",
+    "InverseDynamicsHqpController3D",
     "VelocityControlResult3D",
     "VelocityHqpController3D",
 ]

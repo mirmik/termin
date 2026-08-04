@@ -333,7 +333,7 @@ namespace termin
             return false;
         }
 
-        articulation_ = std::make_unique<robotics::Articulation3D>(
+        articulation_ = std::make_shared<robotics::Articulation3D>(
             std::move(units), std::move(state), entity_name(root));
         if (articulation_->diagnostic() !=
             robotics::Articulation3DDiagnostic::None)
@@ -427,6 +427,26 @@ namespace termin
         return articulation_ != nullptr ? articulation_->unit_count() : 0;
     }
 
+    KinematicUnitComponent*
+    ArticulationComponent::unit_component(std::size_t unit_index) noexcept
+    {
+        return unit_index < bindings_.size() ? bindings_[unit_index] : nullptr;
+    }
+
+    const KinematicUnitComponent* ArticulationComponent::unit_component(
+        std::size_t unit_index) const noexcept
+    {
+        return unit_index < bindings_.size() ? bindings_[unit_index] : nullptr;
+    }
+
+    double ArticulationComponent::unit_coordinate_scale(
+        std::size_t unit_index) const noexcept
+    {
+        return unit_index < coordinate_scales_.size()
+                   ? coordinate_scales_[unit_index]
+                   : 0.0;
+    }
+
     ArticulationComponentDiagnostic
     ArticulationComponent::diagnostic() const noexcept
     {
@@ -447,5 +467,11 @@ namespace termin
     ArticulationComponent::articulation() const noexcept
     {
         return articulation_.get();
+    }
+
+    std::shared_ptr<robotics::Articulation3D>
+    ArticulationComponent::articulation_shared() const noexcept
+    {
+        return articulation_;
     }
 } // namespace termin

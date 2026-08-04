@@ -66,6 +66,17 @@ if(MSVC)
     target_compile_options(termin_components_physics_fem PRIVATE /wd4251 /wd4275)
 endif()
 
+if(TERMIN_BUILD_PYTHON)
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+    nanobind_add_module(_components_physics_fem_native NB_SHARED
+        src/physics_fem_bindings.cpp)
+    target_link_libraries(_components_physics_fem_native PRIVATE
+        termin_components_physics_fem)
+    install(TARGETS _components_physics_fem_native
+        DESTINATION lib/python/termin/physics_fem)
+endif()
+
 if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_executable(termin_components_physics_fem_component_test

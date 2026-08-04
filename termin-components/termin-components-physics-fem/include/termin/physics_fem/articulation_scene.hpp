@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -12,6 +13,7 @@
 
 namespace termin
 {
+    class ArticulationComponent;
     class KinematicUnitComponent;
 
     enum class FEMArticulationSceneDiagnostic : std::uint8_t
@@ -57,6 +59,11 @@ namespace termin
         std::vector<robotics::ArticulationUnit3D> units;
         robotics::Articulation3DState state;
         std::optional<robotics::ArticulationFloatingBase3D> floating_base;
+        // Target authoring path: FEM borrows the solver-neutral model owned by
+        // the co-located ArticulationComponent. Empty for the transitional
+        // joint/body grammar below.
+        ArticulationComponent* articulation_owner = nullptr;
+        std::shared_ptr<robotics::Articulation3D> borrowed_articulation;
         FEMRigidBodyComponent* base_body = nullptr;
         Entity base_entity;
         std::vector<FEMArticulationSceneBinding> bindings;
@@ -67,11 +74,9 @@ namespace termin
         }
     };
 
-    // Compiles the strict alternating hierarchy rooted at an articulation
-    // frame. A fixed root is only a frame. A floating root also owns its
-    // FEMRigidBodyComponent, which becomes the physical base body. Below it,
-    // kinematic joint entity -> rigid body entity alternation forms a
-    // topologically ordered reduced-coordinate tree.
+    // Compiles the target direct KinematicUnit hierarchy when the root owns an
+    // ArticulationComponent. The older alternating joint -> rigid-body scene
+    // grammar remains as a migration path, including its floating-base form.
     [[nodiscard]] ENTITY_API FEMArticulationSceneCompilation
     compile_fem_articulation_scene(Entity root);
 
