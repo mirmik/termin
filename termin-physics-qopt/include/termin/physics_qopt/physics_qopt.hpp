@@ -8,4 +8,5 @@
 #include <termin/physics_qopt/multibody2d.hpp>
 #include <termin/physics_qopt/multibody3d.hpp>
 #include <termin/physics_qopt/point_kinematics3d.hpp>
+#include <termin/physics_qopt/robotics_control.hpp>
 #include <termin/physics_qopt/termin_physics_qopt_api.hpp>

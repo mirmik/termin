@@ -41,7 +41,9 @@ Relations have one canonical meaning:
 `TaskLinearizationContext3D` selects generalized velocity or acceleration.
 Tasks reject an unsupported order explicitly instead of silently applying a
 velocity equation to accelerations. Joint velocity tracking and predictive
-joint limits support both orders. Pose tracking, point velocity and current
+joint limits support both orders. `JointPostureTask3D` provides an explicit
+acceleration-level joint PD law with optional acceleration feed-forward. Pose
+tracking, point velocity and current
 signed-distance avoidance are velocity-level tasks until their acceleration
 bias (`Jdot qdot` and curvature terms) is represented explicitly.
 
@@ -52,6 +54,8 @@ The standard task layer currently provides:
 - `PointVelocityTask3D`;
 - `JointPositionTask3D` with optional velocity feed-forward;
 - `JointVelocityTask3D`;
+- `JointPostureTask3D`, with position/velocity feedback and acceleration
+  feed-forward;
 - `JointLimitConstraint3D`, using one-step position prediction;
 - `JointVelocityLimitConstraint3D`, usable as velocity bounds or as one-step
   acceleration bounds;
@@ -81,8 +85,10 @@ velocity_control (implemented)
 ├── kinematic HQP formulation
 └── explicit articulation-state integration boundary
 
-inverse_dynamics
-└── dynamic HQP formulation
+inverse_dynamics_control (implemented foundation)
+├── acceleration-level HQP formulation
+├── floating-base underactuation equations
+└── actuator effort bounds and inverse-dynamics output
 ```
 
 Velocity and inverse-dynamics formulations share the task linearization
@@ -96,6 +102,21 @@ fixed and floating bases and exposes solver, task and per-level diagnostics.
 The previous optimal generalized velocity is retained as an optional primal
 warm start. The current `termin-qopt` HQP API does not retain an active set
 between calls.
+
+`InverseDynamicsHqpController3D` solves over generalized acceleration. It
+constructs the reduced mass matrix and velocity/gravity bias from the
+articulation, enforces zero required effort on unactuated DOFs, applies optional
+per-actuator effort bounds inside the HQP, and returns both generalized
+acceleration and the corresponding inverse-dynamics effort. By default every
+scalar joint is actuated and the six floating-base DOFs are not. Known external
+generalized loads may be supplied explicitly; contact-force decision variables
+and Cartesian acceleration tasks remain separate future adapters because their
+`Jdot*qdot` and contact-frame semantics must be represented exactly.
+
+The controller does not mutate or integrate the plant. `termin-physics-qopt`
+provides `inverse_dynamics_actuators_from_motor()` and
+`apply_inverse_dynamics_motor_commands()` to preserve motor-channel DOF identity
+and effort limits without introducing physical handles into this module.
 
 Solving does not mutate the articulation. A caller that wants to advance the
 model must explicitly call `integrate_articulation_velocity()`. Scalar joints

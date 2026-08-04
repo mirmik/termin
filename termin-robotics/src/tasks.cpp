@@ -620,6 +620,124 @@ namespace termin::robotics
                        "joint velocity linearization failed");
     }
 
+    JointPostureTask3D::JointPostureTask3D(
+        std::vector<std::size_t> joint_indices,
+        std::vector<double> target_positions,
+        std::vector<double> target_velocities,
+        double position_gain,
+        double velocity_gain,
+        std::vector<double> feedforward_accelerations,
+        TaskSettings3D settings)
+        : joint_indices_(std::move(joint_indices)),
+          target_positions_(std::move(target_positions)),
+          target_velocities_(std::move(target_velocities)),
+          position_gain_(position_gain), velocity_gain_(velocity_gain),
+          feedforward_accelerations_(std::move(feedforward_accelerations)),
+          settings_(std::move(settings))
+    {
+    }
+
+    TaskLinearization3DResult JointPostureTask3D::linearize(
+        const TaskLinearizationContext3D& context) const noexcept
+    {
+        const TaskDiagnostic3D context_diagnostic = validate_context(context);
+        if (context_diagnostic != TaskDiagnostic3D::None)
+        {
+            return failure(context_diagnostic, settings_, "invalid context");
+        }
+        if (!settings_.enabled)
+        {
+            return {make_linearization(
+                        context, settings_, TaskRelation3D::Objective, 0),
+                    TaskDiagnostic3D::None};
+        }
+        if (context.derivative_order != TaskDerivativeOrder3D::Acceleration)
+        {
+            return failure(TaskDiagnostic3D::UnsupportedDerivativeOrder,
+                           settings_,
+                           "joint posture requires acceleration variables");
+        }
+        if (!std::isfinite(position_gain_) || position_gain_ < 0.0 ||
+            !std::isfinite(velocity_gain_) || velocity_gain_ < 0.0)
+        {
+            return failure(TaskDiagnostic3D::InvalidGain,
+                           settings_,
+                           "invalid joint posture gain");
+        }
+        if (!finite(target_positions_) || !finite(target_velocities_) ||
+            !finite(feedforward_accelerations_))
+        {
+            return failure(TaskDiagnostic3D::NonFiniteInput,
+                           settings_,
+                           "non-finite joint posture target");
+        }
+
+        try
+        {
+            const std::vector<std::size_t> joints =
+                resolve_joints(*context.articulation, joint_indices_);
+            const TaskDiagnostic3D joints_diagnostic =
+                validate_joints(*context.articulation, joints);
+            if (joints_diagnostic != TaskDiagnostic3D::None)
+            {
+                return failure(
+                    joints_diagnostic, settings_, "invalid joint selection");
+            }
+            if (target_positions_.size() != joints.size() ||
+                target_velocities_.size() != joints.size() ||
+                (!feedforward_accelerations_.empty() &&
+                 feedforward_accelerations_.size() != joints.size()))
+            {
+                return failure(TaskDiagnostic3D::DimensionMismatch,
+                               settings_,
+                               "joint posture target size mismatch");
+            }
+
+            TaskLinearization3D value = make_linearization(
+                context, settings_, TaskRelation3D::Objective, joints.size());
+            const std::size_t offset = joint_offset(*context.articulation);
+            for (std::size_t row = 0; row < joints.size(); ++row)
+            {
+                const std::size_t joint = joints[row];
+                value.matrix_storage[row * value.variable_count + offset +
+                                     joint] = 1.0;
+                const double feedforward =
+                    feedforward_accelerations_.empty()
+                        ? 0.0
+                        : feedforward_accelerations_[row];
+                value.target_storage[row] =
+                    feedforward +
+                    position_gain_ *
+                        (target_positions_[row] -
+                         context.articulation->state().coordinates[joint]) +
+                    velocity_gain_ *
+                        (target_velocities_[row] -
+                         context.articulation->state().velocities[joint]);
+            }
+            const TaskDiagnostic3D weight = apply_weight(value, settings_);
+            if (weight != TaskDiagnostic3D::None)
+            {
+                return failure(weight, settings_, "invalid objective weight");
+            }
+            return {std::move(value), TaskDiagnostic3D::None};
+        }
+        catch (const std::exception& error)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] joint posture task failed: %s\n",
+                         error.what());
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-robotics] joint posture task failed with "
+                         "an unknown exception\n");
+        }
+        return failure(TaskDiagnostic3D::InternalFailure,
+                       settings_,
+                       "joint posture linearization failed");
+    }
+
     JointLimitConstraint3D::JointLimitConstraint3D(TaskSettings3D settings)
         : settings_(std::move(settings))
     {

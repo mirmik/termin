@@ -19,6 +19,7 @@ add_library(termin_robotics SHARED
     src/articulation3d.cpp
     src/tasks.cpp
     src/velocity_control.cpp
+    src/inverse_dynamics_control.cpp
 )
 add_library(termin_robotics::termin_robotics ALIAS termin_robotics)
 target_compile_features(termin_robotics PUBLIC cxx_std_20)
@@ -73,6 +74,15 @@ if(TERMIN_ROBOTICS_BUILD_TESTS)
     )
     add_test(NAME termin_robotics_velocity_control_test
         COMMAND termin_robotics_velocity_control_test)
+
+    add_executable(termin_robotics_inverse_dynamics_control_test
+        tests/test_inverse_dynamics_control.cpp
+    )
+    target_link_libraries(termin_robotics_inverse_dynamics_control_test PRIVATE
+        termin_robotics
+    )
+    add_test(NAME termin_robotics_inverse_dynamics_control_test
+        COMMAND termin_robotics_inverse_dynamics_control_test)
 endif()
 
 include(GNUInstallDirs)

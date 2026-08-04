@@ -189,6 +189,35 @@ namespace termin::robotics
         TaskSettings3D settings_;
     };
 
+    // Acceleration-level joint-space posture tracking. The target is
+    // qdd_ff + kp * (q_target - q) + kd * (qd_target - qd). Keeping this as a
+    // distinct task avoids assigning ambiguous acceleration semantics to the
+    // velocity-level JointPositionTask3D contract.
+    class TERMIN_ROBOTICS_API JointPostureTask3D final
+        : public ArticulationTask3D
+    {
+    public:
+        JointPostureTask3D(std::vector<std::size_t> joint_indices,
+                           std::vector<double> target_positions,
+                           std::vector<double> target_velocities,
+                           double position_gain,
+                           double velocity_gain,
+                           std::vector<double> feedforward_accelerations = {},
+                           TaskSettings3D settings = {});
+
+        [[nodiscard]] TaskLinearization3DResult linearize(
+            const TaskLinearizationContext3D& context) const noexcept override;
+
+    private:
+        std::vector<std::size_t> joint_indices_;
+        std::vector<double> target_positions_;
+        std::vector<double> target_velocities_;
+        double position_gain_;
+        double velocity_gain_;
+        std::vector<double> feedforward_accelerations_;
+        TaskSettings3D settings_;
+    };
+
     class TERMIN_ROBOTICS_API JointLimitConstraint3D final
         : public ArticulationTask3D
     {

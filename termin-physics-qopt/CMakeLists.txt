@@ -27,6 +27,7 @@ add_library(termin_physics_qopt SHARED
     src/multibody2d.cpp
     src/multibody3d_contributions.cpp
     src/point_kinematics3d.cpp
+    src/robotics_control.cpp
 )
 add_library(termin_physics_qopt::termin_physics_qopt ALIAS termin_physics_qopt)
 target_compile_features(termin_physics_qopt PUBLIC cxx_std_20)

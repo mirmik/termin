@@ -1,7 +1,9 @@
 #include <termin/physics_qopt/articulation3d_motor.hpp>
+#include <termin/physics_qopt/robotics_control.hpp>
 
 #include "test_check.hpp"
 
+#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -84,6 +86,32 @@ int main()
     TERMIN_QOPT_CHECK(std::abs(load[1] - 2.0) < 1.0e-12);
     TERMIN_QOPT_CHECK(std::abs(motor.applied_effort(0) - 2.0) < 1.0e-12);
     TERMIN_QOPT_CHECK(motor.saturated(0));
+
+    const MotorActuatorModel3DResult actuator_model =
+        inverse_dynamics_actuators_from_motor(motor);
+    TERMIN_QOPT_CHECK(actuator_model.ok());
+    TERMIN_QOPT_CHECK(actuator_model.actuators.size() == 1);
+    TERMIN_QOPT_CHECK(actuator_model.actuators[0].dof_index == 1);
+    TERMIN_QOPT_CHECK(*actuator_model.actuators[0].minimum_effort == -2.0);
+    TERMIN_QOPT_CHECK(*actuator_model.actuators[0].maximum_effort == 2.0);
+
+    InverseDynamicsHqpController3D controller(
+        model, actuator_model.actuators, Vec3::zero());
+    JointVelocityTask3D acceleration_task({1}, {0.5}, 2.0);
+    const std::array<const ArticulationTask3D*, 1> control_tasks{
+        &acceleration_task};
+    const InverseDynamicsControlResult3D control =
+        controller.solve(control_tasks);
+    TERMIN_QOPT_CHECK(control.ok());
+    TERMIN_QOPT_CHECK(apply_inverse_dynamics_motor_commands(motor, control) ==
+                      RoboticsControlAdapterDiagnostic3D::None);
+    TERMIN_QOPT_CHECK(std::abs(motor.command(0) - control.actuator_effort[0]) <
+                      1.0e-12);
+
+    InverseDynamicsControlResult3D reordered = control;
+    reordered.actuator_dofs[0] = 0;
+    TERMIN_QOPT_CHECK(apply_inverse_dynamics_motor_commands(motor, reordered) ==
+                      RoboticsControlAdapterDiagnostic3D::DofMismatch);
 
     // Dependency binding is a second pass: contribution insertion order does
     // not have to match ownership order.
