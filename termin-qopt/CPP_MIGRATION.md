@@ -63,10 +63,11 @@
   RNEA и не создаёт внутренних constraint-строк; аналитические
   revolute/prismatic уравнения, ветвление и двойной маятник сверены с
   maximal-coordinate моделью;
-- native scene compiler переводит строгую иерархию articulation root →
-  kinematic joint entity → rigid body entity в публичные `ArticulationLink3D`,
-  а тестовый double-pendulum уже использует две reduced coordinates без
-  внутренних constraint-строк;
+- native scene compiler схлопывает существующую authored-иерархию articulation
+  root → kinematic unit entity → rigid body entity в публичные
+  `ArticulationUnit3D`: постоянный body offset входит в zero pose unit, а motion
+  twist переносится в его output frame; тестовый double-pendulum использует две
+  reduced coordinates без внутренних constraint-строк;
 - старый `RevoluteJoint3D` не переносится под прежней семантикой: его
   point/ball поведение соответствует `PointJoint3D`, а новый
   `RevoluteJoint3DContribution` означает axis-constrained шарнир;

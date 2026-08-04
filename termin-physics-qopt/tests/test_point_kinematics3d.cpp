@@ -83,31 +83,36 @@ namespace
         return {1.0, {0.2, 0.3, 0.4}, Pose3::identity()};
     }
 
-    std::vector<ArticulationLink3D> branching_links()
+    std::vector<ArticulationUnit3D> branching_units()
     {
         return {
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::translation(0.2, -0.1, 0.3),
-                .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(0.8, 0.0, 0.0),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::translation(1.0, -0.1, 0.3),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(0.8, 0.0, 0.0)),
                 .inertia = inertia(),
                 .diagnostic_name = "root-hinge",
             },
             {
-                .parent_link = 0,
-                .parent_to_joint_zero = Pose3::translation(0.5, 0.2, -0.1) *
-                                        Pose3::rotation(Vec3::unit_x(), 0.2),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(0.4, 0.1, 0.0),
+                .parent_unit = 0,
+                .parent_to_unit_zero = (Pose3::translation(0.5, 0.2, -0.1) *
+                                        Pose3::rotation(Vec3::unit_x(), 0.2) *
+                                        Pose3::translation(0.4, 0.1, 0.0))
+                                           .normalized(),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_y(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(0.4, 0.1, 0.0)),
                 .inertia = inertia(),
                 .diagnostic_name = "child-hinge",
             },
             {
-                .parent_link = 0,
-                .parent_to_joint_zero = Pose3::translation(-0.2, 0.4, 0.1),
-                .motion_twist_at_joint = {Vec3::zero(), Vec3::unit_z()},
-                .joint_to_link = Pose3::translation(0.0, 0.0, 0.2),
+                .parent_unit = 0,
+                .parent_to_unit_zero = Pose3::translation(-0.2, 0.4, 0.3),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::zero(), Vec3::unit_z()}.adjoint_inv(
+                        Pose3::translation(0.0, 0.0, 0.2)),
                 .inertia = inertia(),
                 .diagnostic_name = "sibling-slider",
             },
@@ -207,7 +212,7 @@ namespace
             {0.35, -0.42, 0.17},
             {0.8, -0.55, 1.1},
         };
-        Articulation3D model(branching_links(), state, "branching-point-model");
+        Articulation3D model(branching_units(), state, "branching-point-model");
         const ArticulationPointKinematics3DResult model_result =
             model.point_kinematics(1, {0.15, -0.25, 0.35});
         TERMIN_QOPT_CHECK(model_result.ok());
@@ -218,15 +223,15 @@ namespace
         Articulation3DDynamicsContribution articulation(model, Vec3::zero());
         bind(articulation);
 
-        constexpr std::size_t link_index = 1;
+        constexpr std::size_t unit_index = 1;
         const Vec3 point_local{0.15, -0.25, 0.35};
         const PointKinematics3DResult result =
-            articulation.point_kinematics(link_index, point_local);
+            articulation.point_kinematics(unit_index, point_local);
         TERMIN_QOPT_CHECK(result.ok());
         TERMIN_QOPT_CHECK(result.value.dof_count() == 3);
         TERMIN_QOPT_CHECK(result.value.dofs.valid());
         check_near(result.value.position_world,
-                   articulation.link_poses_world()[link_index].transform_point(
+                   articulation.unit_poses_world()[unit_index].transform_point(
                        point_local));
         check_near(
             multiply(result.value.linear_jacobian_world(), state.velocities),
@@ -247,7 +252,7 @@ namespace
             TERMIN_QOPT_CHECK(articulation.set_state(positive) ==
                               Articulation3DDiagnostic::None);
             const Vec3 positive_position =
-                articulation.point_kinematics(link_index, point_local)
+                articulation.point_kinematics(unit_index, point_local)
                     .value.position_world;
 
             Articulation3DState negative = state;
@@ -255,7 +260,7 @@ namespace
             TERMIN_QOPT_CHECK(articulation.set_state(negative) ==
                               Articulation3DDiagnostic::None);
             const Vec3 negative_position =
-                articulation.point_kinematics(link_index, point_local)
+                articulation.point_kinematics(unit_index, point_local)
                     .value.position_world;
 
             const Vec3 derivative =
@@ -293,12 +298,12 @@ namespace
         TERMIN_QOPT_CHECK(body.point_kinematics({0.0, nan, 0.0}).diagnostic ==
                           PointKinematics3DDiagnostic::NonFinitePoint);
 
-        Articulation3D model(branching_links(),
+        Articulation3D model(branching_units(),
                              {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}});
         Articulation3DDynamicsContribution articulation(model);
         TERMIN_QOPT_CHECK(
             articulation.point_kinematics(3, Vec3::zero()).diagnostic ==
-            PointKinematics3DDiagnostic::InvalidLink);
+            PointKinematics3DDiagnostic::InvalidUnit);
         TERMIN_QOPT_CHECK(
             articulation.point_kinematics(0, {0.0, 0.0, nan}).diagnostic ==
             PointKinematics3DDiagnostic::NonFinitePoint);

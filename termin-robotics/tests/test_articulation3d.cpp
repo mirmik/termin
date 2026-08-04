@@ -11,28 +11,30 @@ using namespace termin::robotics;
 
 namespace
 {
-    SpatialInertia3 link_inertia()
+    SpatialInertia3 unit_inertia()
     {
         return {1.0, {0.2, 0.3, 0.4}, Pose3::identity()};
     }
 
-    std::vector<ArticulationLink3D> links()
+    std::vector<ArticulationUnit3D> units()
     {
         return {
             {
-                .parent_link = articulation_root_frame,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(1.0, 0.0, 0.0),
-                .inertia = link_inertia(),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::translation(1.0, 0.0, 0.0),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(1.0, 0.0, 0.0)),
+                .inertia = unit_inertia(),
                 .diagnostic_name = "root",
             },
             {
-                .parent_link = 0,
-                .parent_to_joint_zero = Pose3::translation(0.5, 0.0, 0.0),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::translation(0.5, 0.0, 0.0),
-                .inertia = link_inertia(),
+                .parent_unit = 0,
+                .parent_to_unit_zero = Pose3::translation(1.0, 0.0, 0.0),
+                .motion_twist_at_unit =
+                    Screw3{Vec3::unit_y(), Vec3::zero()}.adjoint_inv(
+                        Pose3::translation(0.5, 0.0, 0.0)),
+                .inertia = unit_inertia(),
                 .diagnostic_name = "child",
             },
         };
@@ -44,9 +46,9 @@ namespace
         TERMIN_ROBOTICS_CHECK(empty.diagnostic() ==
                               Articulation3DDiagnostic::EmptyModel);
 
-        auto invalid_links = links();
-        invalid_links[0].parent_link = 0;
-        Articulation3D invalid(std::move(invalid_links),
+        auto invalid_units = units();
+        invalid_units[0].parent_unit = 0;
+        Articulation3D invalid(std::move(invalid_units),
                                {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_ROBOTICS_CHECK(invalid.diagnostic() ==
                               Articulation3DDiagnostic::InvalidParent);
@@ -55,10 +57,10 @@ namespace
     void test_kinematics_and_inertial_model()
     {
         const Articulation3DState state{{0.3, -0.4}, {0.7, -0.2}};
-        Articulation3D model(links(), state, "two-link");
+        Articulation3D model(units(), state, "two-unit");
         TERMIN_ROBOTICS_CHECK(model.diagnostic() ==
                               Articulation3DDiagnostic::None);
-        TERMIN_ROBOTICS_CHECK(model.link_poses_world().size() == 2);
+        TERMIN_ROBOTICS_CHECK(model.unit_poses_world().size() == 2);
 
         const auto point = model.point_kinematics(1, {0.2, -0.1, 0.3});
         TERMIN_ROBOTICS_CHECK(point.ok());
@@ -92,13 +94,57 @@ namespace
         TERMIN_ROBOTICS_CHECK((actual - expected).norm() < tolerance);
     }
 
+    void test_unit_frame_collapse_equivalence()
+    {
+        const Pose3 parent_to_joint = Pose3::translation(0.2, -0.3, 0.4) *
+                                      Pose3::rotation(Vec3::unit_x(), 0.35);
+        const Pose3 joint_to_output = Pose3::translation(0.7, 0.1, -0.2) *
+                                      Pose3::rotation(Vec3::unit_z(), -0.25);
+        const Screw3 motion_at_joint{Vec3::unit_y(), Vec3::zero()};
+        constexpr double coordinate = 0.6;
+        constexpr double velocity = -0.8;
+
+        Articulation3D model(
+            {{.parent_unit = articulation_root_frame,
+              .parent_to_unit_zero =
+                  (parent_to_joint * joint_to_output).normalized(),
+              .motion_twist_at_unit =
+                  motion_at_joint.adjoint_inv(joint_to_output),
+              .inertia = unit_inertia(),
+              .diagnostic_name = "collapsed-unit"}},
+            {{coordinate}, {velocity}},
+            "unit-frame-collapse");
+        TERMIN_ROBOTICS_CHECK(model.diagnostic() ==
+                              Articulation3DDiagnostic::None);
+
+        const Pose3 separated_oracle =
+            (parent_to_joint * se3_exp(motion_at_joint * coordinate) *
+             joint_to_output)
+                .normalized();
+        const Pose3& actual = model.unit_poses_world()[0];
+        check_vec_near(actual.transform_point({0.3, -0.2, 0.5}),
+                       separated_oracle.transform_point({0.3, -0.2, 0.5}),
+                       1.0e-12);
+        check_vec_near(actual.transform_vector({0.4, 0.5, -0.1}),
+                       separated_oracle.transform_vector({0.4, 0.5, -0.1}),
+                       1.0e-12);
+        const Screw3 expected_velocity =
+            motion_at_joint.adjoint_inv(joint_to_output) * velocity;
+        check_vec_near(model.unit_velocities_local()[0].ang,
+                       expected_velocity.ang,
+                       1.0e-12);
+        check_vec_near(model.unit_velocities_local()[0].lin,
+                       expected_velocity.lin,
+                       1.0e-12);
+    }
+
     void test_bias_acceleration_against_finite_difference()
     {
         constexpr double step = 1.0e-7;
         const Vec3 point_local{0.2, -0.1, 0.3};
         const Articulation3DState initial{{0.3, -0.4}, {0.7, -0.2}};
 
-        Articulation3D fixed(links(), initial, "fixed-bias");
+        Articulation3D fixed(units(), initial, "fixed-bias");
         const auto fixed_point_before = fixed.point_kinematics(1, point_local);
         const auto fixed_frame_before = fixed.frame_kinematics(1);
         TERMIN_ROBOTICS_CHECK(fixed_point_before.ok());
@@ -130,12 +176,12 @@ namespace
                        2.0e-6);
 
         ArticulationFloatingBase3D base{
-            .inertia = link_inertia(),
+            .inertia = unit_inertia(),
             .pose_world = se3_exp({{0.2, -0.1, 0.3}, {0.4, -0.2, 0.1}}),
             .velocity_local = {{0.4, -0.3, 0.2}, {0.7, 0.1, -0.2}},
             .diagnostic_name = "base",
         };
-        Articulation3D floating(base, links(), initial, "floating-bias");
+        Articulation3D floating(base, units(), initial, "floating-bias");
         const auto floating_point_before =
             floating.point_kinematics(1, point_local);
         const auto floating_frame_before = floating.frame_kinematics(1);
@@ -182,6 +228,7 @@ int main()
 {
     test_validation();
     test_kinematics_and_inertial_model();
+    test_unit_frame_collapse_equivalence();
     test_bias_acceleration_against_finite_difference();
     return 0;
 }

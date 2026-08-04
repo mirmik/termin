@@ -58,8 +58,8 @@ commands. Contact-force variables are likewise explicit:
 ```cpp
 const auto support = inverse_dynamics_contact_force_block(
     articulation_dynamics,
-    ContactEndpoint3D::articulation_link(
-        articulation_dynamics, foot_link, foot_point_local),
+    ContactEndpoint3D::articulation_unit(
+        articulation_dynamics, foot_unit, foot_point_local),
     ground_normal_world, friction_coefficient, maximum_normal_force,
     "left-foot");
 InverseDynamicsControlOptions3D options;

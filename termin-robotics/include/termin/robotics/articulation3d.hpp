@@ -24,11 +24,6 @@ namespace termin::robotics
 
     inline constexpr std::size_t articulation_root_frame =
         std::numeric_limits<std::size_t>::max();
-    // Compatibility spelling for fixed-base callers. New code should use the
-    // formulation-neutral root-frame name.
-    inline constexpr std::size_t articulation_world_link =
-        articulation_root_frame;
-
     enum class Articulation3DDiagnostic : std::uint8_t
     {
         None,
@@ -38,10 +33,10 @@ namespace termin::robotics
         InvalidMotionTwist,
         InvalidInertia,
         InvalidState,
-        InvalidJointLimits,
+        InvalidUnitLimits,
         NonFiniteInput,
         InvalidModel,
-        InvalidLink,
+        InvalidUnit,
         NonFinitePoint,
         InternalFailure,
     };
@@ -50,28 +45,27 @@ namespace termin::robotics
     articulation3d_diagnostic_name(
         Articulation3DDiagnostic diagnostic) noexcept;
 
-    struct ArticulationJointLimits3D
+    struct ArticulationUnitLimits3D
     {
         std::optional<double> minimum;
         std::optional<double> maximum;
     };
 
-    // One physical link and the one-DOF joint that attaches it to its parent.
-    // Links must be stored in topological order. The root-frame sentinel
-    // denotes the articulation root frame: inertial world for a fixed base,
-    // or the explicit root body frame for a floating base.
-    struct ArticulationLink3D
+    // One one-DOF kinematic unit and the spatial inertia rigidly attached to
+    // its moving output frame. Units must be stored in topological order. The
+    // root-frame sentinel denotes inertial world for a fixed base, or the
+    // explicit floating-base frame when one is present.
+    struct ArticulationUnit3D
     {
-        std::size_t parent_link = articulation_root_frame;
-        termin::Pose3 parent_to_joint_zero = termin::Pose3::identity();
-        // Motion twist expressed at the moving joint-frame origin. A canonical
-        // revolute joint uses {unit_axis, 0}; a prismatic joint uses
-        // {0, unit_axis}. Coordinate scaling is therefore explicit in this
-        // value and should normally be one radian or one metre.
-        termin::Screw3 motion_twist_at_joint = termin::Screw3::zero();
-        termin::Pose3 joint_to_link = termin::Pose3::identity();
+        std::size_t parent_unit = articulation_root_frame;
+        termin::Pose3 parent_to_unit_zero = termin::Pose3::identity();
+        // Motion twist expressed at the moving output-frame origin. A
+        // canonical revolute unit uses {unit_axis, 0}; a prismatic unit uses
+        // {0, unit_axis}. Coordinate scaling is explicit in this value and
+        // should normally be one radian or one metre.
+        termin::Screw3 motion_twist_at_unit = termin::Screw3::zero();
         termin::SpatialInertia3 inertia;
-        ArticulationJointLimits3D limits;
+        ArticulationUnitLimits3D limits;
         std::string diagnostic_name;
     };
 
@@ -120,9 +114,9 @@ namespace termin::robotics
         [[nodiscard]] bool ok() const noexcept;
     };
 
-    // Differential kinematics of a link frame. World spatial velocity and
-    // Jacobian use vw row order: linear velocity first, angular velocity
-    // second. Both are taken at the link-frame origin.
+    // Differential kinematics of a unit output frame. World spatial velocity
+    // and Jacobian use vw row order: linear velocity first, angular velocity
+    // second. Both are taken at the unit-frame origin.
     struct TERMIN_ROBOTICS_API ArticulationFrameKinematics3D
     {
         termin::Pose3 pose_world = termin::Pose3::identity();
@@ -145,18 +139,18 @@ namespace termin::robotics
         [[nodiscard]] bool ok() const noexcept;
     };
 
-    // Solver-neutral reduced-coordinate tree. It owns the mechanism topology,
-    // configuration, velocity and kinematic cache. Inertial data stays on the
-    // links, so dynamics algorithms can operate on the same compiled model
-    // without owning a parallel tree representation.
+    // Solver-neutral reduced-coordinate tree. Each unit is both a moving
+    // output frame and one generalized coordinate; its spatial inertia is
+    // expressed directly in that frame. There is no parallel joint/link
+    // topology.
     class TERMIN_ROBOTICS_API Articulation3D
     {
     public:
-        Articulation3D(std::vector<ArticulationLink3D> links,
+        Articulation3D(std::vector<ArticulationUnit3D> units,
                        Articulation3DState initial_state,
                        std::string_view diagnostic_name = {});
         Articulation3D(ArticulationFloatingBase3D floating_base,
-                       std::vector<ArticulationLink3D> links,
+                       std::vector<ArticulationUnit3D> units,
                        Articulation3DState initial_state,
                        std::string_view diagnostic_name = {});
 
@@ -167,25 +161,25 @@ namespace termin::robotics
 
         [[nodiscard]] Articulation3DDiagnostic diagnostic() const noexcept;
         [[nodiscard]] std::string_view diagnostic_name() const noexcept;
-        [[nodiscard]] std::size_t link_count() const noexcept;
+        [[nodiscard]] std::size_t unit_count() const noexcept;
         [[nodiscard]] std::size_t dof_count() const noexcept;
-        [[nodiscard]] const std::vector<ArticulationLink3D>&
-        links() const noexcept;
+        [[nodiscard]] const std::vector<ArticulationUnit3D>&
+        units() const noexcept;
         [[nodiscard]] const Articulation3DState& state() const noexcept;
         [[nodiscard]] bool has_floating_base() const noexcept;
         [[nodiscard]] const std::optional<ArticulationFloatingBase3D>&
         floating_base() const noexcept;
         [[nodiscard]] const std::vector<termin::Pose3>&
-        link_poses_world() const noexcept;
+        unit_poses_world() const noexcept;
         [[nodiscard]] const std::vector<termin::Screw3>&
-        link_velocities_local() const noexcept;
+        unit_velocities_local() const noexcept;
         [[nodiscard]] ArticulationPointKinematics3DResult
-        point_kinematics(std::size_t link_index,
+        point_kinematics(std::size_t unit_index,
                          termin::Vec3 point_local) const noexcept;
         [[nodiscard]] ArticulationPointKinematics3DResult
         floating_base_point_kinematics(termin::Vec3 point_local) const noexcept;
         [[nodiscard]] ArticulationFrameKinematics3DResult
-        frame_kinematics(std::size_t link_index) const noexcept;
+        frame_kinematics(std::size_t unit_index) const noexcept;
         [[nodiscard]] ArticulationFrameKinematics3DResult
         floating_base_frame_kinematics() const noexcept;
 
@@ -210,16 +204,16 @@ namespace termin::robotics
     private:
         friend class detail::Articulation3DMutableAccess;
 
-        std::vector<ArticulationLink3D> links_;
+        std::vector<ArticulationUnit3D> units_;
         Articulation3DState state_;
         std::optional<ArticulationFloatingBase3D> floating_base_;
         std::string diagnostic_name_;
         Articulation3DDiagnostic diagnostic_ = Articulation3DDiagnostic::None;
 
-        std::vector<termin::Pose3> parent_to_link_;
-        std::vector<termin::Pose3> link_poses_world_;
-        std::vector<termin::Screw3> motion_twists_at_link_;
-        std::vector<termin::Screw3> link_velocities_local_;
+        std::vector<termin::Pose3> parent_to_unit_;
+        std::vector<termin::Pose3> unit_poses_world_;
+        std::vector<termin::Screw3> motion_twists_at_unit_;
+        std::vector<termin::Screw3> unit_velocities_local_;
 
         [[nodiscard]] Articulation3DDiagnostic validate_model() const noexcept;
         [[nodiscard]] bool update_kinematics() noexcept;

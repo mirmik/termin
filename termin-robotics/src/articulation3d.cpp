@@ -78,14 +78,14 @@ namespace termin::robotics
             return "invalid_inertia";
         case Articulation3DDiagnostic::InvalidState:
             return "invalid_state";
-        case Articulation3DDiagnostic::InvalidJointLimits:
-            return "invalid_joint_limits";
+        case Articulation3DDiagnostic::InvalidUnitLimits:
+            return "invalid_unit_limits";
         case Articulation3DDiagnostic::NonFiniteInput:
             return "non_finite_input";
         case Articulation3DDiagnostic::InvalidModel:
             return "invalid_model";
-        case Articulation3DDiagnostic::InvalidLink:
-            return "invalid_link";
+        case Articulation3DDiagnostic::InvalidUnit:
+            return "invalid_unit";
         case Articulation3DDiagnostic::NonFinitePoint:
             return "non_finite_point";
         case Articulation3DDiagnostic::InternalFailure:
@@ -139,16 +139,16 @@ namespace termin::robotics
         return diagnostic == Articulation3DDiagnostic::None;
     }
 
-    Articulation3D::Articulation3D(std::vector<ArticulationLink3D> links,
+    Articulation3D::Articulation3D(std::vector<ArticulationUnit3D> units,
                                    Articulation3DState initial_state,
                                    std::string_view diagnostic_name)
-        : links_(std::move(links)), state_(std::move(initial_state)),
+        : units_(std::move(units)), state_(std::move(initial_state)),
           diagnostic_name_(diagnostic_name)
     {
-        parent_to_link_.resize(links_.size());
-        link_poses_world_.resize(links_.size());
-        motion_twists_at_link_.resize(links_.size());
-        link_velocities_local_.resize(links_.size());
+        parent_to_unit_.resize(units_.size());
+        unit_poses_world_.resize(units_.size());
+        motion_twists_at_unit_.resize(units_.size());
+        unit_velocities_local_.resize(units_.size());
         diagnostic_ = validate_model();
         if (diagnostic_ == Articulation3DDiagnostic::None &&
             !update_kinematics())
@@ -158,11 +158,11 @@ namespace termin::robotics
     }
 
     Articulation3D::Articulation3D(ArticulationFloatingBase3D floating_base,
-                                   std::vector<ArticulationLink3D> links,
+                                   std::vector<ArticulationUnit3D> units,
                                    Articulation3DState initial_state,
                                    std::string_view diagnostic_name)
         : Articulation3D(
-              std::move(links), std::move(initial_state), diagnostic_name)
+              std::move(units), std::move(initial_state), diagnostic_name)
     {
         floating_base_ = std::move(floating_base);
         diagnostic_ = validate_model();
@@ -175,12 +175,12 @@ namespace termin::robotics
 
     Articulation3DDiagnostic Articulation3D::validate_model() const noexcept
     {
-        if (links_.empty() && !floating_base_.has_value())
+        if (units_.empty() && !floating_base_.has_value())
         {
             return Articulation3DDiagnostic::EmptyModel;
         }
-        if (state_.coordinates.size() != links_.size() ||
-            state_.velocities.size() != links_.size() ||
+        if (state_.coordinates.size() != units_.size() ||
+            state_.velocities.size() != units_.size() ||
             !finite(state_.coordinates) || !finite(state_.velocities))
         {
             return Articulation3DDiagnostic::InvalidState;
@@ -195,40 +195,38 @@ namespace termin::robotics
                        ? Articulation3DDiagnostic::InvalidInertia
                        : Articulation3DDiagnostic::InvalidState;
         }
-        for (std::size_t index = 0; index < links_.size(); ++index)
+        for (std::size_t index = 0; index < units_.size(); ++index)
         {
-            const ArticulationLink3D& link = links_[index];
-            if (link.parent_link != articulation_world_link &&
-                link.parent_link >= index)
+            const ArticulationUnit3D& unit = units_[index];
+            if (unit.parent_unit != articulation_root_frame &&
+                unit.parent_unit >= index)
             {
                 return Articulation3DDiagnostic::InvalidParent;
             }
-            if (!link.parent_to_joint_zero.is_finite() ||
-                !link.joint_to_link.is_finite() ||
-                link.parent_to_joint_zero.ang.norm() <= 1e-10 ||
-                link.joint_to_link.ang.norm() <= 1e-10)
+            if (!unit.parent_to_unit_zero.is_finite() ||
+                unit.parent_to_unit_zero.ang.norm() <= 1e-10)
             {
                 return Articulation3DDiagnostic::InvalidPose;
             }
-            if (!link.motion_twist_at_joint.is_finite() ||
-                link.motion_twist_at_joint.dot(link.motion_twist_at_joint) <=
+            if (!unit.motion_twist_at_unit.is_finite() ||
+                unit.motion_twist_at_unit.dot(unit.motion_twist_at_unit) <=
                     1e-20)
             {
                 return Articulation3DDiagnostic::InvalidMotionTwist;
             }
-            if (!link.inertia.is_valid())
+            if (!unit.inertia.is_valid())
             {
                 return Articulation3DDiagnostic::InvalidInertia;
             }
-            if ((link.limits.minimum.has_value() &&
-                 !std::isfinite(*link.limits.minimum)) ||
-                (link.limits.maximum.has_value() &&
-                 !std::isfinite(*link.limits.maximum)) ||
-                (link.limits.minimum.has_value() &&
-                 link.limits.maximum.has_value() &&
-                 *link.limits.minimum > *link.limits.maximum))
+            if ((unit.limits.minimum.has_value() &&
+                 !std::isfinite(*unit.limits.minimum)) ||
+                (unit.limits.maximum.has_value() &&
+                 !std::isfinite(*unit.limits.maximum)) ||
+                (unit.limits.minimum.has_value() &&
+                 unit.limits.maximum.has_value() &&
+                 *unit.limits.minimum > *unit.limits.maximum))
             {
-                return Articulation3DDiagnostic::InvalidJointLimits;
+                return Articulation3DDiagnostic::InvalidUnitLimits;
             }
         }
         return Articulation3DDiagnostic::None;
@@ -244,20 +242,20 @@ namespace termin::robotics
         return diagnostic_name_;
     }
 
-    std::size_t Articulation3D::link_count() const noexcept
+    std::size_t Articulation3D::unit_count() const noexcept
     {
-        return links_.size();
+        return units_.size();
     }
 
     std::size_t Articulation3D::dof_count() const noexcept
     {
-        return links_.size() + (floating_base_.has_value() ? 6 : 0);
+        return units_.size() + (floating_base_.has_value() ? 6 : 0);
     }
 
-    const std::vector<ArticulationLink3D>&
-    Articulation3D::links() const noexcept
+    const std::vector<ArticulationUnit3D>&
+    Articulation3D::units() const noexcept
     {
-        return links_;
+        return units_;
     }
 
     const Articulation3DState& Articulation3D::state() const noexcept
@@ -277,15 +275,15 @@ namespace termin::robotics
     }
 
     const std::vector<termin::Pose3>&
-    Articulation3D::link_poses_world() const noexcept
+    Articulation3D::unit_poses_world() const noexcept
     {
-        return link_poses_world_;
+        return unit_poses_world_;
     }
 
     const std::vector<termin::Screw3>&
-    Articulation3D::link_velocities_local() const noexcept
+    Articulation3D::unit_velocities_local() const noexcept
     {
-        return link_velocities_local_;
+        return unit_velocities_local_;
     }
 
     ArticulationFrameKinematics3DResult
@@ -353,13 +351,13 @@ namespace termin::robotics
     }
 
     ArticulationFrameKinematics3DResult
-    Articulation3D::frame_kinematics(std::size_t link_index) const noexcept
+    Articulation3D::frame_kinematics(std::size_t unit_index) const noexcept
     {
         if (diagnostic_ != Articulation3DDiagnostic::None ||
-            link_poses_world_.size() != links_.size() ||
-            parent_to_link_.size() != links_.size() ||
-            motion_twists_at_link_.size() != links_.size() ||
-            link_velocities_local_.size() != links_.size())
+            unit_poses_world_.size() != units_.size() ||
+            parent_to_unit_.size() != units_.size() ||
+            motion_twists_at_unit_.size() != units_.size() ||
+            unit_velocities_local_.size() != units_.size())
         {
             std::fprintf(stderr,
                          "[termin-robotics] cannot query frame kinematics of "
@@ -367,21 +365,21 @@ namespace termin::robotics
                          diagnostic_name_.c_str());
             return {{}, Articulation3DDiagnostic::InvalidModel};
         }
-        if (link_index >= links_.size())
+        if (unit_index >= units_.size())
         {
             std::fprintf(stderr,
                          "[termin-robotics] articulation frame references "
-                         "invalid link %zu\n",
-                         link_index);
-            return {{}, Articulation3DDiagnostic::InvalidLink};
+                         "invalid unit %zu\n",
+                         unit_index);
+            return {{}, Articulation3DDiagnostic::InvalidUnit};
         }
 
         try
         {
             ArticulationFrameKinematics3D value;
-            value.pose_world = link_poses_world_[link_index];
+            value.pose_world = unit_poses_world_[unit_index];
             value.velocity_world =
-                link_velocities_local_[link_index].rotated_by(
+                unit_velocities_local_[unit_index].rotated_by(
                     value.pose_world.ang);
             std::vector<termin::Screw3> bias_local;
             if (!bias_accelerations_local(bias_local))
@@ -389,8 +387,8 @@ namespace termin::robotics
                 return {{}, Articulation3DDiagnostic::InvalidModel};
             }
             const termin::Screw3& velocity_local =
-                link_velocities_local_[link_index];
-            const termin::Screw3& acceleration_local = bias_local[link_index];
+                unit_velocities_local_[unit_index];
+            const termin::Screw3& acceleration_local = bias_local[unit_index];
             value.bias_acceleration_world = {
                 value.pose_world.transform_vector(acceleration_local.ang),
                 value.pose_world.transform_vector(
@@ -398,11 +396,11 @@ namespace termin::robotics
                     velocity_local.ang.cross(velocity_local.lin)),
             };
             const std::size_t generalized_count = dof_count();
-            const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+            const std::size_t unit_offset = floating_base_.has_value() ? 6 : 0;
             value.spatial_jacobian_world_storage.assign(6 * generalized_count,
                                                         0.0);
 
-            std::vector<termin::Screw3> unit_velocities(link_index + 1);
+            std::vector<termin::Screw3> unit_velocities(unit_index + 1);
             for (std::size_t column = 0; column < generalized_count; ++column)
             {
                 termin::Screw3 base_velocity = termin::Screw3::zero();
@@ -412,24 +410,23 @@ namespace termin::robotics
                     unit_base[column] = 1.0;
                     base_velocity = read_screw_vw(unit_base);
                 }
-                for (std::size_t index = 0; index <= link_index; ++index)
+                for (std::size_t index = 0; index <= unit_index; ++index)
                 {
-                    const std::size_t parent = links_[index].parent_link;
+                    const std::size_t parent = units_[index].parent_unit;
                     const termin::Screw3 parent_velocity =
                         parent == articulation_root_frame
                             ? base_velocity
                             : unit_velocities[parent];
                     unit_velocities[index] =
-                        parent_velocity.adjoint_inv(parent_to_link_[index]);
-                    if (column >= joint_offset &&
-                        index == column - joint_offset)
+                        parent_velocity.adjoint_inv(parent_to_unit_[index]);
+                    if (column >= unit_offset && index == column - unit_offset)
                     {
-                        unit_velocities[index] += motion_twists_at_link_[index];
+                        unit_velocities[index] += motion_twists_at_unit_[index];
                     }
                 }
 
                 const termin::Screw3 response =
-                    unit_velocities[link_index].rotated_by(
+                    unit_velocities[unit_index].rotated_by(
                         value.pose_world.ang);
                 value.spatial_jacobian_world_storage[column] = response.lin.x;
                 value.spatial_jacobian_world_storage[generalized_count +
@@ -536,14 +533,14 @@ namespace termin::robotics
     }
 
     ArticulationPointKinematics3DResult
-    Articulation3D::point_kinematics(std::size_t link_index,
+    Articulation3D::point_kinematics(std::size_t unit_index,
                                      termin::Vec3 point_local) const noexcept
     {
         if (diagnostic_ != Articulation3DDiagnostic::None ||
-            link_poses_world_.size() != links_.size() ||
-            parent_to_link_.size() != links_.size() ||
-            motion_twists_at_link_.size() != links_.size() ||
-            link_velocities_local_.size() != links_.size())
+            unit_poses_world_.size() != units_.size() ||
+            parent_to_unit_.size() != units_.size() ||
+            motion_twists_at_unit_.size() != units_.size() ||
+            unit_velocities_local_.size() != units_.size())
         {
             std::fprintf(
                 stderr,
@@ -552,14 +549,14 @@ namespace termin::robotics
                 diagnostic_name_.c_str());
             return {{}, Articulation3DDiagnostic::InvalidModel};
         }
-        if (link_index >= links_.size())
+        if (unit_index >= units_.size())
         {
             std::fprintf(
                 stderr,
-                "[termin-robotics] articulation point references invalid link "
+                "[termin-robotics] articulation point references invalid unit "
                 "%zu\n",
-                link_index);
-            return {{}, Articulation3DDiagnostic::InvalidLink};
+                unit_index);
+            return {{}, Articulation3DDiagnostic::InvalidUnit};
         }
         if (!point_local.is_finite())
         {
@@ -573,11 +570,11 @@ namespace termin::robotics
         {
             ArticulationPointKinematics3D value;
             value.position_world =
-                link_poses_world_[link_index].transform_point(point_local);
+                unit_poses_world_[unit_index].transform_point(point_local);
             value.velocity_world =
-                link_velocities_local_[link_index]
+                unit_velocities_local_[unit_index]
                     .velocity_at_offset(point_local)
-                    .rotated_by(link_poses_world_[link_index].ang)
+                    .rotated_by(unit_poses_world_[unit_index].ang)
                     .lin;
             std::vector<termin::Screw3> bias_local;
             if (!bias_accelerations_local(bias_local))
@@ -585,21 +582,21 @@ namespace termin::robotics
                 return {{}, Articulation3DDiagnostic::InvalidModel};
             }
             const termin::Screw3 point_velocity_local =
-                link_velocities_local_[link_index].velocity_at_offset(
+                unit_velocities_local_[unit_index].velocity_at_offset(
                     point_local);
             const termin::Screw3 point_acceleration_local =
-                bias_local[link_index].velocity_at_offset(point_local);
+                bias_local[unit_index].velocity_at_offset(point_local);
             value.bias_acceleration_world =
-                link_poses_world_[link_index].transform_vector(
+                unit_poses_world_[unit_index].transform_vector(
                     point_acceleration_local.lin +
-                    link_velocities_local_[link_index].ang.cross(
+                    unit_velocities_local_[unit_index].ang.cross(
                         point_velocity_local.lin));
             const std::size_t generalized_count = dof_count();
-            const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+            const std::size_t unit_offset = floating_base_.has_value() ? 6 : 0;
             value.linear_jacobian_world_storage.assign(3 * generalized_count,
                                                        0.0);
 
-            std::vector<termin::Screw3> unit_velocities(link_index + 1);
+            std::vector<termin::Screw3> unit_velocities(unit_index + 1);
             for (std::size_t column = 0; column < generalized_count; ++column)
             {
                 termin::Screw3 base_velocity = termin::Screw3::zero();
@@ -609,25 +606,24 @@ namespace termin::robotics
                     unit_base[column] = 1.0;
                     base_velocity = read_screw_vw(unit_base);
                 }
-                for (std::size_t index = 0; index <= link_index; ++index)
+                for (std::size_t index = 0; index <= unit_index; ++index)
                 {
-                    const std::size_t parent = links_[index].parent_link;
+                    const std::size_t parent = units_[index].parent_unit;
                     const termin::Screw3 parent_velocity =
-                        parent == articulation_world_link
+                        parent == articulation_root_frame
                             ? base_velocity
                             : unit_velocities[parent];
                     unit_velocities[index] =
-                        parent_velocity.adjoint_inv(parent_to_link_[index]);
-                    if (column >= joint_offset &&
-                        index == column - joint_offset)
+                        parent_velocity.adjoint_inv(parent_to_unit_[index]);
+                    if (column >= unit_offset && index == column - unit_offset)
                     {
-                        unit_velocities[index] += motion_twists_at_link_[index];
+                        unit_velocities[index] += motion_twists_at_unit_[index];
                     }
                 }
                 const termin::Vec3 response =
-                    unit_velocities[link_index]
+                    unit_velocities[unit_index]
                         .velocity_at_offset(point_local)
-                        .rotated_by(link_poses_world_[link_index].ang)
+                        .rotated_by(unit_poses_world_[unit_index].ang)
                         .lin;
                 value.linear_jacobian_world_storage[column] = response.x;
                 value
@@ -663,8 +659,8 @@ namespace termin::robotics
     Articulation3DDiagnostic
     Articulation3D::set_state(Articulation3DState value) noexcept
     {
-        if (value.coordinates.size() != links_.size() ||
-            value.velocities.size() != links_.size() ||
+        if (value.coordinates.size() != units_.size() ||
+            value.velocities.size() != units_.size() ||
             !finite(value.coordinates) || !finite(value.velocities))
         {
             std::fprintf(
@@ -699,47 +695,45 @@ namespace termin::robotics
 
     bool Articulation3D::update_kinematics() noexcept
     {
-        const std::size_t count = links_.size();
-        if (parent_to_link_.size() != count ||
-            link_poses_world_.size() != count ||
-            motion_twists_at_link_.size() != count ||
-            link_velocities_local_.size() != count)
+        const std::size_t count = units_.size();
+        if (parent_to_unit_.size() != count ||
+            unit_poses_world_.size() != count ||
+            motion_twists_at_unit_.size() != count ||
+            unit_velocities_local_.size() != count)
         {
             return false;
         }
 
         for (std::size_t index = 0; index < count; ++index)
         {
-            const ArticulationLink3D& link = links_[index];
-            const termin::Pose3 joint_motion = termin::se3_exp(
-                link.motion_twist_at_joint * state_.coordinates[index]);
-            parent_to_link_[index] =
-                (link.parent_to_joint_zero * joint_motion * link.joint_to_link)
-                    .normalized();
+            const ArticulationUnit3D& unit = units_[index];
+            const termin::Pose3 unit_motion = termin::se3_exp(
+                unit.motion_twist_at_unit * state_.coordinates[index]);
+            parent_to_unit_[index] =
+                (unit.parent_to_unit_zero * unit_motion).normalized();
             const termin::Pose3 parent_pose =
-                link.parent_link == articulation_world_link
+                unit.parent_unit == articulation_root_frame
                     ? (floating_base_.has_value() ? floating_base_->pose_world
                                                   : termin::Pose3::identity())
-                    : link_poses_world_[link.parent_link];
-            link_poses_world_[index] =
-                (parent_pose * parent_to_link_[index]).normalized();
-            motion_twists_at_link_[index] =
-                link.motion_twist_at_joint.adjoint_inv(link.joint_to_link);
+                    : unit_poses_world_[unit.parent_unit];
+            unit_poses_world_[index] =
+                (parent_pose * parent_to_unit_[index]).normalized();
+            motion_twists_at_unit_[index] = unit.motion_twist_at_unit;
 
             const termin::Screw3 parent_velocity =
-                link.parent_link == articulation_world_link
+                unit.parent_unit == articulation_root_frame
                     ? (floating_base_.has_value()
                            ? floating_base_->velocity_local
                            : termin::Screw3::zero())
-                    : link_velocities_local_[link.parent_link];
-            link_velocities_local_[index] =
-                parent_velocity.adjoint_inv(parent_to_link_[index]) +
-                motion_twists_at_link_[index] * state_.velocities[index];
+                    : unit_velocities_local_[unit.parent_unit];
+            unit_velocities_local_[index] =
+                parent_velocity.adjoint_inv(parent_to_unit_[index]) +
+                motion_twists_at_unit_[index] * state_.velocities[index];
 
-            if (!parent_to_link_[index].is_finite() ||
-                !link_poses_world_[index].is_finite() ||
-                !motion_twists_at_link_[index].is_finite() ||
-                !link_velocities_local_[index].is_finite())
+            if (!parent_to_unit_[index].is_finite() ||
+                !unit_poses_world_[index].is_finite() ||
+                !motion_twists_at_unit_[index].is_finite() ||
+                !unit_velocities_local_[index].is_finite())
             {
                 return false;
             }
@@ -750,24 +744,24 @@ namespace termin::robotics
     bool Articulation3D::bias_accelerations_local(
         std::vector<termin::Screw3>& accelerations) const
     {
-        if (parent_to_link_.size() != links_.size() ||
-            motion_twists_at_link_.size() != links_.size() ||
-            link_velocities_local_.size() != links_.size())
+        if (parent_to_unit_.size() != units_.size() ||
+            motion_twists_at_unit_.size() != units_.size() ||
+            unit_velocities_local_.size() != units_.size())
         {
             return false;
         }
-        accelerations.assign(links_.size(), termin::Screw3::zero());
-        for (std::size_t index = 0; index < links_.size(); ++index)
+        accelerations.assign(units_.size(), termin::Screw3::zero());
+        for (std::size_t index = 0; index < units_.size(); ++index)
         {
-            const std::size_t parent = links_[index].parent_link;
+            const std::size_t parent = units_[index].parent_unit;
             const termin::Screw3 parent_acceleration =
                 parent == articulation_root_frame ? termin::Screw3::zero()
                                                   : accelerations[parent];
-            const termin::Screw3 joint_velocity =
-                motion_twists_at_link_[index] * state_.velocities[index];
+            const termin::Screw3 unit_velocity =
+                motion_twists_at_unit_[index] * state_.velocities[index];
             accelerations[index] =
-                parent_acceleration.adjoint_inv(parent_to_link_[index]) +
-                link_velocities_local_[index].cross_motion(joint_velocity);
+                parent_acceleration.adjoint_inv(parent_to_unit_[index]) +
+                unit_velocities_local_[index].cross_motion(unit_velocity);
             if (!accelerations[index].is_finite())
             {
                 return false;
@@ -782,9 +776,9 @@ namespace termin::robotics
                                      termin::Vec3 gravity_world,
                                      std::vector<double>& effort) const
     {
-        const std::size_t link_count = links_.size();
+        const std::size_t unit_count = units_.size();
         const std::size_t count = dof_count();
-        const std::size_t joint_offset = floating_base_.has_value() ? 6 : 0;
+        const std::size_t unit_offset = floating_base_.has_value() ? 6 : 0;
         if (velocities.size() != count || accelerations.size() != count ||
             !finite(velocities) || !finite(accelerations) ||
             !gravity_world.is_finite())
@@ -808,54 +802,53 @@ namespace termin::robotics
                          base_velocity.cross_force(momentum);
         }
 
-        std::vector<termin::Screw3> velocities_local(link_count);
-        std::vector<termin::Screw3> accelerations_local(link_count);
-        std::vector<termin::Screw3> forces_local(link_count);
-        for (std::size_t index = 0; index < link_count; ++index)
+        std::vector<termin::Screw3> velocities_local(unit_count);
+        std::vector<termin::Screw3> accelerations_local(unit_count);
+        std::vector<termin::Screw3> forces_local(unit_count);
+        for (std::size_t index = 0; index < unit_count; ++index)
         {
-            const ArticulationLink3D& link = links_[index];
+            const ArticulationUnit3D& unit = units_[index];
             const termin::Screw3 parent_velocity =
-                link.parent_link == articulation_world_link
+                unit.parent_unit == articulation_root_frame
                     ? base_velocity
-                    : velocities_local[link.parent_link];
+                    : velocities_local[unit.parent_unit];
             const termin::Screw3 parent_acceleration =
-                link.parent_link == articulation_world_link
+                unit.parent_unit == articulation_root_frame
                     ? base_acceleration
-                    : accelerations_local[link.parent_link];
-            const termin::Screw3 joint_velocity =
-                motion_twists_at_link_[index] *
-                velocities[joint_offset + index];
+                    : accelerations_local[unit.parent_unit];
+            const termin::Screw3 unit_velocity =
+                motion_twists_at_unit_[index] * velocities[unit_offset + index];
             velocities_local[index] =
-                parent_velocity.adjoint_inv(parent_to_link_[index]) +
-                joint_velocity;
+                parent_velocity.adjoint_inv(parent_to_unit_[index]) +
+                unit_velocity;
             accelerations_local[index] =
-                parent_acceleration.adjoint_inv(parent_to_link_[index]) +
-                motion_twists_at_link_[index] *
-                    accelerations[joint_offset + index] +
-                velocities_local[index].cross_motion(joint_velocity);
+                parent_acceleration.adjoint_inv(parent_to_unit_[index]) +
+                motion_twists_at_unit_[index] *
+                    accelerations[unit_offset + index] +
+                velocities_local[index].cross_motion(unit_velocity);
 
             const termin::Screw3 momentum =
-                link.inertia.momentum(velocities_local[index]);
+                unit.inertia.momentum(velocities_local[index]);
             forces_local[index] =
-                link.inertia.momentum(accelerations_local[index]) +
+                unit.inertia.momentum(accelerations_local[index]) +
                 velocities_local[index].cross_force(momentum);
         }
 
         effort.assign(count, 0.0);
-        for (std::size_t reverse = link_count; reverse-- > 0;)
+        for (std::size_t reverse = unit_count; reverse-- > 0;)
         {
-            effort[joint_offset + reverse] =
-                motion_twists_at_link_[reverse].dot(forces_local[reverse]);
-            const std::size_t parent = links_[reverse].parent_link;
-            if (parent != articulation_world_link)
+            effort[unit_offset + reverse] =
+                motion_twists_at_unit_[reverse].dot(forces_local[reverse]);
+            const std::size_t parent = units_[reverse].parent_unit;
+            if (parent != articulation_root_frame)
             {
                 forces_local[parent] +=
-                    forces_local[reverse].coadjoint(parent_to_link_[reverse]);
+                    forces_local[reverse].coadjoint(parent_to_unit_[reverse]);
             }
             else if (floating_base_.has_value())
             {
                 base_force +=
-                    forces_local[reverse].coadjoint(parent_to_link_[reverse]);
+                    forces_local[reverse].coadjoint(parent_to_unit_[reverse]);
             }
         }
         if (floating_base_.has_value())
@@ -914,8 +907,8 @@ namespace termin::robotics
     {
         if (diagnostic_ != Articulation3DDiagnostic::None ||
             !gravity_world.is_finite() ||
-            link_poses_world_.size() != links_.size() ||
-            link_velocities_local_.size() != links_.size())
+            unit_poses_world_.size() != units_.size() ||
+            unit_velocities_local_.size() != units_.size())
         {
             return std::numeric_limits<double>::quiet_NaN();
         }
@@ -930,15 +923,15 @@ namespace termin::robotics
             result -=
                 floating_base_->inertia.mass * gravity_world.dot(center_world);
         }
-        for (std::size_t index = 0; index < links_.size(); ++index)
+        for (std::size_t index = 0; index < units_.size(); ++index)
         {
-            const ArticulationLink3D& link = links_[index];
+            const ArticulationUnit3D& unit = units_[index];
             const termin::Vec3 center_world =
-                link_poses_world_[index].transform_point(
-                    link.inertia.inertia_frame.lin);
+                unit_poses_world_[index].transform_point(
+                    unit.inertia.inertia_frame.lin);
             result +=
-                link.inertia.kinetic_energy(link_velocities_local_[index]);
-            result -= link.inertia.mass * gravity_world.dot(center_world);
+                unit.inertia.kinetic_energy(unit_velocities_local_[index]);
+            result -= unit.inertia.mass * gravity_world.dot(center_world);
         }
         return result;
     }

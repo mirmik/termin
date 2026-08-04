@@ -551,7 +551,7 @@ TEST_CASE(
                    std::numbers::pi_v<double> / 2.0) < 1.0e-12);
 }
 
-TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
+TEST_CASE("scene articulation compiler collapses authored frames into units")
 {
     using namespace termin;
 
@@ -560,17 +560,18 @@ TEST_CASE("scene articulation compiler maps an explicit joint/body hierarchy")
         compile_fem_articulation_scene(pendulum.root);
 
     REQUIRE(compiled.ok());
-    REQUIRE_EQ(compiled.links.size(), 2U);
+    REQUIRE_EQ(compiled.units.size(), 2U);
     REQUIRE_EQ(compiled.bindings.size(), 2U);
-    CHECK(compiled.links[0].parent_link == robotics::articulation_world_link);
-    CHECK(compiled.links[1].parent_link == 0U);
-    CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.z - 4.0) <
+    CHECK(compiled.units[0].parent_unit == robotics::articulation_root_frame);
+    CHECK(compiled.units[1].parent_unit == 0U);
+    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.z - 3.0) <
           1.0e-12);
-    CHECK(std::abs(compiled.links[0].motion_twist_at_joint.ang.y - 1.0) <
+    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.y - 1.0) <
           1.0e-12);
-    CHECK(std::abs(compiled.links[0].motion_twist_at_joint.ang.norm() - 1.0) <
+    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.norm() - 1.0) <
           1.0e-12);
-    CHECK(std::abs(compiled.links[1].joint_to_link.lin.z + 1.0) < 1.0e-12);
+    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.z + 2.0) <
+          1.0e-12);
     CHECK(std::abs(compiled.state.coordinates[0] - 0.7) < 1.0e-12);
     CHECK(std::abs(compiled.state.coordinates[1] + 0.4) < 1.0e-12);
 
@@ -592,12 +593,12 @@ TEST_CASE("scene articulation compiler maps a floating base and branches")
     CHECK(
         (compiled.floating_base->pose_world.lin - Vec3{1.0, 0.0, 2.0}).norm() <
         1.0e-12);
-    REQUIRE_EQ(compiled.links.size(), 2U);
-    CHECK(compiled.links[0].parent_link == robotics::articulation_root_frame);
-    CHECK(compiled.links[1].parent_link == robotics::articulation_root_frame);
-    CHECK(std::abs(compiled.links[0].parent_to_joint_zero.lin.x + 0.75) <
+    REQUIRE_EQ(compiled.units.size(), 2U);
+    CHECK(compiled.units[0].parent_unit == robotics::articulation_root_frame);
+    CHECK(compiled.units[1].parent_unit == robotics::articulation_root_frame);
+    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.x + 0.75) <
           1.0e-12);
-    CHECK(std::abs(compiled.links[1].parent_to_joint_zero.lin.x - 0.75) <
+    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.x - 0.75) <
           1.0e-12);
 
     fixture.scene.destroy();
@@ -644,10 +645,10 @@ TEST_CASE("scene articulation compiler converts authored joint limits")
     const FEMArticulationSceneCompilation compiled =
         compile_fem_articulation_scene(pendulum.root);
     REQUIRE(compiled.ok());
-    REQUIRE(compiled.links[0].limits.minimum.has_value());
-    REQUIRE(compiled.links[0].limits.maximum.has_value());
-    CHECK(std::abs(*compiled.links[0].limits.minimum + 0.2) < 1.0e-12);
-    CHECK(std::abs(*compiled.links[0].limits.maximum - 0.3) < 1.0e-12);
+    REQUIRE(compiled.units[0].limits.minimum.has_value());
+    REQUIRE(compiled.units[0].limits.maximum.has_value());
+    CHECK(std::abs(*compiled.units[0].limits.minimum + 0.2) < 1.0e-12);
+    CHECK(std::abs(*compiled.units[0].limits.maximum - 0.3) < 1.0e-12);
     CHECK(std::abs(compiled.state.coordinates[0] - 0.07) < 1.0e-12);
 
     pendulum.scene.destroy();
@@ -1267,7 +1268,7 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support")
     scene.destroy();
 }
 
-TEST_CASE("FEM routes a CollisionWorld patch to an articulation link")
+TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit")
 {
     using namespace termin;
 
@@ -1314,7 +1315,7 @@ TEST_CASE("FEM routes a CollisionWorld patch to an articulation link")
     scene.destroy();
 }
 
-TEST_CASE("FEM contact policy excludes adjacent articulation links")
+TEST_CASE("FEM contact policy excludes adjacent articulation units")
 {
     using namespace termin;
 

@@ -48,8 +48,8 @@ namespace termin::physics_qopt
         rigid_body(RigidBody3DContribution& body,
                    termin::Vec3 point_local) noexcept;
         [[nodiscard]] static ContactEndpoint3D
-        articulation_link(Articulation3DDynamicsContribution& articulation,
-                          std::size_t link_index,
+        articulation_unit(Articulation3DDynamicsContribution& articulation,
+                          std::size_t unit_index,
                           termin::Vec3 point_local) noexcept;
         [[nodiscard]] static ContactEndpoint3D
         articulation_base(Articulation3DDynamicsContribution& articulation,
@@ -68,13 +68,13 @@ namespace termin::physics_qopt
             StaticWorld,
             RigidBody,
             ArticulationBase,
-            ArticulationLink,
+            ArticulationUnit,
         };
 
         Kind kind_ = Kind::Invalid;
         RigidBody3DContribution* body_ = nullptr;
         Articulation3DDynamicsContribution* articulation_ = nullptr;
-        std::size_t link_index_ = 0;
+        std::size_t unit_index_ = 0;
         termin::Vec3 point_ = termin::Vec3::zero();
     };
 

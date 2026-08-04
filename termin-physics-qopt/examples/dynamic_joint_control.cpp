@@ -12,18 +12,17 @@ using namespace termin::robotics;
 
 int main()
 {
-    ArticulationLink3D link{
-        .parent_link = articulation_root_frame,
-        .parent_to_joint_zero = Pose3::identity(),
-        .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-        .joint_to_link = Pose3::identity(),
+    ArticulationUnit3D unit{
+        .parent_unit = articulation_root_frame,
+        .parent_to_unit_zero = Pose3::identity(),
+        .motion_twist_at_unit = {Vec3::unit_y(), Vec3::zero()},
         .inertia = SpatialInertia3{1.0,
                                    {0.2, 0.25, 0.3},
                                    Pose3::translation(0.4, 0.0, 0.0)},
         .limits = {.minimum = -1.5, .maximum = 1.5},
         .diagnostic_name = "shoulder",
     };
-    Articulation3D arm({link}, {{-0.7}, {0.0}}, "dynamic-example");
+    Articulation3D arm({unit}, {{-0.7}, {0.0}}, "dynamic-example");
     DynamicsSystem system;
     auto dynamics = std::make_unique<Articulation3DDynamicsContribution>(
         arm, Vec3{0.0, 0.0, -9.81}, "arm-dynamics");

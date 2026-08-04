@@ -38,7 +38,7 @@ namespace termin
             Static,
             RigidBody,
             ArticulationBase,
-            ArticulationLink,
+            ArticulationUnit,
         };
 
         struct EndpointOwner
@@ -47,23 +47,23 @@ namespace termin
             physics_qopt::RigidBody3DContribution* body = nullptr;
             physics_qopt::Articulation3DDynamicsContribution* articulation =
                 nullptr;
-            std::size_t link_index = 0;
+            std::size_t unit_index = 0;
         };
 
         struct ArticulationBinding
         {
             physics_qopt::Articulation3DDynamicsContribution* articulation =
                 nullptr;
-            std::size_t link_index = 0;
+            std::size_t unit_index = 0;
             bool base = false;
         };
 
         using EndpointMap =
             std::unordered_map<colliders::Collider*, EndpointOwner>;
 
-        explicit ContactRefreshState(bool allow_adjacent_link_collision,
+        explicit ContactRefreshState(bool allow_adjacent_unit_collision,
                                      double friction_coefficient)
-            : allow_adjacent_link_collision(allow_adjacent_link_collision),
+            : allow_adjacent_unit_collision(allow_adjacent_unit_collision),
               friction_coefficient(friction_coefficient)
         {
         }
@@ -82,7 +82,7 @@ namespace termin
                 return false;
             }
             return !is_same_dynamic_endpoint(a, b) &&
-                   !are_adjacent_articulation_links(a, b) &&
+                   !are_adjacent_articulation_units(a, b) &&
                    !are_connected_maximal_bodies(a, b);
         }
 
@@ -98,7 +98,8 @@ namespace termin
             }
             std::sort(live_endpoints.begin(),
                       live_endpoints.end(),
-                      [](const LiveEndpoint& a, const LiveEndpoint& b) {
+                      [](const LiveEndpoint& a, const LiveEndpoint& b)
+                      {
                           return std::less<colliders::Collider*>{}(a.first,
                                                                    b.first);
                       });
@@ -174,55 +175,55 @@ namespace termin
             {
                 return a.articulation == b.articulation;
             }
-            if (a.kind == EndpointKind::ArticulationLink)
+            if (a.kind == EndpointKind::ArticulationUnit)
             {
                 return a.articulation == b.articulation &&
-                       a.link_index == b.link_index;
+                       a.unit_index == b.unit_index;
             }
             return false;
         }
 
         [[nodiscard]] bool
-        are_adjacent_articulation_links(const EndpointOwner& a,
+        are_adjacent_articulation_units(const EndpointOwner& a,
                                         const EndpointOwner& b) const
         {
             const bool a_belongs_to_articulation =
                 a.kind == EndpointKind::ArticulationBase ||
-                a.kind == EndpointKind::ArticulationLink;
+                a.kind == EndpointKind::ArticulationUnit;
             const bool b_belongs_to_articulation =
                 b.kind == EndpointKind::ArticulationBase ||
-                b.kind == EndpointKind::ArticulationLink;
-            if (allow_adjacent_link_collision || !a_belongs_to_articulation ||
+                b.kind == EndpointKind::ArticulationUnit;
+            if (allow_adjacent_unit_collision || !a_belongs_to_articulation ||
                 !b_belongs_to_articulation ||
                 a.articulation != b.articulation || a.articulation == nullptr)
             {
                 return false;
             }
 
-            const auto& links = a.articulation->links();
+            const auto& links = a.articulation->units();
             if (a.kind == EndpointKind::ArticulationBase ||
                 b.kind == EndpointKind::ArticulationBase)
             {
                 const EndpointOwner& link =
-                    a.kind == EndpointKind::ArticulationLink ? a : b;
-                return link.kind == EndpointKind::ArticulationLink &&
-                       link.link_index < links.size() &&
-                       links[link.link_index].parent_link ==
+                    a.kind == EndpointKind::ArticulationUnit ? a : b;
+                return link.kind == EndpointKind::ArticulationUnit &&
+                       link.unit_index < links.size() &&
+                       links[link.unit_index].parent_unit ==
                            robotics::articulation_root_frame;
             }
-            if (a.link_index >= links.size() || b.link_index >= links.size())
+            if (a.unit_index >= links.size() || b.unit_index >= links.size())
             {
                 return false;
             }
-            return links[a.link_index].parent_link == b.link_index ||
-                   links[b.link_index].parent_link == a.link_index;
+            return links[a.unit_index].parent_unit == b.unit_index ||
+                   links[b.unit_index].parent_unit == a.unit_index;
         }
 
         [[nodiscard]] bool
         are_connected_maximal_bodies(const EndpointOwner& a,
                                      const EndpointOwner& b) const
         {
-            if (allow_adjacent_link_collision ||
+            if (allow_adjacent_unit_collision ||
                 a.kind != EndpointKind::RigidBody ||
                 b.kind != EndpointKind::RigidBody)
             {
@@ -256,12 +257,12 @@ namespace termin
                     *endpoint.articulation,
                     endpoint.articulation->floating_base()
                         ->pose_world.inverse_transform_point(point_world));
-            case EndpointKind::ArticulationLink:
-                return physics_qopt::ContactEndpoint3D::articulation_link(
+            case EndpointKind::ArticulationUnit:
+                return physics_qopt::ContactEndpoint3D::articulation_unit(
                     *endpoint.articulation,
-                    endpoint.link_index,
+                    endpoint.unit_index,
                     endpoint.articulation
-                        ->link_poses_world()[endpoint.link_index]
+                        ->unit_poses_world()[endpoint.unit_index]
                         .inverse_transform_point(point_world));
             case EndpointKind::Ignored:
                 return physics_qopt::ContactEndpoint3D{};
@@ -310,7 +311,7 @@ namespace termin
             return key;
         }
 
-        bool allow_adjacent_link_collision = false;
+        bool allow_adjacent_unit_collision = false;
         double friction_coefficient = 0.0;
         std::unordered_set<std::uint64_t> contact_keys;
     };
@@ -353,17 +354,17 @@ namespace termin
                     "contact ownership");
                 return false;
             }
-            for (std::size_t link_index = 0;
-                 link_index < articulation->bodies_.size();
-                 ++link_index)
+            for (std::size_t unit_index = 0;
+                 unit_index < articulation->bodies_.size();
+                 ++unit_index)
             {
-                FEMRigidBodyComponent* body = articulation->bodies_[link_index];
+                FEMRigidBodyComponent* body = articulation->bodies_[unit_index];
                 if (body == nullptr ||
                     !state.articulation_bindings
                          .emplace(body,
                                   ContactRefreshState::ArticulationBinding{
                                       .articulation = articulation->dynamics_,
-                                      .link_index = link_index,
+                                      .unit_index = unit_index,
                                   })
                          .second)
                 {
@@ -434,9 +435,9 @@ namespace termin
             const auto articulation_binding =
                 state.articulation_bindings.find(body);
             const bool owns_maximal_body = body->body_ != nullptr;
-            const bool owns_articulation_link =
+            const bool owns_articulation_unit =
                 articulation_binding != state.articulation_bindings.end();
-            if (owns_maximal_body == owns_articulation_link)
+            if (owns_maximal_body == owns_articulation_unit)
             {
                 warn_contact_collider_once(
                     collider,
@@ -456,10 +457,10 @@ namespace termin
                 endpoint.kind =
                     articulation_binding->second.base
                         ? ContactRefreshState::EndpointKind::ArticulationBase
-                        : ContactRefreshState::EndpointKind::ArticulationLink;
+                        : ContactRefreshState::EndpointKind::ArticulationUnit;
                 endpoint.articulation =
                     articulation_binding->second.articulation;
-                endpoint.link_index = articulation_binding->second.link_index;
+                endpoint.unit_index = articulation_binding->second.unit_index;
             }
             state.endpoint_owners.emplace(collider, endpoint);
         }
@@ -484,7 +485,7 @@ namespace termin
                    physics_qopt::Contact3DDiagnostic::None;
         }
 
-        ContactRefreshState state{adjacent_link_collision_enabled,
+        ContactRefreshState state{adjacent_unit_collision_enabled,
                                   contact_friction_coefficient};
         if (!collect_contact_endpoints(scene, state))
         {

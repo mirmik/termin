@@ -69,8 +69,8 @@ namespace termin::robotics
         {
             const std::size_t offset = articulation.has_floating_base() ? 6 : 0;
             std::vector<InverseDynamicsActuator3D> result;
-            result.reserve(articulation.link_count());
-            for (std::size_t joint = 0; joint < articulation.link_count();
+            result.reserve(articulation.unit_count());
+            for (std::size_t joint = 0; joint < articulation.unit_count();
                  ++joint)
             {
                 result.push_back({.dof_index = offset + joint});

@@ -108,7 +108,7 @@ namespace termin::robotics
             for (std::size_t position = 0; position < joint_indices.size();
                  ++position)
             {
-                if (joint_indices[position] >= articulation.link_count())
+                if (joint_indices[position] >= articulation.unit_count())
                 {
                     return TaskDiagnostic3D::InvalidJoint;
                 }
@@ -133,7 +133,7 @@ namespace termin::robotics
             {
                 return joint_indices;
             }
-            std::vector<std::size_t> resolved(articulation.link_count());
+            std::vector<std::size_t> resolved(articulation.unit_count());
             for (std::size_t index = 0; index < resolved.size(); ++index)
             {
                 resolved[index] = index;
@@ -149,9 +149,9 @@ namespace termin::robotics
         TaskDiagnostic3D
         frame_diagnostic(Articulation3DDiagnostic diagnostic) noexcept
         {
-            if (diagnostic == Articulation3DDiagnostic::InvalidLink)
+            if (diagnostic == Articulation3DDiagnostic::InvalidUnit)
             {
-                return TaskDiagnostic3D::InvalidLink;
+                return TaskDiagnostic3D::InvalidUnit;
             }
             return diagnostic == Articulation3DDiagnostic::None
                        ? TaskDiagnostic3D::None
@@ -179,8 +179,8 @@ namespace termin::robotics
             return "invalid_context";
         case TaskDiagnostic3D::InvalidModel:
             return "invalid_model";
-        case TaskDiagnostic3D::InvalidLink:
-            return "invalid_link";
+        case TaskDiagnostic3D::InvalidUnit:
+            return "invalid_unit";
         case TaskDiagnostic3D::InvalidJoint:
             return "invalid_joint";
         case TaskDiagnostic3D::DuplicateJoint:
@@ -248,11 +248,11 @@ namespace termin::robotics
         return diagnostic == TaskDiagnostic3D::None;
     }
 
-    PointVelocityTask3D::PointVelocityTask3D(std::size_t link_index,
+    PointVelocityTask3D::PointVelocityTask3D(std::size_t unit_index,
                                              termin::Vec3 point_local,
                                              termin::Vec3 target_velocity_world,
                                              TaskSettings3D settings)
-        : link_index_(link_index), point_local_(point_local),
+        : unit_index_(unit_index), point_local_(point_local),
           target_velocity_world_(target_velocity_world),
           settings_(std::move(settings))
     {
@@ -288,7 +288,7 @@ namespace termin::robotics
         try
         {
             const ArticulationPointKinematics3DResult point =
-                context.articulation->point_kinematics(link_index_,
+                context.articulation->point_kinematics(unit_index_,
                                                        point_local_);
             if (!point.ok())
             {
@@ -324,13 +324,13 @@ namespace termin::robotics
                        "point velocity linearization failed");
     }
 
-    PoseTrackingTask3D::PoseTrackingTask3D(std::size_t link_index,
+    PoseTrackingTask3D::PoseTrackingTask3D(std::size_t unit_index,
                                            termin::Pose3 target_pose_world,
                                            termin::Screw3 target_velocity_world,
                                            double linear_gain,
                                            double angular_gain,
                                            TaskSettings3D settings)
-        : link_index_(link_index), target_pose_world_(target_pose_world),
+        : unit_index_(unit_index), target_pose_world_(target_pose_world),
           target_velocity_world_(target_velocity_world),
           linear_gain_(linear_gain), angular_gain_(angular_gain),
           settings_(std::move(settings))
@@ -375,7 +375,7 @@ namespace termin::robotics
         try
         {
             const ArticulationFrameKinematics3DResult frame =
-                context.articulation->frame_kinematics(link_index_);
+                context.articulation->frame_kinematics(unit_index_);
             if (!frame.ok())
             {
                 return failure(frame_diagnostic(frame.diagnostic),
@@ -422,7 +422,7 @@ namespace termin::robotics
     }
 
     PointAccelerationTask3D::PointAccelerationTask3D(
-        std::size_t link_index,
+        std::size_t unit_index,
         termin::Vec3 point_local,
         termin::Vec3 target_position_world,
         termin::Vec3 target_velocity_world,
@@ -430,7 +430,7 @@ namespace termin::robotics
         double position_gain,
         double velocity_gain,
         TaskSettings3D settings)
-        : link_index_(link_index), point_local_(point_local),
+        : unit_index_(unit_index), point_local_(point_local),
           target_position_world_(target_position_world),
           target_velocity_world_(target_velocity_world),
           feedforward_acceleration_world_(feedforward_acceleration_world),
@@ -478,7 +478,7 @@ namespace termin::robotics
         try
         {
             const ArticulationPointKinematics3DResult point =
-                context.articulation->point_kinematics(link_index_,
+                context.articulation->point_kinematics(unit_index_,
                                                        point_local_);
             if (!point.ok())
             {
@@ -523,7 +523,7 @@ namespace termin::robotics
     }
 
     PoseAccelerationTask3D::PoseAccelerationTask3D(
-        std::size_t link_index,
+        std::size_t unit_index,
         termin::Pose3 target_pose_world,
         termin::Screw3 target_velocity_world,
         termin::Screw3 feedforward_acceleration_world,
@@ -532,7 +532,7 @@ namespace termin::robotics
         double linear_velocity_gain,
         double angular_velocity_gain,
         TaskSettings3D settings)
-        : link_index_(link_index), target_pose_world_(target_pose_world),
+        : unit_index_(unit_index), target_pose_world_(target_pose_world),
           target_velocity_world_(target_velocity_world),
           feedforward_acceleration_world_(feedforward_acceleration_world),
           linear_position_gain_(linear_position_gain),
@@ -588,7 +588,7 @@ namespace termin::robotics
         try
         {
             const ArticulationFrameKinematics3DResult frame =
-                context.articulation->frame_kinematics(link_index_);
+                context.articulation->frame_kinematics(unit_index_);
             if (!frame.ok())
             {
                 return failure(frame_diagnostic(frame.diagnostic),
@@ -989,21 +989,21 @@ namespace termin::robotics
         try
         {
             std::size_t rows = 0;
-            for (const ArticulationLink3D& link : context.articulation->links())
+            for (const ArticulationUnit3D& unit : context.articulation->units())
             {
-                rows += link.limits.maximum.has_value() ? 1 : 0;
-                rows += link.limits.minimum.has_value() ? 1 : 0;
+                rows += unit.limits.maximum.has_value() ? 1 : 0;
+                rows += unit.limits.minimum.has_value() ? 1 : 0;
             }
             TaskLinearization3D value = make_linearization(
                 context, settings_, TaskRelation3D::Inequality, rows);
             const std::size_t offset = joint_offset(*context.articulation);
             std::size_t row = 0;
             for (std::size_t joint = 0;
-                 joint < context.articulation->link_count();
+                 joint < context.articulation->unit_count();
                  ++joint)
             {
-                const ArticulationJointLimits3D& limits =
-                    context.articulation->links()[joint].limits;
+                const ArticulationUnitLimits3D& limits =
+                    context.articulation->units()[joint].limits;
                 const double coordinate =
                     context.articulation->state().coordinates[joint];
                 const double velocity =
@@ -1183,14 +1183,14 @@ namespace termin::robotics
     }
 
     PointAvoidanceConstraint3D::PointAvoidanceConstraint3D(
-        std::size_t link_index,
+        std::size_t unit_index,
         termin::Vec3 point_local,
         termin::Vec3 normal_world,
         double signed_distance,
         double minimum_distance,
         double horizon,
         TaskSettings3D settings)
-        : link_index_(link_index), point_local_(point_local),
+        : unit_index_(unit_index), point_local_(point_local),
           normal_world_(normal_world), signed_distance_(signed_distance),
           minimum_distance_(minimum_distance), horizon_(horizon),
           settings_(std::move(settings))
@@ -1237,7 +1237,7 @@ namespace termin::robotics
         try
         {
             const ArticulationPointKinematics3DResult point =
-                context.articulation->point_kinematics(link_index_,
+                context.articulation->point_kinematics(unit_index_,
                                                        point_local_);
             if (!point.ok())
             {

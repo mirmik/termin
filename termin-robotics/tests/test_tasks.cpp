@@ -14,27 +14,28 @@ namespace
 {
     constexpr double tolerance = 1e-12;
 
-    SpatialInertia3 link_inertia()
+    SpatialInertia3 unit_inertia()
     {
         return {1.0, {0.2, 0.3, 0.4}, Pose3::identity()};
     }
 
-    ArticulationLink3D link()
+    ArticulationUnit3D unit()
     {
         return {
-            .parent_link = articulation_root_frame,
-            .parent_to_joint_zero = Pose3::identity(),
-            .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-            .joint_to_link = Pose3::translation(1.0, 0.0, 0.0),
-            .inertia = link_inertia(),
+            .parent_unit = articulation_root_frame,
+            .parent_to_unit_zero = Pose3::translation(1.0, 0.0, 0.0),
+            .motion_twist_at_unit =
+                Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                    Pose3::translation(1.0, 0.0, 0.0)),
+            .inertia = unit_inertia(),
             .limits = {.minimum = -1.0, .maximum = 1.0},
-            .diagnostic_name = "link",
+            .diagnostic_name = "unit",
         };
     }
 
     Articulation3D model()
     {
-        return Articulation3D({link()}, {{0.25}, {0.1}}, "task-model");
+        return Articulation3D({unit()}, {{0.25}, {0.1}}, "task-model");
     }
 
     void check_near(double actual, double expected)
@@ -88,7 +89,7 @@ namespace
         check_near(point.value.weight()(1, 1), 3.0);
         check_near(point.value.weight()(2, 2), 4.0);
 
-        const Pose3 current = articulation.link_poses_world()[0];
+        const Pose3 current = articulation.unit_poses_world()[0];
         const Screw3 local_error{Vec3{0.0, 0.0, 0.2}, Vec3{0.1, -0.2, 0.3}};
         const Pose3 target = current * se3_exp(local_error);
         PoseTrackingTask3D pose_task(
@@ -134,13 +135,13 @@ namespace
         check_near(acceleration_result.value.target()[0], 1.6);
 
         ArticulationFloatingBase3D base{
-            .inertia = link_inertia(),
+            .inertia = unit_inertia(),
             .pose_world = Pose3::identity(),
             .velocity_local = Screw3::zero(),
             .diagnostic_name = "base",
         };
         Articulation3D floating(
-            base, {link()}, {{0.0}, {0.0}}, "floating-task-model");
+            base, {unit()}, {{0.0}, {0.0}}, "floating-task-model");
         const TaskLinearizationContext3D floating_context{
             .articulation = &floating,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
@@ -281,7 +282,7 @@ namespace
         TERMIN_ROBOTICS_CHECK(point.ok());
         const auto jacobian = point.value.linear_jacobian_world();
         const Vec3 normal =
-            articulation.link_poses_world()[0].ang.rotate(Vec3::unit_y());
+            articulation.unit_poses_world()[0].ang.rotate(Vec3::unit_y());
         const double normal_jacobian = normal.x * jacobian(0, 0) +
                                        normal.y * jacobian(1, 0) +
                                        normal.z * jacobian(2, 0);
@@ -325,11 +326,11 @@ namespace
         TERMIN_ROBOTICS_CHECK(disabled_result.ok());
         TERMIN_ROBOTICS_CHECK(!disabled_result.value.active);
 
-        PointVelocityTask3D invalid_link(
-            8, Vec3::zero(), Vec3::zero(), {.diagnostic_name = "bad-link"});
+        PointVelocityTask3D invalid_unit(
+            8, Vec3::zero(), Vec3::zero(), {.diagnostic_name = "bad-unit"});
         TERMIN_ROBOTICS_CHECK(
-            invalid_link.linearize(velocity_context).diagnostic ==
-            TaskDiagnostic3D::InvalidLink);
+            invalid_unit.linearize(velocity_context).diagnostic ==
+            TaskDiagnostic3D::InvalidUnit);
 
         JointVelocityTask3D duplicate(
             {0, 0}, {0.0, 0.0}, 1.0, {.diagnostic_name = "duplicate"});
@@ -370,7 +371,7 @@ namespace
             .derivative_order = TaskDerivativeOrder3D::Velocity,
         };
         TERMIN_ROBOTICS_CHECK(
-            invalid_link.linearize(invalid_context).diagnostic ==
+            invalid_unit.linearize(invalid_context).diagnostic ==
             TaskDiagnostic3D::InvalidModel);
     }
 }

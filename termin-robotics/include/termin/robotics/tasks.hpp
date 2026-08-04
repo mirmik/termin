@@ -31,7 +31,7 @@ namespace termin::robotics
         None,
         InvalidContext,
         InvalidModel,
-        InvalidLink,
+        InvalidUnit,
         InvalidJoint,
         DuplicateJoint,
         DimensionMismatch,
@@ -110,7 +110,7 @@ namespace termin::robotics
         : public ArticulationTask3D
     {
     public:
-        PointVelocityTask3D(std::size_t link_index,
+        PointVelocityTask3D(std::size_t unit_index,
                             termin::Vec3 point_local,
                             termin::Vec3 target_velocity_world,
                             TaskSettings3D settings = {});
@@ -119,7 +119,7 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
-        std::size_t link_index_;
+        std::size_t unit_index_;
         termin::Vec3 point_local_;
         termin::Vec3 target_velocity_world_;
         TaskSettings3D settings_;
@@ -130,7 +130,7 @@ namespace termin::robotics
     {
     public:
         PoseTrackingTask3D(
-            std::size_t link_index,
+            std::size_t unit_index,
             termin::Pose3 target_pose_world,
             termin::Screw3 target_velocity_world = termin::Screw3::zero(),
             double linear_gain = 1.0,
@@ -141,7 +141,7 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
-        std::size_t link_index_;
+        std::size_t unit_index_;
         termin::Pose3 target_pose_world_;
         termin::Screw3 target_velocity_world_;
         double linear_gain_;
@@ -157,7 +157,7 @@ namespace termin::robotics
     {
     public:
         PointAccelerationTask3D(
-            std::size_t link_index,
+            std::size_t unit_index,
             termin::Vec3 point_local,
             termin::Vec3 target_position_world,
             termin::Vec3 target_velocity_world = termin::Vec3::zero(),
@@ -170,7 +170,7 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
-        std::size_t link_index_;
+        std::size_t unit_index_;
         termin::Vec3 point_local_;
         termin::Vec3 target_position_world_;
         termin::Vec3 target_velocity_world_;
@@ -180,7 +180,7 @@ namespace termin::robotics
         TaskSettings3D settings_;
     };
 
-    // Acceleration-level SE(3) tracking at a link-frame origin. Linear and
+    // Acceleration-level SE(3) tracking at a unit-frame origin. Linear and
     // angular feedback use world-frame errors; target acceleration uses vw
     // Screw3 semantics, matching ArticulationFrameKinematics3D.
     class TERMIN_ROBOTICS_API PoseAccelerationTask3D final
@@ -188,7 +188,7 @@ namespace termin::robotics
     {
     public:
         PoseAccelerationTask3D(
-            std::size_t link_index,
+            std::size_t unit_index,
             termin::Pose3 target_pose_world,
             termin::Screw3 target_velocity_world = termin::Screw3::zero(),
             termin::Screw3 feedforward_acceleration_world =
@@ -203,7 +203,7 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
-        std::size_t link_index_;
+        std::size_t unit_index_;
         termin::Pose3 target_pose_world_;
         termin::Screw3 target_velocity_world_;
         termin::Screw3 feedforward_acceleration_world_;
@@ -322,7 +322,7 @@ namespace termin::robotics
         : public ArticulationTask3D
     {
     public:
-        PointAvoidanceConstraint3D(std::size_t link_index,
+        PointAvoidanceConstraint3D(std::size_t unit_index,
                                    termin::Vec3 point_local,
                                    termin::Vec3 normal_world,
                                    double signed_distance,
@@ -334,7 +334,7 @@ namespace termin::robotics
             const TaskLinearizationContext3D& context) const noexcept override;
 
     private:
-        std::size_t link_index_;
+        std::size_t unit_index_;
         termin::Vec3 point_local_;
         termin::Vec3 normal_world_;
         double signed_distance_;

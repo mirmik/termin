@@ -111,15 +111,15 @@ namespace termin::physics_qopt
         return endpoint;
     }
 
-    ContactEndpoint3D ContactEndpoint3D::articulation_link(
+    ContactEndpoint3D ContactEndpoint3D::articulation_unit(
         Articulation3DDynamicsContribution& articulation,
-        std::size_t link_index,
+        std::size_t unit_index,
         termin::Vec3 point_local) noexcept
     {
         ContactEndpoint3D endpoint;
-        endpoint.kind_ = Kind::ArticulationLink;
+        endpoint.kind_ = Kind::ArticulationUnit;
         endpoint.articulation_ = &articulation;
-        endpoint.link_index_ = link_index;
+        endpoint.unit_index_ = unit_index;
         endpoint.point_ = point_local;
         return endpoint;
     }
@@ -141,7 +141,7 @@ namespace termin::physics_qopt
                (kind_ == Kind::StaticWorld ||
                 (kind_ == Kind::RigidBody && body_ != nullptr) ||
                 (kind_ == Kind::ArticulationBase && articulation_ != nullptr) ||
-                (kind_ == Kind::ArticulationLink && articulation_ != nullptr));
+                (kind_ == Kind::ArticulationUnit && articulation_ != nullptr));
     }
 
     bool ContactEndpoint3D::is_static() const noexcept
@@ -154,7 +154,7 @@ namespace termin::physics_qopt
     {
         return articulation_ == &articulation &&
                (kind_ == Kind::ArticulationBase ||
-                kind_ == Kind::ArticulationLink);
+                kind_ == Kind::ArticulationUnit);
     }
 
     PointKinematics3DResult ContactEndpoint3D::point_kinematics() const noexcept
@@ -175,10 +175,10 @@ namespace termin::physics_qopt
                 return articulation_->floating_base_point_kinematics(point_);
             }
             break;
-        case Kind::ArticulationLink:
+        case Kind::ArticulationUnit:
             if (articulation_ != nullptr)
             {
-                return articulation_->point_kinematics(link_index_, point_);
+                return articulation_->point_kinematics(unit_index_, point_);
             }
             break;
         case Kind::Invalid:

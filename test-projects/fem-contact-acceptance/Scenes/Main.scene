@@ -636,7 +636,7 @@
               "time_step": 0.002,
               "substeps": 1.0,
               "collision_layer_mask": "0xffffffffffffffff",
-              "adjacent_link_collision_enabled": false
+              "adjacent_unit_collision_enabled": false
             }
           }
         ]

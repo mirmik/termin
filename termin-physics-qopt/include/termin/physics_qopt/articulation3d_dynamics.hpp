@@ -13,7 +13,7 @@
 
 namespace termin::physics_qopt
 {
-    struct ArticulationJointLimitState3D
+    struct ArticulationUnitLimitState3D
     {
         double minimum_reaction = 0.0;
         double maximum_reaction = 0.0;
@@ -43,10 +43,10 @@ namespace termin::physics_qopt
         articulation() const noexcept;
         [[nodiscard]] robotics::Articulation3DDiagnostic
         diagnostic() const noexcept;
-        [[nodiscard]] std::size_t link_count() const noexcept;
+        [[nodiscard]] std::size_t unit_count() const noexcept;
         [[nodiscard]] std::size_t dof_count() const noexcept;
-        [[nodiscard]] const std::vector<robotics::ArticulationLink3D>&
-        links() const noexcept;
+        [[nodiscard]] const std::vector<robotics::ArticulationUnit3D>&
+        units() const noexcept;
         [[nodiscard]] const robotics::Articulation3DState&
         state() const noexcept;
         [[nodiscard]] bool has_floating_base() const noexcept;
@@ -54,15 +54,15 @@ namespace termin::physics_qopt
         floating_base() const noexcept;
         [[nodiscard]] const std::vector<double>& accelerations() const noexcept;
         [[nodiscard]] const std::vector<termin::Pose3>&
-        link_poses_world() const noexcept;
+        unit_poses_world() const noexcept;
         [[nodiscard]] const std::vector<termin::Screw3>&
-        link_velocities_local() const noexcept;
-        [[nodiscard]] const std::vector<ArticulationJointLimitState3D>&
-        joint_limit_states() const noexcept;
+        unit_velocities_local() const noexcept;
+        [[nodiscard]] const std::vector<ArticulationUnitLimitState3D>&
+        unit_limit_states() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
         [[nodiscard]] PointKinematics3DResult
-        point_kinematics(std::size_t link_index,
+        point_kinematics(std::size_t unit_index,
                          termin::Vec3 point_local) const noexcept;
         [[nodiscard]] PointKinematics3DResult
         floating_base_point_kinematics(termin::Vec3 point_local) const noexcept;
@@ -123,21 +123,21 @@ namespace termin::physics_qopt
         robotics::Articulation3DDiagnostic diagnostic_ =
             robotics::Articulation3DDiagnostic::None;
 
-        struct JointLimitRows
+        struct UnitLimitRows
         {
             DynamicsUnilateralConstraintHandle minimum;
             DynamicsUnilateralConstraintHandle maximum;
         };
 
-        std::vector<JointLimitRows> joint_limit_rows_;
-        std::vector<ArticulationJointLimitState3D> joint_limit_states_;
+        std::vector<UnitLimitRows> unit_limit_rows_;
+        std::vector<ArticulationUnitLimitState3D> unit_limit_states_;
         double unilateral_time_step_ = 0.0;
 
         robotics::Articulation3DState state_snapshot_;
         std::optional<robotics::ArticulationFloatingBase3D>
             floating_base_snapshot_;
         std::vector<double> acceleration_snapshot_;
-        std::vector<ArticulationJointLimitState3D> joint_limit_state_snapshot_;
+        std::vector<ArticulationUnitLimitState3D> unit_limit_state_snapshot_;
         bool snapshot_ready_ = false;
 
         [[nodiscard]] bool

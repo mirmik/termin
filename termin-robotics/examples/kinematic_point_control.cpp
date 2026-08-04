@@ -9,13 +9,14 @@ using namespace termin::robotics;
 
 namespace
 {
-    ArticulationLink3D planar_link(std::size_t parent, double length)
+    ArticulationUnit3D planar_unit(std::size_t parent, double length)
     {
         return {
-            .parent_link = parent,
-            .parent_to_joint_zero = Pose3::identity(),
-            .motion_twist_at_joint = {Vec3::unit_z(), Vec3::zero()},
-            .joint_to_link = Pose3::translation(length, 0.0, 0.0),
+            .parent_unit = parent,
+            .parent_to_unit_zero = Pose3::translation(length, 0.0, 0.0),
+            .motion_twist_at_unit =
+                Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                    Pose3::translation(length, 0.0, 0.0)),
             .inertia = SpatialInertia3{1.0, {0.1, 0.1, 0.1}, Pose3::identity()},
         };
     }
@@ -24,7 +25,7 @@ namespace
 int main()
 {
     Articulation3D arm(
-        {planar_link(articulation_root_frame, 0.7), planar_link(0, 0.6)},
+        {planar_unit(articulation_root_frame, 0.7), planar_unit(0, 0.6)},
         {{-0.8, 1.0}, {0.0, 0.0}},
         "kinematic-example");
     VelocityHqpController3D controller(arm);

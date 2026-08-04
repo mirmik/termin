@@ -16,7 +16,7 @@ namespace termin::physics_qopt
     {
         None,
         InvalidModel,
-        InvalidLink,
+        InvalidUnit,
         NonFinitePoint,
         NonFiniteForce,
         InvalidOutput,

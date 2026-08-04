@@ -14,7 +14,7 @@ using namespace termin::robotics;
 
 namespace
 {
-    std::vector<ArticulationLink3D> links()
+    std::vector<ArticulationUnit3D> units()
     {
         const SpatialInertia3 inertia{
             1.0,
@@ -23,18 +23,16 @@ namespace
         };
         return {
             {
-                .parent_link = articulation_world_link,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::identity(),
+                .parent_unit = articulation_root_frame,
+                .parent_to_unit_zero = Pose3::identity(),
+                .motion_twist_at_unit = {Vec3::unit_y(), Vec3::zero()},
                 .inertia = inertia,
                 .diagnostic_name = "first",
             },
             {
-                .parent_link = 0,
-                .parent_to_joint_zero = Pose3::identity(),
-                .motion_twist_at_joint = {Vec3::unit_y(), Vec3::zero()},
-                .joint_to_link = Pose3::identity(),
+                .parent_unit = 0,
+                .parent_to_unit_zero = Pose3::identity(),
+                .motion_twist_at_unit = {Vec3::unit_y(), Vec3::zero()},
                 .inertia = inertia,
                 .diagnostic_name = "second",
             },
@@ -44,7 +42,7 @@ namespace
 
 int main()
 {
-    Articulation3D model(links(), {{0.0, 0.0}, {0.0, 0.0}}, "plant");
+    Articulation3D model(units(), {{0.0, 0.0}, {0.0, 0.0}}, "plant");
     Articulation3DDynamicsContribution articulation(
         model, Vec3::zero(), "plant-dynamics");
     ArticulationMotorContribution motor(
@@ -160,7 +158,7 @@ int main()
     // Dependency binding is a second pass: contribution insertion order does
     // not have to match ownership order.
     Articulation3D owned_model(
-        links(), {{0.0, 0.0}, {0.0, 0.0}}, "owned-plant");
+        units(), {{0.0, 0.0}, {0.0, 0.0}}, "owned-plant");
     DynamicsSystem system;
     auto owned_articulation =
         std::make_unique<Articulation3DDynamicsContribution>(owned_model,
