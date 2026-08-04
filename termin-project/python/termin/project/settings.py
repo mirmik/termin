@@ -363,40 +363,139 @@ class ProjectSettingsManager:
         self.save()
 
     def _get_editor_state_path(self) -> Optional[Path]:
-        """Get path to .editor_state.json (per-user, not committed)."""
+        """Get the path to project-local editor state."""
         if self._project_path is None:
             return None
         return self._project_path / "project_settings" / ".editor_state.json"
 
     def get_last_scene(self) -> str | None:
-        """Get the last opened scene path for this project."""
+        """Get the absolute path of the last opened scene for this project."""
         path = self._get_editor_state_path()
-        if path is None or not path.exists():
+        project_root = self._project_path
+        if path is None or project_root is None or not path.exists():
             return None
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return data.get("last_scene")
+            if not isinstance(data, dict):
+                raise ValueError("editor state root must be an object")
+
+            stored_path = data.get("last_scene")
+            if stored_path is None:
+                return None
+            if not isinstance(stored_path, str) or not stored_path.strip():
+                raise ValueError("last_scene must be a non-empty string or null")
+
+            resolved = _resolve_stored_scene_path(project_root, stored_path)
+            if resolved is None:
+                return None
+
+            if _is_legacy_absolute_path(stored_path):
+                relative = resolved.relative_to(project_root.resolve()).as_posix()
+                log.warning(
+                    "[ProjectSettings] Migrating absolute last_scene "
+                    f"'{stored_path}' to project-relative '{relative}'"
+                )
+                self.set_last_scene(str(resolved))
+            return str(resolved)
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to read editor state: {e}")
             return None
 
     def set_last_scene(self, scene_path: str | None) -> None:
-        """Set the last opened scene path (stored in .editor_state.json)."""
+        """Store the last opened scene relative to the current project root."""
         path = self._get_editor_state_path()
-        if path is None:
+        project_root = self._project_path
+        if path is None or project_root is None:
             return
         try:
+            stored_path: str | None = None
+            if scene_path is not None:
+                candidate = Path(scene_path)
+                if not candidate.is_absolute():
+                    candidate = project_root / candidate
+                candidate = candidate.resolve()
+                root = project_root.resolve()
+                try:
+                    stored_path = candidate.relative_to(root).as_posix()
+                except ValueError as e:
+                    raise ValueError(
+                        f"last_scene is outside project root: "
+                        f"scene={candidate} project={root}"
+                    ) from e
+
             path.parent.mkdir(parents=True, exist_ok=True)
             data: dict = {}
             if path.exists():
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-            data["last_scene"] = scene_path
+                if not isinstance(data, dict):
+                    raise ValueError("editor state root must be an object")
+            data["last_scene"] = stored_path
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to save editor state: {e}")
+
+
+def _is_legacy_absolute_path(value: str) -> bool:
+    normalized = value.strip().replace("\\", "/")
+    return Path(value).is_absolute() or bool(re.match(r"^[A-Za-z]:/", normalized))
+
+
+def _resolve_stored_scene_path(project_root: Path, stored_path: str) -> Path | None:
+    root = project_root.resolve()
+    if _is_legacy_absolute_path(stored_path):
+        native_path = Path(stored_path)
+        if native_path.is_absolute():
+            resolved_native = native_path.resolve()
+            try:
+                resolved_native.relative_to(root)
+                return resolved_native
+            except ValueError:
+                pass
+
+        migrated = _find_legacy_scene_by_suffix(root, stored_path)
+        if migrated is None:
+            log.error(
+                "[ProjectSettings] Absolute last_scene cannot be mapped to "
+                f"the current project: scene={stored_path} project={root}"
+            )
+        return migrated
+
+    normalized = stored_path.strip().replace("\\", "/")
+    relative = PurePosixPath(normalized)
+    if normalized in {"", "."} or relative.is_absolute() or ".." in relative.parts:
+        log.error(f"[ProjectSettings] Invalid project-relative last_scene: {stored_path}")
+        return None
+
+    resolved = root.joinpath(*relative.parts).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        log.error(
+            "[ProjectSettings] Project-relative last_scene escapes project root: "
+            f"scene={stored_path} project={root}"
+        )
+        return None
+    return resolved
+
+
+def _find_legacy_scene_by_suffix(project_root: Path, stored_path: str) -> Path | None:
+    normalized = stored_path.strip().replace("\\", "/")
+    parts = [part for part in PurePosixPath(normalized).parts if part not in {"/", "\\"}]
+    if parts and re.fullmatch(r"[A-Za-z]:", parts[0]):
+        parts = parts[1:]
+
+    for start in range(len(parts)):
+        candidate = project_root.joinpath(*parts[start:]).resolve()
+        try:
+            candidate.relative_to(project_root)
+        except ValueError:
+            continue
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _normalize_project_relative_dir(value: object, *, fallback: str, field_name: str) -> str:
