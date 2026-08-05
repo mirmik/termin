@@ -63,6 +63,8 @@ namespace termin
 
             void register_collider(size_t body_idx, Collider* collider);
 
+            void unregister_collider(size_t body_idx);
+
             RigidBody& get_body(size_t idx)
             {
                 return bodies_[idx];

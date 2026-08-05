@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-COMPONENT_SPECS: tuple[tuple[str, str], ...] = (
-    ("termin.physics_components.physics_world_component", "PhysicsWorldComponent"),
-    ("termin.physics_components.rigid_body_component", "RigidBodyComponent"),
-)
+# The canonical component types are registered by the C++ bootstrap. Keeping
+# this package allows old entry-point discovery metadata to remain importable
+# without publishing a second Python-owned runtime type.
+COMPONENT_SPECS: tuple[tuple[str, str], ...] = ()
 
 __all__ = ["COMPONENT_SPECS"]

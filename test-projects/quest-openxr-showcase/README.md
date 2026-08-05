@@ -4,12 +4,15 @@ This project is the interactive Quest acceptance scene for Termin's native
 OpenXR runtime. It exercises the canonical `quest_openxr` profile, strict
 runtime-package closure, stereo rendering, head tracking, controller grip
 poses, trigger input, thumbstick locomotion and reusable direct grabbing.
+The scene also exercises the native game-physics component path: the floor and
+table are static colliders, while the three colored blocks are dynamic rigid
+bodies that settle on the tabletop under gravity.
 
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
-to leave the block in its current world pose. Loss of controller tracking
-releases an object immediately.
+to return the block to physics from its current world pose. Loss of controller
+tracking releases an object immediately as well.
 
 ## Prerequisites
 
@@ -82,7 +85,9 @@ and filtered logcat together with the result.
 3. `grab-left` and `grab-right`: approach each colored block, squeeze the index
    trigger, move and rotate the hand, then release. The block must not snap to
    the controller, must preserve its relative offset while held and must stay
-   at the release pose. Re-acquire it with either hand.
+   at the release pose without a discontinuity before gravity resumes. If it is
+   released above the table or floor, it must fall and collide. Re-acquire it
+   with either hand.
 4. `ownership`: while one hand holds a block, the other cannot steal the same
    block. After release it can acquire it normally.
 5. `locomotion`: left stick moves in head-yaw-relative X/Y; right stick turns
