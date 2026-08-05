@@ -68,9 +68,14 @@ class NativeProfilerPanel:
         return True
 
     def _apply_snapshot(self, snapshot: ProfilerSnapshot) -> None:
-        self.frame_time_model.add_sample(snapshot.frame_ms)
+        self.frame_time_model.add_sample(snapshot.interval_ms)
+        cadence = (
+            f"{snapshot.fps:.0f} FPS | interval {snapshot.interval_ms:.2f} ms"
+            if snapshot.interval_ms > 0.0
+            else "cadence unavailable"
+        )
         self.status_bar.text = (
-            f"Profiler | {snapshot.fps:.0f} FPS | {snapshot.frame_ms:.2f} ms | "
+            f"Profiler | {cadence} | CPU active {snapshot.active_ms:.2f} ms | "
             f"frame {snapshot.frame_number}"
         )
         stable_ids = {
