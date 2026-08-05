@@ -30,6 +30,7 @@
 #include <termin/modules/term_modules_integration.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/platform/sdl_backend_window.hpp>
+#include <termin/profiler_remote/desktop_target.hpp>
 #include <termin/python_host/python_host.hpp>
 #include <termin/input/window_input_bridge.hpp>
 #include <termin/render/rendering_manager.hpp>
@@ -67,6 +68,14 @@ std::mutex g_active_host_mutex;
 namespace {
 
 std::atomic<int> g_requested_shutdown_signal{0};
+
+const char* native_build_type() {
+#ifdef NDEBUG
+    return "Release";
+#else
+    return "Debug";
+#endif
+}
 
 int exit_code_for_signal(int signum) {
     return 128 + signum;
@@ -758,6 +767,8 @@ struct PlayerRuntimeHost::Impl {
     std::atomic<int> exit_code{0};
 
     std::unique_ptr<EngineCore> engine;
+    std::shared_ptr<profiler_remote::RemoteProfilerTarget> remote_profiler;
+    EngineFrameCompletionConnection remote_profiler_connection;
     std::unique_ptr<WindowedGraphicsSession> graphics_session;
     BackendWindowPtr window;
     std::optional<TcDisplay> display;
@@ -808,6 +819,16 @@ struct PlayerRuntimeHost::Impl {
             runtime_bootstrapped = true;
 
             engine = std::make_unique<EngineCore>();
+            remote_profiler =
+                profiler_remote::start_desktop_target_from_environment(
+                    "termin_player", native_build_type());
+            if (remote_profiler) {
+                remote_profiler_connection =
+                    engine->attach_frame_completion_callback(
+                        [target = remote_profiler]() {
+                            target->pump_frame_thread();
+                        });
+            }
             load_project_modules();
             load_package();
             register_scenes();
@@ -1452,6 +1473,11 @@ print(json.dumps({
     }
 
     void shutdown() {
+        remote_profiler_connection.detach();
+        if (remote_profiler) {
+            remote_profiler->stop();
+            remote_profiler.reset();
+        }
         stop_automation_session();
         {
             std::lock_guard<std::mutex> lock(g_active_host_mutex);

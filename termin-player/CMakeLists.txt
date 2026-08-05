@@ -39,6 +39,7 @@ if(TARGET termin_modules_python AND _termin_player_has_sdl)
         Python::Python
         termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
+        termin_profiler_remote::termin_profiler_remote
         termin_runtime::termin_runtime
         tgfx::termin_graphics2
         termin_display::termin_display
