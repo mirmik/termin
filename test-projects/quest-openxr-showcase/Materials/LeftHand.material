@@ -1,0 +1,1 @@
+{"uuid":"quest-showcase-left-hand-material","shader":"CookTorrancePBR","uniforms":{"u_color":[0.05,0.82,0.95,1.0],"u_metallic":0.18,"u_roughness":0.28,"u_diffuse_mul":1.0}}

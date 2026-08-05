@@ -28,6 +28,7 @@
 #include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
+#include <termin/xr/xr_interaction_components.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <tcbase/tc_log.hpp>
 
@@ -64,6 +65,32 @@ static Rect2i tuple_to_rect(nb::tuple rect_py) {
 static tc_scene_handle object_to_scene_handle(nb::object scene_py) {
     if (scene_py.is_none()) return TC_SCENE_HANDLE_INVALID;
     return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
+}
+
+template<typename T>
+void bind_xr_cxx_component_common(nb::class_<T, CxxComponent>& binding) {
+    binding
+        .def("__init__", [](nb::handle self) { cxx_component_init<T>(self); })
+        .def("c_component_ptr", [](T& component) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(component.c_component());
+        })
+        .def("_cxx_component_ptr", [](T& component) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(&component);
+        })
+        .def_static("_from_c_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) return nb::none();
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            if (tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
+                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(tc->body));
+            }
+            CxxComponent* cxx = CxxComponent::from_tc(tc);
+            if (!cxx) return nb::none();
+            return nb::cast(static_cast<T*>(cxx), nb::rv_policy::reference);
+        })
+        .def_static("_from_cxx_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) return nb::none();
+            return nb::cast(reinterpret_cast<T*>(ptr), nb::rv_policy::reference);
+        });
 }
 
 static void set_material_from_python(MaterialPass& pass, nb::object material_obj) {
@@ -530,6 +557,32 @@ NB_MODULE(_components_render_native, m) {
             auto* cxx = reinterpret_cast<XrThumbstickLocomotionComponent*>(ptr);
             return nb::cast(cxx, nb::rv_policy::reference);
         });
+
+    nb::class_<XrTrackedPoseComponent, CxxComponent> tracked_pose_binding(m, "XrTrackedPoseComponent");
+    bind_xr_cxx_component_common(tracked_pose_binding);
+    tracked_pose_binding
+        .def_rw("input_device_id", &XrTrackedPoseComponent::input_device_id)
+        .def_prop_rw("hand", &XrTrackedPoseComponent::get_hand_str,
+                     &XrTrackedPoseComponent::set_hand_str)
+        .def_prop_rw("pose_kind", &XrTrackedPoseComponent::get_pose_kind_str,
+                     &XrTrackedPoseComponent::set_pose_kind_str)
+        .def_prop_ro("tracking_active", &XrTrackedPoseComponent::tracking_active);
+
+    nb::class_<XrGrabInteractableComponent, CxxComponent> interactable_binding(
+        m, "XrGrabInteractableComponent");
+    bind_xr_cxx_component_common(interactable_binding);
+    interactable_binding
+        .def_rw("grab_radius", &XrGrabInteractableComponent::grab_radius)
+        .def_rw("grabbable", &XrGrabInteractableComponent::grabbable)
+        .def_prop_ro("grabbed", &XrGrabInteractableComponent::grabbed);
+
+    nb::class_<XrDirectGrabInteractorComponent, CxxComponent> interactor_binding(
+        m, "XrDirectGrabInteractorComponent");
+    bind_xr_cxx_component_common(interactor_binding);
+    interactor_binding
+        .def_rw("reach", &XrDirectGrabInteractorComponent::reach)
+        .def_rw("select_threshold", &XrDirectGrabInteractorComponent::select_threshold)
+        .def_prop_ro("holding_object", &XrDirectGrabInteractorComponent::holding_object);
 
     nb::class_<MeshRenderer, Component>(m, "MeshRenderer")
         .def("__init__", [](nb::handle self) {

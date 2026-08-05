@@ -569,7 +569,9 @@ struct OpenXRRuntimeScene {
 
         const char *required_components[] = {
             "MeshComponent",  "MeshRenderer",     "UIComponent",      "XrOriginComponent",
-            "XrThumbstickLocomotionComponent", "LightComponent", "UnknownComponent",
+            "XrThumbstickLocomotionComponent", "XrTrackedPoseComponent",
+            "XrGrabInteractableComponent", "XrDirectGrabInteractorComponent",
+            "LightComponent", "UnknownComponent",
         };
         for (const char *name : required_components) {
             if (!tc_component_registry_has(name)) {
@@ -928,7 +930,10 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     load_instance_proc(xr, instance, "xrDestroySession", reinterpret_cast<PFN_xrVoidFunction *>(&xr.destroy_session));
     load_instance_proc(xr, instance, "xrCreateReferenceSpace",
                        reinterpret_cast<PFN_xrVoidFunction *>(&xr.create_reference_space));
+    load_instance_proc(xr, instance, "xrCreateActionSpace",
+                       reinterpret_cast<PFN_xrVoidFunction *>(&xr.create_action_space));
     load_instance_proc(xr, instance, "xrDestroySpace", reinterpret_cast<PFN_xrVoidFunction *>(&xr.destroy_space));
+    load_instance_proc(xr, instance, "xrLocateSpace", reinterpret_cast<PFN_xrVoidFunction *>(&xr.locate_space));
     load_instance_proc(xr, instance, "xrEnumerateViewConfigurationViews",
                        reinterpret_cast<PFN_xrVoidFunction *>(&xr.enumerate_view_configuration_views));
     load_instance_proc(xr, instance, "xrEnumerateEnvironmentBlendModes",
@@ -967,6 +972,10 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     load_instance_proc(xr, instance, "xrSyncActions", reinterpret_cast<PFN_xrVoidFunction *>(&xr.sync_actions));
     load_instance_proc(xr, instance, "xrGetActionStateVector2f",
                        reinterpret_cast<PFN_xrVoidFunction *>(&xr.get_action_state_vector2f));
+    load_instance_proc(xr, instance, "xrGetActionStateFloat",
+                       reinterpret_cast<PFN_xrVoidFunction *>(&xr.get_action_state_float));
+    load_instance_proc(xr, instance, "xrGetActionStatePose",
+                       reinterpret_cast<PFN_xrVoidFunction *>(&xr.get_action_state_pose));
     load_instance_proc(xr, instance, "xrGetVulkanInstanceExtensionsKHR",
                        reinterpret_cast<PFN_xrVoidFunction *>(&xr.get_vulkan_instance_extensions));
     load_instance_proc(xr, instance, "xrGetVulkanDeviceExtensionsKHR",
@@ -1385,7 +1394,10 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
                                                                             : termin::Mat44::identity(),
                                                         head_orientation_valid);
                 }
-                controller_actions.sync(session, frame_index);
+                controller_actions.sync(
+                    session, app_space, frame_state.predictedDisplayTime,
+                    runtime_scene_ready ? runtime_scene.origin_from_xr_reference : termin::Mat44::identity(),
+                    frame_index);
                 if (runtime_scene_ready) {
                     const double frame_dt =
                         std::max(1e-6, static_cast<double>(frame_state.predictedDisplayPeriod) * 1e-9);

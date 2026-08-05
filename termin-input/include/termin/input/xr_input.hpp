@@ -21,6 +21,16 @@ struct XrAxis2State {
     bool changed_since_last_sync = false;
 };
 
+struct XrScalarState {
+    double value = 0.0;
+    bool active = false;
+    bool changed_since_last_sync = false;
+
+    bool pressed(double threshold = 0.55) const {
+        return active && value >= threshold;
+    }
+};
+
 struct XrPoseState {
     Pose3 pose{};
     bool active = false;
@@ -28,6 +38,7 @@ struct XrPoseState {
 
 struct XrHandInputState {
     XrAxis2State thumbstick;
+    XrScalarState select;
     XrPoseState aim_pose;
     XrPoseState grip_pose;
 };

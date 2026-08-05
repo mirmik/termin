@@ -45,24 +45,11 @@ find_package(termin_runtime REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_P
 find_package(termin_collision REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 find_package(termin_openxr REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 
-set(TERMIN_OPENXR_SDK_ROOT
-    "${CMAKE_CURRENT_LIST_DIR}/../../../../../../termin-thirdparty/openxr-sdk"
-)
-if(EXISTS "${TERMIN_OPENXR_SDK_ROOT}/CMakeLists.txt")
-    set(BUILD_LOADER ON CACHE BOOL "" FORCE)
-    set(DYNAMIC_LOADER ON CACHE BOOL "" FORCE)
-    set(BUILD_API_LAYERS OFF CACHE BOOL "" FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_CONFORMANCE_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_SDK_TESTS OFF CACHE BOOL "" FORCE)
-    set(BUILD_WITH_SYSTEM_JSONCPP OFF CACHE BOOL "" FORCE)
-    add_subdirectory(
-        "${TERMIN_OPENXR_SDK_ROOT}"
-        "${CMAKE_BINARY_DIR}/openxr-sdk"
-        EXCLUDE_FROM_ALL
-    )
-else()
-    message(WARNING "OpenXR SDK submodule not found at ${TERMIN_OPENXR_SDK_ROOT}; relying on a system loader")
+set(TERMIN_OPENXR_LOADER "${TERMIN_ANDROID_SDK_PREFIX}/lib/libopenxr_loader.so")
+if(NOT EXISTS "${TERMIN_OPENXR_LOADER}")
+    message(FATAL_ERROR
+        "OpenXR loader not found at ${TERMIN_OPENXR_LOADER}. "
+        "Rebuild the canonical Android SDK before configuring a Quest application.")
 endif()
 
 find_library(ANDROID_LOG_LIB log REQUIRED)
@@ -76,7 +63,4 @@ target_link_libraries(termin_openxr_native_activity
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
 )
-if(TARGET OpenXR::openxr_loader)
-    target_link_libraries(termin_openxr_native_activity PRIVATE OpenXR::openxr_loader)
-endif()
 target_compile_options(termin_openxr_native_activity PRIVATE -Wall -Wextra)

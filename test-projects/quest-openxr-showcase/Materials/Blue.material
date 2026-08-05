@@ -1,0 +1,1 @@
+{"uuid":"quest-showcase-blue-material","shader":"CookTorrancePBR","uniforms":{"u_color":[0.08,0.38,1.0,1.0],"u_metallic":0.12,"u_roughness":0.32,"u_diffuse_mul":1.0}}
