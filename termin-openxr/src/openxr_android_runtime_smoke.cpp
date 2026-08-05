@@ -555,7 +555,7 @@ struct OpenXRRuntimeScene {
         });
     }
 
-    bool load(const std::string &asset_root) {
+    bool load(const std::string &asset_root, tgfx::GraphicsHost &graphics_host) {
         if (ready) {
             return true;
         }
@@ -571,6 +571,7 @@ struct OpenXRRuntimeScene {
             "MeshComponent",  "MeshRenderer",     "UIComponent",      "XrOriginComponent",
             "XrThumbstickLocomotionComponent", "XrTrackedPoseComponent",
             "XrGrabInteractableComponent", "XrDirectGrabInteractorComponent",
+            "ColliderComponent", "PhysicsWorldComponent", "RigidBodyComponent",
             "LightComponent", "UnknownComponent",
         };
         for (const char *name : required_components) {
@@ -590,6 +591,22 @@ struct OpenXRRuntimeScene {
 
         tgfx::set_builtin_shader_root(nullptr);
         engine = std::make_unique<termin::EngineCore>();
+        termin::RenderEngine *render_engine =
+            engine->rendering_manager.render_engine();
+        if (!render_engine) {
+            log_error("OpenXR scene", "render engine is unavailable");
+            tc_log_error("[OpenXR scene] render engine is unavailable");
+            engine.reset();
+            return false;
+        }
+        try {
+            render_engine->set_graphics_host(graphics_host);
+        } catch (const std::exception &e) {
+            log_error("OpenXR scene graphics host", e.what());
+            tc_log_error("[OpenXR scene] failed to install graphics host: %s", e.what());
+            engine.reset();
+            return false;
+        }
         termin::runtime::RuntimePackageLoader loader;
         termin::runtime::RuntimePackageLoadOptions load_options;
         load_options.scene_extensions = termin::default_scene_extension_ids();
@@ -602,7 +619,7 @@ struct OpenXRRuntimeScene {
             return false;
         }
         tgfx::set_builtin_shader_root(package.shader_runtime.builtin_shader_root.c_str());
-        engine->rendering_manager.render_engine()->configure_shader_artifacts(
+        render_engine->configure_shader_artifacts(
             package.shader_runtime.artifact_root,
             package.shader_runtime.cache_root,
             package.shader_runtime.compiler_path,
@@ -1090,7 +1107,8 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
 
     OpenXRRuntimeScene runtime_scene;
     const bool runtime_scene_requested = !asset_root.empty();
-    const bool runtime_scene_ready = runtime_scene_requested && runtime_scene.load(asset_root);
+    const bool runtime_scene_ready =
+        runtime_scene_requested && runtime_scene.load(asset_root, *graphics_host);
 
     XrReferenceSpaceCreateInfo space_create_info{};
     space_create_info.type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO;

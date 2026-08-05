@@ -28,8 +28,17 @@ namespace termin::physics
     {
         if (i >= bodies_.size() || !c)
             return;
+        unregister_collider(i);
         collider_to_body_[c] = i;
         body_to_collider_[i] = c;
+    }
+    void PhysicsWorld::unregister_collider(size_t i)
+    {
+        auto it = body_to_collider_.find(i);
+        if (it == body_to_collider_.end())
+            return;
+        collider_to_body_.erase(it->second);
+        body_to_collider_.erase(it);
     }
     void PhysicsWorld::clear()
     {
