@@ -10,6 +10,7 @@ ANDROID_GRADLE_BUILD_ROOT="$SCRIPT_DIR/build/android-gradle-openxr"
 ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
 ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
 ANDROID_SDK_ROOT_VALUE="${TERMIN_ANDROID_SDK_ROOT:-$SCRIPT_DIR/sdk/android}"
+SYSTEM_ANDROID_SDK_ROOT_VALUE="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 ANDROID_NDK_VERSION_VALUE="${TERMIN_ANDROID_NDK_VERSION:-27.2.12479018}"
 OPENXR_ASSETS_DIR_VALUE="${TERMIN_OPENXR_ASSETS_DIR:-$SCRIPT_DIR/termin-android/assets}"
 ANDROID_APPLICATION_ID_VALUE="${TERMIN_ANDROID_APPLICATION_ID:-}"
@@ -171,6 +172,25 @@ if ! command -v "$GRADLE_BIN_VALUE" >/dev/null 2>&1; then
     exit 1
 fi
 
+if [[ -n "$SYSTEM_ANDROID_SDK_ROOT_VALUE" && ! -d "$SYSTEM_ANDROID_SDK_ROOT_VALUE/platforms" ]]; then
+    echo "ERROR: Configured Android SDK has no platforms directory: $SYSTEM_ANDROID_SDK_ROOT_VALUE" >&2
+    exit 1
+fi
+if [[ -z "$SYSTEM_ANDROID_SDK_ROOT_VALUE" && -f "$PLATFORM_DIR/local.properties" ]]; then
+    SYSTEM_ANDROID_SDK_ROOT_VALUE="<termin-openxr/platform/local.properties>"
+fi
+if [[ -z "$SYSTEM_ANDROID_SDK_ROOT_VALUE" ]]; then
+    echo "ERROR: Android SDK location is not configured." >&2
+    echo "  Set ANDROID_HOME (or ANDROID_SDK_ROOT), or provide termin-openxr/platform/local.properties." >&2
+    echo "  TERMIN_ANDROID_SDK_ROOT is the separate Termin cross-compiled SDK." >&2
+    exit 1
+fi
+
+# Keep every Gradle invocation, including version probing, inside the
+# repository-owned cache. This also makes builds work in isolated agents where
+# the user's global ~/.gradle is intentionally read-only.
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
+
 GRADLE_VERSION="$("$GRADLE_BIN_VALUE" --version | sed -n 's/^Gradle //p' | head -n 1)"
 GRADLE_MAJOR="${GRADLE_VERSION%%.*}"
 if [[ -z "$GRADLE_MAJOR" || "$GRADLE_MAJOR" -lt 8 ]]; then
@@ -223,7 +243,6 @@ if [[ ! -f "$TERMIN_OPENXR_CONFIG" ]]; then
     exit 1
 fi
 
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
 GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache"
 APK_OUTPUT_DIR="$ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/$ANDROID_VARIANT"
 
@@ -239,6 +258,7 @@ echo "Project:         $PLATFORM_DIR"
 echo "Task:            $GRADLE_TASK"
 echo "Variant:         $ANDROID_VARIANT"
 echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
+echo "Android SDK:      $SYSTEM_ANDROID_SDK_ROOT_VALUE"
 echo "OpenXR assets:   $OPENXR_ASSETS_DIR_VALUE"
 echo "ABI:             $ANDROID_ABI_VALUE"
 echo "Platform:        $ANDROID_PLATFORM_VALUE"

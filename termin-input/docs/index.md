@@ -55,3 +55,11 @@ XR coordinate alignment is not part of `XrInput`. OpenXR reference-space axes
 are converted by the OpenXR runner into Termin's engine axes, and
 `XrOriginComponent` owns any authored alignment policy such as matching the
 initial HMD yaw to the scene's `+Y` forward direction.
+
+Per-hand `aim_pose` and `grip_pose` are expressed in the local coordinate
+system of `XrOrigin`: +X is right, +Y is forward and +Z is up. Pose
+states are active only when OpenXR reports both valid position and orientation
+at the predicted display time. Per-hand `select` is the normalized primary
+trigger value; inactive actions publish value zero. Scene components convert
+an active origin-local pose to world space through the authored `XrOrigin`
+entity.

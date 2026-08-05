@@ -1,0 +1,199 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "quest-openxr-showcase-main",
+    "entities": [
+      {
+        "uuid": "quest-showcase-xr-origin",
+        "name": "XrOrigin",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "quest-showcase-xr-origin-component",
+            "type": "XrOriginComponent",
+            "data": {
+              "enabled": true,
+              "reference_space": "local",
+              "reference_alignment": "initial_head_yaw",
+              "near_clip": 0.06,
+              "far_clip": 60.0,
+              "layer_mask": "0xffffffffffffffff"
+            }
+          },
+          {
+            "source_id": "quest-showcase-locomotion-component",
+            "type": "XrThumbstickLocomotionComponent",
+            "data": {
+              "enabled": true,
+              "input_device_id": "xr",
+              "move_hand": "left",
+              "move_frame": "head_yaw",
+              "move_speed": 1.4,
+              "speed_multiplier": 1.0,
+              "deadzone": 0.16,
+              "normalize_diagonal": true,
+              "scale_after_deadzone": true,
+              "invert_x": false,
+              "invert_y": false,
+              "continuous_turn_enabled": true,
+              "turn_hand": "right",
+              "turn_speed_degrees": 75.0,
+              "turn_deadzone": 0.3
+            }
+          }
+        ],
+        "children": [
+          {
+            "uuid": "quest-showcase-left-hand",
+            "name": "Left Controller",
+            "priority": 0.0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0.0,
+            "flags": 0.0,
+            "pose": {"position": [-0.25, 0.55, 1.15], "rotation": [0.0, 0.0, 0.0, 1.0]},
+            "scale": [0.075, 0.16, 0.055],
+            "components": [
+              {"source_id":"quest-showcase-left-tracker","type":"XrTrackedPoseComponent","data":{"enabled":true,"input_device_id":"xr","hand":"left","pose_kind":"grip"}},
+              {"source_id":"quest-showcase-left-grabber","type":"XrDirectGrabInteractorComponent","data":{"enabled":true,"reach":0.16,"select_threshold":0.55}},
+              {"source_id":"quest-showcase-left-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":true,"mesh_offset_position":[0.0,-0.08,-0.0275],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+              {"source_id":"quest-showcase-left-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-left-hand-material","name":"LeftHand","type":"uuid","kind":"tc_material"},"cast_shadow":false,"_override_material":false,"materials":[]}}
+            ]
+          },
+          {
+            "uuid": "quest-showcase-right-hand",
+            "name": "Right Controller",
+            "priority": 0.0,
+            "visible": true,
+            "enabled": true,
+            "pickable": true,
+            "selectable": true,
+            "layer": 0.0,
+            "flags": 0.0,
+            "pose": {"position": [0.25, 0.55, 1.15], "rotation": [0.0, 0.0, 0.0, 1.0]},
+            "scale": [0.075, 0.16, 0.055],
+            "components": [
+              {"source_id":"quest-showcase-right-tracker","type":"XrTrackedPoseComponent","data":{"enabled":true,"input_device_id":"xr","hand":"right","pose_kind":"grip"}},
+              {"source_id":"quest-showcase-right-grabber","type":"XrDirectGrabInteractorComponent","data":{"enabled":true,"reach":0.16,"select_threshold":0.55}},
+              {"source_id":"quest-showcase-right-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":true,"mesh_offset_position":[0.0,-0.08,-0.0275],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+              {"source_id":"quest-showcase-right-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-right-hand-material","name":"RightHand","type":"uuid","kind":"tc_material"},"cast_shadow":false,"_override_material":false,"materials":[]}}
+            ]
+          }
+        ]
+      },
+      {
+        "uuid":"quest-showcase-floor","name":"Floor","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[0.0,2.0,-0.06],"rotation":[0.0,0.0,0.0,1.0]},"scale":[8.0,10.0,0.06],
+        "components":[
+          {"source_id":"quest-showcase-floor-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-floor-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-floor-material","name":"Floor","type":"uuid","kind":"tc_material"},"cast_shadow":false,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-table","name":"Interaction Table","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[0.0,0.65,0.0],"rotation":[0.0,0.0,0.0,1.0]},"scale":[1.35,0.45,0.72],
+        "components":[
+          {"source_id":"quest-showcase-table-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-table-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-table-material","name":"Table","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-red-cube","name":"Grab Red Cube","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[-0.35,0.4,0.75],"rotation":[0.0,0.0,-0.130526,0.991445]},"scale":[0.18,0.18,0.18],
+        "components":[
+          {"source_id":"quest-showcase-red-grabbable","type":"XrGrabInteractableComponent","data":{"enabled":true,"grab_radius":0.13,"grabbable":true}},
+          {"source_id":"quest-showcase-red-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-red-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-red-material","name":"Red","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-green-cube","name":"Grab Green Cube","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[0.0,0.4,0.75],"rotation":[0.0,0.0,0.0,1.0]},"scale":[0.16,0.16,0.24],
+        "components":[
+          {"source_id":"quest-showcase-green-grabbable","type":"XrGrabInteractableComponent","data":{"enabled":true,"grab_radius":0.14,"grabbable":true}},
+          {"source_id":"quest-showcase-green-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-green-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-green-material","name":"Green","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-blue-cube","name":"Grab Blue Cube","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[0.35,0.4,0.75],"rotation":[0.0,0.0,0.173648,0.984808]},"scale":[0.22,0.14,0.16],
+        "components":[
+          {"source_id":"quest-showcase-blue-grabbable","type":"XrGrabInteractableComponent","data":{"enabled":true,"grab_radius":0.14,"grabbable":true}},
+          {"source_id":"quest-showcase-blue-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-blue-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-blue-material","name":"Blue","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-left-landmark","name":"Left Cyan Landmark","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[-2.5,3.2,0.0],"rotation":[0.0,0.0,0.0,1.0]},"scale":[0.35,0.35,2.4],
+        "components":[
+          {"source_id":"quest-showcase-left-landmark-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-left-landmark-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-left-hand-material","name":"LeftHand","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-right-landmark","name":"Right Magenta Landmark","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[2.5,4.0,0.0],"rotation":[0.0,0.0,0.0,1.0]},"scale":[0.35,0.35,3.2],
+        "components":[
+          {"source_id":"quest-showcase-right-landmark-mesh","type":"MeshComponent","data":{"enabled":true,"mesh_generated":false,"mesh":{"uuid":"quest-showcase-cube-mesh","name":"Cube","type":"uuid","kind":"tc_mesh"},"mesh_offset_enabled":false,"mesh_offset_position":[0.0,0.0,0.0],"mesh_offset_euler":[0.0,0.0,0.0],"mesh_offset_scale":[1.0,1.0,1.0]}},
+          {"source_id":"quest-showcase-right-landmark-renderer","type":"MeshRenderer","data":{"enabled":true,"material":{"uuid":"quest-showcase-right-hand-material","name":"RightHand","type":"uuid","kind":"tc_material"},"cast_shadow":true,"_override_material":false,"materials":[]}}
+        ]
+      },
+      {
+        "uuid":"quest-showcase-key-light","name":"Warm Key Light","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[3.0,-2.0,5.0],"rotation":[-0.1098,-0.4342,0.854,0.2647]},"scale":[1.0,1.0,1.0],
+        "components":[{"source_id":"quest-showcase-key-light-component","type":"LightComponent","data":{"enabled":true,"light_type":"directional","color":[1.0,0.88,0.72],"intensity":1.2,"shadows_enabled":true,"shadows_bias":0.001,"shadows_normal_bias":0.02,"shadows_map_resolution":1024.0,"cascade_count":3.0,"max_distance":35.0,"split_lambda":0.7,"cascade_blend":true}}]
+      },
+      {
+        "uuid":"quest-showcase-fill-light","name":"Blue Fill Light","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[-2.0,0.0,2.5],"rotation":[0.0,0.0,0.0,1.0]},"scale":[1.0,1.0,1.0],
+        "components":[{"source_id":"quest-showcase-fill-light-component","type":"LightComponent","data":{"enabled":true,"light_type":"point","color":[0.22,0.42,1.0],"intensity":2.0,"shadows_enabled":false,"shadows_bias":0.001,"shadows_normal_bias":0.0,"shadows_map_resolution":512.0,"cascade_count":1.0,"max_distance":12.0,"split_lambda":0.5,"cascade_blend":true}}]
+      },
+      {
+        "uuid":"quest-showcase-camera","name":"Editor Camera","priority":0.0,"visible":true,"enabled":true,"pickable":true,"selectable":true,"layer":0.0,"flags":0.0,
+        "pose":{"position":[4.0,-5.0,3.2],"rotation":[-0.14,-0.25,0.48,0.83]},"scale":[1.0,1.0,1.0],
+        "components":[{"source_id":"quest-showcase-camera-component","type":"CameraComponent","data":{"enabled":true,"near_clip":0.08,"far_clip":60.0,"ortho_size":5.0,"fov_x_degrees":65.0,"fov_y_degrees":52.0,"fov_mode":"FixHorizontal","layer_mask":"0xffffffffffffffff","render_category_mask":"0xffffffffffffffff"}}]
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "metadata": {"termin":{"editor":{"viewport_camera_name":"camera"}}},
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {"name":"Main Viewport","display_name":"Main","render_target":{"name":"Editor Target"},"region":[0.0,0.0,1.0,1.0],"depth":0.0,"input_mode":"simple","block_input_in_editor":false,"enabled":true}
+        ],
+        "render_target_configs": [
+          {"name":"Editor Target","kind":"texture_2d","camera_uuid":"quest-showcase-camera","dynamic_resolution":true,"color_format":"rgba8","depth_format":"depth24","clear_color":[0.01,0.015,0.035,1.0],"clear_depth":1.0,"pipeline_name":"Default","layer_mask":4294967295.0,"enabled":true},
+          {"name":"Quest Headset","kind":"xr_stereo","xr_origin_uuid":"quest-showcase-xr-origin","dynamic_resolution":false,"color_format":"rgba8","depth_format":"depth24","clear_color":[0.01,0.015,0.035,1.0],"clear_depth":1.0,"pipeline_name":"Default","layer_mask":4294967295.0,"enabled":true}
+        ]
+      },
+      "render_state": {
+        "background_color":[0.01,0.015,0.035,1.0],
+        "lighting":{"ambient_color":[0.28,0.36,0.58],"ambient_intensity":0.28,"shadow_settings":{"method":1.0,"softness":1.5,"bias":0.001}},
+        "skybox":{"type":1.0,"color":[0.01,0.015,0.035],"top_color":[0.08,0.2,0.55],"bottom_color":[0.45,0.22,0.12]}
+      },
+      "collision_world": {}
+    }
+  },
+  "editor": {
+    "camera": {
+      "position": [4.0, -5.0, 3.2],
+      "rotation": [-0.136, -0.034, 0.242, 0.960],
+      "radius": 8.5
+    },
+    "expanded_entities": ["quest-showcase-xr-origin"]
+  }
+}

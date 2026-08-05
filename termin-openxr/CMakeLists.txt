@@ -104,6 +104,29 @@ endif()
 set(TERMIN_OPENXR_HAS_HEADERS "${TERMIN_OPENXR_HAS_HEADERS}" CACHE INTERNAL
     "Whether termin-openxr was compiled with OpenXR headers" FORCE)
 
+# The Android SDK owns the OpenXR loader artifact.  Quest applications consume
+# the installed libopenxr_loader.so alongside the other Termin SDK libraries;
+# they must not build a second loader privately in their Gradle native graph.
+if(ANDROID)
+    if(NOT EXISTS "${TERMIN_OPENXR_SDK_ROOT}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "termin-openxr: Android builds require the OpenXR SDK sources at "
+            "${TERMIN_OPENXR_SDK_ROOT} in order to build the packaged loader")
+    endif()
+
+    set(BUILD_LOADER ON CACHE BOOL "Build the OpenXR loader" FORCE)
+    set(DYNAMIC_LOADER ON CACHE BOOL "Build the shared OpenXR loader" FORCE)
+    set(BUILD_API_LAYERS OFF CACHE BOOL "Build OpenXR API layers" FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL "Build OpenXR SDK tests" FORCE)
+    set(BUILD_CONFORMANCE_TESTS OFF CACHE BOOL "Build OpenXR conformance tests" FORCE)
+    set(BUILD_SDK_TESTS OFF CACHE BOOL "Build OpenXR SDK samples" FORCE)
+    set(BUILD_WITH_SYSTEM_JSONCPP OFF CACHE BOOL "Use system JsonCpp" FORCE)
+    add_subdirectory(
+        "${TERMIN_OPENXR_SDK_ROOT}"
+        "${CMAKE_CURRENT_BINARY_DIR}/openxr-sdk"
+    )
+endif()
+
 set(TERMIN_OPENXR_SOURCES
     src/openxr_android_runtime.cpp
     src/openxr_android_runtime_support.cpp

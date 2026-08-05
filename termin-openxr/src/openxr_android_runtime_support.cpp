@@ -315,39 +315,74 @@ bool XrControllerActions::init(OpenXRDispatch &dispatch, XrInstance xr_instance)
     }
 
     XrPath subaction_paths[2] = {left_hand, right_hand};
-    XrActionCreateInfo action_info{};
-    action_info.type = XR_TYPE_ACTION_CREATE_INFO;
-    action_info.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
-    action_info.countSubactionPaths = 2;
-    action_info.subactionPaths = subaction_paths;
-    std::strncpy(action_info.actionName, "thumbstick_axis", XR_MAX_ACTION_NAME_SIZE - 1);
-    std::strncpy(action_info.localizedActionName, "Thumbstick Axis", XR_MAX_LOCALIZED_ACTION_NAME_SIZE - 1);
+    auto create_action = [&](XrActionType type, const char *name, const char *localized_name,
+                             XrAction &out) -> bool {
+        XrActionCreateInfo action_info{};
+        action_info.type = XR_TYPE_ACTION_CREATE_INFO;
+        action_info.actionType = type;
+        action_info.countSubactionPaths = 2;
+        action_info.subactionPaths = subaction_paths;
+        std::strncpy(action_info.actionName, name, XR_MAX_ACTION_NAME_SIZE - 1);
+        std::strncpy(action_info.localizedActionName, localized_name,
+                     XR_MAX_LOCALIZED_ACTION_NAME_SIZE - 1);
+        const XrResult action_result = xr->create_action(action_set, &action_info, &out);
+        if (XR_FAILED(action_result) || out == XR_NULL_HANDLE) {
+            tc_log_error("[OpenXR input] xrCreateAction '%s' failed: %d", name, action_result);
+            return false;
+        }
+        return true;
+    };
 
-    result = xr->create_action(action_set, &action_info, &thumbstick_axis);
-    if (XR_FAILED(result) || thumbstick_axis == XR_NULL_HANDLE) {
-        tc_log_error("[OpenXR input] xrCreateAction thumbstick_axis failed: %d", result);
+    if (!create_action(XR_ACTION_TYPE_VECTOR2F_INPUT, "thumbstick_axis", "Thumbstick Axis", thumbstick_axis) ||
+        !create_action(XR_ACTION_TYPE_FLOAT_INPUT, "select_value", "Select Value", select_value) ||
+        !create_action(XR_ACTION_TYPE_POSE_INPUT, "aim_pose", "Aim Pose", aim_pose) ||
+        !create_action(XR_ACTION_TYPE_POSE_INPUT, "grip_pose", "Grip Pose", grip_pose)) {
         return false;
     }
 
     XrPath oculus_touch_profile = XR_NULL_PATH;
     XrPath left_thumbstick = XR_NULL_PATH;
     XrPath right_thumbstick = XR_NULL_PATH;
+    XrPath left_trigger = XR_NULL_PATH;
+    XrPath right_trigger = XR_NULL_PATH;
+    XrPath left_aim_pose = XR_NULL_PATH;
+    XrPath right_aim_pose = XR_NULL_PATH;
+    XrPath left_grip_pose = XR_NULL_PATH;
+    XrPath right_grip_pose = XR_NULL_PATH;
     if (!xr_string_to_path(*xr, instance, "/interaction_profiles/oculus/touch_controller", oculus_touch_profile) ||
         !xr_string_to_path(*xr, instance, "/user/hand/left/input/thumbstick", left_thumbstick) ||
-        !xr_string_to_path(*xr, instance, "/user/hand/right/input/thumbstick", right_thumbstick)) {
+        !xr_string_to_path(*xr, instance, "/user/hand/right/input/thumbstick", right_thumbstick) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/left/input/trigger/value", left_trigger) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/right/input/trigger/value", right_trigger) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/left/input/aim/pose", left_aim_pose) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/right/input/aim/pose", right_aim_pose) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/left/input/grip/pose", left_grip_pose) ||
+        !xr_string_to_path(*xr, instance, "/user/hand/right/input/grip/pose", right_grip_pose)) {
         return false;
     }
 
-    XrActionSuggestedBinding suggested_bindings[2]{};
+    XrActionSuggestedBinding suggested_bindings[8]{};
     suggested_bindings[0].action = thumbstick_axis;
     suggested_bindings[0].binding = left_thumbstick;
     suggested_bindings[1].action = thumbstick_axis;
     suggested_bindings[1].binding = right_thumbstick;
+    suggested_bindings[2].action = select_value;
+    suggested_bindings[2].binding = left_trigger;
+    suggested_bindings[3].action = select_value;
+    suggested_bindings[3].binding = right_trigger;
+    suggested_bindings[4].action = aim_pose;
+    suggested_bindings[4].binding = left_aim_pose;
+    suggested_bindings[5].action = aim_pose;
+    suggested_bindings[5].binding = right_aim_pose;
+    suggested_bindings[6].action = grip_pose;
+    suggested_bindings[6].binding = left_grip_pose;
+    suggested_bindings[7].action = grip_pose;
+    suggested_bindings[7].binding = right_grip_pose;
 
     XrInteractionProfileSuggestedBinding suggested_binding_info{};
     suggested_binding_info.type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING;
     suggested_binding_info.interactionProfile = oculus_touch_profile;
-    suggested_binding_info.countSuggestedBindings = 2;
+    suggested_binding_info.countSuggestedBindings = 8;
     suggested_binding_info.suggestedBindings = suggested_bindings;
 
     result = xr->suggest_interaction_profile_bindings(instance, &suggested_binding_info);
@@ -365,7 +400,7 @@ bool XrControllerActions::init(OpenXRDispatch &dispatch, XrInstance xr_instance)
 }
 
 bool XrControllerActions::attach(XrSession session) {
-    if (!initialized || !xr || !xr->attach_session_action_sets || attached) {
+    if (!initialized || !xr || !xr->attach_session_action_sets || !xr->create_action_space || attached) {
         return initialized && attached;
     }
 
@@ -378,6 +413,28 @@ bool XrControllerActions::attach(XrSession session) {
     if (XR_FAILED(result)) {
         tc_log_error("[OpenXR input] xrAttachSessionActionSets failed: %d", result);
         return false;
+    }
+
+    const XrPath hands[2] = {left_hand, right_hand};
+    for (size_t index = 0; index < 2; ++index) {
+        XrActionSpaceCreateInfo space_info{};
+        space_info.type = XR_TYPE_ACTION_SPACE_CREATE_INFO;
+        space_info.subactionPath = hands[index];
+        space_info.poseInActionSpace.orientation.w = 1.0f;
+
+        space_info.action = aim_pose;
+        result = xr->create_action_space(session, &space_info, &aim_spaces[index]);
+        if (XR_FAILED(result) || aim_spaces[index] == XR_NULL_HANDLE) {
+            tc_log_error("[OpenXR input] xrCreateActionSpace aim[%zu] failed: %d", index, result);
+            return false;
+        }
+
+        space_info.action = grip_pose;
+        result = xr->create_action_space(session, &space_info, &grip_spaces[index]);
+        if (XR_FAILED(result) || grip_spaces[index] == XR_NULL_HANDLE) {
+            tc_log_error("[OpenXR input] xrCreateActionSpace grip[%zu] failed: %d", index, result);
+            return false;
+        }
     }
     attached = true;
     tc_log_info("[OpenXR input] XR controller action set attached");
@@ -401,8 +458,10 @@ void XrControllerActions::update_head_axes(const XrView &view, const termin::Mat
     rig_state.head_axes_active = true;
 }
 
-void XrControllerActions::sync(XrSession session, uint64_t frame_index) {
-    if (!initialized || !attached || !xr || !xr->sync_actions || !xr->get_action_state_vector2f) {
+void XrControllerActions::sync(XrSession session, XrSpace reference_space, XrTime predicted_display_time,
+                               const termin::Mat44 &origin_from_xr_reference, uint64_t frame_index) {
+    if (!initialized || !attached || !xr || !xr->sync_actions || !xr->get_action_state_vector2f ||
+        !xr->get_action_state_float || !xr->get_action_state_pose || !xr->locate_space) {
         return;
     }
 
@@ -420,11 +479,27 @@ void XrControllerActions::sync(XrSession session, uint64_t frame_index) {
         tc_log_error("[OpenXR input] xrSyncActions failed: %d", result);
         rig_state.left.thumbstick.active = false;
         rig_state.right.thumbstick.active = false;
+        rig_state.left.select.active = false;
+        rig_state.right.select.active = false;
+        rig_state.left.aim_pose.active = false;
+        rig_state.right.aim_pose.active = false;
+        rig_state.left.grip_pose.active = false;
+        rig_state.right.grip_pose.active = false;
         return;
     }
 
     update_thumbstick(session, left_hand, rig_state.left.thumbstick);
     update_thumbstick(session, right_hand, rig_state.right.thumbstick);
+    update_select(session, left_hand, rig_state.left.select);
+    update_select(session, right_hand, rig_state.right.select);
+    update_pose(session, aim_pose, left_hand, aim_spaces[0], reference_space, predicted_display_time,
+                origin_from_xr_reference, rig_state.left.aim_pose);
+    update_pose(session, aim_pose, right_hand, aim_spaces[1], reference_space, predicted_display_time,
+                origin_from_xr_reference, rig_state.right.aim_pose);
+    update_pose(session, grip_pose, left_hand, grip_spaces[0], reference_space, predicted_display_time,
+                origin_from_xr_reference, rig_state.left.grip_pose);
+    update_pose(session, grip_pose, right_hand, grip_spaces[1], reference_space, predicted_display_time,
+                origin_from_xr_reference, rig_state.right.grip_pose);
     rig_state.frame_index = frame_index;
 }
 
@@ -449,18 +524,111 @@ void XrControllerActions::update_thumbstick(XrSession session, XrPath subaction_
     out.value = termin::Vec2{static_cast<double>(state.currentState.x), static_cast<double>(state.currentState.y)};
 }
 
+void XrControllerActions::update_select(XrSession session, XrPath subaction_path,
+                                        termin::xr::XrScalarState &out) {
+    XrActionStateGetInfo get_info{};
+    get_info.type = XR_TYPE_ACTION_STATE_GET_INFO;
+    get_info.action = select_value;
+    get_info.subactionPath = subaction_path;
+
+    XrActionStateFloat state{};
+    state.type = XR_TYPE_ACTION_STATE_FLOAT;
+    const XrResult result = xr->get_action_state_float(session, &get_info, &state);
+    if (XR_FAILED(result)) {
+        tc_log_error("[OpenXR input] xrGetActionStateFloat failed: %d", result);
+        out = {};
+        return;
+    }
+
+    out.active = state.isActive == XR_TRUE;
+    out.changed_since_last_sync = state.changedSinceLastSync == XR_TRUE;
+    out.value = out.active ? static_cast<double>(state.currentState) : 0.0;
+}
+
+void XrControllerActions::update_pose(XrSession session, XrAction action, XrPath subaction_path,
+                                      XrSpace action_space, XrSpace reference_space, XrTime display_time,
+                                      const termin::Mat44 &origin_from_xr_reference,
+                                      termin::xr::XrPoseState &out) {
+    out.active = false;
+    if (action_space == XR_NULL_HANDLE) {
+        return;
+    }
+
+    XrActionStateGetInfo get_info{};
+    get_info.type = XR_TYPE_ACTION_STATE_GET_INFO;
+    get_info.action = action;
+    get_info.subactionPath = subaction_path;
+    XrActionStatePose action_state{};
+    action_state.type = XR_TYPE_ACTION_STATE_POSE;
+    XrResult result = xr->get_action_state_pose(session, &get_info, &action_state);
+    if (XR_FAILED(result)) {
+        tc_log_error("[OpenXR input] xrGetActionStatePose failed: %d", result);
+        return;
+    }
+    if (action_state.isActive != XR_TRUE) {
+        return;
+    }
+
+    XrSpaceLocation location{};
+    location.type = XR_TYPE_SPACE_LOCATION;
+    result = xr->locate_space(action_space, reference_space, display_time, &location);
+    if (XR_FAILED(result)) {
+        tc_log_error("[OpenXR input] xrLocateSpace failed: %d", result);
+        return;
+    }
+    constexpr XrSpaceLocationFlags required =
+        XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    if ((location.locationFlags & required) != required) {
+        return;
+    }
+
+    const XrQuaternionf &q = location.pose.orientation;
+    const termin::Vec3 right = origin_from_xr_reference.transform_direction(
+        xr_direction_to_scene_direction(rotate_xr_vector(q, XrVector3f{1.0f, 0.0f, 0.0f})));
+    const termin::Vec3 forward = origin_from_xr_reference.transform_direction(
+        xr_direction_to_scene_direction(rotate_xr_vector(q, XrVector3f{0.0f, 0.0f, -1.0f})));
+    const termin::Vec3 up = origin_from_xr_reference.transform_direction(
+        xr_direction_to_scene_direction(rotate_xr_vector(q, XrVector3f{0.0f, 1.0f, 0.0f})));
+    const double rotation[9] = {
+        right.x, forward.x, up.x,
+        right.y, forward.y, up.y,
+        right.z, forward.z, up.z,
+    };
+
+    out.pose.ang = termin::Quat::from_rotation_matrix(rotation);
+    out.pose.lin = origin_from_xr_reference.transform_point(
+        xr_position_to_scene_position(location.pose.position));
+    out.active = true;
+}
+
 void XrControllerActions::destroy() {
     if (registered) {
         termin::xr::XrInput::unregister_state(rig_state.id);
         registered = false;
     }
-    if (xr && thumbstick_axis != XR_NULL_HANDLE && xr->destroy_action) {
-        xr->destroy_action(thumbstick_axis);
+    if (xr && xr->destroy_space) {
+        for (XrSpace &space : aim_spaces) {
+            if (space != XR_NULL_HANDLE) xr->destroy_space(space);
+            space = XR_NULL_HANDLE;
+        }
+        for (XrSpace &space : grip_spaces) {
+            if (space != XR_NULL_HANDLE) xr->destroy_space(space);
+            space = XR_NULL_HANDLE;
+        }
+    }
+    if (xr && xr->destroy_action) {
+        if (thumbstick_axis != XR_NULL_HANDLE) xr->destroy_action(thumbstick_axis);
+        if (select_value != XR_NULL_HANDLE) xr->destroy_action(select_value);
+        if (aim_pose != XR_NULL_HANDLE) xr->destroy_action(aim_pose);
+        if (grip_pose != XR_NULL_HANDLE) xr->destroy_action(grip_pose);
     }
     if (xr && action_set != XR_NULL_HANDLE && xr->destroy_action_set) {
         xr->destroy_action_set(action_set);
     }
     thumbstick_axis = XR_NULL_HANDLE;
+    select_value = XR_NULL_HANDLE;
+    aim_pose = XR_NULL_HANDLE;
+    grip_pose = XR_NULL_HANDLE;
     action_set = XR_NULL_HANDLE;
     initialized = false;
     attached = false;

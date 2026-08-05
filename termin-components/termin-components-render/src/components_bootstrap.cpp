@@ -12,6 +12,7 @@
 #include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
+#include <termin/xr/xr_interaction_components.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 
 namespace termin {
@@ -27,6 +28,9 @@ void register_builtin_render_component_types() {
     SpriteRenderer2D::register_type();
     XrOriginComponent::register_type();
     XrThumbstickLocomotionComponent::register_type();
+    XrTrackedPoseComponent::register_type();
+    XrGrabInteractableComponent::register_type();
+    XrDirectGrabInteractorComponent::register_type();
 }
 
 void register_builtin_render_component_pass_types() {

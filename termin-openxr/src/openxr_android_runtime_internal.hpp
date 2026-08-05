@@ -40,7 +40,9 @@ struct OpenXRDispatch {
     PFN_xrCreateSession create_session = nullptr;
     PFN_xrDestroySession destroy_session = nullptr;
     PFN_xrCreateReferenceSpace create_reference_space = nullptr;
+    PFN_xrCreateActionSpace create_action_space = nullptr;
     PFN_xrDestroySpace destroy_space = nullptr;
+    PFN_xrLocateSpace locate_space = nullptr;
     PFN_xrEnumerateViewConfigurationViews enumerate_view_configuration_views = nullptr;
     PFN_xrEnumerateEnvironmentBlendModes enumerate_environment_blend_modes = nullptr;
     PFN_xrEnumerateSwapchainFormats enumerate_swapchain_formats = nullptr;
@@ -66,6 +68,8 @@ struct OpenXRDispatch {
     PFN_xrAttachSessionActionSets attach_session_action_sets = nullptr;
     PFN_xrSyncActions sync_actions = nullptr;
     PFN_xrGetActionStateVector2f get_action_state_vector2f = nullptr;
+    PFN_xrGetActionStateFloat get_action_state_float = nullptr;
+    PFN_xrGetActionStatePose get_action_state_pose = nullptr;
     PFN_xrGetVulkanInstanceExtensionsKHR get_vulkan_instance_extensions = nullptr;
     PFN_xrGetVulkanDeviceExtensionsKHR get_vulkan_device_extensions = nullptr;
     PFN_xrGetVulkanGraphicsDeviceKHR get_vulkan_graphics_device = nullptr;
@@ -94,8 +98,13 @@ struct XrControllerActions {
     XrInstance instance = XR_NULL_HANDLE;
     XrActionSet action_set = XR_NULL_HANDLE;
     XrAction thumbstick_axis = XR_NULL_HANDLE;
+    XrAction select_value = XR_NULL_HANDLE;
+    XrAction aim_pose = XR_NULL_HANDLE;
+    XrAction grip_pose = XR_NULL_HANDLE;
     XrPath left_hand = XR_NULL_PATH;
     XrPath right_hand = XR_NULL_PATH;
+    std::array<XrSpace, 2> aim_spaces{XR_NULL_HANDLE, XR_NULL_HANDLE};
+    std::array<XrSpace, 2> grip_spaces{XR_NULL_HANDLE, XR_NULL_HANDLE};
     termin::xr::XrRigInputState rig_state;
     bool initialized = false;
     bool attached = false;
@@ -105,11 +114,16 @@ struct XrControllerActions {
     bool attach(XrSession session);
     void update_head_axes(const XrView &head_view, const termin::Mat44 &origin_from_xr_reference,
                           bool orientation_valid);
-    void sync(XrSession session, uint64_t frame_index);
+    void sync(XrSession session, XrSpace reference_space, XrTime predicted_display_time,
+              const termin::Mat44 &origin_from_xr_reference, uint64_t frame_index);
     void destroy();
 
   private:
     void update_thumbstick(XrSession session, XrPath subaction_path, termin::xr::XrAxis2State &out);
+    void update_select(XrSession session, XrPath subaction_path, termin::xr::XrScalarState &out);
+    void update_pose(XrSession session, XrAction action, XrPath subaction_path,
+                     XrSpace action_space, XrSpace reference_space, XrTime display_time,
+                     const termin::Mat44 &origin_from_xr_reference, termin::xr::XrPoseState &out);
 };
 
 std::vector<std::string> split_openxr_extension_string(const std::string &text);
