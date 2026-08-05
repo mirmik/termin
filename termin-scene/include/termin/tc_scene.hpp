@@ -98,7 +98,6 @@ public:
     // Update loop
     void update(double dt);
     void editor_update(double dt);
-    void before_render();
     void request_render();
     bool consume_render_request();
 
@@ -113,7 +112,6 @@ public:
     size_t update_list_count() const;
     size_t fixed_update_list_count() const;
     size_t late_update_list_count() const;
-    size_t before_render_list_count() const;
 
     // Get entity pool owned by this scene
     tc_entity_pool* entity_pool() const;

@@ -9,6 +9,7 @@
 #include "render_target_context_builder.hpp"
 #include "scene_light_collector.hpp"
 #include <termin/entity/entity.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
@@ -1003,12 +1004,31 @@ void RenderingManager::render_planned_offscreen(tc_display_handle only_display) 
         topology_, only_display, demands.data(), demands.size());
     rendering_manager_detail::sync_viewport_render_target_resolutions(
         topology_, only_display, demands.data(), demands.size());
+    struct PlannedRenderContext {
+        RenderingManager* manager;
+        std::vector<tc_scene_handle> prepared_scenes;
+    } planned_context{this, {}};
+
     offscreen_planner_->execute(
         topology_,
         only_display,
         [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* planned_job) {
-            RenderingManager* manager = static_cast<RenderingManager*>(user_data);
+            PlannedRenderContext* planned = static_cast<PlannedRenderContext*>(user_data);
+            RenderingManager* manager = planned->manager;
             const rendering_manager_detail::OffscreenRenderJob& job = *planned_job;
+            bool prepared = std::any_of(
+                planned->prepared_scenes.begin(),
+                planned->prepared_scenes.end(),
+                [job](tc_scene_handle scene) {
+                    return tc_scene_handle_eq(scene, job.scene);
+                });
+            if (!prepared && tc_scene_handle_valid(job.scene)) {
+                RenderPrepareContext context(job.scene);
+                tc_scene_render_mount_prepare(
+                    job.scene,
+                    reinterpret_cast<const tc_render_prepare_context*>(&context));
+                planned->prepared_scenes.push_back(job.scene);
+            }
             if (job.kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
                 manager->render_scene_pipeline_offscreen(job.scene, job.pipeline);
                 return;
@@ -1019,7 +1039,7 @@ void RenderingManager::render_planned_offscreen(tc_display_handle only_display) 
                 manager->render_render_target_offscreen(job.render_target);
             }
         },
-        this,
+        &planned_context,
         nullptr,
         nullptr,
         demands.data(),

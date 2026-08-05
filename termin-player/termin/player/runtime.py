@@ -733,7 +733,6 @@ class PlayerRuntime:
         # Update scene
         if self.scene is not None:
             self.scene.update(self.delta_time)
-            self.scene.before_render()
 
         # Render
         self._render()

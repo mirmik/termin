@@ -349,11 +349,11 @@ public:
     // ========================================================================
 
     // Attach scene pipelines only - compiles pipeline templates stored in tc_scene
-    // Called by attach_scene_full. Notifies components via on_render_attach.
+    // Called by attach_scene_full. Attaches render lifecycle participants.
     void attach_scene(tc_scene_handle scene);
 
     // Detach scene from rendering - destroys compiled pipelines
-    // Called when scene is unmounted. Notifies components via on_render_detach.
+    // Called when scene is unmounted. Detaches render lifecycle participants.
     void detach_scene(tc_scene_handle scene);
 
     // Get scene pipeline by name (searches in specific scene)
@@ -370,7 +370,7 @@ public:
     std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
 
     // Clear all pipelines for a scene (called at render detach time)
-    // Calls tc_scene_notify_render_detach before destroying pipelines.
+    // Detaches render lifecycle participants before destroying pipelines.
     void clear_scene_pipelines(tc_scene_handle scene);
 
     // Clear all scene pipelines

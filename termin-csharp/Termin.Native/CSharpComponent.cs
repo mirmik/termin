@@ -30,7 +30,9 @@ public abstract class CSharpComponent
     protected virtual void OnUpdate(float dt) { }
     protected virtual void OnFixedUpdate(float dt) { }
     protected virtual void OnLateUpdate(float dt) { }
-    protected virtual void OnBeforeRender() { }
+    protected virtual void PrepareRender(IntPtr context) { }
+    protected virtual void OnRenderAttach(IntPtr context) { }
+    protected virtual void OnRenderDetach(IntPtr context) { }
     protected virtual void OnDestroy() { }
     protected virtual void OnAddedToEntity() { }
     protected virtual void OnRemovedFromEntity() { }
@@ -44,7 +46,9 @@ public abstract class CSharpComponent
     internal void DispatchUpdate(float dt)     => OnUpdate(dt);
     internal void DispatchFixedUpdate(float dt) => OnFixedUpdate(dt);
     internal void DispatchLateUpdate(float dt) => OnLateUpdate(dt);
-    internal void DispatchBeforeRender()       => OnBeforeRender();
+    internal void DispatchPrepareRender(IntPtr context) => PrepareRender(context);
+    internal void DispatchRenderAttach(IntPtr context) => OnRenderAttach(context);
+    internal void DispatchRenderDetach(IntPtr context) => OnRenderDetach(context);
     internal void DispatchOnDestroy()          => OnDestroy();
     internal void DispatchOnAddedToEntity()    => OnAddedToEntity();
     internal void DispatchOnRemovedFromEntity() => OnRemovedFromEntity();
@@ -72,4 +76,11 @@ public abstract class CSharpComponent
     {
         return new ComponentRef(NativePtr);
     }
+}
+
+/// <summary>
+/// Marker base for C# components participating in render attach/prepare/detach.
+/// </summary>
+public abstract class CSharpRenderLifecycleComponent : CSharpComponent
+{
 }

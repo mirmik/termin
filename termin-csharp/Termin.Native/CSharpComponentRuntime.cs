@@ -45,6 +45,9 @@ public static class CSharpComponentRuntime
     private delegate void FloatCb(IntPtr csSelf, float dt);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate void ContextCb(IntPtr csSelf, IntPtr context);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr FactoryDelegate(IntPtr userdata);
 
     // Inspect callbacks
@@ -74,7 +77,6 @@ public static class CSharpComponentRuntime
             Update             = Pin<FloatCb>(OnUpdate),
             FixedUpdate        = Pin<FloatCb>(OnFixedUpdate),
             LateUpdate         = Pin<FloatCb>(OnLateUpdate),
-            BeforeRender       = Pin<VoidCb>(OnBeforeRender),
             OnDestroy          = Pin<VoidCb>(OnDestroyCallback),
             OnAddedToEntity    = Pin<VoidCb>(OnAddedToEntity),
             OnRemovedFromEntity = Pin<VoidCb>(OnRemovedFromEntity),
@@ -86,6 +88,14 @@ public static class CSharpComponentRuntime
             RefRelease         = Pin<VoidCb>(OnRefRelease),
         };
         TerminCore.ComponentSetCSharpCallbacks(ref callbacks);
+
+        var renderCallbacks = new TerminCore.CSharpRenderLifecycleCallbacks
+        {
+            OnRenderAttach = Pin<ContextCb>(OnRenderAttach),
+            PrepareRender = Pin<ContextCb>(OnPrepareRender),
+            OnRenderDetach = Pin<ContextCb>(OnRenderDetach),
+        };
+        TerminCore.ComponentSetCSharpRenderLifecycleCallbacks(ref renderCallbacks);
 
         // Inspect callbacks
         var getPtr = Pin<InspectGetCb>(InspectGetHandler);
@@ -191,6 +201,19 @@ public static class CSharpComponentRuntime
 
         var nativePtr = TerminCore.ComponentNewCSharp(gcPtr, typeName);
         component.NativePtr = nativePtr;
+        if (nativePtr == IntPtr.Zero ||
+            (component is CSharpRenderLifecycleComponent &&
+            !TerminCore.ComponentInstallCSharpRenderLifecycle(nativePtr))
+        )
+        {
+            if (nativePtr != IntPtr.Zero)
+                TerminCore.ComponentFreeCSharp(nativePtr);
+            gcHandle.Free();
+            component.NativePtr = IntPtr.Zero;
+            component.GcHandle = default;
+            throw new InvalidOperationException(
+                $"Could not create native component state for '{typeName}'");
+        }
 
         _instances[gcPtr] = component;
         return nativePtr;
@@ -246,7 +269,12 @@ public static class CSharpComponentRuntime
     private static void OnUpdate(IntPtr s, float dt)   => Get(s)?.DispatchUpdate(dt);
     private static void OnFixedUpdate(IntPtr s, float dt) => Get(s)?.DispatchFixedUpdate(dt);
     private static void OnLateUpdate(IntPtr s, float dt) => Get(s)?.DispatchLateUpdate(dt);
-    private static void OnBeforeRender(IntPtr s)       => Get(s)?.DispatchBeforeRender();
+    private static void OnPrepareRender(IntPtr s, IntPtr context) =>
+        Get(s)?.DispatchPrepareRender(context);
+    private static void OnRenderAttach(IntPtr s, IntPtr context) =>
+        Get(s)?.DispatchRenderAttach(context);
+    private static void OnRenderDetach(IntPtr s, IntPtr context) =>
+        Get(s)?.DispatchRenderDetach(context);
     private static void OnDestroyCallback(IntPtr s)    => Get(s)?.DispatchOnDestroy();
     private static void OnAddedToEntity(IntPtr s)      => Get(s)?.DispatchOnAddedToEntity();
     private static void OnRemovedFromEntity(IntPtr s)  => Get(s)?.DispatchOnRemovedFromEntity();

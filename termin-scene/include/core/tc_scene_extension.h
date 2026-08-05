@@ -15,11 +15,22 @@ extern "C" {
 
 typedef uint64_t tc_scene_ext_type_id;
 
+struct tc_component;
+
 typedef struct tc_scene_ext_vtable {
     void* (*create)(tc_scene_handle scene, void* type_userdata);
     void (*destroy)(void* ext, void* type_userdata);
     void (*on_scene_update)(void* ext, double dt, void* type_userdata);
-    void (*on_scene_before_render)(void* ext, void* type_userdata);
+    void (*on_component_registered)(
+        void* ext,
+        struct tc_component* component,
+        void* type_userdata
+    );
+    void (*on_component_unregistering)(
+        void* ext,
+        struct tc_component* component,
+        void* type_userdata
+    );
     bool (*serialize)(void* ext, tc_value* out_data, void* type_userdata);
     bool (*deserialize)(void* ext, const tc_value* in_data, void* type_userdata);
 } tc_scene_ext_vtable;
@@ -64,9 +75,16 @@ TC_API void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value
 // Get debug name for registered extension type (or NULL if not registered).
 TC_API const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id);
 
-// Internal lifecycle hooks (called from tc_scene update/render loop).
+// Internal lifecycle hooks (called from tc_scene update/component registry).
 TC_API void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
-TC_API void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
+TC_API void tc_scene_ext_on_component_registered(
+    tc_scene_handle scene,
+    struct tc_component* component
+);
+TC_API void tc_scene_ext_on_component_unregistering(
+    tc_scene_handle scene,
+    struct tc_component* component
+);
 
 // Internal storage accessors implemented by tc_scene.c.
 TC_API void* tc_scene_ext_slot_get(tc_scene_handle scene, tc_scene_ext_type_id type_id);

@@ -8,7 +8,7 @@ Scene-core библиотека для движка **Termin**.
 ## Возможности
 
 - **Сцена и entity pool** — создание сцен, аллокация сущностей, иерархия parent/child.
-- **Object-компоненты** — lifecycle-хуки (`start`, `fixed_update`, `update`, `late_update`, `before_render`), retain/release владение.
+- **Object-компоненты** — simulation lifecycle (`start`, `fixed_update`, `update`, `late_update`), retain/release владение и расширяемые capabilities.
 - **SoA-архетипы** — плотное хранение data-only компонентов, chunk-итерация по маскам типов.
 - **Generational handles** — безопасные ссылки с защитой от use-after-free.
 - **Scene extensions** — stateful-модули с attach/detach/update/serialize без изменения core.
@@ -23,7 +23,6 @@ tc_entity_id e = tc_entity_pool_alloc(pool, "Player");
 tc_entity_pool_add_component(pool, e, my_component);
 
 tc_scene_update(scene, dt);
-tc_scene_before_render(scene);
 
 tc_scene_free(scene);
 ```

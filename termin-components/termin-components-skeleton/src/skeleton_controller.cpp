@@ -9,7 +9,7 @@ namespace termin {
 SkeletonController::SkeletonController()
     : CxxComponent("SkeletonController")
 {
-    _c.has_before_render = true;
+    install_render_lifecycle(&_c);
 }
 
 void SkeletonController::register_type() {
@@ -89,7 +89,8 @@ void SkeletonController::invalidate_instance() {
     _skeleton_instance.reset();
 }
 
-void SkeletonController::before_render() {
+void SkeletonController::prepare_render(const RenderPrepareContext& context) {
+    (void)context;
     if (_skeleton_instance == nullptr) {
         skeleton_instance(); // Try to create instance
     }
@@ -97,7 +98,7 @@ void SkeletonController::before_render() {
     if (_skeleton_instance != nullptr) {
         _skeleton_instance->update();
     } else {
-        tc::Log::warn("[SkeletonController::before_render] no skeleton instance");
+        tc::Log::warn("[SkeletonController::prepare_render] no skeleton instance");
     }
 }
 

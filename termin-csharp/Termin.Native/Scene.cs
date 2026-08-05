@@ -53,11 +53,6 @@ public class Scene : IDisposable
         TerminCore.SceneEditorUpdate(_handle, dt);
     }
 
-    public void BeforeRender()
-    {
-        TerminCore.SceneBeforeRender(_handle);
-    }
-
     public int EntityCount => (int)TerminCore.SceneEntityCount(_handle);
 
     /// <summary>

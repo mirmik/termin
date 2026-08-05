@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+typedef struct tc_render_attachment_context tc_render_attachment_context;
+
 TC_API bool tc_render_attachment_context_valid(
     const tc_render_attachment_context* context
 );

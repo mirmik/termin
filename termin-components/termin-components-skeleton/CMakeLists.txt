@@ -27,6 +27,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_skeleton REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render termin_render::termin_render)
+else()
+    find_package(termin_render REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
@@ -53,6 +58,7 @@ target_link_libraries(termin_components_skeleton PUBLIC
     termin_scene::termin_scene
     termin_inspect::termin_inspect
     termin_skeleton::termin_skeleton
+    termin_render::termin_render
 )
 
 include(GNUInstallDirs)

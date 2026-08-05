@@ -247,7 +247,6 @@ void bind_tc_scene_core(nb::module_& m) {
         // Update loop
         .def("update", &TcSceneRef::update, nb::arg("dt"))
         .def("editor_update", &TcSceneRef::editor_update, nb::arg("dt"))
-        .def("before_render", &TcSceneRef::before_render)
         .def("request_render", &TcSceneRef::request_render,
              "Request a render frame for this scene")
         .def("consume_render_request", &TcSceneRef::consume_render_request,
@@ -263,7 +262,6 @@ void bind_tc_scene_core(nb::module_& m) {
         .def_prop_ro("update_list_count", &TcSceneRef::update_list_count)
         .def_prop_ro("fixed_update_list_count", &TcSceneRef::fixed_update_list_count)
         .def_prop_ro("late_update_list_count", &TcSceneRef::late_update_list_count)
-        .def_prop_ro("before_render_list_count", &TcSceneRef::before_render_list_count)
 
         // Pool access
         .def("entity_pool_ptr", [](TcSceneRef& self) {

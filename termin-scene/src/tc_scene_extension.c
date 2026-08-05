@@ -1,5 +1,6 @@
 // tc_scene_extension.c - Scene extension registry and scene-local slot storage
 #include "core/tc_scene_extension.h"
+#include "core/tc_component.h"
 #include "core/tc_scene.h"
 #include "termin_scene/internal/tc_scene_extension_registry.h"
 #include <tcbase/tc_log.h>
@@ -283,18 +284,38 @@ void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt) {
     }
 }
 
-void tc_scene_ext_on_scene_before_render(tc_scene_handle scene) {
-    if (!tc_scene_alive(scene)) return;
-    if (!g_registry) return;
+void tc_scene_ext_on_component_registered(
+    tc_scene_handle scene,
+    tc_component* component
+) {
+    if (!tc_scene_alive(scene) || !component || !g_registry) return;
 
     for (size_t i = 0; i < g_registry->type_capacity; i++) {
         tc_scene_ext_type_entry* type_entry = &g_registry->types[i];
         if (!type_entry->registered) continue;
 
-        void* instance = tc_scene_ext_slot_get(scene, (tc_scene_ext_type_id) i);
-        if (!instance) continue;
-        if (!type_entry->vtable.on_scene_before_render) continue;
+        void* instance = tc_scene_ext_slot_get(scene, (tc_scene_ext_type_id)i);
+        if (!instance || !type_entry->vtable.on_component_registered) continue;
 
-        type_entry->vtable.on_scene_before_render(instance, type_entry->type_userdata);
+        type_entry->vtable.on_component_registered(
+            instance, component, type_entry->type_userdata);
+    }
+}
+
+void tc_scene_ext_on_component_unregistering(
+    tc_scene_handle scene,
+    tc_component* component
+) {
+    if (!tc_scene_alive(scene) || !component || !g_registry) return;
+
+    for (size_t i = 0; i < g_registry->type_capacity; i++) {
+        tc_scene_ext_type_entry* type_entry = &g_registry->types[i];
+        if (!type_entry->registered) continue;
+
+        void* instance = tc_scene_ext_slot_get(scene, (tc_scene_ext_type_id)i);
+        if (!instance || !type_entry->vtable.on_component_unregistering) continue;
+
+        type_entry->vtable.on_component_unregistering(
+            instance, component, type_entry->type_userdata);
     }
 }

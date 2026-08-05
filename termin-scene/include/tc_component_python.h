@@ -27,7 +27,6 @@ typedef void (*tc_py_start_fn)(void* py_self);
 typedef void (*tc_py_update_fn)(void* py_self, float dt);
 typedef void (*tc_py_fixed_update_fn)(void* py_self, float dt);
 typedef void (*tc_py_late_update_fn)(void* py_self, float dt);
-typedef void (*tc_py_before_render_fn)(void* py_self);
 typedef void (*tc_py_on_destroy_fn)(void* py_self);
 typedef void (*tc_py_on_added_to_entity_fn)(void* py_self);
 typedef void (*tc_py_on_removed_from_entity_fn)(void* py_self);
@@ -36,8 +35,6 @@ typedef void (*tc_py_on_removed_fn)(void* py_self);
 typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
 typedef void (*tc_py_on_scene_active_fn)(void* py_self);
 typedef void (*tc_py_on_editor_start_fn)(void* py_self);
-typedef void (*tc_py_on_render_attach_fn)(void* py_self, const tc_render_attachment_context* context);
-typedef void (*tc_py_on_render_detach_fn)(void* py_self, const tc_render_attachment_context* context);
 
 // Reference counting callbacks for Python objects
 typedef void (*tc_py_incref_fn)(void* py_obj);
@@ -50,7 +47,6 @@ typedef struct {
     tc_py_update_fn update;
     tc_py_fixed_update_fn fixed_update;
     tc_py_late_update_fn late_update;
-    tc_py_before_render_fn before_render;
     tc_py_on_destroy_fn on_destroy;
     tc_py_on_added_to_entity_fn on_added_to_entity;
     tc_py_on_removed_from_entity_fn on_removed_from_entity;
@@ -59,8 +55,6 @@ typedef struct {
     tc_py_on_scene_inactive_fn on_scene_inactive;
     tc_py_on_scene_active_fn on_scene_active;
     tc_py_on_editor_start_fn on_editor_start;
-    tc_py_on_render_attach_fn on_render_attach;
-    tc_py_on_render_detach_fn on_render_detach;
     // Reference counting
     tc_py_incref_fn incref;
     tc_py_decref_fn decref;

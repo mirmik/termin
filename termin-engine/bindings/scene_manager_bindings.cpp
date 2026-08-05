@@ -246,9 +246,6 @@ void bind_scene_manager(nb::module_ &m) {
            "Update all scenes based on their mode. Returns true if render "
            "needed.")
 
-      .def("before_render", &SceneManager::before_render,
-           "Call before_render on all active scenes.")
-
       // --- Render request ---
 
       .def("request_render", &SceneManager::request_render,
@@ -386,8 +383,6 @@ void bind_scene_manager(nb::module_ &m) {
                     component ? component->has_fixed_update : false;
                 component_info["has_late_update"] =
                     component ? component->has_late_update : false;
-                component_info["has_before_render"] =
-                    component ? component->has_before_render : false;
                 component_info["ptr"] = reinterpret_cast<uintptr_t>(component);
                 components.append(component_info);
               }

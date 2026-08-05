@@ -296,7 +296,6 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
         // Update scene
         _scene?.Update(deltaSeconds);
-        _scene?.BeforeRender();
 
         // Render this display
         var display = SwigHelpers.ToSwigDisplayHandle(_display.Handle);

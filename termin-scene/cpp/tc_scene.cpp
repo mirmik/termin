@@ -77,10 +77,6 @@ void TcSceneRef::editor_update(double dt) {
     tc_scene_editor_update(_h, dt);
 }
 
-void TcSceneRef::before_render() {
-    tc_scene_before_render(_h);
-}
-
 void TcSceneRef::request_render() {
     tc_scene_request_render(_h);
 }
@@ -119,10 +115,6 @@ size_t TcSceneRef::fixed_update_list_count() const {
 
 size_t TcSceneRef::late_update_list_count() const {
     return tc_scene_late_update_list_count(_h);
-}
-
-size_t TcSceneRef::before_render_list_count() const {
-    return tc_scene_before_render_list_count(_h);
 }
 
 tc_entity_pool* TcSceneRef::entity_pool() const {

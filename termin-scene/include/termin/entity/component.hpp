@@ -18,7 +18,6 @@ enum class LifecycleStage : int {
     Update = TC_COMPONENT_LIFECYCLE_UPDATE,
     FixedUpdate = TC_COMPONENT_LIFECYCLE_FIXED_UPDATE,
     LateUpdate = TC_COMPONENT_LIFECYCLE_LATE_UPDATE,
-    BeforeRender = TC_COMPONENT_LIFECYCLE_BEFORE_RENDER,
 };
 
 namespace lifecycle_priority {
@@ -32,8 +31,6 @@ inline constexpr int control = lifecycle_priority::early;
 inline constexpr int physics = lifecycle_priority::normal;
 inline constexpr int post_physics = lifecycle_priority::late;
 } // namespace fixed_update_priority
-
-class RenderAttachmentContext;
 
 // Base class for all C++ components.
 // Built-in C++ components are registered from explicit bootstrap code.
@@ -129,25 +126,19 @@ public:
     bool has_update() const { return _c.has_update; }
     void set_has_update(bool v) {
         set_lifecycle_capabilities(
-            v, _c.has_fixed_update, _c.has_late_update, _c.has_before_render);
+            v, _c.has_fixed_update, _c.has_late_update);
     }
 
     bool has_fixed_update() const { return _c.has_fixed_update; }
     void set_has_fixed_update(bool v) {
         set_lifecycle_capabilities(
-            _c.has_update, v, _c.has_late_update, _c.has_before_render);
+            _c.has_update, v, _c.has_late_update);
     }
 
     bool has_late_update() const { return _c.has_late_update; }
     void set_has_late_update(bool v) {
         set_lifecycle_capabilities(
-            _c.has_update, _c.has_fixed_update, v, _c.has_before_render);
-    }
-
-    bool has_before_render() const { return _c.has_before_render; }
-    void set_has_before_render(bool v) {
-        set_lifecycle_capabilities(
-            _c.has_update, _c.has_fixed_update, _c.has_late_update, v);
+            _c.has_update, _c.has_fixed_update, v);
     }
 
     int lifecycle_priority(LifecycleStage stage) const {
@@ -179,21 +170,13 @@ public:
     bool set_late_update_priority(int priority) {
         return set_lifecycle_priority(LifecycleStage::LateUpdate, priority);
     }
-    int before_render_priority() const {
-        return lifecycle_priority(LifecycleStage::BeforeRender);
-    }
-    bool set_before_render_priority(int priority) {
-        return set_lifecycle_priority(LifecycleStage::BeforeRender, priority);
-    }
-
     void set_lifecycle_capabilities(
         bool update,
         bool fixed_update,
-        bool late_update,
-        bool before_render
+        bool late_update
     ) {
         tc_component_set_lifecycle_capabilities(
-            &_c, update, fixed_update, late_update, before_render);
+            &_c, update, fixed_update, late_update);
     }
 
     // Lifecycle hooks (virtual - subclasses override these)
@@ -201,7 +184,6 @@ public:
     virtual void update(float dt) { (void)dt; }
     virtual void fixed_update(float dt) { (void)dt; }
     virtual void late_update(float dt) { (void)dt; }
-    virtual void before_render() {}
     virtual void on_destroy() {}
     virtual void on_editor_start() {}
 
@@ -217,10 +199,6 @@ public:
     virtual void on_removed() {}
     virtual void on_scene_inactive() {}
     virtual void on_scene_active() {}
-
-    // Render lifecycle
-    virtual void on_render_attach(const RenderAttachmentContext& context) { (void)context; }
-    virtual void on_render_detach(const RenderAttachmentContext& context) { (void)context; }
 
     // Serialization uses C API tc_inspect fields registered during bootstrap.
     virtual tc_value serialize_data() const {
@@ -278,7 +256,6 @@ private:
     static void _cb_update(tc_component* c, float dt);
     static void _cb_fixed_update(tc_component* c, float dt);
     static void _cb_late_update(tc_component* c, float dt);
-    static void _cb_before_render(tc_component* c);
     static void _cb_on_destroy(tc_component* c);
     static void _cb_on_added_to_entity(tc_component* c);
     static void _cb_on_removed_from_entity(tc_component* c);
@@ -286,8 +263,6 @@ private:
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);
-    static void _cb_on_render_attach(tc_component* c, const tc_render_attachment_context* context);
-    static void _cb_on_render_detach(tc_component* c, const tc_render_attachment_context* context);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 };

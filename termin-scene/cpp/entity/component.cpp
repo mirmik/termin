@@ -73,9 +73,6 @@ void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder) {
     add_priority_field("late_update_priority",
                        "Late Update Priority",
                        LifecycleStage::LateUpdate);
-    add_priority_field("before_render_priority",
-                       "Before Render Priority",
-                       LifecycleStage::BeforeRender);
 }
 
 // C++ ref_vtable: retain/release use internal _ref_count, drop deletes
@@ -107,7 +104,6 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     CxxComponent::_cb_update,
     CxxComponent::_cb_fixed_update,
     CxxComponent::_cb_late_update,
-    CxxComponent::_cb_before_render,
     CxxComponent::_cb_on_destroy,
     // Entity relationship
     CxxComponent::_cb_on_added_to_entity,
@@ -117,9 +113,6 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     CxxComponent::_cb_on_removed,
     CxxComponent::_cb_on_scene_inactive,
     CxxComponent::_cb_on_scene_active,
-    // Render lifecycle
-    CxxComponent::_cb_on_render_attach,
-    CxxComponent::_cb_on_render_detach,
     // Editor
     CxxComponent::_cb_on_editor_start,
     CxxComponent::_cb_setup_editor_defaults,
@@ -140,11 +133,11 @@ CxxComponent::CxxComponent(const char* type_name) {
     _c.has_update = false;
     _c.has_fixed_update = false;
     _c.has_late_update = false;
-    _c.has_before_render = false;
     tc_component_set_declared_type_name(&_c, type_name);
 }
 
 CxxComponent::~CxxComponent() {
+    tc_component_clear_capabilities(&_c);
     tc_component_unlink_from_registry(&_c);
 }
 
@@ -212,11 +205,6 @@ void CxxComponent::_cb_late_update(tc_component* c, float dt) {
     if (self) self->late_update(dt);
 }
 
-void CxxComponent::_cb_before_render(tc_component* c) {
-    auto* self = from_tc(c);
-    if (self) self->before_render();
-}
-
 void CxxComponent::_cb_on_destroy(tc_component* c) {
     auto* self = from_tc(c);
     if (self) self->on_destroy();
@@ -250,26 +238,6 @@ void CxxComponent::_cb_on_scene_inactive(tc_component* c) {
 void CxxComponent::_cb_on_scene_active(tc_component* c) {
     auto* self = from_tc(c);
     if (self) self->on_scene_active();
-}
-
-void CxxComponent::_cb_on_render_attach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    auto* self = from_tc(c);
-    if (self && context) {
-        self->on_render_attach(*reinterpret_cast<const RenderAttachmentContext*>(context));
-    }
-}
-
-void CxxComponent::_cb_on_render_detach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    auto* self = from_tc(c);
-    if (self && context) {
-        self->on_render_detach(*reinterpret_cast<const RenderAttachmentContext*>(context));
-    }
 }
 
 void CxxComponent::_cb_on_editor_start(tc_component* c) {

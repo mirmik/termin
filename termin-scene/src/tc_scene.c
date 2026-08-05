@@ -135,7 +135,6 @@ typedef struct tc_scene_slot {
     ComponentList update_list;
     ComponentList fixed_update_list;
     ComponentList late_update_list;
-    ComponentList before_render_list;
     double fixed_timestep;
     double accumulated_time;
     bool render_requested;
@@ -372,7 +371,6 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     list_init(&slot->update_list);
     list_init(&slot->fixed_update_list);
     list_init(&slot->late_update_list);
-    list_init(&slot->before_render_list);
     slot->metadata = tc_value_dict_new();
     slot->name = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
 
@@ -434,7 +432,6 @@ void tc_scene_free(tc_scene_handle h) {
     list_free(&slot->update_list);
     list_free(&slot->fixed_update_list);
     list_free(&slot->late_update_list);
-    list_free(&slot->before_render_list);
     tc_resource_map_free(slot->type_heads);
 
     uint32_t next_generation = slot->generation + 1;
@@ -665,17 +662,11 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
             TC_COMPONENT_LIFECYCLE_LATE_UPDATE
         );
     }
-    if (c->has_before_render && !list_contains(&g_pool->slots[idx].before_render_list, c)) {
-        list_insert_lifecycle_priority(
-            &g_pool->slots[idx].before_render_list,
-            c,
-            TC_COMPONENT_LIFECYCLE_BEFORE_RENDER
-        );
-    }
-
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
         scene_capability_attach(idx, c, slot);
     }
+
+    tc_scene_ext_on_component_registered(h, c);
 
     // Add to type list (intrusive doubly-linked list)
     const char* type_name = tc_component_type_name(c);
@@ -708,13 +699,13 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     }
 
     uint32_t idx = h.index;
+    tc_scene_ext_on_component_unregistering(h, c);
     c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
 
     list_remove(&g_pool->slots[idx].pending_starts, c);
     list_remove(&g_pool->slots[idx].update_list, c);
     list_remove(&g_pool->slots[idx].fixed_update_list, c);
     list_remove(&g_pool->slots[idx].late_update_list, c);
-    list_remove(&g_pool->slots[idx].before_render_list, c);
     c->lifecycle_registration_order = 0;
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
@@ -746,15 +737,13 @@ void tc_component_set_lifecycle_capabilities(
     tc_component* c,
     bool has_update,
     bool has_fixed_update,
-    bool has_late_update,
-    bool has_before_render
+    bool has_late_update
 ) {
     if (!c) return;
 
     c->has_update = has_update;
     c->has_fixed_update = has_fixed_update;
     c->has_late_update = has_late_update;
-    c->has_before_render = has_before_render;
 
     tc_scene_handle scene = c->lifecycle_scene;
     if (!handle_alive(scene)) return;
@@ -777,12 +766,6 @@ void tc_component_set_lifecycle_capabilities(
         c,
         has_late_update,
         TC_COMPONENT_LIFECYCLE_LATE_UPDATE
-    );
-    list_set_lifecycle_membership(
-        &g_pool->slots[idx].before_render_list,
-        c,
-        has_before_render,
-        TC_COMPONENT_LIFECYCLE_BEFORE_RENDER
     );
 }
 
@@ -820,10 +803,6 @@ bool tc_component_set_lifecycle_priority(
         case TC_COMPONENT_LIFECYCLE_LATE_UPDATE:
             list = &scene->late_update_list;
             present = c->has_late_update;
-            break;
-        case TC_COMPONENT_LIFECYCLE_BEFORE_RENDER:
-            list = &scene->before_render_list;
-            present = c->has_before_render;
             break;
         default:
             return false;
@@ -943,7 +922,7 @@ static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot
     tc_component* head = CAPABILITY_HEAD(idx, slot);
     int priority = c->capability_priorities[slot];
 
-    if (!head || priority >= head->capability_priorities[slot]) {
+    if (!head || priority > head->capability_priorities[slot]) {
         c->capability_prev[slot] = NULL;
         c->capability_next[slot] = head;
         if (head) {
@@ -956,7 +935,7 @@ static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot
 
     tc_component* prev = head;
     while (prev->capability_next[slot] &&
-           prev->capability_next[slot]->capability_priorities[slot] > priority) {
+           prev->capability_next[slot]->capability_priorities[slot] >= priority) {
         prev = prev->capability_next[slot];
     }
 
@@ -1125,23 +1104,6 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
         }
     }
     if (profile) tc_profiler_end_section();
-}
-
-void tc_scene_before_render(tc_scene_handle h) {
-    if (!handle_alive(h)) return;
-
-    uint32_t idx = h.index;
-    ComponentList* list = &g_pool->slots[idx].before_render_list;
-
-    for (size_t i = 0; i < list->count; i++) {
-        tc_component* c = list->items[i];
-        if (c->enabled && component_entity_enabled(c)) {
-            tc_component_before_render(c);
-        }
-    }
-
-    // Extension before-render hooks
-    tc_scene_ext_on_scene_before_render(h);
 }
 
 void tc_scene_request_render(tc_scene_handle h) {
@@ -1355,11 +1317,6 @@ size_t tc_scene_late_update_list_count(tc_scene_handle h) {
     return g_pool->slots[h.index].late_update_list.count;
 }
 
-size_t tc_scene_before_render_list_count(tc_scene_handle h) {
-    if (!handle_alive(h)) return 0;
-    return g_pool->slots[h.index].before_render_list.count;
-}
-
 // ============================================================================
 // Entity Queries
 // ============================================================================
@@ -1537,66 +1494,4 @@ void tc_scene_set_metadata(tc_scene_handle h, tc_value value) {
     if (!handle_alive(h)) return;
     tc_value_free(&g_pool->slots[h.index].metadata);
     g_pool->slots[h.index].metadata = value;
-}
-
-// ============================================================================
-// Render Lifecycle Notifications
-// ============================================================================
-
-static bool notify_render_attach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    const tc_render_attachment_context* context =
-        (const tc_render_attachment_context*)user_data;
-    size_t count = tc_entity_pool_component_count(pool, id);
-    for (size_t i = 0; i < count; i++) {
-        tc_component* c = tc_entity_pool_component_at(pool, id, i);
-        if (c && c->vtable && c->vtable->on_render_attach) {
-            c->vtable->on_render_attach(c, context);
-        }
-    }
-    return true;
-}
-
-void tc_scene_notify_render_attach(
-    tc_scene_handle h,
-    const tc_render_attachment_context* context
-) {
-    if (!handle_alive(h)) return;
-    if (!context) {
-        tc_log_error("[Scene] render attach notification requires a context");
-        return;
-    }
-    tc_entity_pool_foreach(
-        scene_slot_entity_pool(&g_pool->slots[h.index]),
-        notify_render_attach_callback,
-        (void*)context
-    );
-}
-
-static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    const tc_render_attachment_context* context =
-        (const tc_render_attachment_context*)user_data;
-    size_t count = tc_entity_pool_component_count(pool, id);
-    for (size_t i = 0; i < count; i++) {
-        tc_component* c = tc_entity_pool_component_at(pool, id, i);
-        if (c && c->vtable && c->vtable->on_render_detach) {
-            c->vtable->on_render_detach(c, context);
-        }
-    }
-    return true;
-}
-
-void tc_scene_notify_render_detach(
-    tc_scene_handle h,
-    const tc_render_attachment_context* context
-) {
-    if (!handle_alive(h)) return;
-    if (!context) {
-        tc_log_error("[Scene] render detach notification requires a context");
-        return;
-    }
-    tc_entity_pool_foreach(
-        scene_slot_entity_pool(&g_pool->slots[h.index]),
-        notify_render_detach_callback,
-        (void*)context
-    );
 }

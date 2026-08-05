@@ -1,8 +1,18 @@
+import pytest
+import termin.bootstrap
+
 from termin.engine import (
     deserialize_scene as engine_deserialize_scene,
     scene_ext_attached_names,
 )
 from termin.render import TcSceneLighting, scene_render_state
+
+
+@pytest.fixture(autouse=True)
+def _bootstrap_runtime():
+    termin.bootstrap.bootstrap_player()
+    yield
+    termin.bootstrap.shutdown_player()
 
 
 def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_state():

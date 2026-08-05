@@ -152,9 +152,6 @@ public static class TerminCore
     [DllImport(SCENE_DLL, EntryPoint = "tc_scene_editor_update")]
     public static extern void SceneEditorUpdate(TcSceneHandle scene, double dt);
 
-    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_before_render")]
-    public static extern void SceneBeforeRender(TcSceneHandle scene);
-
     [DllImport(SCENE_DLL, EntryPoint = "tc_scene_entity_pool")]
     public static extern IntPtr SceneEntityPool(TcSceneHandle scene);
 
@@ -1136,7 +1133,6 @@ public static class TerminCore
         public IntPtr Update;
         public IntPtr FixedUpdate;
         public IntPtr LateUpdate;
-        public IntPtr BeforeRender;
         public IntPtr OnDestroy;
         public IntPtr OnAddedToEntity;
         public IntPtr OnRemovedFromEntity;
@@ -1148,8 +1144,24 @@ public static class TerminCore
         public IntPtr RefRelease;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CSharpRenderLifecycleCallbacks
+    {
+        public IntPtr OnRenderAttach;
+        public IntPtr PrepareRender;
+        public IntPtr OnRenderDetach;
+    }
+
     [DllImport(TERMIN_DLL, EntryPoint = "tc_component_set_csharp_callbacks")]
     public static extern void ComponentSetCSharpCallbacks(ref CSharpCallbacks callbacks);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_component_set_csharp_render_lifecycle_callbacks")]
+    public static extern void ComponentSetCSharpRenderLifecycleCallbacks(
+        ref CSharpRenderLifecycleCallbacks callbacks);
+
+    [DllImport(TERMIN_DLL, EntryPoint = "tc_component_install_csharp_render_lifecycle")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool ComponentInstallCSharpRenderLifecycle(IntPtr component);
 
     [DllImport(TERMIN_DLL, EntryPoint = "tc_component_new_csharp", CharSet = CharSet.Ansi)]
     public static extern IntPtr ComponentNewCSharp(IntPtr csSelf, string typeName);

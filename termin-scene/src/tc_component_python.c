@@ -35,12 +35,6 @@ static void py_vtable_late_update(tc_component* c, float dt) {
     }
 }
 
-static void py_vtable_before_render(tc_component* c) {
-    if (g_py_callbacks.before_render && c->body) {
-        g_py_callbacks.before_render(c->body);
-    }
-}
-
 static void py_vtable_on_destroy(tc_component* c) {
     if (g_py_callbacks.on_destroy && c->body) {
         g_py_callbacks.on_destroy(c->body);
@@ -89,24 +83,6 @@ static void py_vtable_on_editor_start(tc_component* c) {
     }
 }
 
-static void py_vtable_on_render_attach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    if (g_py_callbacks.on_render_attach && c->body) {
-        g_py_callbacks.on_render_attach(c->body, context);
-    }
-}
-
-static void py_vtable_on_render_detach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    if (g_py_callbacks.on_render_detach && c->body) {
-        g_py_callbacks.on_render_detach(c->body, context);
-    }
-}
-
 // ============================================================================
 // Python ref_vtable for Python components (TC_PYTHON_COMPONENT)
 // ============================================================================
@@ -138,7 +114,6 @@ static const tc_component_vtable g_python_vtable = {
     .update = py_vtable_update,
     .fixed_update = py_vtable_fixed_update,
     .late_update = py_vtable_late_update,
-    .before_render = py_vtable_before_render,
     .on_destroy = py_vtable_on_destroy,
     .on_added_to_entity = py_vtable_on_added_to_entity,
     .on_removed_from_entity = py_vtable_on_removed_from_entity,
@@ -147,8 +122,6 @@ static const tc_component_vtable g_python_vtable = {
     .on_scene_inactive = py_vtable_on_scene_inactive,
     .on_scene_active = py_vtable_on_scene_active,
     .on_editor_start = py_vtable_on_editor_start,
-    .on_render_attach = py_vtable_on_render_attach,
-    .on_render_detach = py_vtable_on_render_detach,
     .setup_editor_defaults = NULL,
     .serialize = NULL,
     .deserialize = NULL,
@@ -189,6 +162,7 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
 
 void tc_component_free_python(tc_component* c) {
     if (c) {
+        tc_component_clear_capabilities(c);
         // Unlink from type registry if linked
         tc_component_unlink_from_registry(c);
         free(c);

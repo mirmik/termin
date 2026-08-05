@@ -199,19 +199,6 @@ bool SceneManager::tick(double dt) {
     return should_render;
 }
 
-void SceneManager::before_render() {
-    bool profile = tc_profiler_enabled();
-
-    for (const auto& [name, scene] : _scenes) {
-        tc_scene_mode mode = tc_scene_get_mode(scene);
-        if (mode != TC_SCENE_MODE_INACTIVE) {
-            if (profile) tc_profiler_begin_section(("Scene: " + name).c_str());
-            tc_scene_before_render(scene);
-            if (profile) tc_profiler_end_section();
-        }
-    }
-}
-
 void SceneManager::request_render() {
     _render_requested = true;
 }

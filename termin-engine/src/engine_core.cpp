@@ -291,10 +291,6 @@ bool EngineCore::tick_and_render(double dt) {
     if (profile) tc_profiler_end_section();
 
     if (should_render) {
-        if (profile) tc_profiler_begin_section("SceneManager Before Render");
-        scene_manager.before_render();
-        if (profile) tc_profiler_end_section();
-
         if (profile) tc_profiler_begin_section("SceneManager Render");
         rendering_manager.render_all(true);
         if (profile) tc_profiler_end_section();

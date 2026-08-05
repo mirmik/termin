@@ -53,14 +53,13 @@ EngineCore
 poll UI/input events
 SceneManager.tick(dt)
 if render needed:
-  SceneManager.before_render()
   RenderingManager.render_all(present=True)
   SceneManager.after_render callback
 ```
 
 Scene update идет до render и заканчивается стадией `late_update`.
-`before_render` вызывается только при подготовке реального кадра, до
-`RenderingManager`, чтобы компоненты могли опубликовать render-facing state.
+`RenderingManager` вызывает `prepare_render` участников `render_lifecycle`
+непосредственно перед первой фактической render job каждой сцены.
 
 ## Типовые сценарии
 

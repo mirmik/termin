@@ -105,21 +105,20 @@ Detach scene должен быть зеркалом attach:
 
 Editor displays отслеживаются отдельно и не удаляются при scene detach.
 
-Render lifecycle notifications должны приходить строго один раз на явное
-подключение/отключение render state:
+Render lifecycle capability должен получать сбалансированные переходы:
 
-- `attach_scene()` перекомпилирует старые scene pipelines без
-  `on_render_detach`, затем вызывает `on_render_attach`;
+- повторный `attach_scene()` сначала вызывает `on_render_detach` для старой
+  topology, затем `on_render_attach` для новой;
 - `detach_scene()` вызывает `on_render_detach` один раз и затем уничтожает
   compiled pipelines;
 - публичный `clear_scene_pipelines()` сохраняет поведение cleanup API и
   вызывает `on_render_detach` перед уничтожением pipeline-ов.
 
-Callbacks получают call-scoped `RenderAttachmentContext`, а не
-`RenderingManager`. Через него доступны только текущая сцена, её live render
-targets, target для конкретной камеры и scene pipeline по имени. Все копии
-context становятся невалидны сразу после возврата из callback; это не runtime
-service и хранить его для последующих кадров нельзя.
+Attach/detach callbacks получают attachment-scoped `RenderAttachmentContext`,
+а не `RenderingManager`. Через него доступны только текущая сцена, её live
+render targets, target для конкретной камеры и scene pipeline по имени. Копии
+context остаются валидны до начала detach teardown и становятся невалидны после
+возврата из `on_render_detach`.
 
 ## Кадр рендера
 
