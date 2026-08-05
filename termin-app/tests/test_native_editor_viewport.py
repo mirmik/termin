@@ -263,6 +263,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         def __init__(self, viewport) -> None:
             self.viewport = viewport
             self.rebind_count = 0
+            self.unbind_count = 0
             self.closed = False
             self.__class__.instances.append(self)
 
@@ -272,6 +273,9 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
 
         def rebind_camera(self) -> None:
             self.rebind_count += 1
+
+        def unbind_camera(self) -> None:
+            self.unbind_count += 1
 
         def close(self) -> None:
             self.closed = True
@@ -353,6 +357,8 @@ root:
     runtime.rebind_input_manager()
     assert runtime.input_manager.rebinds == [(7, 11, 41, 1)]
     assert runtime._camera_overlay.rebind_count == 1
+    runtime.unbind_camera_overlay()
+    assert runtime._camera_overlay.unbind_count == 1
 
     overlay_enabled = False
 

@@ -294,6 +294,11 @@ class NativeEditorViewport:
         if self._camera_overlay is not None:
             self._camera_overlay.rebind_camera()
 
+    def unbind_camera_overlay(self) -> None:
+        """Release scene-bound overlay capabilities before a scene switch."""
+        if self._camera_overlay is not None:
+            self._camera_overlay.unbind_camera()
+
     def _on_before_resize(self, _previous, _next) -> None:
         self._request_render()
 

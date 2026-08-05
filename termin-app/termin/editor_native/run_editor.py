@@ -1081,7 +1081,7 @@ def _compose_native_editor(
         and shadow_settings_controller is not None
     ):
 
-        def dismiss_scene_dialogs() -> None:
+        def prepare_scene_switch() -> None:
             for scene_dialog in (
                 scene_properties_dialog,
                 scene_names_dialog,
@@ -1089,6 +1089,10 @@ def _compose_native_editor(
             ):
                 if scene_dialog is not None and scene_dialog.dialog.open:
                     scene_dialog.dialog.close()
+            # The camera controller references the current scene's render
+            # mount. Release it while that scene is still alive; the new
+            # attachment is rebound by scene_switched().
+            native_viewport.unbind_camera_overlay()
 
         def clear_scene_selection() -> None:
             nonlocal selected_entity
@@ -1117,7 +1121,7 @@ def _compose_native_editor(
             scene_names=scene_names_controller,
             shadow_settings=shadow_settings_controller,
             clear_selection=clear_scene_selection,
-            before_switch=dismiss_scene_dialogs,
+            before_switch=prepare_scene_switch,
             on_switched=scene_switched,
         )
 

@@ -14,6 +14,9 @@ COMPONENT_SPECS: list[tuple[str, str]] = [
     ("termin.render_components", "LightComponent"),
     ("termin.render_components", "XrOriginComponent"),
     ("termin.render_components", "XrThumbstickLocomotionComponent"),
+    ("termin.render_components", "XrTrackedPoseComponent"),
+    ("termin.render_components", "XrGrabInteractableComponent"),
+    ("termin.render_components", "XrDirectGrabInteractorComponent"),
 ]
 
 FRAME_PASS_SPECS: list[tuple[str, str]] = [
