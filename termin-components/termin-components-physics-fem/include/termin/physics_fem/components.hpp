@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <termin/entity/component.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include <termin/physics_qopt/articulation3d_motor.hpp>
 #include <termin/physics_qopt/contact3d.hpp>
 #include <termin/physics_qopt/multibody3d.hpp>
@@ -230,7 +231,9 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
-    class ENTITY_API FEMFixedJointComponent final : public CxxComponent
+    class ENTITY_API FEMFixedJointComponent final
+        : public CxxComponent,
+          public RenderLifecycle
     {
     public:
         std::string body_entity_name;
@@ -242,6 +245,7 @@ namespace termin
 
         static void register_type();
         void on_destroy() override;
+        void prepare_render(const RenderPrepareContext& context) override;
 
     private:
         friend class FEMPhysicsWorldComponent;
@@ -250,7 +254,9 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
-    class ENTITY_API FEMRevoluteJointComponent final : public CxxComponent
+    class ENTITY_API FEMRevoluteJointComponent final
+        : public CxxComponent,
+          public RenderLifecycle
     {
     public:
         std::string body_a_entity_name;
@@ -264,6 +270,7 @@ namespace termin
 
         static void register_type();
         void on_destroy() override;
+        void prepare_render(const RenderPrepareContext& context) override;
 
     private:
         friend class FEMPhysicsWorldComponent;

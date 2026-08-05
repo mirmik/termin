@@ -7,7 +7,7 @@ import math
 from typing import Callable
 
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
-from termin.render import scene_render_mount, scene_render_state
+from termin.render import debug_geometry_types, scene_render_mount, scene_render_state
 
 
 _NAME_COUNT = 64
@@ -121,6 +121,14 @@ class ScenePipelineSnapshot:
 
 
 @dataclass(frozen=True)
+class DebugGeometrySettingSnapshot:
+    stable_id: str
+    display_name: str
+    category: str
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class ScenePropertiesSnapshot:
     fixed_update_frequency: float
     background_color: tuple[float, float, float, float]
@@ -131,6 +139,7 @@ class ScenePropertiesSnapshot:
     skybox_top_color: tuple[float, float, float]
     skybox_bottom_color: tuple[float, float, float]
     pipelines: tuple[ScenePipelineSnapshot, ...]
+    debug_geometry: tuple[DebugGeometrySettingSnapshot, ...]
 
 
 class ScenePropertiesController:
@@ -161,6 +170,15 @@ class ScenePropertiesController:
             )
             for handle in handles
         )
+        debug_geometry = tuple(
+            DebugGeometrySettingSnapshot(
+                stable_id=str(item["stable_id"]),
+                display_name=str(item["display_name"]),
+                category=str(item["category"]),
+                enabled=bool(mount.debug_geometry_enabled(str(item["stable_id"]))),
+            )
+            for item in debug_geometry_types()
+        )
         return ScenePropertiesSnapshot(
             fixed_update_frequency=1.0 / float(self._scene.fixed_timestep),
             background_color=_color(state.background_color, alpha=True),
@@ -171,7 +189,18 @@ class ScenePropertiesController:
             skybox_top_color=_color(state.skybox_top_color, alpha=False),
             skybox_bottom_color=_color(state.skybox_bottom_color, alpha=False),
             pipelines=pipelines,
+            debug_geometry=debug_geometry,
         )
+
+    def set_debug_geometry_enabled(
+        self,
+        stable_id: str,
+        enabled: bool,
+    ) -> ScenePropertiesSnapshot:
+        scene_render_mount(self._scene).set_debug_geometry_enabled(
+            str(stable_id), bool(enabled)
+        )
+        return self._published()
 
     def set_fixed_update_frequency(self, value: float) -> ScenePropertiesSnapshot:
         frequency = float(value)
@@ -283,6 +312,7 @@ __all__ = [
     "SceneNamesController",
     "SceneNamesSnapshot",
     "ScenePipelineSnapshot",
+    "DebugGeometrySettingSnapshot",
     "ScenePropertiesController",
     "ScenePropertiesSnapshot",
     "ShadowSettingsController",

@@ -18,6 +18,7 @@ extern "C" {
 #include <termin/render/collider_gizmo_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_triangle_pass.hpp>
+#include <termin/render/debug_geometry_pass.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/id_pass.hpp>
@@ -228,6 +229,37 @@ void bind_render_passes(nb::module_& m) {
     m.attr("DebugTrianglePass").attr("node_inputs") = nb::make_tuple();
     m.attr("DebugTrianglePass").attr("node_outputs") = nb::make_tuple(
         nb::make_tuple("output_res", "fbo")
+    );
+
+    nb::class_<DebugGeometryPass, CxxFramePass>(m, "DebugGeometryPass")
+        .def("__init__", [](DebugGeometryPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) DebugGeometryPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "DebugGeometryPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "DebugGeometry")
+        .def_rw("input_res", &DebugGeometryPass::input_res)
+        .def_rw("output_res", &DebugGeometryPass::output_res)
+        .def("compute_reads", &DebugGeometryPass::compute_reads)
+        .def("compute_writes", &DebugGeometryPass::compute_writes)
+        .def("get_inplace_aliases", &DebugGeometryPass::get_inplace_aliases)
+        .def_prop_ro("reads", &DebugGeometryPass::compute_reads)
+        .def_prop_ro("writes", &DebugGeometryPass::compute_writes)
+        .def("destroy", &DebugGeometryPass::destroy);
+
+    m.attr("DebugGeometryPass").attr("category") = "Debug";
+    m.attr("DebugGeometryPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo")
+    );
+    m.attr("DebugGeometryPass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("DebugGeometryPass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("input_res", "output_res")
     );
 
     nb::class_<ColliderGizmoPass, CxxFramePass>(m, "ColliderGizmoPass")

@@ -154,6 +154,29 @@ RenderTarget (tc_render_target_handle)
 
 Настройки хранятся в `tc_scene_render_mount` — это extension сцены. При сохранении сцены редактор синхронизирует текущее состояние дисплеев/вьюпортов/RT в конфиги через `sync_scene_render_state()`. При attach они восстанавливаются.
 
+### Render lifecycle и debug geometry
+
+Render-aware компоненты подключаются capability `tc_render_lifecycle`, а не
+методами базовой scene-компоненты. Существующий `render_mount` вызывает
+`on_render_attach`, `prepare_render` и `on_render_detach`; поэтому сцена без
+подключённого рендера не собирает отладочную геометрию и не получает renderer в
+обычном `update`.
+
+Типы отладочной геометрии регистрируются процессными metadata-записями со
+stable id, display name, category и default enabled state. Значения галочек и
+frame-local массив примитивов принадлежат runtime-части `render_mount` и не
+сериализуются. На каждом `prepare_render` mount очищает массив, временно выдаёт
+компонентам узкий backend-neutral drawer и закрывает его по окончании фазы.
+Компонент может публиковать линии и wire primitives, но не получает
+`ImmediateRenderer` и не становится обычным `Drawable`.
+
+`DebugGeometryPass` читает готовый массив в согласованной framegraph-фазе и
+переводит его в pass-owned `ImmediateRenderer`. Реестр не хранит callbacks или
+ссылки на компоненты: при выгрузке модуля его registration удаляется, а уже
+собранные примитивы этого типа перестают перечисляться и окончательно исчезают
+при подготовке следующего кадра. Scene Properties строит список галочек прямо
+из реестра, без hardcoded перечня типов.
+
 ---
 
 ## 3. GameModeModel — оркестрация Play/Stop

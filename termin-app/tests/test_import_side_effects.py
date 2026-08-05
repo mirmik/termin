@@ -147,7 +147,7 @@ print(json.dumps({
     state = json.loads(result.stdout)
     assert state == {
         "component_specs": 37,
-        "frame_pass_specs": 24,
+        "frame_pass_specs": 25,
         "profiler_instance": False,
         "resource_manager_factory_active": False,
         "resource_manager_instance": False,
@@ -444,7 +444,7 @@ print(json.dumps({
     state = json.loads(result.stdout)
     assert state == {
         "component_specs": 37,
-        "frame_pass_specs": 24,
+        "frame_pass_specs": 25,
         "loaded_runtime_packages": [],
     }
     assert "nanobind: leaked" not in result.stderr

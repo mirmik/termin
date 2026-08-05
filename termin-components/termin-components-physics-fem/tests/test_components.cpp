@@ -18,10 +18,17 @@ GUARD_TEST_MAIN();
 #include <termin/geom/general_pose3.hpp>
 #include <termin/physics_fem/articulation_scene.hpp>
 #include <termin/physics_fem/components.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include <termin/robotics/inverse_dynamics_control.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin_collision/termin_collision.h>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
+
+extern "C"
+{
+#include <core/tc_debug_geometry.h>
+#include <core/tc_scene_render_mount.h>
+}
 
 namespace
 {
@@ -32,6 +39,7 @@ namespace
             tc_inspect_kind_core_init();
             tc_inspect_component_adapter_init();
             tc_scene_ext_registry_init();
+            tc_scene_render_mount_extension_init();
             termin_collision_runtime_init();
             termin::register_builtin_scene_component_types();
             termin::ColliderComponent::register_type();
@@ -49,6 +57,14 @@ namespace
             return true;
         }();
         (void)registered;
+    }
+
+    void prepare_render_lifecycle(const termin::TcSceneRef& scene)
+    {
+        const termin::RenderPrepareContext context(scene.handle());
+        tc_scene_render_mount_prepare(
+            scene.handle(),
+            reinterpret_cast<const tc_render_prepare_context*>(&context));
     }
 
     struct DoublePendulumScene
@@ -1465,5 +1481,97 @@ TEST_CASE("scene articulation compiler rejects an implicit missing body")
         compile_fem_articulation_scene(root);
     CHECK(compiled.diagnostic == FEMArticulationSceneDiagnostic::MissingBody);
     CHECK(compiled.diagnostic_entity == "Joint without body");
+    scene.destroy();
+}
+
+TEST_CASE("FEM joints publish registry-controlled debug geometry")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    const tc_debug_geometry_type_id debug_type =
+        tc_debug_geometry_type_find("physics.fem.joints");
+    REQUIRE(debug_type != TC_DEBUG_GEOMETRY_TYPE_INVALID);
+
+    TcSceneRef scene = TcSceneRef::create("FEM joint debug geometry");
+    Entity body_a_entity = scene.create_entity("Body A");
+    body_a_entity.transform().set_local_position({0.0, 0.0, 0.0});
+    body_a_entity.add_component(new FEMRigidBodyComponent());
+    Entity body_b_entity = scene.create_entity("Body B");
+    body_b_entity.transform().set_local_position({2.0, 0.0, 0.0});
+    body_b_entity.add_component(new FEMRigidBodyComponent());
+
+    Entity fixed_entity = scene.create_entity("Fixed Joint");
+    fixed_entity.transform().set_local_position({0.0, 0.0, 1.0});
+    auto* fixed = new FEMFixedJointComponent();
+    fixed->body_entity_name = "Body A";
+    fixed_entity.add_component(fixed);
+
+    Entity revolute_entity = scene.create_entity("Revolute Joint");
+    auto* revolute = new FEMRevoluteJointComponent();
+    revolute->body_a_entity_name = "Body A";
+    revolute->body_b_entity_name = "Body B";
+    revolute->joint_offset_in_body_a = {1.0, 0.0, 0.0};
+    revolute_entity.add_component(revolute);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = {0.0, 0.0, 0.0};
+    world_entity.add_component(world);
+
+    REQUIRE(tc_scene_render_mount_ensure(scene.handle()));
+    int attachment_storage = 0;
+    const auto* attachment =
+        reinterpret_cast<const tc_render_attachment_context*>(
+            &attachment_storage);
+    tc_scene_render_mount_notify_attach(scene.handle(), attachment);
+
+    // STOP/editor state uses authored body transforms before the solver starts.
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 5U);
+
+    world->start();
+    REQUIRE(world->telemetry().initialized);
+    world->fixed_update(0.001F);
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 5U);
+    std::size_t line_count = 0;
+    std::size_t sphere_count = 0;
+    for (std::size_t index = 0;
+         index < tc_scene_debug_geometry_primitive_count(scene.handle());
+         ++index)
+    {
+        const tc_debug_geometry_primitive* primitive =
+            tc_scene_debug_geometry_primitive_at(scene.handle(), index);
+        REQUIRE(primitive != nullptr);
+        CHECK(primitive->type_id == debug_type);
+        line_count += primitive->kind == TC_DEBUG_GEOMETRY_LINE ? 1U : 0U;
+        sphere_count +=
+            primitive->kind == TC_DEBUG_GEOMETRY_WIRE_SPHERE ? 1U : 0U;
+    }
+    CHECK(line_count == 3U);
+    CHECK(sphere_count == 2U);
+
+    REQUIRE(tc_scene_debug_geometry_set_enabled(
+        scene.handle(), debug_type, false));
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 0U);
+
+    REQUIRE(tc_scene_debug_geometry_set_enabled(
+        scene.handle(), debug_type, true));
+    revolute->set_enabled(false);
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 2U);
+
+    fixed_entity.remove_component(fixed);
+    fixed = nullptr;
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 0U);
+
+    revolute->set_enabled(true);
+    prepare_render_lifecycle(scene);
+    CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 3U);
+
+    tc_scene_render_mount_notify_detach(scene.handle(), attachment);
     scene.destroy();
 }

@@ -18,6 +18,7 @@ from termin.editor_native.scene_settings_dialogs import (
     build_native_shadow_settings_dialog,
 )
 from termin.gui_native import Rect
+from termin.render import DebugGeometryTypeRegistration
 from termin.scene import TcScene
 
 @pytest.fixture(scope="module", autouse=True)
@@ -96,6 +97,13 @@ def test_native_shadow_settings_dialog_applies_live_and_releases(scene):
 
 
 def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
+    registration = DebugGeometryTypeRegistration(
+        "tests.native-scene-settings.debug-geometry",
+        "Native Dialog Probe",
+        "Tests",
+        True,
+    )
+    assert registration
     document, renders, viewport, render = _host()
     controller = ScenePropertiesController(scene)
     service = NativeDialogService(document, viewport=viewport, request_render=render)
@@ -110,7 +118,24 @@ def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
     assert dialog.show()
     root = dialog.dialog.widget.children[0]
     assert root.children[0].children[0].bounds.width == EDITOR_UI_METRICS.form_label
-    assert root.children[-1].bounds.height == EDITOR_UI_METRICS.field_row
+    assert dialog.debug_geometry_rows.bounds.height >= EDITOR_UI_METRICS.field_row
+    debug_row = next(
+        row
+        for row in dialog.debug_geometry_rows.children
+        if row.debug_name == "debug-geometry-tests-native-scene-settings-debug-geometry"
+    )
+    assert debug_row.bounds.height >= EDITOR_UI_METRICS.field_row
+    checkbox = dialog.debug_geometry_checkboxes[
+        "tests.native-scene-settings.debug-geometry"
+    ]
+    assert checkbox.checked is True
+    checkbox.checked = False
+    setting = next(
+        item
+        for item in controller.load().debug_geometry
+        if item.stable_id == "tests.native-scene-settings.debug-geometry"
+    )
+    assert setting.enabled is False
     dialog.fixed_update_frequency.value = 250.0
     dialog.set_fixed_update_frequency(250.0)
     dialog.set_intensity(0.875)
