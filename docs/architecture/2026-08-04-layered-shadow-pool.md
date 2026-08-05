@@ -7,7 +7,8 @@ Status: proposed target architecture; not implemented.
 Related work:
 
 - Kanboard #1260 `[web/shaders] Make strict PBR and shadow package export pass WGSL validation`;
-- [shader resource contracts](../../termin-graphics/docs/architecture/shader-resource-contracts.md);
+- shader resource contracts in
+  `termin-graphics/docs/architecture/shader-resource-contracts.md`;
 - [backend-neutral MRT contract](2026-07-28-backend-neutral-mrt-contract.md).
 
 ## Context

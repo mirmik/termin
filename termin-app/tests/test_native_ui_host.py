@@ -269,7 +269,7 @@ def test_native_editor_continuously_composes_only_in_game_mode():
 
 
 def test_completed_scene_render_requests_ui_presentation():
-    from termin.editor_native.run_editor import _complete_editor_scene_render
+    from termin.editor_native.native_bootstrap import complete_editor_scene_render
 
     calls = []
 
@@ -281,7 +281,7 @@ def test_completed_scene_render_requests_ui_presentation():
         def request_render_update(self):
             calls.append("present")
 
-    _complete_editor_scene_render(Viewport(), Host())
+    complete_editor_scene_render(Viewport(), Host())
 
     assert calls == ["viewport", "present"]
 

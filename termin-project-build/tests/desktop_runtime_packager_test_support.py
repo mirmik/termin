@@ -1,4 +1,57 @@
+import json
 from pathlib import Path
+
+
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def write_fake_shader_compiler(tmp_path: Path) -> Path:
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        "inp = pathlib.Path(sys.argv[sys.argv.index('--input') + 1])\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(b'SPIRV')\n"
+        "source = inp.read_text(encoding='utf-8') if inp.exists() else ''\n"
+        "resources = []\n"
+        "if 'ConstantBuffer<PerFrame> per_frame' in source:\n"
+        "    resources.append({'name': 'per_frame', 'kind': 'constant_buffer', 'scope': 'frame'})\n"
+        "if 'ConstantBuffer<ShadowPushData> shadow_draw' in source:\n"
+        "    resources.append({'name': 'shadow_draw', 'kind': 'constant_buffer', 'scope': 'draw'})\n"
+        "if 'ConstantBuffer<MaterialParams> material' in source:\n"
+        "    resources.append({'name': 'material', 'kind': 'constant_buffer', 'scope': 'material'})\n"
+        "if 'Sampler2D u_input' in source:\n"
+        "    resources.append({'name': 'u_input', 'kind': 'texture', 'scope': 'transient'})\n"
+        "layout = {'version': 1, 'resources': resources}\n"
+        "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps(layout, indent=2), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    return compiler
+
+
+def write_target_marking_shader_compiler(tmp_path: Path) -> Path:
+    compiler = tmp_path / "fake_target_termin_shaderc.py"
+    calls_path = tmp_path / "target_shaderc_calls.jsonl"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        f"calls = pathlib.Path({str(calls_path)!r})\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n"
+        "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps({'version': 1, 'resources': []}), encoding='utf-8')\n"
+        "with calls.open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    return compiler
 
 
 def write_fake_distribution(

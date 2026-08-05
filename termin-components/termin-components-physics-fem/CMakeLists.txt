@@ -40,6 +40,7 @@ termin_add_module(
     NAMESPACE termin_components_physics_fem::
     SOURCES
         src/components.cpp
+        src/world_state.cpp
         src/collision_contacts.cpp
         src/articulation_scene.cpp
         src/components_bootstrap.cpp

@@ -35,8 +35,8 @@ The relevant CTest registrations are:
 
 ## Android device gate
 
-Use the scenarios in the
-[`android-render-showcase` README](../test-projects/android-render-showcase/README.md#native-ui-emulatordevice-gates).
+Use the scenarios under “Native UI emulator/device gates” in
+`test-projects/android-render-showcase/README.md`.
 Record the device model, physical extent, density, font scale, safe-inset mode,
 portrait and landscape captures, frame count, and filtered logcat.
 
