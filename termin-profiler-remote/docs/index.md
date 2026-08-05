@@ -65,6 +65,34 @@ ssh -N -L 46124:127.0.0.1:46123 user@target-machine
 build/Release-tests/bin/termin_profiler_remote_smoke_client 46124 smoke-token
 ```
 
-This smoke verifies the transport independently of an editor integration. A
-desktop editor or player must instantiate and pump `RemoteProfilerTarget`
-before its real frames can be inspected remotely.
+This smoke verifies the transport independently of an editor integration.
+
+## Desktop editor and player target
+
+`termin_editor` and `termin_player` can expose their real host frames through
+the same loopback-only target. The listener is disabled unless the explicit
+opt-in flag is present. Configure one process launch with:
+
+```bash
+TERMIN_REMOTE_PROFILER=1 \
+TERMIN_REMOTE_PROFILER_ADDRESS=127.0.0.1 \
+TERMIN_REMOTE_PROFILER_PORT=46123 \
+TERMIN_REMOTE_PROFILER_TOKEN='per-launch-secret' \
+./sdk/bin/termin_editor /path/to/Project.terminproj
+```
+
+The address variable is optional and defaults to `127.0.0.1`; non-loopback
+addresses are rejected. Port and token are mandatory whenever the opt-in flag
+is enabled. Leaving `TERMIN_REMOTE_PROFILER` unset creates no listener.
+
+For the player, apply the same variables to `./sdk/bin/termin_player`. To
+inspect a process on another desktop machine, preserve the loopback boundary
+with an SSH local forward from the workstation running Frame Profiler:
+
+```bash
+ssh -N -L 46124:127.0.0.1:46123 user@target-machine
+```
+
+Connect Frame Profiler to local port `46124` with the same token. The target is
+pumped after the complete `EngineHostFrameScope` closes, so cadence and section
+data cover the editor/player host frame rather than only render callbacks.

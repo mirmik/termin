@@ -242,6 +242,7 @@ if(BUILD_EDITOR_MINIMAL)
         termin_python_host::termin_python_host
         termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
+        termin_profiler_remote::termin_profiler_remote
         termin_render::termin_render
         termin_collision::termin_collision
     )

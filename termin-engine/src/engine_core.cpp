@@ -108,6 +108,12 @@ struct EngineLoopState {
     std::atomic<bool> running{false};
 };
 
+struct EngineFrameCompletionState {
+    mutable std::mutex mutex;
+    std::shared_ptr<std::function<void()>> callback;
+    std::uint64_t generation = 0;
+};
+
 } // namespace engine_detail
 
 EngineLoopClientConnection::EngineLoopClientConnection(
@@ -164,9 +170,64 @@ bool EngineLoopClientConnection::connected() const noexcept {
     return state->client.has_value() && state->generation == _generation;
 }
 
+EngineFrameCompletionConnection::EngineFrameCompletionConnection(
+    std::weak_ptr<engine_detail::EngineFrameCompletionState> state,
+    std::uint64_t generation
+)
+    : _state(std::move(state)), _generation(generation) {}
+
+EngineFrameCompletionConnection::~EngineFrameCompletionConnection() {
+    detach();
+}
+
+EngineFrameCompletionConnection::EngineFrameCompletionConnection(
+    EngineFrameCompletionConnection&& other
+) noexcept
+    : _state(std::move(other._state)),
+      _generation(std::exchange(other._generation, 0)) {}
+
+EngineFrameCompletionConnection& EngineFrameCompletionConnection::operator=(
+    EngineFrameCompletionConnection&& other
+) noexcept {
+    if (this != &other) {
+        detach();
+        _state = std::move(other._state);
+        _generation = std::exchange(other._generation, 0);
+    }
+    return *this;
+}
+
+void EngineFrameCompletionConnection::detach() noexcept {
+    if (_generation == 0) {
+        return;
+    }
+    if (const auto state = _state.lock()) {
+        std::lock_guard lock(state->mutex);
+        if (state->callback && state->generation == _generation) {
+            state->callback.reset();
+        }
+    }
+    _state.reset();
+    _generation = 0;
+}
+
+bool EngineFrameCompletionConnection::connected() const noexcept {
+    if (_generation == 0) {
+        return false;
+    }
+    const auto state = _state.lock();
+    if (!state) {
+        return false;
+    }
+    std::lock_guard lock(state->mutex);
+    return state->callback && state->generation == _generation;
+}
+
 EngineCore::EngineCore()
     : rendering_manager(render_topology),
-      _loop_state(std::make_shared<engine_detail::EngineLoopState>()) {
+      _loop_state(std::make_shared<engine_detail::EngineLoopState>()),
+      _frame_completion_state(
+          std::make_shared<engine_detail::EngineFrameCompletionState>()) {
     scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
         if (!render_topology.is_attached(scene)
                 && render_topology.render_targets(scene).empty()
@@ -254,6 +315,46 @@ EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient clien
     return EngineLoopClientConnection(_loop_state, _loop_state->generation);
 }
 
+EngineFrameCompletionConnection EngineCore::attach_frame_completion_callback(
+    std::function<void()> callback
+) {
+    if (_shutdown) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Cannot attach a frame completion callback after shutdown"
+        );
+        throw std::logic_error(
+            "cannot attach a frame completion callback after EngineCore shutdown"
+        );
+    }
+    if (!callback) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Refusing empty frame completion callback");
+        throw std::invalid_argument("frame completion callback must not be empty");
+    }
+    if (is_running()) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Cannot attach a frame completion callback while run() is active"
+        );
+        throw std::logic_error(
+            "cannot attach a frame completion callback while EngineCore is running"
+        );
+    }
+
+    std::lock_guard lock(_frame_completion_state->mutex);
+    if (_frame_completion_state->callback) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Refusing second frame completion callback");
+        throw std::logic_error("EngineCore already has a frame completion callback");
+    }
+    ++_frame_completion_state->generation;
+    _frame_completion_state->callback =
+        std::make_shared<std::function<void()>>(std::move(callback));
+    return EngineFrameCompletionConnection(
+        _frame_completion_state,
+        _frame_completion_state->generation
+    );
+}
+
 void EngineCore::stop() {
     _loop_state->running.store(false);
 }
@@ -309,6 +410,7 @@ void EngineCore::run() {
         throw std::logic_error("cannot run EngineCore after shutdown");
     }
     EngineLoopClient loop_client;
+    std::shared_ptr<std::function<void()>> frame_completion_callback;
     {
         std::lock_guard lock(_loop_state->mutex);
         if (_loop_state->running.load()) {
@@ -321,6 +423,10 @@ void EngineCore::run() {
         }
         loop_client = *_loop_state->client;
         _loop_state->running.store(true);
+    }
+    {
+        std::lock_guard lock(_frame_completion_state->mutex);
+        frame_completion_callback = _frame_completion_state->callback;
     }
 
     using clock = std::chrono::steady_clock;
@@ -408,6 +514,10 @@ void EngineCore::run() {
             // Tick and render — opens its own sections inside the frame
             // scope owned by this block.
             tick_and_render(dt);
+        }
+
+        if (frame_completion_callback) {
+            (*frame_completion_callback)();
         }
 
         if (active_target_fps > 0.0) {
