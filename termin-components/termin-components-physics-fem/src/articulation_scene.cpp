@@ -219,16 +219,43 @@ namespace termin
                     return result;
                 }
                 Entity unit_entity = unit->entity();
+                FEMRigidBodyComponent* body = nullptr;
+                Entity body_entity;
+                for (Entity child : unit_entity.children())
+                {
+                    // A direct KinematicUnit child is another articulation
+                    // unit, not a legacy body anchor for this one.
+                    if (child.get_component<KinematicUnitComponent>() !=
+                        nullptr)
+                    {
+                        continue;
+                    }
+                    const std::vector<FEMRigidBodyComponent*> candidates =
+                        enabled_bodies(child);
+                    if (candidates.empty())
+                    {
+                        continue;
+                    }
+                    if (body != nullptr || candidates.size() > 1)
+                    {
+                        result.diagnostic =
+                            FEMArticulationSceneDiagnostic::MultipleBodies;
+                        result.diagnostic_entity = entity_name(unit_entity);
+                        return result;
+                    }
+                    body = candidates.front();
+                    body_entity = child;
+                }
                 result.bindings.push_back({
                     .joint = unit,
-                    .body = nullptr,
-                    .motor = unit_entity
-                                 .get_component<
-                                     FEMArticulationMotorComponent>(),
-                    .servo = unit_entity
-                                 .get_component<FEMJointServoComponent>(),
+                    .body = body,
+                    .motor =
+                        unit_entity
+                            .get_component<FEMArticulationMotorComponent>(),
+                    .servo =
+                        unit_entity.get_component<FEMJointServoComponent>(),
                     .joint_entity = unit_entity,
-                    .body_entity = {},
+                    .body_entity = body_entity,
                     .coordinate_scale = coordinate_scale,
                 });
             }

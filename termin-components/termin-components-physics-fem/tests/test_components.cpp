@@ -443,6 +443,53 @@ namespace
         return result;
     }
 
+    struct SharedUnitScene
+    {
+        termin::Entity root;
+        termin::Entity unit_entity;
+        termin::ArticulationComponent* owner = nullptr;
+        termin::FEMArticulationComponent* fem = nullptr;
+        termin::RotatorComponent* unit = nullptr;
+    };
+
+    SharedUnitScene add_shared_unit_scene(termin::TcSceneRef scene,
+                                          const char* root_name,
+                                          termin::Vec3 root_position)
+    {
+        using namespace termin;
+
+        SharedUnitScene result;
+        result.root = scene.create_entity(root_name);
+        result.root.transform().set_local_position(root_position);
+        result.owner = new ArticulationComponent();
+        result.fem = new FEMArticulationComponent();
+        result.root.add_component(result.owner);
+        result.root.add_component(result.fem);
+
+        result.unit_entity = result.root.create_child("Unit");
+        result.unit = new RotatorComponent();
+        result.unit->mass = 1.0;
+        result.unit->inertia_diagonal = {0.2, 0.2, 0.2};
+        result.unit_entity.add_component(result.unit);
+        result.unit->set_axis(0.0, 1.0, 0.0);
+        return result;
+    }
+
+    termin::ColliderComponent* add_sphere_collider(termin::Entity parent,
+                                                   const char* name,
+                                                   termin::Vec3 local_position)
+    {
+        using namespace termin;
+
+        Entity collider_entity = parent.create_child(name);
+        collider_entity.transform().set_local_position(local_position);
+        auto* collider = new ColliderComponent();
+        collider->collider_type = "Sphere";
+        collider->box_size = {1.0, 1.0, 1.0};
+        collider_entity.add_component(collider);
+        return collider;
+    }
+
 } // namespace
 
 TEST_CASE("native FEM component doubles round-trip through inspect")
@@ -1413,6 +1460,188 @@ TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit")
     CHECK(telemetry.contact_count >= 1U);
     CHECK(telemetry.minimum_contact_gap >= -1.0e-8);
     CHECK(std::abs(joint->coordinate) > 1.0e-8);
+    scene.destroy();
+}
+
+TEST_CASE("FEM maps direct shared articulation unit contact against static")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared unit static contact");
+
+    Entity terrain = scene.create_entity("Terrain");
+    terrain.transform().set_local_position({0.0, 0.0, -0.5});
+    auto* terrain_collider = new ColliderComponent();
+    terrain_collider->box_size = {10.0, 10.0, 1.0};
+    terrain.add_component(terrain_collider);
+
+    SharedUnitScene articulation =
+        add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
+    Entity collider_entity =
+        articulation.unit_entity.create_child("Unit Collider");
+    collider_entity.transform().set_local_position({1.0, 0.0, 0.0});
+    auto* unit_collider = new ColliderComponent();
+    unit_collider->box_size = {1.0, 1.0, 1.0};
+    collider_entity.add_component(unit_collider);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(articulation.fem->initialized());
+
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().initialized);
+    CHECK(world->telemetry().contact_count >= 1U);
+    scene.destroy();
+}
+
+TEST_CASE("FEM keeps a shared articulation body entity as one unit anchor")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared body anchor contact");
+
+    Entity terrain = scene.create_entity("Terrain");
+    terrain.transform().set_local_position({0.0, 0.0, -0.5});
+    auto* terrain_collider = new ColliderComponent();
+    terrain_collider->box_size = {10.0, 10.0, 1.0};
+    terrain.add_component(terrain_collider);
+
+    SharedUnitScene articulation =
+        add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
+    Entity body_entity = articulation.unit_entity.create_child("Body Anchor");
+    body_entity.transform().set_local_position({1.0, 0.0, 0.0});
+    auto* body = new FEMRigidBodyComponent();
+    body_entity.add_component(body);
+    auto* body_collider = new ColliderComponent();
+    body_collider->box_size = {1.0, 1.0, 1.0};
+    body_entity.add_component(body_collider);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(articulation.fem->initialized());
+    REQUIRE(body->initialized());
+
+    world->fixed_update(0.002F);
+    const FEMPhysicsTelemetry telemetry = world->telemetry();
+    CHECK(telemetry.initialized);
+    CHECK(telemetry.body_count == 1U);
+    CHECK(telemetry.contact_count >= 1U);
+    scene.destroy();
+}
+
+TEST_CASE("FEM maps contact between two direct shared articulations")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared articulation pair contact");
+    SharedUnitScene left =
+        add_shared_unit_scene(scene, "Left Root", {-0.45, 0.0, 0.0});
+    SharedUnitScene right =
+        add_shared_unit_scene(scene, "Right Root", {0.45, 0.0, 0.0});
+    add_sphere_collider(left.unit_entity, "Left Collider", {0.0, 0.0, 0.5});
+    add_sphere_collider(right.unit_entity, "Right Collider", {0.0, 0.0, 0.5});
+
+    collision::CollisionWorld* collision_world =
+        collision::CollisionWorld::from_scene(scene.handle());
+    REQUIRE(collision_world != nullptr);
+    collision_world->update_all();
+    REQUIRE(!collision_world->detect_contacts().empty());
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(left.fem->initialized());
+    REQUIRE(right.fem->initialized());
+
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().initialized);
+    CHECK(world->telemetry().contact_count >= 1U);
+    scene.destroy();
+}
+
+TEST_CASE("FEM filters contact between colliders on one shared unit")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared same unit contact");
+    SharedUnitScene articulation =
+        add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
+    add_sphere_collider(
+        articulation.unit_entity, "Left Collider", {-0.45, 0.0, 0.5});
+    add_sphere_collider(
+        articulation.unit_entity, "Right Collider", {0.45, 0.0, 0.5});
+
+    collision::CollisionWorld* collision_world =
+        collision::CollisionWorld::from_scene(scene.handle());
+    REQUIRE(collision_world != nullptr);
+    collision_world->update_all();
+    REQUIRE(!collision_world->detect_contacts().empty());
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(articulation.fem->initialized());
+
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().initialized);
+    CHECK(world->telemetry().contact_count == 0U);
+    scene.destroy();
+}
+
+TEST_CASE("FEM filters adjacent direct shared units unless enabled")
+{
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("shared adjacent unit contact");
+    SharedUnitScene articulation =
+        add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
+    add_sphere_collider(
+        articulation.unit_entity, "Parent Collider", {-0.45, 0.0, 0.5});
+
+    Entity child_entity = articulation.unit_entity.create_child("Child Unit");
+    auto* child = new RotatorComponent();
+    child->mass = 1.0;
+    child->inertia_diagonal = {0.2, 0.2, 0.2};
+    child_entity.add_component(child);
+    child->set_axis(0.0, 1.0, 0.0);
+    add_sphere_collider(child_entity, "Child Collider", {0.45, 0.0, 0.5});
+
+    collision::CollisionWorld* collision_world =
+        collision::CollisionWorld::from_scene(scene.handle());
+    REQUIRE(collision_world != nullptr);
+    collision_world->update_all();
+    REQUIRE(!collision_world->detect_contacts().empty());
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(articulation.fem->initialized());
+
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().initialized);
+    CHECK(world->telemetry().contact_count == 0U);
+
+    world->adjacent_unit_collision_enabled = true;
+    world->fixed_update(0.002F);
+    CHECK(world->telemetry().initialized);
+    CHECK(world->telemetry().contact_count >= 1U);
     scene.destroy();
 }
 
