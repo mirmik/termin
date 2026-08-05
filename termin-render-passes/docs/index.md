@@ -8,10 +8,10 @@ consume these passes through the public C++ headers under `<termin/render/...>`
 or Python package `termin.render_passes`, not compile pass sources from
 `termin-app`.
 
-`ColliderGizmoPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
-debug/editor render passes. Their implementations use collision, immediate
-rendering, or caller-provided gizmo draw sources privately; consumers should
-depend on the pass API, not on app-side render sources.
+`DebugGeometryPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
+debug/editor render passes. Debug-producing components publish backend-neutral
+primitives through the scene render lifecycle; the pass library does not depend
+on component packages merely to discover debug geometry.
 
 Shadow camera helpers (`ShadowCameraParams`, `build_shadow_view_matrix`,
 `build_shadow_projection_matrix`, `compute_light_space_matrix`,

@@ -19,7 +19,6 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
-#include "termin/render/collider_gizmo_pass.hpp"
 #include "termin/render/ground_grid_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
@@ -189,7 +188,6 @@ CSHARP_COMPONENT_OWNER_REF(termin::ActuatorComponent)
 CSHARP_PASS_OWNER_REF(termin::ColorPass)
 CSHARP_PASS_OWNER_REF(termin::PresentToScreenPass)
 CSHARP_PASS_OWNER_REF(termin::DepthPass)
-CSHARP_PASS_OWNER_REF(termin::ColliderGizmoPass)
 CSHARP_PASS_OWNER_REF(termin::GroundGridPass)
 
 // Opaque type for tc_component
@@ -947,28 +945,6 @@ public:
         const std::string& output_res = "OUTPUT"
     );
     virtual ~PresentToScreenPass();
-
-    tc_pass* tc_pass_ptr();
-
-};
-
-// ============================================================================
-// ColliderGizmoPass - renders collider wireframes for debugging
-// ============================================================================
-
-class ColliderGizmoPass {
-public:
-    std::string input_res;
-    std::string output_res;
-    bool depth_test;
-
-    ColliderGizmoPass(
-        const std::string& input_res = "color",
-        const std::string& output_res = "color",
-        const std::string& pass_name = "ColliderGizmo",
-        bool depth_test = false
-    );
-    virtual ~ColliderGizmoPass();
 
     tc_pass* tc_pass_ptr();
 

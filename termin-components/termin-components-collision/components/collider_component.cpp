@@ -5,12 +5,51 @@
 #include "physics/tc_collision_world.h"
 #include "tc_inspect_cpp.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
 namespace termin {
 
 namespace {
+
+const Color4 collider_debug_color = {0.2f, 0.9f, 0.2f, 1.0f};
+
+DebugGeometryTypeRegistration& collider_debug_geometry_type() {
+    static DebugGeometryTypeRegistration registration(
+        "physics.colliders", "Colliders", "Physics", false);
+    return registration;
+}
+
+bool entity_world_matrix(const tc_component& component, Mat44f& result) {
+    if (!tc_entity_handle_valid(component.owner)) {
+        tc::Log::error(
+            "ColliderComponent::prepare_render: component owner is invalid");
+        return false;
+    }
+    tc_entity_pool* pool = tc_entity_pool_registry_get(component.owner.pool);
+    if (!pool) {
+        tc::Log::error(
+            "ColliderComponent::prepare_render: entity pool is unavailable");
+        return false;
+    }
+    double matrix[16];
+    tc_entity_pool_get_world_matrix(pool, component.owner.id, matrix);
+    for (int index = 0; index < 16; ++index) {
+        result.data[index] = static_cast<float>(matrix[index]);
+    }
+    return true;
+}
+
+Vec3 matrix_column(const Mat44f& matrix, int column) {
+    const int offset = column * 4;
+    return Vec3(
+        matrix.data[offset], matrix.data[offset + 1], matrix.data[offset + 2]);
+}
+
+Vec3 matrix_translation(const Mat44f& matrix) {
+    return Vec3(matrix.data[12], matrix.data[13], matrix.data[14]);
+}
 
 // Register collider_type field with enum choices
 void register_collider_type_field(tc::InspectFacetBuilder& builder) {
@@ -134,14 +173,88 @@ void register_collider_component_inspect_fields(tc::InspectFacetBuilder& builder
 
 ColliderComponent::ColliderComponent()
     : CxxComponent("ColliderComponent")
-{}
+{
+    install_render_lifecycle(&_c);
+}
 
 void ColliderComponent::register_type() {
+    (void)collider_debug_geometry_type();
     auto descriptor = ComponentTypeDescriptorBuilder::native<ColliderComponent>(
         "ColliderComponent", "termin-components-collision", "Component");
     descriptor.category("Collision");
     register_collider_component_inspect_fields(descriptor.inspect());
     (void)descriptor.commit();
+}
+
+void ColliderComponent::prepare_render(const RenderPrepareContext& context) {
+    DebugGeometryDrawer drawer = context.debug_geometry(
+        collider_debug_geometry_type().type_id());
+    if (!drawer || !_collider) return;
+
+    Mat44f entity_world;
+    if (!entity_world_matrix(_c, entity_world)) return;
+    const GeneralPose3& local_pose = _collider->transform;
+    const Mat44f local = Mat44f::compose(
+        local_pose.lin, local_pose.ang, local_pose.scale);
+    const Mat44f world = entity_world * local;
+    const Vec3 center = matrix_translation(world);
+    const Vec3 axis_x = matrix_column(world, 0);
+    const Vec3 axis_y = matrix_column(world, 1);
+    const Vec3 axis_z = matrix_column(world, 2);
+
+    switch (_collider->type()) {
+    case colliders::ColliderType::Box: {
+        const auto* box = static_cast<const colliders::BoxCollider*>(_collider.get());
+        drawer.wire_box(
+            center,
+            axis_x * box->half_size.x,
+            axis_y * box->half_size.y,
+            axis_z * box->half_size.z,
+            collider_debug_color,
+            false);
+        break;
+    }
+    case colliders::ColliderType::Sphere: {
+        const auto* sphere =
+            static_cast<const colliders::SphereCollider*>(_collider.get());
+        const double scale = std::min({
+            axis_x.norm(), axis_y.norm(), axis_z.norm()});
+        drawer.wire_sphere(
+            center, sphere->radius * scale, collider_debug_color, 32, false);
+        break;
+    }
+    case colliders::ColliderType::Capsule: {
+        const auto* capsule =
+            static_cast<const colliders::CapsuleCollider*>(_collider.get());
+        const double z_scale = axis_z.norm();
+        if (z_scale <= 1.0e-12) return;
+        const Vec3 half_axis = axis_z * capsule->half_height;
+        const double radius = capsule->radius * std::min(
+            axis_x.norm(), axis_y.norm());
+        drawer.wire_capsule(
+            center - half_axis,
+            center + half_axis,
+            radius,
+            collider_debug_color,
+            32,
+            false);
+        break;
+    }
+    case colliders::ColliderType::ConvexHull: {
+        const auto* hull = static_cast<const colliders::ConvexHullCollider*>(
+            _collider.get());
+        for (const auto& [first, second] : hull->edges) {
+            drawer.line(
+                world.transform_point(hull->vertices[first]),
+                world.transform_point(hull->vertices[second]),
+                collider_debug_color,
+                false);
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 ColliderComponent::~ColliderComponent() {

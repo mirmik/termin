@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from tcbase import log
 from termin.inspect import InspectField
-from termin.render import RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
+from termin.render import RENDER_CATEGORY_NAVMESH
 from termin.scene import PythonComponent
 
 if TYPE_CHECKING:
@@ -42,18 +42,35 @@ class EditorCameraUIController(PythonComponent):
     def __init__(self) -> None:
         super().__init__(enabled=True)
         self.active_in_editor = True
-        self.colliders_enabled = False
+        self._colliders_enabled = False
         self.navmesh_enabled = True
         self.wireframe_enabled = False
         self.ortho_enabled = False
         self.gizmo_world_orientation_enabled = False
         self._camera: CameraComponent | None = None
+        self._debug_geometry = None
         self._gizmo = None
         self._request_render: Callable[[], None] | None = None
 
     @property
     def camera(self) -> CameraComponent | None:
         return self._camera
+
+    @property
+    def colliders_enabled(self) -> bool:
+        if self._debug_geometry is None:
+            return self._colliders_enabled
+        return bool(
+            self._debug_geometry.debug_geometry_enabled("physics.colliders")
+        )
+
+    @colliders_enabled.setter
+    def colliders_enabled(self, enabled: bool) -> None:
+        self._colliders_enabled = bool(enabled)
+        if self._debug_geometry is not None:
+            self._debug_geometry.set_debug_geometry_enabled(
+                "physics.colliders", self._colliders_enabled
+            )
 
     @property
     def gizmo_orientation_mode(self) -> str:
@@ -63,6 +80,7 @@ class EditorCameraUIController(PythonComponent):
         self,
         *,
         camera: CameraComponent | None,
+        debug_geometry,
         gizmo,
         request_render: Callable[[], None] | None,
     ) -> bool:
@@ -70,25 +88,35 @@ class EditorCameraUIController(PythonComponent):
 
         if camera is None:
             log.error("[EditorCameraUIController] camera capability is unavailable")
+        if debug_geometry is None:
+            log.error("[EditorCameraUIController] debug geometry capability is unavailable")
         if gizmo is None:
             log.error("[EditorCameraUIController] transform gizmo capability is unavailable")
         if request_render is None:
             log.error("[EditorCameraUIController] render-update callback is unavailable")
         self._camera = camera
+        self._debug_geometry = debug_geometry
         self._gizmo = gizmo
         self._request_render = request_render
         self.resync()
-        return camera is not None and gizmo is not None and request_render is not None
+        return (
+            camera is not None
+            and debug_geometry is not None
+            and gizmo is not None
+            and request_render is not None
+        )
 
     def unbind_runtime(self) -> None:
+        self._colliders_enabled = self.colliders_enabled
         self._camera = None
+        self._debug_geometry = None
         self._gizmo = None
         self._request_render = None
 
     def resync(self) -> None:
         """Apply all five persisted modes to currently injected capabilities."""
 
-        self._set_render_category(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
+        self.colliders_enabled = self._colliders_enabled
         self._set_render_category(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
         self._apply_wireframe()
         if self._camera is None:
@@ -104,7 +132,6 @@ class EditorCameraUIController(PythonComponent):
 
     def toggle_colliders(self) -> None:
         self.colliders_enabled = not self.colliders_enabled
-        self._set_render_category(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
         self._request_update()
 
     def toggle_navmesh(self) -> None:

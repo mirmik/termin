@@ -6,6 +6,7 @@ from collections.abc import Callable
 import logging
 
 from termin.gui_native import IconButton, UiScriptLoader
+from termin.render import scene_render_mount
 from termin.stdlib import stdlib_root
 
 
@@ -88,6 +89,7 @@ class NativeEditorCameraOverlayProjection:
         self._controller = next_controller
         self._controller.bind_runtime(
             camera=camera,
+            debug_geometry=scene_render_mount(camera.entity.scene),
             gizmo=self._viewport.interaction.transform_gizmo,
             request_render=self._viewport._request_render,
         )

@@ -15,7 +15,6 @@ FRAME_PASS_SPECS: list[tuple[str, str]] = [
     ("termin.render_passes", "HighlightPass"),
     ("termin.render_passes", "TonemapPass"),
     ("termin.render_passes", "DebugTrianglePass"),
-    ("termin.render_passes", "ColliderGizmoPass"),
     ("termin.render_passes", "DebugGeometryPass"),
     ("termin.render_passes", "ImmediateDepthPass"),
     ("termin.render_passes", "UnifiedGizmoPass"),

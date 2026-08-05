@@ -154,7 +154,7 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 
 На 2026-07-30 сюда перенесены standard/scene/postprocess/debug passes:
 `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`,
-`ColliderGizmoPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
+`DebugGeometryPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
 `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
 `SkyBoxPass`, `IdPass` и единый native `UIWidgetPass` для desktop, Android и
 OpenXR. Модуль также владеет picking RGB/id cache helper, shadow camera
