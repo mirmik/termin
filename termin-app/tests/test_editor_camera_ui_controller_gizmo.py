@@ -8,7 +8,6 @@ from termin.editor_core.editor_camera_ui_controller import EditorCameraUIControl
 from termin.editor_core.resource_loader import register_editor_builtin_resources
 from termin.render import (
     RENDER_CATEGORY_ALL,
-    RENDER_CATEGORY_COLLIDERS,
     RENDER_CATEGORY_NAVMESH,
 )
 
@@ -28,6 +27,17 @@ class _Pass:
 
     def to_python(self):
         return self
+
+
+class _DebugGeometry:
+    def __init__(self) -> None:
+        self.values = {"physics.colliders": False}
+
+    def debug_geometry_enabled(self, stable_id: str) -> bool:
+        return self.values[stable_id]
+
+    def set_debug_geometry_enabled(self, stable_id: str, enabled: bool) -> None:
+        self.values[stable_id] = enabled
 
 
 class _ResourceManager:
@@ -58,8 +68,9 @@ def _runtime():
         viewport=viewport,
     )
     gizmo = _TransformGizmo()
+    debug_geometry = _DebugGeometry()
     renders: list[bool] = []
-    return camera, gizmo, renders, passes
+    return camera, debug_geometry, gizmo, renders, passes
 
 
 def test_editor_builtin_resources_register_camera_ui_controller() -> None:
@@ -79,15 +90,16 @@ def test_editor_builtin_resources_register_camera_ui_controller() -> None:
 
 
 def test_controller_applies_and_toggles_all_five_modes() -> None:
-    camera, gizmo, renders, passes = _runtime()
+    camera, debug_geometry, gizmo, renders, passes = _runtime()
     controller = EditorCameraUIController()
 
     assert controller.bind_runtime(
         camera=camera,
+        debug_geometry=debug_geometry,
         gizmo=gizmo,
         request_render=lambda: renders.append(True),
     )
-    assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS == 0
+    assert not debug_geometry.debug_geometry_enabled("physics.colliders")
     assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH
     assert camera.projection_type == "perspective"
     assert gizmo.modes == ["local"]
@@ -98,7 +110,7 @@ def test_controller_applies_and_toggles_all_five_modes() -> None:
     controller.toggle_projection()
     controller.toggle_gizmo_orientation()
 
-    assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS
+    assert debug_geometry.debug_geometry_enabled("physics.colliders")
     assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH == 0
     assert all(render_pass.wireframe for render_pass in passes)
     assert camera.projection_type == "orthographic"
@@ -107,7 +119,7 @@ def test_controller_applies_and_toggles_all_five_modes() -> None:
 
 
 def test_controller_resyncs_serialized_state_after_runtime_rebind() -> None:
-    camera, gizmo, renders, passes = _runtime()
+    camera, debug_geometry, gizmo, renders, passes = _runtime()
     controller = EditorCameraUIController()
     controller.colliders_enabled = True
     controller.navmesh_enabled = False
@@ -117,11 +129,12 @@ def test_controller_resyncs_serialized_state_after_runtime_rebind() -> None:
 
     controller.bind_runtime(
         camera=camera,
+        debug_geometry=debug_geometry,
         gizmo=gizmo,
         request_render=lambda: renders.append(True),
     )
 
-    assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS
+    assert debug_geometry.debug_geometry_enabled("physics.colliders")
     assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH == 0
     assert all(render_pass.wireframe for render_pass in passes)
     assert camera.projection_type == "orthographic"

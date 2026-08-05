@@ -4,6 +4,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/colliders/colliders.hpp>
 #include <termin/collision/collision_world.hpp>
@@ -25,7 +26,7 @@ namespace termin {
 // - Box: box_size * entity.scale (non-uniform)
 // - Sphere: unit sphere scaled by min(scale.x, scale.y, scale.z)
 // - Capsule: height scaled by scale.z, radius by min(scale.x, scale.y)
-class ENTITY_API ColliderComponent : public CxxComponent {
+class ENTITY_API ColliderComponent : public CxxComponent, public RenderLifecycle {
 public:
     // Collider type: "Box", "Sphere", "Capsule", "ConvexHull"
     std::string collider_type = "Box";
@@ -84,6 +85,7 @@ public:
     void start() override;
     void on_added() override;
     void on_removed() override;
+    void prepare_render(const RenderPrepareContext& context) override;
 
     // Accessors
     colliders::ColliderPrimitive* collider() const { return _collider.get(); }

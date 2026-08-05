@@ -42,6 +42,7 @@ class _Controller:
 class _Entity:
     def __init__(self, controller) -> None:
         self.controller = controller
+        self.scene = object()
 
     def get_component(self, _component_type):
         return self.controller
@@ -68,14 +69,22 @@ class _Viewport:
         return True
 
 
-def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes() -> None:
+def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes(
+    monkeypatch,
+) -> None:
     document = tc_ui_document_create()
     controller = _Controller()
     viewport = _Viewport(document, controller)
+    debug_geometry = object()
+    monkeypatch.setattr(
+        "termin.editor_native.camera_overlay.scene_render_mount",
+        lambda _scene: debug_geometry,
+    )
 
     projection = NativeEditorCameraOverlayProjection.create(viewport)
     assert viewport.loaded is not None
     assert controller.bindings[-1]["camera"] is viewport.camera
+    assert controller.bindings[-1]["debug_geometry"] is debug_geometry
     assert viewport.loaded.named("navmesh_btn").active
 
     colliders = viewport.loaded.named("colliders_btn")
@@ -97,10 +106,14 @@ def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes() ->
     tc_ui_document_destroy(document)
 
 
-def test_native_camera_overlay_rebinds_actions_to_new_scene_controller() -> None:
+def test_native_camera_overlay_rebinds_actions_to_new_scene_controller(monkeypatch) -> None:
     document = tc_ui_document_create()
     first = _Controller()
     viewport = _Viewport(document, first)
+    monkeypatch.setattr(
+        "termin.editor_native.camera_overlay.scene_render_mount",
+        lambda _scene: object(),
+    )
     projection = NativeEditorCameraOverlayProjection.create(viewport)
 
     second = _Controller()

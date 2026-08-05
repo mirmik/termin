@@ -15,7 +15,6 @@ def make_editor_pipeline() -> RenderPipeline:
     from termin.render_framework import ResourceSpec
     from termin.render_passes import (
         BloomPass,
-        ColliderGizmoPass,
         DebugGeometryPass,
         ColorPass,
         HighlightPass,
@@ -125,12 +124,6 @@ def make_editor_pipeline() -> RenderPipeline:
         sort_mode="far_to_near",
     )
 
-    collider_gizmo_pass = ColliderGizmoPass(
-        input_res="color_editor_debug_transparent",
-        output_res="color_colliders",
-        pass_name="ColliderGizmo",
-    )
-
     immediate_depth_pass = ImmediateDepthPass(
         input_res="color_debug_geometry",
         output_res="color_immediate_depth",
@@ -138,7 +131,7 @@ def make_editor_pipeline() -> RenderPipeline:
     )
 
     debug_geometry_pass = DebugGeometryPass(
-        input_res="color_colliders",
+        input_res="color_editor_debug_transparent",
         output_res="color_debug_geometry",
         pass_name="DebugGeometry",
     )
@@ -183,7 +176,6 @@ def make_editor_pipeline() -> RenderPipeline:
         editor_color_pass,
         editor_debug_pass,
         editor_debug_transparent_pass,
-        collider_gizmo_pass,
         debug_geometry_pass,
         immediate_depth_pass,
         gizmo_pass,
@@ -241,10 +233,6 @@ def make_editor_pipeline() -> RenderPipeline:
         ),
         ResourceSpec(
             resource="color_editor_debug_transparent",
-            format=color_fbo_format,
-        ),
-        ResourceSpec(
-            resource="color_colliders",
             format=color_fbo_format,
         ),
         ResourceSpec(

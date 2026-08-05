@@ -79,6 +79,48 @@ void DebugGeometryPass::execute(ExecuteContext& ctx) {
                 primitive_color,
                 primitive->segments,
                 primitive->depth_test);
+        } else if (primitive->kind == TC_DEBUG_GEOMETRY_WIRE_BOX) {
+            const auto vec3 = [](const float value[3]) {
+                return Vec3(value[0], value[1], value[2]);
+            };
+            const Vec3 center = vec3(primitive->data.box.center);
+            const Vec3 x = vec3(primitive->data.box.half_axis_x);
+            const Vec3 y = vec3(primitive->data.box.half_axis_y);
+            const Vec3 z = vec3(primitive->data.box.half_axis_z);
+            const Vec3 corners[8] = {
+                center - x - y - z,
+                center + x - y - z,
+                center + x + y - z,
+                center - x + y - z,
+                center - x - y + z,
+                center + x - y + z,
+                center + x + y + z,
+                center - x + y + z,
+            };
+            constexpr int edges[12][2] = {
+                {0, 1}, {1, 2}, {2, 3}, {3, 0},
+                {4, 5}, {5, 6}, {6, 7}, {7, 4},
+                {0, 4}, {1, 5}, {2, 6}, {3, 7},
+            };
+            for (const auto& edge : edges) {
+                renderer_.line(
+                    corners[edge[0]], corners[edge[1]], primitive_color,
+                    primitive->depth_test);
+            }
+        } else if (primitive->kind == TC_DEBUG_GEOMETRY_WIRE_CAPSULE) {
+            renderer_.capsule_wireframe(
+                Vec3(
+                    primitive->data.capsule.start[0],
+                    primitive->data.capsule.start[1],
+                    primitive->data.capsule.start[2]),
+                Vec3(
+                    primitive->data.capsule.end[0],
+                    primitive->data.capsule.end[1],
+                    primitive->data.capsule.end[2]),
+                primitive->data.capsule.radius,
+                primitive_color,
+                primitive->segments,
+                primitive->depth_test);
         }
     }
 

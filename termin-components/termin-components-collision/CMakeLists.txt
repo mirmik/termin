@@ -36,6 +36,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_mesh REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render termin_render::termin_render)
+else()
+    find_package(termin_render REQUIRED)
+endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 
@@ -45,8 +50,8 @@ termin_add_module(
     SOURCES
         components/collider_component.cpp
         components/components_collision_bootstrap.cpp
-    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect tmesh::termin_mesh termin_collision::termin_collision termin_components_mesh::termin_components_mesh
-    FIND_DEPS termin_base termin_scene termin_inspect termin_mesh termin_collision termin_components_mesh
+    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect tmesh::termin_mesh termin_collision::termin_collision termin_components_mesh::termin_components_mesh termin_render::termin_render
+    FIND_DEPS termin_base termin_scene termin_inspect termin_mesh termin_collision termin_components_mesh termin_render
     INSTALL_HEADERS components
 )
 
@@ -81,3 +86,24 @@ if(TERMIN_BUILD_PYTHON)
         PATTERN "*.pyc" EXCLUDE
     )
 endif()
+
+if(TERMIN_BUILD_TESTS)
+    add_executable(termin_components_collision_debug_geometry_test
+        tests/test_collider_debug_geometry.cpp
+    )
+    target_include_directories(termin_components_collision_debug_geometry_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_collision_debug_geometry_test PRIVATE
+        termin_components_collision
+    )
+    set_target_properties(termin_components_collision_debug_geometry_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_components_collision_debug_geometry_test
+        COMMAND termin_components_collision_debug_geometry_test
+    )
+endif()
+
+termin_label_tests_in_directory("termin-components-collision")

@@ -177,6 +177,12 @@ frame-local массив примитивов принадлежат runtime-ч�
 при подготовке следующего кадра. Scene Properties строит список галочек прямо
 из реестра, без hardcoded перечня типов.
 
+Коллайдеры используют этот же путь как тип `physics.colliders`.
+`ColliderComponent` публикует канонические box/sphere/capsule/convex-hull
+примитивы из `prepare_render`; отдельного обходящего сцену
+`ColliderGizmoPass` и отдельного framegraph-ресурса для них нет. Быстрая кнопка
+`C` в editor viewport переключает ту же scene setting, что и Scene Properties.
+
 ---
 
 ## 3. GameModeModel — оркестрация Play/Stop

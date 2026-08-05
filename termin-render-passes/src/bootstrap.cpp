@@ -1,6 +1,5 @@
 #include <termin/render_passes/bootstrap.hpp>
 #include <termin/render/bloom_pass.hpp>
-#include <termin/render/collider_gizmo_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_triangle_pass.hpp>
 #include <termin/render/debug_geometry_pass.hpp>
@@ -19,7 +18,6 @@ namespace termin {
 
 void register_builtin_render_passes() {
     BloomPass::register_type();
-    ColliderGizmoPass::register_type();
     ColorPass::register_type();
     DebugTrianglePass::register_type();
     DebugGeometryPass::register_type();
