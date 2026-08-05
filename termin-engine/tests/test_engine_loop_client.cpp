@@ -5,6 +5,10 @@
 
 #include <termin/engine/engine_core.hpp>
 
+extern "C" {
+#include <tc_profiler.h>
+}
+
 namespace {
 
 termin::EngineLoopClient make_client(
@@ -139,6 +143,51 @@ TEST_CASE("A connection is harmless after its EngineCore has been destroyed") {
     CHECK_FALSE(connection.connected());
     connection.detach();
     CHECK_FALSE(connection.connected());
+}
+
+TEST_CASE("EngineCore invokes frame completion callbacks after profiler frames close") {
+    termin::EngineCore engine;
+    engine.set_target_fps(0.0);
+    int polls = 0;
+    int checks = 0;
+    int shutdowns = 0;
+    int completions = 0;
+    bool callback_saw_open_frame = false;
+
+    auto loop = engine.attach_loop_client(termin::EngineLoopClient{
+        [&polls]() { ++polls; },
+        [&checks]() { return ++checks < 3; },
+        [&shutdowns]() { ++shutdowns; },
+    });
+    auto completion = engine.attach_frame_completion_callback([&]() {
+        ++completions;
+        callback_saw_open_frame =
+            callback_saw_open_frame || tc_profiler_current_frame() != nullptr;
+    });
+
+    engine.run();
+
+    CHECK_EQ(polls, 3);
+    CHECK_EQ(completions, 2);
+    CHECK_FALSE(callback_saw_open_frame);
+    CHECK_EQ(shutdowns, 1);
+    CHECK(loop.connected());
+    CHECK(completion.connected());
+}
+
+TEST_CASE("EngineCore owns only one detachable frame completion callback") {
+    termin::EngineCore engine;
+    auto first = engine.attach_frame_completion_callback([]() {});
+    CHECK(first.connected());
+    CHECK(throws_as<std::logic_error>([&]() {
+        auto rejected = engine.attach_frame_completion_callback([]() {});
+        (void)rejected;
+    }));
+
+    first.detach();
+    CHECK_FALSE(first.connected());
+    auto replacement = engine.attach_frame_completion_callback([]() {});
+    CHECK(replacement.connected());
 }
 
 GUARD_TEST_MAIN();

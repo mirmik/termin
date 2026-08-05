@@ -17,6 +17,7 @@ include(TerminRpath)
 
 add_library(termin_profiler_remote SHARED
     src/client.cpp
+    src/desktop_target.cpp
     src/target_service.cpp
     src/wire_codec.cpp
 )
@@ -67,6 +68,19 @@ if(TERMIN_BUILD_TESTS)
     termin_set_rpath_test(termin_profiler_remote_target_service_test)
     add_test(NAME termin_profiler_remote_target_service_test
         COMMAND termin_profiler_remote_target_service_test)
+
+    add_executable(termin_profiler_remote_desktop_target_test
+        tests/test_desktop_target.cpp
+    )
+    target_include_directories(termin_profiler_remote_desktop_target_test PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_profiler_remote_desktop_target_test PRIVATE
+        termin_profiler_remote
+    )
+    termin_set_rpath_test(termin_profiler_remote_desktop_target_test)
+    add_test(NAME termin_profiler_remote_desktop_target_test
+        COMMAND termin_profiler_remote_desktop_target_test)
 
     if(NOT ANDROID)
         add_executable(termin_profiler_remote_smoke_target
