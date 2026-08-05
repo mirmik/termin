@@ -80,21 +80,33 @@ class NativeEditorCameraOverlayProjection:
         camera = self._viewport.camera
         if camera is None:
             raise RuntimeError("editor scene switch left the native viewport without a camera")
-        if self._runtime_bound:
-            self._controller.unbind_runtime()
+        self.unbind_camera()
 
         next_controller = camera.entity.get_component(type(self._controller))
         if next_controller is None:
             raise RuntimeError("new editor camera has no camera-mode controller")
+        scene = self._viewport.attachment.scene
+        if scene is None:
+            raise RuntimeError("editor scene switch left the native viewport without a scene")
         self._controller = next_controller
         self._controller.bind_runtime(
             camera=camera,
-            debug_geometry=scene_render_mount(camera.entity.scene),
+            # Editor camera entities intentionally live in a standalone pool,
+            # so their Entity.scene is not the scene rendered by the viewport.
+            debug_geometry=scene_render_mount(scene),
             gizmo=self._viewport.interaction.transform_gizmo,
             request_render=self._viewport._request_render,
         )
         self._runtime_bound = True
         self.sync_buttons()
+
+    def unbind_camera(self) -> None:
+        """Drop runtime capabilities before the attached scene is destroyed."""
+
+        if not self._runtime_bound:
+            return
+        self._controller.unbind_runtime()
+        self._runtime_bound = False
 
     def sync_buttons(self) -> None:
         state = self._controller
@@ -120,9 +132,7 @@ class NativeEditorCameraOverlayProjection:
         if self._closed:
             return
         self._closed = True
-        if self._runtime_bound:
-            self._controller.unbind_runtime()
-            self._runtime_bound = False
+        self.unbind_camera()
         self._buttons.clear()
         if not self._viewport.remove_overlay(_OVERLAY_NAME):
             _logger.error("Native editor-camera overlay was already detached")

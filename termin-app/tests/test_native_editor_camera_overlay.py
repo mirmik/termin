@@ -52,6 +52,7 @@ class _Viewport:
     def __init__(self, document: TcDocument, controller) -> None:
         self.document = document
         self.camera = SimpleNamespace(entity=_Entity(controller))
+        self.attachment = SimpleNamespace(scene=object())
         self.interaction = SimpleNamespace(transform_gizmo=object())
         self._request_render = lambda: None
         self.loaded = None
@@ -78,7 +79,7 @@ def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes(
     debug_geometry = object()
     monkeypatch.setattr(
         "termin.editor_native.camera_overlay.scene_render_mount",
-        lambda _scene: debug_geometry,
+        lambda scene: debug_geometry if scene is viewport.attachment.scene else None,
     )
 
     projection = NativeEditorCameraOverlayProjection.create(viewport)
@@ -99,6 +100,8 @@ def test_native_camera_overlay_loads_shared_script_binds_actions_and_closes(
     assert controller.colliders_enabled
     assert colliders.active
 
+    projection.unbind_camera()
+    assert controller.unbind_count == 1
     projection.close()
     assert controller.unbind_count == 1
     assert viewport.loaded is None

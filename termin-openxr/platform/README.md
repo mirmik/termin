@@ -1,7 +1,8 @@
-# Termin OpenXR Android Smoke App
+# Termin OpenXR Android Runtime App
 
-This Gradle project builds the experimental Quest/OpenXR smoke APK separately
-from `termin-android`.
+This Gradle project packages the Quest/OpenXR NativeActivity separately from
+`termin-android`. Project builds normally reach it through a canonical
+`quest_openxr` build profile.
 
 Build from the repository root:
 
@@ -39,3 +40,10 @@ Termin scene and render engine when an asset root is present. The packaged path
 uses the common native component/pass bootstrap. Its stereo fallback pipeline
 composites `UIComponent` documents through `UIWidgetPass` after tonemapping and
 before presentation, then submits the projection layer through `xrEndFrame`.
+
+The canonical Android SDK build owns `libopenxr_loader.so`. Gradle copies that
+installed loader with the other SDK shared libraries and deliberately does not
+build a private loader from the Khronos source tree. Controller actions expose
+left/right thumbsticks, primary trigger values, and aim/grip poses. Poses are
+located for the predicted display time and converted into the selected
+`XrOrigin` coordinate system before scene update.

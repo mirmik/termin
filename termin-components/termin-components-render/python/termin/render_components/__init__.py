@@ -33,6 +33,9 @@ from termin.render_components._components_render_native import (
     WorldTextComponent,
     WorldTextOrientation,
     XrOriginComponent,
+    XrDirectGrabInteractorComponent,
+    XrGrabInteractableComponent,
+    XrTrackedPoseComponent,
     XrThumbstickLocomotionComponent,
 )
 from termin.render_components.camera import CameraController
@@ -78,6 +81,9 @@ __all__ = [
     "WorldTextComponent",
     "WorldTextOrientation",
     "XrOriginComponent",
+    "XrDirectGrabInteractorComponent",
+    "XrGrabInteractableComponent",
+    "XrTrackedPoseComponent",
     "XrThumbstickLocomotionComponent",
     "get_texture_inputs_for_material",
 ]
