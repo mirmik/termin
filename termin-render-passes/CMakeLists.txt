@@ -83,6 +83,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/collider_gizmo_pass.cpp
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
+    src/debug_geometry_pass.cpp
     src/grayscale_pass.cpp
     src/ground_grid_pass.cpp
     src/id_pass.cpp
@@ -120,6 +121,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/collider_gizmo_pass.hpp
     include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
+    include/termin/render/debug_geometry_pass.hpp
     include/termin/render/grayscale_pass.hpp
     include/termin/render/ground_grid_pass.hpp
     include/termin/render/id_pass.hpp
@@ -346,6 +348,30 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
             "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
     )
     termin_add_test_labels(termin_render_passes_debug_triangle_pixel_smoke
+        "termin:capability:vulkan")
+
+    add_executable(termin_render_passes_debug_geometry_pass_pixel_smoke
+        tests/test_debug_geometry_pass_pixel_smoke.cpp
+    )
+    target_link_libraries(termin_render_passes_debug_geometry_pass_pixel_smoke PRIVATE
+        termin_render_passes
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_render_passes_debug_geometry_pass_pixel_smoke termin_shaderc)
+    endif()
+    set_target_properties(termin_render_passes_debug_geometry_pass_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_debug_geometry_pass_pixel_smoke
+        COMMAND termin_render_passes_debug_geometry_pass_pixel_smoke
+    )
+    set_tests_properties(termin_render_passes_debug_geometry_pass_pixel_smoke PROPERTIES
+        TIMEOUT 20
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
+    )
+    termin_add_test_labels(termin_render_passes_debug_geometry_pass_pixel_smoke
         "termin:capability:vulkan")
 
     add_executable(termin_render_passes_world2d_pass_pixel_smoke

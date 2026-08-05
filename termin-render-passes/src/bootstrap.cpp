@@ -3,6 +3,7 @@
 #include <termin/render/collider_gizmo_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_triangle_pass.hpp>
+#include <termin/render/debug_geometry_pass.hpp>
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/ground_grid_pass.hpp>
 #include <termin/render/id_pass.hpp>
@@ -21,6 +22,7 @@ void register_builtin_render_passes() {
     ColliderGizmoPass::register_type();
     ColorPass::register_type();
     DebugTrianglePass::register_type();
+    DebugGeometryPass::register_type();
     GrayscalePass::register_type();
     GroundGridPass::register_type();
     IdPass::register_type();

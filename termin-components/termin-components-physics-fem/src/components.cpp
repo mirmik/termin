@@ -15,6 +15,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/geom/general_transform3.hpp>
 #include <termin/physics_qopt/robotics_control.hpp>
+#include <termin/render/debug_geometry.hpp>
 #include <termin/tc_scene.hpp>
 
 namespace termin
@@ -23,6 +24,13 @@ namespace termin
     {
 
         constexpr const char* module_owner = "termin-components-physics-fem";
+
+        DebugGeometryTypeRegistration& fem_joint_debug_geometry_type()
+        {
+            static DebugGeometryTypeRegistration registration(
+                "physics.fem.joints", "FEM Joints", "Physics", true);
+            return registration;
+        }
 
         Vec3 vec3(tc_vec3 value)
         {
@@ -649,10 +657,12 @@ namespace termin
     FEMFixedJointComponent::FEMFixedJointComponent()
         : CxxComponent("FEMFixedJointComponent")
     {
+        install_render_lifecycle(&_c);
     }
 
     void FEMFixedJointComponent::register_type()
     {
+        (void)fem_joint_debug_geometry_type();
         auto descriptor =
             ComponentTypeDescriptorBuilder::native<FEMFixedJointComponent>(
                 "FEMFixedJointComponent", module_owner, "Component");
@@ -690,13 +700,52 @@ namespace termin
         CxxComponent::on_destroy();
     }
 
+    void FEMFixedJointComponent::prepare_render(
+        const RenderPrepareContext& context)
+    {
+        DebugGeometryDrawer drawer = context.debug_geometry(
+            fem_joint_debug_geometry_type().type_id());
+        if (!drawer)
+        {
+            return;
+        }
+
+        const Vec3 anchor = entity().transform().global_position();
+        Vec3 body_position;
+        if (body_ != nullptr)
+        {
+            body_position = body_->state().pose.lin;
+        }
+        else
+        {
+            const Entity body_entity =
+                entity().scene().find_entity_by_name(body_entity_name);
+            if (!body_entity.valid())
+            {
+                return;
+            }
+            body_position = body_entity.transform().global_position();
+        }
+        drawer.line(anchor,
+                    body_position,
+                    Color4{0.8f, 0.8f, 0.2f, 1.0f},
+                    false);
+        drawer.wire_sphere(anchor,
+                           0.05,
+                           Color4{1.0f, 0.5f, 0.0f, 1.0f},
+                           8,
+                           false);
+    }
+
     FEMRevoluteJointComponent::FEMRevoluteJointComponent()
         : CxxComponent("FEMRevoluteJointComponent")
     {
+        install_render_lifecycle(&_c);
     }
 
     void FEMRevoluteJointComponent::register_type()
     {
+        (void)fem_joint_debug_geometry_type();
         auto descriptor =
             ComponentTypeDescriptorBuilder::native<FEMRevoluteJointComponent>(
                 "FEMRevoluteJointComponent", module_owner, "Component");
@@ -746,6 +795,58 @@ namespace termin
             world_->detach(*this);
         }
         CxxComponent::on_destroy();
+    }
+
+    void FEMRevoluteJointComponent::prepare_render(
+        const RenderPrepareContext& context)
+    {
+        DebugGeometryDrawer drawer = context.debug_geometry(
+            fem_joint_debug_geometry_type().type_id());
+        if (!drawer)
+        {
+            return;
+        }
+
+        Vec3 joint_position;
+        Vec3 body_a_position;
+        Vec3 body_b_position;
+        if (body_a_ != nullptr && body_b_ != nullptr)
+        {
+            joint_position = body_a_->state().pose.transform_point(
+                vec3(joint_offset_in_body_a));
+            body_a_position = body_a_->state().pose.lin;
+            body_b_position = body_b_->state().pose.lin;
+        }
+        else
+        {
+            const TcSceneRef scene = entity().scene();
+            const Entity body_a_entity =
+                scene.find_entity_by_name(body_a_entity_name);
+            const Entity body_b_entity =
+                scene.find_entity_by_name(body_b_entity_name);
+            if (!body_a_entity.valid() || !body_b_entity.valid())
+            {
+                return;
+            }
+            joint_position = body_a_entity.transform().transform_point(
+                vec3(joint_offset_in_body_a));
+            body_a_position = body_a_entity.transform().global_position();
+            body_b_position = body_b_entity.transform().global_position();
+        }
+
+        drawer.line(joint_position,
+                    body_a_position,
+                    Color4{0.2f, 0.8f, 0.8f, 1.0f},
+                    false);
+        drawer.line(joint_position,
+                    body_b_position,
+                    Color4{0.8f, 0.2f, 0.8f, 1.0f},
+                    false);
+        drawer.wire_sphere(joint_position,
+                           0.05,
+                           Color4{0.2f, 0.8f, 0.2f, 1.0f},
+                           8,
+                           false);
     }
 
     FEMPhysicsWorldComponent::FEMPhysicsWorldComponent()

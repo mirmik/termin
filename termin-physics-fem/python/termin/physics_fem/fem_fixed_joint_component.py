@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from termin.scene import Entity
     from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent
     from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
-    from termin.render import ImmediateRenderer
 
 
 class FEMFixedJointComponent(PythonComponent):
@@ -106,38 +105,6 @@ class FEMFixedJointComponent(PythonComponent):
             body=fem_body,
             coords_of_joint=self.anchor_point,
             assembler=world.assembler,
-        )
-
-    def draw(self, context):
-        """Нарисовать линию от anchor до тела."""
-        if self._body_component is None or self.entity is None:
-            return
-
-        body_entity = self._body_component.entity
-        if body_entity is None:
-            return
-
-        renderer: "ImmediateRenderer | None" = context.get("immediate_renderer")
-        if renderer is None:
-            return
-
-        anchor = self.anchor_point
-        body_pos = np.asarray(body_entity.transform.global_position, dtype=np.float32)
-
-        # Линия связи
-        renderer.line(
-            start=anchor.astype(np.float32),
-            end=body_pos,
-            color=(0.8, 0.8, 0.2, 1.0),  # жёлтая линия
-            width=2.0,
-        )
-
-        # Маленькая сфера в точке крепления
-        renderer.sphere_solid(
-            center=anchor.astype(np.float32),
-            radius=0.05,
-            color=(1.0, 0.5, 0.0, 1.0),  # оранжевая
-            segments=8,
         )
 
     def compute_damping_dissipation(self, dt: float) -> float:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import Callable
 import weakref
@@ -159,8 +159,10 @@ class NativeScenePropertiesDialog:
     skybox_bottom: object
     pipelines: object
     remove_pipeline: object
+    debug_geometry_rows: WidgetRef
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
+    debug_geometry_checkboxes: dict[str, object] = field(default_factory=dict)
     snapshot: ScenePropertiesSnapshot | None = None
     _updating: bool = False
     _closed: bool = False
@@ -195,8 +197,51 @@ class NativeScenePropertiesDialog:
             ))
             self.pipelines.selected_index = 0 if snapshot.pipelines else -1
             self.remove_pipeline.widget.enabled = bool(snapshot.pipelines)
+            self._rebuild_debug_geometry(snapshot)
         finally:
             self._updating = False
+        self.request_render()
+
+    def _rebuild_debug_geometry(self, snapshot: ScenePropertiesSnapshot) -> None:
+        self.debug_geometry_checkboxes.clear()
+        for child in tuple(self.debug_geometry_rows.children):
+            if not self.document.destroy_widget_recursive(child.handle):
+                _logger.error(
+                    "Failed to destroy debug geometry settings row: %s",
+                    child.debug_name,
+                )
+        for item in sorted(
+            snapshot.debug_geometry,
+            key=lambda value: (value.category, value.display_name),
+        ):
+            label = (
+                f"{item.category} / {item.display_name}"
+                if item.category else item.display_name
+            )
+            row = self.document.create_hstack(
+                f"debug-geometry-{item.stable_id.replace('.', '-')}"
+            )
+            row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+            row.add_stretch_child(self.document.create_label(label))
+            checkbox = self.document.create_checkbox(item.enabled)
+            row.add_fixed_child(_ref(self.document, checkbox), 28.0)
+            stable_id = item.stable_id
+            checkbox.connect_changed(
+                lambda enabled, selected=stable_id: self._set_debug_geometry(
+                    selected, enabled
+                )
+            )
+            self.debug_geometry_checkboxes[stable_id] = checkbox
+            self.debug_geometry_rows.add_fixed_child(
+                row, EDITOR_UI_METRICS.field_row
+            )
+
+    def _set_debug_geometry(self, stable_id: str, enabled: bool) -> None:
+        if self._updating:
+            return
+        self.snapshot = self.controller.set_debug_geometry_enabled(
+            stable_id, enabled
+        )
         self.request_render()
 
     def pick_color(self, field: str) -> None:
@@ -381,6 +426,12 @@ def build_native_scene_properties_dialog(
     remove_pipeline = document.create_button("Remove")
     pipeline_row.add_fixed_child(_ref(document, remove_pipeline), 78.0)
     root.add_fixed_child(pipeline_row, EDITOR_UI_METRICS.field_row)
+    root.add_fixed_child(
+        document.create_label("Debug Geometry"), EDITOR_UI_METRICS.section_row
+    )
+    debug_geometry_rows = document.create_vstack("scene-debug-geometry-settings")
+    debug_geometry_rows.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
+    root.add_stretch_child(debug_geometry_rows)
     dialog = document.create_dialog("Scene Properties")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)
@@ -399,6 +450,7 @@ def build_native_scene_properties_dialog(
         skybox_bottom,
         pipelines,
         remove_pipeline,
+        debug_geometry_rows,
         viewport,
         request_render,
     )
@@ -407,7 +459,7 @@ def build_native_scene_properties_dialog(
     def owner() -> NativeScenePropertiesDialog | None:
         return weak_result()
 
-    for button, field in (
+    for button, color_field in (
         (background, "background"),
         (ambient, "ambient"),
         (skybox_color, "skybox"),
@@ -415,7 +467,9 @@ def build_native_scene_properties_dialog(
         (skybox_bottom, "skybox_bottom"),
     ):
         button.connect_clicked(
-            lambda selected=field: owner().pick_color(selected) if owner() is not None else None
+            lambda selected=color_field: owner().pick_color(selected)
+            if owner() is not None
+            else None
         )
     intensity.connect_changed(
         lambda value: owner().set_intensity(value) if owner() is not None else None

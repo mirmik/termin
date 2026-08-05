@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from termin.scene import Entity
     from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent
     from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
-    from termin.render import ImmediateRenderer
 
 
 class FEMRevoluteJointComponent(PythonComponent):
@@ -142,52 +141,6 @@ class FEMRevoluteJointComponent(PythonComponent):
             bodyB=fem_body_b,
             coords_of_joint=joint_point,
             assembler=world.assembler,
-        )
-
-    def draw(self, context):
-        """Нарисовать линии от шарнира до обоих тел."""
-        renderer: "ImmediateRenderer | None" = context.get("immediate_renderer")
-        if renderer is None:
-            return
-
-        # Вычисляем точку шарнира из позиции тела A
-        if self._body_a_component is None or self._body_a_component.entity is None:
-            return
-
-        entity_a = self._body_a_component.entity
-        joint_pos = self._compute_joint_point(entity_a).astype(np.float32)
-
-        # Линия к телу A
-        body_a_pos = np.asarray(
-            entity_a.transform.global_position,
-            dtype=np.float32
-        )
-        renderer.line(
-            start=joint_pos,
-            end=body_a_pos,
-            color=(0.2, 0.8, 0.8, 1.0),  # cyan
-            width=2.0,
-        )
-
-        # Линия к телу B
-        if self._body_b_component is not None and self._body_b_component.entity is not None:
-            body_b_pos = np.asarray(
-                self._body_b_component.entity.transform.global_position,
-                dtype=np.float32
-            )
-            renderer.line(
-                start=joint_pos,
-                end=body_b_pos,
-                color=(0.8, 0.2, 0.8, 1.0),  # magenta
-                width=2.0,
-            )
-
-        # Сфера в точке шарнира
-        renderer.sphere_solid(
-            center=joint_pos,
-            radius=0.05,
-            color=(0.2, 0.8, 0.2, 1.0),  # green
-            segments=8,
         )
 
     def compute_damping_dissipation(self, dt: float) -> float:
