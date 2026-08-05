@@ -83,7 +83,10 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
-set(TERMIN_RUNTIME_SOURCES src/runtime_package.cpp)
+set(TERMIN_RUNTIME_SOURCES
+    src/runtime_package.cpp
+    src/runtime_shader_inference.cpp
+)
 if(TERMIN_RUNTIME_MINIMAL_ONLY)
     set(TERMIN_RUNTIME_SOURCES src/runtime_package_minimal.cpp)
 endif()

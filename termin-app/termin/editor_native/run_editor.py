@@ -31,9 +31,7 @@ from termin.editor_core.scene_edit_service import EditorSceneEditService
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
-from termin.editor_core.profiler_capture import (
-    ProfilerCaptureCoordinator,
-)
+from termin.editor_core.profiler_capture import ProfilerCaptureCoordinator
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_core.project_file_action_controller import ProjectFileActionController
 from termin.editor_core.project_operations import ProjectOperations
@@ -137,6 +135,7 @@ from termin.editor_native.settings_dialog import (
     build_native_settings_dialog,
     connect_settings_command,
 )
+from termin.editor_native.settings_saved_dispatcher import SettingsSavedDispatcher
 from termin.editor_native.about_dialog import build_native_about_dialog, connect_about_command
 from termin.editor_native.diagnostic_dialogs import (
     build_native_audio_debugger_dialog,
@@ -184,7 +183,6 @@ from termin.gui_native import Rect, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
-_complete_editor_scene_render = native_bootstrap.complete_editor_scene_render
 
 
 def _compose_native_editor(
@@ -513,14 +511,7 @@ def _compose_native_editor(
         if display_workspace is not None:
             display_workspace.set_render_only_active_display(enabled)
 
-    settings_saved_handlers: list[Callable[[], None]] = []
-
-    def notify_settings_saved(_snapshot) -> None:
-        for handler in tuple(settings_saved_handlers):
-            try:
-                handler()
-            except Exception:
-                _logger.exception("Editor settings change handler failed")
+    settings_saved = SettingsSavedDispatcher()
 
     settings_dialog = workspace_stage.own(
         "settings dialog",
@@ -532,7 +523,7 @@ def _compose_native_editor(
             request_render=request_editor_render,
             apply_font_size=host.apply_font_size,
             apply_render_only_active_display=apply_render_only_active_display,
-            on_saved=notify_settings_saved,
+            on_saved=settings_saved.notify,
         ),
         cleanup=lambda: settings_dialog.close(),
     )
@@ -1484,7 +1475,7 @@ def _compose_native_editor(
             cleanup=lambda: build_profiles_window.close(),
         )
         build_profiles_window_ref[0] = build_profiles_window
-        settings_saved_handlers.append(build_profiles_window.refresh)
+        settings_saved.handlers.append(build_profiles_window.refresh)
         project_build_commands[shell.build_profiles_command] = build_profiles_window.show
         project_build_commands.update(
             {

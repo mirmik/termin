@@ -24,6 +24,7 @@ add_library(termin_physics_qopt SHARED
     src/contact3d.cpp
     src/contact_friction.cpp
     src/dynamics.cpp
+    src/dynamics_topology.cpp
     src/multibody2d.cpp
     src/multibody3d_contributions.cpp
     src/point_kinematics3d.cpp
