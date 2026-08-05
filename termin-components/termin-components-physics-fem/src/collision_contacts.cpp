@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <components/collider_component.hpp>
+#include <components/kinematic_unit_component.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/collision/collision_world.hpp>
 #include <termin/tc_scene.hpp>
@@ -152,6 +153,8 @@ namespace termin
 
         std::unordered_map<FEMRigidBodyComponent*, ArticulationBinding>
             articulation_bindings;
+        std::unordered_map<KinematicUnitComponent*, ArticulationBinding>
+            shared_unit_bindings;
         EndpointMap endpoint_owners;
         std::vector<std::pair<physics_qopt::RigidBody3DContribution*,
                               physics_qopt::RigidBody3DContribution*>>
@@ -377,6 +380,42 @@ namespace termin
                     return false;
                 }
             }
+            if (articulation->articulation_owner_ == nullptr)
+            {
+                continue;
+            }
+            if (articulation->joint_entities_.size() !=
+                articulation->dynamics_->units().size())
+            {
+                tc::Log::error(
+                    "[FEMPhysicsWorldComponent] shared articulation contact "
+                    "binding size mismatch");
+                return false;
+            }
+            for (std::size_t unit_index = 0;
+                 unit_index < articulation->joint_entities_.size();
+                 ++unit_index)
+            {
+                Entity unit_entity = articulation->joint_entities_[unit_index];
+                KinematicUnitComponent* unit =
+                    unit_entity.valid()
+                        ? unit_entity.get_component<KinematicUnitComponent>()
+                        : nullptr;
+                if (unit == nullptr ||
+                    !state.shared_unit_bindings
+                         .emplace(unit,
+                                  ContactRefreshState::ArticulationBinding{
+                                      .articulation = articulation->dynamics_,
+                                      .unit_index = unit_index,
+                                  })
+                         .second)
+                {
+                    tc::Log::error(
+                        "[FEMPhysicsWorldComponent] ambiguous shared "
+                        "articulation unit contact ownership");
+                    return false;
+                }
+            }
         }
 
         for (const FEMRevoluteJointComponent* joint : revolute_joints_)
@@ -413,57 +452,127 @@ namespace termin
             }
 
             FEMRigidBodyComponent* body = nullptr;
-            Entity body_entity = candidate;
-            while (body_entity.valid() && body == nullptr)
+            KinematicUnitComponent* unit = nullptr;
+            Entity ancestor = candidate;
+            while (ancestor.valid() && (body == nullptr || unit == nullptr))
             {
-                body = body_entity.get_component<FEMRigidBodyComponent>();
-                body_entity = body_entity.parent();
-            }
-            if (body == nullptr || !body->enabled())
-            {
-                endpoint.kind = ContactRefreshState::EndpointKind::Static;
-                state.endpoint_owners.emplace(collider, endpoint);
-                continue;
-            }
-            if (body->world_ != this)
-            {
-                warn_contact_collider_once(
-                    collider,
-                    "enabled FEM body is not registered in this world",
-                    candidate.name());
-                state.endpoint_owners.emplace(collider, endpoint);
-                continue;
+                if (body == nullptr)
+                {
+                    body = ancestor.get_component<FEMRigidBodyComponent>();
+                }
+                if (unit == nullptr)
+                {
+                    unit = ancestor.get_component<KinematicUnitComponent>();
+                }
+                ancestor = ancestor.parent();
             }
 
-            const auto articulation_binding =
-                state.articulation_bindings.find(body);
-            const bool owns_maximal_body = body->body_ != nullptr;
-            const bool owns_articulation_unit =
-                articulation_binding != state.articulation_bindings.end();
-            if (owns_maximal_body == owns_articulation_unit)
+            ContactRefreshState::EndpointOwner body_endpoint;
+            bool has_body_endpoint = false;
+            if (body != nullptr && body->enabled())
             {
-                warn_contact_collider_once(
-                    collider,
-                    "dynamic collider has ambiguous or missing endpoint "
-                    "ownership",
-                    candidate.name());
-                state.endpoint_owners.emplace(collider, endpoint);
-                continue;
+                if (body->world_ != this)
+                {
+                    warn_contact_collider_once(
+                        collider,
+                        "enabled FEM body is not registered in this world",
+                        candidate.name());
+                    state.endpoint_owners.emplace(collider, endpoint);
+                    continue;
+                }
+
+                const auto articulation_binding =
+                    state.articulation_bindings.find(body);
+                const bool owns_maximal_body = body->body_ != nullptr;
+                const bool owns_articulation_unit =
+                    articulation_binding != state.articulation_bindings.end();
+                if (owns_maximal_body == owns_articulation_unit)
+                {
+                    warn_contact_collider_once(
+                        collider,
+                        "dynamic collider has ambiguous or missing endpoint "
+                        "ownership",
+                        candidate.name());
+                    state.endpoint_owners.emplace(collider, endpoint);
+                    continue;
+                }
+                if (owns_maximal_body)
+                {
+                    body_endpoint.kind =
+                        ContactRefreshState::EndpointKind::RigidBody;
+                    body_endpoint.body = body->body_;
+                }
+                else
+                {
+                    body_endpoint.kind =
+                        articulation_binding->second.base
+                            ? ContactRefreshState::EndpointKind::
+                                  ArticulationBase
+                            : ContactRefreshState::EndpointKind::
+                                  ArticulationUnit;
+                    body_endpoint.articulation =
+                        articulation_binding->second.articulation;
+                    body_endpoint.unit_index =
+                        articulation_binding->second.unit_index;
+                }
+                has_body_endpoint = true;
             }
-            if (owns_maximal_body)
+
+            ContactRefreshState::EndpointOwner unit_endpoint;
+            bool has_unit_endpoint = false;
+            if (unit != nullptr && unit->enabled())
             {
-                endpoint.kind = ContactRefreshState::EndpointKind::RigidBody;
-                endpoint.body = body->body_;
+                const auto unit_binding = state.shared_unit_bindings.find(unit);
+                if (unit_binding != state.shared_unit_bindings.end())
+                {
+                    unit_endpoint.kind =
+                        ContactRefreshState::EndpointKind::ArticulationUnit;
+                    unit_endpoint.articulation =
+                        unit_binding->second.articulation;
+                    unit_endpoint.unit_index = unit_binding->second.unit_index;
+                    has_unit_endpoint = true;
+                }
+                else if (!has_body_endpoint)
+                {
+                    warn_contact_collider_once(
+                        collider,
+                        "kinematic unit is not bound to an active shared "
+                        "articulation in this world",
+                        candidate.name());
+                    state.endpoint_owners.emplace(collider, endpoint);
+                    continue;
+                }
+            }
+
+            if (has_body_endpoint && has_unit_endpoint)
+            {
+                const bool same_endpoint =
+                    body_endpoint.kind == unit_endpoint.kind &&
+                    body_endpoint.articulation == unit_endpoint.articulation &&
+                    body_endpoint.unit_index == unit_endpoint.unit_index;
+                if (!same_endpoint)
+                {
+                    warn_contact_collider_once(
+                        collider,
+                        "collider has ambiguous body and articulation unit "
+                        "endpoint ownership",
+                        candidate.name());
+                    state.endpoint_owners.emplace(collider, endpoint);
+                    continue;
+                }
+                endpoint = body_endpoint;
+            }
+            else if (has_body_endpoint)
+            {
+                endpoint = body_endpoint;
+            }
+            else if (has_unit_endpoint)
+            {
+                endpoint = unit_endpoint;
             }
             else
             {
-                endpoint.kind =
-                    articulation_binding->second.base
-                        ? ContactRefreshState::EndpointKind::ArticulationBase
-                        : ContactRefreshState::EndpointKind::ArticulationUnit;
-                endpoint.articulation =
-                    articulation_binding->second.articulation;
-                endpoint.unit_index = articulation_binding->second.unit_index;
+                endpoint.kind = ContactRefreshState::EndpointKind::Static;
             }
             state.endpoint_owners.emplace(collider, endpoint);
         }

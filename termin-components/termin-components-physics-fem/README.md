@@ -45,6 +45,7 @@ contributes dynamics and bounded motor channels:
 ```text
 root (ArticulationComponent, FEMArticulationComponent)
 └── KinematicUnit + optional FEMArticulationMotorComponent
+    ├── optional FEMRigidBodyComponent body anchor
     └── KinematicUnit + optional FEMArticulationMotorComponent
         └── ...
 ```
@@ -53,6 +54,11 @@ Mass, centre of mass and inertia are authored on each unit. Visual children
 are presentation and do not become runtime links. The alternating hierarchy
 below remains a transitional compiler input for existing FEM scenes; new
 scenes should use the shared model path.
+
+An immediate non-kinematic child with one enabled `FEMRigidBodyComponent` may
+remain as a migration-time body/collider anchor. It is bound to the owning
+unit and is not registered as a second maximal rigid body; the unit remains
+the sole source of mass and inertia.
 
 The shared-model compiler currently supports a fixed base. Floating-base
 authoring remains available only through the transitional body hierarchy until
@@ -176,10 +182,14 @@ task hierarchy assembled visibly in Python.
 The FEM scene adapter consumes solver-neutral `ContactPatch` values from the
 scene's single `CollisionWorld`; it never creates a gameplay `PhysicsWorld`.
 At every fixed step it refreshes broad-phase poses and maps each enabled
-`ColliderComponent` to the nearest `FEMRigidBodyComponent` on its own entity or
-an ancestor. This lets end-effector entities own their collision geometry while
-the parent link owns mass and inertia. A collider without such an owner belongs
-to the static world. The resolved body becomes either a maximal body, a floating
+`ColliderComponent` through both supported authoring paths: the nearest
+`FEMRigidBodyComponent` on its own entity or an ancestor, and the nearest
+`KinematicUnit` bound to an active shared articulation. This lets direct units
+and end-effector descendants own collision geometry without a body anchor. A
+collider with neither owner belongs to the static world. When both paths are
+present they must resolve to the same dynamic endpoint; conflicting or foreign
+articulation ownership is logged and ignored instead of being treated as
+static. The resolved owner becomes either a maximal body, a floating
 articulation base, or an articulation unit. Collider rebuild, disable, removal,
 and scene teardown are therefore observed before a patch is converted to
 `ContactEndpoint3D` values, without retaining collider pointers in
