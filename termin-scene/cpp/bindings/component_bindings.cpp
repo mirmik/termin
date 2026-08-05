@@ -26,7 +26,6 @@ void bind_cxx_component(nb::module_& m) {
         .def("update", &CxxComponent::update)
         .def("fixed_update", &CxxComponent::fixed_update)
         .def("late_update", &CxxComponent::late_update)
-        .def("before_render", &CxxComponent::before_render)
         .def("on_destroy", &CxxComponent::on_destroy)
         .def("on_editor_start", &CxxComponent::on_editor_start)
         .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
@@ -44,11 +43,9 @@ void bind_cxx_component(nb::module_& m) {
         .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
         .def_prop_rw("has_late_update", &CxxComponent::has_late_update, &CxxComponent::set_has_late_update)
-        .def_prop_rw("has_before_render", &CxxComponent::has_before_render, &CxxComponent::set_has_before_render)
         .def_prop_rw("update_priority", &CxxComponent::update_priority, &CxxComponent::set_update_priority)
         .def_prop_rw("fixed_update_priority", &CxxComponent::fixed_update_priority, &CxxComponent::set_fixed_update_priority)
         .def_prop_rw("late_update_priority", &CxxComponent::late_update_priority, &CxxComponent::set_late_update_priority)
-        .def_prop_rw("before_render_priority", &CxxComponent::before_render_priority, &CxxComponent::set_before_render_priority)
         .def_prop_ro("entity",
             [](CxxComponent& c) -> nb::object {
                 Entity ent = c.entity();

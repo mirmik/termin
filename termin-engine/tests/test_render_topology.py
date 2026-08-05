@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import pytest
+import termin.bootstrap
+
 from termin.engine import EngineCore, RenderTopology
 from termin.render_framework import render_target_new
-from termin.scene import PythonComponent
+from termin.render import RenderLifecycleComponent
+
+
+@pytest.fixture(autouse=True)
+def _bootstrap_runtime():
+    termin.bootstrap.bootstrap_player()
+    yield
+    termin.bootstrap.shutdown_player()
 
 
 def test_engine_services_are_explicit_and_multiple_engines_are_independent() -> None:
@@ -65,8 +75,8 @@ def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> Non
         engine.scene_manager.close_scene("topology-b")
 
 
-def test_python_render_lifecycle_context_is_scene_scoped_and_call_scoped() -> None:
-    class RenderContextProbe(PythonComponent):
+def test_python_render_lifecycle_context_is_scene_scoped_and_attachment_scoped() -> None:
+    class RenderContextProbe(RenderLifecycleComponent):
         def __init__(self) -> None:
             super().__init__()
             self.attach_context = None
@@ -104,10 +114,11 @@ def test_python_render_lifecycle_context_is_scene_scoped_and_call_scoped() -> No
     engine.rendering_manager.attach_scene(scene)
     assert probe.attach_target is not None
     assert probe.foreign_target is None
-    assert not probe.attach_context.valid
+    assert probe.attach_context.valid
 
     engine.rendering_manager.detach_scene_full(scene)
     assert probe.detach_target is not None
+    assert not probe.attach_context.valid
     assert not probe.detach_context.valid
 
     try:

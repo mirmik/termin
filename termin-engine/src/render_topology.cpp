@@ -76,6 +76,11 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
         return false;
     }
 
+    if (!tc_scene_render_mount_ensure(scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderTopology] Cannot attach render_mount extension");
+        return false;
+    }
+
     std::unordered_map<std::string, tc_pipeline_handle> candidate_pipelines;
     std::unordered_map<std::string, std::vector<std::string>> candidate_targets;
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
@@ -132,6 +137,14 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
     }
 
     SceneRecord& record = ensure_record(scene);
+    if (record.attached && record.attachment_context) {
+        tc_scene_render_mount_notify_detach(
+            scene,
+            reinterpret_cast<const tc_render_attachment_context*>(
+                record.attachment_context.get()));
+        record.attachment_context->invalidate();
+        record.attachment_context.reset();
+    }
     destroy_pipelines(record);
     record.pipelines = std::move(candidate_pipelines);
     record.pipeline_targets = std::move(candidate_targets);
@@ -139,12 +152,12 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
         record.attached = true;
         attached_scenes_.push_back(scene);
     }
-    RenderAttachmentContext context(*this, scene);
-    tc_scene_notify_render_attach(
+    record.attachment_context.reset(new RenderAttachmentContext(*this, scene));
+    tc_scene_render_mount_notify_attach(
         scene,
-        reinterpret_cast<const tc_render_attachment_context*>(&context)
+        reinterpret_cast<const tc_render_attachment_context*>(
+            record.attachment_context.get())
     );
-    context.invalidate();
     return true;
 }
 
@@ -159,12 +172,13 @@ void RenderTopology::detach_scene(tc_scene_handle scene) {
         return;
     }
 
-    RenderAttachmentContext context(*this, scene);
-    tc_scene_notify_render_detach(
+    tc_scene_render_mount_notify_detach(
         scene,
-        reinterpret_cast<const tc_render_attachment_context*>(&context)
+        reinterpret_cast<const tc_render_attachment_context*>(
+            record->attachment_context.get())
     );
-    context.invalidate();
+    record->attachment_context->invalidate();
+    record->attachment_context.reset();
     destroy_pipelines(*record);
     record->attached = false;
     attached_scenes_.erase(
@@ -510,12 +524,13 @@ void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_de
     SceneRecord* record = find_record(scene);
     if (record == nullptr) return;
     if (notify_detach && record->attached && tc_scene_handle_valid(scene)) {
-        RenderAttachmentContext context(*this, scene);
-        tc_scene_notify_render_detach(
+        tc_scene_render_mount_notify_detach(
             scene,
-            reinterpret_cast<const tc_render_attachment_context*>(&context)
+            reinterpret_cast<const tc_render_attachment_context*>(
+                record->attachment_context.get())
         );
-        context.invalidate();
+        record->attachment_context->invalidate();
+        record->attachment_context.reset();
     }
     destroy_pipelines(*record);
     if (record->attached) {
@@ -535,12 +550,15 @@ void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_de
 void RenderTopology::clear_all() {
     for (tc_scene_handle scene : attached_scenes_) {
         if (tc_scene_handle_valid(scene)) {
-            RenderAttachmentContext context(*this, scene);
-            tc_scene_notify_render_detach(
+            SceneRecord* record = find_record(scene);
+            if (!record || !record->attachment_context) continue;
+            tc_scene_render_mount_notify_detach(
                 scene,
-                reinterpret_cast<const tc_render_attachment_context*>(&context)
+                reinterpret_cast<const tc_render_attachment_context*>(
+                    record->attachment_context.get())
             );
-            context.invalidate();
+            record->attachment_context->invalidate();
+            record->attachment_context.reset();
         }
     }
     for (auto& [key, record] : scenes_) {

@@ -95,9 +95,6 @@ public:
     // Returns true if render is needed (has PLAY scenes or render_requested)
     virtual bool tick(double dt);
 
-    // Before render - call before_render on all active scenes
-    void before_render();
-
     // Render request flag
     void request_render();
     bool consume_render_request();

@@ -12,7 +12,8 @@
 
 Поведение добавляется компонентами (`component`). Компоненты можно добавлять и
 удалять динамически, а сцена вызывает их lifecycle-хуки (`start`,
-`fixed_update`, `update`, `late_update`, `before_render`) в своём update-цикле.
+`fixed_update`, `update`, `late_update`) в своём update-цикле. Render lifecycle
+подключается отдельной capability из `termin-render`.
 
 ## Почему C
 

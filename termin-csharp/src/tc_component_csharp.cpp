@@ -6,6 +6,40 @@
 
 // Global C# callbacks (set once at initialization)
 static tc_csharp_callbacks g_cs_callbacks = {0};
+static tc_csharp_render_lifecycle_callbacks g_cs_render_callbacks = {0};
+
+static void cs_render_attach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
+    if (g_cs_render_callbacks.on_render_attach && c->body) {
+        g_cs_render_callbacks.on_render_attach(c->body, context);
+    }
+}
+
+static void cs_render_prepare(
+    tc_component* c,
+    const tc_render_prepare_context* context
+) {
+    if (g_cs_render_callbacks.prepare_render && c->body) {
+        g_cs_render_callbacks.prepare_render(c->body, context);
+    }
+}
+
+static void cs_render_detach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
+    if (g_cs_render_callbacks.on_render_detach && c->body) {
+        g_cs_render_callbacks.on_render_detach(c->body, context);
+    }
+}
+
+static const tc_render_lifecycle_vtable g_cs_render_vtable = {
+    cs_render_attach,
+    cs_render_prepare,
+    cs_render_detach,
+};
 
 // ============================================================================
 // C# vtable callbacks - dispatch to global C# callbacks
@@ -29,11 +63,6 @@ static void cs_vtable_fixed_update(tc_component* c, float dt) {
 static void cs_vtable_late_update(tc_component* c, float dt) {
     if (g_cs_callbacks.late_update && c->body)
         g_cs_callbacks.late_update(c->body, dt);
-}
-
-static void cs_vtable_before_render(tc_component* c) {
-    if (g_cs_callbacks.before_render && c->body)
-        g_cs_callbacks.before_render(c->body);
 }
 
 static void cs_vtable_on_destroy(tc_component* c) {
@@ -100,7 +129,6 @@ static const tc_component_vtable g_csharp_vtable = {
     .update = cs_vtable_update,
     .fixed_update = cs_vtable_fixed_update,
     .late_update = cs_vtable_late_update,
-    .before_render = cs_vtable_before_render,
     .on_destroy = cs_vtable_on_destroy,
     .on_added_to_entity = cs_vtable_on_added_to_entity,
     .on_removed_from_entity = cs_vtable_on_removed_from_entity,
@@ -122,6 +150,19 @@ void tc_component_set_csharp_callbacks(const tc_csharp_callbacks* callbacks) {
     if (callbacks) {
         g_cs_callbacks = *callbacks;
     }
+}
+
+void tc_component_set_csharp_render_lifecycle_callbacks(
+    const tc_csharp_render_lifecycle_callbacks* callbacks
+) {
+    if (callbacks) {
+        g_cs_render_callbacks = *callbacks;
+    }
+}
+
+bool tc_component_install_csharp_render_lifecycle(tc_component* component) {
+    return tc_render_lifecycle_capability_attach(
+        component, &g_cs_render_vtable, component ? component->body : NULL);
 }
 
 tc_component* tc_component_new_csharp(void* cs_self, const char* type_name) {
@@ -146,6 +187,7 @@ tc_component* tc_component_new_csharp(void* cs_self, const char* type_name) {
 
 void tc_component_free_csharp(tc_component* c) {
     if (c) {
+        tc_component_clear_capabilities(c);
         tc_component_unlink_from_registry(c);
         free(c);
     }

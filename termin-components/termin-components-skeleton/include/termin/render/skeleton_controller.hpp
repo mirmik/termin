@@ -7,6 +7,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 
@@ -17,7 +18,7 @@ namespace termin {
 // Holds TcSkeleton and bone Entity references.
 // Creates SkeletonInstance lazily on first access.
 // SkinnedMeshRenderer uses this to get bone matrices.
-class ENTITY_API SkeletonController : public CxxComponent {
+class ENTITY_API SkeletonController : public CxxComponent, public RenderLifecycle {
 public:
     // Skeleton (RAII wrapper over tc_skeleton)
     TcSkeleton skeleton;
@@ -83,7 +84,7 @@ public:
     /**
      * Called before render to update bone matrices once per frame.
      */
-    void before_render() override;
+    void prepare_render(const RenderPrepareContext& context) override;
 
     void on_removed_from_entity() override;
 };

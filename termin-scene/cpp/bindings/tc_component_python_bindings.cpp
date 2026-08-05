@@ -17,20 +17,6 @@ namespace nb = nanobind;
 
 namespace termin {
 
-static PyObject* g_render_attachment_context_wrapper = nullptr;
-
-static nb::object wrap_render_attachment_context(
-    const tc_render_attachment_context* context
-) {
-    nb::object capsule = nb::steal<nb::object>(PyCapsule_New(
-        const_cast<tc_render_attachment_context*>(context),
-        "termin.RenderAttachmentContext",
-        nullptr
-    ));
-    if (!g_render_attachment_context_wrapper) return capsule;
-    return nb::borrow<nb::object>(g_render_attachment_context_wrapper)(capsule);
-}
-
 // ============================================================================
 // Core Python callback implementations
 // Called from C code, dispatch to Python methods.
@@ -86,18 +72,6 @@ static void py_cb_late_update(void* py_self, float dt) {
         self.attr("late_update")(dt);
     } catch (const std::exception& e) {
         tc::Log::error(e, "PythonComponent::late_update");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_before_render(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        self.attr("before_render")();
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::before_render");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -215,40 +189,6 @@ static void py_cb_on_editor_start(void* py_self) {
     PyGILState_Release(gstate);
 }
 
-static void py_cb_on_render_attach(
-    void* py_self,
-    const tc_render_attachment_context* context
-) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_render_attach")) {
-            self.attr("on_render_attach")(wrap_render_attachment_context(context));
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_render_attach");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_render_detach(
-    void* py_self,
-    const tc_render_attachment_context* context
-) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_render_detach")) {
-            self.attr("on_render_detach")(wrap_render_attachment_context(context));
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_render_detach");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
 // ============================================================================
 // Reference counting callbacks
 // ============================================================================
@@ -283,7 +223,6 @@ static void ensure_core_callbacks_initialized() {
         .update = py_cb_update,
         .fixed_update = py_cb_fixed_update,
         .late_update = py_cb_late_update,
-        .before_render = py_cb_before_render,
         .on_destroy = py_cb_on_destroy,
         .on_added_to_entity = py_cb_on_added_to_entity,
         .on_removed_from_entity = py_cb_on_removed_from_entity,
@@ -292,8 +231,6 @@ static void ensure_core_callbacks_initialized() {
         .on_scene_inactive = py_cb_on_scene_inactive,
         .on_scene_active = py_cb_on_scene_active,
         .on_editor_start = py_cb_on_editor_start,
-        .on_render_attach = py_cb_on_render_attach,
-        .on_render_detach = py_cb_on_render_detach,
         .incref = py_cb_incref,
         .decref = py_cb_decref,
     };
@@ -359,7 +296,7 @@ public:
     void set_has_update(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, v, _c->has_fixed_update, _c->has_late_update, _c->has_before_render
+                _c, v, _c->has_fixed_update, _c->has_late_update
             );
         }
     }
@@ -368,7 +305,7 @@ public:
     void set_has_fixed_update(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, v, _c->has_late_update, _c->has_before_render
+                _c, _c->has_update, v, _c->has_late_update
             );
         }
     }
@@ -377,16 +314,7 @@ public:
     void set_has_late_update(bool v) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, _c->has_fixed_update, v, _c->has_before_render
-            );
-        }
-    }
-
-    bool get_has_before_render() const { return _c ? _c->has_before_render : false; }
-    void set_has_before_render(bool v) {
-        if (_c) {
-            tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, _c->has_fixed_update, _c->has_late_update, v
+                _c, _c->has_update, _c->has_fixed_update, v
             );
         }
     }
@@ -418,22 +346,14 @@ public:
     void set_late_update_priority(int value) {
         set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE, value);
     }
-    int get_before_render_priority() const {
-        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_BEFORE_RENDER);
-    }
-    void set_before_render_priority(int value) {
-        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_BEFORE_RENDER, value);
-    }
-
     void set_lifecycle_capabilities(
         bool update,
         bool fixed_update,
-        bool late_update,
-        bool before_render
+        bool late_update
     ) {
         if (_c) {
             tc_component_set_lifecycle_capabilities(
-                _c, update, fixed_update, late_update, before_render
+                _c, update, fixed_update, late_update
             );
         }
     }
@@ -462,13 +382,6 @@ public:
 // ============================================================================
 
 void bind_tc_component_python(nb::module_& m) {
-    m.def("_set_render_attachment_context_wrapper", [](nb::object wrapper) {
-        PyObject* replacement = wrapper.is_none() ? nullptr : wrapper.ptr();
-        Py_XINCREF(replacement);
-        Py_XDECREF(g_render_attachment_context_wrapper);
-        g_render_attachment_context_wrapper = replacement;
-    });
-
     nb::class_<TcComponent>(m, "TcComponent")
         .def(nb::init<nb::object, const std::string&>(),
              nb::arg("py_self"), nb::arg("type_name"))
@@ -483,14 +396,11 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
         .def_prop_rw("has_late_update", &TcComponent::get_has_late_update, &TcComponent::set_has_late_update)
-        .def_prop_rw("has_before_render", &TcComponent::get_has_before_render, &TcComponent::set_has_before_render)
         .def_prop_rw("update_priority", &TcComponent::get_update_priority, &TcComponent::set_update_priority)
         .def_prop_rw("fixed_update_priority", &TcComponent::get_fixed_update_priority, &TcComponent::set_fixed_update_priority)
         .def_prop_rw("late_update_priority", &TcComponent::get_late_update_priority, &TcComponent::set_late_update_priority)
-        .def_prop_rw("before_render_priority", &TcComponent::get_before_render_priority, &TcComponent::set_before_render_priority)
         .def("set_lifecycle_capabilities", &TcComponent::set_lifecycle_capabilities,
-             nb::arg("update"), nb::arg("fixed_update"), nb::arg("late_update"),
-             nb::arg("before_render"))
+             nb::arg("update"), nb::arg("fixed_update"), nb::arg("late_update"))
         .def("c_ptr_int", &TcComponent::c_ptr_int)
         // install_drawable_vtable / is_drawable moved to termin-render bindings
         // install_input_vtable / is_input_handler moved to termin-input bindings

@@ -79,7 +79,7 @@ TC_API tc_entity_pool_handle tc_scene_entity_pool_handle(tc_scene_handle h);
 
 // Register component for lifecycle management
 // Adds to pending_start if not started
-// Adds to update/fixed_update/late_update/before_render lists based on flags
+// Adds to update/fixed_update/late_update lists based on flags
 TC_API void tc_scene_register_component(tc_scene_handle h, tc_component* c);
 
 // Unregister component from lifecycle management
@@ -99,10 +99,6 @@ TC_API void tc_scene_update(tc_scene_handle h, double dt);
 
 // Editor update - only updates components with active_in_editor=true
 TC_API void tc_scene_editor_update(tc_scene_handle h, double dt);
-
-// Before render - call before_render() on all components that implement it
-// Should be called once per frame, before rendering begins
-TC_API void tc_scene_before_render(tc_scene_handle h);
 
 // Scene-local render invalidation. Mutations request a frame on their owning
 // scene; a host SceneManager consumes the flag when scheduling that scene.
@@ -139,7 +135,6 @@ TC_API uint64_t tc_scene_pending_start_visit_count(tc_scene_handle h);
 TC_API size_t tc_scene_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_fixed_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_late_update_list_count(tc_scene_handle h);
-TC_API size_t tc_scene_before_render_list_count(tc_scene_handle h);
 
 // ============================================================================
 // Entity Queries
@@ -290,20 +285,6 @@ TC_API void tc_scene_set_metadata(tc_scene_handle h, tc_value value);
 // ============================================================================
 // Render Lifecycle Notifications
 // ============================================================================
-
-// Notify all components that scene is attached to rendering
-// Called after scene pipelines are compiled, components can find passes
-TC_API void tc_scene_notify_render_attach(
-    tc_scene_handle h,
-    const tc_render_attachment_context* context
-);
-
-// Notify all components that scene is detached from rendering
-// Called before scene pipelines are destroyed, components should clear pass references
-TC_API void tc_scene_notify_render_detach(
-    tc_scene_handle h,
-    const tc_render_attachment_context* context
-);
 
 #ifdef __cplusplus
 }

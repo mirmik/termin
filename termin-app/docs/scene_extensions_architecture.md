@@ -34,9 +34,10 @@ typedef struct tc_scene_ext_vtable {
     void* (*create)(tc_scene_handle scene, void* type_userdata);
     void (*destroy)(void* ext, void* type_userdata);
 
-    // Optional runtime hooks
+    // Optional runtime/component registry hooks
     void (*on_scene_update)(void* ext, double dt, void* type_userdata);
-    void (*on_scene_before_render)(void* ext, void* type_userdata);
+    void (*on_component_registered)(void* ext, tc_component* component, void* type_userdata);
+    void (*on_component_unregistering)(void* ext, tc_component* component, void* type_userdata);
 
     // Optional persistence hooks
     bool (*serialize)(void* ext, tc_value* out_data, void* type_userdata);
@@ -60,9 +61,8 @@ void* tc_scene_ext_get(tc_scene_handle scene, tc_scene_ext_type_id type_id);
 tc_value tc_scene_ext_serialize_scene(tc_scene_handle scene);
 void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* extensions_dict);
 
-// Runtime hook dispatch (called from tc_scene loops)
+// Runtime/component registry dispatch
 void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
-void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 ```
 
 ## Жизненный цикл
@@ -75,8 +75,8 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
    - код создания сцены attach-ит нужные extension type.
 3. Кадровый цикл:
    - `tc_scene_update` / `tc_scene_editor_update` вызывают `tc_scene_ext_on_scene_update(...)`.
-4. Перед рендером:
-   - `tc_scene_before_render` вызывает `tc_scene_ext_on_scene_before_render(...)`.
+4. При изменении набора компонентов scene уведомляет extensions после
+   регистрации и перед снятием индексов компонента.
 5. Уничтожение сцены:
    - `tc_scene_ext_detach_all(...)` и освобождение instance через `destroy`.
 6. Завершение процесса:
@@ -130,7 +130,8 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 - Scene serialization пишет extension state в `extensions.*`.
 - `TcSceneRef::serialize()` пишет `pipeline_templates` и `viewport_configs` только через `extensions.render_mount`.
 - `TcSceneRef::load_from_data()` больше не принимает legacy top-level `scene_pipelines`; старый viewport adapter пока остаётся.
-- Добавлены runtime hooks `on_scene_update` и `on_scene_before_render`.
+- Добавлены `on_scene_update` и component registration hooks. Render lifecycle
+  принадлежит capability из `termin-render` и диспетчеризуется `render_mount`.
 - Основные C/C++ потребители переведены на extension-first доступ к `collision_world`, `render_state`, `render_mount`.
 
 ### Что осталось

@@ -6,7 +6,7 @@
 
 - Отдельный реестр типов расширений.
 - Экземпляры расширений на конкретных сценах.
-- Хуки `update` / `before_render`, вызываемые в потоке кадра.
+- Хук `update` и нотификации регистрации/удаления компонентов.
 - Сериализация/десериализация по `persistence_key`.
 
 ## Базовый поток работы
@@ -25,7 +25,8 @@ tc_scene_ext_type_id type_id = tc_scene_ext_register(&(tc_scene_ext_type_desc){
     .create = my_ext_create,
     .destroy = my_ext_destroy,
     .on_scene_update = my_ext_update,
-    .on_scene_before_render = my_ext_before_render,
+    .on_component_registered = my_ext_component_registered,
+    .on_component_unregistering = my_ext_component_unregistering,
     .serialize = my_ext_serialize,
     .deserialize = my_ext_deserialize,
 });
@@ -56,7 +57,8 @@ tc_scene_ext_detach_all(scene);
 | Хук | Когда вызывается |
 |-----|-----------------|
 | `on_scene_update(ext, dt, userdata)` | В конце `tc_scene_update`, после update компонентов |
-| `on_scene_before_render(ext, userdata)` | В конце `tc_scene_before_render` |
+| `on_component_registered(ext, component, userdata)` | После индексации нового компонента |
+| `on_component_unregistering(ext, component, userdata)` | Перед снятием component/capability indexes |
 | `serialize(ext, out_data, userdata)` | При сериализации сцены |
 | `deserialize(ext, in_data, userdata)` | При десериализации сцены |
 

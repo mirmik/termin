@@ -133,7 +133,7 @@ public:
     [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
 
     // --- Main loop ---
-    // Run one frame: scene tick, before_render, RenderingManager render, after_render callback.
+    // Run one frame: scene tick, RenderingManager render, after_render callback.
     // Returns true if rendering happened.
     bool tick_and_render(double dt);
 

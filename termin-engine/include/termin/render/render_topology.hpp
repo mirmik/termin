@@ -1,8 +1,10 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
+#include "termin/render/render_attachment_context.hpp"
 
 #include <string>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -32,6 +34,7 @@ private:
         std::unordered_map<std::string, std::vector<std::string>> pipeline_targets;
         std::vector<tc_render_target_handle> render_targets;
         std::vector<tc_viewport_handle> viewports;
+        std::unique_ptr<RenderAttachmentContext> attachment_context;
         bool attached = false;
     };
 

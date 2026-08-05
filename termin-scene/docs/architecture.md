@@ -50,10 +50,9 @@
 4. **extensions** — `on_scene_update` для scene extensions.
 5. **late_update** — dependent simulation work после всех обычных updates.
 
-`tc_scene_before_render(scene)`:
-
-1. **before_render** у компонентов.
-2. **on_scene_before_render** у scene extensions.
+Render lifecycle намеренно отсутствует в scene core. Render-enabled host
+подключает `render_mount`; тот индексирует принадлежащую `termin-render`
+component capability и диспетчеризует attach/prepare/detach.
 
 ## Границы API
 

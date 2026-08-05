@@ -29,8 +29,7 @@ typedef enum tc_component_lifecycle_stage {
     TC_COMPONENT_LIFECYCLE_UPDATE = 0,
     TC_COMPONENT_LIFECYCLE_FIXED_UPDATE = 1,
     TC_COMPONENT_LIFECYCLE_LATE_UPDATE = 2,
-    TC_COMPONENT_LIFECYCLE_BEFORE_RENDER = 3,
-    TC_COMPONENT_LIFECYCLE_STAGE_COUNT = 4
+    TC_COMPONENT_LIFECYCLE_STAGE_COUNT = 3
 } tc_component_lifecycle_stage;
 
 // Conventional ordering points within one lifecycle stage. Subsystems may
@@ -41,10 +40,6 @@ typedef enum tc_component_lifecycle_priority {
     TC_COMPONENT_LIFECYCLE_PRIORITY_DEFAULT = 0,
     TC_COMPONENT_LIFECYCLE_PRIORITY_LATE = -100
 } tc_component_lifecycle_priority;
-
-// Opaque, call-scoped render attachment context. Its concrete API is owned by
-// termin-engine; termin-scene only transports it through lifecycle dispatch.
-typedef struct tc_render_attachment_context tc_render_attachment_context;
 
 // ============================================================================
 // Reference counting VTable - separate from main vtable
@@ -66,7 +61,6 @@ struct tc_component_vtable {
     void (*update)(tc_component* self, float dt);
     void (*fixed_update)(tc_component* self, float dt);
     void (*late_update)(tc_component* self, float dt);
-    void (*before_render)(tc_component* self);
     void (*on_destroy)(tc_component* self);
 
     // Entity relationship
@@ -78,12 +72,6 @@ struct tc_component_vtable {
     void (*on_removed)(tc_component* self);
     void (*on_scene_inactive)(tc_component* self);
     void (*on_scene_active)(tc_component* self);
-
-    // Render lifecycle (called when scene is attached/detached from rendering)
-    // on_render_attach: scene pipelines are compiled, components can find passes
-    // on_render_detach: scene pipelines will be destroyed, clear references
-    void (*on_render_attach)(tc_component* self, const tc_render_attachment_context* context);
-    void (*on_render_detach)(tc_component* self, const tc_render_attachment_context* context);
 
     // Editor hooks
     void (*on_editor_start)(tc_component* self);
@@ -139,7 +127,6 @@ struct tc_component {
     bool has_update;
     bool has_fixed_update;
     bool has_late_update;
-    bool has_before_render;
     int lifecycle_priorities[TC_COMPONENT_LIFECYCLE_STAGE_COUNT];
     uint64_t lifecycle_registration_order;
     tc_scene_handle lifecycle_scene;
@@ -186,7 +173,6 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_late_update = (vtable && vtable->late_update != NULL);
-    c->has_before_render = (vtable && vtable->before_render != NULL);
     memset(c->lifecycle_priorities, 0, sizeof(c->lifecycle_priorities));
     c->lifecycle_registration_order = 0;
     c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
@@ -208,8 +194,7 @@ TC_API void tc_component_set_lifecycle_capabilities(
     tc_component* c,
     bool has_update,
     bool has_fixed_update,
-    bool has_late_update,
-    bool has_before_render
+    bool has_late_update
 );
 
 TC_API int tc_component_get_lifecycle_priority(
@@ -251,12 +236,6 @@ static inline void tc_component_fixed_update(tc_component* c, float dt) {
 static inline void tc_component_late_update(tc_component* c, float dt) {
     if (c && c->enabled && c->vtable && c->vtable->late_update) {
         c->vtable->late_update(c, dt);
-    }
-}
-
-static inline void tc_component_before_render(tc_component* c) {
-    if (c && c->enabled && c->vtable && c->vtable->before_render) {
-        c->vtable->before_render(c);
     }
 }
 
@@ -302,24 +281,6 @@ static inline void tc_component_on_scene_inactive(tc_component* c) {
 static inline void tc_component_on_scene_active(tc_component* c) {
     if (c && c->vtable && c->vtable->on_scene_active) {
         c->vtable->on_scene_active(c);
-    }
-}
-
-static inline void tc_component_on_render_attach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    if (c && c->vtable && c->vtable->on_render_attach) {
-        c->vtable->on_render_attach(c, context);
-    }
-}
-
-static inline void tc_component_on_render_detach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
-    if (c && c->vtable && c->vtable->on_render_detach) {
-        c->vtable->on_render_detach(c, context);
     }
 }
 

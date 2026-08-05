@@ -19,6 +19,7 @@ extern "C" {
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
+#include "core/tc_render_lifecycle.h"
 #include "render/tc_display.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_frame_graph.h"
@@ -88,7 +89,7 @@ void lifecycle_counter_on_render_detach(
     counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
 }
 
-const tc_component_vtable lifecycle_counter_vtable = {
+const tc_render_lifecycle_vtable lifecycle_counter_render_vtable = {
     .on_render_attach = lifecycle_counter_on_render_attach,
     .on_render_detach = lifecycle_counter_on_render_detach,
 };
@@ -96,7 +97,9 @@ const tc_component_vtable lifecycle_counter_vtable = {
 RenderLifecycleCounter make_render_lifecycle_counter()
 {
     RenderLifecycleCounter counter;
-    tc_component_init(&counter.component, &lifecycle_counter_vtable);
+    tc_component_init(&counter.component, nullptr);
+    REQUIRE(tc_render_lifecycle_capability_attach(
+        &counter.component, &lifecycle_counter_render_vtable, &counter));
     return counter;
 }
 
@@ -833,15 +836,16 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     CHECK_EQ(counter.detach_count, 0);
     CHECK(counter.attach_context_valid);
     REQUIRE(counter.retained_context.has_value());
-    CHECK(!counter.retained_context->valid());
+    CHECK(counter.retained_context->valid());
 
     manager.attach_scene(scene);
     CHECK_EQ(counter.attach_count, 2);
-    CHECK_EQ(counter.detach_count, 0);
+    CHECK_EQ(counter.detach_count, 1);
+    CHECK(counter.retained_context->valid());
 
     manager.detach_scene(scene);
     CHECK_EQ(counter.attach_count, 2);
-    CHECK_EQ(counter.detach_count, 1);
+    CHECK_EQ(counter.detach_count, 2);
     CHECK(counter.detach_context_valid);
     CHECK(counter.detach_saw_pipeline);
     CHECK(!counter.retained_context->valid());

@@ -13,7 +13,7 @@ namespace termin {
 class RenderTopology;
 
 // A scene-scoped view of live render attachments. Copies share a lifetime
-// token and become invalid immediately after the lifecycle callback returns.
+// token and remain valid from render attach through the detach callback.
 class TERMIN_ENGINE_API RenderAttachmentContext {
 private:
     struct State;

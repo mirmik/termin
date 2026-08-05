@@ -720,11 +720,6 @@ void MeshRenderer::on_scene_active() {
     bind_mesh_component();
 }
 
-void MeshRenderer::on_render_attach(const RenderAttachmentContext& context) {
-    (void)context;
-    bind_mesh_component();
-}
-
 void MeshRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene) {
     Component::deserialize_data(data, scene);
     if (!data || data->type != TC_VALUE_DICT || !tc_value_dict_has(data, "materials")) {

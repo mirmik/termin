@@ -16,8 +16,9 @@ RenderingManager (C++)  — владелец дисплеев, вьюпорто�
 
 ```
 scene_manager.tick(dt)          → should_render?
-  scene_manager.before_render() → уведомить сцены
-  rendering_manager.render_all(true) → offscreen → present
+  rendering_manager.render_all(true)
+    → render_mount prepare для реально запланированных сцен
+    → offscreen → present
   scene_manager.invoke_after_render()
 ```
 
@@ -56,7 +57,8 @@ SceneManager **не управляет** вьюпортами, дисплеям�
 - Есть хотя бы одна сцена в режиме `PLAY`, **или**
 - Выставлен флаг `_render_requested` (через `request_render()`)
 
-Режим `STOP` сам по себе рендер не запускает — он тикает сцены для редактора, но не вызывает `before_render()` / `render_all()`.
+Режим `STOP` сам по себе рендер не запускает — он тикает сцены для редактора,
+но не вызывает `render_all()`, а значит и render lifecycle `prepare_render`.
 
 ---
 

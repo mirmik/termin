@@ -363,7 +363,7 @@ extensions and calls `scene.update(dt)` in a loop until the project requests
 quit or the process is interrupted. `--frames` adds an explicit frame limit for
 finite smoke checks. It attaches the collision world scene extension by default
 so simulation-only physics can run without a window or `RenderingManager`. It
-does not call `scene.before_render()` or `RenderingManager.render_all`.
+does not create `RenderingManager` or activate render lifecycle capabilities.
 Serialized `render_mount` and `render_state` data is deliberately ignored, and
 requesting either extension explicitly is an error because the headless host
 does not create the services required to use them.

@@ -5,6 +5,7 @@
 #define TC_COMPONENT_CSHARP_H
 
 #include "core/tc_component.h"
+#include "core/tc_render_lifecycle.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,7 +20,18 @@ typedef void (*tc_cs_start_fn)(void* cs_self);
 typedef void (*tc_cs_update_fn)(void* cs_self, float dt);
 typedef void (*tc_cs_fixed_update_fn)(void* cs_self, float dt);
 typedef void (*tc_cs_late_update_fn)(void* cs_self, float dt);
-typedef void (*tc_cs_before_render_fn)(void* cs_self);
+typedef void (*tc_cs_render_attach_fn)(
+    void* cs_self,
+    const tc_render_attachment_context* context
+);
+typedef void (*tc_cs_render_prepare_fn)(
+    void* cs_self,
+    const tc_render_prepare_context* context
+);
+typedef void (*tc_cs_render_detach_fn)(
+    void* cs_self,
+    const tc_render_attachment_context* context
+);
 typedef void (*tc_cs_on_destroy_fn)(void* cs_self);
 typedef void (*tc_cs_on_added_to_entity_fn)(void* cs_self);
 typedef void (*tc_cs_on_removed_from_entity_fn)(void* cs_self);
@@ -41,7 +53,6 @@ typedef struct {
     tc_cs_update_fn update;
     tc_cs_fixed_update_fn fixed_update;
     tc_cs_late_update_fn late_update;
-    tc_cs_before_render_fn before_render;
     tc_cs_on_destroy_fn on_destroy;
     tc_cs_on_added_to_entity_fn on_added_to_entity;
     tc_cs_on_removed_from_entity_fn on_removed_from_entity;
@@ -57,6 +68,17 @@ typedef struct {
 // Set the global C# callbacks.
 // Must be called once from C# before any C# components are created.
 TC_API void tc_component_set_csharp_callbacks(const tc_csharp_callbacks* callbacks);
+
+typedef struct {
+    tc_cs_render_attach_fn on_render_attach;
+    tc_cs_render_prepare_fn prepare_render;
+    tc_cs_render_detach_fn on_render_detach;
+} tc_csharp_render_lifecycle_callbacks;
+
+TC_API void tc_component_set_csharp_render_lifecycle_callbacks(
+    const tc_csharp_render_lifecycle_callbacks* callbacks
+);
+TC_API bool tc_component_install_csharp_render_lifecycle(tc_component* component);
 
 // Create a new C# component.
 // cs_self is a GCHandle (IntPtr) to the C# object.

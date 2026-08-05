@@ -8,19 +8,19 @@
 
 1. Устанавливается `c->owner`.
 2. Вызывается `retain`, если `factory_retained == false`.
-3. Компонент регистрируется в scene-списках (`pending_start`, `update`, `fixed_update`, `late_update`, `before_render`).
+3. Компонент регистрируется в scene-списках (`pending_start`, `update`, `fixed_update`, `late_update`) и capability-индексах.
 4. Вызывается `on_added_to_entity`.
 5. Вызывается `on_added`.
 
 Набор scheduler-фаз изменяется через
 `tc_component_set_lifecycle_capabilities`. Для уже добавленного компонента
-операция синхронно обновляет все четыре scene index (`update`, `fixed_update`,
-`late_update`, `before_render`). Прямое изменение флагов после регистрации не является частью
+операция синхронно обновляет три scene index (`update`, `fixed_update`,
+`late_update`). Прямое изменение флагов после регистрации не является частью
 публичного контракта.
 
-Каждый `tc_component` независимо хранит четыре числовых scheduler priority:
-`update_priority`, `fixed_update_priority`, `late_update_priority` и
-`before_render_priority`. Это свойства компонента, а не владеющей `Entity`:
+Каждый `tc_component` независимо хранит три числовых scheduler priority:
+`update_priority`, `fixed_update_priority` и `late_update_priority`. Это
+свойства компонента, а не владеющей `Entity`:
 компоненты на одной entity могут исполняться в разном порядке. Внутри каждой
 фазы большее значение исполняется раньше, default равен `0`, а равные значения
 сохраняют детерминированный порядок регистрации. Setter выполняет live reindex
@@ -85,19 +85,27 @@ runtime проходы независимо обрабатывают тольк�
 `start` исполняется по снимку очереди. Регистрация или удаление компонентов из
 callback безопасны и будят следующий проход, не расширяя текущую итерацию.
 
-## Before render
+## Render lifecycle
 
 `late_update` является частью simulation update и выполняется даже в headless
 режиме или когда кадр не будет отрисован. Авторитетное состояние сцены и
 зависимые вычисления, нужные игровому коду, должны завершаться здесь.
 
-`tc_scene_before_render(scene)`:
+Render lifecycle не является частью `termin-scene`. Его предоставляет
+`termin-render` через capability `render_lifecycle`, а runtime хранится в уже
+существующем scene extension `render_mount`.
 
-1. `before_render` у зарегистрированных компонентов.
-2. `tc_scene_ext_on_scene_before_render` у extensions.
+Контракт участника состоит из `on_render_attach`, `prepare_render` и
+`on_render_detach`. `attach` приходит после создания live topology,
+`prepare_render` — один раз перед первой фактической render job этой сцены в
+кадре, `detach` — до уничтожения pipelines и targets. Добавленный в уже
+подключённую сцену участник сразу получает `attach`; удаляемый сначала получает
+`detach`. Disabled component/entity не получает attach/prepare, но уже
+подключённый участник всегда получает балансирующий detach.
 
-`before_render` предназначен только для render-facing подготовки и может не
-вызываться, если host пропускает рендер.
+В C++ контракт объявляется через `RenderLifecycle`, в Python — через
+`RenderLifecycleComponent`. Порядок `prepare_render` задаётся capability
+priority и не расширяет simulation scheduler.
 
 `PythonComponent` участвует только в тех scheduler-фазах, методы которых
 переопределены. После замены Python-класса вызывается
@@ -122,9 +130,3 @@ callback безопасны и будят следующий проход, не 
 |------------|-------|
 | `on_editor_start` | Запуск editor mode |
 | `on_scene_inactive` / `on_scene_active` | Активация/деактивация сцены |
-| `on_render_attach` / `on_render_detach` | Подключение/отключение рендера |
-
-Обе render-нотификации получают `RenderAttachmentContext`. Это временный
-scene-scoped view живых targets и pipelines; сохранять ссылку на него после
-возврата из callback нельзя. `termin-scene` только транспортирует opaque
-context, а его API и lifetime принадлежат `termin-engine`.

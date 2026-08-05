@@ -35,7 +35,6 @@ tc_entity_pool_add_component(pool, e, c);
 
 ```c
 tc_scene_update(scene, dt);          // start -> fixed_update -> update -> late_update
-tc_scene_before_render(scene);       // before_render для компонентов и extensions
 ```
 
 ## 5. Освобождение

@@ -35,8 +35,8 @@
 
 1. сначала обрабатываются host/UI events;
 2. обновление сцен (`fixed_update -> update -> late_update`) происходит до рендера;
-3. `before_render` дает scene components последний шанс опубликовать только
-   render-facing состояние;
+3. `RenderingManager` вызывает scene-local `prepare_render` перед первой
+   фактической render job;
 4. rendering видит стабильное состояние сцены на текущий кадр;
 5. after-render callbacks вызываются после presentation.
 
