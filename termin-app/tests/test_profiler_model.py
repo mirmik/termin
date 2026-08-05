@@ -8,9 +8,12 @@ from termin.editor_core.profiler_model import (
 
 
 def _frame(number, render_ms, events_ms=2.0):
+    active_ms = render_ms + events_ms
     return FrameProfile(
         frame_number=number,
-        total_ms=render_ms + events_ms,
+        interval_ms=active_ms,
+        active_ms=active_ms,
+        total_ms=active_ms,
         sections={
             "Render": SectionTiming(
                 "Render",
@@ -33,7 +36,8 @@ def _frame(number, render_ms, events_ms=2.0):
 def test_profiler_presentation_flattens_smooths_and_decays_sections():
     model = ProfilerPresentationModel(ema_alpha=0.5)
     first = model.update(_frame(1, 18.0))
-    assert first.frame_ms == pytest.approx(20.0)
+    assert first.interval_ms == pytest.approx(20.0)
+    assert first.active_ms == pytest.approx(20.0)
     assert first.fps == pytest.approx(50.0)
     assert [row.path for row in first.rows] == [
         ("Render",),
@@ -46,14 +50,39 @@ def test_profiler_presentation_flattens_smooths_and_decays_sections():
     assert first.rows[1].call_count == 2
 
     second = model.update(_frame(2, 10.0, 2.0))
-    assert second.frame_ms == pytest.approx(16.0)
+    assert second.interval_ms == pytest.approx(16.0)
+    assert second.active_ms == pytest.approx(16.0)
     render = next(row for row in second.rows if row.path == ("Render",))
     assert render.cpu_ms == pytest.approx(14.0)
 
-    empty = FrameProfile(frame_number=3, total_ms=8.0, sections={})
+    empty = FrameProfile(
+        frame_number=3,
+        interval_ms=8.0,
+        active_ms=8.0,
+        total_ms=8.0,
+        sections={},
+    )
     third = model.update(empty)
-    assert third.frame_ms == pytest.approx(12.0)
+    assert third.interval_ms == pytest.approx(12.0)
+    assert third.active_ms == pytest.approx(12.0)
     assert next(row for row in third.rows if row.path == ("Render",)).cpu_ms == pytest.approx(7.0)
+
+
+def test_profiler_presentation_uses_frame_interval_for_fps():
+    model = ProfilerPresentationModel(ema_alpha=1.0)
+    snapshot = model.update(
+        FrameProfile(
+            frame_number=1,
+            interval_ms=100.0,
+            active_ms=2.0,
+            total_ms=2.0,
+            sections={"Work": SectionTiming("Work", cpu_ms=2.0)},
+        )
+    )
+
+    assert snapshot.fps == pytest.approx(10.0)
+    assert snapshot.interval_ms == pytest.approx(100.0)
+    assert snapshot.active_ms == pytest.approx(2.0)
 
 
 def test_profiler_presentation_keeps_slashes_structural_and_sorts_siblings_only():

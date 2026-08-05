@@ -28,7 +28,8 @@ class ProfilerSectionRow:
 @dataclass(frozen=True)
 class ProfilerSnapshot:
     frame_number: int
-    frame_ms: float
+    interval_ms: float
+    active_ms: float
     fps: float
     rows: tuple[ProfilerSectionRow, ...]
     revision: int
@@ -58,14 +59,16 @@ class ProfilerPresentationModel:
         self._section_ms: dict[tuple[str, ...], float] = {}
         self._children_ms: dict[tuple[str, ...], float] = {}
         self._calls: dict[tuple[str, ...], int] = {}
-        self._total_ms: float | None = None
+        self._active_ms: float | None = None
+        self._interval_ms: float | None = None
         self._revision = 0
 
     def reset(self) -> None:
         self._section_ms.clear()
         self._children_ms.clear()
         self._calls.clear()
-        self._total_ms = None
+        self._active_ms = None
+        self._interval_ms = None
         self._revision += 1
 
     def update(self, frame: FrameProfile) -> ProfilerSnapshot:
@@ -73,12 +76,25 @@ class ProfilerPresentationModel:
         root_total = sum(
             stats.cpu_ms for path, stats in sections.items() if len(path) == 1
         )
-        total = root_total if root_total > 0.0 else max(float(frame.total_ms), 0.0)
+        active_sample_ms = max(float(frame.active_ms), 0.0)
+        if active_sample_ms == 0.0:
+            active_sample_ms = max(float(frame.total_ms), root_total, 0.0)
         alpha = self.ema_alpha
-        if self._total_ms is None:
-            self._total_ms = total
+        if self._active_ms is None:
+            self._active_ms = active_sample_ms
         else:
-            self._total_ms = self._total_ms * (1.0 - alpha) + total * alpha
+            self._active_ms = (
+                self._active_ms * (1.0 - alpha) + active_sample_ms * alpha
+            )
+
+        raw_interval_ms = max(float(frame.interval_ms), 0.0)
+        if raw_interval_ms > 0.0:
+            if self._interval_ms is None:
+                self._interval_ms = raw_interval_ms
+            else:
+                self._interval_ms = (
+                    self._interval_ms * (1.0 - alpha) + raw_interval_ms * alpha
+                )
 
         for path, stats in sections.items():
             previous = self._section_ms.get(path)
@@ -114,7 +130,8 @@ class ProfilerPresentationModel:
                 self._children_ms.pop(path, None)
                 self._calls.pop(path, None)
 
-        frame_ms = self._total_ms
+        active_ms = self._active_ms
+        interval_ms = self._interval_ms if raw_interval_ms > 0.0 else 0.0
         children: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
         for path in self._section_ms:
             children.setdefault(path[:-1], []).append(path)
@@ -140,7 +157,7 @@ class ProfilerPresentationModel:
                     name=path[-1],
                     depth=len(path) - 1,
                     cpu_ms=cpu_ms,
-                    percent=cpu_ms / frame_ms * 100.0 if frame_ms > 0.0 else 0.0,
+                    percent=cpu_ms / active_ms * 100.0 if active_ms > 0.0 else 0.0,
                     coverage_percent=(
                         children_ms / cpu_ms * 100.0 if cpu_ms > 0.0 else 0.0
                     ),
@@ -151,8 +168,9 @@ class ProfilerPresentationModel:
         self._revision += 1
         return ProfilerSnapshot(
             frame_number=frame.frame_number,
-            frame_ms=frame_ms,
-            fps=1000.0 / frame_ms if frame_ms > 0.0 else 0.0,
+            interval_ms=interval_ms,
+            active_ms=active_ms,
+            fps=1000.0 / interval_ms if interval_ms > 0.0 else 0.0,
             rows=tuple(rows),
             revision=self._revision,
         )

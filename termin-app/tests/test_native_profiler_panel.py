@@ -59,6 +59,8 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     profiler.frames.append(
         FrameProfile(
             frame_number=12,
+            interval_ms=100.0,
+            active_ms=20.0,
             total_ms=20.0,
             sections={
                 "Render": SectionTiming(
@@ -75,9 +77,11 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     )
     assert panel.update()
     assert not panel.update()
-    assert panel.frame_time_model.samples == [20.0]
+    assert panel.frame_time_model.samples == [100.0]
     assert panel.table_model.node_count == 3
-    assert "50 FPS" in panel.status_bar.text
+    assert "10 FPS" in panel.status_bar.text
+    assert "interval 100.00 ms" in panel.status_bar.text
+    assert "CPU active 20.00 ms" in panel.status_bar.text
     render = panel.table_model.find('["Render"]')
     compose = panel.table_model.find('["Render","Compose"]')
     assert panel.table_model.node(render).children == [compose]
@@ -90,6 +94,8 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     profiler.frames.append(
         FrameProfile(
             frame_number=13,
+            interval_ms=90.0,
+            active_ms=18.0,
             total_ms=18.0,
             sections={
                 "Render": SectionTiming(
