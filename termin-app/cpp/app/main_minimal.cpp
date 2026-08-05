@@ -8,6 +8,7 @@
 
 #include "termin/bootstrap/bootstrap.hpp"
 #include "termin/engine/engine_core.hpp"
+#include "termin/profiler_remote/desktop_target.hpp"
 #include "termin/python_host/python_host.hpp"
 
 #include <exception>
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <cstdlib>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
@@ -29,6 +31,14 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+const char* native_build_type() {
+#ifdef NDEBUG
+    return "Release";
+#else
+    return "Debug";
+#endif
+}
 
 class RuntimeBootstrapGuard {
 public:
@@ -312,7 +322,20 @@ print(json.dumps({
     }
 
     int exit_code = 0;
+    std::shared_ptr<termin::profiler_remote::RemoteProfilerTarget>
+        remote_profiler;
+    termin::EngineFrameCompletionConnection remote_profiler_connection;
     try {
+        remote_profiler =
+            termin::profiler_remote::start_desktop_target_from_environment(
+                "termin_editor", native_build_type());
+        if (remote_profiler) {
+            remote_profiler_connection =
+                engine.attach_frame_completion_callback(
+                    [target = remote_profiler]() {
+                        target->pump_frame_thread();
+                    });
+        }
         engine.run();
     } catch (const std::exception& error) {
         if (PyErr_Occurred()) {
@@ -326,6 +349,12 @@ print(json.dumps({
         }
         std::cerr << "Editor main loop failed with an unknown exception" << std::endl;
         exit_code = 1;
+    }
+
+    remote_profiler_connection.detach();
+    if (remote_profiler) {
+        remote_profiler->stop();
+        remote_profiler.reset();
     }
 
     // Release frontend integrations first, then the EngineCore-owned render

@@ -17,6 +17,7 @@ namespace termin {
 
 namespace engine_detail {
 struct EngineLoopState;
+struct EngineFrameCompletionState;
 }
 
 // Complete external integration required by EngineCore::run(). Keeping these
@@ -93,6 +94,36 @@ private:
     std::uint64_t _generation = 0;
 };
 
+// Move-only lifetime handle for one host-frame completion callback. The
+// callback runs on the EngineCore frame thread immediately after the owned
+// EngineHostFrameScope has closed. A callback already copied by run() remains
+// alive until that run finishes, so its captures must be safe for the complete
+// run lifetime.
+class TERMIN_ENGINE_API EngineFrameCompletionConnection {
+public:
+    EngineFrameCompletionConnection() = default;
+    ~EngineFrameCompletionConnection();
+
+    EngineFrameCompletionConnection(const EngineFrameCompletionConnection&) = delete;
+    EngineFrameCompletionConnection& operator=(const EngineFrameCompletionConnection&) = delete;
+    EngineFrameCompletionConnection(EngineFrameCompletionConnection&& other) noexcept;
+    EngineFrameCompletionConnection& operator=(EngineFrameCompletionConnection&& other) noexcept;
+
+    void detach() noexcept;
+    bool connected() const noexcept;
+    explicit operator bool() const noexcept { return connected(); }
+
+private:
+    friend class EngineCore;
+    EngineFrameCompletionConnection(
+        std::weak_ptr<engine_detail::EngineFrameCompletionState> state,
+        std::uint64_t generation
+    );
+
+    std::weak_ptr<engine_detail::EngineFrameCompletionState> _state;
+    std::uint64_t _generation = 0;
+};
+
 // EngineCore - owns SceneManager and RenderingManager
 class TERMIN_ENGINE_API EngineCore {
 public:
@@ -102,6 +133,7 @@ public:
 
 private:
     std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
+    std::shared_ptr<engine_detail::EngineFrameCompletionState> _frame_completion_state;
     std::atomic<double> _target_fps{60.0};
     bool _profile_ui = false;
     bool _shutdown = false;
@@ -131,6 +163,13 @@ public:
     // Throws std::invalid_argument for an incomplete client and
     // std::logic_error while another client is attached or the loop is active.
     [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
+
+    // Attach one frame-thread callback used by optional host services that
+    // consume completed profiler frames. The callback is outside the profiler
+    // frame scope and therefore cannot observe a half-written frame.
+    [[nodiscard]] EngineFrameCompletionConnection attach_frame_completion_callback(
+        std::function<void()> callback
+    );
 
     // --- Main loop ---
     // Run one frame: scene tick, RenderingManager render, after_render callback.
