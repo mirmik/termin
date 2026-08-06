@@ -11,6 +11,10 @@ Projects:
 - `RetainedChartWpfExample` - renders that retained scene through the generic
   D3D11 WPF scene host, customizes native chart parts from C#, and anchors a
   real WPF button to a retained scene item. The button callback stays in C#.
+- `AllianceStreamingChartsExample` - composes four independently scaled
+  streaming chart panels in one retained scene and one offscreen texture.
+  Pause and reset are WPF portals whose handlers and streaming timer live in
+  C#.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,
   OpenGL, raw framebuffer, or raw display-pointer dependency.
@@ -35,6 +39,12 @@ vertical slice for Windows/D3D11:
 
 ```powershell
 dotnet run --project termin-csharp/examples/RetainedChartWpfExample/RetainedChartWpfExample.csproj
+```
+
+Run the Alliance-style multi-panel streaming example with:
+
+```powershell
+dotnet run --project termin-csharp/examples/AllianceStreamingChartsExample/AllianceStreamingChartsExample.csproj
 ```
 
 `-m:1` keeps the solution build serial. The individual projects build normally,
