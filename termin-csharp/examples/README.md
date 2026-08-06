@@ -8,6 +8,9 @@ Projects:
 - `RetainedChartComposition` - platform-neutral construction and customization
   of a managed `Chart2D` backed by native retained items. It replaces the
   standard plot background without adding a native layout forwarding method.
+- `RetainedChartWpfExample` - renders that retained scene through the generic
+  D3D11 WPF scene host, customizes native chart parts from C#, and anchors a
+  real WPF button to a retained scene item. The button callback stays in C#.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,
   OpenGL, raw framebuffer, or raw display-pointer dependency.
@@ -26,9 +29,13 @@ dotnet run --project termin-csharp/examples/RetainedChartComposition/RetainedCha
   -p:TerminSdkRoot=C:\TerminSdk -- C:\TerminSdk
 ```
 
-Until the retained WPF host is introduced, this example validates composition
-and native data ownership with a headless Vulkan host on Linux.
-`PlotDemoApp` remains the rendered transitional example.
+`RetainedChartComposition` validates composition and native data ownership
+without a window. `RetainedChartWpfExample` is the corresponding rendered
+vertical slice for Windows/D3D11:
+
+```powershell
+dotnet run --project termin-csharp/examples/RetainedChartWpfExample/RetainedChartWpfExample.csproj
+```
 
 `-m:1` keeps the solution build serial. The individual projects build normally,
 but the parallel solution build can fail on Windows without useful diagnostics
