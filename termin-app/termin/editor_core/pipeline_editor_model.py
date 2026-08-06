@@ -225,9 +225,9 @@ def _populate_pass_node_params(node: Node, pass_class_name: str) -> None:
 def _populate_resource_node_params(node: Node, graph_type: str) -> None:
     if graph_type == "Shadow Maps":
         return
-    if graph_type == "Color Texture":
+    if graph_type in ("Color Texture", "Multiview Color Texture"):
         _add_node_param(node, "format", "Format", "enum", "rgba8", _COLOR_TEXTURE_FORMAT_CHOICES)
-    elif graph_type == "Depth Texture":
+    elif graph_type in ("Depth Texture", "Multiview Depth Texture"):
         _add_node_param(
             node,
             "format",
@@ -272,8 +272,10 @@ def _populate_resource_node_params(node: Node, graph_type: str) -> None:
     )
     _add_node_param(node, "width", "Width", "int", 1024)
     _add_node_param(node, "height", "Height", "int", 1024)
-    if graph_type != "FBO":
+    if graph_type not in ("FBO", "Multiview FBO"):
         return
+    if graph_type == "Multiview FBO":
+        node.params["array_layers"] = 2
     _add_node_param(node, "has_color", "Color", "bool", True)
     _add_node_param(node, "has_depth", "Depth", "bool", True)
     _add_node_param(node, "clear_color", "Clear Color", "bool", False)
@@ -374,6 +376,18 @@ def _configure_node(controller: GraphController, node: Node, node_type: str, gra
             controller.add_output_socket(node.id, "color", "color_texture")
         elif graph_type == "Depth Texture":
             controller.add_output_socket(node.id, "depth", "depth_texture")
+        elif graph_type == "Multiview Color Texture":
+            node.params["resource_type"] = "multiview_color_texture"
+            node.params["array_layers"] = 2
+            controller.add_output_socket(node.id, "color", "multiview_color_texture")
+        elif graph_type == "Multiview Depth Texture":
+            node.params["resource_type"] = "multiview_depth_texture"
+            node.params["array_layers"] = 2
+            controller.add_output_socket(node.id, "depth", "multiview_depth_texture")
+        elif graph_type == "Multiview FBO":
+            node.params["resource_type"] = "multiview_fbo"
+            node.params["array_layers"] = 2
+            controller.add_output_socket(node.id, "fbo", "multiview_fbo")
         else:
             controller.add_output_socket(node.id, "fbo", "fbo")
     elif node_type == "external_rt":
@@ -394,6 +408,17 @@ def _configure_node(controller: GraphController, node: Node, node_type: str, gra
         controller.add_input_socket(node.id, "color", "color_texture")
         controller.add_input_socket(node.id, "depth", "depth_texture")
         controller.add_output_socket(node.id, "fbo", "fbo")
+    elif node_type == "external_xr_multiview_fbo":
+        node.params.setdefault("slot", "XR_MULTIVIEW_TARGET")
+        controller.add_output_socket(node.id, "fbo", "external_xr_multiview_fbo")
+    elif node_type == "multiview_fbo_split":
+        controller.add_input_socket(node.id, "fbo", "multiview_fbo")
+        controller.add_output_socket(node.id, "color", "multiview_color_texture")
+        controller.add_output_socket(node.id, "depth", "multiview_depth_texture")
+    elif node_type == "multiview_fbo_join":
+        controller.add_input_socket(node.id, "color", "multiview_color_texture")
+        controller.add_input_socket(node.id, "depth", "multiview_depth_texture")
+        controller.add_output_socket(node.id, "fbo", "multiview_fbo")
     elif node_type in ("pass", "effect"):
         pass_class = _pass_class_name(graph_type)
         _populate_pass_node_params(node, pass_class)
@@ -409,6 +434,10 @@ def _configure_node(controller: GraphController, node: Node, node_type: str, gra
 
 def load_pipeline_graph(data: dict) -> Graph:
     graph = Graph()
+    execution_model = str(data.get("execution_model", "single_view"))
+    if execution_model not in ("single_view", "xr_multiview"):
+        raise ValueError(f"Unsupported pipeline execution_model: {execution_model}")
+    graph.data["execution_model"] = execution_model
     controller = GraphController(graph)
     node_ids = []
     for index, node_data in enumerate(data.get("nodes", [])):
@@ -567,6 +596,7 @@ def save_pipeline_graph(graph: Graph) -> dict:
     ]
     return {
         "name": "graph_pipeline",
+        "execution_model": str(graph.data.get("execution_model", "single_view")),
         "nodes": serialized_nodes,
         "connections": connections,
         "viewport_frames": frames,

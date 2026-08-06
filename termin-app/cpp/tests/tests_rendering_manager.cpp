@@ -108,6 +108,7 @@ TcPipelineTemplate make_empty_pipeline_template(const std::string& name)
     TcPipelineTemplate resource = TcPipelineTemplate::declare(name + "-uuid", name);
     tc_pipeline_template_payload_desc payload = {};
     payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     payload.name = name.c_str();
     REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
     return resource;
@@ -678,6 +679,78 @@ TEST_CASE("Graph compiler rejects direct resource type conversion without split 
         threw = true;
     }
     REQUIRE(threw);
+}
+
+TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered resources")
+{
+    const char* json = R"JSON(
+{
+  "name": "xr_pipeline",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {
+      "type": "Multiview FBO",
+      "node_type": "resource",
+      "name": "stereo_color",
+      "params": {
+        "resource_type": "multiview_fbo",
+        "format": "rgba16f",
+        "samples": 4,
+        "array_layers": 2
+      }
+    }
+  ],
+  "connections": [],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    CHECK(graph.execution_model == "xr_multiview");
+
+    TcPipelineTemplate published = make_empty_pipeline_template("xr-multiview-graph");
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph, published);
+    REQUIRE(pipeline != nullptr);
+    const tc_pipeline_template* pipeline_template =
+        tc_pipeline_template_get(pipeline->template_handle());
+    REQUIRE(pipeline_template != nullptr);
+    CHECK(pipeline_template->execution_model == TC_PIPELINE_EXECUTION_XR_MULTIVIEW);
+
+    bool found = false;
+    for (const auto& spec : pipeline->specs()) {
+        if (spec.resource != "stereo_color") continue;
+        found = true;
+        CHECK(spec.resource_type == "multiview_fbo");
+        CHECK(spec.samples == 4);
+        CHECK(spec.array_layers == 2);
+    }
+    CHECK(found);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing")
+{
+    const char* json = R"JSON(
+{
+  "name": "mixed_pipeline",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {"type": "XR Multiview Target", "node_type": "external_xr_multiview_fbo"},
+    {"type": "PipelineOutput", "node_type": "pipeline_output"}
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "color"}
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    CHECK_THROWS_AS(tc::compile_graph(graph), tc::GraphCompileError);
 }
 
 TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
@@ -1254,6 +1327,7 @@ TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fai
         "rollback-template-duplicate-uuid", "rollback-template");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     duplicate_payload.name = "rollback-template";
     REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
     REQUIRE(tc_scene_add_pipeline_template(scene, first.handle));
@@ -1285,6 +1359,7 @@ TEST_CASE("RenderTopology preserves live pipelines when replacement instantiatio
         "failed-replacement-uuid", "stable-pipeline");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     duplicate_payload.name = "stable-pipeline";
     REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
     REQUIRE(tc_scene_add_pipeline_template(scene, duplicate.handle));

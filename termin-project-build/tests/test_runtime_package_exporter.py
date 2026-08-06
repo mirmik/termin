@@ -15,7 +15,10 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.project_build.runtime_package.models import ShaderSpec
 from termin.project_build.runtime_package.materials import _shader_source_identity
-from termin.project_build.runtime_package.shaders import write_shader
+from termin.project_build.runtime_package.shaders import (
+    ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID,
+    write_shader,
+)
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
 from termin.project_build.runtime_package.sprites import write_sprites
 from termin.project_build.runtime_package.ui_documents import (
@@ -455,6 +458,7 @@ def test_default_pipeline_exports_world_text_shader() -> None:
     shader_uuids = {shader.uuid for shader in _default_pipeline_engine_shaders()}
 
     assert ENGINE_TEXT3D_SHADER_UUID in shader_uuids
+    assert ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID in shader_uuids
 
 
 def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:

@@ -178,8 +178,9 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
         u32(len(encoded))
         payload.extend(encoded)
 
-    u32(2)  # binary version
-    u32(2)  # descriptor version
+    u32(3)  # binary version
+    u32(3)  # descriptor version
+    u32(1)  # single-view execution model
     text("Compiled Pipeline")
     u32(1)  # passes
     u32(1)  # resources
@@ -198,6 +199,7 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
     i32(0)
     i32(0)
     f32(1.0)
+    u32(1)
     u32(1)
     u32(0)
     u32(dependency_pass_index)
