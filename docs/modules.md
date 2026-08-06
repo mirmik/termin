@@ -59,6 +59,16 @@ Editor-side источник и UI остаются в `termin-app`, а вклю
 security policy принадлежат конкретному host. `termin-runtime` не получает
 обязательный diagnostics server.
 
+### termin-framegraph-remote
+
+Source of truth: [termin-framegraph-remote docs](../termin-framegraph-remote/docs/index.md)
+
+Опциональный нативный versioned contract сетевого Framegraph Debugger. Модуль
+описывает topology revisions, session-scoped target/pass identity, команды
+Snapshot/Live Preview/Burst, hard limits и chunked capture blobs. Codec не
+зависит от editor, Python, sockets, RenderingManager или graphics backend;
+target/client services подключаются отдельными слоями.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)

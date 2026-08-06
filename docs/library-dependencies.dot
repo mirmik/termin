@@ -149,6 +149,7 @@ digraph termin_dependencies {
 	"termin-default-assets";
 	"termin-dispatch";
 	"termin-glb";
+	"termin-framegraph-remote";
 	"termin-gui-native";
 	"termin-image";
 	"termin-materials";
@@ -190,6 +191,7 @@ digraph termin_dependencies {
 	"termin-base" -> "termin-audio";
 	"termin-base" -> "termin-cli";
 	"termin-base" -> "termin-dispatch";
+	"termin-base" -> "termin-framegraph-remote";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
