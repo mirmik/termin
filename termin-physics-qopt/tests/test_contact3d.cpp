@@ -345,6 +345,66 @@ namespace
         TERMIN_QOPT_CHECK(!contact_set->states()[0].sliding);
     }
 
+    struct ForcedContactResult
+    {
+        double displacement = 0.0;
+        double tangent_speed = 0.0;
+        double tangent_impulse = 0.0;
+        bool sliding = false;
+    };
+
+    ForcedContactResult run_forced_ground_contact(double friction_coefficient)
+    {
+        DynamicsSystem system;
+        auto* body =
+            add(system,
+                std::make_unique<RigidBody3DContribution>(
+                    unit_inertia(), RigidBody3DState{}, Vec3{0.0, -9.81, 0.0}));
+        add(system,
+            std::make_unique<ForceOnBody3DContribution>(
+                *body, Screw3{Vec3::zero(), {1.0, 0.0, 0.0}}));
+        auto contacts =
+            std::make_unique<ContactSet3DContribution>("forced-friction");
+        ContactSet3DContribution* contact_set = contacts.get();
+        Contact3D contact = ground_contact(41, *body, 0.0, 81);
+        contact.friction_coefficient = friction_coefficient;
+        TERMIN_QOPT_CHECK(contacts->set_contacts({contact}, {81}) ==
+                          Contact3DDiagnostic::None);
+        add(system, std::move(contacts));
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+
+        constexpr double time_step = 0.002;
+        constexpr std::size_t step_count = 5000;
+        for (std::size_t step = 0; step < step_count; ++step)
+        {
+            TERMIN_QOPT_CHECK(system.step(step_options(time_step)).ok());
+        }
+
+        const ContactState3D& state = contact_set->states()[0];
+        return {
+            .displacement = body->state().pose.lin.x,
+            .tangent_speed = state.tangent_velocity_world.norm(),
+            .tangent_impulse = state.tangent_impulse_world.norm(),
+            .sliding = state.sliding,
+        };
+    }
+
+    void test_sticking_contact_does_not_accumulate_tangential_drift()
+    {
+        const ForcedContactResult sticking = run_forced_ground_contact(0.5);
+        const ForcedContactResult sliding = run_forced_ground_contact(0.05);
+
+        check_near(sticking.displacement, 0.0, 1e-8);
+        check_near(sticking.tangent_speed, 0.0, 1e-8);
+        check_near(sticking.tangent_impulse, 0.002, 1e-8);
+        TERMIN_QOPT_CHECK(!sticking.sliding);
+
+        TERMIN_QOPT_CHECK(sliding.displacement > 1.0);
+        TERMIN_QOPT_CHECK(sliding.tangent_speed > 0.1);
+        TERMIN_QOPT_CHECK(sliding.tangent_impulse < sticking.tangent_impulse);
+        TERMIN_QOPT_CHECK(sliding.sliding);
+    }
+
     void test_persistent_contact_cache_and_warm_start()
     {
         DynamicsSystem system;
@@ -605,6 +665,7 @@ int main()
     test_impact_and_removal();
     test_resting_support_and_separation();
     test_ground_coulomb_friction();
+    test_sticking_contact_does_not_accumulate_tangential_drift();
     test_persistent_contact_cache_and_warm_start();
     test_contact_cache_order_capacity_and_rollback();
     test_articulation_endpoint();
