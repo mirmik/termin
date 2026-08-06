@@ -1,0 +1,84 @@
+uiscript: 2
+root:
+  type: termin.gui.OverlayLayout
+  name: vr_panel_root
+  background_color: [0.015, 0.025, 0.055, 1]
+  children:
+    - type: termin.gui.Panel
+      name: accent
+      anchor: top-left
+      layout: {width: 768, height: 8}
+      background_color: [0.12, 0.62, 1.0, 1]
+    - type: termin.gui.VStack
+      name: content
+      anchor: top-left
+      offset: [42, 34]
+      layout: {width: 684, height: 440}
+      spacing: 14
+      children:
+        - type: termin.gui.Label
+          text: TERMIN / WORLD PANEL
+          font_size: 28
+          color: [0.55, 0.86, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          text: Native UI is now rendering into a texture in VR.
+          font_size: 20
+          color: [0.92, 0.96, 1.0, 1]
+          basis: preferred
+        - type: termin.gui.Label
+          text: The controls are decorative for this first rendering slice.
+          font_size: 15
+          color: [0.60, 0.70, 0.84, 1]
+          basis: preferred
+        - type: termin.gui.Panel
+          name: divider
+          background_color: [0.12, 0.28, 0.46, 1]
+          basis: 2
+        - type: termin.gui.HStack
+          name: controls
+          spacing: 18
+          basis: 84
+          children:
+            - type: termin.gui.IconButton
+              name: launch_button
+              icon: START
+              tooltip: Interaction comes next
+              size: 76
+              font_size: 14
+              background_color: [0.06, 0.30, 0.56, 1]
+              hover_color: [0.10, 0.44, 0.76, 1]
+              pressed_color: [0.04, 0.20, 0.40, 1]
+              border_radius: 10
+            - type: termin.gui.VStack
+              spacing: 8
+              children:
+                - type: termin.gui.Label
+                  text: RENDER TARGET ONLINE
+                  font_size: 16
+                  color: [0.42, 0.94, 0.70, 1]
+                  basis: preferred
+                - type: termin.gui.Label
+                  text: 768 x 512 / native draw list / stereo surface
+                  font_size: 13
+                  color: [0.58, 0.69, 0.82, 1]
+                  basis: preferred
+        - type: termin.gui.HStack
+          name: option_row
+          spacing: 10
+          basis: 30
+          children:
+            - type: termin.gui.Checkbox
+              name: spatial_ui_enabled
+              checked: true
+              basis: 26
+            - type: termin.gui.Label
+              text: Spatial interface enabled
+              font_size: 15
+              color: [0.82, 0.90, 0.98, 1]
+              basis: preferred
+        - type: termin.gui.Label
+          text: Next step: controller ray, focus ownership and pointer capture.
+          font_size: 13
+          color: [0.45, 0.61, 0.76, 1]
+          basis: preferred

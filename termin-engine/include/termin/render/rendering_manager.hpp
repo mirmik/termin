@@ -387,6 +387,11 @@ public:
     // Unregister a render target managed by RenderingManager.
     void unregister_managed_render_target(tc_render_target_handle rt);
 
+    // Restore the scene's declarative render targets without creating host
+    // displays or viewports. Headless hosts (for example OpenXR) use this to
+    // preserve render-target dependency graphs from the authored scene.
+    bool attach_scene_render_targets(tc_scene_handle scene);
+
     // Get all render targets managed by RenderingManager.
     const std::vector<tc_render_target_handle>& managed_render_targets() const {
         return topology_.managed_render_targets();
@@ -407,7 +412,9 @@ public:
     void present_display(tc_display_handle display);
 
 private:
-    void render_planned_offscreen(tc_display_handle only_display);
+    void render_planned_offscreen(
+        tc_display_handle only_display,
+        tc_render_target_handle requested_target = TC_RENDER_TARGET_HANDLE_INVALID);
 
     // Render single viewport to its output FBO
     void render_viewport_offscreen(tc_viewport_handle viewport);
@@ -415,6 +422,10 @@ private:
 public:
     // Render a single managed render target to its output FBO
     void render_render_target_offscreen(tc_render_target_handle rt);
+
+    // Render a managed target together with every render-target dependency
+    // declared through its pipeline parameters.
+    void render_render_target_tree_offscreen(tc_render_target_handle rt);
 
 private:
 

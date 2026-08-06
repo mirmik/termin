@@ -31,6 +31,13 @@ contract. OpenXR declares the state after `xrWaitSwapchainImage` and the state
 required before `xrReleaseSwapchainImage`; client code does not edit Vulkan's
 tracked layout directly.
 
+Named texture parameters on a render target remain part of the common pipeline
+contract. Context providers for special targets, including `xr_stereo`, create
+their platform-owned bindings first; the engine then resolves the target's
+`pipeline_params` into those newly-created contexts without replacing provider
+bindings. This lets an XR graph consume ordinary render-target output, such as
+an offscreen UI panel, through an explicit named texture socket.
+
 ## Pass and resource contract
 
 Layering belongs to texture/resource descriptors through `array_layers`.
@@ -58,9 +65,12 @@ pass and prevents tile corruption. It is visible graph configuration rather
 than a hidden multiview behavior; the default remains disabled for passes and
 platforms that do not need the compatibility ordering.
 
-Shadows, bloom, UI and World2D are outside the first contract. Adding one of
-them requires an explicit multiview pass and typed graph sockets; the runtime
-must not silently execute a mono pass once per eye.
+Shadows, bloom and World2D are outside the first contract. A mono UI pass may
+render into an ordinary texture target before the XR target, then the multiview
+graph may sample that texture on scene geometry through a named texture socket.
+Rendering UI directly into the layered headset target would still require an
+explicit multiview pass and typed graph sockets; the runtime must not silently
+execute a mono pass once per eye.
 
 ## Shader ABI
 

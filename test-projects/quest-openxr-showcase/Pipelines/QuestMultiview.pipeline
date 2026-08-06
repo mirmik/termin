@@ -36,7 +36,10 @@
         "phase_mark": "opaque",
         "sort_mode": "near_to_far",
         "attachment_barrier_between_draws": true
-      }
+      },
+      "dynamic_inputs": [
+        ["u_panel_texture", "fbo"]
+      ]
     },
     {
       "type": "MultiviewColorPass",
@@ -90,6 +93,16 @@
         "exposure": 1.0,
         "method": 0
       }
+    },
+    {
+      "type": "External RT",
+      "node_type": "external_rt",
+      "name": "Panel Color",
+      "x": 20,
+      "y": 360,
+      "params": {
+        "slot": "PANEL_COLOR"
+      }
     }
   ],
   "connections": [
@@ -98,16 +111,7 @@
     {"from_node": 2, "from_socket": "output_res", "to_node": 4, "to_socket": "input_res"},
     {"from_node": 3, "from_socket": "fbo", "to_node": 4, "to_socket": "output_res_target"},
     {"from_node": 4, "from_socket": "output_res", "to_node": 6, "to_socket": "input_res"},
-    {"from_node": 5, "from_socket": "fbo", "to_node": 6, "to_socket": "output_res_target"}
-  ],
-  "viewport_frames": [
-    {
-      "title": "Quest stereo view",
-      "viewport_name": "Quest Headset",
-      "x": 0,
-      "y": 0,
-      "width": 1320,
-      "height": 520
-    }
+    {"from_node": 5, "from_socket": "fbo", "to_node": 6, "to_socket": "output_res_target"},
+    {"from_node": 7, "from_socket": "fbo", "to_node": 1, "to_socket": "u_panel_texture"}
   ]
 }

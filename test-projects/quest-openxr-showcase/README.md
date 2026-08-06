@@ -30,6 +30,12 @@ draws, preventing the square tile corruption observed on the tested Quest 2
 Adreno driver. Do not remove it without a headset A/B test; do not enable it
 globally without evidence that another graph or device needs it.
 
+The floating VR panel is rendered once by `UIWidgetPass` into the ordinary
+`VR Panel Texture` target. The headset target exposes that color result to the
+multiview graph as the named `PANEL_COLOR` texture, and the panel mesh samples
+it like any other material texture. This keeps the UI graph and XR graph
+literal: there is no hidden per-eye execution of the mono UI pass.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
@@ -127,6 +133,9 @@ and filtered logcat together with the result.
    high-contrast object edges for at least one minute. No screen-aligned square
    or stair-step regions containing nearby object colors may appear in either
    eye.
+9. `vr-panel`: the floating panel is visible in both eyes and shows its text,
+   blue button and checkbox. It must not appear as a flat white/black surface or
+   sample the headset swapchain in place of the panel texture.
 
 ## Editor view
 
