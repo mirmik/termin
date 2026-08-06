@@ -1,7 +1,6 @@
 # Explicit XR multiview rendering
 
-Status: implemented for the Vulkan/OpenXR Quest path; device acceptance is
-still required.
+Status: implemented and device-accepted for the Vulkan/OpenXR Quest path.
 
 Termin models XR multiview as a separate, literal render-pipeline contract.
 It is not a second interpretation of an ordinary mono graph. A graph declares
@@ -52,6 +51,13 @@ layered RGBA16F + depth, 4x MSAA
   -> two-layer OpenXR swapchain
 ```
 
+The Quest opaque pass explicitly enables
+`attachment_barrier_between_draws`. On the tested Quest 2/Adreno driver this
+maps to framebuffer-local color/depth ordering inside the same Vulkan render
+pass and prevents tile corruption. It is visible graph configuration rather
+than a hidden multiview behavior; the default remains disabled for passes and
+platforms that do not need the compatibility ordering.
+
 Shadows, bloom, UI and World2D are outside the first contract. Adding one of
 them requires an explicit multiview pass and typed graph sockets; the runtime
 must not silently execute a mono pass once per eye.
@@ -68,6 +74,7 @@ layers in one multiview render pass.
 ## Capability and acceptance requirements
 
 The Vulkan device must expose texture arrays, multiview, and at least two
-multiview views. The remaining acceptance gate is a real Quest run with Vulkan
-validation and both-eye visual inspection. The showcase pipeline is
+multiview views. The showcase pipeline was accepted on a Quest 2 with distinct,
+stable stereo views, 4x MSAA, layered resolve and no observed tile artifacts.
+Its source is
 `test-projects/quest-openxr-showcase/Pipelines/QuestMultiview.pipeline`.
