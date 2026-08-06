@@ -512,7 +512,10 @@ namespace
         TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
         state->reset_assembly_counters();
 
-        TERMIN_QOPT_CHECK(system.step(options(0.002)).ok());
+        const DynamicsSystemStepResult step = system.step(options(0.002));
+        TERMIN_QOPT_CHECK(step.ok());
+        TERMIN_QOPT_CHECK(step.endpoint_equality_factorizations == 1);
+        TERMIN_QOPT_CHECK(step.endpoint_equality_factorization_reuses > 0);
         const ArticulationDynamicsAssemblyCounters counters =
             state->assembly_counters();
         TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 2);

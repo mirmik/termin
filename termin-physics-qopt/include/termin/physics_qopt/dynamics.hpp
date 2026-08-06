@@ -491,6 +491,8 @@ namespace termin::physics_qopt
         double velocity_constraint_linf = 0.0;
         std::size_t position_iterations = 0;
         std::size_t unilateral_constraint_count = 0;
+        std::size_t endpoint_equality_factorizations = 0;
+        std::size_t endpoint_equality_factorization_reuses = 0;
 
         [[nodiscard]] constexpr bool ok() const noexcept
         {

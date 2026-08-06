@@ -4,6 +4,9 @@
 #include <termin/qopt/qp_types.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
 
+#include <cstddef>
+#include <memory>
+
 namespace termin::qopt {
 
 // Provisional dense equality-QP contract:
@@ -24,6 +27,39 @@ struct EqualityQpProblemView {
 struct EqualityQpSolutionView {
   DenseVectorView primal;
   DenseVectorView equality_dual;
+};
+
+struct EqualityQpFactorizationCounters {
+  std::size_t factorizations = 0;
+  std::size_t reuse_hits = 0;
+};
+
+// Explicitly scoped cache for repeated equality QPs whose Hessian and
+// equality Jacobian remain exactly unchanged while their right-hand sides
+// vary. The cache always revalidates the coefficient matrices and
+// automatically refactorizes on any coefficient or tolerance change.
+class TERMIN_QOPT_API EqualityQpFactorizationCache {
+public:
+  EqualityQpFactorizationCache();
+  ~EqualityQpFactorizationCache();
+
+  EqualityQpFactorizationCache(EqualityQpFactorizationCache &&) noexcept;
+  EqualityQpFactorizationCache &
+  operator=(EqualityQpFactorizationCache &&) noexcept;
+  EqualityQpFactorizationCache(const EqualityQpFactorizationCache &) = delete;
+  EqualityQpFactorizationCache &
+  operator=(const EqualityQpFactorizationCache &) = delete;
+
+  [[nodiscard]] QpSolveResult solve(
+      EqualityQpProblemView problem, EqualityQpSolutionView solution,
+      QpTolerance tolerance = {}) noexcept;
+  void clear() noexcept;
+  [[nodiscard]] EqualityQpFactorizationCounters counters() const noexcept;
+  void reset_counters() noexcept;
+
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 [[nodiscard]] TERMIN_QOPT_API QpSolveResult solve_equality_qp(
