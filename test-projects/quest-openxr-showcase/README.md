@@ -8,6 +8,14 @@ The scene also exercises the native game-physics component path: the floor and
 table are static colliders, while the three colored blocks are dynamic rigid
 bodies that settle on the tabletop under gravity.
 
+## Quest rendering budget
+
+This showcase targets Quest-class standalone hardware. Dynamic shadows and
+bloom are currently too expensive for its normal acceptance configuration and
+should remain disabled. Enable either feature only for an explicit profiling or
+quality experiment, and record GPU/frame timing before treating that setting as
+a new project default.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
