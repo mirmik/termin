@@ -122,11 +122,14 @@ public sealed class ChartPart2D<T> where T : GraphicItemRef2D
 public sealed class Chart2D : IDisposable
 {
     private readonly GpuHost _host;
+    private readonly bool _ownsScene;
     private readonly List<PlotLineSeriesItemRef2D> _lines = new();
     private readonly List<PlotScatterSeriesItemRef2D> _scatters = new();
     private readonly List<TextItemRef2D> _xTickLabels = new();
     private readonly List<TextItemRef2D> _yTickLabels = new();
     private bool _disposed;
+    private float _xPx;
+    private float _yPx;
     private float _widthPx;
     private float _heightPx;
     private float _pixelScale;
@@ -143,25 +146,80 @@ public sealed class Chart2D : IDisposable
         string fontUri = "ui://default-font",
         float pixelScale = 1,
         Chart2DTheme? theme = null)
+        : this(
+            host,
+            null,
+            new VisualRect2f(0, 0, widthPx, heightPx),
+            range,
+            fontUri,
+            pixelScale,
+            theme,
+            ownsScene: true)
+    {
+    }
+
+    /// <summary>
+    /// Creates a chart panel inside a scene owned by the caller. Disposing the
+    /// chart removes only its retained subtree and does not destroy the scene.
+    /// </summary>
+    public Chart2D(
+        GpuHost host,
+        TcVisualScene2D scene,
+        VisualRect2f viewport,
+        PlotRange2D range,
+        string fontUri = "ui://default-font",
+        float pixelScale = 1,
+        Chart2DTheme? theme = null)
+        : this(
+            host,
+            scene ?? throw new ArgumentNullException(nameof(scene)),
+            viewport,
+            range,
+            fontUri,
+            pixelScale,
+            theme,
+            ownsScene: false)
+    {
+    }
+
+    private Chart2D(
+        GpuHost host,
+        TcVisualScene2D? scene,
+        VisualRect2f viewport,
+        PlotRange2D range,
+        string fontUri,
+        float pixelScale,
+        Chart2DTheme? theme,
+        bool ownsScene)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         if (string.IsNullOrWhiteSpace(fontUri))
             throw new ArgumentException(
                 "A retained text font URI is required.", nameof(fontUri));
         FontUri = fontUri;
-        ValidateViewport(widthPx, heightPx, pixelScale);
+        ValidateViewport(
+            viewport.X,
+            viewport.Y,
+            viewport.Width,
+            viewport.Height,
+            pixelScale);
         ValidateRange(range);
-        _widthPx = widthPx;
-        _heightPx = heightPx;
+        _xPx = viewport.X;
+        _yPx = viewport.Y;
+        _widthPx = viewport.Width;
+        _heightPx = viewport.Height;
         _pixelScale = pixelScale;
         _range = range;
         Theme = theme ?? Chart2DTheme.Default;
 
-        Scene = new TcVisualScene2D();
+        _ownsScene = ownsScene;
+        Scene = scene ?? new TcVisualScene2D();
         PlotProjectionRef2D? projection = null;
+        GroupItemRef2D? root = null;
         try
         {
-            Root = GroupItemRef2D.Create(Scene);
+            root = GroupItemRef2D.Create(Scene);
+            Root = root;
             PlotArea = GroupItemRef2D.Create(Scene, Root);
             Series = GroupItemRef2D.Create(Scene, PlotArea);
             Annotations = GroupItemRef2D.Create(Scene, PlotArea);
@@ -169,7 +227,11 @@ public sealed class Chart2D : IDisposable
             XTickLabels = GroupItemRef2D.Create(Scene, Chrome);
             YTickLabels = GroupItemRef2D.Create(Scene, Chrome);
 
-            var provisional = new PlotRect2D(0, 0, widthPx, heightPx);
+            var provisional = new PlotRect2D(
+                viewport.X,
+                viewport.Y,
+                viewport.Width,
+                viewport.Height);
             projection = PlotProjectionRef2D.Create(
                 Scene,
                 new PlotProjectionDescriptor2D(
@@ -229,7 +291,10 @@ public sealed class Chart2D : IDisposable
         catch
         {
             projection?.Dispose();
-            Scene.Dispose();
+            if (root is { IsValid: true })
+                root.Destroy();
+            if (_ownsScene)
+                Scene.Dispose();
             throw;
         }
     }
@@ -363,10 +428,24 @@ public sealed class Chart2D : IDisposable
 
     public void Resize(float widthPx, float heightPx, float pixelScale = 1)
     {
+        SetViewport(
+            new VisualRect2f(_xPx, _yPx, widthPx, heightPx),
+            pixelScale);
+    }
+
+    public void SetViewport(VisualRect2f viewport, float pixelScale = 1)
+    {
         ThrowIfDisposed();
-        ValidateViewport(widthPx, heightPx, pixelScale);
-        _widthPx = widthPx;
-        _heightPx = heightPx;
+        ValidateViewport(
+            viewport.X,
+            viewport.Y,
+            viewport.Width,
+            viewport.Height,
+            pixelScale);
+        _xPx = viewport.X;
+        _yPx = viewport.Y;
+        _widthPx = viewport.Width;
+        _heightPx = viewport.Height;
         _pixelScale = pixelScale;
         ApplyLayout();
     }
@@ -386,7 +465,10 @@ public sealed class Chart2D : IDisposable
         if (_disposed)
             return;
         Projection.Dispose();
-        Scene.Dispose();
+        if (_ownsScene)
+            Scene.Dispose();
+        else if (Root.IsValid)
+            Root.Destroy();
         _disposed = true;
         GC.SuppressFinalize(this);
     }
@@ -399,7 +481,7 @@ public sealed class Chart2D : IDisposable
             Scene, " ", FontUri, new VisualVec2f(0, 0),
             Theme.FontSizeLogicalPx * _pixelScale,
             Theme.ForegroundColor,
-            new VisualBounds2f(0, 0, _widthPx, _heightPx),
+            ViewportBounds(),
             anchor,
             Chrome);
         return new ChartPart2D<TextItemRef2D>(
@@ -446,17 +528,17 @@ public sealed class Chart2D : IDisposable
             : RetainedPlotLayout2D.MeasureText(
                 _host, _yLabel, Theme.FontSizeLogicalPx, scale).Width + gap;
 
-        var left = padding + yLabelWidth + widestY + tickLength + gap * 2;
-        var top = padding + titleHeight + (titleHeight > 0 ? gap : 0);
+        var left = _xPx + padding + yLabelWidth + widestY + tickLength + gap * 2;
+        var top = _yPx + padding + titleHeight + (titleHeight > 0 ? gap : 0);
         var right = padding;
         var bottom = padding + tickLength + gap + tickMetrics.LineHeight +
                      xLabelHeight;
         var plot = new PlotRect2D(
             left,
             top,
-            Math.Max(1, _widthPx - left - right),
-            Math.Max(1, _heightPx - top - bottom));
-        var viewport = new PlotRect2D(0, 0, _widthPx, _heightPx);
+            Math.Max(1, _xPx + _widthPx - left - right),
+            Math.Max(1, _yPx + _heightPx - top - bottom));
+        var viewport = new PlotRect2D(_xPx, _yPx, _widthPx, _heightPx);
         Layout = new ChartLayout2D(viewport, plot, scale);
         Projection.Update(new PlotProjectionDescriptor2D(
             viewport, plot, _range, plot, scale));
@@ -488,17 +570,21 @@ public sealed class Chart2D : IDisposable
         RebuildTickLabels(exactXTicks, exactYTicks, tickFontPx, tickMetrics);
         SetText(
             Title.Item, _title,
-            new VisualVec2f(_widthPx / 2, padding + titleFontPx),
+            new VisualVec2f(
+                _xPx + _widthPx / 2,
+                _yPx + padding + titleFontPx),
             titleFontPx, VisualTextAnchor2D.Center);
         SetText(
             XAxisLabel.Item, _xLabel,
             new VisualVec2f(
                 plot.X + plot.Width / 2,
-                _heightPx - padding),
+                _yPx + _heightPx - padding),
             tickFontPx, VisualTextAnchor2D.Center);
         SetText(
             YAxisLabel.Item, _yLabel,
-            new VisualVec2f(padding, plot.Y + plot.Height / 2),
+            new VisualVec2f(
+                _xPx + padding,
+                plot.Y + plot.Height / 2),
             tickFontPx, VisualTextAnchor2D.Left);
     }
 
@@ -547,7 +633,7 @@ public sealed class Chart2D : IDisposable
         DestroyItems(_xTickLabels);
         DestroyItems(_yTickLabels);
         var plot = Layout.PlotArea;
-        var bounds = new VisualBounds2f(0, 0, _widthPx, _heightPx);
+        var bounds = ViewportBounds();
         var gap = Theme.GapLogicalPx * _pixelScale;
         var tickLength = Theme.TickLengthLogicalPx * _pixelScale;
 
@@ -589,7 +675,7 @@ public sealed class Chart2D : IDisposable
         item.Set(
             string.IsNullOrEmpty(text) ? " " : text,
             FontUri, origin, fontSizePx, Theme.ForegroundColor,
-            new VisualBounds2f(0, 0, _widthPx, _heightPx), anchor);
+            ViewportBounds(), anchor);
         item.Visible = !string.IsNullOrEmpty(text);
     }
 
@@ -606,6 +692,12 @@ public sealed class Chart2D : IDisposable
             cap: VisualStrokeCap2D.Square);
 
     private static VisualFillPaint2D Fill(VisualColor4f color) => new(color);
+
+    private VisualBounds2f ViewportBounds() => new(
+        _xPx,
+        _yPx,
+        _xPx + _widthPx,
+        _yPx + _heightPx);
 
     private static VisualRect2f ToVisual(PlotRect2D rect) =>
         new(rect.X, rect.Y, rect.Width, rect.Height);
@@ -663,11 +755,15 @@ public sealed class Chart2D : IDisposable
     }
 
     private static void ValidateViewport(
+        float xPx,
+        float yPx,
         float widthPx,
         float heightPx,
         float pixelScale)
     {
-        if (!float.IsFinite(widthPx) || widthPx <= 0 ||
+        if (!float.IsFinite(xPx) ||
+            !float.IsFinite(yPx) ||
+            !float.IsFinite(widthPx) || widthPx <= 0 ||
             !float.IsFinite(heightPx) || heightPx <= 0 ||
             !float.IsFinite(pixelScale) || pixelScale <= 0)
             throw new ArgumentOutOfRangeException(
