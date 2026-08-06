@@ -1,4 +1,5 @@
 #include "termin/editor/frame_graph_debugger_view.hpp"
+#include "termin/editor/frame_graph_debugger_source.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -18,8 +19,6 @@
 #include <termin/gui_native/rich_text_view.hpp>
 #include <termin/gui_native/status_bar.hpp>
 #include <termin/gui_native/text_area.hpp>
-#include <termin/render/frame_graph_debugger.hpp>
-#include <termin/render/frame_graph_capture.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/i_render_device.hpp>
@@ -103,11 +102,23 @@ FrameGraphDebuggerView::FrameGraphDebuggerView(
     gui_native::TcDocument document,
     FrameGraphDebugger& debugger,
     std::function<void()> request_render
+) : FrameGraphDebuggerView(
+        document,
+        make_local_frame_graph_debugger_source(debugger),
+        std::move(request_render)) {}
+
+FrameGraphDebuggerView::FrameGraphDebuggerView(
+    gui_native::TcDocument document,
+    std::shared_ptr<IFrameGraphDebuggerSource> source,
+    std::function<void()> request_render
 ) : document_(document),
-    debugger_(&debugger),
+    source_(std::move(source)),
     request_render_(std::move(request_render)) {
     if (!document_.valid()) {
         throw std::invalid_argument("FrameGraphDebuggerView requires a valid TcDocument");
+    }
+    if (!source_) {
+        throw std::invalid_argument("FrameGraphDebuggerView requires a source");
     }
     build();
 }
@@ -363,7 +374,9 @@ void FrameGraphDebuggerView::build() {
 
     target_combo_->changed().connect([this](ComboBox&, int index, const std::string&) {
         if (updating_ || index < 0) return;
-        if (!debugger_->select_target_at(static_cast<size_t>(index))) {
+        const auto snapshot = source_->snapshot();
+        if (static_cast<size_t>(index) >= snapshot->targets.size() ||
+            !source_->select_target(snapshot->targets[static_cast<size_t>(index)].id)) {
             tc_log_error(
                 "[framegraph-debugger-view] failed to select target at index %d", index);
             return;
@@ -375,7 +388,7 @@ void FrameGraphDebuggerView::build() {
     });
     mode_combo_->changed().connect([this](ComboBox&, int index, const std::string&) {
         if (!updating_) {
-            debugger_->set_mode(index == 0
+            source_->set_mode(index == 0
                 ? FrameGraphDebuggerMode::InsidePass
                 : FrameGraphDebuggerMode::BetweenPasses);
             refresh_selection();
@@ -385,43 +398,46 @@ void FrameGraphDebuggerView::build() {
     });
     pass_combo_->changed().connect([this](ComboBox&, int index, const std::string&) {
         if (!updating_ && index >= 0 && static_cast<size_t>(index) < pass_indices_.size()) {
-            debugger_->set_selected_pass(pass_indices_[static_cast<size_t>(index)]);
+            const auto snapshot = source_->snapshot();
+            if (static_cast<size_t>(index) < snapshot->passes.size()) {
+                source_->select_pass(snapshot->passes[static_cast<size_t>(index)].id);
+            }
             refresh_lists();
             refresh_info();
         }
     });
     symbol_combo_->changed().connect([this](ComboBox&, int, const std::string& text) {
         if (!updating_) {
-            debugger_->set_selected_symbol(text);
+            source_->set_selected_symbol(text);
             refresh_info();
         }
     });
     resource_combo_->changed().connect([this](ComboBox&, int, const std::string& text) {
         if (!updating_ && !text.empty()) {
-            debugger_->set_selected_resource(text);
+            source_->set_selected_resource(text);
             refresh_info();
         }
     });
     channel_combo_->changed().connect([this](ComboBox&, int index, const std::string&) {
         if (!updating_) {
-            debugger_->set_channel_mode(index);
+            source_->set_channel_mode(index);
             request_render();
         }
     });
     pause_check_->changed().connect([this](Checkbox&, bool checked) {
         if (!updating_) {
-            debugger_->set_paused(checked);
+            source_->set_paused(checked);
             refresh_info();
         }
     });
     hdr_check_->changed().connect([this](Checkbox&, bool checked) {
         if (!updating_) {
-            debugger_->set_highlight_hdr(checked);
+            source_->set_highlight_hdr(checked);
             request_render();
         }
     });
     analyze.clicked().connect([this](Button&) {
-        hdr_model_->set_html(debugger_->analyze_hdr());
+        hdr_model_->set_html(source_->analyze_hdr());
         request_render();
     });
     refresh_stats.clicked().connect([this](Button&) {
@@ -433,9 +449,9 @@ bool FrameGraphDebuggerView::activate() {
     require_open();
     if (active_) return false;
     active_ = true;
-    debugger_->refresh();
+    source_->refresh();
     select_initial_values();
-    debugger_->connect();
+    source_->connect();
     refresh_lists();
     refresh_selection();
     refresh_info();
@@ -445,15 +461,15 @@ bool FrameGraphDebuggerView::activate() {
 void FrameGraphDebuggerView::deactivate() {
     if (!active_) return;
     active_ = false;
-    debugger_->disconnect();
+    source_->disconnect();
     release_previews();
 }
 
 bool FrameGraphDebuggerView::update() {
     require_open();
     if (!active_) return false;
-    debugger_->finish_frame();
-    debugger_->refresh();
+    source_->finish_frame();
+    source_->refresh();
     refresh_lists();
     refresh_selection();
     refresh_info();
@@ -462,15 +478,16 @@ bool FrameGraphDebuggerView::update() {
 
 bool FrameGraphDebuggerView::show_resource(const std::string& resource) {
     require_open();
-    const std::vector<std::string> resources = debugger_->resources();
+    const auto snapshot = source_->snapshot();
+    const auto& resources = snapshot->resources;
     if (std::find(resources.begin(), resources.end(), resource) == resources.end()) {
         tc_log_error(
             "[framegraph-debugger-view] cannot select missing resource '%s'",
             resource.c_str());
         return false;
     }
-    debugger_->set_mode(FrameGraphDebuggerMode::BetweenPasses);
-    debugger_->set_selected_resource(resource);
+    source_->set_mode(FrameGraphDebuggerMode::BetweenPasses);
+    source_->set_selected_resource(resource);
     refresh_lists();
     refresh_selection();
     refresh_info();
@@ -478,40 +495,42 @@ bool FrameGraphDebuggerView::show_resource(const std::string& resource) {
 }
 
 void FrameGraphDebuggerView::select_initial_values() {
-    const auto& targets = debugger_->targets();
-    if (!debugger_->selected_target_index() && !targets.empty() &&
-        !debugger_->select_target_at(0)) {
+    auto snapshot = source_->snapshot();
+    if (!snapshot->selected_target_id && !snapshot->targets.empty() &&
+        !source_->select_target(snapshot->targets.front().id)) {
         tc_log_error(
             "[framegraph-debugger-view] failed to select initial target '%s'",
-            targets.front().label.c_str());
+            snapshot->targets.front().label.c_str());
     }
-    const auto passes = debugger_->passes();
-    if (!debugger_->selected_pass_index() && !passes.empty()) {
-        debugger_->set_selected_pass(passes.front().index);
+    snapshot = source_->snapshot();
+    if (!snapshot->selected_pass_id && !snapshot->passes.empty()) {
+        source_->select_pass(snapshot->passes.front().id);
     }
-    const auto resources = debugger_->resources();
-    if (debugger_->selected_resource().empty() && !resources.empty()) {
-        debugger_->set_selected_resource(resources.front());
+    snapshot = source_->snapshot();
+    if (snapshot->selected_resource.empty() && !snapshot->resources.empty()) {
+        source_->set_selected_resource(snapshot->resources.front());
     }
 }
 
 void FrameGraphDebuggerView::refresh_lists() {
+    const auto snapshot = source_->snapshot();
     updating_ = true;
     target_combo_->clear_items();
-    for (const auto& target : debugger_->targets()) {
+    int selected_target = -1;
+    for (size_t index = 0; index < snapshot->targets.size(); ++index) {
+        const auto& target = snapshot->targets[index];
         target_combo_->add_item(target.label);
+        if (snapshot->selected_target_id == target.id) {
+            selected_target = static_cast<int>(index);
+        }
     }
-    target_combo_->set_selected_index(
-        debugger_->selected_target_index()
-            ? static_cast<int>(*debugger_->selected_target_index())
-            : -1);
+    target_combo_->set_selected_index(selected_target);
 
     resource_combo_->clear_items();
-    const auto resources = debugger_->resources();
     int resource_index = -1;
-    for (size_t index = 0; index < resources.size(); ++index) {
-        resource_combo_->add_item(resources[index]);
-        if (resources[index] == debugger_->selected_resource()) {
+    for (size_t index = 0; index < snapshot->resources.size(); ++index) {
+        resource_combo_->add_item(snapshot->resources[index]);
+        if (snapshot->resources[index] == snapshot->selected_resource) {
             resource_index = static_cast<int>(index);
         }
     }
@@ -520,22 +539,20 @@ void FrameGraphDebuggerView::refresh_lists() {
     pass_combo_->clear_items();
     pass_indices_.clear();
     int selected_pass = -1;
-    const auto passes = debugger_->passes();
-    for (size_t row = 0; row < passes.size(); ++row) {
-        pass_combo_->add_item(passes[row].display_name());
-        pass_indices_.push_back(passes[row].index);
-        if (debugger_->selected_pass_index() == passes[row].index) {
+    for (size_t row = 0; row < snapshot->passes.size(); ++row) {
+        pass_combo_->add_item(snapshot->passes[row].display_name());
+        pass_indices_.push_back(snapshot->passes[row].authored_index);
+        if (snapshot->selected_pass_id == snapshot->passes[row].id) {
             selected_pass = static_cast<int>(row);
         }
     }
     pass_combo_->set_selected_index(selected_pass);
 
     symbol_combo_->clear_items();
-    const auto symbols = debugger_->symbols();
     int symbol_index = -1;
-    for (size_t index = 0; index < symbols.size(); ++index) {
-        symbol_combo_->add_item(symbols[index]);
-        if (symbols[index] == debugger_->selected_symbol()) {
+    for (size_t index = 0; index < snapshot->symbols.size(); ++index) {
+        symbol_combo_->add_item(snapshot->symbols[index]);
+        if (snapshot->symbols[index] == snapshot->selected_symbol) {
             symbol_index = static_cast<int>(index);
         }
     }
@@ -545,29 +562,34 @@ void FrameGraphDebuggerView::refresh_lists() {
 }
 
 void FrameGraphDebuggerView::refresh_selection() {
+    const auto snapshot = source_->snapshot();
     updating_ = true;
     mode_combo_->set_selected_index(
-        debugger_->mode() == FrameGraphDebuggerMode::InsidePass ? 0 : 1);
-    channel_combo_->set_selected_index(debugger_->channel_mode());
-    pause_check_->set_checked(debugger_->paused());
-    hdr_check_->set_checked(debugger_->highlight_hdr());
-    inside_panel_->set_visible(debugger_->mode() == FrameGraphDebuggerMode::InsidePass);
-    between_panel_->set_visible(debugger_->mode() == FrameGraphDebuggerMode::BetweenPasses);
+        snapshot->mode == FrameGraphDebuggerMode::InsidePass ? 0 : 1);
+    channel_combo_->set_selected_index(snapshot->channel_mode);
+    pause_check_->set_checked(snapshot->paused);
+    hdr_check_->set_checked(snapshot->highlight_hdr);
+    inside_panel_->set_visible(snapshot->mode == FrameGraphDebuggerMode::InsidePass);
+    between_panel_->set_visible(snapshot->mode == FrameGraphDebuggerMode::BetweenPasses);
     updating_ = false;
     request_render();
 }
 
 void FrameGraphDebuggerView::refresh_info() {
-    fbo_model_->set_html(debugger_->format_capture_info());
-    pipeline_model_->set_html(debugger_->format_pipeline_info());
-    pass_json_->set_text(debugger_->format_pass_json());
-    stats_bar_->set_text(debugger_->format_render_stats());
-    const std::string timing = debugger_->format_timing();
+    const auto snapshot = source_->snapshot();
+    fbo_model_->set_html(snapshot->capture_info);
+    pipeline_model_->set_html(snapshot->pipeline_info);
+    pass_json_->set_text(snapshot->pass_json);
+    stats_bar_->set_text(snapshot->render_stats);
+    const std::string& timing = snapshot->timing;
     timing_bar_->set_text(timing.empty() ? "Timing: no selection" : timing);
-    std::string state = state_name(debugger_->state());
-    if (debugger_->state() == FrameGraphDebuggerState::Suspended) {
+    std::string state = state_name(snapshot->state);
+    if (snapshot->state == FrameGraphDebuggerState::Suspended) {
         state += ": ";
-        state += suspend_reason_name(debugger_->suspend_reason());
+        state += suspend_reason_name(snapshot->suspend_reason);
+    } else if (!snapshot->status_detail.empty()) {
+        state += ": ";
+        state += snapshot->status_detail;
     }
     state_status_->set_text(std::move(state));
     request_render();
@@ -586,11 +608,11 @@ bool FrameGraphDebuggerView::render_preview(
     tgfx::RenderContext2& context,
     Preview& preview
 ) {
-    FrameGraphCapture& capture = preview.force_depth
-        ? debugger_->depth_capture()
-        : debugger_->capture();
-    if (!capture.has_capture() || !capture.capture_tex() ||
-        capture.width() <= 0 || capture.height() <= 0) {
+    const auto snapshot = source_->snapshot();
+    const auto& image = preview.force_depth
+        ? snapshot->depth_image
+        : snapshot->main_image;
+    if (!image.available || image.width == 0 || image.height == 0) {
         if (preview.ready) preview.canvas->clear_texture();
         preview.ready = false;
         preview.has_cursor = false;
@@ -598,8 +620,8 @@ bool FrameGraphDebuggerView::render_preview(
         return false;
     }
 
-    const uint32_t width = static_cast<uint32_t>(capture.width());
-    const uint32_t height = static_cast<uint32_t>(capture.height());
+    const uint32_t width = image.width;
+    const uint32_t height = image.height;
     if (!preview.target || preview.width != width || preview.height != height) {
         release_preview(preview);
         preview_device_ = &context.device();
@@ -617,12 +639,20 @@ bool FrameGraphDebuggerView::render_preview(
             tc_ui_size{static_cast<float>(width), static_cast<float>(height)});
     }
 
-    FrameGraphPresenterDraw draw;
-    draw.capture_tex = capture.capture_tex();
-    draw.dst_rect = Rect2i{0, 0, static_cast<int>(width), static_cast<int>(height)};
-    draw.options.channel_mode = preview.force_depth ? 5 : debugger_->channel_mode();
-    draw.options.highlight_hdr = preview.force_depth ? false : debugger_->highlight_hdr();
-    debugger_->presenter().render(&context, preview.target, draw);
+    const bool rendered = source_->render_image(
+        context,
+        preview.target,
+        preview.force_depth
+            ? FrameGraphDebuggerImageKind::Depth
+            : FrameGraphDebuggerImageKind::Main,
+        width,
+        height,
+        preview.force_depth ? 5 : snapshot->channel_mode,
+        preview.force_depth ? false : snapshot->highlight_hdr);
+    if (!rendered) {
+        tc_log_error("[framegraph-debugger-view] source failed to render preview");
+        return false;
+    }
     const bool changed = !preview.ready;
     preview.ready = true;
     refresh_preview_status(preview);
@@ -632,15 +662,15 @@ bool FrameGraphDebuggerView::render_preview(
 
 std::string FrameGraphDebuggerView::refresh_depth(tgfx::IRenderDevice& device) {
     require_open();
-    FrameGraphCapture& capture = debugger_->depth_capture();
+    const auto snapshot = source_->snapshot();
     std::string text;
-    if (!capture.has_capture() || !capture.capture_tex()) {
+    if (!snapshot->depth_image.available) {
         text = "No depth capture";
     } else {
         int width = 0;
         int height = 0;
-        const auto pixels = debugger_->presenter().read_depth_normalized(
-            &device, capture.capture_tex(), &width, &height);
+        const auto pixels = source_->read_depth_normalized(
+            device, &width, &height);
         text = pixels.empty()
             ? "No depth data"
             : "Depth: " + std::to_string(width) + "x" +
@@ -698,6 +728,7 @@ void FrameGraphDebuggerView::release_previews() {
 void FrameGraphDebuggerView::close() {
     if (closed_) return;
     deactivate();
+    source_->close();
     closed_ = true;
     if (document_.valid() && root_ &&
         tc_ui_document_is_alive(document_.handle(), root_->handle())) {

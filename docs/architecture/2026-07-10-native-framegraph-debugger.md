@@ -28,6 +28,23 @@ owns callbacks and selection synchronization, and presents both captures. The
 legacy tcgui dialog remains a compatibility frontend; it does not discover
 targets or mutate pipelines itself.
 
+## Frontend source boundary
+
+`IFrameGraphDebuggerSource` is the only debugger interface consumed by
+`FrameGraphDebuggerView`. It publishes immutable value snapshots containing
+topology, selection, status, formatted diagnostics, and capture-image
+descriptors, and accepts selection/session commands. `LocalFrameGraphDebuggerSource`
+projects the sole `FrameGraphDebugger` into that contract; it neither owns nor
+duplicates native debugger state.
+
+Image descriptors contain dimensions, format, depth classification, and a
+source-local generation, but no transport identity or remote GPU handle. The
+source is responsible for rendering its image into a client-local preview
+target and for depth readback. Consequently a remote implementation can upload
+decoded bytes into a local texture while the view follows exactly the same
+path as an in-process capture. Transport, reconnect, and packet handling do not
+belong in the view or in Python.
+
 ## Capture lifecycle
 
 `RenderingManager` is the authoritative source of renderable targets and the

@@ -18,6 +18,7 @@ class RenderContext2;
 namespace termin {
 
 class FrameGraphDebugger;
+class IFrameGraphDebuggerSource;
 
 namespace gui_native {
 class BoxLayout;
@@ -38,6 +39,10 @@ public:
     FrameGraphDebuggerView(
         gui_native::TcDocument document,
         FrameGraphDebugger& debugger,
+        std::function<void()> request_render = {});
+    FrameGraphDebuggerView(
+        gui_native::TcDocument document,
+        std::shared_ptr<IFrameGraphDebuggerSource> source,
         std::function<void()> request_render = {});
     ~FrameGraphDebuggerView();
 
@@ -104,7 +109,7 @@ private:
     void require_open() const;
 
     gui_native::TcDocument document_;
-    FrameGraphDebugger* debugger_ = nullptr;
+    std::shared_ptr<IFrameGraphDebuggerSource> source_;
     std::function<void()> request_render_;
     tgfx::IRenderDevice* preview_device_ = nullptr;
 
