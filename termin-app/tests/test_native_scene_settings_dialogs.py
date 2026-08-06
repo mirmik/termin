@@ -138,10 +138,13 @@ def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
     assert setting.enabled is False
     dialog.fixed_update_frequency.value = 250.0
     dialog.set_fixed_update_frequency(250.0)
+    dialog.time_scale.value = 0.25
+    dialog.set_time_scale(0.25)
     dialog.set_intensity(0.875)
     dialog.set_skybox_type(1)
     assert controller.load().ambient_intensity == pytest.approx(0.875)
     assert scene.fixed_timestep == pytest.approx(0.004)
+    assert scene.time_scale == pytest.approx(0.25)
     assert dialog.dialog.activate("close")
     assert dialog.show()
 

@@ -43,9 +43,19 @@
 в `Scene → Scene Properties`. Таким образом, частота относится к конкретной
 сцене, а не к отдельному physics-компоненту.
 
+Сериализуемое свойство `time_scale` масштабирует runtime-время всей сцены до
+накопления fixed-шагов. Значение `0` приостанавливает simulation time, а
+положительные дробные значения растягивают симуляцию по wall time, не меняя
+сам `fixed_timestep`: каждый `fixed_update` по-прежнему получает полный
+фиксированный шаг. Тем же масштабированным `dt` пользуются runtime `update`,
+scene extensions и `late_update`. Служебный `tc_scene_editor_update` намеренно
+остаётся на немасштабированном wall time, чтобы time scale сцены не замедлял
+редакторские инструменты.
+
 ## Основной update-цикл
 
-`tc_scene_update(scene, dt)`:
+`tc_scene_update(scene, wall_dt)` сначала вычисляет
+`dt = wall_dt * time_scale`, после чего исполняет:
 
 1. **start** — для компонентов из `pending_start` (с учётом `enabled`).
 2. **fixed_update** — в цикле по `accumulated_time` и `fixed_timestep`.
