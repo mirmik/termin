@@ -254,6 +254,7 @@ void bind_tc_scene_core(nb::module_& m) {
 
         // Fixed timestep
         .def_prop_rw("fixed_timestep", &TcSceneRef::fixed_timestep, &TcSceneRef::set_fixed_timestep)
+        .def_prop_rw("time_scale", &TcSceneRef::time_scale, &TcSceneRef::set_time_scale)
         .def_prop_ro("accumulated_time", &TcSceneRef::accumulated_time)
         .def("reset_accumulated_time", &TcSceneRef::reset_accumulated_time)
 

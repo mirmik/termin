@@ -104,6 +104,8 @@ public:
     // Fixed timestep
     double fixed_timestep() const;
     void set_fixed_timestep(double dt);
+    double time_scale() const;
+    void set_time_scale(double scale);
     double accumulated_time() const;
     void reset_accumulated_time();
 

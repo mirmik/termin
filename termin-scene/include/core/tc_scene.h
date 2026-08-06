@@ -121,6 +121,11 @@ TC_API void tc_scene_notify_scene_active(tc_scene_handle h);
 TC_API double tc_scene_fixed_timestep(tc_scene_handle h);
 TC_API void tc_scene_set_fixed_timestep(tc_scene_handle h, double dt);
 
+// Runtime simulation-time multiplier. Values must be finite and non-negative.
+// Editor-only lifecycle updates deliberately remain on unscaled wall time.
+TC_API double tc_scene_time_scale(tc_scene_handle h);
+TC_API void tc_scene_set_time_scale(tc_scene_handle h, double scale);
+
 TC_API double tc_scene_accumulated_time(tc_scene_handle h);
 TC_API void tc_scene_reset_accumulated_time(tc_scene_handle h);
 

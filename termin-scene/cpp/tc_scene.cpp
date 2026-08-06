@@ -93,6 +93,14 @@ void TcSceneRef::set_fixed_timestep(double dt) {
     tc_scene_set_fixed_timestep(_h, dt);
 }
 
+double TcSceneRef::time_scale() const {
+    return tc_scene_time_scale(_h);
+}
+
+void TcSceneRef::set_time_scale(double scale) {
+    tc_scene_set_time_scale(_h, scale);
+}
+
 double TcSceneRef::accumulated_time() const {
     return tc_scene_accumulated_time(_h);
 }
@@ -414,6 +422,7 @@ nos::trent TcSceneRef::serialize() const {
 
     result["uuid"] = uuid();
     result["fixed_timestep"] = fixed_timestep();
+    result["time_scale"] = time_scale();
 
     // Root entities (no parent)
     nos::trent entities;
@@ -478,6 +487,15 @@ int TcSceneRef::load_from_data(const nos::trent& data,
             } else {
                 tc::Log::error(
                     "[TcSceneRef] invalid serialized fixed_timestep=%g", dt);
+            }
+        }
+        if (data.contains("time_scale")) {
+            const double scale = data["time_scale"].as_numer();
+            if (std::isfinite(scale) && scale >= 0.0) {
+                set_time_scale(scale);
+            } else {
+                tc::Log::error(
+                    "[TcSceneRef] invalid serialized time_scale=%g", scale);
             }
         }
 

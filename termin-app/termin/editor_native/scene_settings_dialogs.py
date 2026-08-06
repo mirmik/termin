@@ -150,6 +150,7 @@ class NativeScenePropertiesDialog:
     dialog_service: NativeDialogService
     dialog: object
     fixed_update_frequency: object
+    time_scale: object
     background: object
     ambient: object
     intensity: object
@@ -183,6 +184,7 @@ class NativeScenePropertiesDialog:
         self._updating = True
         try:
             self.fixed_update_frequency.value = snapshot.fixed_update_frequency
+            self.time_scale.value = snapshot.time_scale
             self.background.set_text(_color_text(snapshot.background_color))
             self.ambient.set_text(_color_text(snapshot.ambient_color))
             self.intensity.value = snapshot.ambient_intensity
@@ -282,6 +284,10 @@ class NativeScenePropertiesDialog:
     def set_fixed_update_frequency(self, value: float) -> None:
         if not self._updating:
             self.apply_snapshot(self.controller.set_fixed_update_frequency(value))
+
+    def set_time_scale(self, value: float) -> None:
+        if not self._updating:
+            self.apply_snapshot(self.controller.set_time_scale(value))
 
     def set_skybox_type(self, index: int) -> None:
         if not self._updating and 0 <= index < len(SKYBOX_TYPES):
@@ -397,6 +403,10 @@ def build_native_scene_properties_dialog(
     fixed_update_frequency.set_range(0.1, 10000.0)
     fixed_update_frequency.step = 1.0
     fixed_update_frequency.decimals = 2
+    time_scale = document.create_spin_box()
+    time_scale.set_range(0.0, 100.0)
+    time_scale.step = 0.05
+    time_scale.decimals = 3
     background = document.create_button("Background")
     ambient = document.create_button("Ambient")
     intensity = document.create_spin_box()
@@ -409,6 +419,7 @@ def build_native_scene_properties_dialog(
     skybox_bottom = document.create_button("Skybox Bottom")
     for label, control in (
         ("Fixed Update, Hz", fixed_update_frequency),
+        ("Simulation Time Scale", time_scale),
         ("Background", background),
         ("Ambient", ambient),
         ("Ambient Intensity", intensity),
@@ -441,6 +452,7 @@ def build_native_scene_properties_dialog(
         dialog_service,
         dialog,
         fixed_update_frequency,
+        time_scale,
         background,
         ambient,
         intensity,
@@ -476,6 +488,11 @@ def build_native_scene_properties_dialog(
     )
     fixed_update_frequency.connect_changed(
         lambda value: owner().set_fixed_update_frequency(value)
+        if owner() is not None
+        else None
+    )
+    time_scale.connect_changed(
+        lambda value: owner().set_time_scale(value)
         if owner() is not None
         else None
     )
