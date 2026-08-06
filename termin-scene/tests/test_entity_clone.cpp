@@ -225,6 +225,7 @@ int main() {
 
     termin::TcSceneRef order_scene = termin::TcSceneRef::create("sibling-order-test");
     order_scene.set_fixed_timestep(0.0025);
+    order_scene.set_time_scale(0.4);
     termin::Entity first = order_scene.create_entity("First");
     termin::Entity second = order_scene.create_entity("Second");
     termin::Entity third = order_scene.create_entity("Third");
@@ -246,6 +247,8 @@ int main() {
     nos::trent order_data = order_scene.serialize();
     TEST_ASSERT(std::abs(order_data["fixed_timestep"].as_numer() - 0.0025) < 1.0e-12,
                 "scene serialization should include the fixed timestep");
+    TEST_ASSERT(std::abs(order_data["time_scale"].as_numer() - 0.4) < 1.0e-12,
+                "scene serialization should include the time scale");
     TEST_ASSERT(order_data["entities"].as_list()[0]["name"].as_string() == "Third",
                 "scene serialization should preserve root order");
     TEST_ASSERT(order_data["entities"].as_list()[1]["children"].as_list()[1]["name"].as_string() ==
@@ -258,6 +261,8 @@ int main() {
                 "ordered scene should deserialize every entity");
     TEST_ASSERT(std::abs(restored_order_scene.fixed_timestep() - 0.0025) < 1.0e-12,
                 "scene roundtrip should preserve the fixed timestep");
+    TEST_ASSERT(std::abs(restored_order_scene.time_scale() - 0.4) < 1.0e-12,
+                "scene roundtrip should preserve the time scale");
     std::vector<termin::Entity> restored_roots = restored_order_scene.get_root_entities();
     TEST_ASSERT(std::string(restored_roots[0].name()) == "Third" &&
                     std::string(restored_roots[1].name()) == "First" &&

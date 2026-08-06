@@ -84,22 +84,29 @@ def test_scene_properties_controller_owns_undoable_render_mutations(scene):
     updated = controller.set_skybox_type(next_type)
     updated = controller.set_background_color((0.1, 0.2, 0.3, 1.0))
     updated = controller.set_fixed_update_frequency(200.0)
+    updated = controller.set_time_scale(0.4)
 
     assert updated.fixed_update_frequency == pytest.approx(200.0)
+    assert updated.time_scale == pytest.approx(0.4)
     assert scene.fixed_timestep == pytest.approx(0.005)
+    assert scene.time_scale == pytest.approx(0.4)
     assert updated.ambient_intensity == pytest.approx(0.625)
     assert updated.skybox_type == next_type
     assert updated.background_color == pytest.approx((0.1, 0.2, 0.3, 1.0))
-    assert len(stack) == 4
+    assert len(stack) == 5
+    stack.undo()
+    assert scene.time_scale == pytest.approx(initial.time_scale)
     stack.undo()
     assert scene.fixed_timestep == pytest.approx(initial.fixed_update_frequency**-1)
     stack.undo()
     assert tuple(scene_render_state(scene).background_color) == pytest.approx(initial.background_color)
-    assert len(changed) == 4
+    assert len(changed) == 5
     with pytest.raises(ValueError):
         controller.set_ambient_intensity(12.0)
     with pytest.raises(ValueError):
         controller.set_fixed_update_frequency(0.0)
+    with pytest.raises(ValueError):
+        controller.set_time_scale(-0.1)
 
 
 def test_scene_properties_controller_discovers_and_toggles_debug_geometry(scene):
