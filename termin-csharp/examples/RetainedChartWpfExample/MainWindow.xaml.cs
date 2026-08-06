@@ -43,17 +43,13 @@ public partial class MainWindow : Window
                 _chart.Scene,
                 new VisualRect2f(0, 0, 1, 1),
                 new VisualFillPaint2D(
-                    new VisualColor4f(0.10f, 0.13f, 0.18f, 0.92f)),
-                new VisualStrokePaint2D(
-                    new VisualColor4f(0.35f, 0.72f, 1.0f, 0.8f),
-                    1),
-                _chart.Chrome);
+                    new VisualColor4f(0, 0, 0, 0)),
+                parent: _chart.Chrome);
             _buttonAnchor.ZOrder = 100;
 
             _themeButton = new Button
             {
                 Content = "Switch C# theme",
-                Margin = new Thickness(3),
                 Padding = new Thickness(8, 2, 8, 2),
                 Foreground = Brushes.White,
                 Background = new SolidColorBrush(
@@ -126,10 +122,7 @@ public partial class MainWindow : Window
                 width,
                 height),
             new VisualFillPaint2D(
-                new VisualColor4f(0.10f, 0.13f, 0.18f, 0.92f)),
-            new VisualStrokePaint2D(
-                new VisualColor4f(0.35f, 0.72f, 1.0f, 0.8f),
-                e.PixelScale));
+                new VisualColor4f(0, 0, 0, 0)));
     }
 
     private void OnThemeButtonClick(object sender, RoutedEventArgs e)
