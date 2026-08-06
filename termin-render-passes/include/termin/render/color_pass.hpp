@@ -135,6 +135,9 @@ public:
 
     static void register_type();
 
+    tc_value serialize_extra_textures() const;
+    void deserialize_extra_textures(const tc_value* value);
+
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
 
@@ -198,6 +201,11 @@ public:
     // Compute write resources dynamically.
     std::set<const char*> compute_writes() const override;
 
+    bool set_graph_resource_input(
+        const std::string& socket_name,
+        const std::string& resource_name
+    ) override;
+
     /**
      * Get inplace aliases (input->output pairs that share the same FBO).
      */
@@ -245,6 +253,12 @@ private:
     void sort_draw_calls();
 
 };
+
+SERIALIZABLE_FIELD(
+    ColorPass,
+    extra_textures,
+    serialize_extra_textures(),
+    deserialize_extra_textures(val))
 
 class TERMIN_RENDER_PASSES_API MultiviewColorPass final : public ColorPass {
 public:

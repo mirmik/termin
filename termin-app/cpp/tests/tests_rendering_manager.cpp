@@ -1448,6 +1448,57 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_scene_free(scene);
 }
 
+TEST_CASE("RenderingManager restores scene render targets for headless hosts")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_render_mount_extension_init();
+
+    const size_t baseline_targets = tc_render_target_pool_count();
+    const size_t baseline_pipelines = tc_pipeline_pool_count();
+    const size_t baseline_displays = tc_display_pool_count();
+    const size_t baseline_viewports = tc_viewport_pool_count();
+
+    manager.set_pipeline_factory([](const std::string& name) {
+        return tc_pipeline_create(name.c_str());
+    });
+
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_scene_set_name(scene, "headless-render-target-scene");
+
+    tc_render_target_config config;
+    tc_render_target_config_init(&config);
+    config.name = "HeadlessTexture";
+    config.kind = "texture_2d";
+    config.width = 768;
+    config.height = 512;
+    config.dynamic_resolution = false;
+    config.pipeline_uuid = "headless-pipeline";
+    tc_scene_add_render_target_config(scene, &config);
+
+    REQUIRE(manager.attach_scene_render_targets(scene));
+    CHECK(!topology.is_attached(scene));
+    CHECK_EQ(tc_display_pool_count(), baseline_displays);
+    CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
+    REQUIRE_EQ(manager.managed_render_targets().size(), 1u);
+
+    const tc_render_target_handle target =
+        topology.find_render_target(scene, "HeadlessTexture");
+    REQUIRE(tc_render_target_handle_valid(target));
+    CHECK_EQ(tc_render_target_get_width(target), 768);
+    CHECK_EQ(tc_render_target_get_height(target), 512);
+    CHECK(!tc_render_target_get_dynamic_resolution(target));
+    CHECK(tc_pipeline_handle_valid(tc_render_target_get_pipeline(target)));
+
+    manager.detach_scene_full(scene);
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
+    CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
+    CHECK(manager.managed_render_targets().empty());
+
+    tc_scene_free(scene);
+}
+
 TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty without render target")
 {
     RenderTopology topology;

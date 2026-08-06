@@ -87,15 +87,18 @@ android {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
             assets.srcDir file(terminOpenXRAssetsDir.get())
             assets.srcDir layout.buildDirectory.dir("generated/terminOpenXRAssetIndex").get().asFile
+            assets.srcDir layout.buildDirectory.dir("generated/terminRuntimeAssets").get().asFile
         }
     }
 }
 
 tasks.register("generateTerminOpenXRAssetIndex") {
     def assetsDir = file(terminOpenXRAssetsDir.get())
+    def runtimeAssetsDir = layout.buildDirectory.dir("generated/terminRuntimeAssets")
     def outputDir = layout.buildDirectory.dir("generated/terminOpenXRAssetIndex")
     outputs.file(outputDir.map { it.file("termin_asset_index.txt") })
     inputs.dir(assetsDir)
+    inputs.dir(runtimeAssetsDir)
     doLast {
         def outDir = outputDir.get().asFile
         outDir.mkdirs()
@@ -103,11 +106,14 @@ tasks.register("generateTerminOpenXRAssetIndex") {
         if (!assetsDir.isDirectory()) {
             throw new GradleException("Termin OpenXR assets dir not found: ${assetsDir}")
         }
-        def files = fileTree(assetsDir).matching {
-            include "**/*"
-        }.files.findAll { it.isFile() }.collect {
-            assetsDir.toPath().relativize(it.toPath()).toString().replace(File.separator, "/")
-        }.sort()
+        def assetRoots = [assetsDir, runtimeAssetsDir.get().asFile]
+        def files = assetRoots.collectMany { root ->
+            fileTree(root).matching {
+                include "**/*"
+            }.files.findAll { it.isFile() }.collect {
+                root.toPath().relativize(it.toPath()).toString().replace(File.separator, "/")
+            }
+        }.unique().sort()
         indexFile.text = files.join("\n") + "\n"
     }
 }
@@ -130,7 +136,33 @@ tasks.register("copyTerminOpenXRLibraries", Copy) {
     }
 }
 
+tasks.register("copyTerminOpenXRRuntimeAssets", Copy) {
+    def sdkShareDir = new File(
+            new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()),
+            "share/termin"
+    )
+    def sdkFont = new File(sdkShareDir, "fonts/DroidSans.ttf")
+    from(sdkFont) {
+        into("fonts")
+    }
+    into(layout.buildDirectory.dir("generated/terminRuntimeAssets"))
+    doFirst {
+        if (!sdkFont.isFile()) {
+            throw new GradleException(
+                    "Termin OpenXR SDK UI font not found: ${sdkFont}. " +
+                    "Run ./build-sdk-android.sh --abi ${terminAndroidAbi.get()} first."
+            )
+        }
+        delete(layout.buildDirectory.dir("generated/terminRuntimeAssets"))
+    }
+}
+
+tasks.named("generateTerminOpenXRAssetIndex") {
+    dependsOn("copyTerminOpenXRRuntimeAssets")
+}
+
 tasks.named("preBuild") {
     dependsOn("generateTerminOpenXRAssetIndex")
     dependsOn("copyTerminOpenXRLibraries")
+    dependsOn("copyTerminOpenXRRuntimeAssets")
 }

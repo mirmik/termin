@@ -462,6 +462,8 @@ void bind_render_passes(nb::module_& m) {
         .def_rw("extra_textures", &ColorPass::extra_textures)
         .def("add_extra_texture", &ColorPass::add_extra_texture,
              nb::arg("uniform_name"), nb::arg("resource_name"))
+        .def("set_graph_resource_input", &ColorPass::set_graph_resource_input,
+             nb::arg("socket_name"), nb::arg("resource_name"))
         .def("compute_reads", &ColorPass::compute_reads)
         .def("compute_writes", &ColorPass::compute_writes)
         .def("get_inplace_aliases", &ColorPass::get_inplace_aliases)

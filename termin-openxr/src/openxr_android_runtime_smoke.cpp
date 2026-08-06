@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -230,42 +231,6 @@ struct ScenePrimitiveSmoke {
     }
 };
 
-termin::RenderPipeline make_pipeline_for_xr_render_target(termin::EngineCore &engine,
-                                                          const tc_render_target_config *config) {
-    if (config && cstr_nonempty(config->pipeline_uuid)) {
-        const std::string pipeline_uuid = config->pipeline_uuid;
-        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_uuid);
-        if (tc_pipeline_handle_valid(handle)) {
-            termin::RenderPipeline pipeline(handle);
-            tc_log_info("[OpenXR scene] using render target pipeline uuid='%s' "
-                        "name='%s' passes=%zu",
-                        pipeline_uuid.c_str(), cstr_nonempty(config->pipeline_name) ? config->pipeline_name : "",
-                        pipeline.pass_count());
-            return pipeline;
-        }
-
-        tc_log_warn("[OpenXR scene] failed to create render target pipeline "
-                    "uuid='%s'; trying pipeline_name",
-                    pipeline_uuid.c_str());
-    }
-
-    if (config && cstr_nonempty(config->pipeline_name)) {
-        const std::string pipeline_name = normalized_pipeline_name(config->pipeline_name);
-        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_name);
-        if (tc_pipeline_handle_valid(handle)) {
-            termin::RenderPipeline pipeline(handle);
-            tc_log_info("[OpenXR scene] using render target pipeline '%s' passes=%zu", pipeline_name.c_str(),
-                        pipeline.pass_count());
-            return pipeline;
-        }
-
-        tc_log_error("[OpenXR scene] failed to create render target pipeline '%s'", pipeline_name.c_str());
-    }
-
-    tc_log_error("[OpenXR scene] xr_stereo render target has no loadable explicit pipeline");
-    return {};
-}
-
 const tc_render_target_config *find_xr_render_target_config(termin::TcSceneRef scene) {
     tc_scene_render_mount *mount = tc_scene_render_mount_get(scene.handle());
     if (!mount) {
@@ -417,7 +382,7 @@ struct OpenXRRuntimeScene {
     }
 
     void install_runtime_pipeline_factory() {
-        engine->rendering_manager.set_pipeline_factory([this](const std::string &key) -> tc_pipeline_handle {
+        engine->rendering_manager.set_pipeline_factory([](const std::string &key) -> tc_pipeline_handle {
             const tc_pipeline_template_handle template_handle =
                 tc_pipeline_template_find(key.c_str());
             if (tc_pipeline_template_handle_is_invalid(template_handle)) {
@@ -500,6 +465,21 @@ struct OpenXRRuntimeScene {
             return false;
         }
 
+        const std::filesystem::path ui_font_path =
+            std::filesystem::path(asset_root) / "fonts" / "DroidSans.ttf";
+        if (!std::filesystem::is_regular_file(ui_font_path)) {
+            log_error("OpenXR scene", "packaged native UI font is missing");
+            tc_log_error("[OpenXR scene] packaged native UI font not found at '%s'",
+                         ui_font_path.c_str());
+            return false;
+        }
+        if (setenv("TERMIN_UI_FONT", ui_font_path.c_str(), 1) != 0) {
+            log_error("OpenXR scene", "failed to configure native UI font");
+            tc_log_error("[OpenXR scene] failed to set TERMIN_UI_FONT='%s'",
+                         ui_font_path.c_str());
+            return false;
+        }
+
         tgfx::set_builtin_shader_root(nullptr);
         engine = std::make_unique<termin::EngineCore>();
         termin::RenderEngine *render_engine =
@@ -549,11 +529,34 @@ struct OpenXRRuntimeScene {
         }
         reset_reference_alignment();
 
-        pipeline = make_pipeline_for_xr_render_target(*engine, xr_config);
+        scene = package.scene;
+        if (!engine->rendering_manager.attach_scene_render_targets(scene.handle())) {
+            log_error("OpenXR scene", "failed to restore scene render targets");
+            tc_log_error("[OpenXR scene] failed to restore scene render targets");
+            package.destroy();
+            engine.reset();
+            return false;
+        }
+
+        const std::string xr_target_name = choose_xr_render_target_name(xr_config);
+        xr_render_target = engine->rendering_manager.topology().find_render_target(
+            scene.handle(), xr_target_name);
+        if (!tc_render_target_handle_valid(xr_render_target)) {
+            log_error("OpenXR scene", "scene has no restored XR render target");
+            tc_log_error("[OpenXR scene] restored XR render target '%s' was not found",
+                         xr_target_name.c_str());
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            package.destroy();
+            engine.reset();
+            return false;
+        }
+        pipeline = termin::RenderPipeline(tc_render_target_get_pipeline(xr_render_target));
         if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
             log_error("OpenXR scene", "failed to create render pipeline");
             tc_log_error("[OpenXR scene] failed to create render pipeline");
-            pipeline.destroy();
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            pipeline = {};
+            xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
             package.destroy();
             engine.reset();
             return false;
@@ -573,14 +576,14 @@ struct OpenXRRuntimeScene {
             log_error("OpenXR scene", "xr_stereo requires an xr_multiview pipeline");
             tc_log_error(
                 "[OpenXR scene] xr_stereo target rejected non-xr_multiview pipeline");
-            pipeline.destroy();
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            pipeline = {};
+            xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
             package.destroy();
             engine.reset();
             return false;
         }
 
-        scene = package.scene;
-        create_xr_render_target();
         register_context_provider();
         ready = true;
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "OpenXR runtime scene loaded root='%s' entities=%zu passes=%zu",
@@ -752,7 +755,7 @@ struct OpenXRRuntimeScene {
         active_multiview_frame.views[0] = views[0];
         active_multiview_frame.views[1] = views[1];
         active_multiview_frame.valid = true;
-        engine->rendering_manager.render_render_target_offscreen(xr_render_target);
+        engine->rendering_manager.render_render_target_tree_offscreen(xr_render_target);
         active_multiview_frame.valid = false;
     }
 
@@ -811,17 +814,14 @@ struct OpenXRRuntimeScene {
         active_multiview_frame = {};
         if (engine) {
             engine->rendering_manager.clear_render_target_context_provider(TC_RENDER_TARGET_XR_STEREO);
-            if (tc_render_target_handle_valid(xr_render_target)) {
-                engine->rendering_manager.unregister_managed_render_target(xr_render_target);
-                tc_render_target_free(xr_render_target);
+            if (scene.valid()) {
+                engine->rendering_manager.detach_scene_full(scene.handle());
             }
         }
         xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
-        // RenderPipeline is deliberately a non-owning handle wrapper. Destroy
-        // the owned pool object before releasing package templates; merely
-        // overwriting the wrapper leaks the template retain across Android
-        // pause/resume in the same process.
-        pipeline.destroy();
+        // Scene render targets own their pipeline instances and detach_scene_full
+        // destroyed them above. RenderPipeline is only the non-owning XR view.
+        pipeline = {};
         xr_origin = nullptr;
         package.destroy();
         scene = {};

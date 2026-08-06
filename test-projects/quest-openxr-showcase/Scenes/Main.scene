@@ -1268,6 +1268,98 @@
         ]
       },
       {
+        "uuid": "quest-showcase-vr-panel-document",
+        "name": "VR Panel Document",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": false,
+        "selectable": true,
+        "layer": 1.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 0.0, 0.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0]
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [
+          {
+            "source_id": "quest-showcase-vr-panel-ui-component",
+            "type": "UIComponent",
+            "data": {
+              "enabled": true,
+              "ui_layout": {
+                "type": "uuid",
+                "kind": "ui_document",
+                "role": "ui_document",
+                "uuid": "quest-showcase-vr-panel-ui",
+                "name": "vr_panel"
+              },
+              "priority": 1000.0,
+              "input_source_mask": 1.0
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "quest-showcase-vr-panel-surface",
+        "name": "VR Panel Surface",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {
+          "position": [0.0, 2.15, 1.55],
+          "rotation": [0.70710678, 0.0, 0.0, 0.70710678]
+        },
+        "scale": [1.35, 0.9, 1.0],
+        "components": [
+          {
+            "source_id": "quest-showcase-vr-panel-mesh",
+            "type": "MeshComponent",
+            "data": {
+              "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "mesh_generated": false,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000003",
+                "name": "Plane",
+                "type": "uuid",
+                "kind": "tc_mesh"
+              },
+              "mesh_offset_enabled": false,
+              "mesh_offset_position": [0.0, 0.0, 0.0],
+              "mesh_offset_euler": [0.0, 0.0, 0.0],
+              "mesh_offset_scale": [1.0, 1.0, 1.0]
+            }
+          },
+          {
+            "source_id": "quest-showcase-vr-panel-renderer",
+            "type": "MeshRenderer",
+            "data": {
+              "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "material": {
+                "uuid": "quest-showcase-vr-panel-material",
+                "name": "VrUiPanel",
+                "type": "uuid",
+                "kind": "tc_material"
+              },
+              "cast_shadow": false,
+              "_override_material": false,
+              "materials": []
+            }
+          }
+        ]
+      },
+      {
         "uuid": "quest-showcase-camera",
         "name": "Editor Camera",
         "priority": 0.0,
@@ -1331,6 +1423,9 @@
         "pipeline_templates": [
           {
             "uuid": "quest-showcase-xr-multiview-pipeline"
+          },
+          {
+            "uuid": "quest-showcase-vr-panel-pipeline"
           }
         ],
         "viewport_configs": [
@@ -1367,7 +1462,27 @@
             ],
             "clear_depth": 1.0,
             "pipeline_name": "Default",
-            "layer_mask": 4294967295.0,
+            "layer_mask": 4294967293.0,
+            "enabled": true
+          },
+          {
+            "name": "VR Panel Texture",
+            "camera_uuid": "quest-showcase-camera",
+            "width": 768.0,
+            "height": 512.0,
+            "dynamic_resolution": false,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [
+              0.015,
+              0.025,
+              0.055,
+              1.0
+            ],
+            "clear_depth": 1.0,
+            "pipeline_uuid": "quest-showcase-vr-panel-pipeline",
+            "pipeline_name": "VrUiPanel",
+            "layer_mask": 2.0,
             "enabled": true
           },
           {
@@ -1388,6 +1503,9 @@
             "pipeline_uuid": "quest-showcase-xr-multiview-pipeline",
             "pipeline_name": "QuestMultiview",
             "layer_mask": 4294967295.0,
+            "pipeline_params": {
+              "PANEL_COLOR": "VR Panel Texture"
+            },
             "enabled": true
           }
         ]

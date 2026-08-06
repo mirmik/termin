@@ -7,6 +7,7 @@
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 
 #include <tgfx2/i_render_device.hpp>
 
@@ -132,6 +133,13 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
             }
             return false;
         }
+        std::unordered_set<std::string> existing_contexts;
+        existing_contexts.reserve(request.contexts.size());
+        for (const auto& [name, context] : request.contexts) {
+            (void)context;
+            existing_contexts.insert(name);
+        }
+
         const bool ok = it->second(
             request.manager,
             rt,
@@ -140,6 +148,28 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
             request.contexts,
             request.default_context_name
         );
+        if (ok && request.engine) {
+            request.engine->ensure_tgfx2();
+            tgfx::IRenderDevice* device = request.engine->tgfx2_device();
+            if (!device) {
+                tc_log(
+                    TC_LOG_ERROR,
+                    "[RenderingManager] special render target '%s' provider "
+                    "returned contexts without a tgfx2 device",
+                    tc_render_target_get_name(rt));
+                return false;
+            }
+            for (auto& [name, context] : request.contexts) {
+                if (existing_contexts.contains(name)) {
+                    continue;
+                }
+                fill_external_textures_from_render_target(
+                    context,
+                    rt,
+                    *device,
+                    request.managed_render_targets);
+            }
+        }
         if (ok && request.default_context_name.empty() && !request.contexts.empty()) {
             request.default_context_name = request.contexts.begin()->first;
         }

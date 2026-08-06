@@ -39,6 +39,37 @@ namespace termin {
 
 namespace {
 
+tc_value string_map_to_tc_value(
+    const std::unordered_map<std::string, std::string>& values
+) {
+    tc_value result = tc_value_dict_new();
+    for (const auto& [key, value] : values) {
+        tc_value_dict_set(
+            &result, key.c_str(), tc_value_string(value.c_str()));
+    }
+    return result;
+}
+
+void tc_value_to_string_map(
+    const tc_value* value,
+    std::unordered_map<std::string, std::string>& out
+) {
+    out.clear();
+    if (!value || value->type != TC_VALUE_DICT) {
+        return;
+    }
+    for (size_t index = 0; index < tc_value_dict_size(value); ++index) {
+        const char* key = nullptr;
+        tc_value* item = tc_value_dict_get_at(
+            const_cast<tc_value*>(value), index, &key);
+        if (!key || !item || item->type != TC_VALUE_STRING ||
+            !item->data.s) {
+            continue;
+        }
+        out[key] = item->data.s;
+    }
+}
+
 constexpr const char* STANDARD_PBR_FORWARD_CONSUMER = R"slang(
 import termin_lighting;
 import termin_shadows;
@@ -389,6 +420,14 @@ ColorPass::ColorPass(const ColorPassConfig& config)
     set_pass_name(config.pass_name);
 }
 
+tc_value ColorPass::serialize_extra_textures() const {
+    return string_map_to_tc_value(extra_textures);
+}
+
+void ColorPass::deserialize_extra_textures(const tc_value* value) {
+    tc_value_to_string_map(value, extra_textures);
+}
+
 std::set<const char*> ColorPass::compute_reads() const {
     std::set<const char*> result;
     result.insert(input_res.c_str());
@@ -404,6 +443,22 @@ std::set<const char*> ColorPass::compute_reads() const {
 
 std::set<const char*> ColorPass::compute_writes() const {
     return {output_res.c_str()};
+}
+
+bool ColorPass::set_graph_resource_input(
+    const std::string& socket_name,
+    const std::string& resource_name
+) {
+    if (socket_name.empty() || resource_name.empty()) {
+        return false;
+    }
+    if (socket_name == "input_res" ||
+        socket_name == "output_res" ||
+        socket_name == "shadow_res") {
+        return false;
+    }
+    add_extra_texture(socket_name, resource_name);
+    return true;
 }
 
 std::vector<std::pair<std::string, std::string>> ColorPass::get_inplace_aliases() const {
@@ -1043,7 +1098,8 @@ void ColorPass::execute_with_data(
         extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
             uniform_name.c_str(),
             it->second,
-            tgfx::SamplerHandle{}});
+            tgfx::SamplerHandle{},
+            true});
     }
 
     for (const RenderTask* task : sorted_render_tasks) {
@@ -1289,6 +1345,7 @@ void ColorPass::register_type() {
     _register_inspect_attachment_barrier_between_draws(inspect);
     _register_inspect_camera_name(inspect);
     _register_inspect_metadata_graph(inspect);
+    register_serialize_ColorPass_extra_textures(inspect);
     (void)descriptor.commit();
 }
 
