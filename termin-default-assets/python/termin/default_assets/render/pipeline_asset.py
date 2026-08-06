@@ -29,6 +29,7 @@ class _PipelineCandidate:
     material_names: frozenset[str]
     external_params: tuple[str, ...]
     source_format: str
+    execution_model: str
 
 
 def _pass_parameters(pipeline: "RenderPipeline") -> tuple[str, ...]:
@@ -169,6 +170,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             pass_list = graph_pipeline.serialize()
             pass_list["name"] = str(data.get("name", self._name))
             pass_list["uuid"] = self.uuid
+            pass_list["execution_model"] = str(data.get("execution_model", "single_view"))
             pass_list["targets"] = [
                 {
                     "viewport_name": str(frame.get("viewport_name", "main")),
@@ -196,6 +198,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
                 material_names=candidate.material_names,
                 external_params=external_params,
                 source_format=candidate.source_format,
+                execution_model=candidate.execution_model,
             )
         except Exception:
             log.error(f"[PipelineAsset] Failed to lower graph pipeline '{self._name}'", exc_info=True)
@@ -224,6 +227,13 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             return None
         resource_views = data.get("resource_views", {})
         fbo_compositions = data.get("fbo_compositions", {})
+        execution_model = data.get("execution_model", "single_view")
+        if execution_model not in ("single_view", "xr_multiview"):
+            log.error(
+                f"[PipelineAsset] Pipeline '{self._name}' has invalid execution model "
+                f"'{execution_model}'"
+            )
+            return None
         if (
             not isinstance(resource_views, dict)
             or not all(
@@ -268,6 +278,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             material_names=frozenset(material_pass_materials(data)),
             external_params=external_params,
             source_format=source_format,
+            execution_model=execution_model,
         )
 
     def _candidate_from_pipeline(
@@ -286,6 +297,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
             material_names=frozenset(material_pass_materials(serialized)),
             external_params=(),
             source_format=source_format,
+            execution_model="single_view",
         )
 
     def _publish_candidate(self, candidate: _PipelineCandidate) -> bool:
@@ -297,6 +309,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
                 self._data,
                 list(candidate.pass_parameters),
                 list(candidate.targets),
+                candidate.execution_model,
             )
         except Exception:
             log.error(f"[PipelineAsset] Failed to publish pipeline '{self._name}'", exc_info=True)

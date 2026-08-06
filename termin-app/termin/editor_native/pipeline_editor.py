@@ -134,10 +134,16 @@ class NativePipelineEditor:
             ("output", "Add Output Render Target", "output", "RenderTarget"),
             ("fbo", "Add FBO", "resource", "FBO"),
             ("color-texture", "Add Color Texture", "resource", "Color Texture"),
+            ("multiview-fbo", "Add Multiview FBO", "resource", "Multiview FBO"),
+            ("multiview-color", "Add Multiview Color Texture", "resource", "Multiview Color Texture"),
+            ("multiview-depth", "Add Multiview Depth Texture", "resource", "Multiview Depth Texture"),
             ("depth-texture", "Add Depth Texture", "resource", "Depth Texture"),
             ("shadow-maps", "Add Shadow Maps", "resource", "Shadow Maps"),
             ("external-rt", "Add External RT", "external_rt", "External RT"),
             ("fbo-split", "Add FBO Split", "fbo_split", "FBO Split"),
+            ("xr-multiview-target", "Add XR Multiview Target", "external_xr_multiview_fbo", "XR Multiview Target"),
+            ("multiview-fbo-split", "Add Multiview FBO Split", "multiview_fbo_split", "Multiview FBO Split"),
+            ("multiview-fbo-join", "Add Multiview FBO Join", "multiview_fbo_join", "Multiview FBO Join"),
             ("fbo-join", "Add FBO Join", "fbo_join", "FBO Join"),
         ]
         commands = []

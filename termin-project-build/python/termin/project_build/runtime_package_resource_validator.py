@@ -808,10 +808,13 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         raise ValueError("descriptor magic must be TPLT")
     binary_version = u32()
     descriptor_version = u32()
-    if binary_version != 2:
+    if binary_version != 3:
         raise ValueError(f"unsupported binary version {binary_version}")
-    if descriptor_version != 2:
+    if descriptor_version != 3:
         raise ValueError(f"unsupported descriptor version {descriptor_version}")
+    execution_model = u32()
+    if execution_model not in (1, 2):
+        raise ValueError(f"unsupported execution model {execution_model}")
     name = text()
     if not name:
         raise ValueError("descriptor name must be non-empty")
@@ -870,6 +873,7 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         height = i32()
         scale = f32()
         samples = u32()
+        array_layers = u32()
         flags = u32()
         if not resource_name or not resource_type:
             raise ValueError(f"resource {index} lacks name or type")
@@ -877,6 +881,8 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
             raise ValueError(f"resource '{resource_name}' is duplicated")
         if samples == 0:
             raise ValueError(f"resource '{resource_name}' has zero samples")
+        if array_layers == 0:
+            raise ValueError(f"resource '{resource_name}' has zero array layers")
         resource_names.add(resource_name)
         resources.append(
             {
@@ -888,6 +894,7 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
                 "height": height,
                 "scale": scale,
                 "samples": samples,
+                "array_layers": array_layers,
                 "flags": flags,
             }
         )
@@ -982,6 +989,7 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
     return {
         "binary_version": binary_version,
         "descriptor_version": descriptor_version,
+        "execution_model": execution_model,
         "name": name,
         "passes": passes,
         "resources": resources,

@@ -859,6 +859,15 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "TonemapParams" in tonemap_source
     assert "u_input" in tonemap_source
 
+    multiview_tonemap_source = (
+        result.package_dir
+        / "shaders"
+        / "vulkan"
+        / "termin-engine-multiview-tonemap.frag.slang"
+    ).read_text(encoding="utf-8")
+    assert "SV_ViewID" in multiview_tonemap_source
+    assert "Sampler2DArray" in multiview_tonemap_source
+
     grayscale_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-grayscale.frag.slang"
     ).read_text(encoding="utf-8")
@@ -1222,7 +1231,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
     pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline-template"
     assert pipeline_path.exists()
     pipeline_data = pipeline_path.read_bytes()
-    assert pipeline_data.startswith(b"TPLT\x02\x00\x00\x00")
+    assert pipeline_data.startswith(b"TPLT\x03\x00\x00\x00")
     assert b'"nodes"' not in pipeline_data
     assert b'"connections"' not in pipeline_data
 

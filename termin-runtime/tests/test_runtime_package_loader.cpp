@@ -787,6 +787,7 @@ TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the sce
 
     const tc_pipeline_template_payload_desc descriptor = {
         TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION,
+        TC_PIPELINE_EXECUTION_SINGLE_VIEW,
         "Runtime Compiled Pipeline",
         nullptr, 0,
         nullptr, 0,

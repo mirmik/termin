@@ -34,6 +34,9 @@ public:
     float exposure = 1.0f;
     int method = 0;  // TonemapMethod::ACES
 
+protected:
+    bool multiview_mode_ = false;
+
 private:
     // tgfx2 resources. Created lazily on first execute. Shader lives on
     // the tc_shader registry (FS-only, NULL VS — see grayscale_pass for
@@ -71,6 +74,23 @@ public:
 
     void execute(ExecuteContext& ctx) override;
     void destroy() override;
+};
+
+class TERMIN_RENDER_PASSES_API MultiviewTonemapPass final : public TonemapPass {
+public:
+    static void register_type();
+    INSPECT_TYPE_METADATA(MultiviewTonemapPass, graph, make_pass_graph_metadata(
+        {{"input_res", "multiview_fbo"},
+         {"output_res_target", "external_xr_multiview_fbo"}},
+        {{"output_res", "external_xr_multiview_fbo"}},
+        {{"output_res_target", "output_res"}}
+    ))
+
+    MultiviewTonemapPass(
+        const std::string& input = "color",
+        const std::string& output = "XR_MULTIVIEW_TARGET",
+        float exposure = 1.0f,
+        int method = 0);
 };
 
 } // namespace termin

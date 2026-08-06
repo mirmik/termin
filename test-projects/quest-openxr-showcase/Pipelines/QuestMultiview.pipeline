@@ -1,0 +1,112 @@
+{
+  "uuid": "quest-showcase-xr-multiview-pipeline",
+  "name": "QuestMultiview",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {
+      "type": "Multiview FBO",
+      "node_type": "resource",
+      "name": "xr_msaa_color",
+      "x": 20,
+      "y": 60,
+      "params": {
+        "resource_type": "multiview_fbo",
+        "format": "rgba16f",
+        "samples": 4,
+        "array_layers": 2,
+        "size_mode": "viewport",
+        "scale": 1.0,
+        "has_color": true,
+        "has_depth": true,
+        "clear_color": true,
+        "clear_color_r": 0.01,
+        "clear_color_g": 0.015,
+        "clear_color_b": 0.035,
+        "clear_color_a": 1.0,
+        "clear_depth": true,
+        "clear_depth_value": 1.0
+      }
+    },
+    {
+      "type": "MultiviewColorPass",
+      "name": "XR Opaque",
+      "x": 280,
+      "y": 40,
+      "params": {
+        "phase_mark": "opaque",
+        "sort_mode": "near_to_far"
+      }
+    },
+    {
+      "type": "MultiviewColorPass",
+      "name": "XR Transparent",
+      "x": 540,
+      "y": 40,
+      "params": {
+        "phase_mark": "transparent",
+        "sort_mode": "far_to_near"
+      }
+    },
+    {
+      "type": "Multiview FBO",
+      "node_type": "resource",
+      "name": "xr_resolved_color",
+      "x": 540,
+      "y": 280,
+      "params": {
+        "resource_type": "multiview_fbo",
+        "format": "rgba16f",
+        "samples": 1,
+        "array_layers": 2,
+        "size_mode": "viewport",
+        "scale": 1.0,
+        "has_color": true,
+        "has_depth": false
+      }
+    },
+    {
+      "type": "MultiviewResolvePass",
+      "name": "XR Resolve",
+      "x": 800,
+      "y": 40
+    },
+    {
+      "type": "XR Multiview Target",
+      "node_type": "external_xr_multiview_fbo",
+      "name": "XR Swapchain",
+      "x": 800,
+      "y": 280,
+      "params": {
+        "slot": "XR_MULTIVIEW_TARGET"
+      }
+    },
+    {
+      "type": "MultiviewTonemapPass",
+      "name": "XR Tonemap",
+      "x": 1060,
+      "y": 40,
+      "params": {
+        "exposure": 1.0,
+        "method": 0
+      }
+    }
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "input_res"},
+    {"from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "input_res"},
+    {"from_node": 2, "from_socket": "output_res", "to_node": 4, "to_socket": "input_res"},
+    {"from_node": 3, "from_socket": "fbo", "to_node": 4, "to_socket": "output_res_target"},
+    {"from_node": 4, "from_socket": "output_res", "to_node": 6, "to_socket": "input_res"},
+    {"from_node": 5, "from_socket": "fbo", "to_node": 6, "to_socket": "output_res_target"}
+  ],
+  "viewport_frames": [
+    {
+      "title": "Quest stereo view",
+      "viewport_name": "Quest Headset",
+      "x": 0,
+      "y": 0,
+      "width": 1320,
+      "height": 520
+    }
+  ]
+}
