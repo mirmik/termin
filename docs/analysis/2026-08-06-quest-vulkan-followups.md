@@ -16,6 +16,8 @@ The changes below were therefore reverted. Reapply them as small coherent
 patches, verify the relevant contract, and keep them separate from the tile
 artifact investigation described in
 `docs/analysis/2026-08-06-quest-adreno-tile-artifacts.md`.
+The broader stereo render-path redesign is described in
+`docs/analysis/2026-08-06-quest-openxr-render-path.md`.
 
 ## Candidate changes
 

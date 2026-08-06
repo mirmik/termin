@@ -24,6 +24,8 @@ extern "C" {
 namespace termin {
 
 constexpr const char* TONEMAP_ENGINE_SHADER_UUID = "termin-engine-tonemap";
+constexpr const char* MULTIVIEW_TONEMAP_ENGINE_SHADER_UUID =
+    "termin-engine-multiview-tonemap";
 
 // std140 layout for TonemapParams. Float at 0 (size 4), int at 4 (size 4),
 // block padded to 16-byte vec4 boundary.
@@ -101,7 +103,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tgfx::register_builtin_shader_from_catalog(TONEMAP_ENGINE_SHADER_UUID);
+        shader_handle_ = tgfx::register_builtin_shader_from_catalog(
+            multiview_mode_ ? MULTIVIEW_TONEMAP_ENGINE_SHADER_UUID
+                            : TONEMAP_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
     if (!params_ubo_) {
@@ -124,7 +128,18 @@ void TonemapPass::execute(ExecuteContext& ctx) {
         uploaded_method_ = method;
     }
 
-    ctx.ctx2->begin_pass(output_tex2);
+    if (multiview_mode_) {
+        tgfx::MultiviewRenderPassDesc pass;
+        tgfx::ColorAttachmentDesc color;
+        color.texture = output_tex2;
+        color.load = tgfx::LoadOp::DontCare;
+        pass.colors.push_back(color);
+        pass.view_count = 2;
+        pass.color_final_state = tgfx::MultiviewColorFinalState::ColorAttachment;
+        if (!ctx.ctx2->begin_multiview_pass(pass)) return;
+    } else {
+        ctx.ctx2->begin_pass(output_tex2);
+    }
     ctx.ctx2->set_viewport(0, 0, w, h);
 
     ctx.ctx2->set_depth_test(false);
@@ -182,6 +197,26 @@ void TonemapPass::register_type() {
     _register_inspect_exposure(inspect);
     _register_inspect_method(inspect);
     _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
+}
+
+MultiviewTonemapPass::MultiviewTonemapPass(
+    const std::string& input,
+    const std::string& output,
+    float exposure_value,
+    int method_value)
+    : TonemapPass(input, output, exposure_value, method_value)
+{
+    multiview_mode_ = true;
+    pass_name_set("MultiviewTonemap");
+    link_to_type_registry("MultiviewTonemapPass");
+}
+
+void MultiviewTonemapPass::register_type() {
+    auto descriptor = FramePassTypeDescriptorBuilder::native<MultiviewTonemapPass>(
+        "MultiviewTonemapPass", "termin-render-passes", "TonemapPass");
+    auto& inspect = descriptor.inspect();
+    MultiviewTonemapPass::_register_inspect_metadata_graph(inspect);
     (void)descriptor.commit();
 }
 

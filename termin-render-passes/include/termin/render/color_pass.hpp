@@ -36,6 +36,8 @@ namespace termin {
 
 TERMIN_RENDER_PASSES_API
 MaterialPipelinePassContract color_material_pass_contract();
+TERMIN_RENDER_PASSES_API
+MaterialPipelinePassContract multiview_color_material_pass_contract();
 
 struct ColorPassConfig {
     std::string input_res = "empty";
@@ -98,6 +100,11 @@ public:
 private:
     // Last GPU time in ms (from detailed profiling mode)
     double last_gpu_time_ms_ = 0.0;
+
+protected:
+    bool multiview_mode_ = false;
+
+private:
 
     // Lighting UBO for efficient uniform uploads
     LightingUBO lighting_ubo_;
@@ -230,6 +237,19 @@ private:
     // Sort draw calls by sort_keys_
     void sort_draw_calls();
 
+};
+
+class TERMIN_RENDER_PASSES_API MultiviewColorPass final : public ColorPass {
+public:
+    static void register_type();
+
+    INSPECT_TYPE_METADATA(MultiviewColorPass, graph, make_pass_graph_metadata(
+        {{"input_res", "multiview_fbo"}},
+        {{"output_res", "multiview_fbo"}},
+        {{"input_res", "output_res"}}
+    ))
+
+    explicit MultiviewColorPass(const ColorPassConfig& config = {});
 };
 
 } // namespace termin

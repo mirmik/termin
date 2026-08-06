@@ -16,6 +16,13 @@ should remain disabled. Enable either feature only for an explicit profiling or
 quality experiment, and record GPU/frame timing before treating that setting as
 a new project default.
 
+The headset target uses the explicit `QuestMultiview` graph in
+`Pipelines/QuestMultiview.pipeline`: layered opaque and transparent passes,
+4x MSAA resolve, and direct layered tonemapping into one two-layer OpenXR
+swapchain. The ordinary `Default` pipeline remains attached to the editor
+target. Do not substitute it for the headset target; `xr_stereo` deliberately
+rejects `single_view` pipelines.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
@@ -105,6 +112,10 @@ and filtered logcat together with the result.
    no missing component/resource/shader, OpenXR action, Vulkan or render-pipeline
    errors. It should report controller action-set initialization/attachment and
    grab/release events.
+7. `multiview-contract`: startup logs identify `QuestMultiview`; one layered
+   color swapchain is created, both eyes remain distinct and stable, and no
+   multiview capability, external texture state, or mono-pipeline rejection is
+   reported.
 
 ## Editor view
 
