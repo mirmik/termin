@@ -317,6 +317,7 @@ if(BUILD_TESTS)
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp
         termin/editor/frame_graph_debugger_view.cpp
+        termin/editor/frame_graph_debugger_source.cpp
         termin/editor/frame_profiler_controller.cpp
         termin/editor/frame_profiler_source.cpp
         termin/editor/remote_frame_profiler_source.cpp
