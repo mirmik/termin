@@ -6,6 +6,7 @@
 
 ## 2026-08
 
+- [Retained Chart3D migration](2026-08-06-retained-chart3d-migration-plan.md)
 - [Open retained chart composer](2026-08-06-open-retained-chart-composer-plan.md)
 
 ## 2026-05

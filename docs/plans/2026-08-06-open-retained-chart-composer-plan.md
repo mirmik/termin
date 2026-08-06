@@ -371,6 +371,13 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 6. Native multi-panel composer
 
+Managed vertical prototype готов в `AllianceStreamingChartsExample`: четыре
+компонуемых `Chart2D` используют borrowed shared scene, один renderer/texture,
+общий moving X window, независимые Y ranges и WPF portals. Он доказывает
+контракт, но не заменяет перечисленный ниже native composer. Перед Alliance
+нужно также отделить дешёвое обновление projection от полного layout/tick-label
+rebuild и добавить bounded native streaming/ring-buffer policy.
+
 - [ ] Ввести `RetainedMultiChart2D` поверх общего panel composer.
 - [ ] Реализовать stable panel handles и safe dynamic reconfiguration.
 - [ ] Реализовать shared X и independent Y ranges.
