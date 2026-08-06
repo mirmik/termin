@@ -34,7 +34,8 @@
       "y": 40,
       "params": {
         "phase_mark": "opaque",
-        "sort_mode": "near_to_far"
+        "sort_mode": "near_to_far",
+        "attachment_barrier_between_draws": true
       }
     },
     {

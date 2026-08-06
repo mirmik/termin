@@ -418,7 +418,8 @@ void bind_render_passes(nb::module_& m) {
                             std::string input_res, std::string output_res,
                             nb::object shadow_res_obj, std::string phase_mark,
                             std::string pass_name, std::string sort_mode, bool clear_depth,
-                            std::string camera_name) {
+                            std::string camera_name,
+                            bool attachment_barrier_between_draws) {
             std::string shadow_res = "shadow_maps";
             if (!shadow_res_obj.is_none()) {
                 shadow_res = nb::cast<std::string>(shadow_res_obj);
@@ -434,6 +435,8 @@ void bind_render_passes(nb::module_& m) {
             config.sort_mode = std::move(sort_mode);
             config.clear_depth = clear_depth;
             config.camera_name = std::move(camera_name);
+            config.attachment_barrier_between_draws =
+                attachment_barrier_between_draws;
             new (self) ColorPass(config);
             init_pass_from_python(self, "ColorPass");
         },
@@ -444,13 +447,16 @@ void bind_render_passes(nb::module_& m) {
              nb::arg("pass_name") = "Color",
              nb::arg("sort_mode") = "none",
              nb::arg("clear_depth") = false,
-             nb::arg("camera_name") = "")
+             nb::arg("camera_name") = "",
+             nb::arg("attachment_barrier_between_draws") = false)
         .def_rw("input_res", &ColorPass::input_res)
         .def_rw("output_res", &ColorPass::output_res)
         .def_rw("shadow_res", &ColorPass::shadow_res)
         .def_rw("phase_mark", &ColorPass::phase_mark)
         .def_rw("sort_mode", &ColorPass::sort_mode)
         .def_rw("clear_depth", &ColorPass::clear_depth)
+        .def_rw("attachment_barrier_between_draws",
+                &ColorPass::attachment_barrier_between_draws)
         .def_rw("wireframe", &ColorPass::wireframe)
         .def_rw("camera_name", &ColorPass::camera_name)
         .def_rw("extra_textures", &ColorPass::extra_textures)

@@ -48,6 +48,7 @@ struct ColorPassConfig {
     std::string sort_mode = "none";
     std::string camera_name;
     bool clear_depth = false;
+    bool attachment_barrier_between_draws = false;
 };
 
 struct ColorPassExecuteData {
@@ -84,6 +85,10 @@ public:
     std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
     std::string camera_name;  // Override camera by entity name (empty = use context camera)
     bool clear_depth = false;
+    // Explicit compatibility ordering for tiled renderers. Keeps one render
+    // pass open but inserts a framebuffer-local attachment barrier between
+    // adjacent render items.
+    bool attachment_barrier_between_draws = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
     bool use_ubo = false;    // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
 
@@ -141,6 +146,8 @@ public:
     INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
         {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
     INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
+    INSPECT_FIELD(ColorPass, attachment_barrier_between_draws,
+                  "Attachment Barrier Between Draws", "bool")
     INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
     INSPECT_TYPE_METADATA(ColorPass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}, {"shadow_res", "shadow"}},

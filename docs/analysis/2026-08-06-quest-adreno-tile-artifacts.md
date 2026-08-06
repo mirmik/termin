@@ -2,8 +2,10 @@
 
 Date: 2026-08-06
 
-Status: diagnostic workaround reproduced, but intentionally not retained;
-underlying driver/engine fault not yet proved.
+Status: resolved on the tested Quest 2 by an explicit framebuffer-local
+attachment barrier between opaque draws. The exact Adreno driver failure is
+not proved, so the compatibility option remains graph-scoped and disabled by
+default.
 
 ## Summary
 
@@ -13,16 +15,19 @@ different in the left and right eye and was transient, but it was present in
 captured digital frames. This excludes the headset display matrix, lenses and
 binocular perception as the source.
 
-A clean A/B test found that ending and reopening the opaque Vulkan render pass
-between every draw suppresses the artifact. Removing those boundaries, without
-enabling capture or changing the scene, makes the artifact return. The
-experimental `ColorPass.max_draws_per_render_pass` implementation was useful
-for localization but was rejected as a production design and reverted.
+A clean A/B test first found that ending and reopening the opaque Vulkan render
+pass between every draw suppresses the artifact. A later test obtained the same
+result without ending the pass: a framebuffer-local Vulkan memory barrier
+between neighboring opaque draws is sufficient. The final implementation keeps
+one render pass and exposes this ordering requirement explicitly as
+`ColorPass.attachment_barrier_between_draws`.
 
-This result localizes the failure to work whose lifetime crosses draw calls
-inside a long render pass on the Quest/Adreno tiled renderer. It does not by
-itself prove whether the final cause is an Adreno driver defect, an engine
-synchronization/layout error not reported by validation, or marginal hardware.
+This result localizes the failure to unordered attachment access across draw
+calls inside a long render pass on the Quest/Adreno tiled renderer. Correcting
+the engine's render-pass attachment access masks and layouts was necessary
+Vulkan hygiene but did not by itself remove the artifacts. The evidence is
+consistent with an Adreno driver/compatibility requirement that validation
+does not report, rather than marginal hardware.
 The unusual stereo and external-image path that may expose such a failure is
 analyzed separately in
 `docs/analysis/2026-08-06-quest-openxr-render-path.md`.
@@ -109,6 +114,22 @@ reopening it without clears loads them again. The workaround therefore forces
 attachment materialization and resets the hardware render-pass lifetime after
 each draw.
 
+### MSAA, cached draw state and attachment ordering
+
+Subsequent A/B tests on the true multiview pipeline narrowed the result:
+
+- Disabling 4x MSAA and removing the resolve pass did not remove the artifacts.
+- Rebinding the graphics pipeline, vertex/index buffers and descriptor state
+  before every draw did not remove them.
+- Correct color/depth read-write access masks, early/late depth stages and
+  attachment-optimal initial layouts did not remove them on their own.
+- A by-region color/depth read-write barrier between opaque draws removed the
+  artifacts while keeping one render pass active. Restoring 4x MSAA and the
+  layered resolve retained the fix.
+
+The last configuration was rebuilt into the normal Quest package and visually
+accepted on the headset with correct stereo and no observed tile corruption.
+
 ## Performance cost
 
 Measurements were taken after warm-up at the requested 72 Hz, with rolling
@@ -119,16 +140,23 @@ capture disabled.
 | Unlimited render pass (`0`) | about 1.75--1.90 ms | about 0.50--0.54 ms | 71.7--71.9 |
 | One draw per render pass (`1`) | about 2.06--2.20 ms | about 0.55--0.60 ms | 71.5--71.9 |
 
-The measured cost is approximately 0.3--0.4 ms per stereo XR frame in this
-small scene. It does not currently reduce the 72 Hz presentation rate, but it
-does consume GPU/bandwidth headroom and will scale poorly with draw count on a
-tiled GPU. It is a targeted compatibility switch, not a desirable global
-default.
+The measured cost of the rejected STORE/LOAD workaround is approximately
+0.3--0.4 ms per stereo XR frame in this small scene. The retained local barrier
+does not force attachment materialization and should be cheaper, but still
+requires a dedicated timing comparison before its cost is claimed. It is a
+targeted compatibility switch, not a desirable global default.
 
 ## Code disposition
 
-No rendering or diagnostic code from this investigation was retained. In
-particular, cleanup removed:
+The diagnostic machinery was removed. The retained production contract is:
+
+- a backend-neutral `ICommandList::framebuffer_local_barrier()` operation;
+- a Vulkan by-region color/depth attachment barrier backed by a matching
+  render-pass self-dependency;
+- the opt-in `ColorPass.attachment_barrier_between_draws` graph property;
+- the property enabled only on the showcase's opaque multiview pass.
+
+In particular, cleanup removed:
 
 - The experimental `ColorPass.max_draws_per_render_pass` API and the
   Quest-specific pipeline created to exercise it.
@@ -146,9 +174,8 @@ particular, cleanup removed:
 - The bulk `diagnostic-captures` directory after representative evidence has
   been described here.
 
-Independent Vulkan correctness findings were also reverted so they can be
-reviewed and applied as focused changes rather than inherited from a chaotic
-diagnostic session. They are recorded in
+The independently identified Vulkan attachment layout, access and stage fixes
+were retained with focused tests. Other follow-ups remain recorded in
 `docs/analysis/2026-08-06-quest-vulkan-followups.md` and on the project board.
 
 ### Fix separately
@@ -166,9 +193,9 @@ runtime-package closure bug and should be tracked separately.
 
 ## Follow-up
 
-The workaround should remain project/platform scoped until it is tested on
-more Qualcomm devices. If deeper localization becomes worthwhile, binary-search
-the boundary positions or group draws by count and record which exact pair of
-adjacent draws requires a break. A driver/vendor report should include the
-representative eye frames, device/OS build, Vulkan driver properties and the
-minimal `0` versus `1` A/B.
+The option should remain project/platform scoped until it is tested on more
+Qualcomm devices. Measure its GPU cost against the ordinary long-pass path and
+test whether fewer barriers are sufficient before broadening its use. A
+driver/vendor report should include the representative eye frames, device/OS
+build, Vulkan driver properties and the clean barrier-off versus barrier-on
+A/B.

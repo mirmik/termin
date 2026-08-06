@@ -23,6 +23,13 @@ swapchain. The ordinary `Default` pipeline remains attached to the editor
 target. Do not substitute it for the headset target; `xr_stereo` deliberately
 rejects `single_view` pipelines.
 
+The opaque multiview pass enables the explicit
+`attachment_barrier_between_draws` compatibility option. It keeps one render
+pass active while ordering framebuffer-local color/depth accesses between
+draws, preventing the square tile corruption observed on the tested Quest 2
+Adreno driver. Do not remove it without a headset A/B test; do not enable it
+globally without evidence that another graph or device needs it.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
@@ -116,6 +123,10 @@ and filtered logcat together with the result.
    color swapchain is created, both eyes remain distinct and stable, and no
    multiview capability, external texture state, or mono-pipeline rejection is
    reported.
+8. `tile-integrity`: with 4x MSAA enabled, move the head and controllers around
+   high-contrast object edges for at least one minute. No screen-aligned square
+   or stair-step regions containing nearby object colors may appear in either
+   eye.
 
 ## Editor view
 

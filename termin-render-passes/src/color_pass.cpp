@@ -383,7 +383,8 @@ ColorPass::ColorPass(const ColorPassConfig& config)
       phase_mark(config.phase_mark),
       sort_mode(config.sort_mode),
       camera_name(config.camera_name),
-      clear_depth(config.clear_depth)
+      clear_depth(config.clear_depth),
+      attachment_barrier_between_draws(config.attachment_barrier_between_draws)
 {
     set_pass_name(config.pass_name);
 }
@@ -1076,7 +1077,10 @@ void ColorPass::execute_with_data(
         task.set_resources(&material_resources, uniforms, extra_texture_bindings);
     }
 
-    for (const RenderTask* task_ptr : sorted_render_tasks) {
+    for (size_t sorted_task_index = 0;
+         sorted_task_index < sorted_render_tasks.size();
+         ++sorted_task_index) {
+        const RenderTask* task_ptr = sorted_render_tasks[sorted_task_index];
         const RenderTask& task = *task_ptr;
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
@@ -1117,6 +1121,10 @@ void ColorPass::execute_with_data(
             continue;
         }
         capture_debug_symbol(task.entity_name.c_str());
+        if (attachment_barrier_between_draws &&
+            sorted_task_index + 1 < sorted_render_tasks.size()) {
+            ctx2->framebuffer_local_barrier();
+        }
     }
 
     ctx2->end_pass();
@@ -1278,6 +1286,7 @@ void ColorPass::register_type() {
     _register_inspect_phase_mark(inspect);
     _register_inspect_sort_mode(inspect);
     _register_inspect_clear_depth(inspect);
+    _register_inspect_attachment_barrier_between_draws(inspect);
     _register_inspect_camera_name(inspect);
     _register_inspect_metadata_graph(inspect);
     (void)descriptor.commit();
