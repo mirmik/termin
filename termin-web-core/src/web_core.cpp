@@ -100,10 +100,7 @@ EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
 void unload_web_host_package() {
     web_host_loop_running = false;
     web_host_loop_last_timestamp = -1.0;
-    for (termin::runtime::RuntimePackageScene& packaged : web_headless_package.scenes) {
-        if (packaged.scene.valid()) packaged.scene.destroy();
-    }
-    web_headless_package = {};
+    web_headless_package.destroy();
     if (!web_player) {
         web_host_frame_count = 0;
         return;
@@ -122,12 +119,7 @@ void unload_web_host_package() {
         tc_log_info("TerminWebHost unload: EngineCore released");
     }
     tc_log_info("TerminWebHost unload: destroying packaged scenes");
-    for (termin::runtime::RuntimePackageScene& packaged : web_player->package.scenes) {
-        if (packaged.scene.valid()) {
-            packaged.scene.destroy();
-        }
-    }
-    web_player->package = {};
+    web_player->package.destroy();
     web_player->viewports.clear();
     web_player->presentation_display = TC_DISPLAY_HANDLE_INVALID;
     web_player->registered_scene_names.clear();
