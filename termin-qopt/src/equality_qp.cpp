@@ -2,6 +2,7 @@
 
 #include "qp_internal.hpp"
 
+#include <Eigen/Cholesky>
 #include <Eigen/Eigenvalues>
 #include <Eigen/SVD>
 
@@ -18,7 +19,8 @@ using namespace detail;
 
 [[nodiscard]] QpSolveResult solve_impl(EqualityQpProblemView problem,
                                        EqualityQpSolutionView solution,
-                                       QpTolerance tolerance) {
+                                       QpTolerance tolerance,
+                                       bool try_spd_fast_path) {
   if (!valid_tolerance(tolerance)) {
     return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
   }
@@ -81,6 +83,85 @@ using namespace detail;
       equality_targets[row] /= row_scale;
     }
   }
+
+  // Dynamics subproblems normally have a positive-definite mass matrix and
+  // independent active constraints. Solve that common case through the Schur
+  // complement, while retaining the rank-revealing path below for singular,
+  // semidefinite, or inconsistent problems.
+  if (try_spd_fast_path && constraint_count > 0 &&
+      constraint_count <= variable_count) {
+    Eigen::LLT<Matrix> hessian_factor(hessian);
+    if (hessian_factor.info() == Eigen::Success) {
+      const Vector hessian_pivots =
+          hessian_factor.matrixL().toDenseMatrix().diagonal().array().square();
+      const double hessian_rank_tolerance =
+          scaled_tolerance(tolerance, hessian_scale);
+      if (hessian_pivots.size() > 0 &&
+          hessian_pivots.minCoeff() > hessian_rank_tolerance) {
+        const Vector free_primal = hessian_factor.solve(-gradient);
+        const Matrix constraint_response =
+            hessian_factor.solve(equalities.transpose());
+        const Matrix raw_schur = equalities * constraint_response;
+        const Matrix schur = 0.5 * (raw_schur + raw_schur.transpose());
+
+        Eigen::LLT<Matrix> schur_factor(schur);
+        bool schur_full_rank = false;
+        if (schur_factor.info() == Eigen::Success) {
+          const Vector schur_pivots = schur_factor.matrixL()
+                                            .toDenseMatrix()
+                                            .diagonal()
+                                            .array()
+                                            .square();
+          schur_full_rank =
+              schur_pivots.minCoeff() >
+              scaled_tolerance(tolerance, matrix_linf(schur));
+        }
+
+        if (schur_full_rank) {
+          const Vector normalized_dual = schur_factor.solve(
+              equalities * free_primal - equality_targets);
+          const Vector primal =
+              free_primal - constraint_response * normalized_dual;
+          Vector equality_dual = normalized_dual;
+          equality_dual.array() /= equality_row_scales.array();
+
+          const Vector objective_gradient = hessian * primal + gradient;
+          const Vector stationarity_error =
+              objective_gradient +
+              input_equalities.transpose() * equality_dual;
+          const Vector equality_error =
+              input_equalities * primal - input_equality_targets;
+          const double feasibility_scale =
+              std::max(linf(input_equalities * primal),
+                       linf(input_equality_targets));
+          const double feasibility_tolerance =
+              scaled_tolerance(tolerance, feasibility_scale);
+          const double stationarity_scale = std::max({
+              1.0,
+              linf(hessian * primal),
+              linf(gradient),
+              linf(input_equalities.transpose() * equality_dual),
+          });
+
+          QpSolveResult result;
+          result.status = QpStatus::Optimal;
+          result.diagnostic = QpDiagnostic::None;
+          result.stationarity_linf = linf(stationarity_error);
+          result.equality_linf = linf(equality_error);
+          result.constraint_rank = constraints;
+          result.reduced_hessian_rank = variables - constraints;
+          if (result.stationarity_linf <=
+                  scaled_tolerance(tolerance, stationarity_scale) &&
+              result.equality_linf <= feasibility_tolerance) {
+            copy_to_view(primal, solution.primal);
+            copy_to_view(equality_dual, solution.equality_dual);
+            return result;
+          }
+        }
+      }
+    }
+  }
+
   Matrix nullspace;
   Vector feasible = Vector::Zero(variable_count);
   Matrix left_range;
@@ -255,7 +336,7 @@ QpSolveResult solve_equality_qp(EqualityQpProblemView problem,
                                 EqualityQpSolutionView solution,
                                 QpTolerance tolerance) noexcept {
   try {
-    return solve_impl(problem, solution, tolerance);
+    return solve_impl(problem, solution, tolerance, false);
   } catch (const std::exception &error) {
     std::fprintf(stderr,
                  "[termin-qopt] equality QP failed with an exception: %s\n",
@@ -263,6 +344,25 @@ QpSolveResult solve_equality_qp(EqualityQpProblemView problem,
   } catch (...) {
     std::fprintf(
         stderr, "[termin-qopt] equality QP failed with an unknown exception\n");
+  }
+  return failure(QpStatus::NumericalFailure,
+                 QpDiagnostic::DecompositionFailure);
+}
+
+QpSolveResult detail::solve_equality_qp_spd_first(
+    EqualityQpProblemView problem, EqualityQpSolutionView solution,
+    QpTolerance tolerance) noexcept {
+  try {
+    return solve_impl(problem, solution, tolerance, true);
+  } catch (const std::exception &error) {
+    std::fprintf(stderr,
+                 "[termin-qopt] SPD-first equality QP failed with an "
+                 "exception: %s\n",
+                 error.what());
+  } catch (...) {
+    std::fprintf(stderr,
+                 "[termin-qopt] SPD-first equality QP failed with an unknown "
+                 "exception\n");
   }
   return failure(QpStatus::NumericalFailure,
                  QpDiagnostic::DecompositionFailure);

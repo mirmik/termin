@@ -116,10 +116,18 @@ namespace termin::physics_qopt
         state_snapshot_.velocities.assign(unit_count(), 0.0);
         acceleration_snapshot_.assign(dof_count(), 0.0);
         unit_limit_state_snapshot_.resize(unit_count());
+        const std::size_t generalized_count = dof_count();
+        mass_matrix_cache_.assign(generalized_count * generalized_count, 0.0);
+        bias_work_.assign(generalized_count, 0.0);
+        load_work_.assign(generalized_count, 0.0);
+        generalized_velocity_work_.assign(generalized_count, 0.0);
+        limit_row_work_.assign(generalized_count, 0.0);
+        zero_acceleration_work_.assign(generalized_count, 0.0);
     }
 
     Articulation3D& Articulation3DDynamicsContribution::articulation() noexcept
     {
+        invalidate_mass_matrix_cache();
         return articulation_;
     }
 
@@ -203,6 +211,17 @@ namespace termin::physics_qopt
         return gravity_world_;
     }
 
+    ArticulationDynamicsAssemblyCounters
+    Articulation3DDynamicsContribution::assembly_counters() const noexcept
+    {
+        return assembly_counters_;
+    }
+
+    void Articulation3DDynamicsContribution::reset_assembly_counters() noexcept
+    {
+        assembly_counters_ = {};
+    }
+
     PointKinematics3DResult
     Articulation3DDynamicsContribution::floating_base_point_kinematics(
         termin::Vec3 point_local) const noexcept
@@ -244,6 +263,7 @@ namespace termin::physics_qopt
     Articulation3DDiagnostic Articulation3DDynamicsContribution::set_state(
         Articulation3DState value) noexcept
     {
+        invalidate_mass_matrix_cache();
         return articulation_.set_state(std::move(value));
     }
 
@@ -266,33 +286,52 @@ namespace termin::physics_qopt
     Articulation3DDynamicsContribution::set_floating_base_state(
         termin::Pose3 pose_world, termin::Screw3 velocity_local) noexcept
     {
+        invalidate_mass_matrix_cache();
         return articulation_.set_floating_base_state(pose_world,
                                                      velocity_local);
     }
 
-    bool Articulation3DDynamicsContribution::assemble_mass_and_bias(
-        std::vector<double>& mass, std::vector<double>& bias) const
+    void Articulation3DDynamicsContribution::invalidate_mass_matrix_cache()
+        noexcept
     {
-        const std::size_t count = dof_count();
-        const std::vector<double> zero(count, 0.0);
-        if (!articulation_.mass_matrix(mass))
+        mass_matrix_cache_valid_ = false;
+    }
+
+    bool Articulation3DDynamicsContribution::prepare_mass_matrix()
+    {
+        if (!mass_matrix_cache_valid_)
         {
-            return false;
+            if (!articulation_.mass_matrix(mass_matrix_cache_))
+            {
+                return false;
+            }
+            mass_matrix_cache_valid_ = true;
+            ++assembly_counters_.mass_matrix_evaluations;
         }
-        std::vector<double> generalized_velocity(count, 0.0);
+        return finite(mass_matrix_cache_);
+    }
+
+    bool Articulation3DDynamicsContribution::prepare_bias()
+    {
+        std::fill(generalized_velocity_work_.begin(),
+                  generalized_velocity_work_.end(),
+                  0.0);
         const std::size_t unit_offset =
             articulation_.has_floating_base() ? 6 : 0;
         if (ArticulationAccess::floating_base(articulation_).has_value())
         {
             write_screw_vw(ArticulationAccess::floating_base(articulation_)
                                ->velocity_local,
-                           generalized_velocity);
+                           generalized_velocity_work_);
         }
         std::copy(ArticulationAccess::state(articulation_).velocities.begin(),
                   ArticulationAccess::state(articulation_).velocities.end(),
-                  generalized_velocity.begin() + unit_offset);
+                  generalized_velocity_work_.begin() + unit_offset);
         if (!articulation_.inverse_dynamics(
-                generalized_velocity, zero, gravity_world_, bias))
+                generalized_velocity_work_,
+                zero_acceleration_work_,
+                gravity_world_,
+                bias_work_))
         {
             std::fprintf(stderr,
                          "[termin-qopt] articulation '%s' inverse dynamics "
@@ -300,7 +339,8 @@ namespace termin::physics_qopt
                          diagnostic_name_.c_str());
             return false;
         }
-        return finite(mass);
+        ++assembly_counters_.bias_evaluations;
+        return finite(bias_work_);
     }
 
     double Articulation3DDynamicsContribution::total_energy() const noexcept
@@ -415,17 +455,9 @@ namespace termin::physics_qopt
     {
         try
         {
-            std::vector<double> mass;
-            std::vector<double> bias;
-            if (!ArticulationAccess::update_kinematics(articulation_))
-            {
-                std::fprintf(stderr,
-                             "[termin-qopt] articulation '%s' produced invalid "
-                             "kinematics during assembly\n",
-                             diagnostic_name_.c_str());
-                return AssemblyDiagnostic::NonFiniteContribution;
-            }
-            if (!assemble_mass_and_bias(mass, bias))
+            if (!prepare_mass_matrix() ||
+                (phase == DynamicsAssemblyPhase::Acceleration &&
+                 !prepare_bias()))
             {
                 std::fprintf(stderr,
                              "[termin-qopt] articulation '%s' produced invalid "
@@ -439,46 +471,50 @@ namespace termin::physics_qopt
                 ArticulationAccess::floating_base(articulation_).has_value()
                     ? 6
                     : 0;
-            std::vector<double> load(generalized_count, 0.0);
+            std::fill(load_work_.begin(), load_work_.end(), 0.0);
             if (phase == DynamicsAssemblyPhase::Acceleration)
             {
                 for (std::size_t index = 0; index < generalized_count; ++index)
                 {
-                    load[index] = -bias[index];
+                    load_work_[index] = -bias_work_[index];
                 }
             }
             if (phase == DynamicsAssemblyPhase::VelocityProjection)
             {
-                std::vector<double> generalized_velocity(generalized_count,
-                                                         0.0);
+                std::fill(generalized_velocity_work_.begin(),
+                          generalized_velocity_work_.end(),
+                          0.0);
                 if (ArticulationAccess::floating_base(articulation_)
                         .has_value())
                 {
                     write_screw_vw(
                         ArticulationAccess::floating_base(articulation_)
                             ->velocity_local,
-                        generalized_velocity);
+                        generalized_velocity_work_);
                 }
                 std::copy(
                     ArticulationAccess::state(articulation_).velocities.begin(),
                     ArticulationAccess::state(articulation_).velocities.end(),
-                    generalized_velocity.begin() + unit_offset);
-                std::fill(load.begin(), load.end(), 0.0);
+                    generalized_velocity_work_.begin() + unit_offset);
                 for (std::size_t row = 0; row < generalized_count; ++row)
                 {
                     for (std::size_t column = 0; column < generalized_count;
                          ++column)
                     {
-                        load[row] += mass[row * generalized_count + column] *
-                                     generalized_velocity[column];
+                        load_work_[row] +=
+                            mass_matrix_cache_[row * generalized_count +
+                                               column] *
+                            generalized_velocity_work_[column];
                     }
                 }
             }
 
             const AssemblyDiagnostic mass_result = assembly.add_mass(
-                dofs_, dofs_, matrix_view(mass, generalized_count));
+                dofs_,
+                dofs_,
+                matrix_view(mass_matrix_cache_, generalized_count));
             const AssemblyDiagnostic load_result =
-                assembly.add_load(dofs_, vector_view(load));
+                assembly.add_load(dofs_, vector_view(load_work_));
             if (mass_result != AssemblyDiagnostic::None)
             {
                 return mass_result;
@@ -494,13 +530,13 @@ namespace termin::physics_qopt
                 return AssemblyDiagnostic::NonFiniteContribution;
             }
 
-            std::vector<double> row(generalized_count, 0.0);
+            std::fill(limit_row_work_.begin(), limit_row_work_.end(), 0.0);
             for (std::size_t index = 0; index < articulation_.units().size();
                  ++index)
             {
                 const ArticulationUnitLimits3D& limits =
                     articulation_.units()[index].limits;
-                row[unit_offset + index] = -1.0;
+                limit_row_work_[unit_offset + index] = -1.0;
                 if (unit_limit_rows_[index].minimum.valid())
                 {
                     const double coordinate =
@@ -518,7 +554,7 @@ namespace termin::physics_qopt
                             unit_limit_rows_[index].minimum,
                             dofs_,
                             ConstDenseMatrixView::row_major(
-                                row.data(), 1, generalized_count));
+                                limit_row_work_.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
@@ -530,7 +566,7 @@ namespace termin::physics_qopt
                         return result;
                     }
                 }
-                row[unit_offset + index] = 1.0;
+                limit_row_work_[unit_offset + index] = 1.0;
                 if (unit_limit_rows_[index].maximum.valid())
                 {
                     const double coordinate =
@@ -548,7 +584,7 @@ namespace termin::physics_qopt
                             unit_limit_rows_[index].maximum,
                             dofs_,
                             ConstDenseMatrixView::row_major(
-                                row.data(), 1, generalized_count));
+                                limit_row_work_.data(), 1, generalized_count));
                     if (result == AssemblyDiagnostic::None)
                     {
                         result = assembly.add_unilateral_limit(
@@ -560,7 +596,7 @@ namespace termin::physics_qopt
                         return result;
                     }
                 }
-                row[unit_offset + index] = 0.0;
+                limit_row_work_[unit_offset + index] = 0.0;
             }
             return AssemblyDiagnostic::None;
         }
@@ -581,6 +617,7 @@ namespace termin::physics_qopt
 
     AssemblyDiagnostic Articulation3DDynamicsContribution::begin_step() noexcept
     {
+        invalidate_mass_matrix_cache();
         std::copy(ArticulationAccess::state(articulation_).coordinates.begin(),
                   ArticulationAccess::state(articulation_).coordinates.end(),
                   state_snapshot_.coordinates.begin());
@@ -625,6 +662,7 @@ namespace termin::physics_qopt
             ArticulationAccess::floating_base(articulation_) =
                 floating_base_snapshot_;
             (void)ArticulationAccess::update_kinematics(articulation_);
+            invalidate_mass_matrix_cache();
             snapshot_ready_ = false;
         }
     }
@@ -781,6 +819,7 @@ namespace termin::physics_qopt
         ConstDenseVectorView midpoint_velocity,
         double time_step) noexcept
     {
+        invalidate_mass_matrix_cache();
         if (!snapshot_ready_ || !std::isfinite(time_step) || time_step <= 0.0)
         {
             return AssemblyDiagnostic::NonFiniteContribution;
