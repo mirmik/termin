@@ -1328,7 +1328,11 @@
     },
     "extensions": {
       "render_mount": {
-        "pipeline_templates": [],
+        "pipeline_templates": [
+          {
+            "uuid": "quest-showcase-xr-multiview-pipeline"
+          }
+        ],
         "viewport_configs": [
           {
             "name": "Main Viewport",
@@ -1381,7 +1385,8 @@
               1.0
             ],
             "clear_depth": 1.0,
-            "pipeline_name": "Default",
+            "pipeline_uuid": "quest-showcase-xr-multiview-pipeline",
+            "pipeline_name": "QuestMultiview",
             "layer_mask": 4294967295.0,
             "enabled": true
           }

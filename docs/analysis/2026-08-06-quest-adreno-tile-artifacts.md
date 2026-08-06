@@ -23,6 +23,9 @@ This result localizes the failure to work whose lifetime crosses draw calls
 inside a long render pass on the Quest/Adreno tiled renderer. It does not by
 itself prove whether the final cause is an Adreno driver defect, an engine
 synchronization/layout error not reported by validation, or marginal hardware.
+The unusual stereo and external-image path that may expose such a failure is
+analyzed separately in
+`docs/analysis/2026-08-06-quest-openxr-render-path.md`.
 
 ## Observed symptom
 

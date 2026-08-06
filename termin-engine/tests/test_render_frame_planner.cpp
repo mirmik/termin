@@ -92,13 +92,14 @@ TestPipeline make_pipeline(
     if (external_slot_count > 8 || viewport_target_count > 8) return result;
     for (size_t i = 0; i < external_slot_count; ++i) {
         resources[i] = {
-            external_slots[i], "external", nullptr, nullptr, 0, 0, 1.0f, 1, 0};
+            external_slots[i], "external", nullptr, nullptr, 0, 0, 1.0f, 1, 1, 0};
     }
     for (size_t i = 0; i < viewport_target_count; ++i) {
         targets[i] = {viewport_targets[i], nullptr, 0, 0};
     }
     const tc_pipeline_template_payload_desc payload{
         TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION,
+        TC_PIPELINE_EXECUTION_SINGLE_VIEW,
         name,
         nullptr,
         0,

@@ -12,6 +12,7 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
         json.dumps(
             {
                 "uuid": "pipeline-uuid",
+                "execution_model": "xr_multiview",
                 "nodes": [
                     {"type": "RenderTargetInput", "node_type": "render_target_input"},
                     {"type": "PipelineOutput", "node_type": "pipeline_output"},
@@ -39,6 +40,7 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
     assert controller.graph is graph
     assert controller.file_path == source
     assert controller.file_uuid == "pipeline-uuid"
+    assert graph.data["execution_model"] == "xr_multiview"
     assert graph_events == [graph]
     assert status_events == [f"Loaded: {source}"]
 
@@ -52,6 +54,7 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
     assert controller.save(saved) == saved
     payload = json.loads(saved.read_text(encoding="utf-8"))
     assert payload["uuid"] == "pipeline-uuid"
+    assert payload["execution_model"] == "xr_multiview"
     assert payload["nodes"][-1]["name"] == "Final"
     assert status_events[-1] == f"Saved: {saved}"
 
