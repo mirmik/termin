@@ -255,6 +255,110 @@ void test_nonconvex_and_overlapping_outputs() {
   TERMIN_QOPT_CHECK(result.diagnostic == QpDiagnostic::OverlappingOutputs);
 }
 
+void test_factorization_cache_reuses_only_exact_coefficients() {
+  std::vector<double> hessian{
+      4.0, 1.0,
+      1.0, 3.0,
+  };
+  std::vector<double> equalities{1.0, -1.0};
+  std::vector<double> gradient{-2.0, 1.0};
+  std::vector<double> targets{0.5};
+  std::vector<double> cached_primal(2);
+  std::vector<double> cached_dual(1);
+  std::vector<double> reference_primal(2);
+  std::vector<double> reference_dual(1);
+  EqualityQpFactorizationCache cache;
+
+  const auto solve_cached = [&]() {
+    return cache.solve(
+        {
+            row_major(hessian, 2, 2),
+            const_vector(gradient),
+            row_major(equalities, 1, 2),
+            const_vector(targets),
+        },
+        {vector(cached_primal), vector(cached_dual)});
+  };
+  const auto solve_reference = [&]() {
+    return solve_equality_qp(
+        {
+            row_major(hessian, 2, 2),
+            const_vector(gradient),
+            row_major(equalities, 1, 2),
+            const_vector(targets),
+        },
+        {vector(reference_primal), vector(reference_dual)});
+  };
+
+  TERMIN_QOPT_CHECK(solve_cached().status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(solve_reference().status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(linf_difference(cached_primal, reference_primal) <= 1e-12);
+  TERMIN_QOPT_CHECK(linf_difference(cached_dual, reference_dual) <= 1e-12);
+
+  gradient = {3.0, -4.0};
+  targets[0] = -0.25;
+  TERMIN_QOPT_CHECK(solve_cached().status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(solve_reference().status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(linf_difference(cached_primal, reference_primal) <= 1e-12);
+  TERMIN_QOPT_CHECK(linf_difference(cached_dual, reference_dual) <= 1e-12);
+  EqualityQpFactorizationCounters counters = cache.counters();
+  TERMIN_QOPT_CHECK(counters.factorizations == 1);
+  TERMIN_QOPT_CHECK(counters.reuse_hits == 1);
+
+  hessian[0] += 0.5;
+  TERMIN_QOPT_CHECK(solve_cached().status == QpStatus::Optimal);
+  counters = cache.counters();
+  TERMIN_QOPT_CHECK(counters.factorizations == 2);
+  TERMIN_QOPT_CHECK(counters.reuse_hits == 1);
+
+  equalities[1] += 0.25;
+  TERMIN_QOPT_CHECK(solve_cached().status == QpStatus::Optimal);
+  counters = cache.counters();
+  TERMIN_QOPT_CHECK(counters.factorizations == 3);
+  TERMIN_QOPT_CHECK(counters.reuse_hits == 1);
+
+  cache.clear();
+  TERMIN_QOPT_CHECK(solve_cached().status == QpStatus::Optimal);
+  counters = cache.counters();
+  TERMIN_QOPT_CHECK(counters.factorizations == 4);
+}
+
+void test_factorization_cache_preserves_rhs_diagnostics() {
+  const std::vector<double> hessian{2.0};
+  const std::vector<double> equalities{1.0, 2.0};
+  const std::vector<double> gradient{-4.0};
+  std::vector<double> targets{3.0, 6.0};
+  std::vector<double> primal(1, 123.0);
+  std::vector<double> dual(2, 456.0);
+  EqualityQpFactorizationCache cache;
+
+  const auto solve = [&]() {
+    return cache.solve(
+        {
+            row_major(hessian, 1, 1),
+            const_vector(gradient),
+            row_major(equalities, 2, 1),
+            const_vector(targets),
+        },
+        {vector(primal), vector(dual)});
+  };
+  TERMIN_QOPT_CHECK(solve().status == QpStatus::Optimal);
+
+  targets[1] = 7.0;
+  primal[0] = 123.0;
+  std::fill(dual.begin(), dual.end(), 456.0);
+  const QpSolveResult inconsistent = solve();
+  TERMIN_QOPT_CHECK(inconsistent.status == QpStatus::Infeasible);
+  TERMIN_QOPT_CHECK(inconsistent.diagnostic ==
+                    QpDiagnostic::InconsistentEqualities);
+  TERMIN_QOPT_CHECK(primal[0] == 123.0);
+  TERMIN_QOPT_CHECK(std::ranges::all_of(
+      dual, [](double value) { return value == 456.0; }));
+  const EqualityQpFactorizationCounters counters = cache.counters();
+  TERMIN_QOPT_CHECK(counters.factorizations == 1);
+  TERMIN_QOPT_CHECK(counters.reuse_hits == 1);
+}
+
 } // namespace
 
 int main() {
@@ -265,5 +369,7 @@ int main() {
   test_input_output_aliasing_uses_snapshot_semantics();
   test_invalid_inputs_are_diagnostic_and_do_not_write_outputs();
   test_nonconvex_and_overlapping_outputs();
+  test_factorization_cache_reuses_only_exact_coefficients();
+  test_factorization_cache_preserves_rhs_diagnostics();
   return 0;
 }

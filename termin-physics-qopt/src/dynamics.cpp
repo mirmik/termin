@@ -429,9 +429,11 @@ namespace termin::physics_qopt
         };
     }
 
-    QpSolveResult solve_constrained_dynamics(ConstDynamicsSystemView system,
-                                             DynamicsSolutionView solution,
-                                             QpTolerance tolerance) noexcept
+    static QpSolveResult solve_constrained_dynamics_impl(
+        ConstDynamicsSystemView system,
+        DynamicsSolutionView solution,
+        QpTolerance tolerance,
+        EqualityQpFactorizationCache* factorization_cache) noexcept
     {
         const std::size_t dof_count = system.load.size;
         const std::size_t constraint_count = system.constraint_rhs.size;
@@ -473,18 +475,21 @@ namespace termin::physics_qopt
                 gradient[index] = -system.load[index];
             }
 
-            const QpSolveResult result = solve_equality_qp(
-                {
-                    system.mass,
-                    {gradient.data(), gradient.size(), 1},
-                    system.constraint_jacobian,
-                    system.constraint_rhs,
-                },
-                {
-                    {acceleration.data(), acceleration.size(), 1},
-                    {equality_dual.data(), equality_dual.size(), 1},
-                },
-                tolerance);
+            const EqualityQpProblemView problem = {
+                system.mass,
+                {gradient.data(), gradient.size(), 1},
+                system.constraint_jacobian,
+                system.constraint_rhs,
+            };
+            const EqualityQpSolutionView qp_solution = {
+                {acceleration.data(), acceleration.size(), 1},
+                {equality_dual.data(), equality_dual.size(), 1},
+            };
+            const QpSolveResult result =
+                factorization_cache == nullptr
+                    ? solve_equality_qp(problem, qp_solution, tolerance)
+                    : factorization_cache->solve(
+                          problem, qp_solution, tolerance);
             if (result.status != QpStatus::Optimal)
             {
                 return result;
@@ -517,6 +522,15 @@ namespace termin::physics_qopt
         result.status = QpStatus::NumericalFailure;
         result.diagnostic = QpDiagnostic::DecompositionFailure;
         return result;
+    }
+
+    QpSolveResult solve_constrained_dynamics(
+        ConstDynamicsSystemView system,
+        DynamicsSolutionView solution,
+        QpTolerance tolerance) noexcept
+    {
+        return solve_constrained_dynamics_impl(
+            system, solution, tolerance, nullptr);
     }
 
     QpSolveResult
@@ -1682,6 +1696,7 @@ namespace termin::physics_qopt
             constexpr std::size_t kMaximumVelocityIterations = 20;
             const double endpoint_velocity_tolerance =
                 std::max(1e-12, options.velocity_tolerance * 0.1);
+            EqualityQpFactorizationCache endpoint_factorization;
             for (std::size_t iteration = 0;
                  iteration < kMaximumVelocityIterations;
                  ++iteration)
@@ -1696,7 +1711,7 @@ namespace termin::physics_qopt
                         DynamicsSystemDiagnostic::AssemblyFailure,
                         first_dynamics);
                 }
-                second_dynamics = solve_constrained_dynamics(
+                second_dynamics = solve_constrained_dynamics_impl(
                     assembly.system(),
                     {
                         {
@@ -1710,7 +1725,8 @@ namespace termin::physics_qopt
                             1,
                         },
                     },
-                    options.qp_tolerance);
+                    options.qp_tolerance,
+                    &endpoint_factorization);
                 if (second_dynamics.status != QpStatus::Optimal)
                 {
                     rollback();
@@ -1750,6 +1766,12 @@ namespace termin::physics_qopt
                     break;
                 }
             }
+            const EqualityQpFactorizationCounters endpoint_counters =
+                endpoint_factorization.counters();
+            result.endpoint_equality_factorizations +=
+                endpoint_counters.factorizations;
+            result.endpoint_equality_factorization_reuses +=
+                endpoint_counters.reuse_hits;
             if (!endpoint_velocity_converged)
             {
                 std::fprintf(stderr,
