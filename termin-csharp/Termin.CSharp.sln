@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RetainedChartWpfExample", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AllianceStreamingChartsExample", "examples\AllianceStreamingChartsExample\AllianceStreamingChartsExample.csproj", "{311B1296-6F0A-4E70-B828-52BF2B565E8A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RetainedChart3DWpfExample", "examples\RetainedChart3DWpfExample\RetainedChart3DWpfExample.csproj", "{8287C216-C8B7-457B-882B-49326EE93865}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -127,6 +129,18 @@ Global
 		{311B1296-6F0A-4E70-B828-52BF2B565E8A}.Release|x64.Build.0 = Release|Any CPU
 		{311B1296-6F0A-4E70-B828-52BF2B565E8A}.Release|x86.ActiveCfg = Release|Any CPU
 		{311B1296-6F0A-4E70-B828-52BF2B565E8A}.Release|x86.Build.0 = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|x64.Build.0 = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Debug|x86.Build.0 = Debug|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|x64.ActiveCfg = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|x64.Build.0 = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|x86.ActiveCfg = Release|Any CPU
+		{8287C216-C8B7-457B-882B-49326EE93865}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -137,5 +151,6 @@ Global
 		{63B43A7B-1D67-4A8F-90EC-FA63537D076B} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
 		{9E0D2D77-64CD-4719-A98F-7D2A8E704453} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
 		{311B1296-6F0A-4E70-B828-52BF2B565E8A} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
+		{8287C216-C8B7-457B-882B-49326EE93865} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
 	EndGlobalSection
 EndGlobal
