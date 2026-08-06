@@ -525,7 +525,7 @@ struct OpenXRRuntimeScene {
         if (!package.ok || !package.scene.valid()) {
             log_error("OpenXR scene", (std::string("runtime package load failed: ") + package.message).c_str());
             tc_log_error("[OpenXR scene] runtime package load failed: %s", package.message.c_str());
-            package = termin::runtime::RuntimePackageLoadResult();
+            package.destroy();
             engine.reset();
             return false;
         }
@@ -543,8 +543,7 @@ struct OpenXRRuntimeScene {
         if (!xr_origin) {
             log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");
             tc_log_error("[OpenXR scene] runtime package loaded but has no XR camera origin");
-            package.scene.destroy();
-            package = termin::runtime::RuntimePackageLoadResult();
+            package.destroy();
             engine.reset();
             return false;
         }
@@ -554,8 +553,8 @@ struct OpenXRRuntimeScene {
         if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
             log_error("OpenXR scene", "failed to create render pipeline");
             tc_log_error("[OpenXR scene] failed to create render pipeline");
-            package.scene.destroy();
-            package = termin::runtime::RuntimePackageLoadResult();
+            pipeline.destroy();
+            package.destroy();
             engine.reset();
             return false;
         }
@@ -575,8 +574,7 @@ struct OpenXRRuntimeScene {
             tc_log_error(
                 "[OpenXR scene] xr_stereo target rejected non-xr_multiview pipeline");
             pipeline.destroy();
-            package.scene.destroy();
-            package = termin::runtime::RuntimePackageLoadResult();
+            package.destroy();
             engine.reset();
             return false;
         }
@@ -819,13 +817,14 @@ struct OpenXRRuntimeScene {
             }
         }
         xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
-        pipeline = {};
+        // RenderPipeline is deliberately a non-owning handle wrapper. Destroy
+        // the owned pool object before releasing package templates; merely
+        // overwriting the wrapper leaks the template retain across Android
+        // pause/resume in the same process.
+        pipeline.destroy();
         xr_origin = nullptr;
-        if (scene.valid()) {
-            scene.destroy();
-        }
+        package.destroy();
         scene = {};
-        package = termin::runtime::RuntimePackageLoadResult();
         tgfx::set_builtin_shader_root(nullptr);
         engine.reset();
         ready = false;

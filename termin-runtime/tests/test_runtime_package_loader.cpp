@@ -20,6 +20,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/render/sprite_asset.hpp>
+#include <termin/render/render_pipeline.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -781,7 +782,7 @@ TEST_CASE("RuntimePackageLoader exposes packaged builtin shader root") {
     );
 }
 
-TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the scene") {
+TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runtime session") {
     const std::filesystem::path root = make_package_root();
     constexpr const char* pipeline_uuid = "runtime-loader-compiled-pipeline";
 
@@ -846,6 +847,23 @@ TEST_CASE("RuntimePackageLoader loads compiled pipeline templates before the sce
     CHECK_EQ(tc_scene_pipeline_template_count(result.scene.handle()), 1u);
     CHECK(tc_pipeline_template_handle_eq(
         tc_scene_pipeline_template_at(result.scene.handle(), 0), loaded));
+
+    termin::TcPipelineTemplate loaded_template_ref(loaded);
+    termin::RenderPipeline runtime_pipeline(loaded_template_ref);
+    REQUIRE(runtime_pipeline.is_valid());
+
+    // Runtime execution objects must go first, followed by the package-owned
+    // scenes and canonical resources. This is the Android pause/resume order.
+    runtime_pipeline.destroy();
+    loaded_template_ref = {};
+    result.destroy();
+    CHECK_FALSE(tc_pipeline_template_is_valid(loaded));
+
+    termin::runtime::RuntimePackageLoadResult resumed =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(resumed.ok);
+    CHECK(tc_pipeline_template_is_valid(tc_pipeline_template_find(pipeline_uuid)));
+    resumed.destroy();
 }
 
 TEST_CASE("RuntimePackageLoader registers native UI documents before the scene") {
