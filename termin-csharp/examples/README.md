@@ -15,6 +15,10 @@ Projects:
   streaming chart panels in one retained scene and one offscreen texture.
   Pause and reset are WPF portals whose handlers and streaming timer live in
   C#.
+- `RetainedChart3DWpfExample` - retained surface/scatter items with stable
+  handles, an independently replaceable grid part, public camera state, one
+  color/depth renderer, and WPF wireframe/shading/reset-camera portals whose
+  callbacks stay in C#.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,
   OpenGL, raw framebuffer, or raw display-pointer dependency.
@@ -45,6 +49,12 @@ Run the Alliance-style multi-panel streaming example with:
 
 ```powershell
 dotnet run --project termin-csharp/examples/AllianceStreamingChartsExample/AllianceStreamingChartsExample.csproj
+```
+
+Run the retained 3D vertical slice with:
+
+```powershell
+dotnet run --project termin-csharp/examples/RetainedChart3DWpfExample/RetainedChart3DWpfExample.csproj
 ```
 
 `-m:1` keeps the solution build serial. The individual projects build normally,

@@ -1,0 +1,158 @@
+# Retained Chart3D migration
+
+Дата: 2026-08-06  
+Статус: active
+
+## Контекст
+
+2D vertical slices подтвердили рабочую форму интеграции: chart composition
+владеет retained scene, consumer получает typed items и named parts, renderer
+заимствует scene/GPU host, а WPF controls живут в portal overlay и вызывают
+обычный C# код.
+
+Текущий `PlotEngine3D` этой форме не соответствует. Он одновременно владеет
+`PlotData`, camera/input state, одним глобальным dirty bit, GPU mesh caches,
+grid generation, surface policy, picking и world-text orchestration. Lines и
+scatter объединяются в общие meshes, surfaces адресуются индексами, а ticks и
+labels создаются непосредственно во время `render()`.
+
+## Решение
+
+Ввести plot-specific retained model, не создавая преждевременно универсальную
+engine-wide `TcVisualScene3D`:
+
+```text
+RetainedChart3D
+├── PlotScene3D
+│   ├── LineSeriesItem3D
+│   ├── ScatterSeriesItem3D
+│   ├── SurfaceItem3D
+│   ├── GridItem3D
+│   └── AnnotationItem3D
+├── OrbitCamera + interaction controller
+├── Chart3DParts
+│   ├── Grid
+│   ├── Axes
+│   ├── TickLabels
+│   └── Marker
+└── TcVisualScene2D overlay
+    ├── Background / title / legend
+    └── WPF / termin-gui portal anchors
+```
+
+`PlotScene3D` является публичным semantic item registry с generation handles.
+Каждый data item владеет CPU data, style revision и geometry revision. GPU cache
+принадлежит renderer-side item body и перестраивается только для изменившегося
+item. Camera, viewport и overlay changes не инвалидируют series geometry.
+
+## Границы модулей
+
+### `tcplot`
+
+- semantic `PlotScene3D` и stable handles;
+- line/scatter/surface retained item bodies;
+- chart parts, bounds, camera/controller, picking and annotations;
+- plot-specific 3D renderer orchestration;
+- C ABI.
+
+### `termin-graphics`
+
+- device/context, buffers, shaders, textures;
+- `Text3DRenderer` and `Canvas2DRenderer`;
+- backend-neutral clip-space policy.
+
+### `termin-visual-scene`
+
+- только screen-space overlay scene;
+- title, legend, callouts, hit regions and portal anchors.
+
+### `Termin.Native` / `Termin.Wpf`
+
+- thin handle wrappers;
+- generic color/depth texture presentation;
+- WPF portal controls and input routing;
+- без chart-specific projection/layout math.
+
+## API direction
+
+```csharp
+using var chart = new RetainedChart3D(host, width, height);
+
+SurfaceItem3D surface = chart.Scene.AddSurface(x, y, z, rows, columns);
+surface.Shading = true;
+
+chart.Parts.Grid.Replace(customGrid);
+chart.Camera.Azimuth = 0.8f;
+chart.Overlay.TitleText = "Surface diagnostics";
+
+host.Attach(chart);
+host.AddPortal(chart.Overlay.ToolbarAnchor, wireframeButton);
+```
+
+Consumers must not receive raw native pointers or index-based identities.
+
+## Этап 1. Vertical retained surface slice
+
+- [x] Ввести `PlotScene3D` generation handle pool.
+- [x] Ввести independently versioned `SurfaceItem3D` и `ScatterItem3D`.
+- [x] Отделить renderer-side GPU cache каждого item от semantic state.
+- [x] Ввести `RetainedChart3D` с public scene, camera and named grid part.
+- [x] Переиспользовать текущие surface/scatter mesh builders and shader.
+- [x] Рендерить color+depth через заимствованный `GpuHost`.
+- [x] Добавить C ABI и thin `Termin.Native` wrappers.
+- [x] Добавить WPF example: surface + scatter, replaceable grid,
+  wireframe/shading/reset-camera portal buttons with C# callbacks.
+
+Первый slice использует отдельный `PlotEngine3D` как временный renderer-side
+body каждого retained item. Это обеспечивает независимые GPU caches уже сейчас
+и позволяет переиспользовать проверенные shader/mesh builders. При дальнейшей
+миграции body будет сужен до специализированного renderer item без изменения
+public handles или C# API.
+
+## Этап 2. Complete series model
+
+- [ ] Добавить `LineSeriesItem3D`.
+- [ ] Добавить granular data/style mutations and append APIs.
+- [ ] Добавить bounded streaming/ring-buffer policy.
+- [ ] Реализовать visibility/order/removal without global mesh rebuild.
+- [ ] Перевести data bounds на incremental scene aggregation.
+
+## Этап 3. Open chart chrome
+
+- [ ] Вынести grid/axes/ticks в named replaceable parts.
+- [ ] Сделать world text retained semantic annotations.
+- [ ] Вынести title/legend в `TcVisualScene2D` overlay.
+- [ ] Добавить projected 3D anchors for callouts and portals.
+- [ ] Убрать hard-coded label colors and font sizes из render loop.
+
+## Этап 4. Interaction
+
+- [ ] Разделить camera controller, picking and selection state.
+- [ ] Реализовать item-aware picking with stable handles.
+- [ ] Исключить полный O(all points) scan там, где нужен spatial index.
+- [ ] Маршрутизировать WPF/termin-gui input через общий controller contract.
+
+## Этап 5. Compatibility cutover
+
+- [ ] Перевести `PlotView3D` на `RetainedChart3D` compatibility facade.
+- [ ] Перевести Python and C# examples.
+- [ ] Сопоставить surface colormap, grid, shading, marker and axis scaling.
+- [ ] Удалить legacy global dirty mesh state and index-based surface mutation.
+
+## Проверка
+
+- item handle invalidation after removal and scene teardown;
+- changing one surface does not rebuild unrelated items;
+- camera orbit does not rebuild geometry;
+- D3D11/Vulkan/OpenGL orientation parity;
+- color+depth target resize and deterministic GPU teardown;
+- C# scene access, part replacement and portal callbacks;
+- screenshot smoke with asymmetric surface, scatter and world labels.
+
+## Первый completion gate
+
+Первый этап считается подтверждённым, когда C# WPF example показывает surface
+и scatter, consumer меняет retained surface/grid/camera через typed wrappers,
+а три WPF buttons вызывают C# handlers. Camera/style changes не должны
+перестраивать неизменившуюся CPU geometry и не должны требовать chart-specific
+логики на WPF стороне.

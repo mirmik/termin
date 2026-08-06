@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="..\Termin.Native\Generated\TerminCsharpGeneratedProfile.props"
+          Condition="Exists('..\Termin.Native\Generated\TerminCsharpGeneratedProfile.props')" />
+  <PropertyGroup Condition="'$(TerminCsharpProfile)' == ''">
+    <TerminCsharpProfile>$(TerminCsharpGeneratedProfile)</TerminCsharpProfile>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFrameworks>netcoreapp3.1;net8.0-windows</TargetFrameworks>
     <LangVersion>10.0</LangVersion>
