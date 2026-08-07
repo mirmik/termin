@@ -41,6 +41,29 @@ def _write_fake_gradle(tmp_path: Path) -> tuple[Path, Path]:
     return gradle, log_path
 
 
+def _write_fake_host_python(tmp_path: Path) -> Path:
+    host_python = tmp_path / "fake-host-python.cmd"
+    host_python.write_text(
+        "@echo off\n"
+        "setlocal\n"
+        'set "source="\n'
+        'set "output="\n'
+        ":parse\n"
+        'if "%~1"=="" goto prepare\n'
+        'if "%~1"=="--source" set "source=%~2"\n'
+        'if "%~1"=="--output" set "output=%~2"\n'
+        "shift\n"
+        "goto parse\n"
+        ":prepare\n"
+        'if not defined source exit /b 2\n'
+        'if not defined output exit /b 3\n'
+        'xcopy "%source%" "%output%\\" /E /I /Q /Y >nul\n'
+        "exit /b %errorlevel%\n",
+        encoding="utf-8",
+    )
+    return host_python
+
+
 @pytest.mark.parametrize(
     ("wrapper_name", "expected_task", "product_args"),
     [
@@ -69,8 +92,10 @@ def test_checked_in_windows_wrapper_reaches_gradle(
     openxr_config.write_text("# fake package\n", encoding="utf-8")
     assets_dir = tmp_path / "runtime package"
     assets_dir.mkdir()
+    (assets_dir / "manifest.json").write_text("{}\n", encoding="utf-8")
     env = os.environ.copy()
     env["FAKE_GRADLE_LOG"] = str(log_path)
+    env["TERMIN_HOST_PYTHON"] = str(_write_fake_host_python(tmp_path))
 
     result = subprocess.run(
         [
@@ -106,7 +131,12 @@ def test_checked_in_windows_wrapper_reaches_gradle(
     assert f"-PterminAndroidSdkRoot={sdk_root}" in gradle_arguments
     assert "-PterminAndroidAbi=arm64-v8a" in gradle_arguments
     assert "-PterminAndroidPlatform=android-26" in gradle_arguments
-    assert str(assets_dir) in gradle_arguments
+    if wrapper_name == "build-android-apk.ps1":
+        prepared_assets = termin_root / "build/android-gradle/runtime-assets"
+        assert str(prepared_assets) in gradle_arguments
+        assert (prepared_assets / "manifest.json").is_file()
+    else:
+        assert str(assets_dir) in gradle_arguments
 
 
 def test_windows_release_wrapper_rejects_missing_signing_before_gradle(
