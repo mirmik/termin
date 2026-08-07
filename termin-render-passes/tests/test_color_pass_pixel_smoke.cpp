@@ -370,11 +370,10 @@ int run_smoke(const char* argv0) {
     termin::ColorPass pass(pass_config);
 
     termin::RenderItemSnapshot render_item_snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    collect_request.debug_pass_name = "ColorPassPixelSmoke";
-    if (!termin::collect_scene_render_item_snapshot(
-            render_item_snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    termin::RenderItemSourceRequest source_request{};
+    source_request.debug_name = "ColorPassPixelSmoke";
+    if (!item_source.publish(render_item_snapshot, source_request)) {
         std::fprintf(stderr, "Failed to publish ColorPass RenderItem snapshot\n");
         return false;
     }

@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359, #1360 и #1361
+#1359–#1362
 
 ## Контекст
 
@@ -94,8 +94,8 @@ Surface chart может быть generic mesh item с chart material либо �
 
 - scene adapter и generic executor пока физически находятся в одном
   `termin-render` target, хотя их публичные контракты уже разделены;
-- `RenderSceneItemCollector` умеет получать items только обходом
-  `tc_scene_foreach_drawable()`;
+- `TcSceneRenderItemSource` реализует общий source contract через
+  `tc_scene_foreach_drawable()`, но пока физически собирается в том же target;
 - `RenderTask` содержит `Entity`, `tc_component*` и entity name;
 - `tc_render_item` содержит source `tc_component*`;
 - scene shader discovery всё ещё обходит passes и scene перед исполнением,
@@ -205,11 +205,11 @@ PlotScene3DRenderItemSource
     traverses retained chart items
 ```
 
-Нынешний `RenderSceneItemCollector` становится одной реализацией, а не
-обязательной частью engine. `PlotScene3D` перечисляет stable retained items и
-создаёт snapshot без entities или components. Оба источника после collection
-используют одинаковые task planning, phase routing, shader/material binding и
-submission.
+Нынешний `RenderSceneItemCollector` скрыт за `TcSceneRenderItemSource` и больше
+не является обязательной частью execution contract. `PlotScene3D` сможет
+перечислять stable retained items и создавать snapshot без entities или
+components. Оба источника после collection используют одинаковые task
+planning, phase routing, shader/material binding и submission.
 
 Source identity в generic `tc_render_item` не должна быть выражена только как
 `tc_component*`. Нужен нейтральный source handle/debug identity либо optional
@@ -226,10 +226,15 @@ frame/view snapshot и не интерпретируется generic render code
 явный `render_scene_item_component()`. Retained chart сможет назначить свой
 domain и не создавать component/entity.
 
-`RenderItemCollection` и `RenderItemSnapshot` теперь являются нейтральными
-контрактами. Обход `tc_scene` остался в `RenderSceneItemCollector`, который
-только наполняет общий snapshot. Phase buckets, ownership borrowed payloads и
-snapshot lifetime больше не принадлежат scene adapter.
+`RenderItemCollection`, `RenderItemSnapshot` и `RenderItemSource` теперь
+являются нейтральными контрактами. `RenderItemSource::publish()` владеет единым
+атомарным lifecycle: очищает storage, вызывает source implementation, публикует
+полный snapshot либо инвалидирует частичный результат с логом. Mutable
+`begin_collection()`/`finish_collection()` закрыты от внешнего кода, поэтому
+contract нельзя обойти. Обход `tc_scene`
+остался внутри `TcSceneRenderItemSource`/`RenderSceneItemCollector`. Phase
+buckets и ownership borrowed payloads нейтральны, а storage lifetime явно
+остаётся у caller на всё время execution.
 
 ## Роль `PlotScene3D`
 
@@ -303,9 +308,14 @@ adapter: он до входа в executor собирает по одному sna
 executor header не содержит scene, entity или light APIs и покрыт исполнением
 probe pipeline без создания сцены.
 
-Следующая граница этапа — превратить scene collector и будущий PlotScene3D
-collector в реализации явного item-source contract, после чего начать
-физическое выделение `termin-render-core`.
+В #1362 введён явный scene-neutral `RenderItemSource` contract с нейтральными
+view/layer/category inputs. `TcSceneRenderItemSource` стал первой production
+implementation, а in-memory non-scene source в тесте публикует пустой и
+заполненный snapshots для того же `RenderExecution`. Partial publication
+инвалидируется и диагностируется. Свободный compatibility helper удалён.
+
+Следующая граница этапа — начать физическое выделение `termin-render-core`, не
+перенося вместе с executor scene traversal, lighting и authoring policy.
 
 ### Этап 2. Выделить `termin-render-core`
 
@@ -318,7 +328,7 @@ collector в реализации явного item-source contract, после 
 
 ### Этап 3. Подключить два item source
 
-- Реализовать `TcSceneRenderItemSource` поверх текущего collector.
+- `TcSceneRenderItemSource` поверх текущего collector реализован в #1362.
 - Реализовать `PlotScene3DRenderItemSource` без `tc_scene` и components.
 - Проверить, что один generic pipeline может исполняться для обоих sources.
 - Добавить lifecycle, empty source, stale handle и multi-view tests.
