@@ -10,6 +10,7 @@ from termin.gui_native import (
     KeyCode,
     KeyEvent,
     KeyEventType,
+    MessageBoxKind,
     PointerEvent,
     PointerEventType,
     Rect,
@@ -40,6 +41,24 @@ def test_native_dialog_service_delivers_input_and_releases_dialog() -> None:
     assert service.active_count == 0
     assert document.live_widget_count == 0
     assert len(renders) == 2
+    tc_ui_document_destroy(document)
+
+
+def test_native_dialog_service_shows_and_releases_warning() -> None:
+    document = tc_ui_document_create()
+    service = NativeDialogService(
+        document,
+        viewport=lambda: Rect(0.0, 0.0, 640.0, 480.0),
+        request_render=lambda: None,
+    )
+
+    service.show_warning("CPU Vulkan Renderer", "Vulkan is using the CPU")
+
+    dialog = next(iter(service._active.values()))
+    assert dialog.kind == MessageBoxKind.Warning
+    assert document.dispatch_key_event(_key(KeyCode.Enter))
+    assert service.active_count == 0
+    assert document.live_widget_count == 0
     tc_ui_document_destroy(document)
 
 
