@@ -6,6 +6,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_DIR="$SCRIPT_DIR/termin-android/platform"
 ANDROID_GRADLE_BUILD_ROOT="$SCRIPT_DIR/build/android-gradle"
+HOST_PYTHON_VALUE="${TERMIN_HOST_PYTHON:-$SCRIPT_DIR/sdk/bin/termin_python}"
+SHADER_COMPILER_VALUE="${TERMIN_SHADER_COMPILER:-$SCRIPT_DIR/sdk/bin/termin_shaderc}"
 
 ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
 ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
@@ -157,6 +159,12 @@ if ! command -v "$GRADLE_BIN_VALUE" >/dev/null 2>&1; then
     exit 1
 fi
 
+if [[ ! -x "$HOST_PYTHON_VALUE" ]]; then
+    echo "ERROR: Termin host Python was not found: $HOST_PYTHON_VALUE" >&2
+    echo "  Run ./build-sdk.sh first or set TERMIN_HOST_PYTHON." >&2
+    exit 1
+fi
+
 GRADLE_VERSION="$("$GRADLE_BIN_VALUE" --version | sed -n 's/^Gradle //p' | head -n 1)"
 GRADLE_MAJOR="${GRADLE_VERSION%%.*}"
 if [[ -z "$GRADLE_MAJOR" || "$GRADLE_MAJOR" -lt 8 ]]; then
@@ -168,6 +176,13 @@ fi
 
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
 GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache"
+STAGED_ASSETS_DIR="$ANDROID_GRADLE_BUILD_ROOT/runtime-assets"
+
+"$HOST_PYTHON_VALUE" -m termin.project_build.android_runtime_assets \
+    --source "$ANDROID_ASSETS_DIR_VALUE" \
+    --output "$STAGED_ASSETS_DIR" \
+    --shader-compiler "$SHADER_COMPILER_VALUE"
+ANDROID_ASSETS_DIR_VALUE="$STAGED_ASSETS_DIR"
 
 echo ""
 echo "========================================"
@@ -184,7 +199,7 @@ echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
 echo "ABI:             $ANDROID_ABI_VALUE"
 echo "Platform:        $ANDROID_PLATFORM_VALUE"
 echo "NDK version:     $ANDROID_NDK_VERSION_VALUE"
-echo "Assets dir:      $ANDROID_ASSETS_DIR_VALUE"
+echo "Prepared assets: $ANDROID_ASSETS_DIR_VALUE"
 echo "Application ID:  $ANDROID_APPLICATION_ID_VALUE"
 echo "App label:       $ANDROID_APP_LABEL_VALUE"
 echo "Version:         $ANDROID_VERSION_NAME_VALUE ($ANDROID_VERSION_CODE_VALUE)"
