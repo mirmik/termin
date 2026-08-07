@@ -7,9 +7,9 @@
 #include <dlfcn.h>
 #endif
 #define XR_USE_GRAPHICS_API_VULKAN
+#include <vulkan/vulkan.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
-#include <vulkan/vulkan.h>
 #endif
 
 #include <array>
