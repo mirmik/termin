@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1365
+#1359–#1366
 
 ## Контекст
 
@@ -70,7 +70,8 @@ Runtime `tc_frame_graph` является почти чистым C scheduler. �
 
 - `tc_render_item` представляет mesh, line batch, text batch, foliage batch и
   world quad;
-- `RenderItemCollection` владеет borrowed payload после snapshot collection;
+- `RenderItemCollection` может владеть immutable adapter payload до
+  invalidation snapshot;
 - `RenderItemTask` отделяет planning от submission;
 - draw encoders регистрируются по item kind;
 - material/shader resource binding выполняется до backend draw commands.
@@ -227,6 +228,13 @@ frame/view snapshot и не интерпретируется generic render code
 явный `render_scene_item_component()`. Retained chart сможет назначить свой
 domain и не создавать component/entity.
 
+В #1366 `RenderItemCollection` получил type-erased ownership для adapter
+payload. Это отличает payload pointer от обычного borrowed metadata: source
+удерживает `shared_ptr<const Payload>` в storage, а `adapter_data` ссылается на
+него до invalidation snapshot. `PlotScene3D` использует эту границу для
+immutable geometry/style/chart-state values; retained slot и временный
+`PlotEngine3D` body в snapshot не попадают.
+
 `RenderItemCollection`, `RenderItemSnapshot` и `RenderItemSource` теперь
 являются нейтральными контрактами. `RenderItemSource::publish()` владеет единым
 атомарным lifecycle: очищает storage, вызывает source implementation, публикует
@@ -357,6 +365,9 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
 
 ### Этап 4. Перенести Chart3D rendering
 
+- В #1366 подготовлены snapshot-owned immutable geometry/style/chart-state
+  payloads. Тесты подтверждают, что старые snapshots переживают mutation,
+  slot reuse и уничтожение source chart без dangling pointers.
 - Ввести surface, scatter, line, grid and world-text item encoders.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
