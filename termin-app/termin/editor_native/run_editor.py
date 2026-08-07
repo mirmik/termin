@@ -1607,6 +1607,7 @@ def _compose_native_editor(
         resolve_slangc=resolve_slangc,
         get_render_engine=lambda: engine.rendering_manager.render_engine,
         show_error=dialog_service.show_error,
+        show_warning=dialog_service.show_warning,
     )
 
     from termin.editor_core.project_operations import sync_stdlib

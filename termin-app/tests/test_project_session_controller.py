@@ -272,3 +272,39 @@ def test_module_failure_keeps_repairable_project_without_running_init_script(
     assert "init_script" not in calls
     assert errors[-1][0] == "Project Module Load Failed"
     assert controller.project_file == project_file.resolve()
+
+
+def test_missing_slangc_shows_one_actionable_editor_warning(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config_home = tmp_path / "config"
+    compiler = tmp_path / "termin_shaderc"
+    compiler.write_text("#!/bin/sh\n", encoding="utf-8")
+    compiler.chmod(0o755)
+    warnings: list[tuple[str, str]] = []
+    log_messages: list[str] = []
+    render_calls: list[dict[str, object]] = []
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("APPDATA", str(config_home))
+    monkeypatch.delenv("TERMIN_SLANGC", raising=False)
+    monkeypatch.setattr(session_module.log, "warning", log_messages.append)
+
+    ProjectSessionController.configure_shader_runtime_for_project(
+        tmp_path / "project",
+        resolve_termin_shaderc=lambda: compiler,
+        resolve_slangc=lambda: None,
+        render_engine=type(
+            "RenderEngine",
+            (),
+            {"configure_shader_artifacts": lambda _self, **kwargs: render_calls.append(kwargs)},
+        )(),
+        show_warning=lambda title, message: warnings.append((title, message)),
+    )
+
+    assert len(warnings) == 1
+    assert warnings[0][0] == "Slang Compiler Unavailable"
+    assert "Edit > Settings... > Slang Compiler" in warnings[0][1]
+    assert "Shader/slangCompiler" in warnings[0][1]
+    assert len(log_messages) == 1
+    assert render_calls == []
