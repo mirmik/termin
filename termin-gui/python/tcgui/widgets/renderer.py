@@ -98,6 +98,7 @@ class UIRenderer:
         # into — either _offscreen_color_tex (standalone) or the host's
         # target_color (in-scene).
         self._current_target: Tgfx2TextureHandle | None = None
+        self._current_depth_target: Tgfx2TextureHandle | None = None
 
     # ------------------------------------------------------------------
     # Font property
@@ -214,6 +215,7 @@ class UIRenderer:
                 clear_depth_enabled=False,
             )
             self._current_target = target_color
+            self._current_depth_target = None
         else:
             # Standalone path: own offscreen cleared to background_color
             # (transparent by default). The clear colour leaks through
@@ -233,6 +235,7 @@ class UIRenderer:
                 clear_depth_enabled=True,
             )
             self._current_target = self._offscreen_color_tex
+            self._current_depth_target = self._offscreen_depth_tex
         ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
         ctx.set_cull(CULL_NONE)
         ctx.set_depth_test(False)
@@ -390,6 +393,32 @@ class UIRenderer:
         self._ctx.set_blend_func(Tgfx2BlendFactor.SrcAlpha,
                                  Tgfx2BlendFactor.OneMinusSrcAlpha)
         self._resume_canvas_after_external_draw()
+
+    def render_offscreen(self, callback):
+        """Run an offscreen renderer between two UI pass segments.
+
+        ``callback`` receives the canonical ``GraphicsHost`` and current font
+        atlas. The UI color/depth attachments are reopened with load semantics,
+        so widgets can safely composite the returned texture afterwards.
+        """
+        if self._ctx is None or self._current_target is None:
+            raise RuntimeError(
+                "UIRenderer.render_offscreen requires an active UI pass")
+
+        self._suspend_canvas_for_external_draw()
+        self._ctx.end_pass()
+        try:
+            return callback(self._graphics.graphics_host, self.font)
+        finally:
+            pass_args = {
+                "color": self._current_target,
+                "clear_color_enabled": False,
+                "clear_depth_enabled": False,
+            }
+            if self._current_depth_target is not None:
+                pass_args["depth"] = self._current_depth_target
+            self._ctx.begin_pass(**pass_args)
+            self._restore_ui_pass_state_after_external_draw()
 
     # ------------------------------------------------------------------
     # Public draw API
