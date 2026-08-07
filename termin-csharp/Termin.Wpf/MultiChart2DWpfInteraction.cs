@@ -133,6 +133,7 @@ public sealed class MultiChart2DWpfInteraction : IDisposable
             else
                 _group.ScrollOffset = offset;
             e.Handled = true;
+            _host.RequestRender();
             Scrolled?.Invoke(this, EventArgs.Empty);
             return;
         }
@@ -177,6 +178,7 @@ public sealed class MultiChart2DWpfInteraction : IDisposable
             _chart.SetSharedX(range.XMin, range.XMax);
         else
             _group.SetSharedX(range.XMin, range.XMax);
+        _host.RequestRender();
         Navigated?.Invoke(
             this,
             new MultiChartNavigatedEventArgs2D(kind, panel, range));

@@ -19,6 +19,8 @@ Projects:
   `MultiChart2DGroup` coordinates shared X, panel geometry and virtual scroll;
   wheel input in either column and the external WPF scrollbar move both.
   Pause/reset/follow controls remain real WPF portals with C# callbacks. The
+  hosts render on demand at the data/interaction cadence and use 2x MSAA;
+  styled line appends update only the affected GPU tail. The
   status line reports average managed append/range-update cost per tick; it is
   a load indicator, not a GPU profiling result.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable

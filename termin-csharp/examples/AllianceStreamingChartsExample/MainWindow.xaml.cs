@@ -189,6 +189,10 @@ public partial class MainWindow : Window
             RightSceneHost.FramebufferChanged += OnFramebufferChanged;
             LeftSceneHost.RenderFailed += OnRenderFailed;
             RightSceneHost.RenderFailed += OnRenderFailed;
+            LeftSceneHost.MsaaSamples = 2;
+            RightSceneHost.MsaaSamples = 2;
+            LeftSceneHost.ContinuousRendering = false;
+            RightSceneHost.ContinuousRendering = false;
             LeftSceneHost.Attach(_gpuHost, _leftChart.Scene);
             RightSceneHost.Attach(_gpuHost, _rightChart.Scene);
             leftInteraction = new MultiChart2DWpfInteraction(
@@ -380,6 +384,7 @@ public partial class MainWindow : Window
             scale);
         _chartGroup.SetPanelLayout(190 * scale, panelGap);
         UpdatePanelScrollBar();
+        RequestBothRenders();
 
         if (!ReferenceEquals(sender, LeftSceneHost))
             return;
@@ -419,6 +424,7 @@ public partial class MainWindow : Window
 
         if (_followLatest)
             SnapToLatest();
+        RequestBothRenders();
 
         _updateDurationTicks += Stopwatch.GetTimestamp() - started;
         ++_updateSamples;
@@ -452,6 +458,7 @@ public partial class MainWindow : Window
         foreach (StreamPanel panel in _panels)
             panel.Reset();
         _chartGroup.SetSharedX(0, WindowSeconds);
+        RequestBothRenders();
         _followLatest = true;
         UpdateFollowButton();
         StatusText.Text = "All native series were reset by the C# callback.";
@@ -462,6 +469,7 @@ public partial class MainWindow : Window
         _followLatest = !_followLatest;
         if (_followLatest)
             SnapToLatest();
+        RequestBothRenders();
         UpdateFollowButton();
         StatusText.Text = _followLatest
             ? "Shared X returned to the live window."
@@ -473,6 +481,7 @@ public partial class MainWindow : Window
         MultiChartNavigatedEventArgs2D e)
     {
         _followLatest = false;
+        RequestBothRenders();
         UpdateFollowButton();
         StatusText.Text =
             $"{e.Kind}: shared X updated; selected panel keeps its own Y.";
@@ -480,6 +489,7 @@ public partial class MainWindow : Window
 
     private void OnChartScrolled(object? sender, EventArgs e)
     {
+        RequestBothRenders();
         UpdatePanelScrollBar();
     }
 
@@ -490,6 +500,7 @@ public partial class MainWindow : Window
         if (_synchronizingScrollBar)
             return;
         _chartGroup.ScrollOffset = (float)e.NewValue;
+        RequestBothRenders();
         UpdatePanelScrollBar();
     }
 
@@ -523,6 +534,12 @@ public partial class MainWindow : Window
         _followButton.Content = _followLatest
             ? "Stop following"
             : "Follow latest";
+    }
+
+    private void RequestBothRenders()
+    {
+        LeftSceneHost.RequestRender();
+        RightSceneHost.RequestRender();
     }
 
     private void OnRenderFailed(
