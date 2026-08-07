@@ -480,7 +480,6 @@ void ShadowPass::collect_shadow_casters(
     render_context.pass_contract = shadow_material_pass_contract();
     render_context.layer_mask = layer_mask;
     render_context.render_category_mask = render_category_mask;
-    render_context.scene = TcSceneRef(scene);
 
     const auto& items = snapshot.items();
     const std::span<const size_t> routed_items =
@@ -667,10 +666,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             render_tasks.emplace_extension<ShadowTaskExtension>();
         RenderTask& task = render_tasks.at(planning_result.task_index);
         task.extension = &extension;
-        task.entity = dc.entity;
-        task.component = dc.component;
         const char* entity_name = dc.entity.name();
-        task.entity_name = entity_name ? entity_name : "";
+        task.debug_name = entity_name ? entity_name : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
                 extension.draw_data.u_model,
@@ -713,8 +710,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     entity_names.clear();
     std::set<std::string> seen;
     for (const RenderTask* task : sorted_render_tasks) {
-        if (!task->entity_name.empty() && seen.insert(task->entity_name).second) {
-            entity_names.push_back(task->entity_name);
+        if (!task->debug_name.empty() && seen.insert(task->debug_name).second) {
+            entity_names.push_back(task->debug_name);
         }
     }
 
@@ -923,7 +920,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 encode_request.material_phase = task.material_phase;
                 encode_request.phase = TC_PHASE_SHADOW;
                 encode_request.debug_pass_name = "ShadowPass";
-                encode_request.debug_entity_name = task.entity_name.c_str();
+                encode_request.debug_entity_name = task.debug_name.c_str();
                 encode_request.resources = &task.resources;
                 if (!submit_render_item_draw(
                     *ctx.ctx2,
@@ -931,7 +928,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     encode_request)) {
                     continue;
                 }
-                capture_debug_symbol(task.entity_name.c_str());
+                capture_debug_symbol(task.debug_name.c_str());
                 restore_shadow_raster_state();
                 ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
                 ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);

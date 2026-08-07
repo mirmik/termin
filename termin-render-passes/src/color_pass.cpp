@@ -892,8 +892,6 @@ void ColorPass::execute_with_data(
     collect_context.camera_position = data.camera_position;
     collect_context.viewport_width = data.rect.width;
     collect_context.viewport_height = data.rect.height;
-    collect_context.scene = TcSceneRef(data.scene);
-    collect_context.camera = const_cast<RenderCamera*>(ctx.view.primary_view());
 
     collect_draw_calls(
         data.scene,
@@ -958,10 +956,8 @@ void ColorPass::execute_with_data(
             render_tasks.emplace_extension<ColorTaskExtension>();
         RenderTask& task = render_tasks.at(planning_result.task_index);
         task.extension = &extension;
-        task.entity = dc.entity;
-        task.component = dc.component;
         const char* entity_name = dc.entity.name();
-        task.entity_name = entity_name ? entity_name : "";
+        task.debug_name = entity_name ? entity_name : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
                 extension.draw_data.u_model,
@@ -989,8 +985,6 @@ void ColorPass::execute_with_data(
         task.draw_context.camera_position = data.camera_position;
         task.draw_context.viewport_width = data.rect.width;
         task.draw_context.viewport_height = data.rect.height;
-        task.draw_context.camera =
-            const_cast<RenderCamera*>(ctx.view.primary_view());
 
         dc.final_shader = TcShader(task.final_shader);
         tasks_by_item_index[dc.item_index] = &task;
@@ -1107,7 +1101,7 @@ void ColorPass::execute_with_data(
     }
 
     for (const RenderTask* task : sorted_render_tasks) {
-        entity_names.push_back(task->entity_name);
+        entity_names.push_back(task->debug_name);
     }
 
     if (!render_tasks.empty() && !shadow_sampler_) {
@@ -1172,7 +1166,7 @@ void ColorPass::execute_with_data(
         encode_request.material_phase = task.material_phase;
         encode_request.phase = tc_phase_find(phase_mark.c_str());
         encode_request.debug_pass_name = debug_pass_name_c;
-        encode_request.debug_entity_name = task.entity_name.c_str();
+        encode_request.debug_entity_name = task.debug_name.c_str();
         encode_request.resources = &task.resources;
         if (!submit_render_item_draw(
             *ctx2,
@@ -1180,7 +1174,7 @@ void ColorPass::execute_with_data(
             encode_request)) {
             continue;
         }
-        capture_debug_symbol(task.entity_name.c_str());
+        capture_debug_symbol(task.debug_name.c_str());
         if (attachment_barrier_between_draws &&
             sorted_task_index + 1 < sorted_render_tasks.size()) {
             ctx2->framebuffer_local_barrier();

@@ -134,10 +134,10 @@ TcScene adapter                  PlotScene3D adapter
 camera/lights/components         chart camera/items/picking
 ```
 
-`termin-render-core` здесь является рабочим названием. Не обязательно сразу
-создавать несколько мелких библиотек. Важнее сначала получить одну строгую
-scene-neutral boundary, а уже затем при реальном повторном использовании
-решать, нужен ли отдельный `termin-framegraph` target.
+`termin_render_core` реализован в #1364 как один физический target и отдельный
+CMake package. Дальнейшее дробление на `termin-framegraph` и другие мелкие
+библиотеки не требуется до появления отдельной доказанной границы повторного
+использования.
 
 ## Generic execution contract
 
@@ -323,17 +323,25 @@ registry создаёт non-texture resource по явному type descriptor, 
 preview callback теперь принадлежат `termin-render-passes`; только
 `ShadowPass`/`ColorPass` выполняют typed access.
 
-Следующая граница этапа — начать физическое выделение `termin-render-core`, не
-перенося вместе с executor scene traversal, lighting и authoring policy.
+В #1364 runtime framegraph, pipeline execution, resource tables,
+`RenderItemSource`/snapshot/submission и generic task planning получили одного
+канонического владельца `termin_render_core`. Его link closure содержит base,
+graphics, inspect и materials, но не scene/lighting. `termin_render` теперь
+зависит от core и владеет scene traversal, component capabilities, scene
+services/execution и graph authoring policy. Заодно из `RenderContext` и
+`RenderTask` удалены неиспользуемые `TcSceneRef`/camera/entity/component поля,
+которые физически протаскивали scene headers через generic API.
 
 ### Этап 2. Выделить `termin-render-core`
 
-- Перенести runtime framegraph, pipeline execution и generic resource tables.
-- Перенести generic RenderItem/RenderTask planning и encoder registry.
-- Оставить scene traversal, component capabilities, lighting/shadows и
-  engine passes в `termin-render`.
-- Не переносить authoring/editor inspection policy в нижний core без явной
-  необходимости.
+- Выполнено в #1364: runtime framegraph, executor, resource tables,
+  RenderItem/RenderTask planning и encoder registry находятся в
+  `termin_render_core`.
+- Scene traversal, component capabilities и scene services остаются в
+  `termin_render`; lighting/shadows и concrete engine passes — выше, в
+  `termin-render-passes` и component modules.
+- Runtime pass inspection adapter остаётся в core как часть pipeline
+  deserialization; graph authoring/compiler policy остаётся в `termin_render`.
 
 ### Этап 3. Подключить два item source
 

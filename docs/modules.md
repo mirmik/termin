@@ -149,7 +149,10 @@ Source of truth: [termin-graphics docs](https://github.com/mirmik/termin-monorep
 
 Отвечает за backend-neutral GPU API, tgfx2 context/device/runtime, render targets, texture pools, canvas renderer facade и низкоуровневые GPU utilities. Это канонический GPU substrate для render framework; использование `tgfx`/`tgfx2` типов в render-facing API само по себе не является нарушением границы.
 
-Ключевая граница сейчас важна из-за миграции renderer facades: generic GPU utilities без знания frame graph относятся сюда. Scene-neutral frame graph execution остаётся render-policy слоем над `termin-graphics`; в рамках umbrella #1358 он постепенно отделяется от scene adapter и позднее может стать отдельным `termin-render-core`, но не переносится в GPU substrate.
+Ключевая граница важна из-за миграции renderer facades: generic GPU utilities
+без знания frame graph относятся сюда. Scene-neutral frame graph execution
+остаётся render-policy слоем над `termin-graphics` и с #1364 физически живёт в
+`termin_render_core`, а не в GPU substrate.
 
 ### termin-visual-scene
 
@@ -165,7 +168,14 @@ topology, transforms, hit preparation и pointer interaction. Модуль за�
 
 Source of truth: [termin-render docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md)
 
-Отвечает за render framework поверх canonical resources и `termin-graphics`: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers. В переходной архитектуре здесь совместно живут scene-neutral execution contracts и `tc_scene` adapter. В #1359–#1363 neutral snapshot, view, execution context, единый `RenderEngine::execute_pipeline()`, атомарный `RenderItemSource::publish()` и generic non-texture resource registry отделены от scene/lighting capabilities внутри модуля. Scene path реализован через `TcSceneRenderItemSource`, заранее публикует snapshots/services и вызывает общий executor; следующий шаг #1358 — закрепить эту границу отдельным target.
+Render framework разделён на два физических target. `termin_render_core`
+владеет render engine, runtime frame graph/pipeline, generic resources,
+immutable snapshots, `RenderItemSource`, task planning и draw encoder registry;
+его transitive interface не содержит `termin_scene` или `termin_lighting`.
+`termin_render` зависит от core и владеет `tc_scene` adapter, component
+capabilities, scene render mount/state helpers и graph authoring policy. Scene
+path через `TcSceneRenderItemSource` заранее публикует snapshots/services и
+вызывает тот же core executor.
 
 `termin-render` не обязан инкапсулировать `termin-graphics` как implementation detail. Публичная зависимость от `tgfx`/`tgfx2` допустима для API, которые непосредственно описывают GPU execution, frame graph, render contexts, texture handles или bridge к graphics device. Граница проходит не по факту include-а `tgfx`, а по смыслу контракта: scene/asset/build/editor policy не должны случайно зависеть от backend-specific деталей, если они не являются render-facing API.
 
