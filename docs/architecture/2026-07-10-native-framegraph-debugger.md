@@ -83,6 +83,14 @@ captures 2--16 exact frames with one graph revision and explicit ordered
 indices. Revision changes, cancellation and disconnect terminate either mode;
 drops become protocol gaps instead of latent queued video.
 
+On lifecycle-driven hosts the target service may outlive the native debugger.
+Android starts the authenticated loopback listener at process initialization,
+detaches before destroying `EngineCore`/Vulkan state on pause or surface loss,
+and attaches a new debugger after `RenderingManager` recreation. Detach
+publishes an empty topology under a new revision and terminates active capture
+operations visibly, so the existing ADB/TCP session never owns stale graphics
+objects.
+
 ## Capture lifecycle
 
 `RenderingManager` is the authoritative source of renderable targets and the

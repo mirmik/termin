@@ -401,12 +401,13 @@ namespace termin::framegraph_remote_target
     class RemoteFrameGraphTarget::Impl
     {
     public:
-        Impl(FrameGraphDebugger& target_debugger,
+        Impl(FrameGraphDebugger* target_debugger,
              TargetServiceConfig target_config)
-            : debugger(&target_debugger), config(std::move(target_config)),
+            : debugger(target_debugger), config(std::move(target_config)),
               command_queue(config.command_queue_capacity),
               outbound_queue(config.outbound_queue_capacity),
-              owner_thread(std::this_thread::get_id())
+              owner_thread(std::this_thread::get_id()),
+              debugger_attached(target_debugger != nullptr)
         {
             validate_config();
             refresh_topology();
@@ -530,7 +531,8 @@ namespace termin::framegraph_remote_target
             while (outbound_queue.try_pop(packet))
             {
             }
-            if (pending_capture && std::this_thread::get_id() == owner_thread)
+            if (pending_capture && debugger &&
+                std::this_thread::get_id() == owner_thread)
                 debugger->cancel_request();
             pending_capture.reset();
             stream.reset();
@@ -539,6 +541,60 @@ namespace termin::framegraph_remote_target
             queued_capture_bytes.store(0, std::memory_order_relaxed);
             pending_dropped_outbound = 0;
             tc_log_info("remote framegraph target: stopped");
+        }
+
+        bool attach_debugger(FrameGraphDebugger& target_debugger)
+        {
+            if (!require_owner("attach_debugger"))
+                return false;
+            if (debugger == &target_debugger)
+                return true;
+            if (debugger)
+                detach_debugger();
+            debugger = &target_debugger;
+            if (!refresh_topology())
+            {
+                debugger = nullptr;
+                debugger_attached.store(false, std::memory_order_release);
+                (void)refresh_topology();
+                return false;
+            }
+            debugger_attached.store(true, std::memory_order_release);
+            emit_lifecycle_status("render runtime attached");
+            tc_log_info("remote framegraph target: render debugger attached");
+            return true;
+        }
+
+        void detach_debugger()
+        {
+            if (!require_owner("detach_debugger") || !debugger)
+                return;
+            if (pending_capture)
+                finish_operation(StatusCode::resource_unavailable,
+                                 "render runtime was detached");
+            if (stream)
+            {
+                emit_status(stream->queued,
+                            StatusCode::resource_unavailable,
+                            "render runtime was detached");
+                stream.reset();
+            }
+            if (burst)
+            {
+                emit_status(burst->queued,
+                            StatusCode::resource_unavailable,
+                            "render runtime was detached");
+                burst.reset();
+            }
+            clear_ready_preview();
+            debugger = nullptr;
+            debugger_attached.store(false, std::memory_order_release);
+            target_bindings.clear();
+            if (!refresh_topology())
+                tc_log_error("remote framegraph target: failed to publish "
+                             "detached runtime topology");
+            emit_lifecycle_status("render runtime detached");
+            tc_log_info("remote framegraph target: render debugger detached");
         }
 
         void pump_render_thread()
@@ -550,6 +606,8 @@ namespace termin::framegraph_remote_target
             {
                 apply_command(queued);
             }
+            if (!debugger)
+                return;
             poll_capture();
             schedule_continuous_capture();
         }
@@ -559,6 +617,7 @@ namespace termin::framegraph_remote_target
             return {
                 running.load(std::memory_order_acquire),
                 client_connected.load(std::memory_order_acquire),
+                debugger_attached.load(std::memory_order_acquire),
                 listening_port.load(std::memory_order_acquire),
                 active_session.load(std::memory_order_acquire),
                 published_graph_revision.load(std::memory_order_acquire),
@@ -657,6 +716,8 @@ namespace termin::framegraph_remote_target
                             std::vector<TargetBinding>& next_bindings,
                             std::string& error)
         {
+            if (!debugger)
+                return true;
             const auto& targets = debugger->targets();
             const auto passes = debugger->passes();
             const auto schedule = debugger->schedule();
@@ -772,7 +833,8 @@ namespace termin::framegraph_remote_target
 
         bool refresh_topology()
         {
-            debugger->refresh();
+            if (debugger)
+                debugger->refresh();
             TopologySnapshot next;
             std::vector<TargetBinding> next_bindings;
             std::string error;
@@ -818,7 +880,8 @@ namespace termin::framegraph_remote_target
                 request_id,
                 graph_revision,
                 stream ? SessionState::streaming
-                       : project_state(debugger->state()),
+                       : debugger ? project_state(debugger->state())
+                                  : SessionState::suspended,
                 code,
                 static_cast<std::uint32_t>(outbound_queue.size_approximate()),
                 completed_captures.load(std::memory_order_relaxed),
@@ -950,6 +1013,19 @@ namespace termin::framegraph_remote_target
             enqueue(std::move(packet));
         }
 
+        void emit_lifecycle_status(std::string detail)
+        {
+            const std::uint64_t session =
+                active_session.load(std::memory_order_acquire);
+            if (session == 0)
+                return;
+            OutboundPacket packet;
+            packet.session_id = session;
+            packet.status =
+                make_status(0, StatusCode::completed, std::move(detail));
+            enqueue(std::move(packet));
+        }
+
         bool configure_capture_selector(const QueuedCommand& queued,
                                         std::uint32_t max_long_edge)
         {
@@ -1063,8 +1139,11 @@ namespace termin::framegraph_remote_target
 
         void reset_pending_capture()
         {
-            debugger->cancel_request();
-            debugger->set_capture_max_long_edge(0);
+            if (debugger)
+            {
+                debugger->cancel_request();
+                debugger->set_capture_max_long_edge(0);
+            }
             pending_capture.reset();
         }
 
@@ -1396,6 +1475,16 @@ namespace termin::framegraph_remote_target
         void apply_command(const QueuedCommand& queued)
         {
             const Command& command = queued.command;
+            if (!debugger && command.kind != CommandKind::refresh_topology &&
+                command.kind != CommandKind::request_status &&
+                command.kind != CommandKind::ping &&
+                command.kind != CommandKind::disconnect)
+            {
+                reject_command(queued,
+                               StatusCode::resource_unavailable,
+                               "render runtime is not attached");
+                return;
+            }
             const auto validation = validate_command(command, graph_revision);
             if (!validation)
             {
@@ -2100,6 +2189,7 @@ namespace termin::framegraph_remote_target
         std::thread io_thread;
         std::atomic<bool> running{false};
         std::atomic<bool> client_connected{false};
+        std::atomic<bool> debugger_attached{false};
         std::atomic<Socket> listener_socket{invalid_socket};
         std::atomic<Socket> client_socket{invalid_socket};
         std::atomic<std::uint16_t> listening_port{0};
@@ -2139,9 +2229,14 @@ namespace termin::framegraph_remote_target
 #endif
     };
 
+    RemoteFrameGraphTarget::RemoteFrameGraphTarget(TargetServiceConfig config)
+        : impl_(std::make_unique<Impl>(nullptr, std::move(config)))
+    {
+    }
+
     RemoteFrameGraphTarget::RemoteFrameGraphTarget(FrameGraphDebugger& debugger,
                                                    TargetServiceConfig config)
-        : impl_(std::make_unique<Impl>(debugger, std::move(config)))
+        : impl_(std::make_unique<Impl>(&debugger, std::move(config)))
     {
     }
 
@@ -2154,6 +2249,14 @@ namespace termin::framegraph_remote_target
     void RemoteFrameGraphTarget::stop()
     {
         impl_->stop();
+    }
+    bool RemoteFrameGraphTarget::attach_debugger(FrameGraphDebugger& debugger)
+    {
+        return impl_->attach_debugger(debugger);
+    }
+    void RemoteFrameGraphTarget::detach_debugger()
+    {
+        impl_->detach_debugger();
     }
     void RemoteFrameGraphTarget::pump_render_thread()
     {

@@ -91,6 +91,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_profiler_remote REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_framegraph_remote_target termin_framegraph_remote_target::termin_framegraph_remote_target)
+else()
+    find_package(termin_framegraph_remote_target REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -154,6 +159,7 @@ target_link_libraries(termin_android
         termin_components_ui::termin_components_ui
         termin_render_passes::termin_render_passes
         termin_profiler_remote::termin_profiler_remote
+        termin_framegraph_remote_target::termin_framegraph_remote_target
     PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
