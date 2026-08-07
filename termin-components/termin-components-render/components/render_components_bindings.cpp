@@ -584,6 +584,18 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("select_threshold", &XrDirectGrabInteractorComponent::select_threshold)
         .def_prop_ro("holding_object", &XrDirectGrabInteractorComponent::holding_object);
 
+    nb::class_<XrRayInteractorComponent, CxxComponent> ray_interactor_binding(
+        m, "XrRayInteractorComponent");
+    bind_xr_cxx_component_common(ray_interactor_binding);
+    ray_interactor_binding
+        .def_rw("max_distance", &XrRayInteractorComponent::max_distance)
+        .def_rw("select_threshold", &XrRayInteractorComponent::select_threshold)
+        .def_prop_ro("pointing", &XrRayInteractorComponent::pointing)
+        .def_prop_ro("captured", &XrRayInteractorComponent::captured)
+        .def_prop_ro(
+            "visible_ray_length",
+            &XrRayInteractorComponent::visible_ray_length);
+
     nb::class_<MeshRenderer, Component>(m, "MeshRenderer")
         .def("__init__", [](nb::handle self) {
             cxx_component_init<MeshRenderer>(self);

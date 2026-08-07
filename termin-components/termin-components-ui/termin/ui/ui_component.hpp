@@ -8,6 +8,7 @@
 #include <termin/entity/input_handler.hpp>
 #include <termin/export.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
+#include <termin/input/tc_world_pointer_surface.h>
 
 extern "C" {
 #include <core/tc_input_platform_services.h>
@@ -42,6 +43,7 @@ public:
     bool has_document() const;
     bool reload_document();
     void clear_document();
+    bool dispatch_world_pointer(const tc_world_pointer_event& event);
 
     tc_value serialize_data() const override;
 
@@ -89,6 +91,7 @@ private:
     int input_source_mask_ = 1;
     std::optional<gui_native::LoadedUiScript> loaded_;
     std::optional<TouchCapture> touch_capture_;
+    std::optional<std::uint64_t> world_pointer_owner_;
     tc_input_platform_services platform_services_{};
     std::string clipboard_cache_;
     std::uint64_t input_presentation_revision_ = 0;

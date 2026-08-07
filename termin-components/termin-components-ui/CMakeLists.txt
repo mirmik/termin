@@ -32,6 +32,7 @@ termin_add_module(
         src/components_bootstrap.cpp
         src/scene_ui_document_capability.c
         src/ui_component.cpp
+        src/world_ui_surface_component.cpp
     PUBLIC_DEPS
         tcbase::termin_base
         termin_inspect::termin_inspect

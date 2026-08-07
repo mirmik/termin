@@ -48,6 +48,19 @@ pointer identity through UP/CANCEL, and ignores additional contacts until the
 claimed stream ends. Focus/capture loss and component teardown cancel the
 interaction and clear document focus deterministically.
 
+World-space UI uses the same document interaction path. A
+`WorldUiSurfaceComponent` describes a local XY rectangle, projects normalized
+world-pointer rays onto it, and forwards the resulting UV coordinates to a
+referenced `UIComponent`. The UI component converts UV through its published
+physical presentation extent and density before dispatching ordinary native
+MOVE/DOWN/UP/LEAVE/CANCEL events. It owns one world pointer at a time, matching
+the document's single-pointer contract.
+
+The surface publishes the renderer-independent `world_pointer_surface`
+capability from `termin-input`. It does not depend on OpenXR, controller types,
+render targets, materials, or collision geometry; XR and future gaze/mouse
+interactors consume the same capability.
+
 Committed UTF-8 text is part of the common input ABI. IME preedit/composition,
 selection ranges, grapheme-aware editing, and simultaneous multi-touch widget
 gestures remain outside this contract and are tracked by #863.

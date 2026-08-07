@@ -2,6 +2,7 @@
 
 GUARD_TEST_MAIN();
 
+#include <cmath>
 #include <string>
 
 #include <core/tc_component.h>
@@ -15,6 +16,9 @@ GUARD_TEST_MAIN();
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/ui/tc_scene_ui_document_capability.h>
 #include <termin/ui/ui_component.hpp>
+#include <termin/ui/world_ui_surface_component.hpp>
+#include <termin/input/tc_world_pointer_surface.h>
+#include <termin/tc_scene.hpp>
 #include <tc_input_event.h>
 
 namespace {
@@ -336,5 +340,89 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     CHECK_FALSE(primary_move.handled);
 
     component.clear_document();
+    TcUiDocumentAsset::clear_registry_for_tests();
+}
+
+TEST_CASE("World UI surface projects a scene ray and routes the native pointer stream") {
+    using namespace termin;
+    using namespace termin::gui_native;
+
+    TcUiDocumentAsset::clear_registry_for_tests();
+    const TcUiDocumentAsset asset = TcUiDocumentAsset::declare_source(
+        "world-ui-surface-input",
+        "World UI Surface Input",
+        "UI/world-surface-input.uiscript",
+        kInputSource);
+    REQUIRE(asset.valid());
+
+    TcSceneRef scene = TcSceneRef::create("world-ui-surface-test");
+    Entity ui_entity = Entity::create_with_uuid(
+        scene.entity_pool_handle(), "Panel UI", "world-ui-target");
+    auto* ui = new UIComponent();
+    REQUIRE(ui->set_ui_layout_uuid(asset.uuid()));
+    ui_entity.add_component(ui);
+    const TcDocument document = ui->document();
+    REQUIRE(document.set_presentation_metrics(
+        tc_ui_presentation_metrics{
+            1.0f,
+            1.0f,
+            tc_ui_size{400.0f, 200.0f},
+            tc_ui_insets{},
+        }));
+    document.layout_roots({0.0f, 0.0f, 400.0f, 200.0f});
+
+    tc_widget* root = tc_ui_document_resolve_widget(
+        document.handle(), tc_ui_document_root_at(document.handle(), 0));
+    REQUIRE(root != nullptr);
+    tc_widget* button = tc_widget_child_at(root, 0);
+    REQUIRE(button != nullptr);
+    const tc_ui_rect bounds = tc_widget_bounds(button);
+    const double u = (bounds.x + bounds.width * 0.5) / 400.0;
+    const double v = (bounds.y + bounds.height * 0.5) / 200.0;
+
+    Entity surface_entity = scene.create_entity("Panel Surface");
+    auto* surface = new WorldUiSurfaceComponent();
+    surface->ui_entity_uuid = ui_entity.uuid();
+    surface_entity.add_component(surface);
+    REQUIRE(tc_component_has_capability(
+        surface->tc_component_ptr(),
+        tc_world_pointer_surface_capability_id()));
+
+    const tc_world_pointer_ray ray = {
+        .origin_x = u - 0.5,
+        .origin_y = 0.5 - v,
+        .origin_z = 1.0,
+        .direction_z = -1.0,
+        .max_distance = 3.0,
+    };
+    tc_world_pointer_hit hit{};
+    REQUIRE(tc_world_pointer_surface_project_ray(
+        surface->tc_component_ptr(), &ray, &hit));
+    CHECK(hit.inside);
+    CHECK(std::abs(hit.distance - 1.0) < 1.0e-9);
+    CHECK(std::abs(hit.u - u) < 1.0e-9);
+    CHECK(std::abs(hit.v - v) < 1.0e-9);
+
+    tc_world_pointer_event pointer{
+        .pointer_id = 77,
+        .phase = TC_WORLD_POINTER_MOVE,
+        .u = hit.u,
+        .v = hit.v,
+        .pressure = 0.0f,
+    };
+    tc_world_pointer_surface_dispatch_pointer(
+        surface->tc_component_ptr(), &pointer);
+    pointer.phase = TC_WORLD_POINTER_DOWN;
+    pointer.pressure = 1.0f;
+    REQUIRE(tc_world_pointer_surface_dispatch_pointer(
+        surface->tc_component_ptr(), &pointer));
+    CHECK_FALSE(tc_widget_handle_is_invalid(document.pointer_capture()));
+    pointer.phase = TC_WORLD_POINTER_UP;
+    pointer.pressure = 0.0f;
+    REQUIRE(tc_world_pointer_surface_dispatch_pointer(
+        surface->tc_component_ptr(), &pointer));
+    CHECK(tc_widget_handle_is_invalid(document.pointer_capture()));
+
+    scene.destroy();
     TcUiDocumentAsset::clear_registry_for_tests();
 }

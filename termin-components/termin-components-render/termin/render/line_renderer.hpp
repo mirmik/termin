@@ -48,6 +48,7 @@ public:
     void set_points(std::vector<tc_vec3>&& points);
     void clear_points();
     void add_point(const tc_vec3& point);
+    void set_segment(const tc_vec3& start, const tc_vec3& end);
     void set_width(float value);
     void set_render_mode(LineRenderMode value);
     void set_raw_lines(bool value);

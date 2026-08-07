@@ -83,6 +83,47 @@ private:
     void acquire_nearest(const Pose3& hand_world_pose);
 };
 
+class ENTITY_API XrRayInteractorComponent : public CxxComponent {
+public:
+    double max_distance = 5.0;
+    double select_threshold = 0.55;
+
+    XrRayInteractorComponent();
+
+    static void register_type();
+    void update(float dt) override;
+    void on_removed() override;
+    void on_destroy() override;
+    void on_scene_inactive() override;
+
+    bool pointing() const { return pointing_; }
+    bool captured() const { return captured_surface_.valid(); }
+    double visible_ray_length() const { return visible_ray_length_; }
+
+private:
+    struct SurfaceRef {
+        tc_entity_handle entity = TC_ENTITY_HANDLE_INVALID;
+        std::string source_id;
+
+        bool valid() const {
+            return tc_entity_handle_valid(entity) && !source_id.empty();
+        }
+        void clear() {
+            entity = TC_ENTITY_HANDLE_INVALID;
+            source_id.clear();
+        }
+    };
+
+    SurfaceRef hovered_surface_;
+    SurfaceRef captured_surface_;
+    bool was_pressed_ = false;
+    bool pointing_ = false;
+    double visible_ray_length_ = 0.0;
+    bool logged_missing_tracker_ = false;
+    bool logged_missing_line_renderer_ = false;
+    void reset_interaction(bool cancel_capture, bool clear_runtime_visual);
+};
+
 ENTITY_API const char* xr_tracked_pose_kind_to_string(XrTrackedPoseKind kind);
 ENTITY_API XrTrackedPoseKind xr_tracked_pose_kind_from_string(const std::string& value);
 

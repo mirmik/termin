@@ -36,6 +36,18 @@ multiview graph as the named `PANEL_COLOR` texture, and the panel mesh samples
 it like any other material texture. This keeps the UI graph and XR graph
 literal: there is no hidden per-eye execution of the mono UI pass.
 
+The right controller also owns a separate pointer entity. It currently follows
+the grip pose because the Quest runtime leaves the separate aim action
+inactive. Its `XrRayInteractorComponent` projects through the panel's
+`WorldUiSurfaceComponent`; the surface maps the hit to the panel document's
+physical presentation extent and feeds ordinary native pointer events back to
+`UIComponent`. Pull the right index trigger to press the blue button or
+toggle the checkbox. The `LineRenderer` ray ends at the panel while it is hit.
+
+The ray is only a visualization of the independently tested pointer path. Its
+remaining per-eye rendering defect belongs to the general `LineRenderer`
+material/multiview work and does not affect panel hit testing or input.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
@@ -136,6 +148,11 @@ and filtered logcat together with the result.
 9. `vr-panel`: the floating panel is visible in both eyes and shows its text,
    blue button and checkbox. It must not appear as a flat white/black surface or
    sample the headset swapchain in place of the panel texture.
+10. `vr-panel-input`: the right-controller pointer follows the explicitly
+    selected grip pose (the current Quest runtime leaves the separate aim action
+    inactive), reaches the panel, and produces visible hover/pressed feedback.
+    Trigger DOWN/UP on the checkbox toggles it; moving away or losing tracking
+    cancels capture without leaving a widget pressed.
 
 ## Editor view
 
