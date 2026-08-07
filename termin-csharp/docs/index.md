@@ -83,6 +83,9 @@ independent panel Y ranges, safe dynamic panel count, fixed or distributed
 panel height, virtual extent and scroll offset. Hidden panel roots do not
 render or rebuild layout during shared-X updates; a panel entering the viewport
 receives its deferred X range and new viewport in one native frame mutation.
+For an already visible panel, shared-X uses the composer's X-only invalidation
+path: projection, grid and X-axis chrome update without remeasuring text or
+rebuilding Y-axis/layout geometry.
 Each panel is exposed as a borrowed `Chart2D`, so customization and semantic
 series APIs stay identical. `MultiChart2DWpfInteraction` maps middle drag,
 wheel scrolling and Ctrl+wheel shared-X zoom without moving chart layout into
