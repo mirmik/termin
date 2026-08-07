@@ -86,6 +86,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/resolve_pass.cpp
     src/shadow_camera.cpp
     src/shadow_pass.cpp
+    src/shadow_resource.cpp
     src/skybox_pass.cpp
     src/tc_picking.c
     src/tonemap_pass.cpp
@@ -101,6 +102,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/present_pass.cpp
         src/resolve_pass.cpp
         src/lighting_ubo.cpp
+        src/shadow_resource.cpp
     )
 endif()
 
@@ -111,6 +113,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render_passes/bootstrap.hpp
     include/termin/lighting/lighting_ubo.hpp
     include/termin/lighting/lighting_upload.hpp
+    include/termin/lighting/shadow.hpp
     include/termin/render/bloom_pass.hpp
     include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
@@ -228,6 +231,26 @@ endif()
 
 if(TERMIN_RENDER_PASSES_BUILD_TESTS)
     enable_testing()
+
+    add_executable(termin_render_passes_shadow_resource_contract_test
+        tests/test_shadow_resource_contract.cpp
+    )
+    target_include_directories(
+        termin_render_passes_shadow_resource_contract_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(
+        termin_render_passes_shadow_resource_contract_test PRIVATE
+        termin_render_passes
+    )
+    set_target_properties(
+        termin_render_passes_shadow_resource_contract_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_shadow_resource_contract_test
+        COMMAND termin_render_passes_shadow_resource_contract_test
+    )
 
     add_executable(termin_render_passes_ui_widget_pass_test
         tests/test_ui_widget_pass.cpp

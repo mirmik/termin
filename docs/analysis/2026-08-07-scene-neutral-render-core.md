@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1362
+#1359–#1363
 
 ## Контекст
 
@@ -101,8 +101,9 @@ Surface chart может быть generic mesh item с chart material либо �
 - scene shader discovery всё ещё обходит passes и scene перед исполнением,
   но вынесен из generic `CxxFramePass` в отдельную capability
   `SceneShaderUsageProvider`;
-- `PipelineRenderCache` содержит shadow resources, хотя они нужны не каждому
-  pipeline;
+- generic resource allocation больше не знает о shadow types: non-texture
+  resources создаются через `FrameGraphResourceTypeDescriptor`, а конкретный
+  `shadow_map_array` и его sampled preview принадлежат `termin-render-passes`;
 - `termin-render` публично зависит одновременно от `termin-graphics`,
   `termin-scene`, `termin-materials`, `termin-lighting` и `termin-inspect`.
 
@@ -313,6 +314,14 @@ view/layer/category inputs. `TcSceneRenderItemSource` стал первой prod
 implementation, а in-memory non-scene source в тесте публикует пустой и
 заполненный snapshots для того же `RenderExecution`. Partial publication
 инвалидируется и диагностируется. Свободный compatibility helper удалён.
+
+В #1363 `ExecuteContext`, `PipelineRenderCache` и `RenderEngine` переведены с
+отдельного `ShadowArrayMap` на общую таблицу `FrameGraphResource`. Cold-path
+registry создаёт non-texture resource по явному type descriptor, отклоняет
+неизвестные/дублирующиеся kinds и опционально публикует sampled texture для
+обычных pass/debugger consumers. `ShadowMapArrayResource`, его factory и
+preview callback теперь принадлежат `termin-render-passes`; только
+`ShadowPass`/`ColorPass` выполняют typed access.
 
 Следующая граница этапа — начать физическое выделение `termin-render-core`, не
 перенося вместе с executor scene traversal, lighting и authoring policy.

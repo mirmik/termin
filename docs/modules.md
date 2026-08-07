@@ -165,7 +165,7 @@ topology, transforms, hit preparation и pointer interaction. Модуль за�
 
 Source of truth: [termin-render docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md)
 
-Отвечает за render framework поверх canonical resources и `termin-graphics`: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers. В переходной архитектуре здесь совместно живут scene-neutral execution contracts и `tc_scene` adapter. В #1359–#1362 neutral snapshot, view, execution context, единый `RenderEngine::execute_pipeline()` и атомарный `RenderItemSource::publish()` отделены от scene capabilities внутри модуля. Scene path реализован через `TcSceneRenderItemSource`, заранее публикует snapshots/services и вызывает общий executor; следующий шаг #1358 — закрепить эту границу отдельным target.
+Отвечает за render framework поверх canonical resources и `termin-graphics`: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers. В переходной архитектуре здесь совместно живут scene-neutral execution contracts и `tc_scene` adapter. В #1359–#1363 neutral snapshot, view, execution context, единый `RenderEngine::execute_pipeline()`, атомарный `RenderItemSource::publish()` и generic non-texture resource registry отделены от scene/lighting capabilities внутри модуля. Scene path реализован через `TcSceneRenderItemSource`, заранее публикует snapshots/services и вызывает общий executor; следующий шаг #1358 — закрепить эту границу отдельным target.
 
 `termin-render` не обязан инкапсулировать `termin-graphics` как implementation detail. Публичная зависимость от `tgfx`/`tgfx2` допустима для API, которые непосредственно описывают GPU execution, frame graph, render contexts, texture handles или bridge к graphics device. Граница проходит не по факту include-а `tgfx`, а по смыслу контракта: scene/asset/build/editor policy не должны случайно зависеть от backend-specific деталей, если они не являются render-facing API.
 
@@ -188,7 +188,8 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 `DebugGeometryPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
 `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
 `SkyBoxPass`, `IdPass` и единый native `UIWidgetPass` для desktop, Android и
-OpenXR. Модуль также владеет picking RGB/id cache helper, shadow camera
+OpenXR. Модуль также владеет `ShadowMapArrayResource` и регистрацией его
+framegraph factory/sampled preview, picking RGB/id cache helper, shadow camera
 helpers, shader skinning injection, material UBO apply helper и Python API
 `termin.render_passes`.
 

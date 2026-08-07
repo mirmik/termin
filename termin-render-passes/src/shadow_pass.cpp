@@ -958,12 +958,15 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("ShadowPass");
 
-    auto it = ctx.shadow_arrays.find(output_res);
-    if (it == ctx.shadow_arrays.end() || it->second == nullptr) {
+    ShadowMapArrayResource* shadow_array =
+        ctx.get_frame_graph_resource_as<ShadowMapArrayResource>(output_res);
+    if (!shadow_array) {
+        tc::Log::error(
+            "[ShadowPass] output resource '%s' is missing or is not a shadow_map_array",
+            output_res.c_str());
         if (profile) tc_profiler_end_section();
         return;
     }
-    ShadowMapArrayResource* shadow_array = it->second;
 
     // Clear previous frame's entries
     shadow_array->clear();
@@ -1031,6 +1034,7 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
 void ShadowPass::register_type() {
+    (void)register_shadow_map_array_resource_type();
     auto descriptor = FramePassTypeDescriptorBuilder::native<ShadowPass>(
         "ShadowPass", "termin-render-passes");
     auto& inspect = descriptor.inspect();

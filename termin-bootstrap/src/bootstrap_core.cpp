@@ -15,6 +15,7 @@
 #include <termin/ui/components_bootstrap.hpp>
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render_passes/bootstrap.hpp>
+#include <termin/render/frame_graph_resource_registry.hpp>
 #include <termin/render/skeleton_components_bootstrap.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
@@ -154,6 +155,7 @@ void tc_shutdown(void) {
     tc_entity_pool_registry_shutdown();
     tc_display_pool_shutdown();
     tc_pipeline_pool_shutdown();
+    termin::clear_frame_graph_resource_types();
     tc_pipeline_template_shutdown();
     tc_material_shutdown();
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
