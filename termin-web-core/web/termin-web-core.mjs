@@ -1,6 +1,6 @@
-import createTerminWebCore from "./termin_web_core.mjs?v=20260807-lifecycle1";
+import createTerminWebCore from "./termin_web_core.mjs?v=20260807-textureops1";
 
-export const TERMIN_WEB_ASSET_REVISION = "20260807-lifecycle1";
+export const TERMIN_WEB_ASSET_REVISION = "20260807-textureops1";
 
 export async function createTerminCore(options = {}) {
     const module = await createTerminWebCore({

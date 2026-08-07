@@ -265,6 +265,57 @@ void render_web_smoke(WebRenderState& state) {
     state.device->present();
 }
 
+void render_web_texture_ops_smoke(WebRenderState& state) {
+    constexpr uint32_t texture_size = 8;
+    std::array<uint8_t, texture_size * texture_size * 4> pixels{};
+    for (uint32_t y = 0; y < texture_size; ++y) {
+        for (uint32_t x = 0; x < texture_size; ++x) {
+            const size_t offset = (y * texture_size + x) * 4;
+            const bool right = x >= texture_size / 2;
+            const bool bottom = y >= texture_size / 2;
+            pixels[offset + 0] = bottom ? (right ? 245 : 30) : 235;
+            pixels[offset + 1] = bottom ? (right ? 245 : 65) : (right ? 205 : 35);
+            pixels[offset + 2] = bottom ? (right ? 245 : 225) : 30;
+            pixels[offset + 3] = 255;
+        }
+    }
+
+    tgfx::TextureDesc source_desc;
+    source_desc.width = texture_size;
+    source_desc.height = texture_size;
+    source_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+    source_desc.usage = tgfx::TextureUsage::Sampled |
+        tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
+    const tgfx::TextureHandle source = state.device->create_texture(source_desc);
+    state.device->upload_texture(source, pixels);
+
+    tgfx::TextureDesc copy_desc = source_desc;
+    copy_desc.usage = tgfx::TextureUsage::Sampled |
+        tgfx::TextureUsage::ColorAttachment |
+        tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
+    const tgfx::TextureHandle copy = state.device->create_texture(copy_desc);
+    const termin::Bounds2i full_source = termin::Bounds2i::from_size(
+        texture_size, texture_size);
+    state.device->blit_to_texture(copy, source, full_source, full_source);
+
+    const tgfx::TextureHandle surface = state.device->acquire_surface_texture();
+    state.device->clear_texture(
+        surface, termin::Color4{0.035f, 0.055f, 0.09f, 1.0f},
+        termin::Bounds2i::from_size(state.width, state.height));
+    state.device->blit_to_texture(
+        surface, copy, full_source, termin::Bounds2i{80, 50, 560, 310});
+    state.device->blit_to_texture(
+        surface, copy, termin::Bounds2i{0, 0, 4, 4},
+        termin::Bounds2i{20, 20, 70, 70});
+    state.device->clear_texture(
+        surface, termin::Color4{0.05f, 0.85f, 0.12f, 1.0f},
+        termin::Bounds2i{280, 140, 360, 220});
+    state.device->present();
+
+    state.device->destroy(copy);
+    state.device->destroy(source);
+}
+
 void initialize_web_render(std::unique_ptr<tgfx::WebGpuRenderDevice> device) {
     auto state = std::make_unique<WebRenderState>();
     state->device = std::move(device);
@@ -334,6 +385,7 @@ void initialize_web_render(std::unique_ptr<tgfx::WebGpuRenderDevice> device) {
     state->resource_set = state->device->create_bound_resource_set(set_desc);
 
     render_web_smoke(*state);
+    render_web_texture_ops_smoke(*state);
     web_render_state = std::move(state);
 }
 

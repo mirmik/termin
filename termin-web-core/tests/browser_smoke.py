@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 SUCCESS_MARKER = "TERMIN_WEB_CORE_SMOKE_PASSED"
 FAILURE_MARKER = "TERMIN_WEB_CORE_SMOKE_FAILED"
 FRAME_READY_MARKER = "TERMIN_WEB_CORE_FRAME_READY"
+TEXTURE_OPS_READY_MARKER = "TERMIN_WEB_CORE_TEXTURE_OPS_READY"
 
 
 def artifact_measurements(output_directory: str) -> dict:
@@ -221,7 +222,8 @@ def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
             "returnByValue": True,
         })
         value = result.get("result", {}).get("value", "")
-        if value in (SUCCESS_MARKER, FRAME_READY_MARKER) or value.startswith(FAILURE_MARKER):
+        if value in (SUCCESS_MARKER, FRAME_READY_MARKER, TEXTURE_OPS_READY_MARKER) or \
+                value.startswith(FAILURE_MARKER):
             return value
         time.sleep(0.05)
     diagnostics = devtools.call("Runtime.evaluate", {
@@ -250,7 +252,10 @@ def wait_for_viewer(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
     raise RuntimeError("viewer did not reach running state")
 
 
-def analyze_png(content: bytes) -> dict[str, int]:
+def analyze_png(
+    content: bytes,
+    probes: dict[str, tuple[int, int]] | None = None,
+) -> dict:
     if not content.startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError("DevTools canvas screenshot is not a PNG")
     offset = 8
@@ -318,7 +323,7 @@ def analyze_png(content: bytes) -> dict[str, int]:
                 channel_min[index] = min(channel_min[index], value)
                 channel_max[index] = max(channel_max[index], value)
             colors.add((red >> 4, green >> 4, blue >> 4))
-    return {
+    metrics = {
         "width": width,
         "height": height,
         "bright_pixels": bright_pixels,
@@ -327,6 +332,15 @@ def analyze_png(content: bytes) -> dict[str, int]:
         "channel_max": channel_max,
         "pixel_sha256": hashlib.sha256(pixel_bytes).hexdigest(),
     }
+    if probes:
+        sampled = {}
+        for name, (x, y) in probes.items():
+            if x < 0 or y < 0 or x >= width or y >= height:
+                raise RuntimeError(f"PNG probe {name} is outside {width}x{height}: {(x, y)}")
+            offset = x * channels
+            sampled[name] = list(rows[y][offset:offset + 3])
+        metrics["probes"] = sampled
+    return metrics
 
 
 def console_diagnostics(devtools: DevToolsSocket) -> list[str]:
@@ -479,6 +493,50 @@ def main() -> int:
                 })
                 devtools.call("Runtime.evaluate", {
                     "expression": "document.querySelector('#result').textContent='TERMIN_WEB_CORE_SMOKE_RUNNING'; globalThis.__terminSmokeContinue(); 'continued'",
+                    "returnByValue": True,
+                })
+                result = wait_for_result(devtools)
+            if result == TEXTURE_OPS_READY_MARKER:
+                texture_ops_screenshot = devtools.call("Page.captureScreenshot", {
+                    "format": "png",
+                    "clip": {"x": 0, "y": 0, "width": 640, "height": 360, "scale": 1},
+                    "captureBeyondViewport": False,
+                })
+                texture_ops_metrics = analyze_png(
+                    base64.b64decode(texture_ops_screenshot["data"]),
+                    {
+                        "background": (10, 340),
+                        "cropped_red": (40, 40),
+                        "scaled_red": (160, 100),
+                        "scaled_yellow": (480, 100),
+                        "scaled_blue": (160, 260),
+                        "scaled_white": (480, 260),
+                        "partial_clear": (320, 180),
+                    },
+                )
+                probes = texture_ops_metrics["probes"]
+                expected = {
+                    "cropped_red": lambda r, g, b: r > 170 and g < 100 and b < 100,
+                    "scaled_red": lambda r, g, b: r > 170 and g < 100 and b < 100,
+                    "scaled_yellow": lambda r, g, b: r > 170 and g > 150 and b < 120,
+                    "scaled_blue": lambda r, g, b: r < 100 and g < 120 and b > 160,
+                    "scaled_white": lambda r, g, b: r > 170 and g > 170 and b > 170,
+                    "partial_clear": lambda r, g, b: r < 100 and g > 160 and b < 120,
+                    "background": lambda r, g, b: max(r, g, b) < 80,
+                }
+                failed_probes = [
+                    name for name, predicate in expected.items()
+                    if not predicate(*probes[name])
+                ]
+                if failed_probes:
+                    raise RuntimeError(
+                        "WebGPU cropped/scaled blit or partial clear pixel probes failed: "
+                        f"failed={failed_probes} metrics={texture_ops_metrics}; "
+                        f"console={console_diagnostics(devtools)}"
+                    )
+                report["texture_ops"] = texture_ops_metrics
+                devtools.call("Runtime.evaluate", {
+                    "expression": "document.querySelector('#result').textContent='TERMIN_WEB_CORE_SMOKE_RUNNING'; globalThis.__terminTextureOpsContinue(); 'continued'",
                     "returnByValue": True,
                 })
                 result = wait_for_result(devtools)
