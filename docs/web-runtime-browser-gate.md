@@ -37,7 +37,8 @@ Gate поднимает временный HTTP server только на loopbac
 
 - secure context и наличие WebGPU;
 - создание adapter/device и canvas surface;
-- strict package load и первый текстурированный кадр;
+- single-fetch indexed `package.trpkg` load, SHA-256/path validation и первый
+  текстурированный кадр без package tree в MEMFS;
 - reload, teardown и ожидаемые package errors;
 - финальный shutdown Render bootstrap и повторную инициализацию без дубликатов;
 - orbit, wheel, keyboard, focus и canvas resize/DPR;
@@ -58,7 +59,8 @@ Report schema v1 содержит:
 
 - версию Chromium, user agent и признаки secure context/WebGPU;
 - raw и gzip-размеры Wasm/ESM/host/input/viewer artifacts;
-- число файлов, raw и gzip-размер strict runtime package;
+- число файлов, raw/gzip-размер directory fixture и отдельный размер
+  deterministic `package.trpkg`;
 - package fetch, graphics init, native load, startup, first-frame и frame-time
   metrics;
 - input/resize counters и характеристики кадров до/после orbit;

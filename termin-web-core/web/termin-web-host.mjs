@@ -32,35 +32,6 @@ function packageBaseUrl(packageUrl) {
     return base.href.endsWith("/") ? base : new URL(`${base.href}/`);
 }
 
-function parentPath(path) {
-    const separator = path.lastIndexOf("/");
-    return separator > 0 ? path.slice(0, separator) : "/";
-}
-
-function validateRelativePackagePath(path) {
-    if (!path || path.startsWith("/") || path.includes("\\") ||
-            /^[A-Za-z][A-Za-z0-9+.-]*:/.test(path)) {
-        throw new Error(`runtime package path must be relative: ${path}`);
-    }
-    if (path.split("/").some((segment) => segment === "." || segment === "..")) {
-        throw new Error(`runtime package path must not contain dot segments: ${path}`);
-    }
-}
-
-function removeTree(FS, root) {
-    try {
-        for (const name of FS.readdir(root)) {
-            if (name === "." || name === "..") continue;
-            const path = `${root}/${name}`;
-            if (FS.isDir(FS.stat(path).mode)) removeTree(FS, path);
-            else FS.unlink(path);
-        }
-        FS.rmdir(root);
-    } catch (error) {
-        if (error?.errno !== 44) throw error;
-    }
-}
-
 function describeThrown(module, error) {
     if (error instanceof Error) return error.message;
     try {
@@ -74,41 +45,6 @@ function describeThrown(module, error) {
     } catch {
         return String(error);
     }
-}
-
-function collectArtifactPaths(value, result) {
-    if (typeof value === "string") {
-        validateRelativePackagePath(value);
-        result.add(value);
-        if (value.endsWith(".wgsl")) result.add(`${value}.layout.json`);
-        return;
-    }
-    if (!value || typeof value !== "object") return;
-    for (const child of Object.values(value)) collectArtifactPaths(child, result);
-}
-
-function resourceDependencyPaths(type, spec) {
-    const result = new Set();
-    if (!spec || typeof spec !== "object") return result;
-    if (type === "shader") {
-        for (const name of [
-            "vertex_source_path", "fragment_source_path", "geometry_source_path",
-        ]) {
-            const path = spec[name];
-            if (typeof path === "string" && path) {
-                validateRelativePackagePath(path);
-                result.add(path);
-            }
-        }
-        collectArtifactPaths(spec.artifacts, result);
-    } else if (type === "texture") {
-        const path = spec.source_path;
-        if (typeof path === "string" && path) {
-            validateRelativePackagePath(path);
-            result.add(path);
-        }
-    }
-    return result;
 }
 
 export class TerminWebHost {
@@ -130,13 +66,12 @@ export class TerminWebHost {
         }
         this.state = TerminWebHostState.Idle;
         this.error = "";
-        this.packageRoot = "";
+        this.packageBlobUrl = "";
         this.nativeLoaded = false;
         this.graphicsStarted = false;
         this.frameRequest = 0;
         this.lastTimestamp = null;
         this.lastObservedFrameCount = 0;
-        this.generation = 0;
         this.loadStartedAt = 0;
         this.metrics = {};
         this.setState(this.state);
@@ -170,6 +105,9 @@ export class TerminWebHost {
         this.loadStartedAt = loadStartedAt;
         this.metrics = {
             packageFetchMs: 0,
+            packageBytes: 0,
+            packageRequests: 0,
+            packageProvider: "blob",
             graphicsInitMs: 0,
             nativeLoadMs: 0,
             startupMs: 0,
@@ -179,90 +117,27 @@ export class TerminWebHost {
             maxFrameMs: 0,
             measuredFrames: 0,
         };
-        const generation = ++this.generation;
         try {
-            const base = packageBaseUrl(packageUrl);
-            const manifestBytes = await this.fetchFile(
-                new URL("manifest.json", base), "manifest.json");
-            let manifest;
+            const supplied = new URL(packageUrl, globalThis.location?.href ?? import.meta.url);
+            const blobUrl = supplied.pathname.endsWith(".trpkg")
+                ? supplied
+                : new URL("package.trpkg", packageBaseUrl(supplied));
+            this.packageBlobUrl = blobUrl.href;
+            const packageBlob = await this.fetchFile(blobUrl, "runtime package blob");
+            this.metrics.packageBytes = packageBlob.byteLength;
+            this.metrics.packageRequests = 1;
+            const pointer = this.module._malloc(packageBlob.byteLength);
+            if (!pointer) throw new Error("failed to allocate runtime package blob memory");
             try {
-                manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
-            } catch (error) {
-                throw new Error(`malformed manifest.json: ${error.message}`);
-            }
-            if (!manifest || !Array.isArray(manifest.scenes)) {
-                throw new Error("manifest scenes must be a list");
-            }
-
-            const root = `/termin-runtime/package-${generation}`;
-            this.module.FS.mkdirTree(root);
-            this.packageRoot = root;
-            this.module.FS.writeFile(`${root}/manifest.json`, manifestBytes);
-            const packageFiles = new Map();
-            const builtinContract = manifest.builtin_shader_contract;
-            if (builtinContract && typeof builtinContract === "object") {
-                if (typeof builtinContract.catalog === "string" &&
-                        builtinContract.catalog) {
-                    validateRelativePackagePath(builtinContract.catalog);
-                    packageFiles.set(
-                        builtinContract.catalog,
-                        await this.fetchFile(
-                            new URL(builtinContract.catalog, base),
-                            builtinContract.catalog));
+                this.module.HEAPU8.set(packageBlob, pointer);
+                if (!this.module._termin_web_host_set_package_blob(
+                        pointer, packageBlob.byteLength)) {
+                    const message = this.module.UTF8ToString(
+                        this.module._termin_web_host_error());
+                    throw new Error(message || "native runtime package blob validation failed");
                 }
-                if (Array.isArray(builtinContract.shaders)) {
-                    for (const shader of builtinContract.shaders) {
-                        const artifacts = new Set();
-                        collectArtifactPaths(shader?.artifacts, artifacts);
-                        for (const artifact of artifacts) {
-                            packageFiles.set(
-                                artifact,
-                                await this.fetchFile(new URL(artifact, base), artifact));
-                        }
-                    }
-                }
-            }
-            for (const scene of manifest.scenes) {
-                if (!scene || typeof scene.path !== "string" || !scene.path) {
-                    throw new Error("runtime scene entries require a non-empty path");
-                }
-                validateRelativePackagePath(scene.path);
-                packageFiles.set(
-                    scene.path,
-                    await this.fetchFile(new URL(scene.path, base), scene.path));
-            }
-            if (!Array.isArray(manifest.resources)) {
-                throw new Error("manifest resources must be a list");
-            }
-            for (const resource of manifest.resources) {
-                if (!resource || typeof resource.type !== "string" ||
-                        typeof resource.path !== "string" || !resource.path) {
-                    throw new Error("runtime resource entries require type and path");
-                }
-                validateRelativePackagePath(resource.path);
-                const specBytes = await this.fetchFile(
-                    new URL(resource.path, base), resource.path);
-                packageFiles.set(resource.path, specBytes);
-                let spec = null;
-                if (resource.type === "shader" || resource.type === "texture") {
-                    try {
-                        spec = JSON.parse(new TextDecoder().decode(specBytes));
-                    } catch (error) {
-                        throw new Error(`malformed ${resource.path}: ${error.message}`);
-                    }
-                }
-                for (const dependency of resourceDependencyPaths(resource.type, spec)) {
-                    if (!packageFiles.has(dependency)) {
-                        packageFiles.set(
-                            dependency,
-                            await this.fetchFile(new URL(dependency, base), dependency));
-                    }
-                }
-            }
-            for (const [path, bytes] of packageFiles) {
-                const destination = `${root}/${path}`;
-                this.module.FS.mkdirTree(parentPath(destination));
-                this.module.FS.writeFile(destination, bytes);
+            } finally {
+                this.module._free(pointer);
             }
             this.metrics.packageFetchMs = performance.now() - loadStartedAt;
             const graphicsStartedAt = performance.now();
@@ -271,7 +146,7 @@ export class TerminWebHost {
             const nativeLoadStartedAt = performance.now();
             const loaded = this.module.ccall(
                 this.headless ? "termin_web_host_load_headless" : "termin_web_host_load",
-                "number", ["string"], [root]);
+                "number", ["string"], [""]);
             if (!loaded) {
                 const message = this.module.UTF8ToString(
                     this.module._termin_web_host_error());
@@ -291,8 +166,7 @@ export class TerminWebHost {
             }
             this.nativeLoaded = false;
             this.graphicsStarted = false;
-            if (this.packageRoot) removeTree(this.module.FS, this.packageRoot);
-            this.packageRoot = "";
+            this.packageBlobUrl = "";
             this.setState(TerminWebHostState.Error, message);
             this.logger?.error?.("TerminWebHost load failed:", error);
             throw new Error(message, {cause: error});
@@ -438,8 +312,7 @@ export class TerminWebHost {
         }
         this.nativeLoaded = false;
         this.graphicsStarted = false;
-        if (this.packageRoot) removeTree(this.module.FS, this.packageRoot);
-        this.packageRoot = "";
+        this.packageBlobUrl = "";
         if (this.state !== TerminWebHostState.Idle) {
             this.setState(TerminWebHostState.Idle);
         }

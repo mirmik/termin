@@ -1,0 +1,13 @@
+{
+  "uuid": "runtime-reader-fixture-scene",
+  "name": "Runtime reader fixture",
+  "entities": [
+    {
+      "uuid": "runtime-reader-fixture-entity",
+      "name": "Reader fixture entity",
+      "enabled": true,
+      "components": [],
+      "children": []
+    }
+  ]
+}

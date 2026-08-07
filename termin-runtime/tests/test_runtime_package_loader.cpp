@@ -7,6 +7,8 @@ GUARD_TEST_MAIN();
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -1341,4 +1343,37 @@ TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package")
     CHECK_FALSE(result.ok);
     CHECK_FALSE(result.message.empty());
     std::filesystem::remove(outside, error);
+}
+
+TEST_CASE("RuntimePackageLoader validates the same package through directory and blob readers") {
+    termin::runtime::RuntimePackageLoader loader;
+    termin::runtime::RuntimePackageLoadResult directory = loader.load(
+        TERMIN_RUNTIME_READER_FIXTURE_ROOT);
+    REQUIRE(directory.ok);
+
+    std::ifstream input(TERMIN_RUNTIME_READER_FIXTURE_BLOB, std::ios::binary);
+    REQUIRE(static_cast<bool>(input));
+    auto blob = std::make_shared<std::vector<std::uint8_t>>(
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>());
+    REQUIRE_FALSE(blob->empty());
+    termin::runtime::RuntimePackageLoadResult packed = loader.load(
+        termin::runtime::open_runtime_package_blob(blob, "reader-test-blob"));
+    REQUIRE(packed.ok);
+    CHECK_EQ(packed.entry_scene_identity, directory.entry_scene_identity);
+    CHECK_EQ(packed.scenes.size(), directory.scenes.size());
+    CHECK_EQ(packed.scene.entity_count(), directory.scene.entity_count());
+
+    packed.destroy();
+    directory.destroy();
+    blob->back() ^= 0xff;
+    try {
+        (void)termin::runtime::open_runtime_package_blob(
+            blob, "corrupt-reader-test-blob");
+        CHECK(false);
+    } catch (const std::exception& exception) {
+        CHECK_EQ(
+            std::string(exception.what()),
+            "runtime package blob hash mismatch: scenes/Main.scene.json");
+    }
 }

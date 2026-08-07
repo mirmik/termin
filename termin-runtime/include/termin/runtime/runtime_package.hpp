@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <termin/runtime/termin_runtime_api.h>
@@ -15,6 +19,35 @@ extern "C" {
 namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive;
+
+struct RuntimePackageBytes {
+    std::shared_ptr<const void> owner;
+    const std::uint8_t* data = nullptr;
+    std::size_t size = 0;
+
+    std::span<const std::uint8_t> view() const { return {data, size}; }
+    explicit operator bool() const { return static_cast<bool>(owner); }
+};
+
+// Read-only package boundary used by RuntimePackageLoader. Paths are always
+// portable, package-relative paths; implementations own containment and
+// integrity validation.
+class TERMIN_RUNTIME_API RuntimePackageReader {
+public:
+    virtual ~RuntimePackageReader() = default;
+    virtual RuntimePackageBytes read(std::string_view path) const = 0;
+    virtual bool contains(std::string_view path) const = 0;
+    virtual std::string describe(std::string_view path) const = 0;
+    virtual std::string materialized_path(std::string_view path) const = 0;
+};
+
+TERMIN_RUNTIME_API std::shared_ptr<RuntimePackageReader>
+open_runtime_package_directory(const std::string& root_path);
+
+TERMIN_RUNTIME_API std::shared_ptr<RuntimePackageReader>
+open_runtime_package_blob(
+    std::shared_ptr<const std::vector<std::uint8_t>> blob,
+    std::string label = "runtime-package.blob");
 
 struct RuntimePackageLoadOptions {
     // Extensions required by the runtime host. They are attached to every
@@ -32,6 +65,7 @@ struct ShaderRuntimeConfiguration {
     std::string cache_root;
     std::string compiler_path;
     bool dev_compile_enabled = false;
+    std::shared_ptr<RuntimePackageReader> resource_provider;
 };
 
 struct RuntimePackageScene {
@@ -59,6 +93,10 @@ struct RuntimePackageLoadResult {
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {
 public:
+    RuntimePackageLoadResult load(
+        std::shared_ptr<RuntimePackageReader> reader,
+        const RuntimePackageLoadOptions& options = {}
+    );
     RuntimePackageLoadResult load(
         const std::string& root_path,
         const RuntimePackageLoadOptions& options = {}
