@@ -2,14 +2,14 @@
 #ifndef TC_COMPONENT_H
 #define TC_COMPONENT_H
 
-#include "tc_types.h"
 #include "core/tc_component_capability.h"
-#include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
+#include "core/tc_entity_pool.h"
 #include "inspect/tc_runtime_type_registry.h"
-#include <string.h>
-#include <stdint.h>
+#include "tc_types.h"
 #include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,9 +20,9 @@ extern "C" {
 // ============================================================================
 
 typedef enum tc_component_kind {
-    TC_CXX_COMPONENT = 0,       // C++ component
-    TC_PYTHON_COMPONENT = 1,    // Python component
-    TC_CSHARP_COMPONENT = 2     // C# component
+    TC_CXX_COMPONENT = 0,    // C++ component
+    TC_PYTHON_COMPONENT = 1, // Python component
+    TC_CSHARP_COMPONENT = 2  // C# component
 } tc_component_kind;
 
 typedef enum tc_component_lifecycle_stage {
@@ -150,7 +150,6 @@ struct tc_component {
     int capability_priorities[TC_COMPONENT_MAX_CAPABILITIES];
     tc_component* capability_prev[TC_COMPONENT_MAX_CAPABILITIES];
     tc_component* capability_next[TC_COMPONENT_MAX_CAPABILITIES];
-
 };
 
 // ============================================================================
@@ -190,25 +189,14 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
 // Change the complete lifecycle scheduling contract in one operation. If the
 // component is registered with a scene, its scheduler indexes are updated
 // before this function returns. Detached components only store the flags.
-TC_API void tc_component_set_lifecycle_capabilities(
-    tc_component* c,
-    bool has_update,
-    bool has_fixed_update,
-    bool has_late_update
-);
+TC_API void
+tc_component_set_lifecycle_capabilities(tc_component* c, bool has_update, bool has_fixed_update, bool has_late_update);
 
-TC_API int tc_component_get_lifecycle_priority(
-    const tc_component* c,
-    tc_component_lifecycle_stage stage
-);
+TC_API int tc_component_get_lifecycle_priority(const tc_component* c, tc_component_lifecycle_stage stage);
 
 // Updates one stage independently. Attached components are synchronously
 // reindexed in that stage's scene list before this function returns.
-TC_API bool tc_component_set_lifecycle_priority(
-    tc_component* c,
-    tc_component_lifecycle_stage stage,
-    int priority
-);
+TC_API bool tc_component_set_lifecycle_priority(tc_component* c, tc_component_lifecycle_stage stage, int priority);
 
 // ============================================================================
 // Component lifecycle calls (null-safe vtable dispatch)
@@ -218,7 +206,8 @@ static inline void tc_component_start(tc_component* c) {
     if (c && c->vtable && c->vtable->start) {
         c->vtable->start(c);
     }
-    if (c) c->_started = true;
+    if (c)
+        c->_started = true;
 }
 
 static inline void tc_component_update(tc_component* c, float dt) {
@@ -316,24 +305,18 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 // Component Registry
 // ============================================================================
 
-typedef bool (*tc_component_prepare_unload_fn)(
-    const char* type_name,
-    void* context,
-    void* user_data
-);
+typedef bool (*tc_component_prepare_unload_fn)(const char* type_name, void* context, void* user_data);
 
-TC_API bool tc_component_type_descriptor_add_facet(
-    tc_runtime_type_descriptor* descriptor,
-    tc_runtime_owned_factory* factory,
-    tc_component_kind kind,
-    bool is_abstract,
-    const char* display_name,
-    const char* category,
-    const char* const* requirements,
-    size_t requirement_count,
-    const tc_component_cap_id* capabilities,
-    size_t capability_count
-);
+TC_API bool tc_component_type_descriptor_add_facet(tc_runtime_type_descriptor* descriptor,
+                                                   tc_runtime_owned_factory* factory,
+                                                   tc_component_kind kind,
+                                                   bool is_abstract,
+                                                   const char* display_name,
+                                                   const char* category,
+                                                   const char* const* requirements,
+                                                   size_t requirement_count,
+                                                   const tc_component_cap_id* capabilities,
+                                                   size_t capability_count);
 
 TC_API void tc_component_registry_unregister(const char* type_name);
 TC_API bool tc_component_registry_has(const char* type_name);
@@ -342,38 +325,24 @@ TC_API void tc_component_registry_cleanup(void);
 
 TC_API const char* tc_component_registry_get_owner(const char* type_name);
 TC_API size_t tc_component_registry_unregister_owner(const char* owner);
-TC_API void tc_component_registry_set_prepare_unload_callback(
-    tc_component_prepare_unload_fn callback,
-    void* user_data
-);
+TC_API void tc_component_registry_set_prepare_unload_callback(tc_component_prepare_unload_fn callback, void* user_data);
 
 TC_API size_t tc_component_registry_type_count(void);
 TC_API const char* tc_component_registry_type_at(size_t index);
 
 // Get descendant type names for iteration (includes type itself)
 // Returns count, fills out_names array (caller provides buffer)
-TC_API size_t tc_component_registry_get_type_and_descendants(
-    const char* type_name,
-    const char** out_names,
-    size_t max_count
-);
+TC_API size_t tc_component_registry_get_type_and_descendants(const char* type_name,
+                                                             const char** out_names,
+                                                             size_t max_count);
 
 // Get parent type name (or NULL if none)
 TC_API const char* tc_component_registry_get_parent(const char* type_name);
-TC_API bool tc_component_registry_is_a(
-    const char* type_name,
-    const char* base_type_name
-);
+TC_API bool tc_component_registry_is_a(const char* type_name, const char* base_type_name);
 
 TC_API size_t tc_component_registry_requirement_count(const char* type_name);
-TC_API const char* tc_component_registry_requirement_at(
-    const char* type_name,
-    size_t index
-);
-TC_API bool tc_component_registry_has_requirement(
-    const char* type_name,
-    const char* required_type_name
-);
+TC_API const char* tc_component_registry_requirement_at(const char* type_name, size_t index);
+TC_API bool tc_component_registry_has_requirement(const char* type_name, const char* required_type_name);
 
 // Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
@@ -383,16 +352,11 @@ TC_API const char* tc_component_registry_get_display_name(const char* type_name)
 
 TC_API const char* tc_component_registry_get_category(const char* type_name);
 
-TC_API bool tc_component_registry_has_capability(
-    const char* type_name,
-    tc_component_cap_id cap_id
-);
+TC_API bool tc_component_registry_has_capability(const char* type_name, tc_component_cap_id cap_id);
 
-TC_API size_t tc_component_registry_get_types_with_capability(
-    tc_component_cap_id cap_id,
-    const char** out_names,
-    size_t max_count
-);
+TC_API size_t tc_component_registry_get_types_with_capability(tc_component_cap_id cap_id,
+                                                              const char** out_names,
+                                                              size_t max_count);
 
 // Get type entry for a component type
 TC_API void tc_component_set_declared_type_name(tc_component* c, const char* type_name);
@@ -403,7 +367,8 @@ TC_API size_t tc_component_registry_instance_count(const char* type_name);
 
 // Check if component's type version is current (for hot reload detection)
 static inline bool tc_component_type_is_current(const tc_component* c) {
-    if (!c || !c->runtime_type_link.type_name) return true;
+    if (!c || !c->runtime_type_link.type_name)
+        return true;
     return tc_runtime_type_registry_instance_is_current(&c->runtime_type_link);
 }
 
@@ -411,7 +376,8 @@ static inline bool tc_component_type_is_current(const tc_component* c) {
 TC_API void tc_component_unlink_from_registry(tc_component* c);
 
 static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
-    if (!c) return false;
+    if (!c)
+        return false;
     return c->native_language == lang;
 }
 

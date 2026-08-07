@@ -5,39 +5,40 @@
 
 using guard::Approx;
 using namespace termin::colliders;
-using termin::Vec3;
+using termin::AABB;
 using termin::GeneralPose3;
 using termin::Quat;
-using termin::AABB;
+using termin::Vec3;
 
 // Helper: create a cube ConvexHullCollider from 8 points
 static ConvexHullCollider make_cube_hull(const Vec3& half_size, const GeneralPose3& t = GeneralPose3()) {
     double hx = half_size.x, hy = half_size.y, hz = half_size.z;
-    std::vector<Vec3> pts = {
-        {-hx,-hy,-hz}, {hx,-hy,-hz}, {-hx,hy,-hz}, {hx,hy,-hz},
-        {-hx,-hy,hz},  {hx,-hy,hz},  {-hx,hy,hz},  {hx,hy,hz}
-    };
+    std::vector<Vec3> pts = {{-hx, -hy, -hz},
+                             {hx, -hy, -hz},
+                             {-hx, hy, -hz},
+                             {hx, hy, -hz},
+                             {-hx, -hy, hz},
+                             {hx, -hy, hz},
+                             {-hx, hy, hz},
+                             {hx, hy, hz}};
     return ConvexHullCollider::from_points(pts, t);
 }
 
 // ==================== Support function tests ====================
 
-TEST_CASE("ConvexHull support: cube along +X")
-{
+TEST_CASE("ConvexHull support: cube along +X") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     Vec3 s = hull.support(Vec3(1, 0, 0));
     CHECK_EQ(s.x, Approx(1.0).epsilon(1e-6));
 }
 
-TEST_CASE("ConvexHull support: cube along -Y")
-{
+TEST_CASE("ConvexHull support: cube along -Y") {
     auto hull = make_cube_hull(Vec3(1, 2, 3));
     Vec3 s = hull.support(Vec3(0, -1, 0));
     CHECK_EQ(s.y, Approx(-2.0).epsilon(1e-6));
 }
 
-TEST_CASE("ConvexHull support: cube diagonal")
-{
+TEST_CASE("ConvexHull support: cube diagonal") {
     auto hull = make_cube_hull(Vec3(1, 2, 3));
     Vec3 s = hull.support(Vec3(1, 1, 1));
     CHECK_EQ(s.x, Approx(1.0).epsilon(1e-6));
@@ -45,8 +46,7 @@ TEST_CASE("ConvexHull support: cube diagonal")
     CHECK_EQ(s.z, Approx(3.0).epsilon(1e-6));
 }
 
-TEST_CASE("ConvexHull support: cube with offset")
-{
+TEST_CASE("ConvexHull support: cube with offset") {
     auto hull = make_cube_hull(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
     Vec3 s = hull.support(Vec3(1, 0, 0));
     CHECK_EQ(s.x, Approx(6.0).epsilon(1e-6));
@@ -54,8 +54,7 @@ TEST_CASE("ConvexHull support: cube with offset")
 
 // ==================== AABB tests ====================
 
-TEST_CASE("ConvexHull AABB matches BoxCollider AABB")
-{
+TEST_CASE("ConvexHull AABB matches BoxCollider AABB") {
     auto hull = make_cube_hull(Vec3(1, 2, 3));
     BoxCollider box(Vec3(1, 2, 3));
 
@@ -72,8 +71,7 @@ TEST_CASE("ConvexHull AABB matches BoxCollider AABB")
 
 // ==================== GJK: ConvexHull vs Box ====================
 
-TEST_CASE("ConvexHull-Box separated")
-{
+TEST_CASE("ConvexHull-Box separated") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     BoxCollider box(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
@@ -82,8 +80,7 @@ TEST_CASE("ConvexHull-Box separated")
     CHECK_EQ(hit.distance, Approx(3.0).epsilon(0.1));
 }
 
-TEST_CASE("ConvexHull-Box overlapping")
-{
+TEST_CASE("ConvexHull-Box overlapping") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     BoxCollider box(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
 
@@ -94,8 +91,7 @@ TEST_CASE("ConvexHull-Box overlapping")
 
 // ==================== GJK: ConvexHull vs Sphere ====================
 
-TEST_CASE("ConvexHull-Sphere separated")
-{
+TEST_CASE("ConvexHull-Sphere separated") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     SphereCollider sphere(0.5, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));
 
@@ -104,8 +100,7 @@ TEST_CASE("ConvexHull-Sphere separated")
     CHECK_EQ(hit.distance, Approx(1.5).epsilon(0.1));
 }
 
-TEST_CASE("ConvexHull-Sphere overlapping")
-{
+TEST_CASE("ConvexHull-Sphere overlapping") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     SphereCollider sphere(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
 
@@ -115,8 +110,7 @@ TEST_CASE("ConvexHull-Sphere overlapping")
 
 // ==================== GJK: ConvexHull vs ConvexHull ====================
 
-TEST_CASE("ConvexHull-ConvexHull separated")
-{
+TEST_CASE("ConvexHull-ConvexHull separated") {
     auto h1 = make_cube_hull(Vec3(1, 1, 1));
     auto h2 = make_cube_hull(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
@@ -125,8 +119,7 @@ TEST_CASE("ConvexHull-ConvexHull separated")
     CHECK_EQ(hit.distance, Approx(3.0).epsilon(0.1));
 }
 
-TEST_CASE("ConvexHull-ConvexHull overlapping")
-{
+TEST_CASE("ConvexHull-ConvexHull overlapping") {
     auto h1 = make_cube_hull(Vec3(1, 1, 1));
     auto h2 = make_cube_hull(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
 
@@ -137,8 +130,7 @@ TEST_CASE("ConvexHull-ConvexHull overlapping")
 
 // ==================== ConvexHull cube vs BoxCollider comparison ====================
 
-TEST_CASE("ConvexHull cube matches Box: distance to sphere")
-{
+TEST_CASE("ConvexHull cube matches Box: distance to sphere") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     BoxCollider box(Vec3(1, 1, 1));
     SphereCollider sphere(0.5, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));
@@ -149,8 +141,7 @@ TEST_CASE("ConvexHull cube matches Box: distance to sphere")
     CHECK_EQ(hull_hit.distance, Approx(box_hit.distance).epsilon(0.1));
 }
 
-TEST_CASE("ConvexHull cube matches Box: distance to box")
-{
+TEST_CASE("ConvexHull cube matches Box: distance to box") {
     auto hull = make_cube_hull(Vec3(1, 2, 1));
     BoxCollider b1(Vec3(1, 2, 1));
     BoxCollider b2(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(4, 0, 0)));
@@ -161,8 +152,7 @@ TEST_CASE("ConvexHull cube matches Box: distance to box")
     CHECK_EQ(hull_hit.distance, Approx(box_hit.distance).epsilon(0.1));
 }
 
-TEST_CASE("ConvexHull raycast returns first intersection")
-{
+TEST_CASE("ConvexHull raycast returns first intersection") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
 
     auto top_hit = hull.closest_to_ray(termin::Ray3(Vec3(0, 0, 5), Vec3(0, 0, -1)));
@@ -176,8 +166,7 @@ TEST_CASE("ConvexHull raycast returns first intersection")
 
 // ==================== Reverse dispatch: Box/Sphere → ConvexHull ====================
 
-TEST_CASE("Box.closest_to_collider(ConvexHull) works")
-{
+TEST_CASE("Box.closest_to_collider(ConvexHull) works") {
     BoxCollider box(Vec3(1, 1, 1));
     auto hull = make_cube_hull(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
@@ -186,8 +175,7 @@ TEST_CASE("Box.closest_to_collider(ConvexHull) works")
     CHECK_EQ(hit.distance, Approx(3.0).epsilon(0.1));
 }
 
-TEST_CASE("Sphere.closest_to_collider(ConvexHull) works")
-{
+TEST_CASE("Sphere.closest_to_collider(ConvexHull) works") {
     SphereCollider sphere(1.0);
     auto hull = make_cube_hull(Vec3(1, 1, 1), GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
 
@@ -198,8 +186,7 @@ TEST_CASE("Sphere.closest_to_collider(ConvexHull) works")
 
 // ==================== clone_at ====================
 
-TEST_CASE("ConvexHull clone_at preserves geometry")
-{
+TEST_CASE("ConvexHull clone_at preserves geometry") {
     auto hull = make_cube_hull(Vec3(1, 1, 1));
     GeneralPose3 new_pose(Quat::identity(), Vec3(10, 0, 0));
     auto cloned = hull.clone_at(new_pose);

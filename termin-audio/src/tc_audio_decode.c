@@ -6,16 +6,11 @@
 
 #include <tcbase/tc_log.h>
 
-#include <miniaudio.h>
 #include <extras/decoders/libvorbis/miniaudio_libvorbis.h>
+#include <miniaudio.h>
 
 bool tc_audio_backend_decode_file(
-    const char* path,
-    void** frames,
-    uint64_t* frame_count,
-    uint32_t* sample_rate,
-    uint16_t* channels
-) {
+    const char* path, void** frames, uint64_t* frame_count, uint32_t* sample_rate, uint16_t* channels) {
     if (!path || !path[0] || !frames || !frame_count || !sample_rate || !channels) {
         tc_log_error("tc_audio_backend_decode_file: invalid arguments");
         return false;
@@ -31,11 +26,7 @@ bool tc_audio_backend_decode_file(
     void* decoded_frames = NULL;
     ma_result result = ma_decode_file(path, &config, &decoded_frame_count, &decoded_frames);
     if (result != MA_SUCCESS) {
-        tc_log_error(
-            "tc_audio_backend_decode_file: failed to decode '%s': %s",
-            path,
-            ma_result_description(result)
-        );
+        tc_log_error("tc_audio_backend_decode_file: failed to decode '%s': %s", path, ma_result_description(result));
         return false;
     }
 
@@ -45,11 +36,7 @@ bool tc_audio_backend_decode_file(
         return false;
     }
     if (config.channels > UINT16_MAX) {
-        tc_log_error(
-            "tc_audio_backend_decode_file: unsupported channel count %u for '%s'",
-            config.channels,
-            path
-        );
+        tc_log_error("tc_audio_backend_decode_file: unsupported channel count %u for '%s'", config.channels, path);
         ma_free(decoded_frames, NULL);
         return false;
     }
@@ -62,11 +49,7 @@ bool tc_audio_backend_decode_file(
     const size_t byte_count = (size_t)decoded_frame_count * config.channels * sizeof(float);
     void* owned_frames = malloc(byte_count);
     if (!owned_frames) {
-        tc_log_error(
-            "tc_audio_backend_decode_file: failed to allocate %zu bytes for '%s'",
-            byte_count,
-            path
-        );
+        tc_log_error("tc_audio_backend_decode_file: failed to allocate %zu bytes for '%s'", byte_count, path);
         ma_free(decoded_frames, NULL);
         return false;
     }

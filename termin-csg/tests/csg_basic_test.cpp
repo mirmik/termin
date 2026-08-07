@@ -6,9 +6,9 @@
 
 namespace {
 
-bool near(double a, double b, double eps = 1e-6) {
-    return std::abs(a - b) <= eps;
-}
+    bool near(double a, double b, double eps = 1e-6) {
+        return std::abs(a - b) <= eps;
+    }
 
 } // namespace
 
@@ -29,15 +29,15 @@ TEST_CASE("termin-csg basic primitives and conversions") {
 
     termin::csg::Polygon2 outer = {
         {-2.0, -2.0},
-        { 2.0, -2.0},
-        { 2.0,  2.0},
-        {-2.0,  2.0},
+        {2.0, -2.0},
+        {2.0, 2.0},
+        {-2.0, 2.0},
     };
     termin::csg::Polygon2 hole = {
         {-0.5, -0.5},
-        { 0.5, -0.5},
-        { 0.5,  0.5},
-        {-0.5,  0.5},
+        {0.5, -0.5},
+        {0.5, 0.5},
+        {-0.5, 0.5},
     };
     termin::csg::Solid extruded = termin::csg::extrude(outer, {hole}, 2.0);
     CHECK_FALSE(extruded.is_empty());

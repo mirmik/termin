@@ -2,8 +2,7 @@
 
 #include <components/kinematic_unit_component.hpp>
 
-namespace termin
-{
+namespace termin {
 
     // ActuatorComponent - moves entity along a specified axis.
     //
@@ -14,8 +13,7 @@ namespace termin
     //   actuator.set_axis(1, 0, 0);
     //   actuator.set_coordinate_scale(0.01); // coordinate is centimetres
     //   actuator.set_coordinate(100);       // Move 1 metre along X
-    class ENTITY_API ActuatorComponent : public KinematicUnitComponent
-    {
+    class ENTITY_API ActuatorComponent : public KinematicUnitComponent {
     public:
         ActuatorComponent();
         ~ActuatorComponent() override = default;

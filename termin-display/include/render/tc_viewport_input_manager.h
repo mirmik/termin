@@ -4,10 +4,10 @@
 #ifndef TC_VIEWPORT_INPUT_MANAGER_H
 #define TC_VIEWPORT_INPUT_MANAGER_H
 
-#include "tc_types.h"
-#include "render/termin_display_api.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_viewport_pool.h"
+#include "render/termin_display_api.h"
+#include "tc_types.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus

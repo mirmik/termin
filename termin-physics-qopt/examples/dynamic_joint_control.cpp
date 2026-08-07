@@ -10,64 +10,45 @@ using namespace termin;
 using namespace termin::physics_qopt;
 using namespace termin::robotics;
 
-int main()
-{
+int main() {
     ArticulationUnit3D unit{
         .parent_unit = articulation_root_frame,
         .parent_to_unit_zero = Pose3::identity(),
         .motion_twist_at_unit = {Vec3::unit_y(), Vec3::zero()},
-        .inertia = SpatialInertia3{1.0,
-                                   {0.2, 0.25, 0.3},
-                                   Pose3::translation(0.4, 0.0, 0.0)},
+        .inertia = SpatialInertia3{1.0, {0.2, 0.25, 0.3}, Pose3::translation(0.4, 0.0, 0.0)},
         .limits = {.minimum = -1.5, .maximum = 1.5},
         .diagnostic_name = "shoulder",
     };
     Articulation3D arm({unit}, {{-0.7}, {0.0}}, "dynamic-example");
     DynamicsSystem system;
-    auto dynamics = std::make_unique<Articulation3DDynamicsContribution>(
-        arm, Vec3{0.0, 0.0, -9.81}, "arm-dynamics");
+    auto dynamics = std::make_unique<Articulation3DDynamicsContribution>(arm, Vec3{0.0, 0.0, -9.81}, "arm-dynamics");
     Articulation3DDynamicsContribution* dynamics_ptr = dynamics.get();
     auto motor = std::make_unique<ArticulationMotorContribution>(
         *dynamics_ptr,
         std::vector<ArticulationMotorChannel>{
-            {.dof_index = 0,
-             .effort_limit = 12.0,
-             .diagnostic_name = "shoulder-motor"}},
+            {.dof_index = 0, .effort_limit = 12.0, .diagnostic_name = "shoulder-motor"}},
         "arm-motor");
     ArticulationMotorContribution* motor_ptr = motor.get();
-    const MotorActuatorModel3DResult actuator_model =
-        inverse_dynamics_actuators_from_motor(*motor_ptr);
-    if (!actuator_model.ok() ||
-        system.add_contribution(std::move(motor)) !=
-            DynamicsSystemDiagnostic::None ||
-        system.add_contribution(std::move(dynamics)) !=
-            DynamicsSystemDiagnostic::None ||
-        system.finalize() != DynamicsSystemDiagnostic::None)
-    {
+    const MotorActuatorModel3DResult actuator_model = inverse_dynamics_actuators_from_motor(*motor_ptr);
+    if (!actuator_model.ok() || system.add_contribution(std::move(motor)) != DynamicsSystemDiagnostic::None ||
+        system.add_contribution(std::move(dynamics)) != DynamicsSystemDiagnostic::None ||
+        system.finalize() != DynamicsSystemDiagnostic::None) {
         return 1;
     }
 
-    InverseDynamicsHqpController3D controller(
-        arm, actuator_model.actuators, {0.0, 0.0, -9.81});
+    InverseDynamicsHqpController3D controller(arm, actuator_model.actuators, {0.0, 0.0, -9.81});
     constexpr double time_step = 0.002;
-    for (std::size_t step = 0; step < 1200; ++step)
-    {
+    for (std::size_t step = 0; step < 1200; ++step) {
         JointPostureTask3D posture({0}, {0.6}, {0.0}, 28.0, 10.0);
         JointLimitConstraint3D position_limit({.priority = 0});
-        JointVelocityLimitConstraint3D velocity_limit(
-            {0}, {-2.5}, {2.5}, {.priority = 0});
-        const std::array<const ArticulationTask3D*, 3> tasks{
-            &position_limit, &velocity_limit, &posture};
-        const InverseDynamicsControlResult3D control =
-            controller.solve(tasks, {.time_step = time_step});
+        JointVelocityLimitConstraint3D velocity_limit({0}, {-2.5}, {2.5}, {.priority = 0});
+        const std::array<const ArticulationTask3D*, 3> tasks{&position_limit, &velocity_limit, &posture};
+        const InverseDynamicsControlResult3D control = controller.solve(tasks, {.time_step = time_step});
         if (!control.ok() ||
-            apply_inverse_dynamics_motor_commands(*motor_ptr, control) !=
-                RoboticsControlAdapterDiagnostic3D::None)
-        {
+            apply_inverse_dynamics_motor_commands(*motor_ptr, control) != RoboticsControlAdapterDiagnostic3D::None) {
             return 2;
         }
-        if (!system.step({.time_step = time_step}).ok())
-        {
+        if (!system.step({.time_step = time_step}).ok()) {
             return 3;
         }
     }

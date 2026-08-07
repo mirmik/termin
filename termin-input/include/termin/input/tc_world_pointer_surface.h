@@ -45,13 +45,8 @@ typedef struct tc_world_pointer_event {
 } tc_world_pointer_event;
 
 typedef struct tc_world_pointer_surface_vtable {
-    bool (*project_ray)(
-        tc_component* component,
-        const tc_world_pointer_ray* ray,
-        tc_world_pointer_hit* out_hit);
-    bool (*dispatch_pointer)(
-        tc_component* component,
-        const tc_world_pointer_event* event);
+    bool (*project_ray)(tc_component* component, const tc_world_pointer_ray* ray, tc_world_pointer_hit* out_hit);
+    bool (*dispatch_pointer)(tc_component* component, const tc_world_pointer_event* event);
 } tc_world_pointer_surface_vtable;
 
 typedef struct tc_world_pointer_surface_capability {
@@ -61,22 +56,19 @@ typedef struct tc_world_pointer_surface_capability {
 
 TERMIN_INPUT_API tc_component_cap_id tc_world_pointer_surface_capability_id(void);
 
-TERMIN_INPUT_API bool tc_world_pointer_surface_capability_attach(
-    tc_component* component,
-    const tc_world_pointer_surface_vtable* vtable,
-    void* userdata);
+TERMIN_INPUT_API bool tc_world_pointer_surface_capability_attach(tc_component* component,
+                                                                 const tc_world_pointer_surface_vtable* vtable,
+                                                                 void* userdata);
 
 TERMIN_INPUT_API const tc_world_pointer_surface_capability*
 tc_world_pointer_surface_capability_get(const tc_component* component);
 
-TERMIN_INPUT_API bool tc_world_pointer_surface_project_ray(
-    tc_component* component,
-    const tc_world_pointer_ray* ray,
-    tc_world_pointer_hit* out_hit);
+TERMIN_INPUT_API bool tc_world_pointer_surface_project_ray(tc_component* component,
+                                                           const tc_world_pointer_ray* ray,
+                                                           tc_world_pointer_hit* out_hit);
 
-TERMIN_INPUT_API bool tc_world_pointer_surface_dispatch_pointer(
-    tc_component* component,
-    const tc_world_pointer_event* event);
+TERMIN_INPUT_API bool tc_world_pointer_surface_dispatch_pointer(tc_component* component,
+                                                                const tc_world_pointer_event* event);
 
 #ifdef __cplusplus
 }

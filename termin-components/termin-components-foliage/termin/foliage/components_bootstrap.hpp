@@ -4,6 +4,6 @@
 
 namespace termin {
 
-ENTITY_API void register_builtin_foliage_component_types();
+    ENTITY_API void register_builtin_foliage_component_types();
 
 } // namespace termin

@@ -19,47 +19,67 @@ extern "C" {
 
 namespace {
 
-class ContextBuilderTestDevice final : public tgfx::IRenderDevice {
-public:
-    tgfx::BackendType backend_type() const override { return tgfx::BackendType::Null; }
-    tgfx::BackendCapabilities capabilities() const override { return {}; }
-    void wait_idle() override {}
+    class ContextBuilderTestDevice final : public tgfx::IRenderDevice {
+    public:
+        tgfx::BackendType backend_type() const override {
+            return tgfx::BackendType::Null;
+        }
+        tgfx::BackendCapabilities capabilities() const override {
+            return {};
+        }
+        void wait_idle() override {}
 
-    tgfx::BufferHandle create_buffer(const tgfx::BufferDesc&) override { return {}; }
-    tgfx::TextureHandle create_texture(const tgfx::TextureDesc&) override { return {}; }
-    tgfx::SamplerHandle create_sampler(const tgfx::SamplerDesc&) override { return {}; }
-    tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc&) override { return {}; }
-    tgfx::PipelineHandle create_pipeline(const tgfx::PipelineDesc&) override { return {}; }
-    tgfx::ResourceSetHandle create_bound_resource_set(
-        const tgfx::BoundResourceSetDesc&) override { return {}; }
+        tgfx::BufferHandle create_buffer(const tgfx::BufferDesc&) override {
+            return {};
+        }
+        tgfx::TextureHandle create_texture(const tgfx::TextureDesc&) override {
+            return {};
+        }
+        tgfx::SamplerHandle create_sampler(const tgfx::SamplerDesc&) override {
+            return {};
+        }
+        tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc&) override {
+            return {};
+        }
+        tgfx::PipelineHandle create_pipeline(const tgfx::PipelineDesc&) override {
+            return {};
+        }
+        tgfx::ResourceSetHandle create_bound_resource_set(const tgfx::BoundResourceSetDesc&) override {
+            return {};
+        }
 
-    void destroy(tgfx::BufferHandle) override {}
-    void destroy(tgfx::TextureHandle) override {}
-    void destroy(tgfx::SamplerHandle) override {}
-    void destroy(tgfx::ShaderHandle) override {}
-    void destroy(tgfx::PipelineHandle) override {}
-    void destroy(tgfx::ResourceSetHandle) override {}
+        void destroy(tgfx::BufferHandle) override {}
+        void destroy(tgfx::TextureHandle) override {}
+        void destroy(tgfx::SamplerHandle) override {}
+        void destroy(tgfx::ShaderHandle) override {}
+        void destroy(tgfx::PipelineHandle) override {}
+        void destroy(tgfx::ResourceSetHandle) override {}
 
-    void upload_buffer(
-        tgfx::BufferHandle, std::span<const uint8_t>, uint64_t = 0) override {}
-    void upload_texture(
-        tgfx::TextureHandle, std::span<const uint8_t>, uint32_t = 0) override {}
-    void upload_texture_region(
-        tgfx::TextureHandle, uint32_t, uint32_t, uint32_t, uint32_t,
-        std::span<const uint8_t>, uint32_t = 0) override {}
-    void read_buffer(
-        tgfx::BufferHandle, std::span<uint8_t>, uint64_t = 0) override {}
-    tgfx::TextureDesc texture_desc(tgfx::TextureHandle) const override { return {}; }
-    std::unique_ptr<tgfx::ICommandList> create_command_list(
-        tgfx::QueueType = tgfx::QueueType::Graphics) override { return {}; }
-    void submit(tgfx::ICommandList&) override {}
-    void present() override {}
+        void upload_buffer(tgfx::BufferHandle, std::span<const uint8_t>, uint64_t = 0) override {}
+        void upload_texture(tgfx::TextureHandle, std::span<const uint8_t>, uint32_t = 0) override {}
+        void upload_texture_region(tgfx::TextureHandle,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t,
+                                   uint32_t,
+                                   std::span<const uint8_t>,
+                                   uint32_t = 0) override {}
+        void read_buffer(tgfx::BufferHandle, std::span<uint8_t>, uint64_t = 0) override {}
+        tgfx::TextureDesc texture_desc(tgfx::TextureHandle) const override {
+            return {};
+        }
+        std::unique_ptr<tgfx::ICommandList> create_command_list(tgfx::QueueType = tgfx::QueueType::Graphics) override {
+            return {};
+        }
+        void submit(tgfx::ICommandList&) override {}
+        void present() override {}
 
-    tgfx::TextureHandle ensure_tc_texture(tc_texture* texture) override {
-        if (!texture) return {};
-        return tgfx::TextureHandle{texture->header.pool_index + 100u};
-    }
-};
+        tgfx::TextureHandle ensure_tc_texture(tc_texture* texture) override {
+            if (!texture)
+                return {};
+            return tgfx::TextureHandle{texture->header.pool_index + 100u};
+        }
+    };
 
 } // namespace
 
@@ -69,8 +89,7 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     termin::RenderTopology topology;
     termin::RenderingManager manager(topology);
     termin::RenderEngine engine;
-    auto host = tgfx::GraphicsHost::adopt_isolated_device(
-        std::make_unique<ContextBuilderTestDevice>());
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::make_unique<ContextBuilderTestDevice>());
     REQUIRE(host != nullptr);
     engine.set_graphics_host(*host);
     manager.set_render_engine(&engine);
@@ -90,21 +109,20 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
 
     std::vector<tc_render_target_handle> managed_targets{panel, xr};
     std::unordered_map<int, termin::RenderTargetContextProvider> providers;
-    providers.emplace(
-        TC_RENDER_TARGET_XR_STEREO,
-        [](termin::RenderingManager&,
-           tc_render_target_handle,
-           const std::string&,
-           tc_entity_handle,
-           std::unordered_map<std::string, termin::RenderTargetContext>& contexts,
-           std::string& default_context) {
-            termin::RenderTargetContext context;
-            context.name = "Stereo";
-            context.external_textures["XR_MULTIVIEW_TARGET"] = tgfx::TextureHandle{7};
-            contexts.emplace(context.name, std::move(context));
-            default_context = "Stereo";
-            return true;
-        });
+    providers.emplace(TC_RENDER_TARGET_XR_STEREO,
+                      [](termin::RenderingManager&,
+                         tc_render_target_handle,
+                         const std::string&,
+                         tc_entity_handle,
+                         std::unordered_map<std::string, termin::RenderTargetContext>& contexts,
+                         std::string& default_context) {
+                          termin::RenderTargetContext context;
+                          context.name = "Stereo";
+                          context.external_textures["XR_MULTIVIEW_TARGET"] = tgfx::TextureHandle{7};
+                          contexts.emplace(context.name, std::move(context));
+                          default_context = "Stereo";
+                          return true;
+                      });
     std::unordered_set<uint64_t> warnings;
     std::unordered_map<std::string, termin::RenderTargetContext> contexts;
     std::unordered_map<std::string, tc_entity_handle> internal_entities_by_context;
@@ -132,12 +150,9 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     const termin::RenderTargetContext& context = contexts.at("Stereo");
     CHECK(context.external_textures.at("XR_MULTIVIEW_TARGET") == tgfx::TextureHandle{7});
 
-    tc_texture* panel_texture = tc_texture_get(
-        tc_render_target_get_color_texture(panel));
+    tc_texture* panel_texture = tc_texture_get(tc_render_target_get_color_texture(panel));
     REQUIRE(panel_texture != nullptr);
-    CHECK(
-        context.external_textures.at("PANEL_COLOR") ==
-        tgfx::TextureHandle{panel_texture->header.pool_index + 100u});
+    CHECK(context.external_textures.at("PANEL_COLOR") == tgfx::TextureHandle{panel_texture->header.pool_index + 100u});
 
     tc_render_target_free(xr);
     tc_render_target_free(panel);

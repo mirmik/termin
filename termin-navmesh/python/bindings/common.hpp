@@ -1,16 +1,16 @@
 #pragma once
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
-#include <nanobind/stl/array.h>
-#include <nanobind/ndarray.h>
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 
 namespace termin {
 
-void bind_recast_navmesh_builder(nb::module_& m);
+    void bind_recast_navmesh_builder(nb::module_& m);
 
 } // namespace termin

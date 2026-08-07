@@ -1,15 +1,15 @@
 #include "guard_main.h"
 #include "termin/editor/frame_graph_debugger_source.hpp"
 #include "termin/editor/frame_graph_debugger_view.hpp"
-#include "termin/render/rendering_manager.hpp"
-#include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/frame_graph_capture.hpp"
+#include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/frame_pass.hpp"
-#include "termin/render/render_attachment_context.hpp"
 #include "termin/render/graph_compiler.hpp"
-#include "termin/render/tc_scene_render_ext.hpp"
+#include "termin/render/render_attachment_context.hpp"
+#include "termin/render/rendering_manager.hpp"
 #include "termin/render/tc_pass.hpp"
 #include "termin/render/tc_pipeline_template.hpp"
+#include "termin/render/tc_scene_render_ext.hpp"
 
 #include <cmath>
 #include <optional>
@@ -21,192 +21,199 @@ extern "C" {
 #include "core/tc_component.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
+#include "core/tc_render_lifecycle.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
-#include "core/tc_render_lifecycle.h"
-#include "render/tc_display.h"
-#include "render/tc_pipeline.h"
-#include "render/tc_frame_graph.h"
-#include "render/tc_pipeline_pool.h"
 #include "inspect/tc_inspect_pass_adapter.h"
+#include "render/tc_display.h"
+#include "render/tc_frame_graph.h"
+#include "render/tc_pass.h"
+#include "render/tc_pipeline.h"
+#include "render/tc_pipeline_pool.h"
+#include "render/tc_pipeline_template_registry.h"
 #include "render/tc_render_target.h"
 #include "render/tc_render_target_pool.h"
-#include "render/tc_pipeline_template_registry.h"
-#include "render/tc_pass.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "tgfx/resources/tc_texture.h"
 #include "tgfx/resources/tc_texture_registry.h"
 }
 
-#include <termin/gui_native/combo_box.hpp>
 #include <termin/gui_native/box_layout.hpp>
+#include <termin/gui_native/combo_box.hpp>
 
 #include <termin/gui_native/canvas.hpp>
 #include <termin/gui_native/status_bar.hpp>
 #include <termin/gui_native/tc_document.hpp>
 
-using termin::RenderingManager;
-using termin::RenderTopology;
-using termin::RenderPipeline;
-using termin::ResourceSpec;
-using termin::TcPipelineTemplate;
 using termin::FrameGraphDebugger;
-using termin::FrameGraphDebuggerView;
 using termin::FrameGraphDebuggerMode;
 using termin::FrameGraphDebuggerState;
 using termin::FrameGraphDebuggerSuspendReason;
+using termin::FrameGraphDebuggerView;
+using termin::RenderingManager;
+using termin::RenderPipeline;
+using termin::RenderTopology;
+using termin::ResourceSpec;
+using termin::TcPipelineTemplate;
 
-TEST_CASE("Framegraph preview dimensions preserve aspect ratio under a long-edge bound")
-{
-    CHECK(termin::bounded_frame_graph_capture_dimensions(3840, 2160, 960) ==
-          std::make_pair(960, 540));
-    CHECK(termin::bounded_frame_graph_capture_dimensions(800, 1200, 600) ==
-          std::make_pair(400, 600));
-    CHECK(termin::bounded_frame_graph_capture_dimensions(320, 200, 960) ==
-          std::make_pair(320, 200));
-    CHECK(termin::bounded_frame_graph_capture_dimensions(1, 4096, 1) ==
-          std::make_pair(1, 1));
+TEST_CASE("Framegraph preview dimensions preserve aspect ratio under a long-edge bound") {
+    CHECK(termin::bounded_frame_graph_capture_dimensions(3840, 2160, 960) == std::make_pair(960, 540));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(800, 1200, 600) == std::make_pair(400, 600));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(320, 200, 960) == std::make_pair(320, 200));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(1, 4096, 1) == std::make_pair(1, 1));
 }
 
 namespace {
 
-class TestFrameGraphDebuggerSource final
-    : public termin::IFrameGraphDebuggerSource {
-public:
-    TestFrameGraphDebuggerSource() {
-        state_ = std::make_shared<termin::FrameGraphDebuggerSnapshot>();
-        state_->revision = 9;
-        state_->state = FrameGraphDebuggerState::Error;
-        state_->status_detail = "transport failed";
+    class TestFrameGraphDebuggerSource final : public termin::IFrameGraphDebuggerSource {
+    public:
+        TestFrameGraphDebuggerSource() {
+            state_ = std::make_shared<termin::FrameGraphDebuggerSnapshot>();
+            state_->revision = 9;
+            state_->state = FrameGraphDebuggerState::Error;
+            state_->status_detail = "transport failed";
+        }
+
+        std::shared_ptr<const termin::FrameGraphDebuggerSnapshot> snapshot() const override {
+            return state_;
+        }
+        bool refresh() override {
+            ++refresh_count;
+            return true;
+        }
+        void finish_frame() override {
+            ++finish_count;
+        }
+        void connect() override {
+            ++connect_count;
+        }
+        void disconnect() override {
+            ++disconnect_count;
+        }
+        void close() override {
+            ++close_count;
+        }
+        bool select_target(std::uint64_t) override {
+            return false;
+        }
+        bool select_pass(std::optional<std::uint64_t>) override {
+            return false;
+        }
+        void set_mode(FrameGraphDebuggerMode mode) override {
+            state_->mode = mode;
+        }
+        void set_selected_symbol(const std::string& value) override {
+            state_->selected_symbol = value;
+        }
+        void set_selected_resource(const std::string& value) override {
+            state_->selected_resource = value;
+        }
+        void set_channel_mode(int value) override {
+            state_->channel_mode = value;
+        }
+        void set_paused(bool value) override {
+            state_->paused = value;
+        }
+        void set_highlight_hdr(bool value) override {
+            state_->highlight_hdr = value;
+        }
+        std::string analyze_hdr() override {
+            return "No capture available";
+        }
+        bool render_image(tgfx::RenderContext2&,
+                          tgfx::TextureHandle,
+                          termin::FrameGraphDebuggerImageKind,
+                          std::uint32_t,
+                          std::uint32_t,
+                          int,
+                          bool) override {
+            return false;
+        }
+        std::vector<std::uint8_t> read_depth_normalized(tgfx::IRenderDevice&, int*, int*) override {
+            return {};
+        }
+
+        int refresh_count = 0;
+        int finish_count = 0;
+        int connect_count = 0;
+        int disconnect_count = 0;
+        int close_count = 0;
+
+    private:
+        std::shared_ptr<termin::FrameGraphDebuggerSnapshot> state_;
+    };
+
+    struct RenderLifecycleCounter {
+        tc_component component;
+        int attach_count = 0;
+        int detach_count = 0;
+        bool attach_context_valid = false;
+        bool detach_context_valid = false;
+        bool detach_saw_pipeline = false;
+        std::optional<termin::RenderAttachmentContext> retained_context;
+    };
+
+    void lifecycle_counter_on_render_attach(tc_component* component, const tc_render_attachment_context* context) {
+        auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
+        counter->attach_count++;
+        counter->attach_context_valid = tc_render_attachment_context_valid(context);
+        counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
     }
 
-    std::shared_ptr<const termin::FrameGraphDebuggerSnapshot>
-    snapshot() const override { return state_; }
-    bool refresh() override { ++refresh_count; return true; }
-    void finish_frame() override { ++finish_count; }
-    void connect() override { ++connect_count; }
-    void disconnect() override { ++disconnect_count; }
-    void close() override { ++close_count; }
-    bool select_target(std::uint64_t) override { return false; }
-    bool select_pass(std::optional<std::uint64_t>) override { return false; }
-    void set_mode(FrameGraphDebuggerMode mode) override { state_->mode = mode; }
-    void set_selected_symbol(const std::string& value) override {
-        state_->selected_symbol = value;
-    }
-    void set_selected_resource(const std::string& value) override {
-        state_->selected_resource = value;
-    }
-    void set_channel_mode(int value) override { state_->channel_mode = value; }
-    void set_paused(bool value) override { state_->paused = value; }
-    void set_highlight_hdr(bool value) override { state_->highlight_hdr = value; }
-    std::string analyze_hdr() override { return "No capture available"; }
-    bool render_image(
-        tgfx::RenderContext2&,
-        tgfx::TextureHandle,
-        termin::FrameGraphDebuggerImageKind,
-        std::uint32_t,
-        std::uint32_t,
-        int,
-        bool) override { return false; }
-    std::vector<std::uint8_t> read_depth_normalized(
-        tgfx::IRenderDevice&,
-        int*,
-        int*) override { return {}; }
-
-    int refresh_count = 0;
-    int finish_count = 0;
-    int connect_count = 0;
-    int disconnect_count = 0;
-    int close_count = 0;
-
-private:
-    std::shared_ptr<termin::FrameGraphDebuggerSnapshot> state_;
-};
-
-struct RenderLifecycleCounter {
-    tc_component component;
-    int attach_count = 0;
-    int detach_count = 0;
-    bool attach_context_valid = false;
-    bool detach_context_valid = false;
-    bool detach_saw_pipeline = false;
-    std::optional<termin::RenderAttachmentContext> retained_context;
-};
-
-void lifecycle_counter_on_render_attach(
-    tc_component* component,
-    const tc_render_attachment_context* context
-)
-{
-    auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
-    counter->attach_count++;
-    counter->attach_context_valid = tc_render_attachment_context_valid(context);
-    counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
-}
-
-void lifecycle_counter_on_render_detach(
-    tc_component* component,
-    const tc_render_attachment_context* context
-)
-{
-    auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
-    counter->detach_count++;
-    counter->detach_context_valid = tc_render_attachment_context_valid(context);
-    counter->detach_saw_pipeline = tc_pipeline_handle_valid(
-        tc_render_attachment_context_get_pipeline(context, "lifecycle-template")
-    );
-    counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
-}
-
-const tc_render_lifecycle_vtable lifecycle_counter_render_vtable = {
-    .on_render_attach = lifecycle_counter_on_render_attach,
-    .on_render_detach = lifecycle_counter_on_render_detach,
-};
-
-RenderLifecycleCounter make_render_lifecycle_counter()
-{
-    RenderLifecycleCounter counter;
-    tc_component_init(&counter.component, nullptr);
-    REQUIRE(tc_render_lifecycle_capability_attach(
-        &counter.component, &lifecycle_counter_render_vtable, &counter));
-    return counter;
-}
-
-TcPipelineTemplate make_empty_pipeline_template(const std::string& name)
-{
-    TcPipelineTemplate resource = TcPipelineTemplate::declare(name + "-uuid", name);
-    tc_pipeline_template_payload_desc payload = {};
-    payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
-    payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
-    payload.name = name.c_str();
-    REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
-    return resource;
-}
-
-class FrameGraphDebuggerProbePass final : public termin::CxxFramePass {
-public:
-    FrameGraphDebuggerProbePass() {
-        pass_name_set("DebuggerProbe");
+    void lifecycle_counter_on_render_detach(tc_component* component, const tc_render_attachment_context* context) {
+        auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
+        counter->detach_count++;
+        counter->detach_context_valid = tc_render_attachment_context_valid(context);
+        counter->detach_saw_pipeline =
+            tc_pipeline_handle_valid(tc_render_attachment_context_get_pipeline(context, "lifecycle-template"));
+        counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
     }
 
-    std::set<const char*> compute_reads() const override {
-        return {"input_color"};
+    const tc_render_lifecycle_vtable lifecycle_counter_render_vtable = {
+        .on_render_attach = lifecycle_counter_on_render_attach,
+        .on_render_detach = lifecycle_counter_on_render_detach,
+    };
+
+    RenderLifecycleCounter make_render_lifecycle_counter() {
+        RenderLifecycleCounter counter;
+        tc_component_init(&counter.component, nullptr);
+        REQUIRE(tc_render_lifecycle_capability_attach(&counter.component, &lifecycle_counter_render_vtable, &counter));
+        return counter;
     }
 
-    std::set<const char*> compute_writes() const override {
-        return {"probe_color"};
+    TcPipelineTemplate make_empty_pipeline_template(const std::string& name) {
+        TcPipelineTemplate resource = TcPipelineTemplate::declare(name + "-uuid", name);
+        tc_pipeline_template_payload_desc payload = {};
+        payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+        payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
+        payload.name = name.c_str();
+        REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
+        return resource;
     }
 
-    std::vector<std::string> get_internal_symbols() const override {
-        return {"before_probe", "after_probe"};
-    }
-};
+    class FrameGraphDebuggerProbePass final : public termin::CxxFramePass {
+    public:
+        FrameGraphDebuggerProbePass() {
+            pass_name_set("DebuggerProbe");
+        }
+
+        std::set<const char*> compute_reads() const override {
+            return {"input_color"};
+        }
+
+        std::set<const char*> compute_writes() const override {
+            return {"probe_color"};
+        }
+
+        std::vector<std::string> get_internal_symbols() const override {
+            return {"before_probe", "after_probe"};
+        }
+    };
 
 } // namespace
 
-TEST_CASE("Graph compiler preserves FBO resource params on generated names")
-{
+TEST_CASE("Graph compiler preserves FBO resource params on generated names") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -261,8 +268,7 @@ TEST_CASE("Graph compiler preserves FBO resource params on generated names")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler treats render target input as external resources")
-{
+TEST_CASE("Graph compiler treats render target input as external resources") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -343,8 +349,7 @@ TEST_CASE("Graph compiler treats render target input as external resources")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler allows passes to write into render target input")
-{
+TEST_CASE("Graph compiler allows passes to write into render target input") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -382,8 +387,7 @@ TEST_CASE("Graph compiler allows passes to write into render target input")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
-{
+TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -419,7 +423,8 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
             found_external = true;
             CHECK(spec.resource_type == "external_color");
         }
-        if (spec.resource == "DepthPass_1_output_res") found_output = true;
+        if (spec.resource == "DepthPass_1_output_res")
+            found_output = true;
     }
     CHECK(found_external);
     CHECK(found_output);
@@ -439,8 +444,7 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler creates FBO attachment views for FboSplit")
-{
+TEST_CASE("Graph compiler creates FBO attachment views for FboSplit") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -472,8 +476,7 @@ TEST_CASE("Graph compiler creates FBO attachment views for FboSplit")
     CHECK(naming.resource_views["RT_COLOR.depth"].attachment == termin::AttachmentKind::Depth);
 }
 
-TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO")
-{
+TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -520,8 +523,7 @@ TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output")
-{
+TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -568,8 +570,7 @@ TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler supports explicit depth color conversion passes")
-{
+TEST_CASE("Graph compiler supports explicit depth color conversion passes") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -614,8 +615,7 @@ TEST_CASE("Graph compiler supports explicit depth color conversion passes")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler supports standalone texture resource nodes")
-{
+TEST_CASE("Graph compiler supports standalone texture resource nodes") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -675,8 +675,7 @@ TEST_CASE("Graph compiler supports standalone texture resource nodes")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler creates typed temporary texture resources for empty inputs")
-{
+TEST_CASE("Graph compiler creates typed temporary texture resources for empty inputs") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -719,8 +718,7 @@ TEST_CASE("Graph compiler creates typed temporary texture resources for empty in
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler rejects direct resource type conversion without split or join")
-{
+TEST_CASE("Graph compiler rejects direct resource type conversion without split or join") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -751,8 +749,7 @@ TEST_CASE("Graph compiler rejects direct resource type conversion without split 
     REQUIRE(threw);
 }
 
-TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered resources")
-{
+TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered resources") {
     const char* json = R"JSON(
 {
   "name": "xr_pipeline",
@@ -782,14 +779,14 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
     TcPipelineTemplate published = make_empty_pipeline_template("xr-multiview-graph");
     termin::RenderPipeline* pipeline = tc::compile_graph(graph, published);
     REQUIRE(pipeline != nullptr);
-    const tc_pipeline_template* pipeline_template =
-        tc_pipeline_template_get(pipeline->template_handle());
+    const tc_pipeline_template* pipeline_template = tc_pipeline_template_get(pipeline->template_handle());
     REQUIRE(pipeline_template != nullptr);
     CHECK(pipeline_template->execution_model == TC_PIPELINE_EXECUTION_XR_MULTIVIEW);
 
     bool found = false;
     for (const auto& spec : pipeline->specs()) {
-        if (spec.resource != "stereo_color") continue;
+        if (spec.resource != "stereo_color")
+            continue;
         found = true;
         CHECK(spec.resource_type == "multiview_fbo");
         CHECK(spec.samples == 4);
@@ -801,8 +798,7 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing")
-{
+TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing") {
     const char* json = R"JSON(
 {
   "name": "mixed_pipeline",
@@ -823,8 +819,7 @@ TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing")
     CHECK_THROWS_AS(tc::compile_graph(graph), tc::GraphCompileError);
 }
 
-TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
-{
+TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -864,8 +859,7 @@ TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler prefers External RT slot over display name")
-{
+TEST_CASE("Graph compiler prefers External RT slot over display name") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -896,8 +890,7 @@ TEST_CASE("Graph compiler prefers External RT slot over display name")
     CHECK(naming.socket_names["1"]["fbo"] == "repeatTex");
 }
 
-TEST_CASE("Graph compiler uses unnamed slot for External RT without name")
-{
+TEST_CASE("Graph compiler uses unnamed slot for External RT without name") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -927,8 +920,7 @@ TEST_CASE("Graph compiler uses unnamed slot for External RT without name")
     CHECK(naming.socket_names["1"]["fbo"] == "unnamed");
 }
 
-TEST_CASE("RenderingManager detach_scene removes attached scene")
-{
+TEST_CASE("RenderingManager detach_scene removes attached scene") {
     RenderTopology topology;
     RenderingManager manager(topology);
 
@@ -952,8 +944,7 @@ TEST_CASE("RenderingManager detach_scene removes attached scene")
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
-{
+TEST_CASE("RenderingManager render lifecycle notifications are not duplicated") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
@@ -996,8 +987,7 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     tc_scene_free(scene);
 }
 
-TEST_CASE("Scene render mount strongly owns canonical pipeline templates")
-{
+TEST_CASE("Scene render mount strongly owns canonical pipeline templates") {
     tc_scene_render_mount_extension_init();
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -1025,8 +1015,7 @@ TEST_CASE("Scene render mount strongly owns canonical pipeline templates")
     CHECK_FALSE(tc_pipeline_template_is_valid(original));
 }
 
-TEST_CASE("RenderingManager preserves host viewport until forced scene teardown")
-{
+TEST_CASE("RenderingManager preserves host viewport until forced scene teardown") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1055,8 +1044,7 @@ TEST_CASE("RenderingManager preserves host viewport until forced scene teardown"
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebugger polls live RenderingManager targets")
-{
+TEST_CASE("FrameGraphDebugger polls live RenderingManager targets") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1096,8 +1084,7 @@ TEST_CASE("FrameGraphDebugger polls live RenderingManager targets")
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps document lifecycle explicit")
-{
+TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps document lifecycle explicit") {
     RenderTopology topology;
     RenderingManager manager(topology);
     FrameGraphDebugger debugger(manager);
@@ -1106,8 +1093,7 @@ TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps docume
     termin::gui_native::TcDocument document(handle);
     int render_requests = 0;
 
-    FrameGraphDebuggerView view(
-        document, debugger, [&render_requests]() { ++render_requests; });
+    FrameGraphDebuggerView view(document, debugger, [&render_requests]() { ++render_requests; });
     REQUIRE_EQ(tc_ui_document_root_count(handle), 1u);
     CHECK_EQ(std::string(view.root_widget()->stable_id()), "editor.framegraph-debugger");
     CHECK_EQ(std::string(view.target_combo()->stable_id()), "editor.framegraph.target");
@@ -1115,36 +1101,20 @@ TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps docume
     CHECK_EQ(std::string(view.pass_combo()->stable_id()), "editor.framegraph.pass");
     CHECK_EQ(std::string(view.symbol_combo()->stable_id()), "editor.framegraph.symbol");
     CHECK_EQ(std::string(view.resource_combo()->stable_id()), "editor.framegraph.resource");
-    CHECK_EQ(
-        std::string(view.main_sampling_combo()->stable_id()),
-        "editor.framegraph.main-sampling");
-    CHECK_EQ(
-        std::string(view.depth_sampling_combo()->stable_id()),
-        "editor.framegraph.depth-sampling");
+    CHECK_EQ(std::string(view.main_sampling_combo()->stable_id()), "editor.framegraph.main-sampling");
+    CHECK_EQ(std::string(view.depth_sampling_combo()->stable_id()), "editor.framegraph.depth-sampling");
     CHECK_EQ(view.main_sampling_combo()->selected_index(), 0);
     CHECK_EQ(view.depth_sampling_combo()->selected_index(), 0);
-    CHECK_EQ(
-        view.main_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_LINEAR);
-    CHECK_EQ(
-        view.depth_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_LINEAR);
+    CHECK_EQ(view.main_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_LINEAR);
+    CHECK_EQ(view.depth_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_LINEAR);
 
     view.main_sampling_combo()->set_selected_index(1);
-    CHECK_EQ(
-        view.main_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_NEAREST);
-    CHECK_EQ(
-        view.depth_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_LINEAR);
+    CHECK_EQ(view.main_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_NEAREST);
+    CHECK_EQ(view.depth_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_LINEAR);
     view.depth_sampling_combo()->set_selected_index(1);
-    CHECK_EQ(
-        view.depth_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_NEAREST);
+    CHECK_EQ(view.depth_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_NEAREST);
     view.main_sampling_combo()->set_selected_index(0);
-    CHECK_EQ(
-        view.main_preview_canvas()->texture_sampling(),
-        TC_UI_TEXTURE_SAMPLING_LINEAR);
+    CHECK_EQ(view.main_preview_canvas()->texture_sampling(), TC_UI_TEXTURE_SAMPLING_LINEAR);
 
     CHECK(view.activate());
     CHECK(view.active());
@@ -1163,8 +1133,7 @@ TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps docume
     tc_ui_document_destroy(handle);
 }
 
-TEST_CASE("FrameGraphDebuggerView projects source errors and closes the source session")
-{
+TEST_CASE("FrameGraphDebuggerView projects source errors and closes the source session") {
     const tc_ui_document_handle handle = tc_ui_document_create();
     termin::gui_native::TcDocument document(handle);
     auto source = std::make_shared<TestFrameGraphDebuggerSource>();
@@ -1184,8 +1153,7 @@ TEST_CASE("FrameGraphDebuggerView projects source errors and closes the source s
     tc_ui_document_destroy(handle);
 }
 
-TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions and teardown")
-{
+TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions and teardown") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1206,9 +1174,7 @@ TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions an
     auto snapshot = source->snapshot();
     REQUIRE_EQ(snapshot->targets.size(), 1u);
     CHECK(snapshot->targets[0].id != 0);
-    CHECK_EQ(
-        snapshot->targets[0].label,
-        "SourceDisplay / SourceViewport / SourceTarget");
+    CHECK_EQ(snapshot->targets[0].label, "SourceDisplay / SourceViewport / SourceTarget");
     REQUIRE_EQ(snapshot->passes.size(), 1u);
     CHECK_EQ(snapshot->passes[0].authored_index, 0u);
     CHECK_EQ(snapshot->passes[0].name, "DebuggerProbe");
@@ -1239,8 +1205,7 @@ TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions an
     CHECK(source->refresh());
     snapshot = source->snapshot();
     CHECK(snapshot->state == FrameGraphDebuggerState::Suspended);
-    CHECK(snapshot->suspend_reason ==
-          FrameGraphDebuggerSuspendReason::TargetRemoved);
+    CHECK(snapshot->suspend_reason == FrameGraphDebuggerSuspendReason::TargetRemoved);
 
     source->close();
     snapshot = source->snapshot();
@@ -1258,8 +1223,7 @@ TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions an
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebuggerView projects topology, actions, selection and suspension")
-{
+TEST_CASE("FrameGraphDebuggerView projects topology, actions, selection and suspension") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1315,8 +1279,7 @@ TEST_CASE("FrameGraphDebuggerView projects topology, actions, selection and susp
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebugger owns pass symbol and resource selection")
-{
+TEST_CASE("FrameGraphDebugger owns pass symbol and resource selection") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1366,8 +1329,7 @@ TEST_CASE("FrameGraphDebugger owns pass symbol and resource selection")
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebugger reconciles pipeline replacement and target removal")
-{
+TEST_CASE("FrameGraphDebugger reconciles pipeline replacement and target removal") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1416,8 +1378,7 @@ TEST_CASE("FrameGraphDebugger reconciles pipeline replacement and target removal
     tc_scene_free(scene);
 }
 
-TEST_CASE("FrameGraphDebugger exact target follows recreated viewport only on connect")
-{
+TEST_CASE("FrameGraphDebugger exact target follows recreated viewport only on connect") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_handle scene = tc_scene_new();
@@ -1472,8 +1433,7 @@ TEST_CASE("FrameGraphDebugger exact target follows recreated viewport only on co
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fails")
-{
+TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fails") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
@@ -1488,8 +1448,7 @@ TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fai
     tc_scene_add_render_target_config(scene, &target_config);
 
     TcPipelineTemplate first = make_empty_pipeline_template("rollback-template");
-    TcPipelineTemplate duplicate = TcPipelineTemplate::declare(
-        "rollback-template-duplicate-uuid", "rollback-template");
+    TcPipelineTemplate duplicate = TcPipelineTemplate::declare("rollback-template-duplicate-uuid", "rollback-template");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
     duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
@@ -1507,8 +1466,7 @@ TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fai
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderTopology preserves live pipelines when replacement instantiation fails")
-{
+TEST_CASE("RenderTopology preserves live pipelines when replacement instantiation fails") {
     RenderTopology topology;
     tc_scene_render_mount_extension_init();
     tc_scene_handle scene = tc_scene_new();
@@ -1520,8 +1478,7 @@ TEST_CASE("RenderTopology preserves live pipelines when replacement instantiatio
     tc_pipeline_handle original = topology.get_pipeline(scene, "stable-pipeline");
     REQUIRE(tc_pipeline_handle_valid(original));
 
-    TcPipelineTemplate duplicate = TcPipelineTemplate::declare(
-        "failed-replacement-uuid", "stable-pipeline");
+    TcPipelineTemplate duplicate = TcPipelineTemplate::declare("failed-replacement-uuid", "stable-pipeline");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
     duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
@@ -1536,8 +1493,7 @@ TEST_CASE("RenderTopology preserves live pipelines when replacement instantiatio
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
-{
+TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene") {
     RenderTopology topology;
     RenderingManager manager(topology);
     const size_t baseline_displays = tc_display_pool_count();
@@ -1547,9 +1503,7 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_scene_set_name(scene, "rendering-manager-viewport-scene-test");
     tc_scene_render_mount_extension_init();
 
-    manager.set_display_factory([](const std::string& name) {
-        return tc_display_new(name.c_str(), nullptr);
-    });
+    manager.set_display_factory([](const std::string& name) { return tc_display_new(name.c_str(), nullptr); });
 
     tc_render_target_config rt_config;
     tc_render_target_config_init(&rt_config);
@@ -1613,8 +1567,7 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderingManager restores scene render targets for headless hosts")
-{
+TEST_CASE("RenderingManager restores scene render targets for headless hosts") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
@@ -1624,9 +1577,7 @@ TEST_CASE("RenderingManager restores scene render targets for headless hosts")
     const size_t baseline_displays = tc_display_pool_count();
     const size_t baseline_viewports = tc_viewport_pool_count();
 
-    manager.set_pipeline_factory([](const std::string& name) {
-        return tc_pipeline_create(name.c_str());
-    });
+    manager.set_pipeline_factory([](const std::string& name) { return tc_pipeline_create(name.c_str()); });
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -1648,8 +1599,7 @@ TEST_CASE("RenderingManager restores scene render targets for headless hosts")
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
     REQUIRE_EQ(manager.managed_render_targets().size(), 1u);
 
-    const tc_render_target_handle target =
-        topology.find_render_target(scene, "HeadlessTexture");
+    const tc_render_target_handle target = topology.find_render_target(scene, "HeadlessTexture");
     REQUIRE(tc_render_target_handle_valid(target));
     CHECK_EQ(tc_render_target_get_width(target), 768);
     CHECK_EQ(tc_render_target_get_height(target), 512);
@@ -1664,8 +1614,7 @@ TEST_CASE("RenderingManager restores scene render targets for headless hosts")
     tc_scene_free(scene);
 }
 
-TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty without render target")
-{
+TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty without render target") {
     RenderTopology topology;
     RenderingManager manager(topology);
     const size_t baseline_displays = tc_display_pool_count();
@@ -1675,9 +1624,7 @@ TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty withou
     tc_scene_set_name(scene, "rendering-manager-empty-viewport-scene-test");
     tc_scene_render_mount_extension_init();
 
-    manager.set_display_factory([](const std::string& name) {
-        return tc_display_new(name.c_str(), nullptr);
-    });
+    manager.set_display_factory([](const std::string& name) { return tc_display_new(name.c_str(), nullptr); });
 
     const size_t baseline_targets = tc_render_target_pool_count();
 
@@ -1713,8 +1660,7 @@ TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty withou
     tc_scene_free(scene);
 }
 
-TEST_CASE("Viewport references render target without owning it")
-{
+TEST_CASE("Viewport references render target without owning it") {
     tc_viewport_handle viewport = tc_viewport_new("flat-viewport", TC_SCENE_HANDLE_INVALID);
     REQUIRE(tc_viewport_handle_valid(viewport));
 
@@ -1747,8 +1693,7 @@ TEST_CASE("Viewport references render target without owning it")
     tc_render_target_free(second);
 }
 
-TEST_CASE("Render target ensure_textures refreshes owned texture size")
-{
+TEST_CASE("Render target ensure_textures refreshes owned texture size") {
     tc_render_target_handle rt = tc_render_target_new("resize-target");
     REQUIRE(tc_render_target_handle_valid(rt));
 
@@ -1770,8 +1715,7 @@ TEST_CASE("Render target ensure_textures refreshes owned texture size")
     tc_render_target_free(rt);
 }
 
-TEST_CASE("RenderingManager attach detach restores editor render counts")
-{
+TEST_CASE("RenderingManager attach detach restores editor render counts") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
@@ -1805,9 +1749,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
         tc_display_set_auto_remove_when_empty(display, true);
         return display;
     });
-    manager.set_pipeline_factory([](const std::string& name) {
-        return tc_pipeline_create(name.c_str());
-    });
+    manager.set_pipeline_factory([](const std::string& name) { return tc_pipeline_create(name.c_str()); });
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -1874,8 +1816,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     tc_scene_free(editor_scene);
 }
 
-TEST_CASE("Default pipeline color FBOs inherit output render target format")
-{
+TEST_CASE("Default pipeline color FBOs inherit output render target format") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_pipeline_handle pipeline_handle = manager.make_default_pipeline();

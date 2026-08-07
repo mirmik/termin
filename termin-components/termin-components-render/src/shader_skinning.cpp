@@ -2,103 +2,80 @@
 
 #include "termin/render/shader_skinning.hpp"
 #include "termin/render/material_pipeline.hpp"
-#include <tcbase/tc_log.hpp>
 #include <string>
+#include <tcbase/tc_log.hpp>
 #include <unordered_set>
 
 namespace termin {
 
-MaterialPipelinePassContract legacy_full_material_pass_contract()
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = "legacy_material";
-    contract.required_material_fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.vertex_output_adapter =
-        material_pipeline_standard_material_vertex_output_adapter();
-    contract.static_vertex_transform =
-        material_pipeline_make_static_mesh_vertex_transform_provider(
-            "static",
-            MeshVertexTransformProfile::Material,
-            "draw_data.u_model");
-    contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_mesh_vertex_transform_provider(
-            "skinned",
-            MeshVertexTransformProfile::Material,
-            "draw_data.u_model");
-    contract.static_vertex_transform->resources.push_back(
-        material_pipeline_draw_resource_decl(
-            "draw_data", TC_SHADER_STAGE_VERTEX, 64u));
-    contract.skinned_vertex_transform->resources.push_back(
-        material_pipeline_draw_resource_decl(
-            "draw_data", TC_SHADER_STAGE_VERTEX, 64u));
-    return contract;
-}
-
-namespace {
-
-bool should_log_unsupported_skinning_shader(
-    const std::string& phase_mark,
-    TcShader original_shader
-) {
-    static std::unordered_set<std::string> logged_keys;
-    std::string key = phase_mark;
-    key += '|';
-    key += original_shader.uuid();
-    key += '|';
-    key += std::to_string(static_cast<unsigned>(original_shader.language()));
-    return logged_keys.insert(key).second;
-}
-
-} // namespace
-
-TcShader get_skinned_shader_for_pass(
-    const MaterialPipelinePassContract& pass_contract,
-    TcShader original_shader)
-{
-    if (!original_shader.is_valid()) {
-        return TcShader();
+    MaterialPipelinePassContract legacy_full_material_pass_contract() {
+        MaterialPipelinePassContract contract;
+        contract.debug_name = "legacy_material";
+        contract.required_material_fragment_input = material_pipeline_standard_material_fragment_interface();
+        contract.vertex_output_adapter = material_pipeline_standard_material_vertex_output_adapter();
+        contract.static_vertex_transform = material_pipeline_make_static_mesh_vertex_transform_provider(
+            "static", MeshVertexTransformProfile::Material, "draw_data.u_model");
+        contract.skinned_vertex_transform = material_pipeline_make_skinned_mesh_vertex_transform_provider(
+            "skinned", MeshVertexTransformProfile::Material, "draw_data.u_model");
+        contract.static_vertex_transform->resources.push_back(
+            material_pipeline_draw_resource_decl("draw_data", TC_SHADER_STAGE_VERTEX, 64u));
+        contract.skinned_vertex_transform->resources.push_back(
+            material_pipeline_draw_resource_decl("draw_data", TC_SHADER_STAGE_VERTEX, 64u));
+        return contract;
     }
-    if (original_shader.language() == TC_SHADER_LANGUAGE_SLANG) {
-        if (!pass_contract.skinned_vertex_transform.has_value()) {
-            if (should_log_unsupported_skinning_shader(pass_contract.debug_name, original_shader)) {
-                tc::Log::error(
-                    "[get_skinned_shader] pass '%s' has no skinned vertex transform contract",
-                    pass_contract.debug_name.c_str());
-            }
-            return TcShader();
+
+    namespace {
+
+        bool should_log_unsupported_skinning_shader(const std::string& phase_mark, TcShader original_shader) {
+            static std::unordered_set<std::string> logged_keys;
+            std::string key = phase_mark;
+            key += '|';
+            key += original_shader.uuid();
+            key += '|';
+            key += std::to_string(static_cast<unsigned>(original_shader.language()));
+            return logged_keys.insert(key).second;
         }
 
-        MaterialShaderOverrideRequest request{};
-        request.original_shader = original_shader;
-        request.vertex_transform_kind = VertexTransformKind::SkinnedMesh;
-        request.pass_contract = pass_contract;
-        request.vertex_transform_contract = pass_contract.skinned_vertex_transform;
-        request.shader_variant_op = TC_SHADER_VARIANT_SKINNING;
-        request.debug_context = "SkinnedMeshRenderer";
-        return assemble_material_shader_override(request);
-    }
-    if (should_log_unsupported_skinning_shader(pass_contract.debug_name, original_shader)) {
-        tc::Log::error(
-            "[get_skinned_shader] Shader '%s' uses unsupported source language %u; "
-            "skinning variants require Slang material shaders",
-            original_shader.name(),
-            static_cast<unsigned>(original_shader.language()));
-    }
-    return TcShader();
-}
+    } // namespace
 
-TcShader get_skinned_shader(const std::string& phase_mark, TcShader original_shader) {
-    (void)phase_mark;
-    return get_skinned_shader_for_pass(
-        legacy_full_material_pass_contract(),
-        original_shader);
-}
+    TcShader get_skinned_shader_for_pass(const MaterialPipelinePassContract& pass_contract, TcShader original_shader) {
+        if (!original_shader.is_valid()) {
+            return TcShader();
+        }
+        if (original_shader.language() == TC_SHADER_LANGUAGE_SLANG) {
+            if (!pass_contract.skinned_vertex_transform.has_value()) {
+                if (should_log_unsupported_skinning_shader(pass_contract.debug_name, original_shader)) {
+                    tc::Log::error("[get_skinned_shader] pass '%s' has no skinned vertex transform contract",
+                                   pass_contract.debug_name.c_str());
+                }
+                return TcShader();
+            }
 
-TcShader get_skinned_shader(TcShader original_shader) {
-    return get_skinned_shader_for_pass(
-        legacy_full_material_pass_contract(),
-        original_shader);
-}
+            MaterialShaderOverrideRequest request{};
+            request.original_shader = original_shader;
+            request.vertex_transform_kind = VertexTransformKind::SkinnedMesh;
+            request.pass_contract = pass_contract;
+            request.vertex_transform_contract = pass_contract.skinned_vertex_transform;
+            request.shader_variant_op = TC_SHADER_VARIANT_SKINNING;
+            request.debug_context = "SkinnedMeshRenderer";
+            return assemble_material_shader_override(request);
+        }
+        if (should_log_unsupported_skinning_shader(pass_contract.debug_name, original_shader)) {
+            tc::Log::error("[get_skinned_shader] Shader '%s' uses unsupported source language %u; "
+                           "skinning variants require Slang material shaders",
+                           original_shader.name(),
+                           static_cast<unsigned>(original_shader.language()));
+        }
+        return TcShader();
+    }
+
+    TcShader get_skinned_shader(const std::string& phase_mark, TcShader original_shader) {
+        (void)phase_mark;
+        return get_skinned_shader_for_pass(legacy_full_material_pass_contract(), original_shader);
+    }
+
+    TcShader get_skinned_shader(TcShader original_shader) {
+        return get_skinned_shader_for_pass(legacy_full_material_pass_contract(), original_shader);
+    }
 
 } // namespace termin

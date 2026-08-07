@@ -2,34 +2,34 @@
 
 namespace termin {
 
-EditorSnapRegistry& EditorSnapRegistry::instance() {
-    static EditorSnapRegistry editor_snap_registry;
-    return editor_snap_registry;
-}
-
-void EditorSnapRegistry::register_provider(std::unique_ptr<EditorSnapProvider> provider) {
-    if (provider) {
-        _providers.push_back(std::move(provider));
-    }
-}
-
-bool EditorSnapRegistry::snap(const EditorSnapRequest& request, EditorSnapResult& result) {
-    if (request.source == EditorSnapSource::None) {
-        return false;
+    EditorSnapRegistry& EditorSnapRegistry::instance() {
+        static EditorSnapRegistry editor_snap_registry;
+        return editor_snap_registry;
     }
 
-    if (request.source == EditorSnapSource::VisibleGeometry) {
-        result.success = true;
-        result.position = request.reference_position;
-        return true;
-    }
-
-    for (const auto& provider : _providers) {
-        if (provider->snap(request, result) && result.success) {
-            return true;
+    void EditorSnapRegistry::register_provider(std::unique_ptr<EditorSnapProvider> provider) {
+        if (provider) {
+            _providers.push_back(std::move(provider));
         }
     }
-    return false;
-}
+
+    bool EditorSnapRegistry::snap(const EditorSnapRequest& request, EditorSnapResult& result) {
+        if (request.source == EditorSnapSource::None) {
+            return false;
+        }
+
+        if (request.source == EditorSnapSource::VisibleGeometry) {
+            result.success = true;
+            result.position = request.reference_position;
+            return true;
+        }
+
+        for (const auto& provider : _providers) {
+            if (provider->snap(request, result) && result.success) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 } // namespace termin

@@ -2,11 +2,11 @@
 #ifndef TC_INPUT_EVENT_H
 #define TC_INPUT_EVENT_H
 
-#include <tcbase/tc_types.h>
 #include "core/tc_input_platform_services.h"
 #include "core/tc_input_source.h"
 #include "render/tc_viewport_pool.h"
 #include <stdint.h>
+#include <tcbase/tc_types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,73 +18,73 @@ extern "C" {
 
 // Action types
 #define TC_ACTION_RELEASE 0
-#define TC_ACTION_PRESS   1
-#define TC_ACTION_REPEAT  2
+#define TC_ACTION_PRESS 1
+#define TC_ACTION_REPEAT 2
 
 // Mouse buttons
-#define TC_MOUSE_BUTTON_LEFT   0
-#define TC_MOUSE_BUTTON_RIGHT  1
+#define TC_MOUSE_BUTTON_LEFT 0
+#define TC_MOUSE_BUTTON_RIGHT 1
 #define TC_MOUSE_BUTTON_MIDDLE 2
 
 // Modifier keys
-#define TC_MOD_SHIFT   0x0001
+#define TC_MOD_SHIFT 0x0001
 #define TC_MOD_CONTROL 0x0002
-#define TC_MOD_ALT     0x0004
-#define TC_MOD_SUPER   0x0008
+#define TC_MOD_ALT 0x0004
+#define TC_MOD_SUPER 0x0008
 
 // Pointer device types
 #define TC_POINTER_DEVICE_MOUSE 0
 #define TC_POINTER_DEVICE_TOUCH 1
-#define TC_POINTER_DEVICE_PEN   2
+#define TC_POINTER_DEVICE_PEN 2
 
 // Pointer phases
-#define TC_POINTER_DOWN   0
-#define TC_POINTER_MOVE   1
-#define TC_POINTER_UP     2
+#define TC_POINTER_DOWN 0
+#define TC_POINTER_MOVE 1
+#define TC_POINTER_UP 2
 #define TC_POINTER_CANCEL 3
 
 // Key codes (matching GLFW values)
-#define TC_KEY_SPACE         32
-#define TC_KEY_ESCAPE        256
-#define TC_KEY_ENTER         257
-#define TC_KEY_TAB           258
-#define TC_KEY_BACKSPACE     259
-#define TC_KEY_INSERT        260
-#define TC_KEY_DELETE        261
-#define TC_KEY_RIGHT         262
-#define TC_KEY_LEFT          263
-#define TC_KEY_DOWN          264
-#define TC_KEY_UP            265
-#define TC_KEY_PAGE_UP       266
-#define TC_KEY_PAGE_DOWN     267
-#define TC_KEY_HOME          268
-#define TC_KEY_END           269
-#define TC_KEY_A             65
-#define TC_KEY_B             66
-#define TC_KEY_C             67
-#define TC_KEY_D             68
-#define TC_KEY_E             69
-#define TC_KEY_F             70
-#define TC_KEY_G             71
-#define TC_KEY_H             72
-#define TC_KEY_I             73
-#define TC_KEY_J             74
-#define TC_KEY_K             75
-#define TC_KEY_L             76
-#define TC_KEY_M             77
-#define TC_KEY_N             78
-#define TC_KEY_O             79
-#define TC_KEY_P             80
-#define TC_KEY_Q             81
-#define TC_KEY_R             82
-#define TC_KEY_S             83
-#define TC_KEY_T             84
-#define TC_KEY_U             85
-#define TC_KEY_V             86
-#define TC_KEY_W             87
-#define TC_KEY_X             88
-#define TC_KEY_Y             89
-#define TC_KEY_Z             90
+#define TC_KEY_SPACE 32
+#define TC_KEY_ESCAPE 256
+#define TC_KEY_ENTER 257
+#define TC_KEY_TAB 258
+#define TC_KEY_BACKSPACE 259
+#define TC_KEY_INSERT 260
+#define TC_KEY_DELETE 261
+#define TC_KEY_RIGHT 262
+#define TC_KEY_LEFT 263
+#define TC_KEY_DOWN 264
+#define TC_KEY_UP 265
+#define TC_KEY_PAGE_UP 266
+#define TC_KEY_PAGE_DOWN 267
+#define TC_KEY_HOME 268
+#define TC_KEY_END 269
+#define TC_KEY_A 65
+#define TC_KEY_B 66
+#define TC_KEY_C 67
+#define TC_KEY_D 68
+#define TC_KEY_E 69
+#define TC_KEY_F 70
+#define TC_KEY_G 71
+#define TC_KEY_H 72
+#define TC_KEY_I 73
+#define TC_KEY_J 74
+#define TC_KEY_K 75
+#define TC_KEY_L 76
+#define TC_KEY_M 77
+#define TC_KEY_N 78
+#define TC_KEY_O 79
+#define TC_KEY_P 80
+#define TC_KEY_Q 81
+#define TC_KEY_R 82
+#define TC_KEY_S 83
+#define TC_KEY_T 84
+#define TC_KEY_U 85
+#define TC_KEY_V 86
+#define TC_KEY_W 87
+#define TC_KEY_X 88
+#define TC_KEY_Y 89
+#define TC_KEY_Z 90
 
 // ============================================================================
 // Input Event Structures
@@ -95,13 +95,13 @@ typedef struct tc_mouse_button_event {
     tc_viewport_handle viewport;
     double x;
     double y;
-    int button;     // 0=left, 1=right, 2=middle
-    int action;     // 0=release, 1=press, 2=repeat
-    int mods;       // Shift=1, Ctrl=2, Alt=4, Super=8
+    int button;           // 0=left, 1=right, 2=middle
+    int action;           // 0=release, 1=press, 2=repeat
+    int mods;             // Shift=1, Ctrl=2, Alt=4, Super=8
     uint32_t click_count; // Host-supplied sequence count (1=single, 2=double).
-    uint32_t source; // tc_input_source flag identifying the dispatch origin.
+    uint32_t source;      // tc_input_source flag identifying the dispatch origin.
     const tc_input_platform_services* platform_services;
-    bool handled;   // Set by a handler to stop further input propagation.
+    bool handled; // Set by a handler to stop further input propagation.
 } tc_mouse_button_event;
 
 // Mouse move event
@@ -134,7 +134,7 @@ typedef struct tc_key_event {
     tc_viewport_handle viewport;
     int key;
     int scancode;
-    int action;     // 0=release, 1=press, 2=repeat
+    int action; // 0=release, 1=press, 2=repeat
     int mods;
     uint32_t source;
     const tc_input_platform_services* platform_services;
@@ -196,10 +196,8 @@ typedef struct tc_scroll_event_init_info {
 // Initialization helpers
 // ============================================================================
 
-static inline void tc_mouse_button_event_init_source(
-    tc_mouse_button_event* e,
-    const tc_mouse_button_event_init_info* info
-) {
+static inline void tc_mouse_button_event_init_source(tc_mouse_button_event* e,
+                                                     const tc_mouse_button_event_init_info* info) {
     e->viewport = info->viewport;
     e->x = info->x;
     e->y = info->y;
@@ -213,31 +211,13 @@ static inline void tc_mouse_button_event_init_source(
 }
 
 static inline void tc_mouse_button_event_init(
-    tc_mouse_button_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    int button, int action, int mods
-) {
-    const tc_mouse_button_event_init_info info = {
-        viewport,
-        x,
-        y,
-        button,
-        action,
-        mods,
-        1,
-        TC_INPUT_SOURCE_RUNTIME
-    };
+    tc_mouse_button_event* e, tc_viewport_handle viewport, double x, double y, int button, int action, int mods) {
+    const tc_mouse_button_event_init_info info = {viewport, x, y, button, action, mods, 1, TC_INPUT_SOURCE_RUNTIME};
     tc_mouse_button_event_init_source(e, &info);
 }
 
 static inline void tc_mouse_move_event_init_source(
-    tc_mouse_move_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    double dx, double dy,
-    uint32_t source
-) {
+    tc_mouse_move_event* e, tc_viewport_handle viewport, double x, double y, double dx, double dy, uint32_t source) {
     e->viewport = viewport;
     e->x = x;
     e->y = y;
@@ -249,18 +229,11 @@ static inline void tc_mouse_move_event_init_source(
 }
 
 static inline void tc_mouse_move_event_init(
-    tc_mouse_move_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    double dx, double dy
-) {
+    tc_mouse_move_event* e, tc_viewport_handle viewport, double x, double y, double dx, double dy) {
     tc_mouse_move_event_init_source(e, viewport, x, y, dx, dy, TC_INPUT_SOURCE_RUNTIME);
 }
 
-static inline void tc_scroll_event_init_source(
-    tc_scroll_event* e,
-    const tc_scroll_event_init_info* info
-) {
+static inline void tc_scroll_event_init_source(tc_scroll_event* e, const tc_scroll_event_init_info* info) {
     e->viewport = info->viewport;
     e->x = info->x;
     e->y = info->y;
@@ -273,31 +246,13 @@ static inline void tc_scroll_event_init_source(
 }
 
 static inline void tc_scroll_event_init(
-    tc_scroll_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    double xoffset, double yoffset,
-    int mods
-) {
-    const tc_scroll_event_init_info info = {
-        viewport,
-        x,
-        y,
-        xoffset,
-        yoffset,
-        mods,
-        TC_INPUT_SOURCE_RUNTIME
-    };
+    tc_scroll_event* e, tc_viewport_handle viewport, double x, double y, double xoffset, double yoffset, int mods) {
+    const tc_scroll_event_init_info info = {viewport, x, y, xoffset, yoffset, mods, TC_INPUT_SOURCE_RUNTIME};
     tc_scroll_event_init_source(e, &info);
 }
 
 static inline void tc_key_event_init_source(
-    tc_key_event* e,
-    tc_viewport_handle viewport,
-    int key, int scancode,
-    int action, int mods,
-    uint32_t source
-) {
+    tc_key_event* e, tc_viewport_handle viewport, int key, int scancode, int action, int mods, uint32_t source) {
     e->viewport = viewport;
     e->key = key;
     e->scancode = scancode;
@@ -308,28 +263,22 @@ static inline void tc_key_event_init_source(
     e->handled = false;
 }
 
-static inline void tc_key_event_init(
-    tc_key_event* e,
-    tc_viewport_handle viewport,
-    int key, int scancode,
-    int action, int mods
-) {
+static inline void
+tc_key_event_init(tc_key_event* e, tc_viewport_handle viewport, int key, int scancode, int action, int mods) {
     tc_key_event_init_source(e, viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
 }
 
-static inline void tc_pointer_event_init_source(
-    tc_pointer_event* e,
-    tc_viewport_handle viewport,
-    uint64_t pointer_id,
-    int device,
-    int phase,
-    double x,
-    double y,
-    double dx,
-    double dy,
-    float pressure,
-    uint32_t source
-) {
+static inline void tc_pointer_event_init_source(tc_pointer_event* e,
+                                                tc_viewport_handle viewport,
+                                                uint64_t pointer_id,
+                                                int device,
+                                                int phase,
+                                                double x,
+                                                double y,
+                                                double dx,
+                                                double dy,
+                                                float pressure,
+                                                uint32_t source) {
     e->viewport = viewport;
     e->pointer_id = pointer_id;
     e->device = device;
@@ -344,12 +293,8 @@ static inline void tc_pointer_event_init_source(
     e->handled = false;
 }
 
-static inline void tc_text_event_init_source(
-    tc_text_event* e,
-    tc_viewport_handle viewport,
-    const char* text_utf8,
-    uint32_t source
-) {
+static inline void
+tc_text_event_init_source(tc_text_event* e, tc_viewport_handle viewport, const char* text_utf8, uint32_t source) {
     e->viewport = viewport;
     e->text_utf8 = text_utf8;
     e->source = source;
@@ -357,31 +302,25 @@ static inline void tc_text_event_init_source(
     e->handled = false;
 }
 
-static inline void tc_input_focus_event_init_source(
-    tc_input_focus_event* e,
-    tc_viewport_handle viewport,
-    uint32_t source
-) {
+static inline void
+tc_input_focus_event_init_source(tc_input_focus_event* e, tc_viewport_handle viewport, uint32_t source) {
     e->viewport = viewport;
     e->source = source;
     e->platform_services = NULL;
 }
 
-static inline void tc_pointer_event_init(
-    tc_pointer_event* e,
-    tc_viewport_handle viewport,
-    uint64_t pointer_id,
-    int device,
-    int phase,
-    double x,
-    double y,
-    double dx,
-    double dy,
-    float pressure
-) {
+static inline void tc_pointer_event_init(tc_pointer_event* e,
+                                         tc_viewport_handle viewport,
+                                         uint64_t pointer_id,
+                                         int device,
+                                         int phase,
+                                         double x,
+                                         double y,
+                                         double dx,
+                                         double dy,
+                                         float pressure) {
     tc_pointer_event_init_source(
-        e, viewport, pointer_id, device, phase, x, y, dx, dy, pressure,
-        TC_INPUT_SOURCE_RUNTIME);
+        e, viewport, pointer_id, device, phase, x, y, dx, dy, pressure, TC_INPUT_SOURCE_RUNTIME);
 }
 
 #ifdef __cplusplus

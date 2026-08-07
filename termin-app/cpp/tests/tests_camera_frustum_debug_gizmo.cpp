@@ -13,30 +13,28 @@ using termin::Entity;
 
 namespace {
 
-tc_camera_data camera_data_from(CameraComponent& camera)
-{
-    tc_camera_data data = {};
-    termin::Mat44 view = camera.get_view_matrix();
-    termin::Mat44 projection = camera.get_projection_matrix();
-    for (int i = 0; i < 16; ++i) {
-        data.view[i] = view.data[i];
-        data.projection[i] = projection.data[i];
+    tc_camera_data camera_data_from(CameraComponent& camera) {
+        tc_camera_data data = {};
+        termin::Mat44 view = camera.get_view_matrix();
+        termin::Mat44 projection = camera.get_projection_matrix();
+        for (int i = 0; i < 16; ++i) {
+            data.view[i] = view.data[i];
+            data.projection[i] = projection.data[i];
+        }
+        termin::Vec3 position = camera.get_position();
+        data.position[0] = position.x;
+        data.position[1] = position.y;
+        data.position[2] = position.z;
+        data.near_clip = camera.near_clip;
+        data.far_clip = camera.far_clip;
+        data.layer_mask = camera.layer_mask;
+        data.render_category_mask = camera.render_category_mask;
+        return data;
     }
-    termin::Vec3 position = camera.get_position();
-    data.position[0] = position.x;
-    data.position[1] = position.y;
-    data.position[2] = position.z;
-    data.near_clip = camera.near_clip;
-    data.far_clip = camera.far_clip;
-    data.layer_mask = camera.layer_mask;
-    data.render_category_mask = camera.render_category_mask;
-    return data;
-}
 
 } // namespace
 
-TEST_CASE("Camera frustum debug computes finite perspective corners")
-{
+TEST_CASE("Camera frustum debug computes finite perspective corners") {
     Entity camera_entity = Entity::create(Entity::standalone_pool_handle(), "frustum-camera");
     CameraComponent* camera = new CameraComponent();
     camera_entity.add_component(camera);
@@ -58,8 +56,7 @@ TEST_CASE("Camera frustum debug computes finite perspective corners")
     tc_entity_free(camera_entity.handle());
 }
 
-TEST_CASE("Camera frustum debug rejects singular projection-view matrices")
-{
+TEST_CASE("Camera frustum debug rejects singular projection-view matrices") {
     tc_camera_data data = {};
     for (int i = 0; i < 16; ++i) {
         data.view[i] = 0.0;

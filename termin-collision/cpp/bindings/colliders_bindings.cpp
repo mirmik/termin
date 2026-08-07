@@ -2,13 +2,13 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
-#include <nanobind/stl/shared_ptr.h>
 
-#include <termin/geom/geom.hpp>
-#include <termin/geom/general_transform3.hpp>
 #include "termin/colliders/colliders.hpp"
+#include <termin/geom/general_transform3.hpp>
+#include <termin/geom/geom.hpp>
 
 namespace nb = nanobind;
 using namespace termin;
@@ -70,28 +70,35 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<BoxCollider, ColliderPrimitive>(m, "BoxCollider")
         .def(nb::init<>())
-        .def("__init__", [](BoxCollider* self, const Vec3& half_size,
-                            std::optional<GeneralPose3> transform) {
-            new (self) BoxCollider{half_size, transform.value_or(GeneralPose3{})};
-        }, nb::arg("half_size"), nb::arg("transform").none() = nb::none())
-        .def_static("from_size", [](const Vec3& size,
-                                     std::optional<GeneralPose3> transform) {
-            return BoxCollider::from_size(size, transform.value_or(GeneralPose3{}));
-        }, nb::arg("size"), nb::arg("transform").none() = nb::none())
+        .def(
+            "__init__",
+            [](BoxCollider* self, const Vec3& half_size, std::optional<GeneralPose3> transform) {
+                new (self) BoxCollider{half_size, transform.value_or(GeneralPose3{})};
+            },
+            nb::arg("half_size"),
+            nb::arg("transform").none() = nb::none())
+        .def_static(
+            "from_size",
+            [](const Vec3& size, std::optional<GeneralPose3> transform) {
+                return BoxCollider::from_size(size, transform.value_or(GeneralPose3{}));
+            },
+            nb::arg("size"),
+            nb::arg("transform").none() = nb::none())
         .def_rw("half_size", &BoxCollider::half_size)
         .def("effective_half_size", &BoxCollider::effective_half_size)
-        .def("get_corners_world", [](const BoxCollider& b) {
-            auto corners = b.get_corners_world();
-            double* data = new double[24];
-            for (int i = 0; i < 8; i++) {
-                data[i * 3 + 0] = corners[i].x;
-                data[i * 3 + 1] = corners[i].y;
-                data[i * 3 + 2] = corners[i].z;
-            }
-            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {8, 3};
-            return nb::ndarray<nb::numpy, double, nb::shape<8, 3>>(data, 2, shape, owner);
-        })
+        .def("get_corners_world",
+             [](const BoxCollider& b) {
+                 auto corners = b.get_corners_world();
+                 double* data = new double[24];
+                 for (int i = 0; i < 8; i++) {
+                     data[i * 3 + 0] = corners[i].x;
+                     data[i * 3 + 1] = corners[i].y;
+                     data[i * 3 + 2] = corners[i].z;
+                 }
+                 nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+                 size_t shape[2] = {8, 3};
+                 return nb::ndarray<nb::numpy, double, nb::shape<8, 3>>(data, 2, shape, owner);
+             })
         .def("get_axes_world", [](const BoxCollider& b) {
             auto axes = b.get_axes_world();
             double* data = new double[9];
@@ -109,10 +116,13 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<SphereCollider, ColliderPrimitive>(m, "SphereCollider")
         .def(nb::init<>())
-        .def("__init__", [](SphereCollider* self, double radius,
-                            std::optional<GeneralPose3> transform) {
-            new (self) SphereCollider{radius, transform.value_or(GeneralPose3{})};
-        }, nb::arg("radius"), nb::arg("transform").none() = nb::none())
+        .def(
+            "__init__",
+            [](SphereCollider* self, double radius, std::optional<GeneralPose3> transform) {
+                new (self) SphereCollider{radius, transform.value_or(GeneralPose3{})};
+            },
+            nb::arg("radius"),
+            nb::arg("transform").none() = nb::none())
         .def_rw("radius", &SphereCollider::radius)
         .def("effective_radius", &SphereCollider::effective_radius);
 
@@ -120,18 +130,22 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<CapsuleCollider, ColliderPrimitive>(m, "CapsuleCollider")
         .def(nb::init<>())
-        .def("__init__", [](CapsuleCollider* self, double half_height, double radius,
-                            std::optional<GeneralPose3> transform) {
-            new (self) CapsuleCollider{
-                half_height, radius, transform.value_or(GeneralPose3{})};
-        }, nb::arg("half_height"), nb::arg("radius"),
-           nb::arg("transform").none() = nb::none())
-        .def_static("from_total_height", [](double total_height, double radius,
-                                             std::optional<GeneralPose3> transform) {
-            return CapsuleCollider::from_total_height(
-                total_height, radius, transform.value_or(GeneralPose3{}));
-        }, nb::arg("total_height"), nb::arg("radius"),
-           nb::arg("transform").none() = nb::none())
+        .def(
+            "__init__",
+            [](CapsuleCollider* self, double half_height, double radius, std::optional<GeneralPose3> transform) {
+                new (self) CapsuleCollider{half_height, radius, transform.value_or(GeneralPose3{})};
+            },
+            nb::arg("half_height"),
+            nb::arg("radius"),
+            nb::arg("transform").none() = nb::none())
+        .def_static(
+            "from_total_height",
+            [](double total_height, double radius, std::optional<GeneralPose3> transform) {
+                return CapsuleCollider::from_total_height(total_height, radius, transform.value_or(GeneralPose3{}));
+            },
+            nb::arg("total_height"),
+            nb::arg("radius"),
+            nb::arg("transform").none() = nb::none())
         .def_rw("half_height", &CapsuleCollider::half_height)
         .def_rw("radius", &CapsuleCollider::radius)
         .def("effective_half_height", &CapsuleCollider::effective_half_height)
@@ -144,27 +158,29 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<UnionCollider, Collider>(m, "UnionCollider")
         .def(nb::init<>())
-        .def("__init__", [](UnionCollider* self, std::vector<Collider*> colliders) {
-            new (self) UnionCollider(colliders);
-        }, nb::arg("colliders"), nb::keep_alive<1, 2>())
-        .def("colliders", &UnionCollider::colliders,
-             nb::rv_policy::reference)
-        .def("add", &UnionCollider::add, nb::arg("collider"),
-             nb::keep_alive<1, 2>())
+        .def(
+            "__init__",
+            [](UnionCollider* self, std::vector<Collider*> colliders) { new (self) UnionCollider(colliders); },
+            nb::arg("colliders"),
+            nb::keep_alive<1, 2>())
+        .def("colliders", &UnionCollider::colliders, nb::rv_policy::reference)
+        .def("add", &UnionCollider::add, nb::arg("collider"), nb::keep_alive<1, 2>())
         .def("clear", &UnionCollider::clear);
 
     // ==================== AttachedCollider ====================
 
     nb::class_<AttachedCollider, Collider>(m, "AttachedCollider")
-        .def("__init__", [](AttachedCollider* self, ColliderPrimitive* collider, GeneralTransform3* transform) {
-            new (self) AttachedCollider(collider, transform);
-        }, nb::arg("collider"), nb::arg("transform"),
-             nb::keep_alive<1, 2>(),  // Keep collider alive
-             nb::keep_alive<1, 3>())  // Keep transform alive
-        .def("collider", &AttachedCollider::collider,
-             nb::rv_policy::reference)
-        .def("transform", &AttachedCollider::transform,
-             nb::rv_policy::reference)
+        .def(
+            "__init__",
+            [](AttachedCollider* self, ColliderPrimitive* collider, GeneralTransform3* transform) {
+                new (self) AttachedCollider(collider, transform);
+            },
+            nb::arg("collider"),
+            nb::arg("transform"),
+            nb::keep_alive<1, 2>(), // Keep collider alive
+            nb::keep_alive<1, 3>()) // Keep transform alive
+        .def("collider", &AttachedCollider::collider, nb::rv_policy::reference)
+        .def("transform", &AttachedCollider::transform, nb::rv_policy::reference)
         .def("world_transform", &AttachedCollider::world_transform)
         .def("colliding", &AttachedCollider::colliding, nb::arg("other"))
         .def("distance", &AttachedCollider::distance, nb::arg("other"));

@@ -4,98 +4,98 @@
 // Based on the approach used in Unreal Engine and Unity.
 #pragma once
 
+#include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
 #include "tgfx2/handles.hpp"
-#include "tc_inspect_cpp.hpp"
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
-#include <vector>
 #include <memory>
+#include <vector>
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+    class IRenderDevice;
+}
 
 namespace termin {
 
-// BloomPass - HDR bloom with mip-chain downsampling/upsampling.
-// Draws through tgfx::RenderContext2 end-to-end (bright prefilter,
-// separable Gaussian downsample chain, normalized reconstruction and
-// composite). Legacy tgfx1 dual-path removed in Stage 8.1.
-class TERMIN_RENDER_PASSES_API BloomPass : public CxxFramePass {
-public:
-    std::string input_res = "color";
-    std::string output_res = "color";
-    std::string output_res_target;
-    float threshold = 1.0f;
-    float soft_threshold = 0.5f;
-    float intensity = 1.0f;
-    int mip_levels = 5;
-    float scatter = 0.7f;
+    // BloomPass - HDR bloom with mip-chain downsampling/upsampling.
+    // Draws through tgfx::RenderContext2 end-to-end (bright prefilter,
+    // separable Gaussian downsample chain, normalized reconstruction and
+    // composite). Legacy tgfx1 dual-path removed in Stage 8.1.
+    class TERMIN_RENDER_PASSES_API BloomPass : public CxxFramePass {
+    public:
+        std::string input_res = "color";
+        std::string output_res = "color";
+        std::string output_res_target;
+        float threshold = 1.0f;
+        float soft_threshold = 0.5f;
+        float intensity = 1.0f;
+        int mip_levels = 5;
+        float scatter = 0.7f;
 
-private:
-    // tgfx2 resources — persistent across frames, rebuilt on resize.
-    // FS shaders live on the tc_shader registry (FS-only, NULL VS; VS
-    // comes from ctx2->fsq_vertex_shader()) so hash-based dedup keeps
-    // compiled modules across pass re-creations — see GrayscalePass for
-    // the simpler single-FS variant.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    std::vector<tgfx::TextureHandle> mip_textures_;
-    std::vector<tgfx::TextureHandle> reconstruction_textures_;
-    tgfx::TextureHandle resolve_texture_;
-    tc_shader_handle bright_shader_handle_     = tc_shader_handle_invalid();
-    tc_shader_handle downsample_shader_handle_ = tc_shader_handle_invalid();
-    tc_shader_handle blur_vertical_shader_handle_ = tc_shader_handle_invalid();
-    tc_shader_handle upsample_shader_handle_   = tc_shader_handle_invalid();
-    tc_shader_handle composite_shader_handle_  = tc_shader_handle_invalid();
-    tgfx::BufferHandle bright_ubo_;
-    tgfx::BufferHandle downsample_ubo_;
-    tgfx::BufferHandle upsample_ubo_;
-    tgfx::BufferHandle composite_ubo_;
+    private:
+        // tgfx2 resources — persistent across frames, rebuilt on resize.
+        // FS shaders live on the tc_shader registry (FS-only, NULL VS; VS
+        // comes from ctx2->fsq_vertex_shader()) so hash-based dedup keeps
+        // compiled modules across pass re-creations — see GrayscalePass for
+        // the simpler single-FS variant.
+        tgfx::IRenderDevice* device2_ = nullptr;
+        std::vector<tgfx::TextureHandle> mip_textures_;
+        std::vector<tgfx::TextureHandle> reconstruction_textures_;
+        tgfx::TextureHandle resolve_texture_;
+        tc_shader_handle bright_shader_handle_ = tc_shader_handle_invalid();
+        tc_shader_handle downsample_shader_handle_ = tc_shader_handle_invalid();
+        tc_shader_handle blur_vertical_shader_handle_ = tc_shader_handle_invalid();
+        tc_shader_handle upsample_shader_handle_ = tc_shader_handle_invalid();
+        tc_shader_handle composite_shader_handle_ = tc_shader_handle_invalid();
+        tgfx::BufferHandle bright_ubo_;
+        tgfx::BufferHandle downsample_ubo_;
+        tgfx::BufferHandle upsample_ubo_;
+        tgfx::BufferHandle composite_ubo_;
 
-    int last_tgfx2_width_ = 0;
-    int last_tgfx2_height_ = 0;
-    int last_tgfx2_mip_levels_ = 0;
+        int last_tgfx2_width_ = 0;
+        int last_tgfx2_height_ = 0;
+        int last_tgfx2_mip_levels_ = 0;
 
-public:
-    static void register_type();
-    INSPECT_FIELD(BloomPass, input_res, "Input", "string")
-    INSPECT_FIELD(BloomPass, output_res, "Output", "string")
-    INSPECT_FIELD(BloomPass, output_res_target, "Output Target", "string")
-    INSPECT_FIELD_RANGE(BloomPass, threshold, "Threshold", "float", 0.0f, 10.0f)
-    INSPECT_FIELD_RANGE(BloomPass, soft_threshold, "Soft Knee", "float", 0.0f, 1.0f)
-    INSPECT_FIELD_RANGE(BloomPass, intensity, "Intensity", "float", 0.0f, 5.0f)
-    INSPECT_FIELD_RANGE(BloomPass, mip_levels, "Mip Levels", "int", 1, 8)
-    INSPECT_FIELD_RANGE(BloomPass, scatter, "Scatter", "float", 0.0f, 1.0f)
-    INSPECT_TYPE_METADATA(BloomPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
-        {{"output_res", "fbo"}},
-        {{"output_res_target", "output_res"}}
-    ))
+    public:
+        static void register_type();
+        INSPECT_FIELD(BloomPass, input_res, "Input", "string")
+        INSPECT_FIELD(BloomPass, output_res, "Output", "string")
+        INSPECT_FIELD(BloomPass, output_res_target, "Output Target", "string")
+        INSPECT_FIELD_RANGE(BloomPass, threshold, "Threshold", "float", 0.0f, 10.0f)
+        INSPECT_FIELD_RANGE(BloomPass, soft_threshold, "Soft Knee", "float", 0.0f, 1.0f)
+        INSPECT_FIELD_RANGE(BloomPass, intensity, "Intensity", "float", 0.0f, 5.0f)
+        INSPECT_FIELD_RANGE(BloomPass, mip_levels, "Mip Levels", "int", 1, 8)
+        INSPECT_FIELD_RANGE(BloomPass, scatter, "Scatter", "float", 0.0f, 1.0f)
+        INSPECT_TYPE_METADATA(BloomPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "fbo"}, {"output_res_target", "fbo"}},
+                                                       {{"output_res", "fbo"}},
+                                                       {{"output_res_target", "output_res"}}))
 
-    BloomPass(
-        const std::string& input = "color",
-        const std::string& output = "color",
-        float threshold = 1.0f,
-        float soft_threshold = 0.5f,
-        float intensity = 1.0f,
-        int mip_levels = 5,
-        float scatter = 0.7f
-    );
+        BloomPass(const std::string& input = "color",
+                  const std::string& output = "color",
+                  float threshold = 1.0f,
+                  float soft_threshold = 0.5f,
+                  float intensity = 1.0f,
+                  int mip_levels = 5,
+                  float scatter = 0.7f);
 
-    std::set<const char*> compute_reads() const override;
-    std::set<const char*> compute_writes() const override;
+        std::set<const char*> compute_reads() const override;
+        std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
-    void execute(ExecuteContext& ctx) override;
-    void destroy() override;
+        void execute(ExecuteContext& ctx) override;
+        void destroy() override;
 
-private:
-    void ensure_tgfx2_shaders();
-    void ensure_tgfx2_mip_textures(int width, int height);
-    void destroy_tgfx2_mip_textures();
-};
+    private:
+        void ensure_tgfx2_shaders();
+        void ensure_tgfx2_mip_textures(int width, int height);
+        void destroy_tgfx2_mip_textures();
+    };
 
 } // namespace termin

@@ -4,5 +4,5 @@
 #include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_soa_registry(nanobind::module_& m);
+    void bind_soa_registry(nanobind::module_& m);
 }

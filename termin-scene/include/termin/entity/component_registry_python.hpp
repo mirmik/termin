@@ -7,40 +7,39 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Python extension for ComponentRegistry.
-// Provides Python component registration and creation.
-class ComponentRegistryPython {
-public:
-    // Register a Python component class
-    static bool register_python(
-        const std::string& name,
-        nb::object cls,
-        const std::string& owner,
-        const char* parent,
-        nb::dict fields,
-        nb::dict metadata,
-        const std::string& category,
-        const std::string& display_name,
-        nb::list requirements,
-        nb::list capabilities);
+    // Python extension for ComponentRegistry.
+    // Provides Python component registration and creation.
+    class ComponentRegistryPython {
+    public:
+        // Register a Python component class
+        static bool register_python(const std::string& name,
+                                    nb::object cls,
+                                    const std::string& owner,
+                                    const char* parent,
+                                    nb::dict fields,
+                                    nb::dict metadata,
+                                    const std::string& category,
+                                    const std::string& display_name,
+                                    nb::list requirements,
+                                    nb::list capabilities);
 
-    // Unregister a Python component class and release the stored Python class object
-    static bool unregister_python(const std::string& name);
+        // Unregister a Python component class and release the stored Python class object
+        static bool unregister_python(const std::string& name);
 
-    // Create tc_component* for any component type (C++ or Python)
-    static tc_component* create_tc_component(const std::string& name);
+        // Create tc_component* for any component type (C++ or Python)
+        static tc_component* create_tc_component(const std::string& name);
 
-    // Get Python class for component
-    static nb::object get_class(const std::string& name);
+        // Get Python class for component
+        static nb::object get_class(const std::string& name);
 
-    // Attach a Python projection to an already registered native descriptor.
-    static bool bind_class_projection(const std::string& name, nb::object cls);
+        // Attach a Python projection to an already registered native descriptor.
+        static bool bind_class_projection(const std::string& name, nb::object cls);
 
-    // Release all Python class projections without touching native descriptors.
-    static void clear_class_projections();
+        // Release all Python class projections without touching native descriptors.
+        static void clear_class_projections();
 
-    // List Python components
-    static std::vector<std::string> list_python();
-};
+        // List Python components
+        static std::vector<std::string> list_python();
+    };
 
 } // namespace termin

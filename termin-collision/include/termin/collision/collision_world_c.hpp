@@ -1,7 +1,7 @@
 // collision_world_c.hpp - C API for CollisionWorld
 #pragma once
 
-#include "physics/tc_collision.h"  // For tc_contact_manifold
+#include "physics/tc_collision.h" // For tc_contact_manifold
 #include "termin_collision/termin_collision.h"
 
 #ifdef __cplusplus

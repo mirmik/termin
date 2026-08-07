@@ -12,127 +12,87 @@
 #include <unordered_set>
 #include <vector>
 
-namespace termin::physics_qopt
-{
-    namespace
-    {
+namespace termin::physics_qopt {
+    namespace {
 
-        [[nodiscard]] AssemblyDiagnostic first_diagnostic(
-            std::initializer_list<AssemblyDiagnostic> diagnostics) noexcept
-        {
-            for (const AssemblyDiagnostic diagnostic : diagnostics)
-            {
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+        [[nodiscard]] AssemblyDiagnostic
+        first_diagnostic(std::initializer_list<AssemblyDiagnostic> diagnostics) noexcept {
+            for (const AssemblyDiagnostic diagnostic : diagnostics) {
+                if (diagnostic != AssemblyDiagnostic::None) {
                     return diagnostic;
                 }
             }
             return AssemblyDiagnostic::None;
         }
 
-        [[nodiscard]] QpDiagnostic
-        validate_output(DenseVectorView view,
-                        std::size_t expected_size) noexcept
-        {
-            if (view.size != expected_size)
-            {
+        [[nodiscard]] QpDiagnostic validate_output(DenseVectorView view, std::size_t expected_size) noexcept {
+            if (view.size != expected_size) {
                 return QpDiagnostic::DimensionMismatch;
             }
-            if (view.empty())
-            {
+            if (view.empty()) {
                 return QpDiagnostic::None;
             }
-            if (view.data == nullptr)
-            {
+            if (view.data == nullptr) {
                 return QpDiagnostic::NullData;
             }
-            if (view.stride <= 0)
-            {
+            if (view.stride <= 0) {
                 return QpDiagnostic::InvalidStride;
             }
             return QpDiagnostic::None;
         }
 
-        [[nodiscard]] QpDiagnostic
-        validate_optional_output(DenseVectorView view,
-                                 std::size_t expected_size) noexcept
-        {
-            if (view.empty())
-            {
+        [[nodiscard]] QpDiagnostic validate_optional_output(DenseVectorView view, std::size_t expected_size) noexcept {
+            if (view.empty()) {
                 return QpDiagnostic::None;
             }
             return validate_output(view, expected_size);
         }
 
-        [[nodiscard]] QpDiagnostic
-        validate_system(ConstDynamicsSystemView system) noexcept
-        {
+        [[nodiscard]] QpDiagnostic validate_system(ConstDynamicsSystemView system) noexcept {
             const std::size_t dof_count = system.load.size;
             const std::size_t constraint_count = system.constraint_rhs.size;
-            if (system.mass.rows != dof_count ||
-                system.mass.columns != dof_count ||
+            if (system.mass.rows != dof_count || system.mass.columns != dof_count ||
                 system.constraint_jacobian.rows != constraint_count ||
-                system.constraint_jacobian.columns != dof_count)
-            {
+                system.constraint_jacobian.columns != dof_count) {
                 return QpDiagnostic::DimensionMismatch;
             }
             if ((!system.load.empty() && system.load.data == nullptr) ||
                 (!system.mass.empty() && system.mass.data == nullptr) ||
-                (!system.constraint_jacobian.empty() &&
-                 system.constraint_jacobian.data == nullptr) ||
-                (!system.constraint_rhs.empty() &&
-                 system.constraint_rhs.data == nullptr))
-            {
+                (!system.constraint_jacobian.empty() && system.constraint_jacobian.data == nullptr) ||
+                (!system.constraint_rhs.empty() && system.constraint_rhs.data == nullptr)) {
                 return QpDiagnostic::NullData;
             }
             if ((!system.load.empty() && system.load.stride <= 0) ||
-                (!system.mass.empty() && (system.mass.row_stride <= 0 ||
-                                          system.mass.column_stride <= 0)) ||
+                (!system.mass.empty() && (system.mass.row_stride <= 0 || system.mass.column_stride <= 0)) ||
                 (!system.constraint_jacobian.empty() &&
-                 (system.constraint_jacobian.row_stride <= 0 ||
-                  system.constraint_jacobian.column_stride <= 0)) ||
-                (!system.constraint_rhs.empty() &&
-                 system.constraint_rhs.stride <= 0))
-            {
+                 (system.constraint_jacobian.row_stride <= 0 || system.constraint_jacobian.column_stride <= 0)) ||
+                (!system.constraint_rhs.empty() && system.constraint_rhs.stride <= 0)) {
                 return QpDiagnostic::InvalidStride;
             }
             return QpDiagnostic::None;
         }
 
-        [[nodiscard]] bool outputs_overlap(DenseVectorView first,
-                                           DenseVectorView second)
-        {
-            if (first.empty() || second.empty())
-            {
+        [[nodiscard]] bool outputs_overlap(DenseVectorView first, DenseVectorView second) {
+            if (first.empty() || second.empty()) {
                 return false;
             }
             std::unordered_set<std::uintptr_t> addresses;
             addresses.reserve(first.size);
-            for (std::size_t index = 0; index < first.size; ++index)
-            {
-                addresses.insert(
-                    reinterpret_cast<std::uintptr_t>(&first[index]));
+            for (std::size_t index = 0; index < first.size; ++index) {
+                addresses.insert(reinterpret_cast<std::uintptr_t>(&first[index]));
             }
-            for (std::size_t index = 0; index < second.size; ++index)
-            {
-                if (addresses.contains(
-                        reinterpret_cast<std::uintptr_t>(&second[index])))
-                {
+            for (std::size_t index = 0; index < second.size; ++index) {
+                if (addresses.contains(reinterpret_cast<std::uintptr_t>(&second[index]))) {
                     return true;
                 }
             }
             return false;
         }
 
-        [[nodiscard]] bool
-        any_outputs_overlap(std::initializer_list<DenseVectorView> outputs)
-        {
-            for (auto first = outputs.begin(); first != outputs.end(); ++first)
-            {
-                for (auto second = first + 1; second != outputs.end(); ++second)
-                {
-                    if (outputs_overlap(*first, *second))
-                    {
+        [[nodiscard]] bool any_outputs_overlap(std::initializer_list<DenseVectorView> outputs) {
+            for (auto first = outputs.begin(); first != outputs.end(); ++first) {
+                for (auto second = first + 1; second != outputs.end(); ++second) {
+                    if (outputs_overlap(*first, *second)) {
                         return true;
                     }
                 }
@@ -140,9 +100,7 @@ namespace termin::physics_qopt
             return false;
         }
 
-        [[nodiscard]] QpSolveResult
-        invalid_result(QpDiagnostic diagnostic) noexcept
-        {
+        [[nodiscard]] QpSolveResult invalid_result(QpDiagnostic diagnostic) noexcept {
             QpSolveResult result;
             result.status = QpStatus::InvalidInput;
             result.diagnostic = diagnostic;
@@ -150,24 +108,16 @@ namespace termin::physics_qopt
         }
 
     } // namespace
-    DynamicsFrictionAssembly::DynamicsFrictionAssembly(
-        const DynamicsTopology& topology,
-        const DynamicsFrictionTopology& friction_topology,
-        DynamicsFrictionWorkspaceView workspace) noexcept
+    DynamicsFrictionAssembly::DynamicsFrictionAssembly(const DynamicsTopology& topology,
+                                                       const DynamicsFrictionTopology& friction_topology,
+                                                       DynamicsFrictionWorkspaceView workspace) noexcept
         : workspace_(workspace),
-          contact_normal_jacobian_(friction_topology.contact_topology(),
-                                   topology.dof_topology(),
-                                   workspace.contact_normal_jacobian),
-          tangent_jacobian_(friction_topology.tangent_topology(),
-                            topology.dof_topology(),
-                            workspace.tangent_jacobian),
-          normal_impulse_(friction_topology.contact_topology(),
-                          workspace.normal_impulse),
-          friction_coefficient_(friction_topology.contact_topology(),
-                                workspace.friction_coefficient)
-    {
-        if (!topology.finalized() || !friction_topology.finalized())
-        {
+          contact_normal_jacobian_(
+              friction_topology.contact_topology(), topology.dof_topology(), workspace.contact_normal_jacobian),
+          tangent_jacobian_(friction_topology.tangent_topology(), topology.dof_topology(), workspace.tangent_jacobian),
+          normal_impulse_(friction_topology.contact_topology(), workspace.normal_impulse),
+          friction_coefficient_(friction_topology.contact_topology(), workspace.friction_coefficient) {
+        if (!topology.finalized() || !friction_topology.finalized()) {
             diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
             return;
         }
@@ -179,20 +129,16 @@ namespace termin::physics_qopt
         });
     }
 
-    AssemblyDiagnostic DynamicsFrictionAssembly::diagnostic() const noexcept
-    {
+    AssemblyDiagnostic DynamicsFrictionAssembly::diagnostic() const noexcept {
         return diagnostic_;
     }
 
-    bool DynamicsFrictionAssembly::valid() const noexcept
-    {
+    bool DynamicsFrictionAssembly::valid() const noexcept {
         return diagnostic_ == AssemblyDiagnostic::None;
     }
 
-    AssemblyDiagnostic DynamicsFrictionAssembly::clear() noexcept
-    {
-        if (!valid())
-        {
+    AssemblyDiagnostic DynamicsFrictionAssembly::clear() noexcept {
+        if (!valid()) {
             return diagnostic_;
         }
         return first_diagnostic({
@@ -203,54 +149,56 @@ namespace termin::physics_qopt
         });
     }
 
-    AssemblyDiagnostic DynamicsFrictionAssembly::add_tangent_jacobian(
-        DynamicsFrictionContactHandle contact,
-        DynamicsDofHandle dofs,
-        ConstDenseMatrixView contribution) noexcept
-    {
-        return tangent_jacobian_.add(
-            contact.tangent_block, dofs.block, contribution);
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_tangent_jacobian(DynamicsFrictionContactHandle contact,
+                                                                      DynamicsDofHandle dofs,
+                                                                      ConstDenseMatrixView contribution) noexcept {
+        return tangent_jacobian_.add(contact.tangent_block, dofs.block, contribution);
     }
 
     AssemblyDiagnostic DynamicsFrictionAssembly::add_contact_normal_jacobian(
-        DynamicsFrictionContactHandle contact,
-        DynamicsDofHandle dofs,
-        ConstDenseMatrixView contribution) noexcept
-    {
-        return contact_normal_jacobian_.add(
-            contact.contact_block, dofs.block, contribution);
+        DynamicsFrictionContactHandle contact, DynamicsDofHandle dofs, ConstDenseMatrixView contribution) noexcept {
+        return contact_normal_jacobian_.add(contact.contact_block, dofs.block, contribution);
     }
 
-    AssemblyDiagnostic DynamicsFrictionAssembly::add_normal_impulse(
-        DynamicsFrictionContactHandle contact, double impulse) noexcept
-    {
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_normal_impulse(DynamicsFrictionContactHandle contact,
+                                                                    double impulse) noexcept {
         const std::array<double, 1> value{impulse};
-        return normal_impulse_.add(contact.contact_block,
-                                   {value.data(), value.size(), 1});
+        return normal_impulse_.add(contact.contact_block, {value.data(), value.size(), 1});
     }
 
-    AssemblyDiagnostic DynamicsFrictionAssembly::add_friction_coefficient(
-        DynamicsFrictionContactHandle contact, double coefficient) noexcept
-    {
+    AssemblyDiagnostic DynamicsFrictionAssembly::add_friction_coefficient(DynamicsFrictionContactHandle contact,
+                                                                          double coefficient) noexcept {
         const std::array<double, 1> value{coefficient};
-        return friction_coefficient_.add(contact.contact_block,
-                                         {value.data(), value.size(), 1});
+        return friction_coefficient_.add(contact.contact_block, {value.data(), value.size(), 1});
+    }
+
+    DynamicsAssembly::DynamicsAssembly(const DynamicsTopology& topology, DynamicsWorkspaceView workspace) noexcept
+        : workspace_(workspace),
+          mass_(topology.dof_topology(), topology.dof_topology(), workspace.mass),
+          load_(topology.dof_topology(), workspace.load),
+          constraint_jacobian_(topology.constraint_topology(), topology.dof_topology(), workspace.constraint_jacobian),
+          constraint_rhs_(topology.constraint_topology(), workspace.constraint_rhs) {
+        if (!topology.finalized()) {
+            diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
+            return;
+        }
+        diagnostic_ = first_diagnostic({
+            mass_.diagnostic(),
+            load_.diagnostic(),
+            constraint_jacobian_.diagnostic(),
+            constraint_rhs_.diagnostic(),
+        });
     }
 
     DynamicsAssembly::DynamicsAssembly(const DynamicsTopology& topology,
+                                       const DynamicsUnilateralTopology& unilateral_topology,
                                        DynamicsWorkspaceView workspace) noexcept
         : workspace_(workspace),
-          mass_(
-              topology.dof_topology(), topology.dof_topology(), workspace.mass),
+          mass_(topology.dof_topology(), topology.dof_topology(), workspace.mass),
           load_(topology.dof_topology(), workspace.load),
-          constraint_jacobian_(topology.constraint_topology(),
-                               topology.dof_topology(),
-                               workspace.constraint_jacobian),
-          constraint_rhs_(topology.constraint_topology(),
-                          workspace.constraint_rhs)
-    {
-        if (!topology.finalized())
-        {
+          constraint_jacobian_(topology.constraint_topology(), topology.dof_topology(), workspace.constraint_jacobian),
+          constraint_rhs_(topology.constraint_topology(), workspace.constraint_rhs) {
+        if (!topology.finalized() || !unilateral_topology.finalized()) {
             diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
             return;
         }
@@ -260,61 +208,25 @@ namespace termin::physics_qopt
             constraint_jacobian_.diagnostic(),
             constraint_rhs_.diagnostic(),
         });
-    }
-
-    DynamicsAssembly::DynamicsAssembly(
-        const DynamicsTopology& topology,
-        const DynamicsUnilateralTopology& unilateral_topology,
-        DynamicsWorkspaceView workspace) noexcept
-        : workspace_(workspace),
-          mass_(
-              topology.dof_topology(), topology.dof_topology(), workspace.mass),
-          load_(topology.dof_topology(), workspace.load),
-          constraint_jacobian_(topology.constraint_topology(),
-                               topology.dof_topology(),
-                               workspace.constraint_jacobian),
-          constraint_rhs_(topology.constraint_topology(),
-                          workspace.constraint_rhs)
-    {
-        if (!topology.finalized() || !unilateral_topology.finalized())
-        {
-            diagnostic_ = AssemblyDiagnostic::TopologyNotFinalized;
+        if (diagnostic_ != AssemblyDiagnostic::None) {
             return;
         }
-        diagnostic_ = first_diagnostic({
-            mass_.diagnostic(),
-            load_.diagnostic(),
-            constraint_jacobian_.diagnostic(),
-            constraint_rhs_.diagnostic(),
-        });
-        if (diagnostic_ != AssemblyDiagnostic::None)
-        {
-            return;
-        }
-        try
-        {
+        try {
             unilateral_jacobian_ = std::make_unique<DenseBlockMatrixAssembly>(
-                unilateral_topology.constraint_topology(),
-                topology.dof_topology(),
-                workspace.unilateral_jacobian);
-            unilateral_limit_ = std::make_unique<DenseBlockVectorAssembly>(
-                unilateral_topology.constraint_topology(),
-                workspace.unilateral_limit);
+                unilateral_topology.constraint_topology(), topology.dof_topology(), workspace.unilateral_jacobian);
+            unilateral_limit_ = std::make_unique<DenseBlockVectorAssembly>(unilateral_topology.constraint_topology(),
+                                                                           workspace.unilateral_limit);
             diagnostic_ = first_diagnostic({
                 unilateral_jacobian_->diagnostic(),
                 unilateral_limit_->diagnostic(),
             });
-        }
-        catch (const std::exception& error)
-        {
+        } catch (const std::exception& error) {
             std::fprintf(stderr,
                          "[termin-qopt] unilateral assembly construction "
                          "failed: %s\n",
                          error.what());
             diagnostic_ = AssemblyDiagnostic::InternalFailure;
-        }
-        catch (...)
-        {
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] unilateral assembly construction "
                          "failed with unknown exception\n");
@@ -322,20 +234,16 @@ namespace termin::physics_qopt
         }
     }
 
-    AssemblyDiagnostic DynamicsAssembly::diagnostic() const noexcept
-    {
+    AssemblyDiagnostic DynamicsAssembly::diagnostic() const noexcept {
         return diagnostic_;
     }
 
-    bool DynamicsAssembly::valid() const noexcept
-    {
+    bool DynamicsAssembly::valid() const noexcept {
         return diagnostic_ == AssemblyDiagnostic::None;
     }
 
-    AssemblyDiagnostic DynamicsAssembly::clear() noexcept
-    {
-        if (!valid())
-        {
+    AssemblyDiagnostic DynamicsAssembly::clear() noexcept {
+        if (!valid()) {
             return diagnostic_;
         }
         const AssemblyDiagnostic permanent = first_diagnostic({
@@ -344,9 +252,7 @@ namespace termin::physics_qopt
             constraint_jacobian_.clear(),
             constraint_rhs_.clear(),
         });
-        if (permanent != AssemblyDiagnostic::None ||
-            unilateral_jacobian_ == nullptr)
-        {
+        if (permanent != AssemblyDiagnostic::None || unilateral_jacobian_ == nullptr) {
             return permanent;
         }
         return first_diagnostic({
@@ -355,63 +261,45 @@ namespace termin::physics_qopt
         });
     }
 
-    AssemblyDiagnostic
-    DynamicsAssembly::add_mass(DynamicsDofHandle row,
-                               DynamicsDofHandle column,
-                               ConstDenseMatrixView contribution) noexcept
-    {
+    AssemblyDiagnostic DynamicsAssembly::add_mass(DynamicsDofHandle row,
+                                                  DynamicsDofHandle column,
+                                                  ConstDenseMatrixView contribution) noexcept {
         return mass_.add(row.block, column.block, contribution);
     }
 
-    AssemblyDiagnostic
-    DynamicsAssembly::add_load(DynamicsDofHandle dofs,
-                               ConstDenseVectorView contribution) noexcept
-    {
+    AssemblyDiagnostic DynamicsAssembly::add_load(DynamicsDofHandle dofs, ConstDenseVectorView contribution) noexcept {
         return load_.add(dofs.block, contribution);
     }
 
-    AssemblyDiagnostic DynamicsAssembly::add_constraint_jacobian(
-        DynamicsConstraintHandle constraint,
-        DynamicsDofHandle dofs,
-        ConstDenseMatrixView contribution) noexcept
-    {
-        return constraint_jacobian_.add(
-            constraint.block, dofs.block, contribution);
+    AssemblyDiagnostic DynamicsAssembly::add_constraint_jacobian(DynamicsConstraintHandle constraint,
+                                                                 DynamicsDofHandle dofs,
+                                                                 ConstDenseMatrixView contribution) noexcept {
+        return constraint_jacobian_.add(constraint.block, dofs.block, contribution);
     }
 
-    AssemblyDiagnostic DynamicsAssembly::add_constraint_rhs(
-        DynamicsConstraintHandle constraint,
-        ConstDenseVectorView contribution) noexcept
-    {
+    AssemblyDiagnostic DynamicsAssembly::add_constraint_rhs(DynamicsConstraintHandle constraint,
+                                                            ConstDenseVectorView contribution) noexcept {
         return constraint_rhs_.add(constraint.block, contribution);
     }
 
-    AssemblyDiagnostic DynamicsAssembly::add_unilateral_jacobian(
-        DynamicsUnilateralConstraintHandle constraint,
-        DynamicsDofHandle dofs,
-        ConstDenseMatrixView contribution) noexcept
-    {
-        if (unilateral_jacobian_ == nullptr)
-        {
+    AssemblyDiagnostic DynamicsAssembly::add_unilateral_jacobian(DynamicsUnilateralConstraintHandle constraint,
+                                                                 DynamicsDofHandle dofs,
+                                                                 ConstDenseMatrixView contribution) noexcept {
+        if (unilateral_jacobian_ == nullptr) {
             return AssemblyDiagnostic::InvalidBlock;
         }
-        return unilateral_jacobian_->add(
-            constraint.block, dofs.block, contribution);
+        return unilateral_jacobian_->add(constraint.block, dofs.block, contribution);
     }
 
-    AssemblyDiagnostic DynamicsAssembly::add_unilateral_limit(
-        DynamicsUnilateralConstraintHandle constraint,
-        ConstDenseVectorView contribution) noexcept
-    {
-        if (unilateral_limit_ == nullptr)
-        {
+    AssemblyDiagnostic DynamicsAssembly::add_unilateral_limit(DynamicsUnilateralConstraintHandle constraint,
+                                                              ConstDenseVectorView contribution) noexcept {
+        if (unilateral_limit_ == nullptr) {
             return AssemblyDiagnostic::InvalidBlock;
         }
         return unilateral_limit_->add(constraint.block, contribution);
     }
 
-    ConstDynamicsSystemView DynamicsAssembly::system() const noexcept
-    {
+    ConstDynamicsSystemView DynamicsAssembly::system() const noexcept {
         return {
             workspace_.mass,
             workspace_.load,
@@ -420,56 +308,42 @@ namespace termin::physics_qopt
         };
     }
 
-    ConstDynamicsUnilateralView
-    DynamicsAssembly::unilateral_constraints() const noexcept
-    {
+    ConstDynamicsUnilateralView DynamicsAssembly::unilateral_constraints() const noexcept {
         return {
             workspace_.unilateral_jacobian,
             workspace_.unilateral_limit,
         };
     }
 
-    static QpSolveResult solve_constrained_dynamics_impl(
-        ConstDynamicsSystemView system,
-        DynamicsSolutionView solution,
-        QpTolerance tolerance,
-        EqualityQpFactorizationCache* factorization_cache) noexcept
-    {
+    static QpSolveResult solve_constrained_dynamics_impl(ConstDynamicsSystemView system,
+                                                         DynamicsSolutionView solution,
+                                                         QpTolerance tolerance,
+                                                         EqualityQpFactorizationCache* factorization_cache) noexcept {
         const std::size_t dof_count = system.load.size;
         const std::size_t constraint_count = system.constraint_rhs.size;
         const QpDiagnostic system_diagnostic = validate_system(system);
-        if (system_diagnostic != QpDiagnostic::None)
-        {
+        if (system_diagnostic != QpDiagnostic::None) {
             return invalid_result(system_diagnostic);
         }
-        const QpDiagnostic acceleration_diagnostic =
-            validate_output(solution.acceleration, dof_count);
-        if (acceleration_diagnostic != QpDiagnostic::None)
-        {
+        const QpDiagnostic acceleration_diagnostic = validate_output(solution.acceleration, dof_count);
+        if (acceleration_diagnostic != QpDiagnostic::None) {
             return invalid_result(acceleration_diagnostic);
         }
-        const QpDiagnostic reaction_diagnostic =
-            validate_output(solution.constraint_reaction, constraint_count);
-        if (reaction_diagnostic != QpDiagnostic::None)
-        {
+        const QpDiagnostic reaction_diagnostic = validate_output(solution.constraint_reaction, constraint_count);
+        if (reaction_diagnostic != QpDiagnostic::None) {
             return invalid_result(reaction_diagnostic);
         }
 
-        try
-        {
-            if (outputs_overlap(solution.acceleration,
-                                solution.constraint_reaction))
-            {
+        try {
+            if (outputs_overlap(solution.acceleration, solution.constraint_reaction)) {
                 return invalid_result(QpDiagnostic::OverlappingOutputs);
             }
 
             std::vector<double> gradient(dof_count);
             std::vector<double> acceleration(dof_count);
             std::vector<double> equality_dual(constraint_count);
-            for (std::size_t index = 0; index < dof_count; ++index)
-            {
-                if (!std::isfinite(system.load[index]))
-                {
+            for (std::size_t index = 0; index < dof_count; ++index) {
+                if (!std::isfinite(system.load[index])) {
                     return invalid_result(QpDiagnostic::NonFiniteInput);
                 }
                 gradient[index] = -system.load[index];
@@ -485,34 +359,22 @@ namespace termin::physics_qopt
                 {acceleration.data(), acceleration.size(), 1},
                 {equality_dual.data(), equality_dual.size(), 1},
             };
-            const QpSolveResult result =
-                factorization_cache == nullptr
-                    ? solve_equality_qp(problem, qp_solution, tolerance)
-                    : factorization_cache->solve(
-                          problem, qp_solution, tolerance);
-            if (result.status != QpStatus::Optimal)
-            {
+            const QpSolveResult result = factorization_cache == nullptr
+                                             ? solve_equality_qp(problem, qp_solution, tolerance)
+                                             : factorization_cache->solve(problem, qp_solution, tolerance);
+            if (result.status != QpStatus::Optimal) {
                 return result;
             }
-            for (std::size_t index = 0; index < dof_count; ++index)
-            {
+            for (std::size_t index = 0; index < dof_count; ++index) {
                 solution.acceleration[index] = acceleration[index];
             }
-            for (std::size_t index = 0; index < constraint_count; ++index)
-            {
+            for (std::size_t index = 0; index < constraint_count; ++index) {
                 solution.constraint_reaction[index] = -equality_dual[index];
             }
             return result;
-        }
-        catch (const std::exception& error)
-        {
-            std::fprintf(
-                stderr,
-                "[termin-qopt] constrained dynamics solve failed: %s\n",
-                error.what());
-        }
-        catch (...)
-        {
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] constrained dynamics solve failed: %s\n", error.what());
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] constrained dynamics solve failed with "
                          "an unknown exception\n");
@@ -524,46 +386,34 @@ namespace termin::physics_qopt
         return result;
     }
 
-    QpSolveResult solve_constrained_dynamics(
-        ConstDynamicsSystemView system,
-        DynamicsSolutionView solution,
-        QpTolerance tolerance) noexcept
-    {
-        return solve_constrained_dynamics_impl(
-            system, solution, tolerance, nullptr);
+    QpSolveResult solve_constrained_dynamics(ConstDynamicsSystemView system,
+                                             DynamicsSolutionView solution,
+                                             QpTolerance tolerance) noexcept {
+        return solve_constrained_dynamics_impl(system, solution, tolerance, nullptr);
     }
 
-    QpSolveResult
-    solve_unilateral_velocity(ConstDynamicsSystemView system,
-                              ConstDynamicsUnilateralView unilateral,
-                              DynamicsVelocitySolutionView solution,
-                              ActiveSetQpWarmStartView warm_start,
-                              ActiveSetQpOptions options) noexcept
-    {
+    QpSolveResult solve_unilateral_velocity(ConstDynamicsSystemView system,
+                                            ConstDynamicsUnilateralView unilateral,
+                                            DynamicsVelocitySolutionView solution,
+                                            ActiveSetQpWarmStartView warm_start,
+                                            ActiveSetQpOptions options) noexcept {
         const std::size_t dof_count = system.load.size;
         const std::size_t equality_count = system.constraint_rhs.size;
         const std::size_t unilateral_count = unilateral.limit.size;
         const QpDiagnostic system_diagnostic = validate_system(system);
-        if (system_diagnostic != QpDiagnostic::None)
-        {
+        if (system_diagnostic != QpDiagnostic::None) {
             return invalid_result(system_diagnostic);
         }
-        if (unilateral.jacobian.rows != unilateral_count ||
-            unilateral.jacobian.columns != dof_count)
-        {
+        if (unilateral.jacobian.rows != unilateral_count || unilateral.jacobian.columns != dof_count) {
             return invalid_result(QpDiagnostic::DimensionMismatch);
         }
-        if ((!unilateral.jacobian.empty() &&
-             unilateral.jacobian.data == nullptr) ||
-            (!unilateral.limit.empty() && unilateral.limit.data == nullptr))
-        {
+        if ((!unilateral.jacobian.empty() && unilateral.jacobian.data == nullptr) ||
+            (!unilateral.limit.empty() && unilateral.limit.data == nullptr)) {
             return invalid_result(QpDiagnostic::NullData);
         }
         if ((!unilateral.jacobian.empty() &&
-             (unilateral.jacobian.row_stride <= 0 ||
-              unilateral.jacobian.column_stride <= 0)) ||
-            (!unilateral.limit.empty() && unilateral.limit.stride <= 0))
-        {
+             (unilateral.jacobian.row_stride <= 0 || unilateral.jacobian.column_stride <= 0)) ||
+            (!unilateral.limit.empty() && unilateral.limit.stride <= 0)) {
             return invalid_result(QpDiagnostic::InvalidStride);
         }
 
@@ -571,13 +421,10 @@ namespace termin::physics_qopt
             validate_output(solution.velocity, dof_count),
             validate_output(solution.constraint_reaction, equality_count),
             validate_output(solution.unilateral_reaction, unilateral_count),
-            validate_optional_output(solution.tight_unilateral_mask,
-                                     unilateral_count),
+            validate_optional_output(solution.tight_unilateral_mask, unilateral_count),
         };
-        for (const QpDiagnostic diagnostic : output_diagnostics)
-        {
-            if (diagnostic != QpDiagnostic::None)
-            {
+        for (const QpDiagnostic diagnostic : output_diagnostics) {
+            if (diagnostic != QpDiagnostic::None) {
                 return invalid_result(diagnostic);
             }
         }
@@ -586,22 +433,18 @@ namespace termin::physics_qopt
                 solution.constraint_reaction,
                 solution.unilateral_reaction,
                 solution.tight_unilateral_mask,
-            }))
-        {
+            })) {
             return invalid_result(QpDiagnostic::OverlappingOutputs);
         }
 
-        try
-        {
+        try {
             std::vector<double> gradient(dof_count);
             std::vector<double> velocity(dof_count);
             std::vector<double> equality_dual(equality_count);
             std::vector<double> unilateral_dual(unilateral_count);
             std::vector<double> tight_mask(unilateral_count);
-            for (std::size_t index = 0; index < dof_count; ++index)
-            {
-                if (!std::isfinite(system.load[index]))
-                {
+            for (std::size_t index = 0; index < dof_count; ++index) {
+                if (!std::isfinite(system.load[index])) {
                     return invalid_result(QpDiagnostic::NonFiniteInput);
                 }
                 gradient[index] = -system.load[index];
@@ -627,48 +470,33 @@ namespace termin::physics_qopt
                 },
                 warm_start,
                 options);
-            if (result.status != QpStatus::Optimal)
-            {
+            if (result.status != QpStatus::Optimal) {
                 return result;
             }
 
-            for (std::size_t row = 0; row < unilateral_count; ++row)
-            {
+            for (std::size_t row = 0; row < unilateral_count; ++row) {
                 double value = -unilateral.limit[row];
-                for (std::size_t column = 0; column < dof_count; ++column)
-                {
-                    value +=
-                        unilateral.jacobian(row, column) * velocity[column];
+                for (std::size_t column = 0; column < dof_count; ++column) {
+                    value += unilateral.jacobian(row, column) * velocity[column];
                 }
-                tight_mask[row] =
-                    std::abs(value) <= options.active_tolerance ? 1.0 : 0.0;
+                tight_mask[row] = std::abs(value) <= options.active_tolerance ? 1.0 : 0.0;
             }
-            for (std::size_t index = 0; index < dof_count; ++index)
-            {
+            for (std::size_t index = 0; index < dof_count; ++index) {
                 solution.velocity[index] = velocity[index];
             }
-            for (std::size_t index = 0; index < equality_count; ++index)
-            {
+            for (std::size_t index = 0; index < equality_count; ++index) {
                 solution.constraint_reaction[index] = -equality_dual[index];
             }
-            for (std::size_t index = 0; index < unilateral_count; ++index)
-            {
+            for (std::size_t index = 0; index < unilateral_count; ++index) {
                 solution.unilateral_reaction[index] = unilateral_dual[index];
-                if (!solution.tight_unilateral_mask.empty())
-                {
+                if (!solution.tight_unilateral_mask.empty()) {
                     solution.tight_unilateral_mask[index] = tight_mask[index];
                 }
             }
             return result;
-        }
-        catch (const std::exception& error)
-        {
-            std::fprintf(stderr,
-                         "[termin-qopt] unilateral velocity solve failed: %s\n",
-                         error.what());
-        }
-        catch (...)
-        {
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] unilateral velocity solve failed: %s\n", error.what());
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] unilateral velocity solve failed with "
                          "an unknown exception\n");
@@ -680,15 +508,13 @@ namespace termin::physics_qopt
         return result;
     }
 
-    namespace
-    {
+    namespace {
 
-        [[nodiscard]] DynamicsSystemStepResult dynamics_system_failure(
-            QpStatus status,
-            DynamicsSystemDiagnostic diagnostic,
-            QpSolveResult dynamics = {},
-            std::size_t unilateral_constraint_count = 0) noexcept
-        {
+        [[nodiscard]] DynamicsSystemStepResult
+        dynamics_system_failure(QpStatus status,
+                                DynamicsSystemDiagnostic diagnostic,
+                                QpSolveResult dynamics = {},
+                                std::size_t unilateral_constraint_count = 0) noexcept {
             DynamicsSystemStepResult result;
             result.status = status;
             result.diagnostic = diagnostic;
@@ -699,8 +525,7 @@ namespace termin::physics_qopt
 
     } // namespace
 
-    struct DynamicsSystem::Impl
-    {
+    struct DynamicsSystem::Impl {
         DynamicsTopology topology;
         DynamicsUnilateralTopology unilateral_topology;
         DynamicsFrictionTopology friction_topology;
@@ -739,20 +564,14 @@ namespace termin::physics_qopt
         bool finalized = false;
         bool velocity_warm_primal_valid = false;
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        assemble(DynamicsAssembly& assembly,
-                 DynamicsAssemblyPhase phase) noexcept
-        {
-            if (assembly.clear() != AssemblyDiagnostic::None)
-            {
+        [[nodiscard]] DynamicsSystemDiagnostic assemble(DynamicsAssembly& assembly,
+                                                        DynamicsAssemblyPhase phase) noexcept {
+            if (assembly.clear() != AssemblyDiagnostic::None) {
                 return DynamicsSystemDiagnostic::AssemblyFailure;
             }
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
-                const AssemblyDiagnostic diagnostic =
-                    contributions[index]->assemble(assembly, phase);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
+                const AssemblyDiagnostic diagnostic = contributions[index]->assemble(assembly, phase);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu assembly "
                                  "failed in phase %u: %s\n",
@@ -765,13 +584,10 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic begin_step() noexcept
-        {
+        [[nodiscard]] DynamicsSystemDiagnostic begin_step() noexcept {
             step_contribution_count = 0;
-            for (const auto& contribution : contributions)
-            {
-                if (contribution->begin_step() != AssemblyDiagnostic::None)
-                {
+            for (const auto& contribution : contributions) {
+                if (contribution->begin_step() != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu failed to "
                                  "begin a transactional step\n",
@@ -783,43 +599,31 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        prepare_unilateral_topology(double time_step)
-        {
+        [[nodiscard]] DynamicsSystemDiagnostic prepare_unilateral_topology(double time_step) {
             unilateral_topology = DynamicsUnilateralTopology{};
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
                 const AssemblyDiagnostic diagnostic =
-                    contributions[index]->register_unilateral_constraints(
-                        unilateral_topology, time_step);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
-                    std::fprintf(
-                        stderr,
-                        "[termin-qopt] contribution %zu transient "
-                        "unilateral topology registration failed: %s\n",
-                        index,
-                        assembly_diagnostic_name(diagnostic).data());
+                    contributions[index]->register_unilateral_constraints(unilateral_topology, time_step);
+                if (diagnostic != AssemblyDiagnostic::None) {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] contribution %zu transient "
+                                 "unilateral topology registration failed: %s\n",
+                                 index,
+                                 assembly_diagnostic_name(diagnostic).data());
                     return DynamicsSystemDiagnostic::TopologyFailure;
                 }
             }
-            const AssemblyDiagnostic finalize_diagnostic =
-                unilateral_topology.finalize();
-            if (finalize_diagnostic != AssemblyDiagnostic::None)
-            {
-                std::fprintf(
-                    stderr,
-                    "[termin-qopt] transient unilateral topology "
-                    "finalization failed: %s\n",
-                    assembly_diagnostic_name(finalize_diagnostic).data());
+            const AssemblyDiagnostic finalize_diagnostic = unilateral_topology.finalize();
+            if (finalize_diagnostic != AssemblyDiagnostic::None) {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient unilateral topology "
+                             "finalization failed: %s\n",
+                             assembly_diagnostic_name(finalize_diagnostic).data());
                 return DynamicsSystemDiagnostic::TopologyFailure;
             }
-            const std::size_t constraints =
-                unilateral_topology.constraint_count();
+            const std::size_t constraints = unilateral_topology.constraint_count();
             const std::size_t dofs = topology.dof_count();
-            if (dofs != 0 &&
-                constraints > std::numeric_limits<std::size_t>::max() / dofs)
-            {
+            if (dofs != 0 && constraints > std::numeric_limits<std::size_t>::max() / dofs) {
                 std::fprintf(stderr,
                              "[termin-qopt] transient unilateral workspace "
                              "size overflow\n");
@@ -833,17 +637,12 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        prepare_friction_topology(double time_step)
-        {
+        [[nodiscard]] DynamicsSystemDiagnostic prepare_friction_topology(double time_step) {
             friction_topology = DynamicsFrictionTopology{};
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
                 const AssemblyDiagnostic diagnostic =
-                    contributions[index]->register_friction_contacts(
-                        friction_topology, time_step);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+                    contributions[index]->register_friction_contacts(friction_topology, time_step);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu transient "
                                  "friction topology registration failed: %s\n",
@@ -852,24 +651,19 @@ namespace termin::physics_qopt
                     return DynamicsSystemDiagnostic::TopologyFailure;
                 }
             }
-            const AssemblyDiagnostic finalize_diagnostic =
-                friction_topology.finalize();
-            if (finalize_diagnostic != AssemblyDiagnostic::None)
-            {
-                std::fprintf(
-                    stderr,
-                    "[termin-qopt] transient friction topology "
-                    "finalization failed: %s\n",
-                    assembly_diagnostic_name(finalize_diagnostic).data());
+            const AssemblyDiagnostic finalize_diagnostic = friction_topology.finalize();
+            if (finalize_diagnostic != AssemblyDiagnostic::None) {
+                std::fprintf(stderr,
+                             "[termin-qopt] transient friction topology "
+                             "finalization failed: %s\n",
+                             assembly_diagnostic_name(finalize_diagnostic).data());
                 return DynamicsSystemDiagnostic::TopologyFailure;
             }
 
             const std::size_t dofs = topology.dof_count();
             const std::size_t tangents = friction_topology.tangent_count();
             const std::size_t contacts = friction_topology.contact_count();
-            if (dofs != 0 &&
-                tangents > std::numeric_limits<std::size_t>::max() / dofs)
-            {
+            if (dofs != 0 && tangents > std::numeric_limits<std::size_t>::max() / dofs) {
                 std::fprintf(stderr,
                              "[termin-qopt] transient friction workspace size "
                              "overflow\n");
@@ -878,20 +672,16 @@ namespace termin::physics_qopt
             friction_tangent_jacobian.assign(tangents * dofs, 0.0);
             friction_contact_normal_jacobian.assign(contacts * dofs, 0.0);
             friction_contact_normal_rows.resize(contacts);
-            for (std::size_t contact = 0; contact < contacts; ++contact)
-            {
+            for (std::size_t contact = 0; contact < contacts; ++contact) {
                 const DynamicsUnilateralConstraintHandle normal_constraint =
                     friction_topology.normal_constraint(contact);
                 const DenseBlockInfo normal_info =
-                    unilateral_topology.constraint_topology().block_info(
-                        normal_constraint.block);
-                if (!normal_info.ok() || normal_info.size != 1)
-                {
-                    std::fprintf(
-                        stderr,
-                        "[termin-qopt] friction contact %zu has an invalid "
-                        "normal-row mapping\n",
-                        contact);
+                    unilateral_topology.constraint_topology().block_info(normal_constraint.block);
+                if (!normal_info.ok() || normal_info.size != 1) {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] friction contact %zu has an invalid "
+                                 "normal-row mapping\n",
+                                 contact);
                     return DynamicsSystemDiagnostic::TopologyFailure;
                 }
                 friction_contact_normal_rows[contact] = normal_info.offset;
@@ -904,19 +694,13 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        assemble_friction(DynamicsFrictionAssembly& assembly) noexcept
-        {
-            if (assembly.clear() != AssemblyDiagnostic::None)
-            {
+        [[nodiscard]] DynamicsSystemDiagnostic assemble_friction(DynamicsFrictionAssembly& assembly) noexcept {
+            if (assembly.clear() != AssemblyDiagnostic::None) {
                 return DynamicsSystemDiagnostic::AssemblyFailure;
             }
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
-                const AssemblyDiagnostic diagnostic =
-                    contributions[index]->assemble_friction(assembly);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
+                const AssemblyDiagnostic diagnostic = contributions[index]->assemble_friction(assembly);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu friction "
                                  "assembly failed: %s\n",
@@ -928,30 +712,22 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] ActiveSetQpWarmStartView unilateral_warm_start() noexcept
-        {
-            if (!velocity_warm_primal_valid ||
-                velocity_warm_primal.size() != topology.dof_count() ||
-                unilateral_warm_mask.size() !=
-                    unilateral_topology.constraint_count())
-            {
+        [[nodiscard]] ActiveSetQpWarmStartView unilateral_warm_start() noexcept {
+            if (!velocity_warm_primal_valid || velocity_warm_primal.size() != topology.dof_count() ||
+                unilateral_warm_mask.size() != unilateral_topology.constraint_count()) {
                 return {};
             }
-            std::fill(
-                unilateral_warm_mask.begin(), unilateral_warm_mask.end(), 0.0);
+            std::fill(unilateral_warm_mask.begin(), unilateral_warm_mask.end(), 0.0);
             bool has_hint = false;
             const DenseVectorView mask{
                 unilateral_warm_mask.data(),
                 unilateral_warm_mask.size(),
                 1,
             };
-            for (const auto& contribution : contributions)
-            {
-                has_hint |= contribution->write_unilateral_warm_start(
-                    unilateral_topology, mask);
+            for (const auto& contribution : contributions) {
+                has_hint |= contribution->write_unilateral_warm_start(unilateral_topology, mask);
             }
-            if (!has_hint)
-            {
+            if (!has_hint) {
                 return {};
             }
             return {
@@ -962,27 +738,21 @@ namespace termin::physics_qopt
             };
         }
 
-        void commit_step() noexcept
-        {
-            for (std::size_t index = 0; index < step_contribution_count;
-                 ++index)
-            {
+        void commit_step() noexcept {
+            for (std::size_t index = 0; index < step_contribution_count; ++index) {
                 contributions[index]->commit_step();
             }
             step_contribution_count = 0;
         }
 
-        void rollback_step() noexcept
-        {
-            while (step_contribution_count != 0)
-            {
+        void rollback_step() noexcept {
+            while (step_contribution_count != 0) {
                 --step_contribution_count;
                 contributions[step_contribution_count]->rollback_step();
             }
         }
 
-        void apply_solution(DynamicsAssemblyPhase phase) noexcept
-        {
+        void apply_solution(DynamicsAssemblyPhase phase) noexcept {
             const ConstDenseVectorView dofs{
                 dof_solution.data(),
                 dof_solution.size(),
@@ -993,14 +763,12 @@ namespace termin::physics_qopt
                 constraint_reaction.size(),
                 1,
             };
-            for (const auto& contribution : contributions)
-            {
+            for (const auto& contribution : contributions) {
                 contribution->apply_solution(phase, topology, dofs, reactions);
             }
         }
 
-        void apply_unilateral_solution() noexcept
-        {
+        void apply_unilateral_solution() noexcept {
             const ConstDenseVectorView reactions{
                 unilateral_reaction.data(),
                 unilateral_reaction.size(),
@@ -1011,15 +779,12 @@ namespace termin::physics_qopt
                 unilateral_tight_mask.size(),
                 1,
             };
-            for (const auto& contribution : contributions)
-            {
-                contribution->apply_unilateral_solution(
-                    topology, unilateral_topology, reactions, tight_mask);
+            for (const auto& contribution : contributions) {
+                contribution->apply_unilateral_solution(topology, unilateral_topology, reactions, tight_mask);
             }
         }
 
-        void apply_friction_solution() noexcept
-        {
+        void apply_friction_solution() noexcept {
             const ConstDenseVectorView impulses{
                 friction_tangent_impulse.data(),
                 friction_tangent_impulse.size(),
@@ -1035,29 +800,21 @@ namespace termin::physics_qopt
                 friction_work.size(),
                 1,
             };
-            for (const auto& contribution : contributions)
-            {
-                contribution->apply_friction_solution(
-                    friction_topology, normal_impulses, impulses, work);
+            for (const auto& contribution : contributions) {
+                contribution->apply_friction_solution(friction_topology, normal_impulses, impulses, work);
             }
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic read_velocity() noexcept
-        {
-            std::fill(velocity.begin(),
-                      velocity.end(),
-                      std::numeric_limits<double>::quiet_NaN());
+        [[nodiscard]] DynamicsSystemDiagnostic read_velocity() noexcept {
+            std::fill(velocity.begin(), velocity.end(), std::numeric_limits<double>::quiet_NaN());
             const DenseVectorView destination{
                 velocity.data(),
                 velocity.size(),
                 1,
             };
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
-                const AssemblyDiagnostic diagnostic =
-                    contributions[index]->write_velocity(topology, destination);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
+                const AssemblyDiagnostic diagnostic = contributions[index]->write_velocity(topology, destination);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu failed to "
                                  "write generalized velocity: %s\n",
@@ -1066,10 +823,7 @@ namespace termin::physics_qopt
                     return DynamicsSystemDiagnostic::InternalFailure;
                 }
             }
-            if (!std::all_of(velocity.begin(),
-                             velocity.end(),
-                             [](double value) { return std::isfinite(value); }))
-            {
+            if (!std::all_of(velocity.begin(), velocity.end(), [](double value) { return std::isfinite(value); })) {
                 std::fprintf(stderr,
                              "[termin-qopt] one or more generalized DOFs have "
                              "no finite velocity owner\n");
@@ -1078,15 +832,10 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        write_velocity(ConstDenseVectorView source) noexcept
-        {
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
-                const AssemblyDiagnostic diagnostic =
-                    contributions[index]->set_velocity(topology, source);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+        [[nodiscard]] DynamicsSystemDiagnostic write_velocity(ConstDenseVectorView source) noexcept {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
+                const AssemblyDiagnostic diagnostic = contributions[index]->set_velocity(topology, source);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu rejected "
                                  "generalized velocity: %s\n",
@@ -1098,17 +847,12 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        set_trial_configuration(ConstDenseVectorView source,
-                                double time_step) noexcept
-        {
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
+        [[nodiscard]] DynamicsSystemDiagnostic set_trial_configuration(ConstDenseVectorView source,
+                                                                       double time_step) noexcept {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
                 const AssemblyDiagnostic diagnostic =
-                    contributions[index]->set_trial_configuration(
-                        topology, source, time_step);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+                    contributions[index]->set_trial_configuration(topology, source, time_step);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu rejected "
                                  "trial configuration: %s\n",
@@ -1120,9 +864,7 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        apply_position_correction(double time_step) noexcept
-        {
+        [[nodiscard]] DynamicsSystemDiagnostic apply_position_correction(double time_step) noexcept {
             std::fill(corrected_configuration_velocity.begin(),
                       corrected_configuration_velocity.end(),
                       std::numeric_limits<double>::quiet_NaN());
@@ -1141,17 +883,10 @@ namespace termin::physics_qopt
                 corrected_configuration_velocity.size(),
                 1,
             };
-            for (std::size_t index = 0; index < contributions.size(); ++index)
-            {
-                const AssemblyDiagnostic diagnostic =
-                    contributions[index]->write_corrected_midpoint_velocity(
-                        topology,
-                        configuration,
-                        correction,
-                        time_step,
-                        destination);
-                if (diagnostic != AssemblyDiagnostic::None)
-                {
+            for (std::size_t index = 0; index < contributions.size(); ++index) {
+                const AssemblyDiagnostic diagnostic = contributions[index]->write_corrected_midpoint_velocity(
+                    topology, configuration, correction, time_step, destination);
+                if (diagnostic != AssemblyDiagnostic::None) {
                     std::fprintf(stderr,
                                  "[termin-qopt] contribution %zu failed to map "
                                  "a trial tangent correction: %s\n",
@@ -1162,8 +897,7 @@ namespace termin::physics_qopt
             }
             if (!std::all_of(corrected_configuration_velocity.begin(),
                              corrected_configuration_velocity.end(),
-                             [](double value) { return std::isfinite(value); }))
-            {
+                             [](double value) { return std::isfinite(value); })) {
                 std::fprintf(stderr,
                              "[termin-qopt] one or more generalized DOFs have "
                              "no position-correction owner\n");
@@ -1173,12 +907,9 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic
-        apply_friction_configuration_correction(double time_step) noexcept
-        {
+        [[nodiscard]] DynamicsSystemDiagnostic apply_friction_configuration_correction(double time_step) noexcept {
             if (pre_friction_velocity.size() != dof_solution.size() ||
-                post_friction_velocity.size() != dof_solution.size())
-            {
+                post_friction_velocity.size() != dof_solution.size()) {
                 std::fprintf(stderr,
                              "[termin-qopt] friction configuration correction "
                              "has inconsistent velocity sizes\n");
@@ -1191,24 +922,14 @@ namespace termin::physics_qopt
             // of that velocity change. The correction is expressed as a
             // tangent increment so each contribution can map it through its
             // own configuration geometry.
-            for (std::size_t index = 0; index < dof_solution.size(); ++index)
-            {
-                dof_solution[index] =
-                    0.5 * time_step *
-                    (post_friction_velocity[index] -
-                     pre_friction_velocity[index]);
+            for (std::size_t index = 0; index < dof_solution.size(); ++index) {
+                dof_solution[index] = 0.5 * time_step * (post_friction_velocity[index] - pre_friction_velocity[index]);
             }
-            if (apply_position_correction(time_step) !=
+            if (apply_position_correction(time_step) != DynamicsSystemDiagnostic::None ||
+                set_trial_configuration({configuration_velocity.data(), configuration_velocity.size(), 1}, time_step) !=
                     DynamicsSystemDiagnostic::None ||
-                set_trial_configuration(
-                    {configuration_velocity.data(),
-                     configuration_velocity.size(),
-                     1},
-                    time_step) != DynamicsSystemDiagnostic::None ||
-                write_velocity({post_friction_velocity.data(),
-                                post_friction_velocity.size(),
-                                1}) != DynamicsSystemDiagnostic::None)
-            {
+                write_velocity({post_friction_velocity.data(), post_friction_velocity.size(), 1}) !=
+                    DynamicsSystemDiagnostic::None) {
                 return DynamicsSystemDiagnostic::InternalFailure;
             }
 
@@ -1216,32 +937,25 @@ namespace termin::physics_qopt
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] double max_position_error() const noexcept
-        {
+        [[nodiscard]] double max_position_error() const noexcept {
             double result = 0.0;
-            for (const auto& contribution : contributions)
-            {
+            for (const auto& contribution : contributions) {
                 result = std::max(result, contribution->position_error_linf());
             }
             return result;
         }
 
-        [[nodiscard]] double max_velocity_error() const noexcept
-        {
+        [[nodiscard]] double max_velocity_error() const noexcept {
             double result = 0.0;
-            for (const auto& contribution : contributions)
-            {
+            for (const auto& contribution : contributions) {
                 result = std::max(result, contribution->velocity_error_linf());
             }
             return result;
         }
     };
 
-    std::string_view dynamics_system_diagnostic_name(
-        DynamicsSystemDiagnostic diagnostic) noexcept
-    {
-        switch (diagnostic)
-        {
+    std::string_view dynamics_system_diagnostic_name(DynamicsSystemDiagnostic diagnostic) noexcept {
+        switch (diagnostic) {
         case DynamicsSystemDiagnostic::None:
             return "none";
         case DynamicsSystemDiagnostic::ModelFinalized:
@@ -1272,42 +986,30 @@ namespace termin::physics_qopt
         return "unknown";
     }
 
-    DynamicsSystem::DynamicsSystem() : impl_(std::make_unique<Impl>()) {}
+    DynamicsSystem::DynamicsSystem()
+        : impl_(std::make_unique<Impl>()) {}
 
     DynamicsSystem::~DynamicsSystem() = default;
     DynamicsSystem::DynamicsSystem(DynamicsSystem&&) noexcept = default;
-    DynamicsSystem&
-    DynamicsSystem::operator=(DynamicsSystem&&) noexcept = default;
+    DynamicsSystem& DynamicsSystem::operator=(DynamicsSystem&&) noexcept = default;
 
-    DynamicsSystemDiagnostic DynamicsSystem::add_contribution(
-        std::unique_ptr<DynamicsContribution> contribution) noexcept
-    {
-        if (impl_ == nullptr)
-        {
+    DynamicsSystemDiagnostic
+    DynamicsSystem::add_contribution(std::unique_ptr<DynamicsContribution> contribution) noexcept {
+        if (impl_ == nullptr) {
             return DynamicsSystemDiagnostic::InternalFailure;
         }
-        if (impl_->finalized)
-        {
+        if (impl_->finalized) {
             return DynamicsSystemDiagnostic::ModelFinalized;
         }
-        if (contribution == nullptr)
-        {
+        if (contribution == nullptr) {
             return DynamicsSystemDiagnostic::NullContribution;
         }
-        try
-        {
+        try {
             impl_->contributions.push_back(std::move(contribution));
             return DynamicsSystemDiagnostic::None;
-        }
-        catch (const std::exception& error)
-        {
-            std::fprintf(
-                stderr,
-                "[termin-qopt] adding dynamics contribution failed: %s\n",
-                error.what());
-        }
-        catch (...)
-        {
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] adding dynamics contribution failed: %s\n", error.what());
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] adding dynamics contribution failed "
                          "with unknown exception\n");
@@ -1315,23 +1017,16 @@ namespace termin::physics_qopt
         return DynamicsSystemDiagnostic::InternalFailure;
     }
 
-    DynamicsSystemDiagnostic DynamicsSystem::finalize() noexcept
-    {
-        if (impl_ == nullptr)
-        {
+    DynamicsSystemDiagnostic DynamicsSystem::finalize() noexcept {
+        if (impl_ == nullptr) {
             return DynamicsSystemDiagnostic::InternalFailure;
         }
-        if (impl_->finalized)
-        {
+        if (impl_->finalized) {
             return DynamicsSystemDiagnostic::ModelFinalized;
         }
-        for (std::size_t index = 0; index < impl_->contributions.size();
-             ++index)
-        {
-            const AssemblyDiagnostic diagnostic =
-                impl_->contributions[index]->register_topology(impl_->topology);
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+        for (std::size_t index = 0; index < impl_->contributions.size(); ++index) {
+            const AssemblyDiagnostic diagnostic = impl_->contributions[index]->register_topology(impl_->topology);
+            if (diagnostic != AssemblyDiagnostic::None) {
                 std::fprintf(stderr,
                              "[termin-qopt] contribution %zu topology "
                              "registration failed: %s\n",
@@ -1340,17 +1035,12 @@ namespace termin::physics_qopt
                 return DynamicsSystemDiagnostic::TopologyFailure;
             }
         }
-        if (impl_->topology.finalize() != AssemblyDiagnostic::None)
-        {
+        if (impl_->topology.finalize() != AssemblyDiagnostic::None) {
             return DynamicsSystemDiagnostic::TopologyFailure;
         }
-        for (std::size_t index = 0; index < impl_->contributions.size();
-             ++index)
-        {
-            const AssemblyDiagnostic diagnostic =
-                impl_->contributions[index]->bind_topology(impl_->topology);
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+        for (std::size_t index = 0; index < impl_->contributions.size(); ++index) {
+            const AssemblyDiagnostic diagnostic = impl_->contributions[index]->bind_topology(impl_->topology);
+            if (diagnostic != AssemblyDiagnostic::None) {
                 std::fprintf(stderr,
                              "[termin-qopt] contribution %zu topology binding "
                              "failed: %s\n",
@@ -1359,8 +1049,7 @@ namespace termin::physics_qopt
                 return DynamicsSystemDiagnostic::TopologyFailure;
             }
         }
-        try
-        {
+        try {
             const std::size_t dofs = impl_->topology.dof_count();
             const std::size_t constraints = impl_->topology.constraint_count();
             impl_->mass.assign(dofs * dofs, 0.0);
@@ -1381,16 +1070,9 @@ namespace termin::physics_qopt
             impl_->velocity_warm_primal_valid = false;
             impl_->finalized = true;
             return DynamicsSystemDiagnostic::None;
-        }
-        catch (const std::exception& error)
-        {
-            std::fprintf(
-                stderr,
-                "[termin-qopt] finalizing dynamics system failed: %s\n",
-                error.what());
-        }
-        catch (...)
-        {
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] finalizing dynamics system failed: %s\n", error.what());
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] finalizing dynamics system failed with "
                          "unknown exception\n");
@@ -1398,172 +1080,120 @@ namespace termin::physics_qopt
         return DynamicsSystemDiagnostic::InternalFailure;
     }
 
-    DynamicsSystemStepResult
-    DynamicsSystem::step(DynamicsSystemStepOptions options) noexcept
-    {
-        if (impl_ == nullptr || !impl_->finalized)
-        {
-            return dynamics_system_failure(
-                QpStatus::InvalidInput,
-                DynamicsSystemDiagnostic::ModelNotFinalized);
+    DynamicsSystemStepResult DynamicsSystem::step(DynamicsSystemStepOptions options) noexcept {
+        if (impl_ == nullptr || !impl_->finalized) {
+            return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::ModelNotFinalized);
         }
-        if (!std::isfinite(options.time_step) || options.time_step <= 0.0)
-        {
-            return dynamics_system_failure(
-                QpStatus::InvalidInput,
-                DynamicsSystemDiagnostic::InvalidTimeStep);
+        if (!std::isfinite(options.time_step) || options.time_step <= 0.0) {
+            return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::InvalidTimeStep);
         }
-        if (!std::isfinite(options.position_tolerance) ||
-            !std::isfinite(options.velocity_tolerance) ||
-            options.position_tolerance < 0.0 ||
-            options.velocity_tolerance < 0.0 ||
-            (impl_->topology.constraint_count() != 0 &&
-             options.max_position_iterations == 0) ||
-            options.friction_cone_facets < 4 ||
-            options.friction_cone_facets % 2 != 0)
-        {
-            return dynamics_system_failure(
-                QpStatus::InvalidInput,
-                DynamicsSystemDiagnostic::InvalidProjectionOptions);
+        if (!std::isfinite(options.position_tolerance) || !std::isfinite(options.velocity_tolerance) ||
+            options.position_tolerance < 0.0 || options.velocity_tolerance < 0.0 ||
+            (impl_->topology.constraint_count() != 0 && options.max_position_iterations == 0) ||
+            options.friction_cone_facets < 4 || options.friction_cone_facets % 2 != 0) {
+            return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::InvalidProjectionOptions);
         }
 
-        if (impl_->begin_step() != DynamicsSystemDiagnostic::None)
-        {
+        if (impl_->begin_step() != DynamicsSystemDiagnostic::None) {
             impl_->rollback_step();
-            return dynamics_system_failure(
-                QpStatus::NumericalFailure,
-                DynamicsSystemDiagnostic::InternalFailure);
+            return dynamics_system_failure(QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure);
         }
         bool step_open = true;
-        const auto rollback = [&]() noexcept
-        {
-            if (step_open)
-            {
+        const auto rollback = [&]() noexcept {
+            if (step_open) {
                 impl_->rollback_step();
                 step_open = false;
             }
         };
 
-        try
-        {
+        try {
             const DynamicsSystemDiagnostic unilateral_topology_diagnostic =
                 impl_->prepare_unilateral_topology(options.time_step);
-            if (unilateral_topology_diagnostic !=
-                DynamicsSystemDiagnostic::None)
-            {
+            if (unilateral_topology_diagnostic != DynamicsSystemDiagnostic::None) {
                 rollback();
-                return dynamics_system_failure(QpStatus::InvalidInput,
-                                               unilateral_topology_diagnostic);
+                return dynamics_system_failure(QpStatus::InvalidInput, unilateral_topology_diagnostic);
             }
-            const std::size_t unilateral_constraint_count =
-                impl_->unilateral_topology.constraint_count();
+            const std::size_t unilateral_constraint_count = impl_->unilateral_topology.constraint_count();
             const DynamicsSystemDiagnostic friction_topology_diagnostic =
                 impl_->prepare_friction_topology(options.time_step);
-            if (friction_topology_diagnostic != DynamicsSystemDiagnostic::None)
-            {
+            if (friction_topology_diagnostic != DynamicsSystemDiagnostic::None) {
                 rollback();
-                return dynamics_system_failure(QpStatus::InvalidInput,
-                                               friction_topology_diagnostic,
-                                               {},
-                                               unilateral_constraint_count);
+                return dynamics_system_failure(
+                    QpStatus::InvalidInput, friction_topology_diagnostic, {}, unilateral_constraint_count);
             }
             DynamicsAssembly assembly(
                 impl_->topology,
                 impl_->unilateral_topology,
                 {
-                    DenseMatrixView::row_major(impl_->mass.data(),
-                                               impl_->topology.dof_count(),
-                                               impl_->topology.dof_count()),
+                    DenseMatrixView::row_major(
+                        impl_->mass.data(), impl_->topology.dof_count(), impl_->topology.dof_count()),
                     {impl_->load.data(), impl_->load.size(), 1},
                     DenseMatrixView::row_major(
-                        impl_->jacobian.data(),
-                        impl_->topology.constraint_count(),
-                        impl_->topology.dof_count()),
+                        impl_->jacobian.data(), impl_->topology.constraint_count(), impl_->topology.dof_count()),
                     {
                         impl_->constraint_rhs.data(),
                         impl_->constraint_rhs.size(),
                         1,
                     },
                     DenseMatrixView::row_major(
-                        impl_->unilateral_jacobian.data(),
-                        unilateral_constraint_count,
-                        impl_->topology.dof_count()),
+                        impl_->unilateral_jacobian.data(), unilateral_constraint_count, impl_->topology.dof_count()),
                     {
                         impl_->unilateral_limit.data(),
                         impl_->unilateral_limit.size(),
                         1,
                     },
                 });
-            if (!assembly.valid() ||
-                impl_->read_velocity() != DynamicsSystemDiagnostic::None ||
-                impl_->assemble(assembly,
-                                DynamicsAssemblyPhase::Acceleration) !=
-                    DynamicsSystemDiagnostic::None)
-            {
+            if (!assembly.valid() || impl_->read_velocity() != DynamicsSystemDiagnostic::None ||
+                impl_->assemble(assembly, DynamicsAssemblyPhase::Acceleration) != DynamicsSystemDiagnostic::None) {
                 rollback();
-                return dynamics_system_failure(
-                    QpStatus::InvalidInput,
-                    DynamicsSystemDiagnostic::AssemblyFailure);
+                return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure);
             }
 
-            const QpSolveResult first_dynamics = solve_constrained_dynamics(
-                assembly.system(),
-                {
-                    {
-                        impl_->dof_solution.data(),
-                        impl_->dof_solution.size(),
-                        1,
-                    },
-                    {
-                        impl_->constraint_reaction.data(),
-                        impl_->constraint_reaction.size(),
-                        1,
-                    },
-                },
-                options.qp_tolerance);
-            if (first_dynamics.status != QpStatus::Optimal)
-            {
+            const QpSolveResult first_dynamics = solve_constrained_dynamics(assembly.system(),
+                                                                            {
+                                                                                {
+                                                                                    impl_->dof_solution.data(),
+                                                                                    impl_->dof_solution.size(),
+                                                                                    1,
+                                                                                },
+                                                                                {
+                                                                                    impl_->constraint_reaction.data(),
+                                                                                    impl_->constraint_reaction.size(),
+                                                                                    1,
+                                                                                },
+                                                                            },
+                                                                            options.qp_tolerance);
+            if (first_dynamics.status != QpStatus::Optimal) {
                 rollback();
                 return dynamics_system_failure(
-                    first_dynamics.status,
-                    DynamicsSystemDiagnostic::DynamicsFailure,
-                    first_dynamics);
+                    first_dynamics.status, DynamicsSystemDiagnostic::DynamicsFailure, first_dynamics);
             }
             impl_->apply_solution(DynamicsAssemblyPhase::Acceleration);
-            for (std::size_t index = 0; index < impl_->velocity.size(); ++index)
-            {
+            for (std::size_t index = 0; index < impl_->velocity.size(); ++index) {
                 impl_->midpoint_velocity[index] =
-                    impl_->velocity[index] +
-                    0.5 * options.time_step * impl_->dof_solution[index];
+                    impl_->velocity[index] + 0.5 * options.time_step * impl_->dof_solution[index];
             }
             impl_->configuration_velocity = impl_->midpoint_velocity;
-            const auto midpoint_view = [&]() noexcept
-            {
+            const auto midpoint_view = [&]() noexcept {
                 return ConstDenseVectorView{
                     impl_->midpoint_velocity.data(),
                     impl_->midpoint_velocity.size(),
                     1,
                 };
             };
-            const auto configuration_view = [&]() noexcept
-            {
+            const auto configuration_view = [&]() noexcept {
                 return ConstDenseVectorView{
                     impl_->configuration_velocity.data(),
                     impl_->configuration_velocity.size(),
                     1,
                 };
             };
-            if (impl_->write_velocity(midpoint_view()) !=
-                    DynamicsSystemDiagnostic::None ||
-                impl_->set_trial_configuration(configuration_view(),
-                                               options.time_step) !=
-                    DynamicsSystemDiagnostic::None)
-            {
+            if (impl_->write_velocity(midpoint_view()) != DynamicsSystemDiagnostic::None ||
+                impl_->set_trial_configuration(configuration_view(), options.time_step) !=
+                    DynamicsSystemDiagnostic::None) {
                 rollback();
                 return dynamics_system_failure(
-                    QpStatus::NumericalFailure,
-                    DynamicsSystemDiagnostic::InternalFailure,
-                    first_dynamics);
+                    QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure, first_dynamics);
             }
 
             DynamicsSystemStepResult result;
@@ -1580,564 +1210,406 @@ namespace termin::physics_qopt
             // position, acceleration, unilateral, and friction equations on
             // that corrected configuration without changing it afterward.
             constexpr std::size_t kMaximumConfigurationPasses = 2;
-            for (std::size_t configuration_pass = 0;
-                 configuration_pass < kMaximumConfigurationPasses;
-                 ++configuration_pass)
-            {
+            for (std::size_t configuration_pass = 0; configuration_pass < kMaximumConfigurationPasses;
+                 ++configuration_pass) {
                 bool configuration_corrected = false;
-            for (std::size_t iteration = 0;
-                 iteration < options.max_position_iterations;
-                 ++iteration)
-            {
-                result.position_constraint_linf = impl_->max_position_error();
-                if (result.position_constraint_linf <=
-                    options.position_tolerance)
-                {
-                    break;
-                }
-                if (impl_->assemble(
-                        assembly, DynamicsAssemblyPhase::PositionProjection) !=
-                    DynamicsSystemDiagnostic::None)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        QpStatus::InvalidInput,
-                        DynamicsSystemDiagnostic::AssemblyFailure,
-                        first_dynamics);
-                }
-                QpSolveResult projection;
-                if (unilateral_constraint_count == 0)
-                {
-                    projection = solve_constrained_dynamics(
-                        assembly.system(),
-                        {
-                            {
-                                impl_->dof_solution.data(),
-                                impl_->dof_solution.size(),
-                                1,
-                            },
-                            {
-                                impl_->constraint_reaction.data(),
-                                impl_->constraint_reaction.size(),
-                                1,
-                            },
-                        },
-                        options.qp_tolerance);
-                }
-                else
-                {
-                    projection = solve_unilateral_velocity(
-                        assembly.system(),
-                        assembly.unilateral_constraints(),
-                        {
-                            {
-                                impl_->dof_solution.data(),
-                                impl_->dof_solution.size(),
-                                1,
-                            },
-                            {
-                                impl_->constraint_reaction.data(),
-                                impl_->constraint_reaction.size(),
-                                1,
-                            },
-                            {
-                                impl_->unilateral_reaction.data(),
-                                impl_->unilateral_reaction.size(),
-                                1,
-                            },
-                            {
-                                impl_->unilateral_tight_mask.data(),
-                                impl_->unilateral_tight_mask.size(),
-                                1,
-                            },
-                        },
-                        {},
-                        {.tolerance = options.qp_tolerance});
-                }
-                ++result.position_iterations;
-                if (projection.status != QpStatus::Optimal)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        projection.status,
-                        DynamicsSystemDiagnostic::PositionProjectionFailure,
-                        first_dynamics);
-                }
-                if (impl_->apply_position_correction(options.time_step) !=
-                        DynamicsSystemDiagnostic::None ||
-                    impl_->write_velocity(configuration_view()) !=
-                        DynamicsSystemDiagnostic::None ||
-                    impl_->set_trial_configuration(configuration_view(),
-                                                   options.time_step) !=
-                        DynamicsSystemDiagnostic::None)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        QpStatus::NumericalFailure,
-                        DynamicsSystemDiagnostic::InternalFailure,
-                        first_dynamics);
-                }
-            }
-            result.position_constraint_linf = impl_->max_position_error();
-            if (result.position_constraint_linf > options.position_tolerance)
-            {
-                rollback();
-                return dynamics_system_failure(
-                    QpStatus::NumericalFailure,
-                    DynamicsSystemDiagnostic::PositionProjectionFailure,
-                    first_dynamics);
-            }
-
-            // Position projection changes only the trial configuration. The
-            // physical midpoint velocity remains the unconstrained dynamics
-            // result and is restored before the endpoint acceleration solve.
-            const ConstDenseVectorView endpoint_velocity_seed =
-                configuration_pass == 0
-                    ? midpoint_view()
-                    : ConstDenseVectorView{
-                          impl_->endpoint_velocity_predictor.data(),
-                          impl_->endpoint_velocity_predictor.size(),
-                          1,
-                      };
-            if (impl_->write_velocity(endpoint_velocity_seed) !=
-                DynamicsSystemDiagnostic::None)
-            {
-                rollback();
-                return dynamics_system_failure(
-                    QpStatus::NumericalFailure,
-                    DynamicsSystemDiagnostic::InternalFailure,
-                    first_dynamics);
-            }
-
-            // The body-fixed bias ad*_v Mv depends on the endpoint velocity.
-            // Therefore the second kick is an implicit trapezoidal half-step. A
-            // small fixed-point solve keeps this generic: concrete
-            // contributions merely reassemble their equations at the current
-            // endpoint-velocity candidate.
-            impl_->velocity = configuration_pass == 0
-                                  ? impl_->midpoint_velocity
-                                  : impl_->endpoint_velocity_predictor;
-            bool endpoint_velocity_converged = false;
-            constexpr std::size_t kMaximumVelocityIterations = 20;
-            const double endpoint_velocity_tolerance =
-                std::max(1e-12, options.velocity_tolerance * 0.1);
-            EqualityQpFactorizationCache endpoint_factorization;
-            for (std::size_t iteration = 0;
-                 iteration < kMaximumVelocityIterations;
-                 ++iteration)
-            {
-                if (impl_->assemble(assembly,
-                                    DynamicsAssemblyPhase::Acceleration) !=
-                    DynamicsSystemDiagnostic::None)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        QpStatus::InvalidInput,
-                        DynamicsSystemDiagnostic::AssemblyFailure,
-                        first_dynamics);
-                }
-                second_dynamics = solve_constrained_dynamics_impl(
-                    assembly.system(),
-                    {
-                        {
-                            impl_->dof_solution.data(),
-                            impl_->dof_solution.size(),
-                            1,
-                        },
-                        {
-                            impl_->constraint_reaction.data(),
-                            impl_->constraint_reaction.size(),
-                            1,
-                        },
-                    },
-                    options.qp_tolerance,
-                    &endpoint_factorization);
-                if (second_dynamics.status != QpStatus::Optimal)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        second_dynamics.status,
-                        DynamicsSystemDiagnostic::DynamicsFailure,
-                        second_dynamics);
-                }
-                double change_linf = 0.0;
-                for (std::size_t index = 0; index < impl_->velocity.size();
-                     ++index)
-                {
-                    impl_->corrected_midpoint_velocity[index] =
-                        impl_->midpoint_velocity[index] +
-                        0.5 * options.time_step * impl_->dof_solution[index];
-                    change_linf = std::max(
-                        change_linf,
-                        std::abs(impl_->corrected_midpoint_velocity[index] -
-                                 impl_->velocity[index]));
-                }
-                if (impl_->write_velocity({
-                        impl_->corrected_midpoint_velocity.data(),
-                        impl_->corrected_midpoint_velocity.size(),
-                        1,
-                    }) != DynamicsSystemDiagnostic::None)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        QpStatus::NumericalFailure,
-                        DynamicsSystemDiagnostic::InternalFailure,
-                        second_dynamics);
-                }
-                impl_->velocity.swap(impl_->corrected_midpoint_velocity);
-                if (change_linf <= endpoint_velocity_tolerance)
-                {
-                    endpoint_velocity_converged = true;
-                    break;
-                }
-            }
-            const EqualityQpFactorizationCounters endpoint_counters =
-                endpoint_factorization.counters();
-            result.endpoint_equality_factorizations +=
-                endpoint_counters.factorizations;
-            result.endpoint_equality_factorization_reuses +=
-                endpoint_counters.reuse_hits;
-            if (!endpoint_velocity_converged)
-            {
-                std::fprintf(stderr,
-                             "[termin-qopt] implicit endpoint-velocity solve "
-                             "did not converge\n");
-                rollback();
-                return dynamics_system_failure(
-                    QpStatus::NumericalFailure,
-                    DynamicsSystemDiagnostic::DynamicsFailure,
-                    second_dynamics);
-            }
-            if (configuration_pass == 0)
-            {
-                impl_->endpoint_velocity_predictor = impl_->velocity;
-            }
-            impl_->apply_solution(DynamicsAssemblyPhase::Acceleration);
-            result.dynamics = second_dynamics;
-
-            if (impl_->topology.constraint_count() != 0 ||
-                unilateral_constraint_count != 0)
-            {
-                if (impl_->assemble(
-                        assembly, DynamicsAssemblyPhase::VelocityProjection) !=
-                    DynamicsSystemDiagnostic::None)
-                {
-                    rollback();
-                    return dynamics_system_failure(
-                        QpStatus::InvalidInput,
-                        DynamicsSystemDiagnostic::AssemblyFailure,
-                        second_dynamics);
-                }
-                const ActiveSetQpWarmStartView warm_start =
-                    impl_->unilateral_warm_start();
-                QpSolveResult velocity_projection = solve_unilateral_velocity(
-                    assembly.system(),
-                    assembly.unilateral_constraints(),
-                    {
-                        {
-                            impl_->dof_solution.data(),
-                            impl_->dof_solution.size(),
-                            1,
-                        },
-                        {
-                            impl_->constraint_reaction.data(),
-                            impl_->constraint_reaction.size(),
-                            1,
-                        },
-                        {
-                            impl_->unilateral_reaction.data(),
-                            impl_->unilateral_reaction.size(),
-                            1,
-                        },
-                        {
-                            impl_->unilateral_tight_mask.data(),
-                            impl_->unilateral_tight_mask.size(),
-                            1,
-                        },
-                    },
-                    warm_start,
-                    {.tolerance = options.qp_tolerance});
-                if (velocity_projection.status != QpStatus::Optimal &&
-                    velocity_projection.diagnostic ==
-                        QpDiagnostic::InvalidWarmStart &&
-                    !warm_start.primal.empty())
-                {
-                    velocity_projection = solve_unilateral_velocity(
-                        assembly.system(),
-                        assembly.unilateral_constraints(),
-                        {
-                            {impl_->dof_solution.data(),
-                             impl_->dof_solution.size(),
-                             1},
-                            {impl_->constraint_reaction.data(),
-                             impl_->constraint_reaction.size(),
-                             1},
-                            {impl_->unilateral_reaction.data(),
-                             impl_->unilateral_reaction.size(),
-                             1},
-                            {impl_->unilateral_tight_mask.data(),
-                             impl_->unilateral_tight_mask.size(),
-                             1},
-                        },
-                        {},
-                        {.tolerance = options.qp_tolerance});
-                }
-                result.velocity_projection = velocity_projection;
-                if (velocity_projection.status != QpStatus::Optimal)
-                {
-                    rollback();
-                    DynamicsSystemStepResult failure = dynamics_system_failure(
-                        velocity_projection.status,
-                        DynamicsSystemDiagnostic::VelocityProjectionFailure,
-                        second_dynamics,
-                        unilateral_constraint_count);
-                    failure.velocity_projection = velocity_projection;
-                    return failure;
-                }
-                impl_->apply_solution(
-                    DynamicsAssemblyPhase::VelocityProjection);
-                impl_->apply_unilateral_solution();
-
-                const std::size_t friction_contact_count =
-                    impl_->friction_topology.contact_count();
-                result.friction_contact_count = friction_contact_count;
-                if (friction_contact_count != 0)
-                {
-                    impl_->pre_friction_velocity = impl_->dof_solution;
-                    DynamicsFrictionAssembly friction_assembly(
-                        impl_->topology,
-                        impl_->friction_topology,
-                        {
-                            DenseMatrixView::row_major(
-                                impl_->friction_contact_normal_jacobian.data(),
-                                friction_contact_count,
-                                impl_->topology.dof_count()),
-                            DenseMatrixView::row_major(
-                                impl_->friction_tangent_jacobian.data(),
-                                impl_->friction_topology.tangent_count(),
-                                impl_->topology.dof_count()),
-                            {impl_->friction_normal_impulse.data(),
-                             impl_->friction_normal_impulse.size(),
-                             1},
-                            {impl_->friction_coefficient.data(),
-                             impl_->friction_coefficient.size(),
-                             1},
-                        });
-                    if (!friction_assembly.valid() ||
-                        impl_->assemble_friction(friction_assembly) !=
-                            DynamicsSystemDiagnostic::None)
-                    {
+                for (std::size_t iteration = 0; iteration < options.max_position_iterations; ++iteration) {
+                    result.position_constraint_linf = impl_->max_position_error();
+                    if (result.position_constraint_linf <= options.position_tolerance) {
+                        break;
+                    }
+                    if (impl_->assemble(assembly, DynamicsAssemblyPhase::PositionProjection) !=
+                        DynamicsSystemDiagnostic::None) {
                         rollback();
                         return dynamics_system_failure(
-                            QpStatus::InvalidInput,
-                            DynamicsSystemDiagnostic::AssemblyFailure,
-                            second_dynamics,
-                            unilateral_constraint_count);
+                            QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure, first_dynamics);
                     }
+                    QpSolveResult projection;
+                    if (unilateral_constraint_count == 0) {
+                        projection = solve_constrained_dynamics(assembly.system(),
+                                                                {
+                                                                    {
+                                                                        impl_->dof_solution.data(),
+                                                                        impl_->dof_solution.size(),
+                                                                        1,
+                                                                    },
+                                                                    {
+                                                                        impl_->constraint_reaction.data(),
+                                                                        impl_->constraint_reaction.size(),
+                                                                        1,
+                                                                    },
+                                                                },
+                                                                options.qp_tolerance);
+                    } else {
+                        projection = solve_unilateral_velocity(assembly.system(),
+                                                               assembly.unilateral_constraints(),
+                                                               {
+                                                                   {
+                                                                       impl_->dof_solution.data(),
+                                                                       impl_->dof_solution.size(),
+                                                                       1,
+                                                                   },
+                                                                   {
+                                                                       impl_->constraint_reaction.data(),
+                                                                       impl_->constraint_reaction.size(),
+                                                                       1,
+                                                                   },
+                                                                   {
+                                                                       impl_->unilateral_reaction.data(),
+                                                                       impl_->unilateral_reaction.size(),
+                                                                       1,
+                                                                   },
+                                                                   {
+                                                                       impl_->unilateral_tight_mask.data(),
+                                                                       impl_->unilateral_tight_mask.size(),
+                                                                       1,
+                                                                   },
+                                                               },
+                                                               {},
+                                                               {.tolerance = options.qp_tolerance});
+                    }
+                    ++result.position_iterations;
+                    if (projection.status != QpStatus::Optimal) {
+                        rollback();
+                        return dynamics_system_failure(
+                            projection.status, DynamicsSystemDiagnostic::PositionProjectionFailure, first_dynamics);
+                    }
+                    if (impl_->apply_position_correction(options.time_step) != DynamicsSystemDiagnostic::None ||
+                        impl_->write_velocity(configuration_view()) != DynamicsSystemDiagnostic::None ||
+                        impl_->set_trial_configuration(configuration_view(), options.time_step) !=
+                            DynamicsSystemDiagnostic::None) {
+                        rollback();
+                        return dynamics_system_failure(
+                            QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure, first_dynamics);
+                    }
+                }
+                result.position_constraint_linf = impl_->max_position_error();
+                if (result.position_constraint_linf > options.position_tolerance) {
+                    rollback();
+                    return dynamics_system_failure(QpStatus::NumericalFailure,
+                                                   DynamicsSystemDiagnostic::PositionProjectionFailure,
+                                                   first_dynamics);
+                }
 
-                    const std::size_t dofs = impl_->topology.dof_count();
-                    impl_->friction_normal_jacobian.resize(
-                        unilateral_constraint_count * dofs);
-                    impl_->friction_minimum_normal_velocity.resize(
-                        unilateral_constraint_count);
-                    for (std::size_t row = 0; row < unilateral_constraint_count;
-                         ++row)
-                    {
-                        impl_->friction_minimum_normal_velocity[row] =
-                            -impl_->unilateral_limit[row];
-                        for (std::size_t dof = 0; dof < dofs; ++dof)
-                        {
-                            impl_->friction_normal_jacobian[row * dofs + dof] =
-                                -impl_->unilateral_jacobian[row * dofs + dof];
+                // Position projection changes only the trial configuration. The
+                // physical midpoint velocity remains the unconstrained dynamics
+                // result and is restored before the endpoint acceleration solve.
+                const ConstDenseVectorView endpoint_velocity_seed = configuration_pass == 0
+                                                                        ? midpoint_view()
+                                                                        : ConstDenseVectorView{
+                                                                              impl_->endpoint_velocity_predictor.data(),
+                                                                              impl_->endpoint_velocity_predictor.size(),
+                                                                              1,
+                                                                          };
+                if (impl_->write_velocity(endpoint_velocity_seed) != DynamicsSystemDiagnostic::None) {
+                    rollback();
+                    return dynamics_system_failure(
+                        QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure, first_dynamics);
+                }
+
+                // The body-fixed bias ad*_v Mv depends on the endpoint velocity.
+                // Therefore the second kick is an implicit trapezoidal half-step. A
+                // small fixed-point solve keeps this generic: concrete
+                // contributions merely reassemble their equations at the current
+                // endpoint-velocity candidate.
+                impl_->velocity =
+                    configuration_pass == 0 ? impl_->midpoint_velocity : impl_->endpoint_velocity_predictor;
+                bool endpoint_velocity_converged = false;
+                constexpr std::size_t kMaximumVelocityIterations = 20;
+                const double endpoint_velocity_tolerance = std::max(1e-12, options.velocity_tolerance * 0.1);
+                EqualityQpFactorizationCache endpoint_factorization;
+                for (std::size_t iteration = 0; iteration < kMaximumVelocityIterations; ++iteration) {
+                    if (impl_->assemble(assembly, DynamicsAssemblyPhase::Acceleration) !=
+                        DynamicsSystemDiagnostic::None) {
+                        rollback();
+                        return dynamics_system_failure(
+                            QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure, first_dynamics);
+                    }
+                    second_dynamics = solve_constrained_dynamics_impl(assembly.system(),
+                                                                      {
+                                                                          {
+                                                                              impl_->dof_solution.data(),
+                                                                              impl_->dof_solution.size(),
+                                                                              1,
+                                                                          },
+                                                                          {
+                                                                              impl_->constraint_reaction.data(),
+                                                                              impl_->constraint_reaction.size(),
+                                                                              1,
+                                                                          },
+                                                                      },
+                                                                      options.qp_tolerance,
+                                                                      &endpoint_factorization);
+                    if (second_dynamics.status != QpStatus::Optimal) {
+                        rollback();
+                        return dynamics_system_failure(
+                            second_dynamics.status, DynamicsSystemDiagnostic::DynamicsFailure, second_dynamics);
+                    }
+                    double change_linf = 0.0;
+                    for (std::size_t index = 0; index < impl_->velocity.size(); ++index) {
+                        impl_->corrected_midpoint_velocity[index] =
+                            impl_->midpoint_velocity[index] + 0.5 * options.time_step * impl_->dof_solution[index];
+                        change_linf = std::max(
+                            change_linf, std::abs(impl_->corrected_midpoint_velocity[index] - impl_->velocity[index]));
+                    }
+                    if (impl_->write_velocity({
+                            impl_->corrected_midpoint_velocity.data(),
+                            impl_->corrected_midpoint_velocity.size(),
+                            1,
+                        }) != DynamicsSystemDiagnostic::None) {
+                        rollback();
+                        return dynamics_system_failure(
+                            QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure, second_dynamics);
+                    }
+                    impl_->velocity.swap(impl_->corrected_midpoint_velocity);
+                    if (change_linf <= endpoint_velocity_tolerance) {
+                        endpoint_velocity_converged = true;
+                        break;
+                    }
+                }
+                const EqualityQpFactorizationCounters endpoint_counters = endpoint_factorization.counters();
+                result.endpoint_equality_factorizations += endpoint_counters.factorizations;
+                result.endpoint_equality_factorization_reuses += endpoint_counters.reuse_hits;
+                if (!endpoint_velocity_converged) {
+                    std::fprintf(stderr,
+                                 "[termin-qopt] implicit endpoint-velocity solve "
+                                 "did not converge\n");
+                    rollback();
+                    return dynamics_system_failure(
+                        QpStatus::NumericalFailure, DynamicsSystemDiagnostic::DynamicsFailure, second_dynamics);
+                }
+                if (configuration_pass == 0) {
+                    impl_->endpoint_velocity_predictor = impl_->velocity;
+                }
+                impl_->apply_solution(DynamicsAssemblyPhase::Acceleration);
+                result.dynamics = second_dynamics;
+
+                if (impl_->topology.constraint_count() != 0 || unilateral_constraint_count != 0) {
+                    if (impl_->assemble(assembly, DynamicsAssemblyPhase::VelocityProjection) !=
+                        DynamicsSystemDiagnostic::None) {
+                        rollback();
+                        return dynamics_system_failure(
+                            QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure, second_dynamics);
+                    }
+                    const ActiveSetQpWarmStartView warm_start = impl_->unilateral_warm_start();
+                    QpSolveResult velocity_projection =
+                        solve_unilateral_velocity(assembly.system(),
+                                                  assembly.unilateral_constraints(),
+                                                  {
+                                                      {
+                                                          impl_->dof_solution.data(),
+                                                          impl_->dof_solution.size(),
+                                                          1,
+                                                      },
+                                                      {
+                                                          impl_->constraint_reaction.data(),
+                                                          impl_->constraint_reaction.size(),
+                                                          1,
+                                                      },
+                                                      {
+                                                          impl_->unilateral_reaction.data(),
+                                                          impl_->unilateral_reaction.size(),
+                                                          1,
+                                                      },
+                                                      {
+                                                          impl_->unilateral_tight_mask.data(),
+                                                          impl_->unilateral_tight_mask.size(),
+                                                          1,
+                                                      },
+                                                  },
+                                                  warm_start,
+                                                  {.tolerance = options.qp_tolerance});
+                    if (velocity_projection.status != QpStatus::Optimal &&
+                        velocity_projection.diagnostic == QpDiagnostic::InvalidWarmStart &&
+                        !warm_start.primal.empty()) {
+                        velocity_projection = solve_unilateral_velocity(
+                            assembly.system(),
+                            assembly.unilateral_constraints(),
+                            {
+                                {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                                {impl_->constraint_reaction.data(), impl_->constraint_reaction.size(), 1},
+                                {impl_->unilateral_reaction.data(), impl_->unilateral_reaction.size(), 1},
+                                {impl_->unilateral_tight_mask.data(), impl_->unilateral_tight_mask.size(), 1},
+                            },
+                            {},
+                            {.tolerance = options.qp_tolerance});
+                    }
+                    result.velocity_projection = velocity_projection;
+                    if (velocity_projection.status != QpStatus::Optimal) {
+                        rollback();
+                        DynamicsSystemStepResult failure =
+                            dynamics_system_failure(velocity_projection.status,
+                                                    DynamicsSystemDiagnostic::VelocityProjectionFailure,
+                                                    second_dynamics,
+                                                    unilateral_constraint_count);
+                        failure.velocity_projection = velocity_projection;
+                        return failure;
+                    }
+                    impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
+                    impl_->apply_unilateral_solution();
+
+                    const std::size_t friction_contact_count = impl_->friction_topology.contact_count();
+                    result.friction_contact_count = friction_contact_count;
+                    if (friction_contact_count != 0) {
+                        impl_->pre_friction_velocity = impl_->dof_solution;
+                        DynamicsFrictionAssembly friction_assembly(
+                            impl_->topology,
+                            impl_->friction_topology,
+                            {
+                                DenseMatrixView::row_major(impl_->friction_contact_normal_jacobian.data(),
+                                                           friction_contact_count,
+                                                           impl_->topology.dof_count()),
+                                DenseMatrixView::row_major(impl_->friction_tangent_jacobian.data(),
+                                                           impl_->friction_topology.tangent_count(),
+                                                           impl_->topology.dof_count()),
+                                {impl_->friction_normal_impulse.data(), impl_->friction_normal_impulse.size(), 1},
+                                {impl_->friction_coefficient.data(), impl_->friction_coefficient.size(), 1},
+                            });
+                        if (!friction_assembly.valid() ||
+                            impl_->assemble_friction(friction_assembly) != DynamicsSystemDiagnostic::None) {
+                            rollback();
+                            return dynamics_system_failure(QpStatus::InvalidInput,
+                                                           DynamicsSystemDiagnostic::AssemblyFailure,
+                                                           second_dynamics,
+                                                           unilateral_constraint_count);
                         }
-                    }
 
-                    QpTolerance friction_tolerance = options.qp_tolerance;
-                    const double friction_accuracy =
-                        options.velocity_tolerance * 1.0e-2;
-                    friction_tolerance.absolute = std::max(
-                        friction_tolerance.absolute, friction_accuracy);
-                    friction_tolerance.relative = std::max(
-                        friction_tolerance.relative, friction_accuracy);
-                    const std::size_t friction_support_count =
-                        static_cast<std::size_t>(std::count_if(
+                        const std::size_t dofs = impl_->topology.dof_count();
+                        impl_->friction_normal_jacobian.resize(unilateral_constraint_count * dofs);
+                        impl_->friction_minimum_normal_velocity.resize(unilateral_constraint_count);
+                        for (std::size_t row = 0; row < unilateral_constraint_count; ++row) {
+                            impl_->friction_minimum_normal_velocity[row] = -impl_->unilateral_limit[row];
+                            for (std::size_t dof = 0; dof < dofs; ++dof) {
+                                impl_->friction_normal_jacobian[row * dofs + dof] =
+                                    -impl_->unilateral_jacobian[row * dofs + dof];
+                            }
+                        }
+
+                        QpTolerance friction_tolerance = options.qp_tolerance;
+                        const double friction_accuracy = options.velocity_tolerance * 1.0e-2;
+                        friction_tolerance.absolute = std::max(friction_tolerance.absolute, friction_accuracy);
+                        friction_tolerance.relative = std::max(friction_tolerance.relative, friction_accuracy);
+                        const std::size_t friction_support_count = static_cast<std::size_t>(std::count_if(
                             impl_->friction_normal_impulse.begin(),
                             impl_->friction_normal_impulse.end(),
-                            [](double impulse)
+                            [](double impulse) { return impulse > ActiveSetQpOptions{}.active_tolerance; }));
+                        const std::size_t friction_inequality_count =
+                            unilateral_constraint_count - friction_support_count +
+                            friction_contact_count * (options.friction_cone_facets + 1);
+                        std::size_t friction_max_iterations = ActiveSetQpOptions{}.max_iterations;
+                        if (options.friction_cone_facets > DynamicsSystemStepOptions{}.friction_cone_facets) {
+                            const std::size_t scaled_budget =
+                                friction_inequality_count > std::numeric_limits<std::size_t>::max() / 2
+                                    ? std::numeric_limits<std::size_t>::max()
+                                    : friction_inequality_count * 2;
+                            friction_max_iterations = std::max(friction_max_iterations, scaled_budget);
+                        }
+                        const QpSolveResult friction_result = solve_contact_friction(
                             {
-                                return impulse >
-                                       ActiveSetQpOptions{}.active_tolerance;
-                            }));
-                    const std::size_t friction_inequality_count =
-                        unilateral_constraint_count - friction_support_count +
-                        friction_contact_count *
-                            (options.friction_cone_facets + 1);
-                    std::size_t friction_max_iterations =
-                        ActiveSetQpOptions{}.max_iterations;
-                    if (options.friction_cone_facets >
-                        DynamicsSystemStepOptions{}.friction_cone_facets)
-                    {
-                        const std::size_t scaled_budget =
-                            friction_inequality_count >
-                                    std::numeric_limits<std::size_t>::max() / 2
-                                ? std::numeric_limits<std::size_t>::max()
-                                : friction_inequality_count * 2;
-                        friction_max_iterations =
-                            std::max(friction_max_iterations, scaled_budget);
-                    }
-                    const QpSolveResult friction_result =
-                        solve_contact_friction(
-                            {
+                                ConstDenseMatrixView::row_major(impl_->mass.data(), dofs, dofs),
                                 ConstDenseMatrixView::row_major(
-                                    impl_->mass.data(), dofs, dofs),
+                                    impl_->jacobian.data(), impl_->topology.constraint_count(), dofs),
+                                {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
                                 ConstDenseMatrixView::row_major(
-                                    impl_->jacobian.data(),
-                                    impl_->topology.constraint_count(),
-                                    dofs),
-                                {impl_->dof_solution.data(),
-                                 impl_->dof_solution.size(),
-                                 1},
-                                ConstDenseMatrixView::row_major(
-                                    impl_->friction_normal_jacobian.data(),
-                                    unilateral_constraint_count,
-                                    dofs),
+                                    impl_->friction_normal_jacobian.data(), unilateral_constraint_count, dofs),
                                 {impl_->friction_minimum_normal_velocity.data(),
                                  impl_->friction_minimum_normal_velocity.size(),
                                  1},
                                 ConstDenseMatrixView::row_major(
-                                    impl_->friction_contact_normal_jacobian
-                                        .data(),
-                                    friction_contact_count,
-                                    dofs),
+                                    impl_->friction_contact_normal_jacobian.data(), friction_contact_count, dofs),
                                 {impl_->friction_contact_normal_rows.data(),
                                  impl_->friction_contact_normal_rows.size()},
-                                ConstDenseMatrixView::row_major(
-                                    impl_->friction_tangent_jacobian.data(),
-                                    impl_->friction_topology.tangent_count(),
-                                    dofs),
-                                {impl_->friction_normal_impulse.data(),
-                                 impl_->friction_normal_impulse.size(),
-                                 1},
-                                {impl_->friction_coefficient.data(),
-                                 impl_->friction_coefficient.size(),
-                                 1},
+                                ConstDenseMatrixView::row_major(impl_->friction_tangent_jacobian.data(),
+                                                                impl_->friction_topology.tangent_count(),
+                                                                dofs),
+                                {impl_->friction_normal_impulse.data(), impl_->friction_normal_impulse.size(), 1},
+                                {impl_->friction_coefficient.data(), impl_->friction_coefficient.size(), 1},
                             },
                             {
-                                {impl_->dof_solution.data(),
-                                 impl_->dof_solution.size(),
-                                 1},
-                                {impl_->friction_tangent_impulse.data(),
-                                 impl_->friction_tangent_impulse.size(),
-                                 1},
-                                {impl_->friction_normal_impulse.data(),
-                                 impl_->friction_normal_impulse.size(),
-                                 1},
-                                {impl_->friction_work.data(),
-                                 impl_->friction_work.size(),
-                                 1},
-                                {impl_->friction_bilateral_impulse.data(),
-                                 impl_->friction_bilateral_impulse.size(),
-                                 1},
+                                {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                                {impl_->friction_tangent_impulse.data(), impl_->friction_tangent_impulse.size(), 1},
+                                {impl_->friction_normal_impulse.data(), impl_->friction_normal_impulse.size(), 1},
+                                {impl_->friction_work.data(), impl_->friction_work.size(), 1},
+                                {impl_->friction_bilateral_impulse.data(), impl_->friction_bilateral_impulse.size(), 1},
                             },
                             {
                                 .cone_facets = options.friction_cone_facets,
-                                .qp = {
-                                    .tolerance = friction_tolerance,
-                                    .max_iterations = friction_max_iterations,
-                                },
+                                .qp =
+                                    {
+                                        .tolerance = friction_tolerance,
+                                        .max_iterations = friction_max_iterations,
+                                    },
                             });
-                    result.friction_projection = friction_result;
-                    if (friction_result.status != QpStatus::Optimal)
-                    {
-                        if (friction_result.diagnostic ==
-                            QpDiagnostic::IterationLimit)
-                        {
-                            std::fprintf(
-                                stderr,
-                                "[termin-qopt] contact friction solve failed: "
-                                "iteration_limit residuals=unavailable "
-                                "contacts=%zu facets=%zu inequalities=%zu "
-                                "iterations=%zu active=%zu\n",
-                                friction_contact_count,
-                                options.friction_cone_facets,
-                                friction_inequality_count,
-                                friction_result.iterations,
-                                friction_result.active_set_size);
+                        result.friction_projection = friction_result;
+                        if (friction_result.status != QpStatus::Optimal) {
+                            if (friction_result.diagnostic == QpDiagnostic::IterationLimit) {
+                                std::fprintf(stderr,
+                                             "[termin-qopt] contact friction solve failed: "
+                                             "iteration_limit residuals=unavailable "
+                                             "contacts=%zu facets=%zu inequalities=%zu "
+                                             "iterations=%zu active=%zu\n",
+                                             friction_contact_count,
+                                             options.friction_cone_facets,
+                                             friction_inequality_count,
+                                             friction_result.iterations,
+                                             friction_result.active_set_size);
+                            } else {
+                                std::fprintf(stderr,
+                                             "[termin-qopt] contact friction solve failed: "
+                                             "%s stationarity=%g equality=%g inequality=%g "
+                                             "dual=%g complementarity=%g contacts=%zu "
+                                             "facets=%zu iterations=%zu active=%zu\n",
+                                             qp_diagnostic_name(friction_result.diagnostic).data(),
+                                             friction_result.stationarity_linf,
+                                             friction_result.equality_linf,
+                                             friction_result.inequality_linf,
+                                             friction_result.dual_linf,
+                                             friction_result.complementarity_linf,
+                                             friction_contact_count,
+                                             options.friction_cone_facets,
+                                             friction_result.iterations,
+                                             friction_result.active_set_size);
+                            }
+                            rollback();
+                            DynamicsSystemStepResult failure =
+                                dynamics_system_failure(friction_result.status,
+                                                        DynamicsSystemDiagnostic::FrictionProjectionFailure,
+                                                        second_dynamics,
+                                                        unilateral_constraint_count);
+                            failure.friction_projection = friction_result;
+                            failure.friction_contact_count = friction_contact_count;
+                            failure.friction_cone_facets = options.friction_cone_facets;
+                            return failure;
                         }
-                        else
-                        {
-                            std::fprintf(
-                                stderr,
-                                "[termin-qopt] contact friction solve failed: "
-                                "%s stationarity=%g equality=%g inequality=%g "
-                                "dual=%g complementarity=%g contacts=%zu "
-                                "facets=%zu iterations=%zu active=%zu\n",
-                                qp_diagnostic_name(friction_result.diagnostic)
-                                    .data(),
-                                friction_result.stationarity_linf,
-                                friction_result.equality_linf,
-                                friction_result.inequality_linf,
-                                friction_result.dual_linf,
-                                friction_result.complementarity_linf,
-                                friction_contact_count,
-                                options.friction_cone_facets,
-                                friction_result.iterations,
-                                friction_result.active_set_size);
+                        impl_->post_friction_velocity = impl_->dof_solution;
+                        for (std::size_t row = 0; row < impl_->constraint_reaction.size(); ++row) {
+                            impl_->constraint_reaction[row] += impl_->friction_bilateral_impulse[row];
                         }
-                        rollback();
-                        DynamicsSystemStepResult failure =
-                            dynamics_system_failure(
-                                friction_result.status,
-                                DynamicsSystemDiagnostic::
-                                    FrictionProjectionFailure,
-                                second_dynamics,
-                                unilateral_constraint_count);
-                        failure.friction_projection = friction_result;
-                        failure.friction_contact_count = friction_contact_count;
-                        failure.friction_cone_facets =
-                            options.friction_cone_facets;
-                        return failure;
+                        impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
+                        impl_->apply_friction_solution();
+                        if (configuration_pass == 0 && impl_->apply_friction_configuration_correction(
+                                                           options.time_step) != DynamicsSystemDiagnostic::None) {
+                            rollback();
+                            return dynamics_system_failure(QpStatus::NumericalFailure,
+                                                           DynamicsSystemDiagnostic::InternalFailure,
+                                                           second_dynamics,
+                                                           unilateral_constraint_count);
+                        }
+                        configuration_corrected = configuration_pass == 0;
                     }
-                    impl_->post_friction_velocity = impl_->dof_solution;
-                    for (std::size_t row = 0;
-                         row < impl_->constraint_reaction.size();
-                         ++row)
-                    {
-                        impl_->constraint_reaction[row] +=
-                            impl_->friction_bilateral_impulse[row];
-                    }
-                    impl_->apply_solution(
-                        DynamicsAssemblyPhase::VelocityProjection);
-                    impl_->apply_friction_solution();
-                    if (configuration_pass == 0 &&
-                        impl_->apply_friction_configuration_correction(
-                            options.time_step) !=
-                            DynamicsSystemDiagnostic::None)
-                    {
-                        rollback();
-                        return dynamics_system_failure(
-                            QpStatus::NumericalFailure,
-                            DynamicsSystemDiagnostic::InternalFailure,
-                            second_dynamics,
-                            unilateral_constraint_count);
-                    }
-                    configuration_corrected = configuration_pass == 0;
                 }
-            }
-                if (!configuration_corrected)
-                {
+                if (!configuration_corrected) {
                     break;
                 }
             }
             result.velocity_constraint_linf = impl_->max_velocity_error();
-            if (result.velocity_constraint_linf > options.velocity_tolerance)
-            {
+            if (result.velocity_constraint_linf > options.velocity_tolerance) {
                 rollback();
-                DynamicsSystemStepResult failure = dynamics_system_failure(
-                    QpStatus::NumericalFailure,
-                    DynamicsSystemDiagnostic::VelocityProjectionFailure,
-                    second_dynamics,
-                    unilateral_constraint_count);
+                DynamicsSystemStepResult failure =
+                    dynamics_system_failure(QpStatus::NumericalFailure,
+                                            DynamicsSystemDiagnostic::VelocityProjectionFailure,
+                                            second_dynamics,
+                                            unilateral_constraint_count);
                 failure.velocity_projection = result.velocity_projection;
                 failure.friction_projection = result.friction_projection;
                 failure.friction_contact_count = result.friction_contact_count;
@@ -2151,47 +1623,34 @@ namespace termin::physics_qopt
             impl_->commit_step();
             step_open = false;
             return result;
-        }
-        catch (const std::exception& error)
-        {
-            std::fprintf(stderr,
-                         "[termin-qopt] dynamics system step failed: %s\n",
-                         error.what());
-        }
-        catch (...)
-        {
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] dynamics system step failed: %s\n", error.what());
+        } catch (...) {
             std::fprintf(stderr,
                          "[termin-qopt] dynamics system step failed with "
                          "unknown exception\n");
         }
         rollback();
-        return dynamics_system_failure(
-            QpStatus::NumericalFailure,
-            DynamicsSystemDiagnostic::InternalFailure);
+        return dynamics_system_failure(QpStatus::NumericalFailure, DynamicsSystemDiagnostic::InternalFailure);
     }
 
-    bool DynamicsSystem::finalized() const noexcept
-    {
+    bool DynamicsSystem::finalized() const noexcept {
         return impl_ != nullptr && impl_->finalized;
     }
 
-    std::size_t DynamicsSystem::contribution_count() const noexcept
-    {
+    std::size_t DynamicsSystem::contribution_count() const noexcept {
         return impl_ == nullptr ? 0 : impl_->contributions.size();
     }
 
-    const DynamicsTopology& DynamicsSystem::topology() const noexcept
-    {
+    const DynamicsTopology& DynamicsSystem::topology() const noexcept {
         return impl_->topology;
     }
 
-    double DynamicsSystem::max_position_constraint_error() const noexcept
-    {
+    double DynamicsSystem::max_position_constraint_error() const noexcept {
         return impl_ == nullptr ? 0.0 : impl_->max_position_error();
     }
 
-    double DynamicsSystem::max_velocity_constraint_error() const noexcept
-    {
+    double DynamicsSystem::max_velocity_constraint_error() const noexcept {
         return impl_ == nullptr ? 0.0 : impl_->max_velocity_error();
     }
 

@@ -2,27 +2,27 @@
 #include <termin/bindings/entity_bindings.hpp>
 #include <termin/bindings/entity_helpers.hpp>
 
+#include <cstdint>
+#include <cstring>
+#include <functional>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
 #include <nanobind/stl/tuple.h>
-#include <functional>
-#include <cstring>
-#include <cstdint>
+#include <nanobind/stl/vector.h>
 #include <stdexcept>
 #include <unordered_map>
 
+#include "core/tc_scene.h"
+#include "inspect/tc_inspect.h"
+#include "inspect/tc_inspect_context.h"
 #include <tcbase/tc_log.hpp>
 #include <tcbase/tc_value_trent.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry_python.hpp>
 #include <termin/entity/entity.hpp>
-#include <termin/geom/general_transform3.hpp>
 #include <termin/geom/general_pose3.hpp>
+#include <termin/geom/general_transform3.hpp>
 #include <termin/tc_scene.hpp>
-#include "core/tc_scene.h"
-#include "inspect/tc_inspect.h"
-#include "inspect/tc_inspect_context.h"
 
 extern "C" {
 #include "core/tc_archetype.h"
@@ -32,640 +32,932 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Look up SoA type id by name
-static tc_soa_type_id soa_type_id_by_name(const std::string& name) {
-    tc_soa_type_registry* reg = tc_soa_global_registry();
-    for (size_t i = 0; i < reg->count; i++) {
-        if (reg->types[i].name && name == reg->types[i].name) {
-            return (tc_soa_type_id)i;
+    // Look up SoA type id by name
+    static tc_soa_type_id soa_type_id_by_name(const std::string& name) {
+        tc_soa_type_registry* reg = tc_soa_global_registry();
+        for (size_t i = 0; i < reg->count; i++) {
+            if (reg->types[i].name && name == reg->types[i].name) {
+                return (tc_soa_type_id)i;
+            }
         }
+        return TC_SOA_TYPE_INVALID;
     }
-    return TC_SOA_TYPE_INVALID;
-}
 
-// Iterator for traversing ancestor entities
-class EntityAncestorIterator {
-public:
-    Entity _current;
+    // Iterator for traversing ancestor entities
+    class EntityAncestorIterator {
+    public:
+        Entity _current;
 
-    explicit EntityAncestorIterator(Entity start) : _current(start.parent()) {}
+        explicit EntityAncestorIterator(Entity start)
+            : _current(start.parent()) {}
 
-    nb::object next() {
-        if (!_current.valid()) {
-            throw nb::stop_iteration();
+        nb::object next() {
+            if (!_current.valid()) {
+                throw nb::stop_iteration();
+            }
+            Entity result = _current;
+            _current = _current.parent();
+            return nb::cast(result);
         }
-        Entity result = _current;
-        _current = _current.parent();
-        return nb::cast(result);
+    };
+
+    static nb::object trent_to_py_object(const nos::trent& data) {
+        tc_value value = tc::trent_to_tc_value(data);
+        nb::object result = tc_value_to_py(&value);
+        tc_value_free(&value);
+        return result;
     }
-};
 
-static nb::object trent_to_py_object(const nos::trent& data) {
-    tc_value value = tc::trent_to_tc_value(data);
-    nb::object result = tc_value_to_py(&value);
-    tc_value_free(&value);
-    return result;
-}
-
-static nos::trent py_object_to_trent(nb::object data) {
-    tc_value value = py_to_tc_value(data);
-    nos::trent result = tc::tc_value_to_trent(value);
-    tc_value_free(&value);
-    return result;
-}
-
-static tc_scene_handle scene_handle_from_py(nb::object scene) {
-    if (scene.is_none()) return TC_SCENE_HANDLE_INVALID;
-    return nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
-}
-
-static tc_entity_pool* entity_pool_from_py_scene(nb::object scene) {
-    if (scene.is_none()) return nullptr;
-    uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
-    return reinterpret_cast<tc_entity_pool*>(pool_ptr);
-}
-
-static std::string component_type_name_from_class(nb::object type_class) {
-    std::string target_type = nb::cast<std::string>(type_class.attr("__name__"));
-    if (target_type.empty()) {
-        throw std::runtime_error("Component class has empty __name__");
+    static nos::trent py_object_to_trent(nb::object data) {
+        tc_value value = py_to_tc_value(data);
+        nos::trent result = tc::tc_value_to_trent(value);
+        tc_value_free(&value);
+        return result;
     }
-    return target_type;
-}
 
-// Forward-declare TcComponentRef (defined in tc_component_ref_bindings.cpp, registered in same module)
-// We use tc_component* directly here since TcComponentRef is a local class in that TU.
-// For add_component_by_name etc., we return nb::object and let nanobind find the registered type.
+    static tc_scene_handle scene_handle_from_py(nb::object scene) {
+        if (scene.is_none())
+            return TC_SCENE_HANDLE_INVALID;
+        return nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
+    }
 
-void bind_entity_class(nb::module_& m) {
-    // Ancestor iterator
-    nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
-        .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
-        .def("__next__", &EntityAncestorIterator::next);
+    static tc_entity_pool* entity_pool_from_py_scene(nb::object scene) {
+        if (scene.is_none())
+            return nullptr;
+        uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
+        return reinterpret_cast<tc_entity_pool*>(pool_ptr);
+    }
 
-    nb::class_<Entity>(m, "Entity")
-        .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
-            new (self) Entity(
-                uuid.empty()
-                    ? Entity::create(get_standalone_pool(), name)
-                    : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
-            if (!self->valid()) {
-                throw std::runtime_error("Entity construction failed; UUID may already exist");
-            }
-        }, nb::arg("name") = "entity", nb::arg("uuid") = "")
-        .def("__init__", [](Entity* self, const GeneralPose3& pose, const std::string& name, int priority,
-                        bool pickable, bool selectable,
-                        int layer, uint64_t flags, const std::string& uuid) {
-            new (self) Entity(
-                uuid.empty()
-                    ? Entity::create(get_standalone_pool(), name)
-                    : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
-            if (!self->valid()) {
-                throw std::runtime_error("Entity construction failed; UUID may already exist");
-            }
+    static std::string component_type_name_from_class(nb::object type_class) {
+        std::string target_type = nb::cast<std::string>(type_class.attr("__name__"));
+        if (target_type.empty()) {
+            throw std::runtime_error("Component class has empty __name__");
+        }
+        return target_type;
+    }
 
-            self->transform().set_local_pose(pose);
-            self->set_priority(priority);
-            self->set_pickable(pickable);
-            self->set_selectable(selectable);
-            self->set_layer(static_cast<uint64_t>(layer));
-            self->set_flags(flags);
-        }, nb::arg("pose"), nb::arg("name") = "entity",
-            nb::arg("priority") = 0, nb::arg("pickable") = true,
-            nb::arg("selectable") = true,
-            nb::arg("layer") = 0, nb::arg("flags") = 0, nb::arg("uuid") = "")
+    // Forward-declare TcComponentRef (defined in tc_component_ref_bindings.cpp, registered in same module)
+    // We use tc_component* directly here since TcComponentRef is a local class in that TU.
+    // For add_component_by_name etc., we return nb::object and let nanobind find the registered type.
 
-        // Validity
-        .def("valid", &Entity::valid)
-        .def("__bool__", &Entity::valid)
+    void bind_entity_class(nb::module_& m) {
+        // Ancestor iterator
+        nb::class_<EntityAncestorIterator>(m, "_EntityAncestorIterator")
+            .def("__iter__", [](EntityAncestorIterator& self) -> EntityAncestorIterator& { return self; })
+            .def("__next__", &EntityAncestorIterator::next);
 
-        // Identity
-        .def_prop_ro("uuid", [](const Entity& e) -> nb::object {
-            const char* u = e.uuid();
-            if (u) return nb::str(u);
-            return nb::none();
-        })
-        .def("__eq__", [](const Entity& a, const Entity& b) {
-            return a.pool() == b.pool() &&
-                   a.id().index == b.id().index &&
-                   a.id().generation == b.id().generation;
-        })
-        .def("__hash__", [](const Entity& e) {
-            size_t h = std::hash<void*>()(e.pool());
-            h ^= std::hash<uint32_t>()(e.id().index) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<uint32_t>()(e.id().generation) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            return h;
-        })
-        .def_prop_rw("name",
-            [](const Entity& e) -> nb::object {
-                const char* n = e.name();
-                if (n) return nb::str(n);
-                return nb::none();
-            },
-            [](Entity& e, const std::string& n) {
-                e.set_name(n);
-            })
-        .def_prop_ro("runtime_id", [](const Entity& e) -> uint64_t {
-            return e.runtime_id();
-        })
-        .def_prop_ro("scene", [](const Entity& e) -> nb::object {
-            TcSceneRef scene = e.scene();
-            if (!scene.is_alive()) return nb::none();
-            return nb::cast(scene);
-        })
-
-        // Flags
-        .def_prop_rw("visible",
-            [](const Entity& e) { return e.visible(); },
-            [](Entity& e, bool v) { e.set_visible(v); })
-        .def_prop_rw("enabled",
-            [](const Entity& e) { return e.enabled(); },
-            [](Entity& e, bool v) { e.set_enabled(v); })
-        .def_prop_rw("pickable",
-            [](const Entity& e) { return e.pickable(); },
-            [](Entity& e, bool v) { e.set_pickable(v); })
-        .def_prop_rw("selectable",
-            [](const Entity& e) { return e.selectable(); },
-            [](Entity& e, bool v) { e.set_selectable(v); })
-
-        // Rendering
-        .def_prop_rw("priority",
-            [](const Entity& e) { return e.priority(); },
-            [](Entity& e, int p) { e.set_priority(p); })
-        .def_prop_rw("layer",
-            [](const Entity& e) { return e.layer(); },
-            [](Entity& e, uint64_t l) { e.set_layer(l); })
-        .def_prop_rw("flags",
-            [](const Entity& e) { return e.flags(); },
-            [](Entity& e, uint64_t f) { e.set_flags(f); })
-
-        // Pick ID
-        .def_prop_ro("pick_id", &Entity::pick_id)
-
-        // Transform access
-        .def_prop_ro("transform", [](Entity& e) -> GeneralTransform3 {
-            return e.transform();
-        })
-
-        .def("model_matrix", [](Entity& e) {
-            double m[16];
-            e.transform().world_matrix(m);
-            double buf[16];
-            for (int row = 0; row < 4; ++row)
-                for (int col = 0; col < 4; ++col)
-                    buf[row * 4 + col] = m[col * 4 + row];
-            return mat44_row_tuple(buf);
-        })
-
-        .def("inverse_model_matrix", [](Entity& e) {
-            double m[16];
-            e.transform().inverse_world_matrix(m);
-            double buf[16];
-            for (int row = 0; row < 4; ++row)
-                for (int col = 0; col < 4; ++col)
-                    buf[row * 4 + col] = m[col * 4 + row];
-            return mat44_row_tuple(buf);
-        })
-
-        .def("set_visible", [](Entity& e, bool flag) {
-            e.set_visible(flag);
-            for (Entity child : e.children()) {
-                child.set_visible(flag);
-            }
-        }, nb::arg("flag"))
-
-        .def("is_pickable", [](Entity& e) {
-            return e.pickable() && e.visible() && e.enabled();
-        })
-
-        // Component management
-        .def("add_component_by_name", [](Entity& e, const std::string& type_name) -> nb::object {
-            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
-            if (!tc) {
-                throw std::runtime_error("Failed to create component: " + type_name);
-            }
-            e.add_component_ptr(tc);
-            // Return as nb::object — nanobind will find TcComponentRef type
-            // Use module import to construct TcComponentRef
-            nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-            nb::object cls = mod.attr("TcComponentRef");
-            return cls(reinterpret_cast<uintptr_t>(tc));
-        }, nb::arg("type_name"))
-
-        .def("add_component", [](Entity& e, const std::string& type_name) -> nb::object {
-            tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
-            if (!tc) {
-                throw std::runtime_error("Failed to create component: " + type_name);
-            }
-            e.add_component_ptr(tc);
-            nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-            nb::object cls = mod.attr("TcComponentRef");
-            return cls(reinterpret_cast<uintptr_t>(tc));
-        }, nb::arg("component"))
-
-        .def("add_component", [](Entity& e, CxxComponent& comp) -> nb::object {
-            tc_component* tc = comp.c_component();
-            if (!tc) {
-                throw std::runtime_error("CxxComponent has no tc_component");
-            }
-            e.add_component_ptr(tc);
-            nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-            nb::object cls = mod.attr("TcComponentRef");
-            return cls(reinterpret_cast<uintptr_t>(tc));
-        }, nb::arg("component"))
-
-        .def("add_component", [](Entity& e, nb::object comp) -> nb::object {
-            nb::object tc_wrapper = comp.attr("_tc");
-            uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
-            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
-            if (!tc) {
-                throw std::runtime_error("Component has no tc_component");
-            }
-            e.add_component_ptr(tc);
-            nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-            nb::object cls = mod.attr("TcComponentRef");
-            return cls(reinterpret_cast<uintptr_t>(tc));
-        }, nb::arg("component"))
-
-        .def("remove_component", [](Entity& e, nb::object comp) {
-            nb::object tc_wrapper = comp.attr("_tc");
-            uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
-            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
-            if (!tc) {
-                throw std::runtime_error("Component has no tc_component");
-            }
-            e.remove_component_ptr(tc);
-        }, nb::arg("component"))
-
-        .def("remove_component_ref", [](Entity& e, nb::object ref) {
-            uintptr_t ptr = nb::cast<uintptr_t>(ref.attr("tc_component_ptr"));
-            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
-            if (!tc) return;
-            e.remove_component_ptr(tc);
-        }, nb::arg("ref"))
-
-        .def("has_component_ref", [](Entity& e, nb::object ref) -> bool {
-            uintptr_t ptr = nb::cast<uintptr_t>(ref.attr("tc_component_ptr"));
-            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
-            if (!tc) return false;
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                if (e.component_at(i) == tc) return true;
-            }
-            return false;
-        }, nb::arg("ref"))
-
-        .def("get_component_by_type", [](Entity& e, const std::string& type_name) -> nb::object {
-            tc_component* tc = e.get_component_by_type_name(type_name);
-            if (!tc) return nb::none();
-            return tc_component_to_python(tc);
-        }, nb::arg("type_name"))
-        .def("has_component_type", [](Entity& e, const std::string& type_name) -> bool {
-            return e.get_component_by_type_name(type_name) != nullptr;
-        }, nb::arg("type_name"))
-        .def("get_python_component", [](Entity& e, const std::string& type_name) -> nb::object {
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (tc && tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
-                    const char* comp_type = tc_component_type_name(tc);
-                    if (comp_type && type_name == comp_type) {
-                        return nb::borrow((PyObject*)tc->body);
+        nb::class_<Entity>(m, "Entity")
+            .def(
+                "__init__",
+                [](Entity* self, const std::string& name, const std::string& uuid) {
+                    new (self) Entity(uuid.empty() ? Entity::create(get_standalone_pool(), name)
+                                                   : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
+                    if (!self->valid()) {
+                        throw std::runtime_error("Entity construction failed; UUID may already exist");
                     }
-                }
-            }
-            return nb::none();
-        }, nb::arg("type_name"))
-        .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
-            if (!e.valid()) return nb::none();
-            std::string target_type = component_type_name_from_class(type_class);
-            tc_component* tc = e.get_component_by_type_name(target_type);
-            if (!tc) return nb::none();
-            return tc_component_to_python(tc);
-        }, nb::arg("component_type"))
-        .def("find_component", [](Entity& e, nb::object type_class) -> nb::object {
-            std::string target_type = component_type_name_from_class(type_class);
-            tc_component* tc = e.get_component_by_type_name(target_type);
-            if (!tc) {
-                throw std::runtime_error("Component not found: " + target_type);
-            }
-            return tc_component_to_python(tc);
-        }, nb::arg("component_type"))
-        .def_prop_ro("components", [](Entity& e) {
-            nb::list result;
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-                nb::object py_comp = tc_component_to_python(tc);
-                if (!py_comp.is_none()) result.append(py_comp);
-            }
-            return result;
-        })
+                },
+                nb::arg("name") = "entity",
+                nb::arg("uuid") = "")
+            .def(
+                "__init__",
+                [](Entity* self,
+                   const GeneralPose3& pose,
+                   const std::string& name,
+                   int priority,
+                   bool pickable,
+                   bool selectable,
+                   int layer,
+                   uint64_t flags,
+                   const std::string& uuid) {
+                    new (self) Entity(uuid.empty() ? Entity::create(get_standalone_pool(), name)
+                                                   : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
+                    if (!self->valid()) {
+                        throw std::runtime_error("Entity construction failed; UUID may already exist");
+                    }
 
-        .def_prop_ro("tc_components", [](Entity& e) {
-            nb::list result;
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-                // Construct TcComponentRef via module
-                nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-                nb::object cls = mod.attr("TcComponentRef");
-                result.append(cls(reinterpret_cast<uintptr_t>(tc)));
-            }
-            return result;
-        })
+                    self->transform().set_local_pose(pose);
+                    self->set_priority(priority);
+                    self->set_pickable(pickable);
+                    self->set_selectable(selectable);
+                    self->set_layer(static_cast<uint64_t>(layer));
+                    self->set_flags(flags);
+                },
+                nb::arg("pose"),
+                nb::arg("name") = "entity",
+                nb::arg("priority") = 0,
+                nb::arg("pickable") = true,
+                nb::arg("selectable") = true,
+                nb::arg("layer") = 0,
+                nb::arg("flags") = 0,
+                nb::arg("uuid") = "")
 
-        // SoA component management
-        .def("add_soa_by_name", [](Entity& e, const std::string& name) {
-            tc_soa_type_id id = soa_type_id_by_name(name);
-            if (id == TC_SOA_TYPE_INVALID) {
-                throw std::runtime_error("Unknown SoA type: " + name);
-            }
-            tc_entity_add_soa(e._h, id);
-        }, nb::arg("name"))
-        .def("remove_soa_by_name", [](Entity& e, const std::string& name) {
-            tc_soa_type_id id = soa_type_id_by_name(name);
-            if (id == TC_SOA_TYPE_INVALID) {
-                throw std::runtime_error("Unknown SoA type: " + name);
-            }
-            tc_entity_remove_soa(e._h, id);
-        }, nb::arg("name"))
-        .def("has_soa_by_name", [](Entity& e, const std::string& name) -> bool {
-            tc_soa_type_id id = soa_type_id_by_name(name);
-            if (id == TC_SOA_TYPE_INVALID) return false;
-            return tc_entity_has_soa(e._h, id);
-        }, nb::arg("name"))
-        .def_prop_ro("soa_component_names", [](Entity& e) {
-            nb::list result;
-            uint64_t mask = tc_entity_soa_mask(e._h);
-            if (mask == 0) return result;
-            tc_soa_type_registry* reg = tc_soa_global_registry();
-            for (size_t i = 0; i < reg->count; i++) {
-                if (mask & (1ULL << i)) {
-                    result.append(reg->types[i].name ? reg->types[i].name : "(unnamed)");
-                }
-            }
-            return result;
-        })
+            // Validity
+            .def("valid", &Entity::valid)
+            .def("__bool__", &Entity::valid)
 
-        // get_tc_component
-        .def("get_tc_component", [](Entity& e, const std::string& type_name) -> nb::object {
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-                if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+            // Identity
+            .def_prop_ro("uuid",
+                         [](const Entity& e) -> nb::object {
+                             const char* u = e.uuid();
+                             if (u)
+                                 return nb::str(u);
+                             return nb::none();
+                         })
+            .def("__eq__",
+                 [](const Entity& a, const Entity& b) {
+                     return a.pool() == b.pool() && a.id().index == b.id().index &&
+                            a.id().generation == b.id().generation;
+                 })
+            .def("__hash__",
+                 [](const Entity& e) {
+                     size_t h = std::hash<void*>()(e.pool());
+                     h ^= std::hash<uint32_t>()(e.id().index) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                     h ^= std::hash<uint32_t>()(e.id().generation) + 0x9e3779b9 + (h << 6) + (h >> 2);
+                     return h;
+                 })
+            .def_prop_rw(
+                "name",
+                [](const Entity& e) -> nb::object {
+                    const char* n = e.name();
+                    if (n)
+                        return nb::str(n);
+                    return nb::none();
+                },
+                [](Entity& e, const std::string& n) { e.set_name(n); })
+            .def_prop_ro("runtime_id", [](const Entity& e) -> uint64_t { return e.runtime_id(); })
+            .def_prop_ro("scene",
+                         [](const Entity& e) -> nb::object {
+                             TcSceneRef scene = e.scene();
+                             if (!scene.is_alive())
+                                 return nb::none();
+                             return nb::cast(scene);
+                         })
+
+            // Flags
+            .def_prop_rw(
+                "visible", [](const Entity& e) { return e.visible(); }, [](Entity& e, bool v) { e.set_visible(v); })
+            .def_prop_rw(
+                "enabled", [](const Entity& e) { return e.enabled(); }, [](Entity& e, bool v) { e.set_enabled(v); })
+            .def_prop_rw(
+                "pickable", [](const Entity& e) { return e.pickable(); }, [](Entity& e, bool v) { e.set_pickable(v); })
+            .def_prop_rw(
+                "selectable",
+                [](const Entity& e) { return e.selectable(); },
+                [](Entity& e, bool v) { e.set_selectable(v); })
+
+            // Rendering
+            .def_prop_rw(
+                "priority", [](const Entity& e) { return e.priority(); }, [](Entity& e, int p) { e.set_priority(p); })
+            .def_prop_rw(
+                "layer", [](const Entity& e) { return e.layer(); }, [](Entity& e, uint64_t l) { e.set_layer(l); })
+            .def_prop_rw(
+                "flags", [](const Entity& e) { return e.flags(); }, [](Entity& e, uint64_t f) { e.set_flags(f); })
+
+            // Pick ID
+            .def_prop_ro("pick_id", &Entity::pick_id)
+
+            // Transform access
+            .def_prop_ro("transform", [](Entity& e) -> GeneralTransform3 { return e.transform(); })
+
+            .def("model_matrix",
+                 [](Entity& e) {
+                     double m[16];
+                     e.transform().world_matrix(m);
+                     double buf[16];
+                     for (int row = 0; row < 4; ++row)
+                         for (int col = 0; col < 4; ++col)
+                             buf[row * 4 + col] = m[col * 4 + row];
+                     return mat44_row_tuple(buf);
+                 })
+
+            .def("inverse_model_matrix",
+                 [](Entity& e) {
+                     double m[16];
+                     e.transform().inverse_world_matrix(m);
+                     double buf[16];
+                     for (int row = 0; row < 4; ++row)
+                         for (int col = 0; col < 4; ++col)
+                             buf[row * 4 + col] = m[col * 4 + row];
+                     return mat44_row_tuple(buf);
+                 })
+
+            .def(
+                "set_visible",
+                [](Entity& e, bool flag) {
+                    e.set_visible(flag);
+                    for (Entity child : e.children()) {
+                        child.set_visible(flag);
+                    }
+                },
+                nb::arg("flag"))
+
+            .def("is_pickable", [](Entity& e) { return e.pickable() && e.visible() && e.enabled(); })
+
+            // Component management
+            .def(
+                "add_component_by_name",
+                [](Entity& e, const std::string& type_name) -> nb::object {
+                    tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+                    if (!tc) {
+                        throw std::runtime_error("Failed to create component: " + type_name);
+                    }
+                    e.add_component_ptr(tc);
+                    // Return as nb::object — nanobind will find TcComponentRef type
+                    // Use module import to construct TcComponentRef
                     nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
                     nb::object cls = mod.attr("TcComponentRef");
                     return cls(reinterpret_cast<uintptr_t>(tc));
-                }
-            }
-            return nb::none();
-        }, nb::arg("type_name"))
+                },
+                nb::arg("type_name"))
 
-        .def("has_tc_component", [](Entity& e, const std::string& type_name) -> bool {
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-                if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) return true;
-            }
-            return false;
-        }, nb::arg("type_name"))
-
-        // Hierarchy
-        .def("set_parent", [](Entity& e, nb::object parent_obj) {
-            if (parent_obj.is_none()) {
-                e.set_parent(Entity());
-            } else {
-                Entity parent = nb::cast<Entity>(parent_obj);
-                e.set_parent(parent);
-            }
-        }, nb::arg("parent").none())
-        .def_prop_ro("parent", [](Entity& e) -> nb::object {
-            Entity p = e.parent();
-            if (p.valid()) return nb::cast(p);
-            return nb::none();
-        })
-        .def("children", &Entity::children)
-        .def_prop_rw("sibling_index", &Entity::sibling_index, &Entity::set_sibling_index)
-        .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
-        .def("destroy_children", &Entity::destroy_children)
-        .def("serialize_hierarchy", [](Entity& e) -> nb::object {
-            return trent_to_py_object(e.serialize_hierarchy());
-        })
-        .def_static("make_clone_payload", [](nb::object data, const std::string& name_suffix) -> nb::object {
-            try {
-                if (data.is_none()) return nb::none();
-
-                nos::trent source_data = py_object_to_trent(data);
-                std::unordered_map<std::string, std::string> uuid_remap;
-                nos::trent clone_data = Entity::make_clone_payload(source_data, name_suffix, uuid_remap);
-                if (!clone_data.is_dict()) return nb::none();
-
-                nb::dict py_remap;
-                for (const auto& [old_uuid, new_uuid] : uuid_remap) {
-                    py_remap[nb::str(old_uuid.c_str())] = nb::str(new_uuid.c_str());
-                }
-
-                return nb::make_tuple(trent_to_py_object(clone_data), py_remap);
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::make_clone_payload");
-                return nb::none();
-            }
-        }, nb::arg("data"), nb::arg("name_suffix") = "_copy")
-        .def_static("remap_entity_refs", [](nb::object data, nb::object uuid_remap) -> nb::object {
-            try {
-                if (data.is_none()) return nb::none();
-
-                nos::trent remapped_data = py_object_to_trent(data);
-                std::unordered_map<std::string, std::string> remap;
-                if (!uuid_remap.is_none()) {
-                    nb::dict py_remap = nb::cast<nb::dict>(uuid_remap);
-                    for (auto item : py_remap) {
-                        remap[nb::cast<std::string>(item.first)] =
-                            nb::cast<std::string>(item.second);
+            .def(
+                "add_component",
+                [](Entity& e, const std::string& type_name) -> nb::object {
+                    tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+                    if (!tc) {
+                        throw std::runtime_error("Failed to create component: " + type_name);
                     }
-                }
+                    e.add_component_ptr(tc);
+                    nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                    nb::object cls = mod.attr("TcComponentRef");
+                    return cls(reinterpret_cast<uintptr_t>(tc));
+                },
+                nb::arg("component"))
 
-                Entity::remap_entity_refs(remapped_data, remap);
-                return trent_to_py_object(remapped_data);
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::remap_entity_refs");
-                return nb::none();
-            }
-        }, nb::arg("data"), nb::arg("uuid_remap"))
-        .def_static("deserialize_hierarchy", [](nb::object data, nb::object scene, nb::object parent) -> nb::object {
-            try {
-                if (data.is_none()) return nb::none();
+            .def(
+                "add_component",
+                [](Entity& e, CxxComponent& comp) -> nb::object {
+                    tc_component* tc = comp.c_component();
+                    if (!tc) {
+                        throw std::runtime_error("CxxComponent has no tc_component");
+                    }
+                    e.add_component_ptr(tc);
+                    nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                    nb::object cls = mod.attr("TcComponentRef");
+                    return cls(reinterpret_cast<uintptr_t>(tc));
+                },
+                nb::arg("component"))
 
-                nos::trent hierarchy_data = py_object_to_trent(data);
-                tc_scene_handle scene_handle = scene_handle_from_py(scene);
+            .def(
+                "add_component",
+                [](Entity& e, nb::object comp) -> nb::object {
+                    nb::object tc_wrapper = comp.attr("_tc");
+                    uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
+                    tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+                    if (!tc) {
+                        throw std::runtime_error("Component has no tc_component");
+                    }
+                    e.add_component_ptr(tc);
+                    nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                    nb::object cls = mod.attr("TcComponentRef");
+                    return cls(reinterpret_cast<uintptr_t>(tc));
+                },
+                nb::arg("component"))
 
-                Entity parent_entity;
-                if (!parent.is_none()) {
-                    parent_entity = nb::cast<Entity>(parent);
-                }
+            .def(
+                "remove_component",
+                [](Entity& e, nb::object comp) {
+                    nb::object tc_wrapper = comp.attr("_tc");
+                    uintptr_t ptr = nb::cast<uintptr_t>(tc_wrapper.attr("c_ptr_int")());
+                    tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+                    if (!tc) {
+                        throw std::runtime_error("Component has no tc_component");
+                    }
+                    e.remove_component_ptr(tc);
+                },
+                nb::arg("component"))
 
-                Entity ent = Entity::deserialize_hierarchy(hierarchy_data, scene_handle, parent_entity);
-                if (!ent.valid()) return nb::none();
-                return nb::cast(ent);
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::deserialize_hierarchy");
-                return nb::none();
-            }
-        }, nb::arg("data"), nb::arg("scene") = nb::none(), nb::arg("parent") = nb::none())
-        .def("find_child", &Entity::find_child, nb::arg("name"))
-        .def("clone", &Entity::clone, nb::arg("name_suffix") = "_copy")
-        .def("ancestors", [](Entity& e) {
-            return EntityAncestorIterator(e);
-        })
+            .def(
+                "remove_component_ref",
+                [](Entity& e, nb::object ref) {
+                    uintptr_t ptr = nb::cast<uintptr_t>(ref.attr("tc_component_ptr"));
+                    tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+                    if (!tc)
+                        return;
+                    e.remove_component_ptr(tc);
+                },
+                nb::arg("ref"))
 
-        // Lifecycle
-        .def("update", &Entity::update, nb::arg("dt"))
-        .def("on_added_to_scene", [](Entity& e, TcSceneRef scene) {
-            e.on_added_to_scene(scene.handle());
-        }, nb::arg("scene"))
-        .def("on_removed_from_scene", &Entity::on_removed_from_scene)
-        .def("on_added", [](Entity& e, TcSceneRef scene) {
-            e.on_added_to_scene(scene.handle());
-        }, nb::arg("scene"))
-        .def("on_removed", [](Entity& e) {
-            e.on_removed_from_scene();
-        })
+            .def(
+                "has_component_ref",
+                [](Entity& e, nb::object ref) -> bool {
+                    uintptr_t ptr = nb::cast<uintptr_t>(ref.attr("tc_component_ptr"));
+                    tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+                    if (!tc)
+                        return false;
+                    size_t count = e.component_count();
+                    for (size_t i = 0; i < count; i++) {
+                        if (e.component_at(i) == tc)
+                            return true;
+                    }
+                    return false;
+                },
+                nb::arg("ref"))
 
-        // Validation
-        .def("validate_components", &Entity::validate_components)
-
-        // Serialization
-        .def("serialize", [](Entity& e) -> nb::object {
-            tc_value data = e.serialize_base();
-            if (data.type == TC_VALUE_NIL) return nb::none();
-            nb::dict result = nb::cast<nb::dict>(tc_value_to_py(&data));
-            tc_value_free(&data);
-
-            nb::list comp_list;
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* tc = e.component_at(i);
-                if (!tc) continue;
-                // Use TcComponentRef via module
-                nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-                nb::object ref_cls = mod.attr("TcComponentRef");
-                nb::object ref = ref_cls(reinterpret_cast<uintptr_t>(tc));
-                nb::object comp_data = ref.attr("serialize")();
-                if (!comp_data.is_none()) comp_list.append(comp_data);
-            }
-            result["components"] = comp_list;
-
-            nb::list children_list;
-            for (Entity child : e.children()) {
-                nb::object py_child = nb::cast(child);
-                nb::object child_data = py_child.attr("serialize")();
-                if (!child_data.is_none()) children_list.append(child_data);
-            }
-            result["children"] = children_list;
-            return result;
-        })
-
-        .def_static("deserialize", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
-            try {
-                if (data.is_none() || !nb::isinstance<nb::dict>(data)) return nb::none();
-                nb::dict dict_data = nb::cast<nb::dict>(data);
-
-                std::string name = "entity";
-                if (dict_data.contains("name")) {
-                    name = nb::cast<std::string>(dict_data["name"]);
-                }
-                std::string uuid_str;
-                if (dict_data.contains("uuid")) {
-                    uuid_str = nb::cast<std::string>(dict_data["uuid"]);
-                }
-
-                tc_entity_pool* pool = nullptr;
-                TcSceneRef c_scene;
-                if (!scene.is_none()) {
-                    pool = entity_pool_from_py_scene(scene);
-                    c_scene = TcSceneRef(scene_handle_from_py(scene));
-                }
-                if (!pool) pool = get_standalone_pool();
-                if (!pool) {
-                    tc::Log::error("Entity::deserialize: pool is null");
-                    return nb::none();
-                }
-                Entity ent = uuid_str.empty()
-                    ? Entity::create(pool, name)
-                    : Entity::create_with_uuid(pool, name, uuid_str);
-                if (!ent.valid()) {
-                    tc::Log::error("Entity::deserialize: failed to create entity '%s'", name.c_str());
-                    return nb::none();
-                }
-
-                // Restore flags
-                if (dict_data.contains("priority")) ent.set_priority(nb::cast<int>(dict_data["priority"]));
-                if (dict_data.contains("visible")) ent.set_visible(nb::cast<bool>(dict_data["visible"]));
-                if (dict_data.contains("enabled")) ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
-                if (dict_data.contains("pickable")) ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
-                if (dict_data.contains("selectable")) ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
-                if (dict_data.contains("layer")) ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
-                if (dict_data.contains("flags")) ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
-
-                // Restore pose
-                if (dict_data.contains("pose")) {
-                    nb::object pose_obj = dict_data["pose"];
-                    if (nb::isinstance<nb::dict>(pose_obj)) {
-                        nb::dict pose = nb::cast<nb::dict>(pose_obj);
-                        if (pose.contains("position")) {
-                            nb::list pos = nb::cast<nb::list>(pose["position"]);
-                            if (nb::len(pos) >= 3) {
-                                double xyz[3] = {nb::cast<double>(pos[0]), nb::cast<double>(pos[1]), nb::cast<double>(pos[2])};
-                                ent.set_local_position(xyz);
-                            }
-                        }
-                        if (pose.contains("rotation")) {
-                            nb::list rot = nb::cast<nb::list>(pose["rotation"]);
-                            if (nb::len(rot) >= 4) {
-                                double xyzw[4] = {nb::cast<double>(rot[0]), nb::cast<double>(rot[1]),
-                                                  nb::cast<double>(rot[2]), nb::cast<double>(rot[3])};
-                                ent.set_local_rotation(xyzw);
+            .def(
+                "get_component_by_type",
+                [](Entity& e, const std::string& type_name) -> nb::object {
+                    tc_component* tc = e.get_component_by_type_name(type_name);
+                    if (!tc)
+                        return nb::none();
+                    return tc_component_to_python(tc);
+                },
+                nb::arg("type_name"))
+            .def(
+                "has_component_type",
+                [](Entity& e, const std::string& type_name) -> bool {
+                    return e.get_component_by_type_name(type_name) != nullptr;
+                },
+                nb::arg("type_name"))
+            .def(
+                "get_python_component",
+                [](Entity& e, const std::string& type_name) -> nb::object {
+                    size_t count = e.component_count();
+                    for (size_t i = 0; i < count; i++) {
+                        tc_component* tc = e.component_at(i);
+                        if (tc && tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
+                            const char* comp_type = tc_component_type_name(tc);
+                            if (comp_type && type_name == comp_type) {
+                                return nb::borrow((PyObject*)tc->body);
                             }
                         }
                     }
-                }
-                if (dict_data.contains("scale")) {
-                    nb::list scl = nb::cast<nb::list>(dict_data["scale"]);
-                    if (nb::len(scl) >= 3) {
-                        double xyz[3] = {nb::cast<double>(scl[0]), nb::cast<double>(scl[1]), nb::cast<double>(scl[2])};
-                        ent.set_local_scale(xyz);
+                    return nb::none();
+                },
+                nb::arg("type_name"))
+            .def(
+                "get_component",
+                [](Entity& e, nb::object type_class) -> nb::object {
+                    if (!e.valid())
+                        return nb::none();
+                    std::string target_type = component_type_name_from_class(type_class);
+                    tc_component* tc = e.get_component_by_type_name(target_type);
+                    if (!tc)
+                        return nb::none();
+                    return tc_component_to_python(tc);
+                },
+                nb::arg("component_type"))
+            .def(
+                "find_component",
+                [](Entity& e, nb::object type_class) -> nb::object {
+                    std::string target_type = component_type_name_from_class(type_class);
+                    tc_component* tc = e.get_component_by_type_name(target_type);
+                    if (!tc) {
+                        throw std::runtime_error("Component not found: " + target_type);
                     }
-                }
+                    return tc_component_to_python(tc);
+                },
+                nb::arg("component_type"))
+            .def_prop_ro("components",
+                         [](Entity& e) {
+                             nb::list result;
+                             size_t count = e.component_count();
+                             for (size_t i = 0; i < count; i++) {
+                                 tc_component* tc = e.component_at(i);
+                                 if (!tc)
+                                     continue;
+                                 nb::object py_comp = tc_component_to_python(tc);
+                                 if (!py_comp.is_none())
+                                     result.append(py_comp);
+                             }
+                             return result;
+                         })
 
-                // Deserialize components
-                if (dict_data.contains("components")) {
-                    nb::object comp_list_obj = dict_data["components"];
-                    if (nb::isinstance<nb::list>(comp_list_obj)) {
+            .def_prop_ro("tc_components",
+                         [](Entity& e) {
+                             nb::list result;
+                             size_t count = e.component_count();
+                             for (size_t i = 0; i < count; i++) {
+                                 tc_component* tc = e.component_at(i);
+                                 if (!tc)
+                                     continue;
+                                 // Construct TcComponentRef via module
+                                 nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                                 nb::object cls = mod.attr("TcComponentRef");
+                                 result.append(cls(reinterpret_cast<uintptr_t>(tc)));
+                             }
+                             return result;
+                         })
+
+            // SoA component management
+            .def(
+                "add_soa_by_name",
+                [](Entity& e, const std::string& name) {
+                    tc_soa_type_id id = soa_type_id_by_name(name);
+                    if (id == TC_SOA_TYPE_INVALID) {
+                        throw std::runtime_error("Unknown SoA type: " + name);
+                    }
+                    tc_entity_add_soa(e._h, id);
+                },
+                nb::arg("name"))
+            .def(
+                "remove_soa_by_name",
+                [](Entity& e, const std::string& name) {
+                    tc_soa_type_id id = soa_type_id_by_name(name);
+                    if (id == TC_SOA_TYPE_INVALID) {
+                        throw std::runtime_error("Unknown SoA type: " + name);
+                    }
+                    tc_entity_remove_soa(e._h, id);
+                },
+                nb::arg("name"))
+            .def(
+                "has_soa_by_name",
+                [](Entity& e, const std::string& name) -> bool {
+                    tc_soa_type_id id = soa_type_id_by_name(name);
+                    if (id == TC_SOA_TYPE_INVALID)
+                        return false;
+                    return tc_entity_has_soa(e._h, id);
+                },
+                nb::arg("name"))
+            .def_prop_ro("soa_component_names",
+                         [](Entity& e) {
+                             nb::list result;
+                             uint64_t mask = tc_entity_soa_mask(e._h);
+                             if (mask == 0)
+                                 return result;
+                             tc_soa_type_registry* reg = tc_soa_global_registry();
+                             for (size_t i = 0; i < reg->count; i++) {
+                                 if (mask & (1ULL << i)) {
+                                     result.append(reg->types[i].name ? reg->types[i].name : "(unnamed)");
+                                 }
+                             }
+                             return result;
+                         })
+
+            // get_tc_component
+            .def(
+                "get_tc_component",
+                [](Entity& e, const std::string& type_name) -> nb::object {
+                    size_t count = e.component_count();
+                    for (size_t i = 0; i < count; i++) {
+                        tc_component* tc = e.component_at(i);
+                        if (!tc)
+                            continue;
+                        if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0) {
+                            nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                            nb::object cls = mod.attr("TcComponentRef");
+                            return cls(reinterpret_cast<uintptr_t>(tc));
+                        }
+                    }
+                    return nb::none();
+                },
+                nb::arg("type_name"))
+
+            .def(
+                "has_tc_component",
+                [](Entity& e, const std::string& type_name) -> bool {
+                    size_t count = e.component_count();
+                    for (size_t i = 0; i < count; i++) {
+                        tc_component* tc = e.component_at(i);
+                        if (!tc)
+                            continue;
+                        if (strcmp(tc_component_type_name(tc), type_name.c_str()) == 0)
+                            return true;
+                    }
+                    return false;
+                },
+                nb::arg("type_name"))
+
+            // Hierarchy
+            .def(
+                "set_parent",
+                [](Entity& e, nb::object parent_obj) {
+                    if (parent_obj.is_none()) {
+                        e.set_parent(Entity());
+                    } else {
+                        Entity parent = nb::cast<Entity>(parent_obj);
+                        e.set_parent(parent);
+                    }
+                },
+                nb::arg("parent").none())
+            .def_prop_ro("parent",
+                         [](Entity& e) -> nb::object {
+                             Entity p = e.parent();
+                             if (p.valid())
+                                 return nb::cast(p);
+                             return nb::none();
+                         })
+            .def("children", &Entity::children)
+            .def_prop_rw("sibling_index", &Entity::sibling_index, &Entity::set_sibling_index)
+            .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
+            .def("destroy_children", &Entity::destroy_children)
+            .def("serialize_hierarchy",
+                 [](Entity& e) -> nb::object { return trent_to_py_object(e.serialize_hierarchy()); })
+            .def_static(
+                "make_clone_payload",
+                [](nb::object data, const std::string& name_suffix) -> nb::object {
+                    try {
+                        if (data.is_none())
+                            return nb::none();
+
+                        nos::trent source_data = py_object_to_trent(data);
+                        std::unordered_map<std::string, std::string> uuid_remap;
+                        nos::trent clone_data = Entity::make_clone_payload(source_data, name_suffix, uuid_remap);
+                        if (!clone_data.is_dict())
+                            return nb::none();
+
+                        nb::dict py_remap;
+                        for (const auto& [old_uuid, new_uuid] : uuid_remap) {
+                            py_remap[nb::str(old_uuid.c_str())] = nb::str(new_uuid.c_str());
+                        }
+
+                        return nb::make_tuple(trent_to_py_object(clone_data), py_remap);
+                    } catch (const std::exception& ex) {
+                        tc::Log::error(ex, "Entity::make_clone_payload");
+                        return nb::none();
+                    }
+                },
+                nb::arg("data"),
+                nb::arg("name_suffix") = "_copy")
+            .def_static(
+                "remap_entity_refs",
+                [](nb::object data, nb::object uuid_remap) -> nb::object {
+                    try {
+                        if (data.is_none())
+                            return nb::none();
+
+                        nos::trent remapped_data = py_object_to_trent(data);
+                        std::unordered_map<std::string, std::string> remap;
+                        if (!uuid_remap.is_none()) {
+                            nb::dict py_remap = nb::cast<nb::dict>(uuid_remap);
+                            for (auto item : py_remap) {
+                                remap[nb::cast<std::string>(item.first)] = nb::cast<std::string>(item.second);
+                            }
+                        }
+
+                        Entity::remap_entity_refs(remapped_data, remap);
+                        return trent_to_py_object(remapped_data);
+                    } catch (const std::exception& ex) {
+                        tc::Log::error(ex, "Entity::remap_entity_refs");
+                        return nb::none();
+                    }
+                },
+                nb::arg("data"),
+                nb::arg("uuid_remap"))
+            .def_static(
+                "deserialize_hierarchy",
+                [](nb::object data, nb::object scene, nb::object parent) -> nb::object {
+                    try {
+                        if (data.is_none())
+                            return nb::none();
+
+                        nos::trent hierarchy_data = py_object_to_trent(data);
+                        tc_scene_handle scene_handle = scene_handle_from_py(scene);
+
+                        Entity parent_entity;
+                        if (!parent.is_none()) {
+                            parent_entity = nb::cast<Entity>(parent);
+                        }
+
+                        Entity ent = Entity::deserialize_hierarchy(hierarchy_data, scene_handle, parent_entity);
+                        if (!ent.valid())
+                            return nb::none();
+                        return nb::cast(ent);
+                    } catch (const std::exception& ex) {
+                        tc::Log::error(ex, "Entity::deserialize_hierarchy");
+                        return nb::none();
+                    }
+                },
+                nb::arg("data"),
+                nb::arg("scene") = nb::none(),
+                nb::arg("parent") = nb::none())
+            .def("find_child", &Entity::find_child, nb::arg("name"))
+            .def("clone", &Entity::clone, nb::arg("name_suffix") = "_copy")
+            .def("ancestors", [](Entity& e) { return EntityAncestorIterator(e); })
+
+            // Lifecycle
+            .def("update", &Entity::update, nb::arg("dt"))
+            .def(
+                "on_added_to_scene",
+                [](Entity& e, TcSceneRef scene) { e.on_added_to_scene(scene.handle()); },
+                nb::arg("scene"))
+            .def("on_removed_from_scene", &Entity::on_removed_from_scene)
+            .def(
+                "on_added", [](Entity& e, TcSceneRef scene) { e.on_added_to_scene(scene.handle()); }, nb::arg("scene"))
+            .def("on_removed", [](Entity& e) { e.on_removed_from_scene(); })
+
+            // Validation
+            .def("validate_components", &Entity::validate_components)
+
+            // Serialization
+            .def("serialize",
+                 [](Entity& e) -> nb::object {
+                     tc_value data = e.serialize_base();
+                     if (data.type == TC_VALUE_NIL)
+                         return nb::none();
+                     nb::dict result = nb::cast<nb::dict>(tc_value_to_py(&data));
+                     tc_value_free(&data);
+
+                     nb::list comp_list;
+                     size_t count = e.component_count();
+                     for (size_t i = 0; i < count; i++) {
+                         tc_component* tc = e.component_at(i);
+                         if (!tc)
+                             continue;
+                         // Use TcComponentRef via module
+                         nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                         nb::object ref_cls = mod.attr("TcComponentRef");
+                         nb::object ref = ref_cls(reinterpret_cast<uintptr_t>(tc));
+                         nb::object comp_data = ref.attr("serialize")();
+                         if (!comp_data.is_none())
+                             comp_list.append(comp_data);
+                     }
+                     result["components"] = comp_list;
+
+                     nb::list children_list;
+                     for (Entity child : e.children()) {
+                         nb::object py_child = nb::cast(child);
+                         nb::object child_data = py_child.attr("serialize")();
+                         if (!child_data.is_none())
+                             children_list.append(child_data);
+                     }
+                     result["children"] = children_list;
+                     return result;
+                 })
+
+            .def_static(
+                "deserialize",
+                [](nb::object data, nb::object context, nb::object scene) -> nb::object {
+                    try {
+                        if (data.is_none() || !nb::isinstance<nb::dict>(data))
+                            return nb::none();
+                        nb::dict dict_data = nb::cast<nb::dict>(data);
+
+                        std::string name = "entity";
+                        if (dict_data.contains("name")) {
+                            name = nb::cast<std::string>(dict_data["name"]);
+                        }
+                        std::string uuid_str;
+                        if (dict_data.contains("uuid")) {
+                            uuid_str = nb::cast<std::string>(dict_data["uuid"]);
+                        }
+
+                        tc_entity_pool* pool = nullptr;
+                        TcSceneRef c_scene;
+                        if (!scene.is_none()) {
+                            pool = entity_pool_from_py_scene(scene);
+                            c_scene = TcSceneRef(scene_handle_from_py(scene));
+                        }
+                        if (!pool)
+                            pool = get_standalone_pool();
+                        if (!pool) {
+                            tc::Log::error("Entity::deserialize: pool is null");
+                            return nb::none();
+                        }
+                        Entity ent = uuid_str.empty() ? Entity::create(pool, name)
+                                                      : Entity::create_with_uuid(pool, name, uuid_str);
+                        if (!ent.valid()) {
+                            tc::Log::error("Entity::deserialize: failed to create entity '%s'", name.c_str());
+                            return nb::none();
+                        }
+
+                        // Restore flags
+                        if (dict_data.contains("priority"))
+                            ent.set_priority(nb::cast<int>(dict_data["priority"]));
+                        if (dict_data.contains("visible"))
+                            ent.set_visible(nb::cast<bool>(dict_data["visible"]));
+                        if (dict_data.contains("enabled"))
+                            ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
+                        if (dict_data.contains("pickable"))
+                            ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
+                        if (dict_data.contains("selectable"))
+                            ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
+                        if (dict_data.contains("layer"))
+                            ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
+                        if (dict_data.contains("flags"))
+                            ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
+
+                        // Restore pose
+                        if (dict_data.contains("pose")) {
+                            nb::object pose_obj = dict_data["pose"];
+                            if (nb::isinstance<nb::dict>(pose_obj)) {
+                                nb::dict pose = nb::cast<nb::dict>(pose_obj);
+                                if (pose.contains("position")) {
+                                    nb::list pos = nb::cast<nb::list>(pose["position"]);
+                                    if (nb::len(pos) >= 3) {
+                                        double xyz[3] = {nb::cast<double>(pos[0]),
+                                                         nb::cast<double>(pos[1]),
+                                                         nb::cast<double>(pos[2])};
+                                        ent.set_local_position(xyz);
+                                    }
+                                }
+                                if (pose.contains("rotation")) {
+                                    nb::list rot = nb::cast<nb::list>(pose["rotation"]);
+                                    if (nb::len(rot) >= 4) {
+                                        double xyzw[4] = {nb::cast<double>(rot[0]),
+                                                          nb::cast<double>(rot[1]),
+                                                          nb::cast<double>(rot[2]),
+                                                          nb::cast<double>(rot[3])};
+                                        ent.set_local_rotation(xyzw);
+                                    }
+                                }
+                            }
+                        }
+                        if (dict_data.contains("scale")) {
+                            nb::list scl = nb::cast<nb::list>(dict_data["scale"]);
+                            if (nb::len(scl) >= 3) {
+                                double xyz[3] = {
+                                    nb::cast<double>(scl[0]), nb::cast<double>(scl[1]), nb::cast<double>(scl[2])};
+                                ent.set_local_scale(xyz);
+                            }
+                        }
+
+                        // Deserialize components
+                        if (dict_data.contains("components")) {
+                            nb::object comp_list_obj = dict_data["components"];
+                            if (nb::isinstance<nb::list>(comp_list_obj)) {
+                                nb::list components = nb::cast<nb::list>(comp_list_obj);
+                                for (size_t i = 0; i < nb::len(components); ++i) {
+                                    nb::object comp_data_item = components[i];
+                                    if (!nb::isinstance<nb::dict>(comp_data_item))
+                                        continue;
+                                    nb::dict comp_data = nb::cast<nb::dict>(comp_data_item);
+                                    if (!comp_data.contains("type"))
+                                        continue;
+
+                                    std::string type_name = nb::cast<std::string>(comp_data["type"]);
+                                    nb::object data_field = comp_data.contains("data") ? nb::borrow(comp_data["data"])
+                                                                                       : nb::cast(nb::dict());
+
+                                    if (!ComponentRegistry::instance().has(type_name)) {
+                                        tc::Log::warn("Unknown component type: %s (creating placeholder)",
+                                                      type_name.c_str());
+                                        try {
+                                            tc_component* tc = tc_component_registry_create("UnknownComponent");
+                                            if (tc) {
+                                                ent.add_component_ptr(tc);
+                                                nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                                                nb::object ref =
+                                                    mod.attr("TcComponentRef")(reinterpret_cast<uintptr_t>(tc));
+                                                ref.attr("set_field")(
+                                                    "original_type", nb::str(type_name.c_str()), c_scene);
+                                                ref.attr("set_field")("original_data", data_field, c_scene);
+                                            }
+                                        } catch (const std::exception& ex) {
+                                            tc::Log::error(
+                                                ex, "Failed to create UnknownComponent for %s", type_name.c_str());
+                                        }
+                                        continue;
+                                    }
+
+                                    try {
+                                        tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
+                                        if (!tc) {
+                                            tc::Log::warn("Failed to create component: %s", type_name.c_str());
+                                            continue;
+                                        }
+                                        ent.add_component_ptr(tc);
+                                        nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
+                                        nb::object ref = mod.attr("TcComponentRef")(reinterpret_cast<uintptr_t>(tc));
+                                        ref.attr("deserialize_data")(data_field, c_scene);
+                                    } catch (const std::exception& ex) {
+                                        tc::Log::warn(ex, "Failed to deserialize component %s", type_name.c_str());
+                                    }
+                                }
+                            }
+                        }
+                        return nb::cast(ent);
+                    } catch (const std::exception& ex) {
+                        tc::Log::error(ex, "Entity::deserialize");
+                        return nb::none();
+                    }
+                },
+                nb::arg("data"),
+                nb::arg("context") = nb::none(),
+                nb::arg("scene") = nb::none())
+
+            .def_static(
+                "deserialize_base",
+                [](nb::object data, nb::object context, nb::object scene) -> nb::object {
+                    try {
+                        if (data.is_none() || !nb::isinstance<nb::dict>(data))
+                            return nb::none();
+                        nb::dict dict_data = nb::cast<nb::dict>(data);
+
+                        std::string name = "entity";
+                        if (dict_data.contains("name"))
+                            name = nb::cast<std::string>(dict_data["name"]);
+                        std::string uuid_str;
+                        if (dict_data.contains("uuid"))
+                            uuid_str = nb::cast<std::string>(dict_data["uuid"]);
+
+                        tc_entity_pool* pool = nullptr;
+                        if (!scene.is_none()) {
+                            pool = entity_pool_from_py_scene(scene);
+                        }
+                        if (!pool)
+                            pool = get_standalone_pool();
+                        if (!pool) {
+                            tc::Log::error("Entity::deserialize_base: pool is null");
+                            return nb::none();
+                        }
+
+                        Entity ent = uuid_str.empty() ? Entity::create(pool, name)
+                                                      : Entity::create_with_uuid(pool, name, uuid_str);
+                        if (!ent.valid()) {
+                            tc::Log::error("Entity::deserialize_base: failed to create entity '%s'", name.c_str());
+                            return nb::none();
+                        }
+
+                        if (dict_data.contains("priority"))
+                            ent.set_priority(nb::cast<int>(dict_data["priority"]));
+                        if (dict_data.contains("visible"))
+                            ent.set_visible(nb::cast<bool>(dict_data["visible"]));
+                        if (dict_data.contains("enabled"))
+                            ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
+                        if (dict_data.contains("pickable"))
+                            ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
+                        if (dict_data.contains("selectable"))
+                            ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
+                        if (dict_data.contains("layer"))
+                            ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
+                        if (dict_data.contains("flags"))
+                            ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
+
+                        if (dict_data.contains("pose")) {
+                            nb::object pose_obj = dict_data["pose"];
+                            if (nb::isinstance<nb::dict>(pose_obj)) {
+                                nb::dict pose = nb::cast<nb::dict>(pose_obj);
+                                if (pose.contains("position")) {
+                                    nb::list pos = nb::cast<nb::list>(pose["position"]);
+                                    if (nb::len(pos) >= 3) {
+                                        double xyz[3] = {nb::cast<double>(pos[0]),
+                                                         nb::cast<double>(pos[1]),
+                                                         nb::cast<double>(pos[2])};
+                                        ent.set_local_position(xyz);
+                                    }
+                                }
+                                if (pose.contains("rotation")) {
+                                    nb::list rot = nb::cast<nb::list>(pose["rotation"]);
+                                    if (nb::len(rot) >= 4) {
+                                        double xyzw[4] = {nb::cast<double>(rot[0]),
+                                                          nb::cast<double>(rot[1]),
+                                                          nb::cast<double>(rot[2]),
+                                                          nb::cast<double>(rot[3])};
+                                        ent.set_local_rotation(xyzw);
+                                    }
+                                }
+                            }
+                        }
+                        if (dict_data.contains("scale")) {
+                            nb::list scl = nb::cast<nb::list>(dict_data["scale"]);
+                            if (nb::len(scl) >= 3) {
+                                double xyz[3] = {
+                                    nb::cast<double>(scl[0]), nb::cast<double>(scl[1]), nb::cast<double>(scl[2])};
+                                ent.set_local_scale(xyz);
+                            }
+                        }
+                        return nb::cast(ent);
+                    } catch (const std::exception& ex) {
+                        tc::Log::error(ex, "Entity::deserialize_base");
+                        return nb::none();
+                    }
+                },
+                nb::arg("data"),
+                nb::arg("context") = nb::none(),
+                nb::arg("scene") = nb::none())
+
+            .def_static(
+                "deserialize_components",
+                [](nb::object py_entity, nb::object data, nb::object context, nb::object scene) {
+                    try {
+                        if (py_entity.is_none() || data.is_none())
+                            return;
+                        Entity ent = nb::cast<Entity>(py_entity);
+                        if (!ent.valid())
+                            return;
+
+                        nb::dict dict_data = nb::cast<nb::dict>(data);
+                        if (!dict_data.contains("components"))
+                            return;
+                        nb::object comp_list_obj = dict_data["components"];
+                        if (!nb::isinstance<nb::list>(comp_list_obj))
+                            return;
                         nb::list components = nb::cast<nb::list>(comp_list_obj);
+
+                        TcSceneRef scene_ref;
+                        if (!scene.is_none()) {
+                            scene_ref = TcSceneRef(scene_handle_from_py(scene));
+                        }
+
                         for (size_t i = 0; i < nb::len(components); ++i) {
                             nb::object comp_data_item = components[i];
-                            if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
+                            if (!nb::isinstance<nb::dict>(comp_data_item))
+                                continue;
                             nb::dict comp_data = nb::cast<nb::dict>(comp_data_item);
-                            if (!comp_data.contains("type")) continue;
-
+                            if (!comp_data.contains("type"))
+                                continue;
                             std::string type_name = nb::cast<std::string>(comp_data["type"]);
-                            nb::object data_field = comp_data.contains("data") ? nb::borrow(comp_data["data"]) : nb::cast(nb::dict());
+                            nb::object data_field =
+                                comp_data.contains("data") ? nb::borrow(comp_data["data"]) : nb::cast(nb::dict());
 
                             if (!ComponentRegistry::instance().has(type_name)) {
                                 tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
                                 try {
-                                    tc_component* tc = tc_component_registry_create("UnknownComponent");
-                                    if (tc) {
-                                        ent.add_component_ptr(tc);
-                                        nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-                                        nb::object ref = mod.attr("TcComponentRef")(reinterpret_cast<uintptr_t>(tc));
-                                        ref.attr("set_field")("original_type", nb::str(type_name.c_str()), c_scene);
-                                        ref.attr("set_field")("original_data", data_field, c_scene);
+                                    nb::object ref = py_entity.attr("add_component_by_name")("UnknownComponent");
+                                    if (nb::cast<bool>(ref)) {
+                                        ref.attr("set_field")("original_type", nb::str(type_name.c_str()), scene_ref);
+                                        ref.attr("set_field")("original_data", data_field, scene_ref);
                                     }
                                 } catch (const std::exception& ex) {
                                     tc::Log::error(ex, "Failed to create UnknownComponent for %s", type_name.c_str());
@@ -674,187 +966,68 @@ void bind_entity_class(nb::module_& m) {
                             }
 
                             try {
-                                tc_component* tc = ComponentRegistryPython::create_tc_component(type_name);
-                                if (!tc) {
+                                nb::object ref = py_entity.attr("add_component_by_name")(type_name);
+                                if (!nb::cast<bool>(ref)) {
                                     tc::Log::warn("Failed to create component: %s", type_name.c_str());
                                     continue;
                                 }
-                                ent.add_component_ptr(tc);
-                                nb::module_ mod = nb::module_::import_("termin.scene._scene_native");
-                                nb::object ref = mod.attr("TcComponentRef")(reinterpret_cast<uintptr_t>(tc));
-                                ref.attr("deserialize_data")(data_field, c_scene);
+                                ref.attr("deserialize_data")(data_field, scene_ref);
                             } catch (const std::exception& ex) {
                                 tc::Log::warn(ex, "Failed to deserialize component %s", type_name.c_str());
                             }
                         }
-                    }
-                }
-                return nb::cast(ent);
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::deserialize");
-                return nb::none();
-            }
-        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
-
-        .def_static("deserialize_base", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
-            try {
-                if (data.is_none() || !nb::isinstance<nb::dict>(data)) return nb::none();
-                nb::dict dict_data = nb::cast<nb::dict>(data);
-
-                std::string name = "entity";
-                if (dict_data.contains("name")) name = nb::cast<std::string>(dict_data["name"]);
-                std::string uuid_str;
-                if (dict_data.contains("uuid")) uuid_str = nb::cast<std::string>(dict_data["uuid"]);
-
-                tc_entity_pool* pool = nullptr;
-                if (!scene.is_none()) {
-                    pool = entity_pool_from_py_scene(scene);
-                }
-                if (!pool) pool = get_standalone_pool();
-                if (!pool) {
-                    tc::Log::error("Entity::deserialize_base: pool is null");
-                    return nb::none();
-                }
-
-                Entity ent = uuid_str.empty()
-                    ? Entity::create(pool, name)
-                    : Entity::create_with_uuid(pool, name, uuid_str);
-                if (!ent.valid()) {
-                    tc::Log::error("Entity::deserialize_base: failed to create entity '%s'", name.c_str());
-                    return nb::none();
-                }
-
-                if (dict_data.contains("priority")) ent.set_priority(nb::cast<int>(dict_data["priority"]));
-                if (dict_data.contains("visible")) ent.set_visible(nb::cast<bool>(dict_data["visible"]));
-                if (dict_data.contains("enabled")) ent.set_enabled(nb::cast<bool>(dict_data["enabled"]));
-                if (dict_data.contains("pickable")) ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
-                if (dict_data.contains("selectable")) ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
-                if (dict_data.contains("layer")) ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
-                if (dict_data.contains("flags")) ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
-
-                if (dict_data.contains("pose")) {
-                    nb::object pose_obj = dict_data["pose"];
-                    if (nb::isinstance<nb::dict>(pose_obj)) {
-                        nb::dict pose = nb::cast<nb::dict>(pose_obj);
-                        if (pose.contains("position")) {
-                            nb::list pos = nb::cast<nb::list>(pose["position"]);
-                            if (nb::len(pos) >= 3) {
-                                double xyz[3] = {nb::cast<double>(pos[0]), nb::cast<double>(pos[1]), nb::cast<double>(pos[2])};
-                                ent.set_local_position(xyz);
-                            }
-                        }
-                        if (pose.contains("rotation")) {
-                            nb::list rot = nb::cast<nb::list>(pose["rotation"]);
-                            if (nb::len(rot) >= 4) {
-                                double xyzw[4] = {nb::cast<double>(rot[0]), nb::cast<double>(rot[1]),
-                                                  nb::cast<double>(rot[2]), nb::cast<double>(rot[3])};
-                                ent.set_local_rotation(xyzw);
-                            }
-                        }
-                    }
-                }
-                if (dict_data.contains("scale")) {
-                    nb::list scl = nb::cast<nb::list>(dict_data["scale"]);
-                    if (nb::len(scl) >= 3) {
-                        double xyz[3] = {nb::cast<double>(scl[0]), nb::cast<double>(scl[1]), nb::cast<double>(scl[2])};
-                        ent.set_local_scale(xyz);
-                    }
-                }
-                return nb::cast(ent);
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::deserialize_base");
-                return nb::none();
-            }
-        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
-
-        .def_static("deserialize_components", [](nb::object py_entity, nb::object data, nb::object context, nb::object scene) {
-            try {
-                if (py_entity.is_none() || data.is_none()) return;
-                Entity ent = nb::cast<Entity>(py_entity);
-                if (!ent.valid()) return;
-
-                nb::dict dict_data = nb::cast<nb::dict>(data);
-                if (!dict_data.contains("components")) return;
-                nb::object comp_list_obj = dict_data["components"];
-                if (!nb::isinstance<nb::list>(comp_list_obj)) return;
-                nb::list components = nb::cast<nb::list>(comp_list_obj);
-
-                TcSceneRef scene_ref;
-                if (!scene.is_none()) {
-                    scene_ref = TcSceneRef(scene_handle_from_py(scene));
-                }
-
-                for (size_t i = 0; i < nb::len(components); ++i) {
-                    nb::object comp_data_item = components[i];
-                    if (!nb::isinstance<nb::dict>(comp_data_item)) continue;
-                    nb::dict comp_data = nb::cast<nb::dict>(comp_data_item);
-                    if (!comp_data.contains("type")) continue;
-                    std::string type_name = nb::cast<std::string>(comp_data["type"]);
-                    nb::object data_field = comp_data.contains("data") ? nb::borrow(comp_data["data"]) : nb::cast(nb::dict());
-
-                    if (!ComponentRegistry::instance().has(type_name)) {
-                        tc::Log::warn("Unknown component type: %s (creating placeholder)", type_name.c_str());
-                        try {
-                            nb::object ref = py_entity.attr("add_component_by_name")("UnknownComponent");
-                            if (nb::cast<bool>(ref)) {
-                                ref.attr("set_field")("original_type", nb::str(type_name.c_str()), scene_ref);
-                                ref.attr("set_field")("original_data", data_field, scene_ref);
-                            }
-                        } catch (const std::exception& ex) {
-                            tc::Log::error(ex, "Failed to create UnknownComponent for %s", type_name.c_str());
-                        }
-                        continue;
-                    }
-
-                    try {
-                        nb::object ref = py_entity.attr("add_component_by_name")(type_name);
-                        if (!nb::cast<bool>(ref)) {
-                            tc::Log::warn("Failed to create component: %s", type_name.c_str());
-                            continue;
-                        }
-                        ref.attr("deserialize_data")(data_field, scene_ref);
                     } catch (const std::exception& ex) {
-                        tc::Log::warn(ex, "Failed to deserialize component %s", type_name.c_str());
+                        tc::Log::error(ex, "Entity::deserialize_components");
                     }
-                }
-            } catch (const std::exception& ex) {
-                tc::Log::error(ex, "Entity::deserialize_components");
-            }
-        }, nb::arg("entity"), nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none())
+                },
+                nb::arg("entity"),
+                nb::arg("data"),
+                nb::arg("context") = nb::none(),
+                nb::arg("scene") = nb::none())
 
-        .def_static("deserialize_with_children", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
-            std::function<nb::object(nb::object, nb::object, nb::object)> deserialize_recursive;
-            deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context, nb::object scene) -> nb::object {
-                nb::object entity_cls = nb::module_::import_("termin.scene").attr("Entity");
-                nb::object ent = entity_cls.attr("deserialize")(data, context, scene);
-                if (ent.is_none()) return nb::none();
+            .def_static(
+                "deserialize_with_children",
+                [](nb::object data, nb::object context, nb::object scene) -> nb::object {
+                    std::function<nb::object(nb::object, nb::object, nb::object)> deserialize_recursive;
+                    deserialize_recursive =
+                        [&deserialize_recursive](nb::object data, nb::object context, nb::object scene) -> nb::object {
+                        nb::object entity_cls = nb::module_::import_("termin.scene").attr("Entity");
+                        nb::object ent = entity_cls.attr("deserialize")(data, context, scene);
+                        if (ent.is_none())
+                            return nb::none();
 
-                if (nb::isinstance<nb::dict>(data)) {
-                    nb::dict dict_data = nb::cast<nb::dict>(data);
-                    if (dict_data.contains("children")) {
-                        nb::object children_obj = dict_data["children"];
-                        if (nb::isinstance<nb::list>(children_obj)) {
-                            nb::list children = nb::cast<nb::list>(children_obj);
-                            for (size_t i = 0; i < nb::len(children); ++i) {
-                                nb::object child = deserialize_recursive(children[i], context, scene);
-                                if (!child.is_none()) child.attr("set_parent")(ent);
+                        if (nb::isinstance<nb::dict>(data)) {
+                            nb::dict dict_data = nb::cast<nb::dict>(data);
+                            if (dict_data.contains("children")) {
+                                nb::object children_obj = dict_data["children"];
+                                if (nb::isinstance<nb::list>(children_obj)) {
+                                    nb::list children = nb::cast<nb::list>(children_obj);
+                                    for (size_t i = 0; i < nb::len(children); ++i) {
+                                        nb::object child = deserialize_recursive(children[i], context, scene);
+                                        if (!child.is_none())
+                                            child.attr("set_parent")(ent);
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                return ent;
-            };
-            return deserialize_recursive(data, context, scene);
-        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("scene") = nb::none());
+                        return ent;
+                    };
+                    return deserialize_recursive(data, context, scene);
+                },
+                nb::arg("data"),
+                nb::arg("context") = nb::none(),
+                nb::arg("scene") = nb::none());
 
-    // Pool utilities
-    m.def("get_standalone_pool", []() {
-        return reinterpret_cast<uintptr_t>(Entity::standalone_pool());
-    });
-    m.def("migrate_entity", [](Entity& entity, uintptr_t dst_pool_ptr) -> Entity {
-        tc_entity_pool* dst_pool = reinterpret_cast<tc_entity_pool*>(dst_pool_ptr);
-        return migrate_entity_to_pool(entity, dst_pool);
-    }, nb::arg("entity"), nb::arg("dst_pool"));
-}
+        // Pool utilities
+        m.def("get_standalone_pool", []() { return reinterpret_cast<uintptr_t>(Entity::standalone_pool()); });
+        m.def(
+            "migrate_entity",
+            [](Entity& entity, uintptr_t dst_pool_ptr) -> Entity {
+                tc_entity_pool* dst_pool = reinterpret_cast<tc_entity_pool*>(dst_pool_ptr);
+                return migrate_entity_to_pool(entity, dst_pool);
+            },
+            nb::arg("entity"),
+            nb::arg("dst_pool"));
+    }
 
 } // namespace termin

@@ -3,5 +3,5 @@
 #include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_transform(nanobind::module_& m);
+    void bind_transform(nanobind::module_& m);
 }

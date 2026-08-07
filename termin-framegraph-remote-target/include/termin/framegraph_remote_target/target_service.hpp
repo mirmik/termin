@@ -10,20 +10,16 @@
 #elif defined(_WIN32)
 #define TERMIN_FRAMEGRAPH_REMOTE_TARGET_API __declspec(dllimport)
 #else
-#define TERMIN_FRAMEGRAPH_REMOTE_TARGET_API                                    \
-    __attribute__((visibility("default")))
+#define TERMIN_FRAMEGRAPH_REMOTE_TARGET_API __attribute__((visibility("default")))
 #endif
 
-namespace termin
-{
+namespace termin {
     class FrameGraphDebugger;
 }
 
-namespace termin::framegraph_remote_target
-{
+namespace termin::framegraph_remote_target {
 
-    struct TargetServiceConfig
-    {
+    struct TargetServiceConfig {
         std::string bind_address = "127.0.0.1";
         std::uint16_t port = 0;
         std::string authentication_token;
@@ -37,8 +33,7 @@ namespace termin::framegraph_remote_target
         std::uint64_t capture_memory_budget_bytes = 256ULL * 1024ULL * 1024ULL;
     };
 
-    struct TargetServiceStatus
-    {
+    struct TargetServiceStatus {
         bool running = false;
         bool client_connected = false;
         bool debugger_attached = false;
@@ -65,17 +60,14 @@ namespace termin::framegraph_remote_target
     // render/main thread that owns the referenced debugger. status() is
     // thread-safe and may be called from any thread. The I/O thread never
     // touches FrameGraphDebugger.
-    class TERMIN_FRAMEGRAPH_REMOTE_TARGET_API RemoteFrameGraphTarget
-    {
+    class TERMIN_FRAMEGRAPH_REMOTE_TARGET_API RemoteFrameGraphTarget {
     public:
         explicit RemoteFrameGraphTarget(TargetServiceConfig config);
-        RemoteFrameGraphTarget(FrameGraphDebugger& debugger,
-                               TargetServiceConfig config);
+        RemoteFrameGraphTarget(FrameGraphDebugger& debugger, TargetServiceConfig config);
         ~RemoteFrameGraphTarget();
 
         RemoteFrameGraphTarget(const RemoteFrameGraphTarget&) = delete;
-        RemoteFrameGraphTarget&
-        operator=(const RemoteFrameGraphTarget&) = delete;
+        RemoteFrameGraphTarget& operator=(const RemoteFrameGraphTarget&) = delete;
 
         bool start();
         void stop();

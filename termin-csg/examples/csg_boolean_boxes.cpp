@@ -9,11 +9,8 @@ int main() {
 
     termin::Mesh3 mesh = termin::csg::to_mesh3(wall_with_door, "wall_with_door");
 
-    std::cout << "status=" << wall_with_door.status_string()
-              << " vertices=" << mesh.vertex_count()
-              << " triangles=" << mesh.triangle_count()
-              << " volume=" << wall_with_door.volume()
-              << "\n";
+    std::cout << "status=" << wall_with_door.status_string() << " vertices=" << mesh.vertex_count()
+              << " triangles=" << mesh.triangle_count() << " volume=" << wall_with_door.volume() << "\n";
 
     return mesh.is_valid() ? 0 : 1;
 }

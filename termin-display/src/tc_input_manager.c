@@ -1,16 +1,13 @@
 // tc_input_manager.c - Input manager implementation
 #include "render/tc_input_manager.h"
-#include <tcbase/tc_log.h>
 #include <stdlib.h>
+#include <tcbase/tc_log.h>
 
 // ============================================================================
 // Input Manager Lifecycle
 // ============================================================================
 
-tc_input_manager* tc_input_manager_new(
-    const tc_input_manager_vtable* vtable,
-    void* body
-) {
+tc_input_manager* tc_input_manager_new(const tc_input_manager_vtable* vtable, void* body) {
     if (!vtable) {
         tc_log(TC_LOG_ERROR, "[tc_input_manager_new] vtable is NULL");
         return NULL;
@@ -29,7 +26,8 @@ tc_input_manager* tc_input_manager_new(
 }
 
 void tc_input_manager_free(tc_input_manager* m) {
-    if (!m) return;
+    if (!m)
+        return;
     tc_input_manager_destroy(m);
     free(m);
 }
@@ -39,38 +37,25 @@ void tc_input_manager_free(tc_input_manager* m) {
 // ============================================================================
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_pointer(
-    tc_input_manager* m,
-    uint64_t pointer_id,
-    int device,
-    int phase,
-    double x,
-    double y,
-    float pressure
-) {
+    tc_input_manager* m, uint64_t pointer_id, int device, int phase, double x, double y, float pressure) {
     tc_input_manager_on_pointer(m, pointer_id, device, phase, x, y, pressure);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
-    tc_input_manager* m, int button, int action, int mods, uint32_t click_count
-) {
+TERMIN_DISPLAY_API void
+tc_input_manager_dispatch_mouse_button(tc_input_manager* m, int button, int action, int mods, uint32_t click_count) {
     tc_input_manager_on_mouse_button(m, button, action, mods, click_count);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(
-    tc_input_manager* m, double x, double y
-) {
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(tc_input_manager* m, double x, double y) {
     tc_input_manager_on_mouse_move(m, x, y);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_scroll(
-    tc_input_manager* m, double x, double y, int mods
-) {
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_scroll(tc_input_manager* m, double x, double y, int mods) {
     tc_input_manager_on_scroll(m, x, y, mods);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_key(
-    tc_input_manager* m, int key, int scancode, int action, int mods
-) {
+TERMIN_DISPLAY_API void
+tc_input_manager_dispatch_key(tc_input_manager* m, int key, int scancode, int action, int mods) {
     tc_input_manager_on_key(m, key, scancode, action, mods);
 }
 
@@ -78,15 +63,10 @@ TERMIN_DISPLAY_API void tc_input_manager_dispatch_char(tc_input_manager* m, uint
     tc_input_manager_on_char(m, codepoint);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_text(
-    tc_input_manager* m,
-    const char* text_utf8
-) {
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_text(tc_input_manager* m, const char* text_utf8) {
     tc_input_manager_on_text(m, text_utf8);
 }
 
-TERMIN_DISPLAY_API void tc_input_manager_dispatch_focus_lost(
-    tc_input_manager* m
-) {
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_focus_lost(tc_input_manager* m) {
     tc_input_manager_on_focus_lost(m);
 }

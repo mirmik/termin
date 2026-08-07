@@ -16,9 +16,9 @@ typedef struct {
 } tc_display_handle;
 
 #ifdef __cplusplus
-    #define TC_DISPLAY_HANDLE_INVALID (tc_display_handle{0xFFFFFFFFu, 0u})
+#define TC_DISPLAY_HANDLE_INVALID (tc_display_handle{0xFFFFFFFFu, 0u})
 #else
-    #define TC_DISPLAY_HANDLE_INVALID ((tc_display_handle){0xFFFFFFFFu, 0u})
+#define TC_DISPLAY_HANDLE_INVALID ((tc_display_handle){0xFFFFFFFFu, 0u})
 #endif
 
 static inline bool tc_display_handle_valid(tc_display_handle h) {

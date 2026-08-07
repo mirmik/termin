@@ -4,5 +4,5 @@
 #include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_entity_class(nanobind::module_& m);
+    void bind_entity_class(nanobind::module_& m);
 }

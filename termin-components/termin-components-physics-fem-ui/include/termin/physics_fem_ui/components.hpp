@@ -5,11 +5,9 @@
 
 #include <termin/entity/component.hpp>
 
-namespace termin
-{
+namespace termin {
 
-    class ENTITY_API FEMPhysicsHudComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMPhysicsHudComponent final : public CxxComponent {
     public:
         std::string world_entity_name = "FEM Physics World";
         // Optional. When set, a co-located servo diagnostic row named

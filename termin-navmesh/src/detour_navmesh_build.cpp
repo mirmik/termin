@@ -1,166 +1,158 @@
 #include <termin/navmesh/detour_navmesh_build.hpp>
 
-#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <DetourAlloc.h>
 #include <DetourNavMeshBuilder.h>
 #include <Recast.h>
 #include <algorithm>
 #include <cstring>
 #include <tcbase/tc_log.hpp>
+#include <termin/navmesh/navmesh_bake_source.hpp>
 
 namespace termin {
 
-DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
-    const RecastBuildResult& recast_result,
-    const DetourNavMeshBuildConfig& config,
-    const DetourOffMeshLinkData* off_mesh_links,
-    const DetourLinearPathData* linear_paths)
-{
-    DetourNavMeshTileBuildResult result;
-    rcPolyMesh* pmesh = recast_result.poly_mesh;
-    if (!recast_result.success || !pmesh) {
-        result.error = "cannot build Detour tile without a successful Recast poly mesh";
-        tc_log_error("[NavMesh] %s", result.error.c_str());
-        return result;
-    }
-    if (pmesh->nverts <= 0 || pmesh->npolys <= 0 || !pmesh->verts || !pmesh->polys) {
-        result.error = "cannot build Detour tile from invalid Recast poly mesh";
-        tc_log_error("[NavMesh] %s (verts=%d polys=%d verts_ptr=%p polys_ptr=%p)",
-                     result.error.c_str(),
-                     pmesh ? pmesh->nverts : 0,
-                     pmesh ? pmesh->npolys : 0,
-                     pmesh ? static_cast<const void*>(pmesh->verts) : nullptr,
-                     pmesh ? static_cast<const void*>(pmesh->polys) : nullptr);
-        return result;
-    }
-
-    const int poly_area_id = std::clamp(config.area_id, 0, 63);
-    if (poly_area_id != config.area_id) {
-        tc_log_warn("[NavMesh] Detour area_id=%d is outside Detour range, using %d",
-                    config.area_id, poly_area_id);
-    }
-
-    std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
-    std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
-    for (int i = 0; i < pmesh->npolys; ++i) {
-        const unsigned char area = pmesh->areas
-            ? pmesh->areas[i]
-            : navmesh_detour_area_to_recast_area(poly_area_id);
-        poly_areas[static_cast<size_t>(i)] =
-            navmesh_recast_area_to_detour_area(area, poly_area_id);
-        poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
-    }
-
-    std::vector<dtLinearLink> detour_linear_links;
-    if (linear_paths && linear_paths->count() > 0) {
-        const int count = linear_paths->count();
-        const bool valid =
-            static_cast<int>(linear_paths->segment_verts.size()) == count * 6 &&
-            static_cast<int>(linear_paths->flags.size()) == count &&
-            (linear_paths->user_ids.empty() ||
-             static_cast<int>(linear_paths->user_ids.size()) == count);
-        if (!valid) {
-            result.error = "invalid linear path data sizes";
-            tc_log_error("[NavMesh] %s (segments=%d verts=%zu flags=%zu user_ids=%zu)",
+    DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(const RecastBuildResult& recast_result,
+                                                                const DetourNavMeshBuildConfig& config,
+                                                                const DetourOffMeshLinkData* off_mesh_links,
+                                                                const DetourLinearPathData* linear_paths) {
+        DetourNavMeshTileBuildResult result;
+        rcPolyMesh* pmesh = recast_result.poly_mesh;
+        if (!recast_result.success || !pmesh) {
+            result.error = "cannot build Detour tile without a successful Recast poly mesh";
+            tc_log_error("[NavMesh] %s", result.error.c_str());
+            return result;
+        }
+        if (pmesh->nverts <= 0 || pmesh->npolys <= 0 || !pmesh->verts || !pmesh->polys) {
+            result.error = "cannot build Detour tile from invalid Recast poly mesh";
+            tc_log_error("[NavMesh] %s (verts=%d polys=%d verts_ptr=%p polys_ptr=%p)",
                          result.error.c_str(),
-                         count,
-                         linear_paths->segment_verts.size(),
-                         linear_paths->flags.size(),
-                         linear_paths->user_ids.size());
+                         pmesh ? pmesh->nverts : 0,
+                         pmesh ? pmesh->npolys : 0,
+                         pmesh ? static_cast<const void*>(pmesh->verts) : nullptr,
+                         pmesh ? static_cast<const void*>(pmesh->polys) : nullptr);
             return result;
         }
 
-        detour_linear_links.reserve(linear_paths->links.size());
-        for (const DetourLinearLinkData& link : linear_paths->links) {
-            if (link.from_segment >= count || link.to_segment >= count) {
-                result.error = "linear path link references an invalid segment";
-                tc_log_error("[NavMesh] %s (from=%u to=%u segments=%d)",
+        const int poly_area_id = std::clamp(config.area_id, 0, 63);
+        if (poly_area_id != config.area_id) {
+            tc_log_warn("[NavMesh] Detour area_id=%d is outside Detour range, using %d", config.area_id, poly_area_id);
+        }
+
+        std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
+        std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
+        for (int i = 0; i < pmesh->npolys; ++i) {
+            const unsigned char area =
+                pmesh->areas ? pmesh->areas[i] : navmesh_detour_area_to_recast_area(poly_area_id);
+            poly_areas[static_cast<size_t>(i)] = navmesh_recast_area_to_detour_area(area, poly_area_id);
+            poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
+        }
+
+        std::vector<dtLinearLink> detour_linear_links;
+        if (linear_paths && linear_paths->count() > 0) {
+            const int count = linear_paths->count();
+            const bool valid =
+                static_cast<int>(linear_paths->segment_verts.size()) == count * 6 &&
+                static_cast<int>(linear_paths->flags.size()) == count &&
+                (linear_paths->user_ids.empty() || static_cast<int>(linear_paths->user_ids.size()) == count);
+            if (!valid) {
+                result.error = "invalid linear path data sizes";
+                tc_log_error("[NavMesh] %s (segments=%d verts=%zu flags=%zu user_ids=%zu)",
                              result.error.c_str(),
-                             static_cast<unsigned int>(link.from_segment),
-                             static_cast<unsigned int>(link.to_segment),
-                             count);
+                             count,
+                             linear_paths->segment_verts.size(),
+                             linear_paths->flags.size(),
+                             linear_paths->user_ids.size());
                 return result;
             }
-            dtLinearLink detour_link;
-            std::memset(&detour_link, 0, sizeof(detour_link));
-            detour_link.fromPoly = static_cast<unsigned short>(pmesh->npolys + link.from_segment);
-            detour_link.toPoly = static_cast<unsigned short>(pmesh->npolys + link.to_segment);
-            detour_link.fromT = link.from_t;
-            detour_link.toT = link.to_t;
-            detour_link.flags = link.flags;
-            detour_linear_links.push_back(detour_link);
+
+            detour_linear_links.reserve(linear_paths->links.size());
+            for (const DetourLinearLinkData& link : linear_paths->links) {
+                if (link.from_segment >= count || link.to_segment >= count) {
+                    result.error = "linear path link references an invalid segment";
+                    tc_log_error("[NavMesh] %s (from=%u to=%u segments=%d)",
+                                 result.error.c_str(),
+                                 static_cast<unsigned int>(link.from_segment),
+                                 static_cast<unsigned int>(link.to_segment),
+                                 count);
+                    return result;
+                }
+                dtLinearLink detour_link;
+                std::memset(&detour_link, 0, sizeof(detour_link));
+                detour_link.fromPoly = static_cast<unsigned short>(pmesh->npolys + link.from_segment);
+                detour_link.toPoly = static_cast<unsigned short>(pmesh->npolys + link.to_segment);
+                detour_link.fromT = link.from_t;
+                detour_link.toT = link.to_t;
+                detour_link.flags = link.flags;
+                detour_linear_links.push_back(detour_link);
+            }
         }
-    }
 
-    dtNavMeshCreateParams params;
-    std::memset(&params, 0, sizeof(params));
-    params.verts = pmesh->verts;
-    params.vertCount = pmesh->nverts;
-    params.polys = pmesh->polys;
-    params.polyAreas = poly_areas.data();
-    params.polyFlags = poly_flags.data();
-    params.polyCount = pmesh->npolys;
-    params.nvp = pmesh->nvp;
+        dtNavMeshCreateParams params;
+        std::memset(&params, 0, sizeof(params));
+        params.verts = pmesh->verts;
+        params.vertCount = pmesh->nverts;
+        params.polys = pmesh->polys;
+        params.polyAreas = poly_areas.data();
+        params.polyFlags = poly_flags.data();
+        params.polyCount = pmesh->npolys;
+        params.nvp = pmesh->nvp;
 
-    if (off_mesh_links && off_mesh_links->count() > 0) {
-        params.offMeshConVerts = off_mesh_links->verts.data();
-        params.offMeshConRad = off_mesh_links->radii.data();
-        params.offMeshConDir = off_mesh_links->dirs.data();
-        params.offMeshConAreas = off_mesh_links->areas.data();
-        params.offMeshConFlags = off_mesh_links->flags.data();
-        params.offMeshConUserID = off_mesh_links->user_ids.data();
-        params.offMeshConCount = off_mesh_links->count();
-    }
+        if (off_mesh_links && off_mesh_links->count() > 0) {
+            params.offMeshConVerts = off_mesh_links->verts.data();
+            params.offMeshConRad = off_mesh_links->radii.data();
+            params.offMeshConDir = off_mesh_links->dirs.data();
+            params.offMeshConAreas = off_mesh_links->areas.data();
+            params.offMeshConFlags = off_mesh_links->flags.data();
+            params.offMeshConUserID = off_mesh_links->user_ids.data();
+            params.offMeshConCount = off_mesh_links->count();
+        }
 
-    if (linear_paths && linear_paths->count() > 0) {
-        params.linearSegmentVerts = linear_paths->segment_verts.data();
-        params.linearSegmentAreas = linear_paths->areas.data();
-        params.linearSegmentFlags = linear_paths->flags.data();
-        params.linearSegmentUserID = linear_paths->user_ids.empty()
-            ? nullptr
-            : linear_paths->user_ids.data();
-        params.linearSegmentCount = linear_paths->count();
-        params.linearLinks = detour_linear_links.empty() ? nullptr : detour_linear_links.data();
-        params.linearLinkCount = static_cast<int>(detour_linear_links.size());
-    }
+        if (linear_paths && linear_paths->count() > 0) {
+            params.linearSegmentVerts = linear_paths->segment_verts.data();
+            params.linearSegmentAreas = linear_paths->areas.data();
+            params.linearSegmentFlags = linear_paths->flags.data();
+            params.linearSegmentUserID = linear_paths->user_ids.empty() ? nullptr : linear_paths->user_ids.data();
+            params.linearSegmentCount = linear_paths->count();
+            params.linearLinks = detour_linear_links.empty() ? nullptr : detour_linear_links.data();
+            params.linearLinkCount = static_cast<int>(detour_linear_links.size());
+        }
 
-    if (recast_result.detail_mesh) {
-        params.detailMeshes = recast_result.detail_mesh->meshes;
-        params.detailVerts = recast_result.detail_mesh->verts;
-        params.detailVertsCount = recast_result.detail_mesh->nverts;
-        params.detailTris = recast_result.detail_mesh->tris;
-        params.detailTriCount = recast_result.detail_mesh->ntris;
-    }
+        if (recast_result.detail_mesh) {
+            params.detailMeshes = recast_result.detail_mesh->meshes;
+            params.detailVerts = recast_result.detail_mesh->verts;
+            params.detailVertsCount = recast_result.detail_mesh->nverts;
+            params.detailTris = recast_result.detail_mesh->tris;
+            params.detailTriCount = recast_result.detail_mesh->ntris;
+        }
 
-    rcVcopy(params.bmin, pmesh->bmin);
-    rcVcopy(params.bmax, pmesh->bmax);
-    params.walkableHeight = config.agent_height;
-    params.walkableRadius = config.agent_radius;
-    params.walkableClimb = config.agent_max_climb;
-    params.cs = pmesh->cs;
-    params.ch = pmesh->ch;
-    params.buildBvTree = true;
+        rcVcopy(params.bmin, pmesh->bmin);
+        rcVcopy(params.bmax, pmesh->bmax);
+        params.walkableHeight = config.agent_height;
+        params.walkableRadius = config.agent_radius;
+        params.walkableClimb = config.agent_max_climb;
+        params.cs = pmesh->cs;
+        params.ch = pmesh->ch;
+        params.buildBvTree = true;
 
-    unsigned char* nav_data = nullptr;
-    int nav_data_size = 0;
-    if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
-        result.error = "dtCreateNavMeshData failed";
-        tc_log_error("[NavMesh] %s (verts=%d polys=%d nvp=%d offmesh=%d linear=%d detail_verts=%d detail_tris=%d)",
-                     result.error.c_str(),
-                     params.vertCount,
-                     params.polyCount,
-                     params.nvp,
-                     params.offMeshConCount,
-                     params.linearSegmentCount,
-                     params.detailVertsCount,
-                     params.detailTriCount);
+        unsigned char* nav_data = nullptr;
+        int nav_data_size = 0;
+        if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
+            result.error = "dtCreateNavMeshData failed";
+            tc_log_error("[NavMesh] %s (verts=%d polys=%d nvp=%d offmesh=%d linear=%d detail_verts=%d detail_tris=%d)",
+                         result.error.c_str(),
+                         params.vertCount,
+                         params.polyCount,
+                         params.nvp,
+                         params.offMeshConCount,
+                         params.linearSegmentCount,
+                         params.detailVertsCount,
+                         params.detailTriCount);
+            return result;
+        }
+
+        result.data.assign(nav_data, nav_data + nav_data_size);
+        result.success = true;
+        dtFree(nav_data);
         return result;
     }
-
-    result.data.assign(nav_data, nav_data + nav_data_size);
-    result.success = true;
-    dtFree(nav_data);
-    return result;
-}
 
 } // namespace termin

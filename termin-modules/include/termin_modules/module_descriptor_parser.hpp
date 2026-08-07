@@ -8,9 +8,9 @@
 
 namespace termin_modules {
 
-class TERMIN_MODULES_API ModuleDescriptorParser {
-public:
-    std::optional<ModuleSpec> parse(const std::filesystem::path& path, std::string& error) const;
-};
+    class TERMIN_MODULES_API ModuleDescriptorParser {
+    public:
+        std::optional<ModuleSpec> parse(const std::filesystem::path& path, std::string& error) const;
+    };
 
 } // namespace termin_modules

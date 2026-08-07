@@ -13,21 +13,21 @@ GUARD_TEST_MAIN();
 #include <string>
 #include <vector>
 
-#include <termin/entity/entity.hpp>
-#include <termin/bootstrap/bootstrap.hpp>
-#include <termin/image/image_decode.hpp>
-#include <termin/collision/collision_world.hpp>
 #include <components/collider_component.hpp>
-#include <termin/scene/scene_manager.hpp>
-#include <termin/render/mesh_renderer.hpp>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/camera/orbit_camera_controller.hpp>
-#include <termin/render/sprite_asset.hpp>
-#include <termin/render/render_pipeline.hpp>
-#include <termin/render/tc_scene_render_accessors.hpp>
-#include <termin/render/tc_pipeline_template.hpp>
-#include <termin/runtime/runtime_package.hpp>
-#include <termin/scene/tc_scene_render_ext.hpp>
+#include <termin/collision/collision_world.hpp>
+#include <termin/entity/entity.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
+#include <termin/image/image_decode.hpp>
+#include <termin/render/mesh_renderer.hpp>
+#include <termin/render/render_pipeline.hpp>
+#include <termin/render/sprite_asset.hpp>
+#include <termin/render/tc_pipeline_template.hpp>
+#include <termin/render/tc_scene_render_accessors.hpp>
+#include <termin/runtime/runtime_package.hpp>
+#include <termin/scene/scene_manager.hpp>
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_shader_program_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
@@ -45,42 +45,41 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kProgramUuid = "runtime-loader-test-program";
-constexpr const char* kShaderUuid = "shader-phase-12beb2a809af29f7";
-constexpr const char* kMaterialUuid = "runtime-loader-test-material";
-constexpr const char* kMeshUuid = "runtime-loader-test-mesh";
-constexpr const char* kMeshName = "RuntimeLoaderTestMesh";
-constexpr const char* kTextureUuid = "runtime-loader-test-texture";
-constexpr const char* kTextureName = "RuntimeLoaderTestTexture";
+    constexpr const char* kProgramUuid = "runtime-loader-test-program";
+    constexpr const char* kShaderUuid = "shader-phase-12beb2a809af29f7";
+    constexpr const char* kMaterialUuid = "runtime-loader-test-material";
+    constexpr const char* kMeshUuid = "runtime-loader-test-mesh";
+    constexpr const char* kMeshName = "RuntimeLoaderTestMesh";
+    constexpr const char* kTextureUuid = "runtime-loader-test-texture";
+    constexpr const char* kTextureName = "RuntimeLoaderTestTexture";
 
-std::filesystem::path make_package_root() {
-    std::filesystem::path root = std::filesystem::temp_directory_path()
-        / "termin-runtime-package-loader-test";
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "shaders");
-    std::filesystem::create_directories(root / "materials");
-    std::filesystem::create_directories(root / "meshes");
-    std::filesystem::create_directories(root / "textures");
-    std::filesystem::create_directories(root / "pipelines");
-    return root;
-}
+    std::filesystem::path make_package_root() {
+        std::filesystem::path root = std::filesystem::temp_directory_path() / "termin-runtime-package-loader-test";
+        std::filesystem::remove_all(root);
+        std::filesystem::create_directories(root / "shaders");
+        std::filesystem::create_directories(root / "materials");
+        std::filesystem::create_directories(root / "meshes");
+        std::filesystem::create_directories(root / "textures");
+        std::filesystem::create_directories(root / "pipelines");
+        return root;
+    }
 
-void write_binary(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
-    std::ofstream out(path, std::ios::binary);
-    REQUIRE(static_cast<bool>(out));
-    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    REQUIRE(static_cast<bool>(out));
-}
+    void write_binary(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
+        std::ofstream out(path, std::ios::binary);
+        REQUIRE(static_cast<bool>(out));
+        out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(static_cast<bool>(out));
+    }
 
-void write_text(const std::filesystem::path& path, const std::string& text) {
-    std::ofstream out(path, std::ios::binary);
-    REQUIRE(static_cast<bool>(out));
-    out << text;
-    REQUIRE(static_cast<bool>(out));
-}
+    void write_text(const std::filesystem::path& path, const std::string& text) {
+        std::ofstream out(path, std::ios::binary);
+        REQUIRE(static_cast<bool>(out));
+        out << text;
+        REQUIRE(static_cast<bool>(out));
+    }
 
-std::string shader_fragment_source() {
-    return R"(
+    std::string shader_fragment_source() {
+        return R"(
 #version 330 core
 uniform sampler2D u_albedo_texture;
 uniform sampler2D u_normal_texture;
@@ -95,97 +94,95 @@ void main() {
     FragColor = u_color;
 }
 )";
-}
-
-std::string json_string(const std::string& value) {
-    std::string result = "\"";
-    for (const char character : value) {
-        switch (character) {
-        case '\\':
-            result += "\\\\";
-            break;
-        case '"':
-            result += "\\\"";
-            break;
-        case '\n':
-            result += "\\n";
-            break;
-        case '\r':
-            result += "\\r";
-            break;
-        case '\t':
-            result += "\\t";
-            break;
-        default:
-            result += character;
-            break;
-        }
     }
-    result += '"';
-    return result;
-}
 
-std::string shader_spec() {
-    std::ostringstream out;
-    out
-        << "{\n"
-        << "  \"uuid\": \"" << kShaderUuid << "\",\n"
-        << "  \"name\": \"RuntimeLoaderTestShader\",\n"
-        << "  \"language\": \"glsl\",\n"
-        << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
-        << "  \"features\": 1,\n"
-        << "  \"shader_contract\": {\"schema_version\": 1, "
-           "\"debug_name\": \"RuntimeLoaderTestShader\", \"vertex_inputs\": ["
-           "{\"semantic\": \"position\", \"type\": 3, \"required\": true}, "
-           "{\"semantic\": \"color\", \"type\": 3, \"required\": true}]},\n"
-        << "  \"surface_producer\": {\n"
-        << "    \"schema_version\": 1,\n"
-        << "    \"contract_id\": \"termin.surface.standard-pbr\",\n"
-        << "    \"contract_version\": 1,\n"
-        << "    \"surface_type_name\": \"TerminStandardSurfaceV1\",\n"
-        << "    \"evaluator_entry\": \"main\",\n"
-        << "    \"evaluator_source\": " << json_string(shader_fragment_source()) << ",\n"
-        << "    \"source_identity\": \"runtime-loader-test-surface\",\n"
-        << "    \"fragment_inputs\": [{\"semantic\": \"world_pos\", \"type\": 3}],\n"
-        << "    \"resources\": [{\"name\": \"material\", \"kind\": 1, "
-           "\"scope\": 3, \"stage_mask\": 2, \"size\": 16, "
-           "\"element_stride\": 0, \"fields\": [{\"name\": \"u_color\", "
-           "\"type\": \"Color\", \"offset\": 0, \"size\": 16}]}]\n"
-        << "  }\n"
-        << "}\n";
-    return out.str();
-}
+    std::string json_string(const std::string& value) {
+        std::string result = "\"";
+        for (const char character : value) {
+            switch (character) {
+            case '\\':
+                result += "\\\\";
+                break;
+            case '"':
+                result += "\\\"";
+                break;
+            case '\n':
+                result += "\\n";
+                break;
+            case '\r':
+                result += "\\r";
+                break;
+            case '\t':
+                result += "\\t";
+                break;
+            default:
+                result += character;
+                break;
+            }
+        }
+        result += '"';
+        return result;
+    }
 
-std::string shader_program_spec() {
-    std::ostringstream out;
-    out
-        << "{\n"
-        << "  \"schema_version\": 1,\n"
-        << "  \"uuid\": \"" << kProgramUuid << "\",\n"
-        << "  \"name\": \"RuntimeLoaderTestProgram\",\n"
-        << "  \"source_path\": \"packaged-test\",\n"
-        << "  \"language\": \"glsl\",\n"
-        << "  \"features\": 1,\n"
-        << "  \"properties\": [\n"
-        << "    {\"name\": \"u_color\", \"property_type\": \"Color\", "
-           "\"default\": [1.0, 0.5, 0.25, 1.0]},\n"
-        << "    {\"name\": \"u_albedo_texture\", \"property_type\": \"Texture\", "
-           "\"expected_encoding\": \"srgb\", \"default\": \"white\"},\n"
-        << "    {\"name\": \"u_normal_texture\", \"property_type\": \"Texture\", "
-           "\"expected_encoding\": \"linear\", \"default\": \"normal\"}\n"
-        << "  ],\n"
-        << "  \"phases\": [\n"
-        << "    {\"phase_mark\": \"opaque\", \"priority\": 0, \"shader\": \""
-        << kShaderUuid << "\", \"state\": {\"polygon_mode\": 0, \"cull\": true, "
-           "\"depth_test\": true, \"depth_write\": true, \"blend\": false, "
-           "\"blend_src\": 2, \"blend_dst\": 3, \"depth_func\": 0}}\n"
-        << "  ]\n"
-        << "}\n";
-    return out.str();
-}
+    std::string shader_spec() {
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"uuid\": \"" << kShaderUuid << "\",\n"
+            << "  \"name\": \"RuntimeLoaderTestShader\",\n"
+            << "  \"language\": \"glsl\",\n"
+            << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
+            << "  \"features\": 1,\n"
+            << "  \"shader_contract\": {\"schema_version\": 1, "
+               "\"debug_name\": \"RuntimeLoaderTestShader\", \"vertex_inputs\": ["
+               "{\"semantic\": \"position\", \"type\": 3, \"required\": true}, "
+               "{\"semantic\": \"color\", \"type\": 3, \"required\": true}]},\n"
+            << "  \"surface_producer\": {\n"
+            << "    \"schema_version\": 1,\n"
+            << "    \"contract_id\": \"termin.surface.standard-pbr\",\n"
+            << "    \"contract_version\": 1,\n"
+            << "    \"surface_type_name\": \"TerminStandardSurfaceV1\",\n"
+            << "    \"evaluator_entry\": \"main\",\n"
+            << "    \"evaluator_source\": " << json_string(shader_fragment_source()) << ",\n"
+            << "    \"source_identity\": \"runtime-loader-test-surface\",\n"
+            << "    \"fragment_inputs\": [{\"semantic\": \"world_pos\", \"type\": 3}],\n"
+            << "    \"resources\": [{\"name\": \"material\", \"kind\": 1, "
+               "\"scope\": 3, \"stage_mask\": 2, \"size\": 16, "
+               "\"element_stride\": 0, \"fields\": [{\"name\": \"u_color\", "
+               "\"type\": \"Color\", \"offset\": 0, \"size\": 16}]}]\n"
+            << "  }\n"
+            << "}\n";
+        return out.str();
+    }
 
-std::string mesh_spec() {
-    return R"({
+    std::string shader_program_spec() {
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"schema_version\": 1,\n"
+            << "  \"uuid\": \"" << kProgramUuid << "\",\n"
+            << "  \"name\": \"RuntimeLoaderTestProgram\",\n"
+            << "  \"source_path\": \"packaged-test\",\n"
+            << "  \"language\": \"glsl\",\n"
+            << "  \"features\": 1,\n"
+            << "  \"properties\": [\n"
+            << "    {\"name\": \"u_color\", \"property_type\": \"Color\", "
+               "\"default\": [1.0, 0.5, 0.25, 1.0]},\n"
+            << "    {\"name\": \"u_albedo_texture\", \"property_type\": \"Texture\", "
+               "\"expected_encoding\": \"srgb\", \"default\": \"white\"},\n"
+            << "    {\"name\": \"u_normal_texture\", \"property_type\": \"Texture\", "
+               "\"expected_encoding\": \"linear\", \"default\": \"normal\"}\n"
+            << "  ],\n"
+            << "  \"phases\": [\n"
+            << "    {\"phase_mark\": \"opaque\", \"priority\": 0, \"shader\": \"" << kShaderUuid
+            << "\", \"state\": {\"polygon_mode\": 0, \"cull\": true, "
+               "\"depth_test\": true, \"depth_write\": true, \"blend\": false, "
+               "\"blend_src\": 2, \"blend_dst\": 3, \"depth_func\": 0}}\n"
+            << "  ]\n"
+            << "}\n";
+        return out.str();
+    }
+
+    std::string mesh_spec() {
+        return R"({
   "uuid": "runtime-loader-test-mesh",
   "name": "RuntimeLoaderTestMesh",
   "draw_mode": "triangles",
@@ -200,34 +197,33 @@ std::string mesh_spec() {
   "indices": [0, 1, 2]
 }
 )";
-}
+    }
 
-std::string material_spec() {
-    std::ostringstream out;
-    out
-        << "{\n"
-        << "  \"uuid\": \"" << kMaterialUuid << "\",\n"
-        << "  \"name\": \"RuntimeLoaderTestMaterial\",\n"
-        << "  \"shader_program\": \"" << kProgramUuid << "\",\n"
-        << "  \"phases\": [\n"
-        << "    {\"shader\": \"" << kShaderUuid << "\", \"mark\": \"opaque\", \"priority\": 0}\n"
-        << "  ],\n"
-        << "  \"uniforms\": {\n"
-        << "    \"u_color\": [0.25, 0.5, 0.75, 1.0],\n"
-        << "    \"u_roughness\": 0.42,\n"
-        << "    \"u_emissive\": [0.1, 0.2, 0.3],\n"
-        << "    \"u_enabled\": true\n"
-        << "  },\n"
-        << "  \"textures\": {\n"
-        << "    \"u_albedo_texture\": {\"kind\": \"builtin\", \"name\": \"white\"},\n"
-        << "    \"u_normal_texture\": {\"kind\": \"builtin\", \"name\": \"normal\"}\n"
-        << "  }\n"
-        << "}\n";
-    return out.str();
-}
+    std::string material_spec() {
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"uuid\": \"" << kMaterialUuid << "\",\n"
+            << "  \"name\": \"RuntimeLoaderTestMaterial\",\n"
+            << "  \"shader_program\": \"" << kProgramUuid << "\",\n"
+            << "  \"phases\": [\n"
+            << "    {\"shader\": \"" << kShaderUuid << "\", \"mark\": \"opaque\", \"priority\": 0}\n"
+            << "  ],\n"
+            << "  \"uniforms\": {\n"
+            << "    \"u_color\": [0.25, 0.5, 0.75, 1.0],\n"
+            << "    \"u_roughness\": 0.42,\n"
+            << "    \"u_emissive\": [0.1, 0.2, 0.3],\n"
+            << "    \"u_enabled\": true\n"
+            << "  },\n"
+            << "  \"textures\": {\n"
+            << "    \"u_albedo_texture\": {\"kind\": \"builtin\", \"name\": \"white\"},\n"
+            << "    \"u_normal_texture\": {\"kind\": \"builtin\", \"name\": \"normal\"}\n"
+            << "  }\n"
+            << "}\n";
+        return out.str();
+    }
 
-std::string manifest() {
-    return R"({
+    std::string manifest() {
+        return R"({
   "version": 2,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -241,38 +237,35 @@ std::string manifest() {
   ]
 }
 )";
-}
+    }
 
-std::string replace_once(std::string text, const std::string& needle, const std::string& replacement) {
-    const size_t offset = text.find(needle);
-    REQUIRE(offset != std::string::npos);
-    text.replace(offset, needle.size(), replacement);
-    return text;
-}
+    std::string replace_once(std::string text, const std::string& needle, const std::string& replacement) {
+        const size_t offset = text.find(needle);
+        REQUIRE(offset != std::string::npos);
+        text.replace(offset, needle.size(), replacement);
+        return text;
+    }
 
-std::string texture_spec(const std::string& source_path = "textures/albedo.png") {
-    std::ostringstream out;
-    out
-        << "{\n"
-        << "  \"uuid\": \"" << kTextureUuid << "\",\n"
-        << "  \"name\": \"" << kTextureName << "\",\n"
-        << "  \"source_path\": \"" << source_path << "\",\n"
-        << "  \"import_settings\": {\"flip_x\": true, \"flip_y\": false, "
-           "\"transpose\": true, \"encoding\": \"srgb\"}\n"
-        << "}\n";
-    return out.str();
-}
+    std::string texture_spec(const std::string& source_path = "textures/albedo.png") {
+        std::ostringstream out;
+        out << "{\n"
+            << "  \"uuid\": \"" << kTextureUuid << "\",\n"
+            << "  \"name\": \"" << kTextureName << "\",\n"
+            << "  \"source_path\": \"" << source_path << "\",\n"
+            << "  \"import_settings\": {\"flip_x\": true, \"flip_y\": false, "
+               "\"transpose\": true, \"encoding\": \"srgb\"}\n"
+            << "}\n";
+        return out.str();
+    }
 
-std::string material_spec_with_asset_texture() {
-    return replace_once(
-        material_spec(),
-        "{\"kind\": \"builtin\", \"name\": \"white\"}",
-        std::string("{\"kind\": \"asset\", \"uuid\": \"") + kTextureUuid + "\"}"
-    );
-}
+    std::string material_spec_with_asset_texture() {
+        return replace_once(material_spec(),
+                            "{\"kind\": \"builtin\", \"name\": \"white\"}",
+                            std::string("{\"kind\": \"asset\", \"uuid\": \"") + kTextureUuid + "\"}");
+    }
 
-std::string manifest_with_packaged_texture() {
-    return R"({
+    std::string manifest_with_packaged_texture() {
+        return R"({
   "version": 2,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -287,10 +280,10 @@ std::string manifest_with_packaged_texture() {
   ]
 }
 )";
-}
+    }
 
-std::string scene_json() {
-    return R"({
+    std::string scene_json() {
+        return R"({
   "uuid": "runtime-loader-test-scene",
   "entities": [
     {
@@ -384,10 +377,10 @@ std::string scene_json() {
   }
 }
 )";
-}
+    }
 
-std::string collision_scene_json() {
-    return R"({
+    std::string collision_scene_json() {
+        return R"({
   "uuid": "runtime-loader-collision-scene",
   "entities": [
     {
@@ -416,65 +409,71 @@ std::string collision_scene_json() {
   ]
 }
 )";
-}
-
-void write_test_package(const std::filesystem::path& root) {
-    write_text(root / "manifest.json", manifest());
-    write_text(root / "scene.json", scene_json());
-    write_text(root / "shaders" / "test.shader.json", shader_spec());
-    write_text(root / "shaders" / "test.shader-program.json", shader_program_spec());
-    write_text(root / "shaders" / "test.frag", shader_fragment_source());
-    write_text(root / "materials" / "test.tmat.json", material_spec());
-    write_text(root / "meshes" / "test.tmesh.json", mesh_spec());
-}
-
-void write_test_package_with_texture(const std::filesystem::path& root) {
-    write_test_package(root);
-    write_text(root / "manifest.json", manifest_with_packaged_texture());
-    write_text(root / "materials" / "test.tmat.json", material_spec_with_asset_texture());
-    write_text(root / "textures" / "test.texture.json", texture_spec());
-    const std::vector<std::uint8_t> rgba = {
-        0x10, 0x20, 0x30, 0x40,
-        0x50, 0x60, 0x70, 0x80,
-    };
-    write_binary(root / "textures" / "albedo.png", termin::image::encode_png_rgba8(rgba, 2, 1));
-}
-
-tc_uniform_value* require_uniform(tc_material_phase* phase, const char* name, tc_uniform_type type) {
-    REQUIRE(phase != nullptr);
-    tc_uniform_value* value = tc_material_phase_find_uniform(phase, name);
-    REQUIRE(value != nullptr);
-    CHECK_EQ(value->type, static_cast<unsigned char>(type));
-    return value;
-}
-
-tc_material_texture* require_texture(tc_material_phase* phase, const char* name) {
-    REQUIRE(phase != nullptr);
-    tc_material_texture* texture = tc_material_phase_find_texture(phase, name);
-    REQUIRE(texture != nullptr);
-    CHECK(tc_texture_is_valid(texture->texture));
-    return texture;
-}
-
-struct LightProbe {
-    size_t count = 0;
-    tc_light_data first{};
-};
-
-bool collect_test_light(tc_component* c, void* user_data) {
-    LightProbe* probe = static_cast<LightProbe*>(user_data);
-    const tc_light_capability* cap = tc_light_capability_get(c);
-    REQUIRE(cap != nullptr);
-    REQUIRE(cap->vtable != nullptr);
-    REQUIRE(cap->vtable->get_light_data != nullptr);
-    tc_light_data data{};
-    REQUIRE(cap->vtable->get_light_data(c, &data));
-    if (probe->count == 0) {
-        probe->first = data;
     }
-    ++probe->count;
-    return true;
-}
+
+    void write_test_package(const std::filesystem::path& root) {
+        write_text(root / "manifest.json", manifest());
+        write_text(root / "scene.json", scene_json());
+        write_text(root / "shaders" / "test.shader.json", shader_spec());
+        write_text(root / "shaders" / "test.shader-program.json", shader_program_spec());
+        write_text(root / "shaders" / "test.frag", shader_fragment_source());
+        write_text(root / "materials" / "test.tmat.json", material_spec());
+        write_text(root / "meshes" / "test.tmesh.json", mesh_spec());
+    }
+
+    void write_test_package_with_texture(const std::filesystem::path& root) {
+        write_test_package(root);
+        write_text(root / "manifest.json", manifest_with_packaged_texture());
+        write_text(root / "materials" / "test.tmat.json", material_spec_with_asset_texture());
+        write_text(root / "textures" / "test.texture.json", texture_spec());
+        const std::vector<std::uint8_t> rgba = {
+            0x10,
+            0x20,
+            0x30,
+            0x40,
+            0x50,
+            0x60,
+            0x70,
+            0x80,
+        };
+        write_binary(root / "textures" / "albedo.png", termin::image::encode_png_rgba8(rgba, 2, 1));
+    }
+
+    tc_uniform_value* require_uniform(tc_material_phase* phase, const char* name, tc_uniform_type type) {
+        REQUIRE(phase != nullptr);
+        tc_uniform_value* value = tc_material_phase_find_uniform(phase, name);
+        REQUIRE(value != nullptr);
+        CHECK_EQ(value->type, static_cast<unsigned char>(type));
+        return value;
+    }
+
+    tc_material_texture* require_texture(tc_material_phase* phase, const char* name) {
+        REQUIRE(phase != nullptr);
+        tc_material_texture* texture = tc_material_phase_find_texture(phase, name);
+        REQUIRE(texture != nullptr);
+        CHECK(tc_texture_is_valid(texture->texture));
+        return texture;
+    }
+
+    struct LightProbe {
+        size_t count = 0;
+        tc_light_data first{};
+    };
+
+    bool collect_test_light(tc_component* c, void* user_data) {
+        LightProbe* probe = static_cast<LightProbe*>(user_data);
+        const tc_light_capability* cap = tc_light_capability_get(c);
+        REQUIRE(cap != nullptr);
+        REQUIRE(cap->vtable != nullptr);
+        REQUIRE(cap->vtable->get_light_data != nullptr);
+        tc_light_data data{};
+        REQUIRE(cap->vtable->get_light_data(c, &data));
+        if (probe->count == 0) {
+            probe->first = data;
+        }
+        ++probe->count;
+        return true;
+    }
 
 } // namespace
 
@@ -489,8 +488,7 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
   ],
   "resources": []
 }
-)"
-    );
+)");
     write_text(root / "scene.json", R"({
   "uuid": "minimal-runtime-scene",
   "entities": [
@@ -501,12 +499,10 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     }
   ]
 }
-)"
-    );
+)");
 
     termin::runtime::RuntimePackageLoadOptions options;
-    options.bootstrap_profile =
-        termin::bootstrap::RuntimeBootstrapProfile::Minimal;
+    options.bootstrap_profile = termin::bootstrap::RuntimeBootstrapProfile::Minimal;
     termin::runtime::RuntimePackageLoader loader;
     auto supported = loader.load(root.string(), options);
     REQUIRE(supported.ok);
@@ -529,8 +525,7 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     }
   ]
 }
-)"
-    );
+)");
     auto unsupported_component = loader.load(root.string(), options);
     CHECK_FALSE(unsupported_component.ok);
     CHECK(unsupported_component.message.find("MeshComponent") != std::string::npos);
@@ -547,8 +542,7 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     {"type": "mesh", "uuid": "unsupported-mesh", "path": "meshes/test.tmesh.json"}
   ]
 }
-)"
-    );
+)");
     auto unsupported_resource = loader.load(root.string(), options);
     CHECK_FALSE(unsupported_resource.ok);
     CHECK(unsupported_resource.message.find("resource type 'mesh'") != std::string::npos);
@@ -567,8 +561,7 @@ TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
   ],
   "resources": []
 }
-)"
-    );
+)");
     write_text(root / "scene.json", R"({
   "uuid": "orbit-camera-runtime-scene",
   "entities": [
@@ -582,16 +575,13 @@ TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
     }
   ]
 }
-)"
-    );
+)");
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
     termin::Entity camera = result.scene.find_entity_by_name("RuntimeCamera");
     REQUIRE(camera.valid());
-    termin::OrbitCameraController* controller =
-        camera.get_component<termin::OrbitCameraController>();
+    termin::OrbitCameraController* controller = camera.get_component<termin::OrbitCameraController>();
     REQUIRE(controller != nullptr);
     CHECK_FALSE(controller->horizon_lock);
 
@@ -611,22 +601,19 @@ TEST_CASE("RuntimePackageLoader attaches rendering host extensions before compon
     termin::runtime::RuntimePackageLoadOptions options;
     termin::bootstrap::bootstrap_runtime();
     options.scene_extensions = termin::default_scene_extension_ids();
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string(), options);
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string(), options);
 
     REQUIRE(result.ok);
     REQUIRE(result.scene.valid());
     CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_RENDER_MOUNT));
     CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_RENDER_STATE));
     CHECK(tc_scene_ext_has(result.scene.handle(), TC_SCENE_EXT_TYPE_COLLISION_WORLD));
-    termin::collision::CollisionWorld* world =
-        termin::collision::CollisionWorld::from_scene(result.scene.handle());
+    termin::collision::CollisionWorld* world = termin::collision::CollisionWorld::from_scene(result.scene.handle());
     REQUIRE(world != nullptr);
 
     termin::Entity packaged_entity = result.scene.find_entity_by_name("PackagedCollider");
     REQUIRE(packaged_entity.valid());
-    termin::ColliderComponent* packaged_collider =
-        packaged_entity.get_component<termin::ColliderComponent>();
+    termin::ColliderComponent* packaged_collider = packaged_entity.get_component<termin::ColliderComponent>();
     REQUIRE(packaged_collider != nullptr);
     REQUIRE(packaged_collider->attached_collider() != nullptr);
     CHECK(world->contains(packaged_collider->attached_collider()));
@@ -663,12 +650,8 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     REQUIRE(program.get() != nullptr);
     REQUIRE_EQ(program.get()->property_count, 3u);
     CHECK(program.get()->properties[1].has_expected_encoding != 0);
-    CHECK(
-        program.get()->properties[1].expected_encoding
-        == TC_TEXTURE_ENCODING_SRGB);
-    CHECK(
-        program.get()->properties[2].expected_encoding
-        == TC_TEXTURE_ENCODING_LINEAR);
+    CHECK(program.get()->properties[1].expected_encoding == TC_TEXTURE_ENCODING_SRGB);
+    CHECK(program.get()->properties[2].expected_encoding == TC_TEXTURE_ENCODING_LINEAR);
     CHECK_EQ(program.get()->phase_count, 1u);
     tc_shader* program_phase_shader = tc_shader_get(program.get()->phases[0].shader);
     REQUIRE(program_phase_shader != nullptr);
@@ -684,18 +667,12 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     REQUIRE(tc_shader_get_contract_view(shader.get(), &shader_contract));
     CHECK_EQ(shader_contract.source_kind, TC_SHADER_CONTRACT_SOURCE_DECLARED);
     REQUIRE_EQ(shader_contract.vertex_input_count, 2u);
-    CHECK_EQ(
-        std::string(shader_contract.vertex_inputs[0].semantic),
-        std::string("position"));
-    CHECK_EQ(
-        std::string(shader_contract.vertex_inputs[1].semantic),
-        std::string("color"));
+    CHECK_EQ(std::string(shader_contract.vertex_inputs[0].semantic), std::string("position"));
+    CHECK_EQ(std::string(shader_contract.vertex_inputs[1].semantic), std::string("color"));
     REQUIRE(shader.has_surface_producer());
     tc_shader_surface_producer_view producer{};
     REQUIRE(tc_shader_get_surface_producer_view(shader.get(), &producer));
-    CHECK_EQ(
-        std::string(producer.contract_id),
-        std::string("termin.surface.standard-pbr"));
+    CHECK_EQ(std::string(producer.contract_id), std::string("termin.surface.standard-pbr"));
     CHECK_EQ(producer.contract_version, 1u);
     REQUIRE_EQ(producer.fragment_input_count, 1u);
     CHECK_EQ(std::string(producer.fragment_inputs[0].semantic), std::string("world_pos"));
@@ -721,22 +698,16 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     tc_uniform_value* enabled = require_uniform(phase, "u_enabled", TC_UNIFORM_INT);
     CHECK_EQ(enabled->data.i, 1);
 
-    tc_material_texture* albedo_slot =
-        require_texture(phase, "u_albedo_texture");
-    tc_material_texture* normal_slot =
-        require_texture(phase, "u_normal_texture");
+    tc_material_texture* albedo_slot = require_texture(phase, "u_albedo_texture");
+    tc_material_texture* normal_slot = require_texture(phase, "u_normal_texture");
     CHECK(albedo_slot->has_expected_encoding != 0);
     CHECK(normal_slot->has_expected_encoding != 0);
     CHECK_EQ(albedo_slot->expected_encoding, TC_TEXTURE_ENCODING_SRGB);
     CHECK_EQ(normal_slot->expected_encoding, TC_TEXTURE_ENCODING_LINEAR);
     REQUIRE(tc_texture_get(albedo_slot->texture) != nullptr);
     REQUIRE(tc_texture_get(normal_slot->texture) != nullptr);
-    CHECK_EQ(
-        tc_texture_get(albedo_slot->texture)->encoding,
-        TC_TEXTURE_ENCODING_SRGB);
-    CHECK_EQ(
-        tc_texture_get(normal_slot->texture)->encoding,
-        TC_TEXTURE_ENCODING_LINEAR);
+    CHECK_EQ(tc_texture_get(albedo_slot->texture)->encoding, TC_TEXTURE_ENCODING_SRGB);
+    CHECK_EQ(tc_texture_get(normal_slot->texture)->encoding, TC_TEXTURE_ENCODING_LINEAR);
 
     tc_scene_handle scene = result.scene.handle();
     CHECK_EQ(tc_scene_count_components_of_type(scene, "LightComponent"), 1);
@@ -747,11 +718,7 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
 
     LightProbe probe;
     tc_scene_foreach_with_capability(
-        scene,
-        light_cap,
-        collect_test_light,
-        &probe,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+        scene, light_cap, collect_test_light, &probe, TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
     REQUIRE_EQ(probe.count, 1);
     CHECK_EQ(probe.first.type, TC_LIGHT_DIRECTIONAL);
     CHECK(std::fabs(probe.first.color[0] - 0.8) < 0.0001);
@@ -770,33 +737,22 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
 TEST_CASE("RuntimePackageLoader exposes packaged builtin shader root") {
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
-    write_text(
-        root / "manifest.json",
-        replace_once(
-            manifest(),
-            "\"resources\":",
-            "\"builtin_shader_contract\": {"
-            "\"version\": 1,"
-            "\"catalog\": \"builtin_shaders/engine-shader-catalog.json\","
-            "\"shaders\": [{\"uuid\": \"termin-engine-test\", \"artifacts\": {}}]"
-            "},"
-            "\"resources\":"
-        )
-    );
+    write_text(root / "manifest.json",
+               replace_once(manifest(),
+                            "\"resources\":",
+                            "\"builtin_shader_contract\": {"
+                            "\"version\": 1,"
+                            "\"catalog\": \"builtin_shaders/engine-shader-catalog.json\","
+                            "\"shaders\": [{\"uuid\": \"termin-engine-test\", \"artifacts\": {}}]"
+                            "},"
+                            "\"resources\":"));
     std::filesystem::create_directories(root / "builtin_shaders");
-    write_text(
-        root / "builtin_shaders" / "engine-shader-catalog.json",
-        R"({"version":1,"shaders":[]})"
-    );
+    write_text(root / "builtin_shaders" / "engine-shader-catalog.json", R"({"version":1,"shaders":[]})");
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
 
     REQUIRE(result.ok);
-    CHECK(
-        result.shader_runtime.builtin_shader_root ==
-        (root / "builtin_shaders").string()
-    );
+    CHECK(result.shader_runtime.builtin_shader_root == (root / "builtin_shaders").string());
 }
 
 TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runtime session") {
@@ -807,22 +763,24 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
         TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION,
         TC_PIPELINE_EXECUTION_SINGLE_VIEW,
         "Runtime Compiled Pipeline",
-        nullptr, 0,
-        nullptr, 0,
-        nullptr, 0,
-        nullptr, 0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        0,
     };
-    const tc_pipeline_template_handle source_handle = tc_pipeline_template_create(
-        "runtime-loader-compiled-pipeline-source", "source");
+    const tc_pipeline_template_handle source_handle =
+        tc_pipeline_template_create("runtime-loader-compiled-pipeline-source", "source");
     tc_pipeline_template* source = tc_pipeline_template_get(source_handle);
     REQUIRE(source != nullptr);
     REQUIRE(tc_pipeline_template_set_payload(source, &descriptor));
     const size_t payload_size = tc_pipeline_template_serialize(source, nullptr, 0);
     REQUIRE(payload_size > 0);
     std::vector<std::uint8_t> payload(payload_size);
-    REQUIRE_EQ(
-        tc_pipeline_template_serialize(source, payload.data(), payload.size()),
-        payload_size);
+    REQUIRE_EQ(tc_pipeline_template_serialize(source, payload.data(), payload.size()), payload_size);
     REQUIRE(tc_pipeline_template_remove(source_handle));
 
     write_binary(root / "pipelines" / "compiled.pipeline-template", payload);
@@ -852,8 +810,7 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
 }
 )");
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
     REQUIRE(result.resources != nullptr);
     const tc_pipeline_template_handle loaded = tc_pipeline_template_find(pipeline_uuid);
@@ -862,8 +819,7 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
     REQUIRE(loaded_template != nullptr);
     CHECK_EQ(std::string(loaded_template->header.name), "Runtime Compiled Pipeline");
     CHECK_EQ(tc_scene_pipeline_template_count(result.scene.handle()), 1u);
-    CHECK(tc_pipeline_template_handle_eq(
-        tc_scene_pipeline_template_at(result.scene.handle(), 0), loaded));
+    CHECK(tc_pipeline_template_handle_eq(tc_scene_pipeline_template_at(result.scene.handle(), 0), loaded));
 
     termin::TcPipelineTemplate loaded_template_ref(loaded);
     termin::RenderPipeline runtime_pipeline(loaded_template_ref);
@@ -876,8 +832,7 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
     result.destroy();
     CHECK_FALSE(tc_pipeline_template_is_valid(loaded));
 
-    termin::runtime::RuntimePackageLoadResult resumed =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult resumed = termin::runtime::load_runtime_package(root.string());
     REQUIRE(resumed.ok);
     CHECK(tc_pipeline_template_is_valid(tc_pipeline_template_find(pipeline_uuid)));
     resumed.destroy();
@@ -894,9 +849,8 @@ root:
   name: runtime_root
   background_color: [0.1, 0.2, 0.3, 1]
 )";
-    const std::string compiled =
-        termin::gui_native::TcUiDocumentAsset::compile_source_json(
-            ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
+    const std::string compiled = termin::gui_native::TcUiDocumentAsset::compile_source_json(
+        ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
     write_text(root / "ui" / "runtime.ui-document.json", compiled);
     write_text(root / "manifest.json", R"({
   "version": 2,
@@ -916,13 +870,11 @@ root:
 )");
 
     termin::gui_native::TcUiDocumentAsset::clear_registry_for_tests();
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
 
     REQUIRE(result.ok);
     REQUIRE(result.resources != nullptr);
-    const auto asset =
-        termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid);
+    const auto asset = termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid);
     REQUIRE(asset.valid());
     const auto recipe = asset.resolve();
     REQUIRE(recipe != nullptr);
@@ -937,19 +889,14 @@ TEST_CASE("RuntimePackageLoader requires an explicit supported shader language")
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
 
-    write_text(
-        root / "shaders" / "test.shader.json",
-        replace_once(shader_spec(), "  \"language\": \"glsl\",\n", ""));
-    termin::runtime::RuntimePackageLoadResult missing =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "shaders" / "test.shader.json", replace_once(shader_spec(), "  \"language\": \"glsl\",\n", ""));
+    termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing.ok);
     CHECK(missing.message.find("has no explicit language") != std::string::npos);
 
-    write_text(
-        root / "shaders" / "test.shader.json",
-        replace_once(shader_spec(), "\"language\": \"glsl\"", "\"language\": \"spirv\""));
-    termin::runtime::RuntimePackageLoadResult unsupported =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "shaders" / "test.shader.json",
+               replace_once(shader_spec(), "\"language\": \"glsl\"", "\"language\": \"spirv\""));
+    termin::runtime::RuntimePackageLoadResult unsupported = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(unsupported.ok);
     CHECK(unsupported.message.find("unsupported language 'spirv'") != std::string::npos);
 }
@@ -957,12 +904,10 @@ TEST_CASE("RuntimePackageLoader requires an explicit supported shader language")
 TEST_CASE("RuntimePackageLoader rejects incompatible shader program schema") {
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
-    write_text(
-        root / "shaders" / "test.shader-program.json",
-        replace_once(shader_program_spec(), "\"schema_version\": 1", "\"schema_version\": 99"));
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(), "\"schema_version\": 1", "\"schema_version\": 99"));
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(result.ok);
     CHECK(result.message.find("requires schema_version 1") != std::string::npos);
 }
@@ -971,26 +916,19 @@ TEST_CASE("RuntimePackageLoader accepts shader texture property without encoding
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
 
-    write_text(
-        root / "shaders" / "test.shader-program.json",
-        replace_once(
-            shader_program_spec(),
-            ", \"expected_encoding\": \"srgb\"",
-            ""));
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(), ", \"expected_encoding\": \"srgb\"", ""));
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
 
-    termin::TcShaderProgram program =
-        termin::TcShaderProgram::find(kProgramUuid);
+    termin::TcShaderProgram program = termin::TcShaderProgram::find(kProgramUuid);
     REQUIRE(program.is_valid());
     REQUIRE(program.get()->property_count > 1);
     CHECK(program.get()->properties[1].has_expected_encoding == 0);
 
     termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
     REQUIRE(material.is_valid());
-    tc_material_texture* slot =
-        require_texture(material.default_phase(), "u_albedo_texture");
+    tc_material_texture* slot = require_texture(material.default_phase(), "u_albedo_texture");
     CHECK(slot->is_declared != 0);
     CHECK(slot->has_expected_encoding == 0);
     tc_texture* texture = tc_texture_get(slot->texture);
@@ -1002,14 +940,10 @@ TEST_CASE("RuntimePackageLoader rejects invalid shader texture property encoding
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
 
-    write_text(
-        root / "shaders" / "test.shader-program.json",
-        replace_once(
-            shader_program_spec(),
-            "\"expected_encoding\": \"srgb\"",
-            "\"expected_encoding\": \"display-p3\""));
-    termin::runtime::RuntimePackageLoadResult invalid =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(
+                   shader_program_spec(), "\"expected_encoding\": \"srgb\"", "\"expected_encoding\": \"display-p3\""));
+    termin::runtime::RuntimePackageLoadResult invalid = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid.ok);
     CHECK(invalid.message.find("must be 'srgb' or 'linear'") != std::string::npos);
 }
@@ -1019,19 +953,15 @@ TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or 
     write_test_package(root);
 
     std::filesystem::remove(root / "scene.json");
-    termin::runtime::RuntimePackageLoadResult missing =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing.ok);
     CHECK_FALSE(missing.scene.valid());
-    CHECK(
-        missing.message.find("failed to open file") != std::string::npos ||
-        missing.message.find("failed to canonicalize runtime package path") !=
-            std::string::npos);
+    CHECK(missing.message.find("failed to open file") != std::string::npos ||
+          missing.message.find("failed to canonicalize runtime package path") != std::string::npos);
     CHECK(missing.message.find("scene.json") != std::string::npos);
 
     write_text(root / "scene.json", "{ invalid scene json");
-    termin::runtime::RuntimePackageLoadResult invalid =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult invalid = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid.ok);
     CHECK_FALSE(invalid.scene.valid());
     CHECK(invalid.message.find("failed to parse packaged runtime scene") != std::string::npos);
@@ -1047,19 +977,14 @@ TEST_CASE("RuntimePackageLoader resolves and transitions between packaged scene 
   "entities": []
 }
 )");
-    write_text(
-        root / "manifest.json",
-        replace_once(
-            manifest(),
-            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"}",
-            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"},\n"
-            "    {\"identity\": \"Scenes/Menu.scene\", "
-            "\"path\": \"scenes/Menu.scene.json\"}"
-        )
-    );
+    write_text(root / "manifest.json",
+               replace_once(manifest(),
+                            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"}",
+                            "{\"identity\": \"Scenes/Main.scene\", \"path\": \"scene.json\"},\n"
+                            "    {\"identity\": \"Scenes/Menu.scene\", "
+                            "\"path\": \"scenes/Menu.scene.json\"}"));
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
 
     REQUIRE(result.ok);
     CHECK_EQ(result.entry_scene_identity, "Scenes/Main.scene");
@@ -1067,10 +992,7 @@ TEST_CASE("RuntimePackageLoader resolves and transitions between packaged scene 
     REQUIRE(result.find_scene("Scenes/Main.scene").valid());
     REQUIRE(result.find_scene("Scenes/Menu.scene").valid());
     CHECK_FALSE(result.find_scene("Scenes/Missing.scene").valid());
-    CHECK_EQ(
-        result.find_scene("Scenes/Menu.scene").source_path(),
-        (root / "scenes" / "Menu.scene.json").string()
-    );
+    CHECK_EQ(result.find_scene("Scenes/Menu.scene").source_path(), (root / "scenes" / "Menu.scene.json").string());
 
     termin::SceneManager manager;
     for (const termin::runtime::RuntimePackageScene& packaged_scene : result.scenes) {
@@ -1145,21 +1067,15 @@ TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materia
 TEST_CASE("RuntimePackageLoader binds material texture encoding mismatch") {
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
-    write_text(
-        root / "textures" / "test.texture.json",
-        replace_once(
-            texture_spec(),
-            "\"encoding\": \"srgb\"",
-            "\"encoding\": \"linear\""));
+    write_text(root / "textures" / "test.texture.json",
+               replace_once(texture_spec(), "\"encoding\": \"srgb\"", "\"encoding\": \"linear\""));
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
 
     termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
     REQUIRE(material.is_valid());
-    tc_material_texture* binding =
-        require_texture(material.default_phase(), "u_albedo_texture");
+    tc_material_texture* binding = require_texture(material.default_phase(), "u_albedo_texture");
     tc_texture* bound_texture = tc_texture_get(binding->texture);
     REQUIRE(bound_texture != nullptr);
     CHECK_EQ(bound_texture->encoding, TC_TEXTURE_ENCODING_LINEAR);
@@ -1173,10 +1089,8 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
     write_text(root / "textures" / "test.texture.json", texture_spec("textures/missing.png"));
     termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing.ok);
-    CHECK(
-        missing.message.find("source file not found") != std::string::npos ||
-        missing.message.find("failed to canonicalize runtime package path") !=
-            std::string::npos);
+    CHECK(missing.message.find("source file not found") != std::string::npos ||
+          missing.message.find("failed to canonicalize runtime package path") != std::string::npos);
 
     write_text(root / "textures" / "test.texture.json", texture_spec("../outside.png"));
     termin::runtime::RuntimePackageLoadResult escaping = termin::runtime::load_runtime_package(root.string());
@@ -1190,54 +1104,35 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
     CHECK(unsupported.message.find("unsupported image format") != std::string::npos);
 
     write_text(root / "textures" / "test.texture.json", texture_spec("textures/malformed.png"));
-    write_binary(
-        root / "textures" / "malformed.png",
-        {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00}
-    );
+    write_binary(root / "textures" / "malformed.png", {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00});
     termin::runtime::RuntimePackageLoadResult malformed = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(malformed.ok);
     CHECK(malformed.message.find("libpng") != std::string::npos);
 
-    write_text(
-        root / "textures" / "test.texture.json",
-        replace_once(texture_spec(), "\"flip_x\": true", "\"flip_x\": 1")
-    );
-    termin::runtime::RuntimePackageLoadResult invalid_settings =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "textures" / "test.texture.json",
+               replace_once(texture_spec(), "\"flip_x\": true", "\"flip_x\": 1"));
+    termin::runtime::RuntimePackageLoadResult invalid_settings = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid_settings.ok);
     CHECK(invalid_settings.message.find("must be boolean") != std::string::npos);
 
-    write_text(
-        root / "textures" / "test.texture.json",
-        replace_once(texture_spec(), "\"encoding\": \"srgb\"", "\"encoding\": \"display-p3\"")
-    );
-    termin::runtime::RuntimePackageLoadResult invalid_encoding =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "textures" / "test.texture.json",
+               replace_once(texture_spec(), "\"encoding\": \"srgb\"", "\"encoding\": \"display-p3\""));
+    termin::runtime::RuntimePackageLoadResult invalid_encoding = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(invalid_encoding.ok);
     CHECK(invalid_encoding.message.find("must be 'srgb' or 'linear'") != std::string::npos);
 
-    write_text(
-        root / "textures" / "test.texture.json",
-        replace_once(texture_spec(), ", \"encoding\": \"srgb\"", "")
-    );
-    termin::runtime::RuntimePackageLoadResult missing_encoding =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "textures" / "test.texture.json", replace_once(texture_spec(), ", \"encoding\": \"srgb\"", ""));
+    termin::runtime::RuntimePackageLoadResult missing_encoding = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(missing_encoding.ok);
     CHECK(missing_encoding.message.find("field 'encoding' must be a string") != std::string::npos);
 
     write_text(root / "textures" / "test.texture.json", texture_spec());
-    write_text(
-        root / "manifest.json",
-        replace_once(manifest_with_packaged_texture(), kTextureUuid, "different-texture-uuid")
-    );
-    termin::runtime::RuntimePackageLoadResult mismatched_uuid =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "manifest.json",
+               replace_once(manifest_with_packaged_texture(), kTextureUuid, "different-texture-uuid"));
+    termin::runtime::RuntimePackageLoadResult mismatched_uuid = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(mismatched_uuid.ok);
     CHECK(mismatched_uuid.message.find("manifest uuid does not match") != std::string::npos);
-    CHECK(
-        std::string(termin::tgfx2_get_shader_artifact_root()) ==
-        "runtime-loader-failure-sentinel"
-    );
+    CHECK(std::string(termin::tgfx2_get_shader_artifact_root()) == "runtime-loader-failure-sentinel");
     termin::tgfx2_set_shader_artifact_root("");
 }
 
@@ -1258,20 +1153,16 @@ TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
   "sampling": "nearest"
 }
 )");
-    write_text(
-        root / "manifest.json",
-        replace_once(
-            manifest_with_packaged_texture(),
-            "    {\"type\": \"material\"",
-            "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
-            "\"path\": \"sprites/hero.sprite.json\"},\n"
-            "    {\"type\": \"material\""));
+    write_text(root / "manifest.json",
+               replace_once(manifest_with_packaged_texture(),
+                            "    {\"type\": \"material\"",
+                            "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
+                            "\"path\": \"sprites/hero.sprite.json\"},\n"
+                            "    {\"type\": \"material\""));
 
-    termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
-    termin::TcSpriteAsset sprite =
-        termin::TcSpriteAsset::from_uuid("runtime-loader-test-sprite");
+    termin::TcSpriteAsset sprite = termin::TcSpriteAsset::from_uuid("runtime-loader-test-sprite");
     REQUIRE(sprite.is_loaded());
     REQUIRE(sprite.get() != nullptr);
     CHECK_EQ(sprite.get()->texture_uuid, std::string(kTextureUuid));
@@ -1292,8 +1183,7 @@ TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform sep
     };
     for (const auto& [needle, replacement] : invalid_paths) {
         write_text(root / "manifest.json", replace_once(manifest(), needle, replacement));
-        const termin::runtime::RuntimePackageLoadResult result =
-            termin::runtime::load_runtime_package(root.string());
+        const termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
         CHECK_FALSE(result.ok);
         CHECK_FALSE(result.message.empty());
     }
@@ -1305,10 +1195,7 @@ TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package")
 
     std::error_code error;
     std::filesystem::create_symlink(
-        root / "shaders" / "test.shader.json",
-        root / "shaders" / "inside.shader.json",
-        error
-    );
+        root / "shaders" / "test.shader.json", root / "shaders" / "inside.shader.json", error);
 #ifdef _WIN32
     if (error.value() == 1314) {
         std::fprintf(stderr, "Skipping symlink containment check: Windows symlink privilege is unavailable\n");
@@ -1318,28 +1205,17 @@ TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package")
     REQUIRE_FALSE(error);
     write_text(
         root / "manifest.json",
-        replace_once(
-            manifest(),
-            "\"path\": \"shaders/test.shader.json\"",
-            "\"path\": \"shaders/inside.shader.json\""
-        )
-    );
+        replace_once(manifest(), "\"path\": \"shaders/test.shader.json\"", "\"path\": \"shaders/inside.shader.json\""));
     CHECK(termin::runtime::load_runtime_package(root.string()).ok);
 
     const std::filesystem::path outside = root.parent_path() / "termin-runtime-package-loader-outside.json";
     write_text(outside, shader_spec());
     std::filesystem::create_symlink(outside, root / "shaders" / "outside.shader.json", error);
     REQUIRE_FALSE(error);
-    write_text(
-        root / "manifest.json",
-        replace_once(
-            manifest(),
-            "\"path\": \"shaders/test.shader.json\"",
-            "\"path\": \"shaders/outside.shader.json\""
-        )
-    );
-    const termin::runtime::RuntimePackageLoadResult result =
-        termin::runtime::load_runtime_package(root.string());
+    write_text(root / "manifest.json",
+               replace_once(
+                   manifest(), "\"path\": \"shaders/test.shader.json\"", "\"path\": \"shaders/outside.shader.json\""));
+    const termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(result.ok);
     CHECK_FALSE(result.message.empty());
     std::filesystem::remove(outside, error);
@@ -1347,18 +1223,16 @@ TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package")
 
 TEST_CASE("RuntimePackageLoader validates the same package through directory and blob readers") {
     termin::runtime::RuntimePackageLoader loader;
-    termin::runtime::RuntimePackageLoadResult directory = loader.load(
-        TERMIN_RUNTIME_READER_FIXTURE_ROOT);
+    termin::runtime::RuntimePackageLoadResult directory = loader.load(TERMIN_RUNTIME_READER_FIXTURE_ROOT);
     REQUIRE(directory.ok);
 
     std::ifstream input(TERMIN_RUNTIME_READER_FIXTURE_BLOB, std::ios::binary);
     REQUIRE(static_cast<bool>(input));
-    auto blob = std::make_shared<std::vector<std::uint8_t>>(
-        std::istreambuf_iterator<char>(input),
-        std::istreambuf_iterator<char>());
+    auto blob = std::make_shared<std::vector<std::uint8_t>>(std::istreambuf_iterator<char>(input),
+                                                            std::istreambuf_iterator<char>());
     REQUIRE_FALSE(blob->empty());
-    termin::runtime::RuntimePackageLoadResult packed = loader.load(
-        termin::runtime::open_runtime_package_blob(blob, "reader-test-blob"));
+    termin::runtime::RuntimePackageLoadResult packed =
+        loader.load(termin::runtime::open_runtime_package_blob(blob, "reader-test-blob"));
     REQUIRE(packed.ok);
     CHECK_EQ(packed.entry_scene_identity, directory.entry_scene_identity);
     CHECK_EQ(packed.scenes.size(), directory.scenes.size());
@@ -1368,12 +1242,9 @@ TEST_CASE("RuntimePackageLoader validates the same package through directory and
     directory.destroy();
     blob->back() ^= 0xff;
     try {
-        (void)termin::runtime::open_runtime_package_blob(
-            blob, "corrupt-reader-test-blob");
+        (void)termin::runtime::open_runtime_package_blob(blob, "corrupt-reader-test-blob");
         CHECK(false);
     } catch (const std::exception& exception) {
-        CHECK_EQ(
-            std::string(exception.what()),
-            "runtime package blob hash mismatch: scenes/Main.scene.json");
+        CHECK_EQ(std::string(exception.what()), "runtime package blob hash mismatch: scenes/Main.scene.json");
     }
 }

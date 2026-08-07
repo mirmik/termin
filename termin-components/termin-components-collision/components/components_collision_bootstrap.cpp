@@ -4,8 +4,8 @@
 
 namespace termin {
 
-void register_builtin_collision_component_types() {
-    ColliderComponent::register_type();
-}
+    void register_builtin_collision_component_types() {
+        ColliderComponent::register_type();
+    }
 
 } // namespace termin

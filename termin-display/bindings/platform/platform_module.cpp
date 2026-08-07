@@ -13,13 +13,13 @@ namespace nb = nanobind;
 
 namespace termin {
 
-void bind_backend_window(nb::module_& m) {
-    nb::class_<BackendWindow>(m, "BackendWindow")
-        .def("window_size", &BackendWindow::window_size)
-        .def("framebuffer_size", &BackendWindow::framebuffer_size)
-        .def_prop_ro("content_scale", &BackendWindow::content_scale);
-    nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
-}
+    void bind_backend_window(nb::module_& m) {
+        nb::class_<BackendWindow>(m, "BackendWindow")
+            .def("window_size", &BackendWindow::window_size)
+            .def("framebuffer_size", &BackendWindow::framebuffer_size)
+            .def_prop_ro("content_scale", &BackendWindow::content_scale);
+        nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
+    }
 
 } // namespace termin
 
@@ -39,7 +39,8 @@ NB_MODULE(_platform_native, m) {
     try {
         nb::module_::import_("tgfx._tgfx_native");
     } catch (const std::exception& e) {
-        tc::Log::debug("[platform] Failed to import tgfx._tgfx_native: %s (non-fatal, SDL bindings remain usable)", e.what());
+        tc::Log::debug("[platform] Failed to import tgfx._tgfx_native: %s (non-fatal, SDL bindings remain usable)",
+                       e.what());
     }
 
     termin::bind_sdl(m);

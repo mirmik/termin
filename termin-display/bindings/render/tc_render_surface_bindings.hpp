@@ -8,6 +8,6 @@ extern "C" {
 
 namespace termin {
 
-tc_render_surface* create_python_render_surface(nanobind::object python_surface);
+    tc_render_surface* create_python_render_surface(nanobind::object python_surface);
 
 } // namespace termin

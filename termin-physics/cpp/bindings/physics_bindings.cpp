@@ -5,9 +5,9 @@
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
 
+#include <termin/collision/collision_world.hpp>
 #include <termin/geom/geom.hpp>
 #include <termin/physics/physics.hpp>
-#include <termin/collision/collision_world.hpp>
 
 namespace nb = nanobind;
 using namespace termin;
@@ -19,18 +19,19 @@ NB_MODULE(_physics_native, m) {
     nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
 
-    m.def("compute_mass_properties", [](
-              const colliders::ColliderPrimitive& collider,
-              const Vec3& entity_scale,
-              double mass) {
-        SpatialInertia3 properties;
-        std::string diagnostic;
-        if (!try_compute_mass_properties(
-                collider, entity_scale, mass, properties, diagnostic)) {
-            throw std::invalid_argument(diagnostic);
-        }
-        return properties;
-    }, nb::arg("collider"), nb::arg("entity_scale"), nb::arg("mass"));
+    m.def(
+        "compute_mass_properties",
+        [](const colliders::ColliderPrimitive& collider, const Vec3& entity_scale, double mass) {
+            SpatialInertia3 properties;
+            std::string diagnostic;
+            if (!try_compute_mass_properties(collider, entity_scale, mass, properties, diagnostic)) {
+                throw std::invalid_argument(diagnostic);
+            }
+            return properties;
+        },
+        nb::arg("collider"),
+        nb::arg("entity_scale"),
+        nb::arg("mass"));
 
     nb::class_<RigidBody>(m, "RigidBody")
         .def(nb::init<>())
@@ -60,26 +61,34 @@ NB_MODULE(_physics_native, m) {
         .def("apply_impulse_at_point", &RigidBody::apply_impulse_at_point)
         .def("integrate_forces", &RigidBody::integrate_forces)
         .def("integrate_positions", &RigidBody::integrate_positions)
-        .def_static("create_box", [](double sx, double sy, double sz, double mass,
-                                      std::optional<Pose3> pose, bool is_static) {
-            return RigidBody::create_box(
-                sx, sy, sz, mass, pose.value_or(Pose3{}), is_static);
-        }, nb::arg("sx"), nb::arg("sy"), nb::arg("sz"), nb::arg("mass"),
-           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false)
-        .def_static("create_sphere", [](double radius, double mass,
-                                         std::optional<Pose3> pose, bool is_static) {
-            return RigidBody::create_sphere(
-                radius, mass, pose.value_or(Pose3{}), is_static);
-        }, nb::arg("radius"), nb::arg("mass"),
-           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false)
-        .def_static("create_with_mass_properties", [](
-                const SpatialInertia3& properties,
-                std::optional<Pose3> shape_pose,
-                bool is_static) {
-            return RigidBody::create_with_mass_properties(
-                properties, shape_pose.value_or(Pose3{}), is_static);
-        }, nb::arg("properties"), nb::arg("shape_pose").none() = nb::none(),
-           nb::arg("is_static") = false);
+        .def_static(
+            "create_box",
+            [](double sx, double sy, double sz, double mass, std::optional<Pose3> pose, bool is_static) {
+                return RigidBody::create_box(sx, sy, sz, mass, pose.value_or(Pose3{}), is_static);
+            },
+            nb::arg("sx"),
+            nb::arg("sy"),
+            nb::arg("sz"),
+            nb::arg("mass"),
+            nb::arg("pose").none() = nb::none(),
+            nb::arg("is_static") = false)
+        .def_static(
+            "create_sphere",
+            [](double radius, double mass, std::optional<Pose3> pose, bool is_static) {
+                return RigidBody::create_sphere(radius, mass, pose.value_or(Pose3{}), is_static);
+            },
+            nb::arg("radius"),
+            nb::arg("mass"),
+            nb::arg("pose").none() = nb::none(),
+            nb::arg("is_static") = false)
+        .def_static(
+            "create_with_mass_properties",
+            [](const SpatialInertia3& properties, std::optional<Pose3> shape_pose, bool is_static) {
+                return RigidBody::create_with_mass_properties(properties, shape_pose.value_or(Pose3{}), is_static);
+            },
+            nb::arg("properties"),
+            nb::arg("shape_pose").none() = nb::none(),
+            nb::arg("is_static") = false);
 
     nb::class_<Contact>(m, "Contact")
         .def(nb::init<>())
@@ -96,68 +105,76 @@ NB_MODULE(_physics_native, m) {
         .def_rw("solver_iterations", &PhysicsWorld::solver_iterations)
         .def_rw("restitution", &PhysicsWorld::restitution)
         .def_rw("friction", &PhysicsWorld::friction)
-        .def("set_collision_world", &PhysicsWorld::set_collision_world,
-            nb::arg("collision_world"), nb::keep_alive<1, 2>())
+        .def("set_collision_world",
+             &PhysicsWorld::set_collision_world,
+             nb::arg("collision_world"),
+             nb::keep_alive<1, 2>())
         .def("collision_world", &PhysicsWorld::collision_world, nb::rv_policy::reference)
         .def("add_body", &PhysicsWorld::add_body)
-        .def("register_collider", &PhysicsWorld::register_collider,
-            nb::arg("body_idx"), nb::arg("collider"))
+        .def("register_collider", &PhysicsWorld::register_collider, nb::arg("body_idx"), nb::arg("collider"))
         .def("get_body", nb::overload_cast<size_t>(&PhysicsWorld::get_body), nb::rv_policy::reference)
         .def("body_count", &PhysicsWorld::body_count)
         .def("clear", &PhysicsWorld::clear)
-        .def("add_box", &PhysicsWorld::add_box,
-            nb::arg("sx"), nb::arg("sy"), nb::arg("sz"),
-            nb::arg("mass"), nb::arg("pose"), nb::arg("is_static") = false)
-        .def("add_sphere", &PhysicsWorld::add_sphere,
-            nb::arg("radius"), nb::arg("mass"),
-            nb::arg("pose"), nb::arg("is_static") = false)
+        .def("add_box",
+             &PhysicsWorld::add_box,
+             nb::arg("sx"),
+             nb::arg("sy"),
+             nb::arg("sz"),
+             nb::arg("mass"),
+             nb::arg("pose"),
+             nb::arg("is_static") = false)
+        .def("add_sphere",
+             &PhysicsWorld::add_sphere,
+             nb::arg("radius"),
+             nb::arg("mass"),
+             nb::arg("pose"),
+             nb::arg("is_static") = false)
         .def("step", &PhysicsWorld::step)
-        .def("get_positions", [](const PhysicsWorld& world) {
-            size_t n = world.body_count();
-            double* data = new double[n * 3];
-            for (size_t i = 0; i < n; ++i) {
-                const auto& pos = world.get_body(i).pose.lin;
-                data[i * 3 + 0] = pos.x;
-                data[i * 3 + 1] = pos.y;
-                data[i * 3 + 2] = pos.z;
-            }
-            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {n, 3};
-            return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
-        })
-        .def("get_rotations", [](const PhysicsWorld& world) {
-            size_t n = world.body_count();
-            double* data = new double[n * 4];
-            for (size_t i = 0; i < n; ++i) {
-                const auto& q = world.get_body(i).pose.ang;
-                data[i * 4 + 0] = q.x;
-                data[i * 4 + 1] = q.y;
-                data[i * 4 + 2] = q.z;
-                data[i * 4 + 3] = q.w;
-            }
-            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {n, 4};
-            return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
-        })
-        .def("get_velocities", [](const PhysicsWorld& world) {
-            size_t n = world.body_count();
-            double* data = new double[n * 3];
-            for (size_t i = 0; i < n; ++i) {
-                const auto& v = world.get_body(i).linear_velocity;
-                data[i * 3 + 0] = v.x;
-                data[i * 3 + 1] = v.y;
-                data[i * 3 + 2] = v.z;
-            }
-            nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {n, 3};
-            return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
-        })
-        .def("contact_count", [](const PhysicsWorld& world) {
-            return world.contacts().size();
-        })
-        .def("contacts", [](const PhysicsWorld& world) {
-            return world.contacts();
-        })
+        .def("get_positions",
+             [](const PhysicsWorld& world) {
+                 size_t n = world.body_count();
+                 double* data = new double[n * 3];
+                 for (size_t i = 0; i < n; ++i) {
+                     const auto& pos = world.get_body(i).pose.lin;
+                     data[i * 3 + 0] = pos.x;
+                     data[i * 3 + 1] = pos.y;
+                     data[i * 3 + 2] = pos.z;
+                 }
+                 nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+                 size_t shape[2] = {n, 3};
+                 return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
+             })
+        .def("get_rotations",
+             [](const PhysicsWorld& world) {
+                 size_t n = world.body_count();
+                 double* data = new double[n * 4];
+                 for (size_t i = 0; i < n; ++i) {
+                     const auto& q = world.get_body(i).pose.ang;
+                     data[i * 4 + 0] = q.x;
+                     data[i * 4 + 1] = q.y;
+                     data[i * 4 + 2] = q.z;
+                     data[i * 4 + 3] = q.w;
+                 }
+                 nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+                 size_t shape[2] = {n, 4};
+                 return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
+             })
+        .def("get_velocities",
+             [](const PhysicsWorld& world) {
+                 size_t n = world.body_count();
+                 double* data = new double[n * 3];
+                 for (size_t i = 0; i < n; ++i) {
+                     const auto& v = world.get_body(i).linear_velocity;
+                     data[i * 3 + 0] = v.x;
+                     data[i * 3 + 1] = v.y;
+                     data[i * 3 + 2] = v.z;
+                 }
+                 nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
+                 size_t shape[2] = {n, 3};
+                 return nb::ndarray<nb::numpy, double>(data, 2, shape, owner);
+             })
+        .def("contact_count", [](const PhysicsWorld& world) { return world.contacts().size(); })
+        .def("contacts", [](const PhysicsWorld& world) { return world.contacts(); })
         .def("get_contact_points", [](const PhysicsWorld& world) {
             const auto& contacts = world.contacts();
             size_t n = contacts.size();

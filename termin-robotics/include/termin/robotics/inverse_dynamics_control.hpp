@@ -13,10 +13,8 @@
 #include <termin/robotics/tasks.hpp>
 #include <termin/robotics/termin_robotics_api.hpp>
 
-namespace termin::robotics
-{
-    struct InverseDynamicsActuator3D
-    {
+namespace termin::robotics {
+    struct InverseDynamicsActuator3D {
         std::size_t dof_index = 0;
         std::optional<double> minimum_effort;
         std::optional<double> maximum_effort;
@@ -27,8 +25,7 @@ namespace termin::robotics
     // generalized-force basis G maps block variables lambda to effort G*lambda.
     // Optional inequalities use C*lambda <= d and may express unilateral
     // bounds or a polyhedral friction cone without introducing physics types.
-    struct InverseDynamicsForceVariableBlock3D
-    {
+    struct InverseDynamicsForceVariableBlock3D {
         std::size_t variable_count = 0;
         std::vector<double> generalized_force_basis_storage;
         std::size_t inequality_row_count = 0;
@@ -37,8 +34,7 @@ namespace termin::robotics
         std::string diagnostic_name;
     };
 
-    enum class InverseDynamicsControlDiagnostic3D : std::uint8_t
-    {
+    enum class InverseDynamicsControlDiagnostic3D : std::uint8_t {
         None,
         InvalidModel,
         InvalidTimeStep,
@@ -58,11 +54,9 @@ namespace termin::robotics
     };
 
     [[nodiscard]] TERMIN_ROBOTICS_API std::string_view
-    inverse_dynamics_control_diagnostic_name(
-        InverseDynamicsControlDiagnostic3D diagnostic) noexcept;
+    inverse_dynamics_control_diagnostic_name(InverseDynamicsControlDiagnostic3D diagnostic) noexcept;
 
-    struct InverseDynamicsControlOptions3D
-    {
+    struct InverseDynamicsControlOptions3D {
         double time_step = 1.0 / 60.0;
         // Known generalized effort applied by the environment, in the same
         // vw layout as Articulation3D. Empty means zero. Contact-force decision
@@ -74,8 +68,7 @@ namespace termin::robotics
         qopt::HqpOptions hqp;
     };
 
-    struct TERMIN_ROBOTICS_API InverseDynamicsControlResult3D
-    {
+    struct TERMIN_ROBOTICS_API InverseDynamicsControlResult3D {
         std::vector<double> generalized_acceleration;
         // M*qdd + bias - known_external - G*lambda. Unactuated entries are
         // constrained to zero.
@@ -90,8 +83,7 @@ namespace termin::robotics
         std::vector<int> level_priorities;
         std::vector<double> level_task_residual_l2;
         qopt::QpStatus status = qopt::QpStatus::InvalidInput;
-        InverseDynamicsControlDiagnostic3D diagnostic =
-            InverseDynamicsControlDiagnostic3D::None;
+        InverseDynamicsControlDiagnostic3D diagnostic = InverseDynamicsControlDiagnostic3D::None;
         TaskDiagnostic3D task_diagnostic = TaskDiagnostic3D::None;
         qopt::HqpDiagnostic hqp_diagnostic = qopt::HqpDiagnostic::None;
         qopt::HqpSolveResult hqp_result;
@@ -107,30 +99,23 @@ namespace termin::robotics
     // Solver-neutral inverse-dynamics formulation over generalized
     // acceleration. The default actuator set contains every scalar joint and
     // intentionally excludes the six floating-base DOFs.
-    class TERMIN_ROBOTICS_API InverseDynamicsHqpController3D
-    {
+    class TERMIN_ROBOTICS_API InverseDynamicsHqpController3D {
     public:
-        explicit InverseDynamicsHqpController3D(
-            Articulation3D& articulation,
-            termin::Vec3 gravity_world = termin::Vec3::zero());
-        InverseDynamicsHqpController3D(
-            Articulation3D& articulation,
-            std::vector<InverseDynamicsActuator3D> actuators,
-            termin::Vec3 gravity_world = termin::Vec3::zero());
+        explicit InverseDynamicsHqpController3D(Articulation3D& articulation,
+                                                termin::Vec3 gravity_world = termin::Vec3::zero());
+        InverseDynamicsHqpController3D(Articulation3D& articulation,
+                                       std::vector<InverseDynamicsActuator3D> actuators,
+                                       termin::Vec3 gravity_world = termin::Vec3::zero());
 
-        [[nodiscard]] const std::vector<InverseDynamicsActuator3D>&
-        actuators() const noexcept;
+        [[nodiscard]] const std::vector<InverseDynamicsActuator3D>& actuators() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
-        [[nodiscard]] InverseDynamicsControlDiagnostic3D
-        set_gravity_world(termin::Vec3 gravity_world) noexcept;
+        [[nodiscard]] InverseDynamicsControlDiagnostic3D set_gravity_world(termin::Vec3 gravity_world) noexcept;
 
-        [[nodiscard]] InverseDynamicsControlResult3D
-        solve(std::span<const ArticulationTask3D* const> tasks,
-              InverseDynamicsControlOptions3D options = {}) noexcept;
+        [[nodiscard]] InverseDynamicsControlResult3D solve(std::span<const ArticulationTask3D* const> tasks,
+                                                           InverseDynamicsControlOptions3D options = {}) noexcept;
 
         void reset_primal_warm_start() noexcept;
-        [[nodiscard]] const std::vector<double>&
-        primal_warm_start() const noexcept;
+        [[nodiscard]] const std::vector<double>& primal_warm_start() const noexcept;
 
     private:
         Articulation3D* articulation_ = nullptr;

@@ -1,110 +1,101 @@
-#include <termin/render/skeleton_controller.hpp>
-#include <termin/entity/entity.hpp>
-#include <termin/entity/component_registry.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/render/skeleton_controller.hpp>
 
 namespace termin {
 
-SkeletonController::SkeletonController()
-    : CxxComponent("SkeletonController")
-{
-    install_render_lifecycle(&_c);
-}
+    SkeletonController::SkeletonController()
+        : CxxComponent("SkeletonController") {
+        install_render_lifecycle(&_c);
+    }
 
-void SkeletonController::register_type() {
-    auto descriptor = ComponentTypeDescriptorBuilder::native<SkeletonController>(
-        "SkeletonController", "termin-components-skeleton", "Component");
-    descriptor.category("Animation");
-    tc::stage_inspect_field(descriptor.inspect(),
-        &SkeletonController::skeleton,
-        "SkeletonController",
-        "skeleton",
-        "Skeleton",
-        "tc_skeleton"
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &SkeletonController::bone_entities,
-        "SkeletonController",
-        "bone_entities",
-        "Bone Entities",
-        "list[entity]"
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &SkeletonController::skeleton_root,
-        "SkeletonController",
-        "skeleton_root",
-        "Skeleton Root",
-        "entity"
-    );
-    (void)descriptor.commit();
-}
+    void SkeletonController::register_type() {
+        auto descriptor = ComponentTypeDescriptorBuilder::native<SkeletonController>(
+            "SkeletonController", "termin-components-skeleton", "Component");
+        descriptor.category("Animation");
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &SkeletonController::skeleton,
+                                "SkeletonController",
+                                "skeleton",
+                                "Skeleton",
+                                "tc_skeleton");
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &SkeletonController::bone_entities,
+                                "SkeletonController",
+                                "bone_entities",
+                                "Bone Entities",
+                                "list[entity]");
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &SkeletonController::skeleton_root,
+                                "SkeletonController",
+                                "skeleton_root",
+                                "Skeleton Root",
+                                "entity");
+        (void)descriptor.commit();
+    }
 
-void SkeletonController::start() {
-    CxxComponent::start();
-}
+    void SkeletonController::start() {
+        CxxComponent::start();
+    }
 
-void SkeletonController::set_skeleton(const TcSkeleton& skel) {
-    skeleton = skel;
-    _skeleton_instance.reset();
-}
-
-void SkeletonController::set_bone_entities(std::vector<Entity> entities) {
-    bone_entities = std::move(entities);
-    _skeleton_instance.reset();
-}
-
-void SkeletonController::set_skeleton_root(Entity root) {
-    skeleton_root = root;
-    _skeleton_instance.reset();
-}
-
-SkeletonInstance* SkeletonController::skeleton_instance() {
-    // Ensure skeleton is loaded (trigger lazy loading if needed)
-    skeleton.ensure_loaded();
-
-    tc_skeleton* skel = skeleton.get();
-    Entity effective_root = skeleton_root.valid() ? skeleton_root : entity();
-    if (_skeleton_instance != nullptr && _skeleton_instance->skeleton_root() != effective_root) {
+    void SkeletonController::set_skeleton(const TcSkeleton& skel) {
+        skeleton = skel;
         _skeleton_instance.reset();
     }
 
-    if (_skeleton_instance == nullptr && skel != nullptr) {
-        if (!bone_entities.empty()) {
-            _skeleton_instance = std::make_unique<SkeletonInstance>(
-                skel,
-                bone_entities,
-                effective_root
-            );
+    void SkeletonController::set_bone_entities(std::vector<Entity> entities) {
+        bone_entities = std::move(entities);
+        _skeleton_instance.reset();
+    }
+
+    void SkeletonController::set_skeleton_root(Entity root) {
+        skeleton_root = root;
+        _skeleton_instance.reset();
+    }
+
+    SkeletonInstance* SkeletonController::skeleton_instance() {
+        // Ensure skeleton is loaded (trigger lazy loading if needed)
+        skeleton.ensure_loaded();
+
+        tc_skeleton* skel = skeleton.get();
+        Entity effective_root = skeleton_root.valid() ? skeleton_root : entity();
+        if (_skeleton_instance != nullptr && _skeleton_instance->skeleton_root() != effective_root) {
+            _skeleton_instance.reset();
+        }
+
+        if (_skeleton_instance == nullptr && skel != nullptr) {
+            if (!bone_entities.empty()) {
+                _skeleton_instance = std::make_unique<SkeletonInstance>(skel, bone_entities, effective_root);
+                _skeleton_instance->update();
+            } else {
+                tc::Log::warn("[SkeletonController::skeleton_instance] bone_entities is empty! skel=%p", (void*)skel);
+            }
+        }
+        return _skeleton_instance.get();
+    }
+
+    void SkeletonController::invalidate_instance() {
+        _skeleton_instance.reset();
+    }
+
+    void SkeletonController::prepare_render(const RenderPrepareContext& context) {
+        (void)context;
+        if (_skeleton_instance == nullptr) {
+            skeleton_instance(); // Try to create instance
+        }
+
+        if (_skeleton_instance != nullptr) {
             _skeleton_instance->update();
         } else {
-            tc::Log::warn("[SkeletonController::skeleton_instance] bone_entities is empty! skel=%p",
-                (void*)skel);
+            tc::Log::warn("[SkeletonController::prepare_render] no skeleton instance");
         }
     }
-    return _skeleton_instance.get();
-}
 
-void SkeletonController::invalidate_instance() {
-    _skeleton_instance.reset();
-}
-
-void SkeletonController::prepare_render(const RenderPrepareContext& context) {
-    (void)context;
-    if (_skeleton_instance == nullptr) {
-        skeleton_instance(); // Try to create instance
+    void SkeletonController::on_removed_from_entity() {
+        CxxComponent::on_removed_from_entity();
+        _skeleton_instance.reset();
     }
-
-    if (_skeleton_instance != nullptr) {
-        _skeleton_instance->update();
-    } else {
-        tc::Log::warn("[SkeletonController::prepare_render] no skeleton instance");
-    }
-}
-
-void SkeletonController::on_removed_from_entity() {
-    CxxComponent::on_removed_from_entity();
-    _skeleton_instance.reset();
-}
 
 } // namespace termin

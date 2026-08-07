@@ -1,5 +1,5 @@
-#include "physics/tc_collision_world.h"
 #include "core/tc_scene_extension.h"
+#include "physics/tc_collision_world.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -37,7 +37,8 @@ static void* collision_world_ext_create(tc_scene_handle scene, void* type_userda
 
 static void collision_world_ext_destroy(void* ext, void* type_userdata) {
     (void)type_userdata;
-    if (!ext) return;
+    if (!ext)
+        return;
 
     tc_collision_world_ext_instance* inst = (tc_collision_world_ext_instance*)ext;
     if (inst->world) {
@@ -50,7 +51,8 @@ static void collision_world_ext_destroy(void* ext, void* type_userdata) {
 static void collision_world_ext_on_scene_update(void* ext, double dt, void* type_userdata) {
     (void)dt;
     (void)type_userdata;
-    if (!ext) return;
+    if (!ext)
+        return;
 
     tc_collision_world_ext_instance* inst = (tc_collision_world_ext_instance*)ext;
     if (!inst->world) {
@@ -62,7 +64,8 @@ static void collision_world_ext_on_scene_update(void* ext, double dt, void* type
 }
 
 void tc_collision_world_extension_init(void) {
-    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) return;
+    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD))
+        return;
 
     tc_scene_ext_vtable vtable = {
         .create = collision_world_ext_create,
@@ -71,21 +74,13 @@ void tc_collision_world_extension_init(void) {
     };
 
     if (!tc_scene_ext_register(
-            TC_SCENE_EXT_TYPE_COLLISION_WORLD,
-            "collision_world",
-            "collision_world",
-            &vtable,
-            NULL
-        )) {
+            TC_SCENE_EXT_TYPE_COLLISION_WORLD, "collision_world", "collision_world", &vtable, NULL)) {
         tc_log_error("[tc_collision_world] failed to register collision_world extension type");
         return;
     }
 }
 
-void tc_collision_world_set_allocator(
-    tc_collision_world_alloc_fn alloc_fn,
-    tc_collision_world_free_fn free_fn
-) {
+void tc_collision_world_set_allocator(tc_collision_world_alloc_fn alloc_fn, tc_collision_world_free_fn free_fn) {
     s_collision_world_alloc_fn = alloc_fn;
     s_collision_world_free_fn = free_fn;
 }

@@ -7,13 +7,11 @@
 #include <termin/geom/spatial_inertia3.hpp>
 #include <termin/geom/vec3.hpp>
 
-extern "C"
-{
+extern "C" {
 #include "tc_types.h"
 }
 
-namespace termin
-{
+namespace termin {
 
     // KinematicUnitComponent - abstract base for 1-DOF kinematic components.
     //
@@ -27,8 +25,7 @@ namespace termin
     //
     // The origin pose is the fixed transform from the parent entity to the
     // kinematic frame. Formula: local = origin * motion(coordinate).
-    class ENTITY_API KinematicUnitComponent : public CxxComponent
-    {
+    class ENTITY_API KinematicUnitComponent : public CxxComponent {
     public:
         // Current coordinate (interpretation depends on subclass)
         double coordinate = 0.0;
@@ -53,9 +50,7 @@ namespace termin
 
         // Lifecycle
         void on_added() override;
-        void deserialize_data(
-            const tc_value* data,
-            tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
+        void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
         // Axis
         void set_axis(double x, double y, double z);
@@ -70,8 +65,7 @@ namespace termin
 
         // Coordinate
         void set_coordinate(double value);
-        double get_coordinate() const
-        {
+        double get_coordinate() const {
             return coordinate;
         }
 
@@ -83,9 +77,7 @@ namespace termin
         virtual void recalculate_origin();
 
     protected:
-        KinematicUnitComponent(const char* type_name,
-                               Vec3 default_axis,
-                               double default_coordinate_scale);
+        KinematicUnitComponent(const char* type_name, Vec3 default_axis, double default_coordinate_scale);
 
         // Helper: read current entity local rigid pose.
         bool read_entity_transform(double pos[3], double rot[4]) const;

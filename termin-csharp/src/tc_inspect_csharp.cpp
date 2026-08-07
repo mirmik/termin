@@ -1,8 +1,8 @@
 // tc_inspect_csharp.cpp - C# inspect integration implementation
-#include <termin_csharp/tc_inspect_csharp.h>
-#include <string>
-#include <vector>
 #include <cstring>
+#include <string>
+#include <termin_csharp/tc_inspect_csharp.h>
+#include <vector>
 
 // ============================================================================
 // Internal storage for C# field metadata
@@ -44,7 +44,8 @@ static bool g_cs_vtable_initialized = false;
 
 static bool cs_has_type(const char* type_name, void* ctx) {
     (void)ctx;
-    if (!type_name) return false;
+    if (!type_name)
+        return false;
     return cs_facet(type_name) != nullptr;
 }
 
@@ -55,16 +56,19 @@ static const char* cs_get_parent(const char* type_name, void* ctx) {
 
 static size_t cs_field_count(const char* type_name, void* ctx) {
     (void)ctx;
-    if (!type_name) return 0;
+    if (!type_name)
+        return 0;
     auto* facet = cs_facet(type_name);
     return facet ? facet->fields.size() : 0;
 }
 
 static bool cs_get_field(const char* type_name, size_t index, tc_field_info* out, void* ctx) {
     (void)ctx;
-    if (!type_name || !out) return false;
+    if (!type_name || !out)
+        return false;
     auto* facet = cs_facet(type_name);
-    if (!facet || index >= facet->fields.size()) return false;
+    if (!facet || index >= facet->fields.size())
+        return false;
 
     const auto& f = facet->fields[index];
     out->path = f.path.c_str();
@@ -82,9 +86,11 @@ static bool cs_get_field(const char* type_name, size_t index, tc_field_info* out
 
 static bool cs_find_field(const char* type_name, const char* path, tc_field_info* out, void* ctx) {
     (void)ctx;
-    if (!type_name || !path || !out) return false;
+    if (!type_name || !path || !out)
+        return false;
     auto* facet = cs_facet(type_name);
-    if (!facet) return false;
+    if (!facet)
+        return false;
 
     for (const auto& f : facet->fields) {
         if (f.path == path) {
@@ -120,7 +126,10 @@ static bool cs_set(void* obj, const char* type_name, const char* path, tc_value 
 }
 
 static void cs_action(void* obj, const char* type_name, const char* path, void* ctx) {
-    (void)obj; (void)type_name; (void)path; (void)ctx;
+    (void)obj;
+    (void)type_name;
+    (void)path;
+    (void)ctx;
     // Button actions not yet supported for C#
 }
 
@@ -129,7 +138,8 @@ static void cs_action(void* obj, const char* type_name, const char* path, void* 
 // ============================================================================
 
 void tc_inspect_csharp_init(void) {
-    if (g_cs_vtable_initialized) return;
+    if (g_cs_vtable_initialized)
+        return;
     g_cs_vtable_initialized = true;
 
     static tc_inspect_lang_vtable cs_vtable = {
@@ -141,35 +151,34 @@ void tc_inspect_csharp_init(void) {
         cs_get,
         cs_set,
         cs_action,
-        nullptr  // ctx
+        nullptr // ctx
     };
 
     tc_inspect_set_lang_vtable(TC_INSPECT_LANG_CSHARP, &cs_vtable);
 }
 
-tc_csharp_inspect_descriptor* tc_csharp_inspect_descriptor_create(
-    const char* type_name
-) {
-    if (!type_name || !type_name[0]) return nullptr;
+tc_csharp_inspect_descriptor* tc_csharp_inspect_descriptor_create(const char* type_name) {
+    if (!type_name || !type_name[0])
+        return nullptr;
     auto* descriptor = new tc_csharp_inspect_descriptor;
     descriptor->type_name = type_name;
     return descriptor;
 }
 
-bool tc_csharp_inspect_descriptor_add_field(
-    tc_csharp_inspect_descriptor* descriptor,
-    const char* path,
-    const char* label,
-    const char* kind,
-    double min,
-    double max,
-    double step
-) {
-    if (!descriptor || !path || !path[0]) return false;
+bool tc_csharp_inspect_descriptor_add_field(tc_csharp_inspect_descriptor* descriptor,
+                                            const char* path,
+                                            const char* label,
+                                            const char* kind,
+                                            double min,
+                                            double max,
+                                            double step) {
+    if (!descriptor || !path || !path[0])
+        return false;
     tc_inspect_csharp_init();
 
     for (const auto& field : descriptor->fields) {
-        if (field.path == path) return false;
+        if (field.path == path)
+            return false;
     }
 
     CsFieldInfo info;
@@ -184,34 +193,23 @@ bool tc_csharp_inspect_descriptor_add_field(
     return true;
 }
 
-bool tc_csharp_inspect_descriptor_attach(
-    tc_csharp_inspect_descriptor* inspect_descriptor,
-    tc_runtime_type_descriptor* runtime_descriptor
-) {
-    if (!inspect_descriptor || !runtime_descriptor) return false;
+bool tc_csharp_inspect_descriptor_attach(tc_csharp_inspect_descriptor* inspect_descriptor,
+                                         tc_runtime_type_descriptor* runtime_descriptor) {
+    if (!inspect_descriptor || !runtime_descriptor)
+        return false;
     if (!tc_runtime_type_descriptor_add_facet(
-            runtime_descriptor,
-            k_csharp_inspect_facet,
-            inspect_descriptor,
-            destroy_cs_facet,
-            nullptr,
-            1)) {
+            runtime_descriptor, k_csharp_inspect_facet, inspect_descriptor, destroy_cs_facet, nullptr, 1)) {
         return false;
     }
     tc_inspect_csharp_init();
     return true;
 }
 
-void tc_csharp_inspect_descriptor_destroy(
-    tc_csharp_inspect_descriptor* descriptor
-) {
+void tc_csharp_inspect_descriptor_destroy(tc_csharp_inspect_descriptor* descriptor) {
     delete descriptor;
 }
 
-void tc_inspect_set_csharp_callbacks(
-    tc_cs_inspect_get_fn getter,
-    tc_cs_inspect_set_fn setter
-) {
+void tc_inspect_set_csharp_callbacks(tc_cs_inspect_get_fn getter, tc_cs_inspect_set_fn setter) {
     g_cs_inspect_get = getter;
     g_cs_inspect_set = setter;
     tc_inspect_csharp_init();

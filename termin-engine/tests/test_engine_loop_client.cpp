@@ -11,32 +11,27 @@ extern "C" {
 
 namespace {
 
-termin::EngineLoopClient make_client(
-    int& polls,
-    int& continuation_checks,
-    int& shutdowns
-) {
-    return termin::EngineLoopClient{
-        [&polls]() { ++polls; },
-        [&continuation_checks]() {
-            ++continuation_checks;
-            return false;
-        },
-        [&shutdowns]() { ++shutdowns; },
-    };
-}
+    termin::EngineLoopClient make_client(int& polls, int& continuation_checks, int& shutdowns) {
+        return termin::EngineLoopClient{
+            [&polls]() { ++polls; },
+            [&continuation_checks]() {
+                ++continuation_checks;
+                return false;
+            },
+            [&shutdowns]() { ++shutdowns; },
+        };
+    }
 
-template <typename Exception, typename Callable>
-bool throws_as(Callable&& callable) {
-    try {
-        std::forward<Callable>(callable)();
-    } catch (const Exception&) {
-        return true;
-    } catch (...) {
+    template <typename Exception, typename Callable> bool throws_as(Callable&& callable) {
+        try {
+            std::forward<Callable>(callable)();
+        } catch (const Exception&) {
+            return true;
+        } catch (...) {
+            return false;
+        }
         return false;
     }
-    return false;
-}
 
 } // namespace
 
@@ -47,9 +42,7 @@ TEST_CASE("EngineCore atomically attaches and runs one complete loop client") {
     int continuation_checks = 0;
     int shutdowns = 0;
 
-    auto connection = engine.attach_loop_client(
-        make_client(polls, continuation_checks, shutdowns)
-    );
+    auto connection = engine.attach_loop_client(make_client(polls, continuation_checks, shutdowns));
     REQUIRE(connection.connected());
 
     engine.run();
@@ -66,13 +59,14 @@ TEST_CASE("EngineCore rejects incomplete loop clients without changing its conne
     int polls = 0;
     int continuation_checks = 0;
     int shutdowns = 0;
-    auto connection = engine.attach_loop_client(
-        make_client(polls, continuation_checks, shutdowns)
-    );
+    auto connection = engine.attach_loop_client(make_client(polls, continuation_checks, shutdowns));
 
     termin::EngineLoopClient incomplete;
-    incomplete.poll_events = []() {};
-    incomplete.should_continue = []() { return false; };
+    incomplete.poll_events = []() {
+    };
+    incomplete.should_continue = []() {
+        return false;
+    };
     CHECK(throws_as<std::invalid_argument>([&]() {
         auto rejected = engine.attach_loop_client(std::move(incomplete));
         (void)rejected;
@@ -95,14 +89,10 @@ TEST_CASE("EngineCore refuses a second client without replacing the first") {
     int second_polls = 0;
     int second_checks = 0;
     int second_shutdowns = 0;
-    auto first = engine.attach_loop_client(
-        make_client(first_polls, first_checks, first_shutdowns)
-    );
+    auto first = engine.attach_loop_client(make_client(first_polls, first_checks, first_shutdowns));
 
     CHECK(throws_as<std::logic_error>([&]() {
-        auto rejected = engine.attach_loop_client(
-            make_client(second_polls, second_checks, second_shutdowns)
-        );
+        auto rejected = engine.attach_loop_client(make_client(second_polls, second_checks, second_shutdowns));
         (void)rejected;
     }));
     REQUIRE(first.connected());
@@ -161,8 +151,7 @@ TEST_CASE("EngineCore invokes frame completion callbacks after profiler frames c
     });
     auto completion = engine.attach_frame_completion_callback([&]() {
         ++completions;
-        callback_saw_open_frame =
-            callback_saw_open_frame || tc_profiler_current_frame() != nullptr;
+        callback_saw_open_frame = callback_saw_open_frame || tc_profiler_current_frame() != nullptr;
     });
 
     engine.run();

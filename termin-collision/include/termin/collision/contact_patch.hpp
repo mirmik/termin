@@ -9,15 +9,12 @@
 #include <span>
 #include <vector>
 
-namespace termin::collision
-{
+namespace termin::collision {
 
     using colliders::Collider;
 
-    struct ContactFeaturePair
-    {
-        static constexpr uint32_t INVALID_FEATURE =
-            std::numeric_limits<uint32_t>::max();
+    struct ContactFeaturePair {
+        static constexpr uint32_t INVALID_FEATURE = std::numeric_limits<uint32_t>::max();
 
         uint32_t feature_a = INVALID_FEATURE;
         uint32_t feature_b = INVALID_FEATURE;
@@ -33,21 +30,18 @@ namespace termin::collision
      * B. signed_gap is negative for penetration and satisfies
      * dot(point_on_b_world - point_on_a_world, normal_world) == signed_gap.
      */
-    struct ContactCandidate
-    {
+    struct ContactCandidate {
         Vec3 point_on_a_world = Vec3::zero();
         Vec3 point_on_b_world = Vec3::zero();
         double signed_gap = 0.0;
         ContactFeaturePair features;
 
-        Vec3 representative_point_world() const
-        {
+        Vec3 representative_point_world() const {
             return (point_on_a_world + point_on_b_world) * 0.5;
         }
     };
 
-    struct TERMIN_COLLISION_API ContactPatch
-    {
+    struct TERMIN_COLLISION_API ContactPatch {
         Collider* collider_a = nullptr;
         Collider* collider_b = nullptr;
         Vec3 normal_world = Vec3::zero();
@@ -57,35 +51,29 @@ namespace termin::collision
         uint64_t pair_key() const;
     };
 
-    struct ContactPatchReductionConfig
-    {
+    struct ContactPatchReductionConfig {
         std::size_t max_points = 4;
         double duplicate_tolerance = 1e-9;
         double metric_tolerance = 1e-12;
     };
 
-    struct RayHit
-    {
+    struct RayHit {
         Collider* collider = nullptr;
         Vec3 point = Vec3::zero();
         Vec3 normal = Vec3::zero();
         double distance = 0.0;
 
-        bool hit() const
-        {
+        bool hit() const {
             return collider != nullptr;
         }
     };
 
-    struct ColliderPair
-    {
+    struct ColliderPair {
         Collider* a = nullptr;
         Collider* b = nullptr;
 
-        bool operator==(const ColliderPair& other) const
-        {
-            return (a == other.a && b == other.b) ||
-                   (a == other.b && b == other.a);
+        bool operator==(const ColliderPair& other) const {
+            return (a == other.a && b == other.b) || (a == other.b && b == other.a);
         }
     };
 
@@ -101,8 +89,7 @@ namespace termin::collision
                               const Vec3& normal_world,
                               const ContactPatchReductionConfig& config = {});
 
-    TERMIN_COLLISION_API ContactPatch
-    reduce_contact_patch(const ContactPatch& patch,
-                         const ContactPatchReductionConfig& config = {});
+    TERMIN_COLLISION_API ContactPatch reduce_contact_patch(const ContactPatch& patch,
+                                                           const ContactPatchReductionConfig& config = {});
 
 } // namespace termin::collision

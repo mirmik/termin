@@ -8,8 +8,7 @@
 
 #include "termin/collision/collision.hpp"
 
-extern "C"
-{
+extern "C" {
 #include "core/tc_scene.h"
 }
 
@@ -18,15 +17,13 @@ using namespace termin;
 using namespace termin::collision;
 using namespace termin::colliders;
 
-static tc_scene_handle extract_scene_handle(nb::handle scene_obj)
-{
+static tc_scene_handle extract_scene_handle(nb::handle scene_obj) {
     if (scene_obj.is_none())
         return TC_SCENE_HANDLE_INVALID;
     return nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
 }
 
-NB_MODULE(_collision_native, m)
-{
+NB_MODULE(_collision_native, m) {
     m.doc() = "Native C++ collision detection module for termin";
 
     // Import dependencies
@@ -47,8 +44,7 @@ NB_MODULE(_collision_native, m)
         .def_rw("point_on_b_world", &ContactCandidate::point_on_b_world)
         .def_rw("signed_gap", &ContactCandidate::signed_gap)
         .def_rw("features", &ContactCandidate::features)
-        .def("representative_point_world",
-             &ContactCandidate::representative_point_world);
+        .def("representative_point_world", &ContactCandidate::representative_point_world);
 
     nb::class_<ContactPatch>(m, "ContactPatch")
         .def(nb::init<>())
@@ -94,8 +90,7 @@ NB_MODULE(_collision_native, m)
         .def("update", &BVH::update, nb::arg("collider"), nb::arg("new_aabb"))
         .def(
             "query_aabb",
-            [](const BVH& bvh, const AABB& aabb)
-            {
+            [](const BVH& bvh, const AABB& aabb) {
                 std::vector<Collider*> result;
                 bvh.query_aabb(aabb, [&](Collider* c) { result.push_back(c); });
                 return result;
@@ -103,21 +98,17 @@ NB_MODULE(_collision_native, m)
             nb::arg("aabb"))
         .def(
             "query_ray",
-            [](const BVH& bvh, const Ray3& ray)
-            {
+            [](const BVH& bvh, const Ray3& ray) {
                 std::vector<std::tuple<Collider*, double, double>> result;
                 bvh.query_ray(ray,
-                              [&](Collider* c, double t_min, double t_max)
-                              { result.push_back({c, t_min, t_max}); });
+                              [&](Collider* c, double t_min, double t_max) { result.push_back({c, t_min, t_max}); });
                 return result;
             },
             nb::arg("ray"))
         .def("query_all_pairs",
-             [](const BVH& bvh)
-             {
+             [](const BVH& bvh) {
                  std::vector<std::pair<Collider*, Collider*>> result;
-                 bvh.query_all_pairs([&](Collider* a, Collider* b)
-                                     { result.push_back({a, b}); });
+                 bvh.query_all_pairs([&](Collider* a, Collider* b) { result.push_back({a, b}); });
                  return result;
              })
         .def("root", &BVH::root)
@@ -132,8 +123,7 @@ NB_MODULE(_collision_native, m)
         .def(nb::init<>())
         .def_static(
             "from_scene",
-            [](nb::handle scene_obj) -> CollisionWorld*
-            {
+            [](nb::handle scene_obj) -> CollisionWorld* {
                 tc_scene_handle scene = extract_scene_handle(scene_obj);
                 if (!tc_scene_handle_valid(scene))
                     return nullptr;
@@ -151,43 +141,30 @@ NB_MODULE(_collision_native, m)
         .def("update_all", &CollisionWorld::update_all)
         .def("contains", &CollisionWorld::contains, nb::arg("collider"))
         .def("size", &CollisionWorld::size)
-        .def("set_broad_phase_mode",
-             &CollisionWorld::set_broad_phase_mode,
-             nb::arg("mode"))
+        .def("set_broad_phase_mode", &CollisionWorld::set_broad_phase_mode, nb::arg("mode"))
         .def("broad_phase_mode", &CollisionWorld::broad_phase_mode)
         .def("detect_contacts", &CollisionWorld::detect_contacts)
         .def("query_aabb", &CollisionWorld::query_aabb, nb::arg("aabb"))
         .def(
-            "raycast",
-            [](const CollisionWorld& world, const Ray3& ray)
-            { return world.raycast(ray); },
-            nb::arg("ray"))
+            "raycast", [](const CollisionWorld& world, const Ray3& ray) { return world.raycast(ray); }, nb::arg("ray"))
         .def(
             "raycast_closest",
-            [](const CollisionWorld& world, const Ray3& ray)
-            { return world.raycast_closest(ray); },
+            [](const CollisionWorld& world, const Ray3& ray) { return world.raycast_closest(ray); },
             nb::arg("ray"))
         .def_prop_ro(
-            "bvh",
-            [](const CollisionWorld& w) -> const BVH& { return w.bvh(); },
-            nb::rv_policy::reference_internal);
+            "bvh", [](const CollisionWorld& w) -> const BVH& { return w.bvh(); }, nb::rv_policy::reference_internal);
 
     // ==================== AABB (if not already exposed) ====================
 
     // Check if AABB is already exposed in geombase, if not expose it here
-    try
-    {
+    try {
         nb::module_::import_("tcbase._geom_native").attr("AABB");
-    }
-    catch (...)
-    {
+    } catch (...) {
         tc::Log::debug("[collision_bindings] AABB not found in "
                        "tcbase._geom_native, exposing local fallback");
         nb::class_<AABB>(m, "AABB")
             .def(nb::init<>())
-            .def(nb::init<const Vec3&, const Vec3&>(),
-                 nb::arg("min_point"),
-                 nb::arg("max_point"))
+            .def(nb::init<const Vec3&, const Vec3&>(), nb::arg("min_point"), nb::arg("max_point"))
             .def_rw("min_point", &AABB::min_point)
             .def_rw("max_point", &AABB::max_point)
             .def("extend", &AABB::extend, nb::arg("point"))

@@ -1,9 +1,9 @@
 #include "core/tc_component_capability.h"
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
-#include <tcbase/tc_string.h>
-#include <tcbase/tc_log.h>
 #include <string.h>
+#include <tcbase/tc_log.h>
+#include <tcbase/tc_string.h>
 
 typedef struct {
     const char* names[TC_COMPONENT_MAX_CAPABILITIES];
@@ -14,10 +14,13 @@ typedef struct {
 static tc_component_capability_registry g_component_capability_registry = {0};
 
 static bool capability_slot_from_id(tc_component_cap_id id, uint32_t* out_slot) {
-    if (id == TC_COMPONENT_CAPABILITY_INVALID_ID) return false;
+    if (id == TC_COMPONENT_CAPABILITY_INVALID_ID)
+        return false;
     uint32_t slot = id - 1;
-    if (slot >= g_component_capability_registry.count) return false;
-    if (out_slot) *out_slot = slot;
+    if (slot >= g_component_capability_registry.count)
+        return false;
+    if (out_slot)
+        *out_slot = slot;
     return true;
 }
 
@@ -25,16 +28,15 @@ tc_component_cap_id tc_component_capability_register(const char* debug_name) {
     return tc_component_capability_register_with_destructor(debug_name, NULL);
 }
 
-tc_component_cap_id tc_component_capability_register_with_destructor(
-    const char* debug_name,
-    tc_component_capability_destroy_fn destroy_fn
-) {
+tc_component_cap_id tc_component_capability_register_with_destructor(const char* debug_name,
+                                                                     tc_component_capability_destroy_fn destroy_fn) {
     if (!debug_name || !debug_name[0]) {
         return TC_COMPONENT_CAPABILITY_INVALID_ID;
     }
 
     for (size_t i = 0; i < g_component_capability_registry.count; i++) {
-        if (g_component_capability_registry.names[i] && strcmp(g_component_capability_registry.names[i], debug_name) == 0) {
+        if (g_component_capability_registry.names[i] &&
+            strcmp(g_component_capability_registry.names[i], debug_name) == 0) {
             if (destroy_fn && g_component_capability_registry.destroy_fns[i] == NULL) {
                 g_component_capability_registry.destroy_fns[i] = destroy_fn;
             }
@@ -72,27 +74,33 @@ bool tc_component_capability_slot(tc_component_cap_id id, uint32_t* out_slot) {
 
 bool tc_component_has_capability(const tc_component* c, tc_component_cap_id id) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return false;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return false;
     return (c->capability_mask & (UINT64_C(1) << slot)) != 0;
 }
 
 void* tc_component_get_capability(const tc_component* c, tc_component_cap_id id) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return NULL;
-    if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) return NULL;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return NULL;
+    if ((c->capability_mask & (UINT64_C(1) << slot)) == 0)
+        return NULL;
     return c->capability_ptrs[slot];
 }
 
 int tc_component_get_capability_priority(const tc_component* c, tc_component_cap_id id) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return 0;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return 0;
     return c->capability_priorities[slot];
 }
 
 bool tc_component_set_capability_priority(tc_component* c, tc_component_cap_id id, int priority) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return false;
-    if (c->capability_priorities[slot] == priority) return true;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return false;
+    if (c->capability_priorities[slot] == priority)
+        return true;
 
     c->capability_priorities[slot] = priority;
 
@@ -105,7 +113,8 @@ bool tc_component_set_capability_priority(tc_component* c, tc_component_cap_id i
 
 bool tc_component_attach_capability(tc_component* c, tc_component_cap_id id, void* cap_ptr) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return false;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return false;
 
     if ((c->capability_mask & (UINT64_C(1) << slot)) != 0) {
         c->capability_ptrs[slot] = cap_ptr;
@@ -123,8 +132,10 @@ bool tc_component_attach_capability(tc_component* c, tc_component_cap_id id, voi
 
 void tc_component_detach_capability(tc_component* c, tc_component_cap_id id) {
     uint32_t slot = 0;
-    if (!c || !capability_slot_from_id(id, &slot)) return;
-    if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) return;
+    if (!c || !capability_slot_from_id(id, &slot))
+        return;
+    if ((c->capability_mask & (UINT64_C(1) << slot)) == 0)
+        return;
 
     void* cap_ptr = c->capability_ptrs[slot];
     if (tc_scene_handle_valid(c->lifecycle_scene)) {
@@ -140,7 +151,8 @@ void tc_component_detach_capability(tc_component* c, tc_component_cap_id id) {
 }
 
 void tc_component_clear_capabilities(tc_component* c) {
-    if (!c) return;
+    if (!c)
+        return;
     for (uint32_t slot = 0; slot < g_component_capability_registry.count; slot++) {
         if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) {
             continue;

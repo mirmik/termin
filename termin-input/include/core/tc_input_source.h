@@ -9,7 +9,7 @@ extern "C" {
 
 typedef enum tc_input_source {
     TC_INPUT_SOURCE_RUNTIME = 1u << 0u,
-    TC_INPUT_SOURCE_EDITOR  = 1u << 1u,
+    TC_INPUT_SOURCE_EDITOR = 1u << 1u,
 } tc_input_source;
 
 #ifdef __cplusplus

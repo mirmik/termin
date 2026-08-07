@@ -1,9 +1,9 @@
 #pragma once
 
 class ConsumerOnlyViolation {
-  public:
+public:
     void update();
 
-  private:
+private:
     int value_ = 0;
 };

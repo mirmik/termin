@@ -4,4 +4,3 @@ int main(int argc, char* argv[]) {
     termin::player::PlayerRuntimeHost host;
     return host.run(argc, argv);
 }
-

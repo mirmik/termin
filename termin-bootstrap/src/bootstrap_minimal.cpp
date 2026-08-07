@@ -1,11 +1,11 @@
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/bootstrap/bootstrap_c.h>
 
+#include <tcbase/tc_log.h>
+#include <tcbase/tc_string.h>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/unknown_component.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
-#include <tcbase/tc_log.h>
-#include <tcbase/tc_string.h>
 
 extern "C" {
 #include <core/tc_entity_pool_registry.h>
@@ -19,92 +19,89 @@ extern "C" {
 
 namespace {
 
-bool g_runtime_initialized = false;
-bool g_inspect_initialized = false;
-bool g_entity_kind_registered = false;
-bool g_scene_components_registered = false;
+    bool g_runtime_initialized = false;
+    bool g_inspect_initialized = false;
+    bool g_entity_kind_registered = false;
+    bool g_scene_components_registered = false;
 
-void log_unavailable(const char* feature) {
-    tc_log_error(
-        "[termin-bootstrap] minimal-only build does not provide %s",
-        feature
-    );
-}
+    void log_unavailable(const char* feature) {
+        tc_log_error("[termin-bootstrap] minimal-only build does not provide %s", feature);
+    }
 
 } // namespace
 
 namespace termin::bootstrap {
 
-void reset_python_bootstrap_state();
+    void reset_python_bootstrap_state();
 
-void register_runtime_kinds(const RuntimeKindOptions& options) {
-    if (options.entity && !g_entity_kind_registered) {
-        tc::register_cpp_handle_kind<Entity>("entity");
-        g_entity_kind_registered = true;
+    void register_runtime_kinds(const RuntimeKindOptions& options) {
+        if (options.entity && !g_entity_kind_registered) {
+            tc::register_cpp_handle_kind<Entity>("entity");
+            g_entity_kind_registered = true;
+        }
+        if (options.mesh || options.material || options.skeleton || options.animation || options.voxel_grid ||
+            options.navmesh || options.ui_document) {
+            log_unavailable("non-core runtime handle kinds");
+        }
     }
-    if (options.mesh || options.material || options.skeleton || options.animation ||
-            options.voxel_grid || options.navmesh || options.ui_document) {
-        log_unavailable("non-core runtime handle kinds");
+
+    void register_scene_extensions(const SceneExtensionOptions& options) {
+        if (options.render_mount || options.render_state || options.collision_world) {
+            log_unavailable("render/collision scene extensions");
+        }
     }
-}
 
-void register_scene_extensions(const SceneExtensionOptions& options) {
-    if (options.render_mount || options.render_state || options.collision_world) {
-        log_unavailable("render/collision scene extensions");
+    void init_inspect_adapters() {
+        if (g_inspect_initialized) {
+            return;
+        }
+        tc_inspect_kind_core_init();
+        tc_inspect_component_adapter_init();
+        tc_inspect_python_adapter_init();
+        g_inspect_initialized = true;
     }
-}
 
-void init_inspect_adapters() {
-    if (g_inspect_initialized) {
-        return;
+    void register_builtin_pass_types() {
+        log_unavailable("built-in render pass types");
     }
-    tc_inspect_kind_core_init();
-    tc_inspect_component_adapter_init();
-    tc_inspect_python_adapter_init();
-    g_inspect_initialized = true;
-}
 
-void register_builtin_pass_types() {
-    log_unavailable("built-in render pass types");
-}
-
-void bootstrap_runtime() {
-    bootstrap_runtime(RuntimeBootstrapProfile::Minimal);
-}
-
-void bootstrap_runtime(RuntimeBootstrapProfile profile) {
-    if (profile == RuntimeBootstrapProfile::Full) {
-        log_unavailable("the full runtime bootstrap profile");
-        return;
+    void bootstrap_runtime() {
+        bootstrap_runtime(RuntimeBootstrapProfile::Minimal);
     }
-    tc_init();
-    init_inspect_adapters();
-    RuntimeKindOptions kinds;
-    kinds.mesh = false;
-    kinds.material = false;
-    kinds.skeleton = false;
-    kinds.animation = false;
-    kinds.voxel_grid = false;
-    kinds.navmesh = false;
-    kinds.ui_document = false;
-    register_runtime_kinds(kinds);
-    if (!g_scene_components_registered) {
-        register_builtin_scene_component_types();
-        g_scene_components_registered = true;
+
+    void bootstrap_runtime(RuntimeBootstrapProfile profile) {
+        if (profile == RuntimeBootstrapProfile::Full) {
+            log_unavailable("the full runtime bootstrap profile");
+            return;
+        }
+        tc_init();
+        init_inspect_adapters();
+        RuntimeKindOptions kinds;
+        kinds.mesh = false;
+        kinds.material = false;
+        kinds.skeleton = false;
+        kinds.animation = false;
+        kinds.voxel_grid = false;
+        kinds.navmesh = false;
+        kinds.ui_document = false;
+        register_runtime_kinds(kinds);
+        if (!g_scene_components_registered) {
+            register_builtin_scene_component_types();
+            g_scene_components_registered = true;
+        }
     }
-}
 
-void bootstrap_player() {
-    log_unavailable("player bootstrap");
-}
+    void bootstrap_player() {
+        log_unavailable("player bootstrap");
+    }
 
-void bootstrap_editor() {
-    log_unavailable("editor bootstrap");
-}
+    void bootstrap_editor() {
+        log_unavailable("editor bootstrap");
+    }
 
-void shutdown_runtime() {
-    tc_shutdown();
-}
+    void shutdown_runtime() {
+        tc_shutdown();
+    }
 
 } // namespace termin::bootstrap
 
@@ -121,9 +118,7 @@ void tc_init(void) {
 }
 
 void tc_bootstrap_runtime(void) {
-    termin::bootstrap::bootstrap_runtime(
-        termin::bootstrap::RuntimeBootstrapProfile::Minimal
-    );
+    termin::bootstrap::bootstrap_runtime(termin::bootstrap::RuntimeBootstrapProfile::Minimal);
 }
 
 void tc_shutdown(void) {

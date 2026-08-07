@@ -4,8 +4,8 @@
 
 namespace termin {
 
-void register_builtin_mesh_component_types() {
-    MeshComponent::register_type();
-}
+    void register_builtin_mesh_component_types() {
+        MeshComponent::register_type();
+    }
 
 } // namespace termin

@@ -16,55 +16,56 @@
  */
 
 #include "collider.hpp"
-#include <termin/geom/general_pose3.hpp>
 #include <memory>
+#include <termin/geom/general_pose3.hpp>
 
 namespace termin {
-namespace colliders {
+    namespace colliders {
 
+        /**
+         * Базовый класс для геометрических примитивов.
+         *
+         * Хранит GeneralPose3 transform, который задаёт позицию, ориентацию и масштаб.
+         */
+        class ColliderPrimitive : public Collider {
+        public:
+            GeneralPose3 transform;
 
-/**
- * Базовый класс для геометрических примитивов.
- *
- * Хранит GeneralPose3 transform, который задаёт позицию, ориентацию и масштаб.
- */
-class ColliderPrimitive : public Collider {
-public:
-    GeneralPose3 transform;
+            ColliderPrimitive()
+                : transform() {}
+            explicit ColliderPrimitive(const GeneralPose3& t)
+                : transform(t) {}
 
-    ColliderPrimitive() : transform() {}
-    explicit ColliderPrimitive(const GeneralPose3& t) : transform(t) {}
+            /**
+             * Центр коллайдера = transform.lin
+             */
+            Vec3 center() const override {
+                return transform.lin;
+            }
 
-    /**
-     * Центр коллайдера = transform.lin
-     */
-    Vec3 center() const override {
-        return transform.lin;
-    }
+            /**
+             * Uniform scale — минимальный компонент scale.
+             * Используется для Sphere и радиуса Capsule.
+             */
+            double uniform_scale() const {
+                return std::min({transform.scale.x, transform.scale.y, transform.scale.z});
+            }
 
-    /**
-     * Uniform scale — минимальный компонент scale.
-     * Используется для Sphere и радиуса Capsule.
-     */
-    double uniform_scale() const {
-        return std::min({transform.scale.x, transform.scale.y, transform.scale.z});
-    }
+            /**
+             * Создать Pose3 из transform (без scale).
+             * Используется для внутренних вычислений.
+             */
+            Pose3 pose() const {
+                return transform.to_pose3();
+            }
 
-    /**
-     * Создать Pose3 из transform (без scale).
-     * Используется для внутренних вычислений.
-     */
-    Pose3 pose() const {
-        return transform.to_pose3();
-    }
+            // Создать копию примитива с другим трансформом.
+            // Используется AttachedCollider для создания world-space копий.
+            virtual std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const = 0;
 
-    // Создать копию примитива с другим трансформом.
-    // Используется AttachedCollider для создания world-space копий.
-    virtual std::unique_ptr<ColliderPrimitive> clone_at(const GeneralPose3& pose) const = 0;
+            // Support function для GJK: самая дальняя точка в направлении direction (world space).
+            virtual Vec3 support(const Vec3& direction) const = 0;
+        };
 
-    // Support function для GJK: самая дальняя точка в направлении direction (world space).
-    virtual Vec3 support(const Vec3& direction) const = 0;
-};
-
-} // namespace colliders
+    } // namespace colliders
 } // namespace termin

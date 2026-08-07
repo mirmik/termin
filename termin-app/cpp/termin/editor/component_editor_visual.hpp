@@ -10,35 +10,33 @@
 
 namespace termin {
 
-struct ComponentEditorVisualContext {
-    TransformGizmo* transform_gizmo = nullptr;
-};
+    struct ComponentEditorVisualContext {
+        TransformGizmo* transform_gizmo = nullptr;
+    };
 
-class ComponentEditorVisualProvider {
-public:
-    virtual ~ComponentEditorVisualProvider() = default;
+    class ComponentEditorVisualProvider {
+    public:
+        virtual ~ComponentEditorVisualProvider() = default;
 
-    virtual void collect_gizmos(
-        Entity entity,
-        tc_component* component,
-        const ComponentEditorVisualContext& context,
-        std::vector<std::unique_ptr<Gizmo>>& out_gizmos) = 0;
-};
+        virtual void collect_gizmos(Entity entity,
+                                    tc_component* component,
+                                    const ComponentEditorVisualContext& context,
+                                    std::vector<std::unique_ptr<Gizmo>>& out_gizmos) = 0;
+    };
 
-class ComponentEditorVisualRegistry {
-private:
-    std::vector<std::unique_ptr<ComponentEditorVisualProvider>> _providers;
+    class ComponentEditorVisualRegistry {
+    private:
+        std::vector<std::unique_ptr<ComponentEditorVisualProvider>> _providers;
 
-public:
-    static ComponentEditorVisualRegistry& instance();
+    public:
+        static ComponentEditorVisualRegistry& instance();
 
-    void register_provider(std::unique_ptr<ComponentEditorVisualProvider> provider);
+        void register_provider(std::unique_ptr<ComponentEditorVisualProvider> provider);
 
-    void collect_gizmos(
-        Entity entity,
-        tc_component* component,
-        const ComponentEditorVisualContext& context,
-        std::vector<std::unique_ptr<Gizmo>>& out_gizmos);
-};
+        void collect_gizmos(Entity entity,
+                            tc_component* component,
+                            const ComponentEditorVisualContext& context,
+                            std::vector<std::unique_ptr<Gizmo>>& out_gizmos);
+    };
 
 } // namespace termin

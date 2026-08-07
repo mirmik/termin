@@ -15,458 +15,426 @@
 
 #include "termin/engine/termin_engine_api.hpp"
 #include "termin/geom/rect2.hpp"
-#include "termin/render/viewport_render_state.hpp"
-#include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_topology.hpp"
+#include "termin/render/viewport_render_state.hpp"
 #include <termin/lighting/light.hpp>
 
 extern "C" {
 #include "core/tc_scene.h"
-#include "tc_viewport_config.h"
 #include "render/tc_display.h"
+#include "render/tc_render_target.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
-#include "render/tc_render_target.h"
+#include "tc_viewport_config.h"
 }
 
-#include <vector>
+#include <functional>
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <memory>
-#include <functional>
-#include <string>
+#include <vector>
 
 namespace termin {
 
-class RenderingManager;
-
-namespace rendering_manager_detail {
-class OffscreenRenderPlanner;
-class RenderDisplayRegistry;
-class RenderStateStore;
-}
-
-// Factory callback types
-using DisplayFactory = std::function<tc_display_handle(const std::string& name)>;
-using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
-using DisplayRemovedCallback = std::function<void(tc_display_handle)>;
-using RenderTargetContextProvider = std::function<bool(
-    RenderingManager& manager,
-    tc_render_target_handle render_target,
-    const std::string& base_context_name,
-    tc_entity_handle internal_entities,
-    std::unordered_map<std::string, RenderTargetContext>& contexts,
-    std::string& default_context_name
-)>;
-
-struct SceneMountRequest {
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-    tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
-    tc_component* camera = nullptr;
-    Rect2f region;
-    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
-    std::string name;
-};
-
-enum class RenderExecutionTargetKind {
-    Viewport,
-    RenderTarget,
-};
-
-struct RenderExecutionTargetId {
-    RenderExecutionTargetKind kind = RenderExecutionTargetKind::RenderTarget;
-    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
-    tc_render_target_handle render_target = TC_RENDER_TARGET_HANDLE_INVALID;
-
-    bool operator==(const RenderExecutionTargetId& other) const {
-        return kind == other.kind
-            && tc_viewport_handle_eq(viewport, other.viewport)
-            && tc_render_target_handle_eq(render_target, other.render_target);
-    }
-};
-
-// Value-only description of one target that RenderingManager can currently
-// resolve to a pipeline. Consumers must re-query before use; the handles carry
-// generations and no pointer in this snapshot extends a render object's life.
-struct RenderExecutionTargetInfo {
-    RenderExecutionTargetId id;
-    tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
-    std::string label;
-    bool renderable = false;
-
-    bool operator==(const RenderExecutionTargetInfo& other) const {
-        return id == other.id
-            && tc_display_handle_eq(display, other.display)
-            && scene.index == other.scene.index
-            && scene.generation == other.scene.generation
-            && tc_pipeline_handle_eq(pipeline, other.pipeline)
-            && label == other.label
-            && renderable == other.renderable;
-    }
-};
-
-struct RenderExecutionInfo {
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
-    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
-    std::vector<RenderExecutionTargetId> targets;
-};
-
-// Main-thread observer of actual render executions. Implementations may
-// provide one frame-local capture request. RenderingManager never retains the
-// returned request beyond the matching RenderEngine call.
-class TERMIN_ENGINE_API RenderExecutionObserver {
-public:
-    virtual ~RenderExecutionObserver() = default;
-    virtual void collect_render_demands(
-        std::vector<RenderExecutionTargetId>&
-    ) const {}
-    virtual FrameGraphCaptureRequest* prepare_render_execution(
-        const RenderExecutionInfo& execution
-    ) = 0;
-    virtual void finish_render_execution(
-        const RenderExecutionInfo& execution,
-        FrameGraphCaptureRequest* request
-    ) = 0;
-};
-
-// RenderingManager - manages displays and rendering
-//
-// Owned by EngineCore and passed explicitly to hosts and controllers.
-// Thread safety: NOT thread-safe. All calls must be from main/render thread.
-class TERMIN_ENGINE_API RenderingManager {
-private:
-    // Scene/editor display lists and per-display input routers.
-    std::unique_ptr<rendering_manager_detail::RenderDisplayRegistry> display_registry_;
+    class RenderingManager;
+
+    namespace rendering_manager_detail {
+        class OffscreenRenderPlanner;
+        class RenderDisplayRegistry;
+        class RenderStateStore;
+    } // namespace rendering_manager_detail
+
+    // Factory callback types
+    using DisplayFactory = std::function<tc_display_handle(const std::string& name)>;
+    using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
+    using DisplayRemovedCallback = std::function<void(tc_display_handle)>;
+    using RenderTargetContextProvider =
+        std::function<bool(RenderingManager& manager,
+                           tc_render_target_handle render_target,
+                           const std::string& base_context_name,
+                           tc_entity_handle internal_entities,
+                           std::unordered_map<std::string, RenderTargetContext>& contexts,
+                           std::string& default_context_name)>;
+
+    struct SceneMountRequest {
+        tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+        tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
+        tc_component* camera = nullptr;
+        Rect2f region;
+        tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+        std::string name;
+    };
+
+    enum class RenderExecutionTargetKind {
+        Viewport,
+        RenderTarget,
+    };
+
+    struct RenderExecutionTargetId {
+        RenderExecutionTargetKind kind = RenderExecutionTargetKind::RenderTarget;
+        tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+        tc_render_target_handle render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+
+        bool operator==(const RenderExecutionTargetId& other) const {
+            return kind == other.kind && tc_viewport_handle_eq(viewport, other.viewport) &&
+                   tc_render_target_handle_eq(render_target, other.render_target);
+        }
+    };
+
+    // Value-only description of one target that RenderingManager can currently
+    // resolve to a pipeline. Consumers must re-query before use; the handles carry
+    // generations and no pointer in this snapshot extends a render object's life.
+    struct RenderExecutionTargetInfo {
+        RenderExecutionTargetId id;
+        tc_display_handle display = TC_DISPLAY_HANDLE_INVALID;
+        tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+        tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+        std::string label;
+        bool renderable = false;
+
+        bool operator==(const RenderExecutionTargetInfo& other) const {
+            return id == other.id && tc_display_handle_eq(display, other.display) && scene.index == other.scene.index &&
+                   scene.generation == other.scene.generation && tc_pipeline_handle_eq(pipeline, other.pipeline) &&
+                   label == other.label && renderable == other.renderable;
+        }
+    };
+
+    struct RenderExecutionInfo {
+        tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+        tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+        std::vector<RenderExecutionTargetId> targets;
+    };
+
+    // Main-thread observer of actual render executions. Implementations may
+    // provide one frame-local capture request. RenderingManager never retains the
+    // returned request beyond the matching RenderEngine call.
+    class TERMIN_ENGINE_API RenderExecutionObserver {
+    public:
+        virtual ~RenderExecutionObserver() = default;
+        virtual void collect_render_demands(std::vector<RenderExecutionTargetId>&) const {}
+        virtual FrameGraphCaptureRequest* prepare_render_execution(const RenderExecutionInfo& execution) = 0;
+        virtual void finish_render_execution(const RenderExecutionInfo& execution,
+                                             FrameGraphCaptureRequest* request) = 0;
+    };
+
+    // RenderingManager - manages displays and rendering
+    //
+    // Owned by EngineCore and passed explicitly to hosts and controllers.
+    // Thread safety: NOT thread-safe. All calls must be from main/render thread.
+    class TERMIN_ENGINE_API RenderingManager {
+    private:
+        // Scene/editor display lists and per-display input routers.
+        std::unique_ptr<rendering_manager_detail::RenderDisplayRegistry> display_registry_;
+
+        // Render engine (owned if created internally)
+        RenderEngine* render_engine_ = nullptr;
+        std::unique_ptr<RenderEngine> owned_render_engine_;
+
+        // Runtime GPU output state helpers.
+        std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
+        std::unique_ptr<rendering_manager_detail::OffscreenRenderPlanner> offscreen_planner_;
+
+        // Engine-owned live scene/pipeline/target topology.
+        RenderTopology& topology_;
+
+        // Factory for creating displays on demand
+        DisplayFactory display_factory_;
 
-    // Render engine (owned if created internally)
-    RenderEngine* render_engine_ = nullptr;
-    std::unique_ptr<RenderEngine> owned_render_engine_;
+        // Factory for creating pipelines by special name
+        PipelineFactory pipeline_factory_;
 
-    // Runtime GPU output state helpers.
-    std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
-    std::unique_ptr<rendering_manager_detail::OffscreenRenderPlanner> offscreen_planner_;
+        // Callback when a display is removed
+        DisplayRemovedCallback display_removed_callback_;
 
-    // Engine-owned live scene/pipeline/target topology.
-    RenderTopology& topology_;
+        // Special target providers, keyed by tc_render_target_kind.
+        std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
+        std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
+        std::vector<RenderExecutionObserver*> render_execution_observers_;
 
-    // Factory for creating displays on demand
-    DisplayFactory display_factory_;
+    public:
+        explicit RenderingManager(RenderTopology& topology);
+        ~RenderingManager();
 
-    // Factory for creating pipelines by special name
-    PipelineFactory pipeline_factory_;
+    private:
+        // Disable copy
+        RenderingManager(const RenderingManager&) = delete;
+        RenderingManager& operator=(const RenderingManager&) = delete;
 
-    // Callback when a display is removed
-    DisplayRemovedCallback display_removed_callback_;
+    public:
+        // ========================================================================
+        // Configuration
+        // ========================================================================
 
-    // Special target providers, keyed by tc_render_target_kind.
-    std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
-    std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
-    std::vector<RenderExecutionObserver*> render_execution_observers_;
+        // Set render engine (optional, created lazily if not set)
+        void set_render_engine(RenderEngine* engine);
+        RenderEngine* render_engine();
+        const RenderEngine* render_engine_if_created() const {
+            return render_engine_;
+        }
+        RenderTopology& topology() {
+            return topology_;
+        }
+        const RenderTopology& topology() const {
+            return topology_;
+        }
 
-public:
-    explicit RenderingManager(RenderTopology& topology);
-    ~RenderingManager();
+        // Set factory for creating displays on demand
+        void set_display_factory(DisplayFactory factory);
 
-private:
-    // Disable copy
-    RenderingManager(const RenderingManager&) = delete;
-    RenderingManager& operator=(const RenderingManager&) = delete;
+        // Set factory for creating pipelines by special name (e.g., "(Editor)")
+        void set_pipeline_factory(PipelineFactory factory);
 
-public:
-    // ========================================================================
-    // Configuration
-    // ========================================================================
+        // Register a provider for special render target kinds. Texture targets
+        // are built internally; XR stereo targets use this hook to supply per-eye
+        // RenderTargetContext objects for the current runtime frame.
+        void set_render_target_context_provider(tc_render_target_kind kind, RenderTargetContextProvider provider);
+        void clear_render_target_context_provider(tc_render_target_kind kind);
 
-    // Set render engine (optional, created lazily if not set)
-    void set_render_engine(RenderEngine* engine);
-    RenderEngine* render_engine();
-    const RenderEngine* render_engine_if_created() const { return render_engine_; }
-    RenderTopology& topology() { return topology_; }
-    const RenderTopology& topology() const { return topology_; }
+        void add_render_execution_observer(RenderExecutionObserver& observer);
+        void remove_render_execution_observer(RenderExecutionObserver& observer);
 
-    // Set factory for creating displays on demand
-    void set_display_factory(DisplayFactory factory);
+        // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
+        tc_pipeline_handle create_pipeline(const std::string& name);
 
-    // Set factory for creating pipelines by special name (e.g., "(Editor)")
-    void set_pipeline_factory(PipelineFactory factory);
+        // Recreate live render-target pipelines that were created from the given
+        // pipeline asset. Returns the number of render targets rebound.
+        size_t recreate_render_target_pipelines_for_asset(const std::string& asset_name, const std::string& asset_uuid);
 
-    // Register a provider for special render target kinds. Texture targets
-    // are built internally; XR stereo targets use this hook to supply per-eye
-    // RenderTargetContext objects for the current runtime frame.
-    void set_render_target_context_provider(
-        tc_render_target_kind kind,
-        RenderTargetContextProvider provider
-    );
-    void clear_render_target_context_provider(tc_render_target_kind kind);
+        // Create default render pipeline (Shadow, Skybox, Color, Transparent, Resolve, PostFX, UIWidgets, Present)
+        static tc_pipeline_handle make_default_pipeline();
 
-    void add_render_execution_observer(RenderExecutionObserver& observer);
-    void remove_render_execution_observer(RenderExecutionObserver& observer);
+        // Set callback called when a display is removed (for cleanup in editor)
+        void set_display_removed_callback(DisplayRemovedCallback callback);
 
-    // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
-    tc_pipeline_handle create_pipeline(const std::string& name);
+        // ========================================================================
+        // Display Management
+        // ========================================================================
 
-    // Recreate live render-target pipelines that were created from the given
-    // pipeline asset. Returns the number of render targets rebound.
-    size_t recreate_render_target_pipelines_for_asset(
-        const std::string& asset_name,
-        const std::string& asset_uuid
-    );
+        // Add display to management (scene display, cleaned up by detach_scene_full)
+        void add_display(tc_display_handle display);
 
-    // Create default render pipeline (Shadow, Skybox, Color, Transparent, Resolve, PostFX, UIWidgets, Present)
-    static tc_pipeline_handle make_default_pipeline();
+        // Remove display from management
+        void remove_display(tc_display_handle display);
 
-    // Set callback called when a display is removed (for cleanup in editor)
-    void set_display_removed_callback(DisplayRemovedCallback callback);
+        // Get all managed scene displays
+        const std::vector<tc_display_handle>& displays() const;
 
-    // ========================================================================
-    // Display Management
-    // ========================================================================
+        // Add editor display (skipped by detach_scene_full/unmount_scene)
+        void add_editor_display(tc_display_handle display);
 
-    // Add display to management (scene display, cleaned up by detach_scene_full)
-    void add_display(tc_display_handle display);
+        // Remove editor display
+        void remove_editor_display(tc_display_handle display);
 
-    // Remove display from management
-    void remove_display(tc_display_handle display);
+        // Get all editor displays
+        const std::vector<tc_display_handle>& editor_displays() const;
 
-    // Get all managed scene displays
-    const std::vector<tc_display_handle>& displays() const;
+        // Query the currently live debugger/inspection targets. This is a pull
+        // API by design: callers reconcile against actual manager state instead
+        // of relying on a loss-prone topology notification history.
+        std::vector<RenderExecutionTargetInfo> execution_targets() const;
 
-    // Add editor display (skipped by detach_scene_full/unmount_scene)
-    void add_editor_display(tc_display_handle display);
-
-    // Remove editor display
-    void remove_editor_display(tc_display_handle display);
+        // Find display by name (searches both scene and editor displays)
+        tc_display_handle get_display_by_name(const std::string& name) const;
 
-    // Get all editor displays
-    const std::vector<tc_display_handle>& editor_displays() const;
+        // Get existing display or create via factory
+        tc_display_handle get_or_create_display(const std::string& name);
 
-    // Query the currently live debugger/inspection targets. This is a pull
-    // API by design: callers reconcile against actual manager state instead
-    // of relying on a loss-prone topology notification history.
-    std::vector<RenderExecutionTargetInfo> execution_targets() const;
+        // Check if display should be auto-removed (empty + auto_remove_when_empty flag)
+        // Returns true if display was removed.
+        bool try_auto_remove_display(tc_display_handle display);
 
-    // Find display by name (searches both scene and editor displays)
-    tc_display_handle get_display_by_name(const std::string& name) const;
+        // Return the stable display-owned input endpoint.
+        tc_input_manager* display_input_endpoint(tc_display_handle display);
 
-    // Get existing display or create via factory
-    tc_display_handle get_or_create_display(const std::string& name);
+        // ========================================================================
+        // Viewport State Management
+        // ========================================================================
 
-    // Check if display should be auto-removed (empty + auto_remove_when_empty flag)
-    // Returns true if display was removed.
-    bool try_auto_remove_display(tc_display_handle display);
+        // Get render state for viewport (returns nullptr if not found)
+        ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
 
-    // Return the stable display-owned input endpoint.
-    tc_input_manager* display_input_endpoint(tc_display_handle display);
+        // Get or create render state for viewport
+        ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
 
-    // ========================================================================
-    // Viewport State Management
-    // ========================================================================
+        // Remove viewport state (call when viewport is destroyed)
+        void remove_viewport_state(tc_viewport_handle viewport);
 
-    // Get render state for viewport (returns nullptr if not found)
-    ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
+        // ========================================================================
+        // Render Target State
+        // ========================================================================
 
-    // Get or create render state for viewport
-    ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
+        // Get render state for a render target (returns nullptr if not found)
+        ViewportRenderState* get_render_target_state(tc_render_target_handle rt);
 
-    // Remove viewport state (call when viewport is destroyed)
-    void remove_viewport_state(tc_viewport_handle viewport);
+        // Get or create render state for a render target
+        ViewportRenderState* get_or_create_render_target_state(tc_render_target_handle rt);
 
-    // ========================================================================
-    // Render Target State
-    // ========================================================================
+        // ========================================================================
+        // Rendering - Single Display (Simple Path)
+        // ========================================================================
 
-    // Get render state for a render target (returns nullptr if not found)
-    ViewportRenderState* get_render_target_state(tc_render_target_handle rt);
+        // Render and present a single display for pull-based hosts (WPF/Qt style).
+        // Renders RT-backed viewports on this display through the shared offscreen
+        // render-target path, then composites them into the display surface.
+        void render_display(tc_display_handle display);
 
-    // Get or create render state for a render target
-    ViewportRenderState* get_or_create_render_target_state(tc_render_target_handle rt);
+        // ========================================================================
+        // Rendering - Offscreen-First Model (Full Path)
+        // ========================================================================
 
-    // ========================================================================
-    // Rendering - Single Display (Simple Path)
-    // ========================================================================
+        // Render all viewports using offscreen rendering model.
+        // Phase 1: render_all_offscreen() - renders to output_fbos
+        // Phase 2: present_all() - blits to displays
+        void render_all(bool present = true);
 
-    // Render and present a single display for pull-based hosts (WPF/Qt style).
-    // Renders RT-backed viewports on this display through the shared offscreen
-    // render-target path, then composites them into the display surface.
-    void render_display(tc_display_handle display);
+        // Phase 1: Render all viewports to their output_fbos
+        // All viewports (from all displays) rendered in single pass.
+        void render_all_offscreen();
 
-    // ========================================================================
-    // Rendering - Offscreen-First Model (Full Path)
-    // ========================================================================
+        // Phase 2: composite viewport textures into each display texture output.
+        void present_all();
 
-    // Render all viewports using offscreen rendering model.
-    // Phase 1: render_all_offscreen() - renders to output_fbos
-    // Phase 2: present_all() - blits to displays
-    void render_all(bool present = true);
+        // ========================================================================
+        // Scene Mounting
+        // ========================================================================
 
-    // Phase 1: Render all viewports to their output_fbos
-    // All viewports (from all displays) rendered in single pass.
-    void render_all_offscreen();
+        // Mount scene to display region, creating a viewport
+        // Returns viewport handle (invalid if failed)
+        tc_viewport_handle mount_scene(const SceneMountRequest& request);
 
-    // Phase 2: composite viewport textures into each display texture output.
-    void present_all();
+        // Register a host-created viewport in the engine-owned live topology.
+        bool register_viewport_attachment(tc_display_handle display,
+                                          tc_viewport_handle viewport,
+                                          bool destroy_on_scene_detach = true);
+        bool unregister_viewport_attachment(tc_viewport_handle viewport);
 
-    // ========================================================================
-    // Scene Mounting
-    // ========================================================================
+        // Unmount scene from display (removes all viewports showing this scene)
+        void unmount_scene(tc_scene_handle scene, tc_display_handle display, bool include_host_viewports = false);
 
-    // Mount scene to display region, creating a viewport
-    // Returns viewport handle (invalid if failed)
-    tc_viewport_handle mount_scene(const SceneMountRequest& request);
+        // Attach scene using its viewport_configs
+        // Creates displays via factory, mounts viewports, compiles scene pipelines
+        // Returns list of created viewport handles
+        std::vector<tc_viewport_handle> attach_scene_full(tc_scene_handle scene);
 
-    // Register a host-created viewport in the engine-owned live topology.
-    bool register_viewport_attachment(
-        tc_display_handle display,
-        tc_viewport_handle viewport,
-        bool destroy_on_scene_detach = true
-    );
-    bool unregister_viewport_attachment(tc_viewport_handle viewport);
+        // Detach scene from all displays and cleanup
+        void detach_scene_full(tc_scene_handle scene, bool include_host_viewports = false);
 
-    // Unmount scene from display (removes all viewports showing this scene)
-    void unmount_scene(
-        tc_scene_handle scene,
-        tc_display_handle display,
-        bool include_host_viewports = false
-    );
+        // Get attached scenes list
+        const std::vector<tc_scene_handle>& attached_scenes() const {
+            return topology_.attached_scenes();
+        }
 
-    // Attach scene using its viewport_configs
-    // Creates displays via factory, mounts viewports, compiles scene pipelines
-    // Returns list of created viewport handles
-    std::vector<tc_viewport_handle> attach_scene_full(tc_scene_handle scene);
+        // ========================================================================
+        // Scene Pipeline Management
+        // ========================================================================
 
-    // Detach scene from all displays and cleanup
-    void detach_scene_full(tc_scene_handle scene, bool include_host_viewports = false);
+        // Attach scene pipelines only - compiles pipeline templates stored in tc_scene
+        // Called by attach_scene_full. Attaches render lifecycle participants.
+        void attach_scene(tc_scene_handle scene);
 
-    // Get attached scenes list
-    const std::vector<tc_scene_handle>& attached_scenes() const {
-        return topology_.attached_scenes();
-    }
+        // Detach scene from rendering - destroys compiled pipelines
+        // Called when scene is unmounted. Detaches render lifecycle participants.
+        void detach_scene(tc_scene_handle scene);
 
-    // ========================================================================
-    // Scene Pipeline Management
-    // ========================================================================
-
-    // Attach scene pipelines only - compiles pipeline templates stored in tc_scene
-    // Called by attach_scene_full. Attaches render lifecycle participants.
-    void attach_scene(tc_scene_handle scene);
-
-    // Detach scene from rendering - destroys compiled pipelines
-    // Called when scene is unmounted. Detaches render lifecycle participants.
-    void detach_scene(tc_scene_handle scene);
-
-    // Get scene pipeline by name (searches in specific scene)
-    tc_pipeline_handle get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
-
-    // Get scene pipeline by name (searches all scenes)
-    tc_pipeline_handle get_scene_pipeline(const std::string& name) const;
-
-    // Pipeline targets (viewport names for each pipeline)
-    void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
-    const std::vector<std::string>& get_pipeline_targets(const std::string& pipeline_name) const;
-
-    // Get all pipeline names for a scene
-    std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
-
-    // Clear all pipelines for a scene (called at render detach time)
-    // Detaches render lifecycle participants before destroying pipelines.
-    void clear_scene_pipelines(tc_scene_handle scene);
-
-    // Clear all scene pipelines
-    void clear_all_scene_pipelines();
-
-    // ========================================================================
-    // Managed Render Target Management
-    // ========================================================================
-
-    // Register a render target managed by RenderingManager.
-    // The manager will track it for rendering and scene-detach cleanup.
-    void register_managed_render_target(tc_render_target_handle rt);
-
-    // Unregister a render target managed by RenderingManager.
-    void unregister_managed_render_target(tc_render_target_handle rt);
-
-    // Restore the scene's declarative render targets without creating host
-    // displays or viewports. Headless hosts (for example OpenXR) use this to
-    // preserve render-target dependency graphs from the authored scene.
-    bool attach_scene_render_targets(tc_scene_handle scene);
-
-    // Get all render targets managed by RenderingManager.
-    const std::vector<tc_render_target_handle>& managed_render_targets() const {
-        return topology_.managed_render_targets();
-    }
-
-    // ========================================================================
-    // Shutdown
-    // ========================================================================
-
-    // Cleanup all resources
-    void shutdown();
-
-    // ========================================================================
-    // Low-level Presentation (for RenderingController)
-    // ========================================================================
-
-    // Blit viewports to single display
-    void present_display(tc_display_handle display);
-
-private:
-    void render_planned_offscreen(
-        tc_display_handle only_display,
-        tc_render_target_handle requested_target = TC_RENDER_TARGET_HANDLE_INVALID);
-
-    // Render single viewport to its output FBO
-    void render_viewport_offscreen(tc_viewport_handle viewport);
-
-public:
-    // Render a single managed render target to its output FBO
-    void render_render_target_offscreen(tc_render_target_handle rt);
-
-    // Render a managed target together with every render-target dependency
-    // declared through its pipeline parameters.
-    void render_render_target_tree_offscreen(tc_render_target_handle rt);
-
-private:
-
-    // Sync dynamic-resolution render targets: update width/height from attached viewport pixel_rect
-    void sync_viewport_resolutions();
-
-    // Render scene pipeline to viewport output FBOs
-    void render_scene_pipeline_offscreen(
-        tc_scene_handle scene,
-        tc_pipeline_handle pipeline
-    );
-
-    bool build_render_target_contexts(
-        tc_render_target_handle rt,
-        const std::string& base_context_name,
-        tc_entity_handle internal_entities,
-        int render_width,
-        int render_height,
-        std::unordered_map<std::string, RenderTargetContext>& contexts,
-        std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context,
-        std::string& default_context_name
-    );
-
-    std::vector<FrameGraphCaptureRequest*> prepare_render_execution(
-        const RenderExecutionInfo& execution
-    );
-    void finish_render_execution(
-        const RenderExecutionInfo& execution,
-        const std::vector<FrameGraphCaptureRequest*>& requests
-    );
-
-    // Collect lights from scene (simplified - returns empty for now)
-    std::vector<Light> collect_lights(tc_scene_handle scene);
-
-    // Apply scene pipelines after viewports are created
-    bool apply_scene_pipelines(
-        tc_scene_handle scene,
-        const std::vector<tc_viewport_handle>& viewports
-    );
-
-};
+        // Get scene pipeline by name (searches in specific scene)
+        tc_pipeline_handle get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
+
+        // Get scene pipeline by name (searches all scenes)
+        tc_pipeline_handle get_scene_pipeline(const std::string& name) const;
+
+        // Pipeline targets (viewport names for each pipeline)
+        void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
+        const std::vector<std::string>& get_pipeline_targets(const std::string& pipeline_name) const;
+
+        // Get all pipeline names for a scene
+        std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
+
+        // Clear all pipelines for a scene (called at render detach time)
+        // Detaches render lifecycle participants before destroying pipelines.
+        void clear_scene_pipelines(tc_scene_handle scene);
+
+        // Clear all scene pipelines
+        void clear_all_scene_pipelines();
+
+        // ========================================================================
+        // Managed Render Target Management
+        // ========================================================================
+
+        // Register a render target managed by RenderingManager.
+        // The manager will track it for rendering and scene-detach cleanup.
+        void register_managed_render_target(tc_render_target_handle rt);
+
+        // Unregister a render target managed by RenderingManager.
+        void unregister_managed_render_target(tc_render_target_handle rt);
+
+        // Restore the scene's declarative render targets without creating host
+        // displays or viewports. Headless hosts (for example OpenXR) use this to
+        // preserve render-target dependency graphs from the authored scene.
+        bool attach_scene_render_targets(tc_scene_handle scene);
+
+        // Get all render targets managed by RenderingManager.
+        const std::vector<tc_render_target_handle>& managed_render_targets() const {
+            return topology_.managed_render_targets();
+        }
+
+        // ========================================================================
+        // Shutdown
+        // ========================================================================
+
+        // Cleanup all resources
+        void shutdown();
+
+        // ========================================================================
+        // Low-level Presentation (for RenderingController)
+        // ========================================================================
+
+        // Blit viewports to single display
+        void present_display(tc_display_handle display);
+
+    private:
+        void render_planned_offscreen(tc_display_handle only_display,
+                                      tc_render_target_handle requested_target = TC_RENDER_TARGET_HANDLE_INVALID);
+
+        // Render single viewport to its output FBO
+        void render_viewport_offscreen(tc_viewport_handle viewport);
+
+    public:
+        // Render a single managed render target to its output FBO
+        void render_render_target_offscreen(tc_render_target_handle rt);
+
+        // Render a managed target together with every render-target dependency
+        // declared through its pipeline parameters.
+        void render_render_target_tree_offscreen(tc_render_target_handle rt);
+
+    private:
+        // Sync dynamic-resolution render targets: update width/height from attached viewport pixel_rect
+        void sync_viewport_resolutions();
+
+        // Render scene pipeline to viewport output FBOs
+        void render_scene_pipeline_offscreen(tc_scene_handle scene, tc_pipeline_handle pipeline);
+
+        bool
+        build_render_target_contexts(tc_render_target_handle rt,
+                                     const std::string& base_context_name,
+                                     tc_entity_handle internal_entities,
+                                     int render_width,
+                                     int render_height,
+                                     std::unordered_map<std::string, RenderTargetContext>& contexts,
+                                     std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context,
+                                     std::string& default_context_name);
+
+        std::vector<FrameGraphCaptureRequest*> prepare_render_execution(const RenderExecutionInfo& execution);
+        void finish_render_execution(const RenderExecutionInfo& execution,
+                                     const std::vector<FrameGraphCaptureRequest*>& requests);
+
+        // Collect lights from scene (simplified - returns empty for now)
+        std::vector<Light> collect_lights(tc_scene_handle scene);
+
+        // Apply scene pipelines after viewports are created
+        bool apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports);
+    };
 
 } // namespace termin

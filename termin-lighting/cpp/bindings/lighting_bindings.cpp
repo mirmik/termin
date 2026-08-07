@@ -1,15 +1,14 @@
 #include <nanobind/nanobind.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/optional.h>
 #include <nanobind/operators.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/string.h>
 
-#include <termin/lighting/lighting.hpp>
-#include <termin/geom/vec3.hpp>
 #include <termin/bindings/entity_helpers.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/lighting/lighting.hpp>
 
 namespace nb = nanobind;
 using namespace termin;
-
 
 NB_MODULE(_lighting_native, m) {
     m.doc() = "Native C++ lighting module for termin";
@@ -30,23 +29,29 @@ NB_MODULE(_lighting_native, m) {
         .def_ro_static("METHOD_HARD", &ShadowSettings::METHOD_HARD)
         .def_ro_static("METHOD_PCF", &ShadowSettings::METHOD_PCF)
         .def_ro_static("METHOD_POISSON", &ShadowSettings::METHOD_POISSON)
-        .def("serialize", [](const ShadowSettings& s) {
-            nb::dict d;
-            d["method"] = s.method;
-            d["softness"] = s.softness;
-            d["bias"] = s.bias;
-            return d;
-        })
-        .def("load_from_data", [](ShadowSettings& s, nb::dict data) {
-            if (data.contains("method")) s.method = nb::cast<int>(data["method"]);
-            if (data.contains("softness")) s.softness = nb::cast<double>(data["softness"]);
-            if (data.contains("bias")) s.bias = nb::cast<double>(data["bias"]);
-        }, nb::arg("data"))
+        .def("serialize",
+             [](const ShadowSettings& s) {
+                 nb::dict d;
+                 d["method"] = s.method;
+                 d["softness"] = s.softness;
+                 d["bias"] = s.bias;
+                 return d;
+             })
+        .def(
+            "load_from_data",
+            [](ShadowSettings& s, nb::dict data) {
+                if (data.contains("method"))
+                    s.method = nb::cast<int>(data["method"]);
+                if (data.contains("softness"))
+                    s.softness = nb::cast<double>(data["softness"]);
+                if (data.contains("bias"))
+                    s.bias = nb::cast<double>(data["bias"]);
+            },
+            nb::arg("data"))
         .def("__repr__", [](const ShadowSettings& s) {
             const char* method_names[] = {"Hard", "PCF 5x5", "Poisson"};
             const char* method_name = (s.method >= 0 && s.method <= 2) ? method_names[s.method] : "Unknown";
-            return "ShadowSettings(method=" + std::string(method_name) +
-                   ", softness=" + std::to_string(s.softness) +
+            return "ShadowSettings(method=" + std::string(method_name) + ", softness=" + std::to_string(s.softness) +
                    ", bias=" + std::to_string(s.bias) + ")";
         });
 
@@ -60,19 +65,21 @@ NB_MODULE(_lighting_native, m) {
         .def_rw("constant", &AttenuationCoefficients::constant)
         .def_rw("linear", &AttenuationCoefficients::linear)
         .def_rw("quadratic", &AttenuationCoefficients::quadratic)
-        .def("evaluate", &AttenuationCoefficients::evaluate,
+        .def("evaluate",
+             &AttenuationCoefficients::evaluate,
              nb::arg("distance"),
              "Compute attenuation weight for a given distance")
-        .def_static("match_range", &AttenuationCoefficients::match_range,
+        .def_static("match_range",
+                    &AttenuationCoefficients::match_range,
                     nb::arg("falloff_range"),
                     nb::arg("cutoff") = 0.01,
                     "Create coefficients that attenuate to cutoff at range")
-        .def_static("inverse_square", &AttenuationCoefficients::inverse_square,
+        .def_static("inverse_square",
+                    &AttenuationCoefficients::inverse_square,
                     "Physical inverse-square attenuation: w(d) = 1/d^2")
         .def("__repr__", [](const AttenuationCoefficients& a) {
             return "AttenuationCoefficients(constant=" + std::to_string(a.constant) +
-                   ", linear=" + std::to_string(a.linear) +
-                   ", quadratic=" + std::to_string(a.quadratic) + ")";
+                   ", linear=" + std::to_string(a.linear) + ", quadratic=" + std::to_string(a.quadratic) + ")";
         });
 
     // LightType enum
@@ -82,15 +89,19 @@ NB_MODULE(_lighting_native, m) {
         .value("SPOT", LightType::Spot);
 
     // Helper to create LightType from string or int
-    m.def("light_type_from_value", [](nb::object value) -> LightType {
-        if (nb::isinstance<nb::str>(value)) {
-            return light_type_from_string(nb::cast<std::string>(value));
-        }
-        if (nb::isinstance<LightType>(value)) {
-            return nb::cast<LightType>(value);
-        }
-        return static_cast<LightType>(nb::cast<int>(value));
-    }, nb::arg("value"), "Create LightType from string, int, or LightType");
+    m.def(
+        "light_type_from_value",
+        [](nb::object value) -> LightType {
+            if (nb::isinstance<nb::str>(value)) {
+                return light_type_from_string(nb::cast<std::string>(value));
+            }
+            if (nb::isinstance<LightType>(value)) {
+                return nb::cast<LightType>(value);
+            }
+            return static_cast<LightType>(nb::cast<int>(value));
+        },
+        nb::arg("value"),
+        "Create LightType from string, int, or LightType");
 
     // LightShadowParams
     nb::class_<LightShadowParams>(m, "LightShadowParams")
@@ -112,134 +123,148 @@ NB_MODULE(_lighting_native, m) {
         .def_rw("blend_distance", &LightShadowParams::blend_distance)
         .def("__repr__", [](const LightShadowParams& s) {
             return "LightShadowParams(enabled=" + std::string(s.enabled ? "True" : "False") +
-                   ", bias=" + std::to_string(s.bias) +
-                   ", cascades=" + std::to_string(s.cascade_count) + ")";
+                   ", bias=" + std::to_string(s.bias) + ", cascades=" + std::to_string(s.cascade_count) + ")";
         });
 
     // LightSample
     nb::class_<LightSample>(m, "LightSample")
         .def(nb::init<>())
-        .def_prop_rw("L",
-            [](const LightSample& s) { return s.L; },
-            [](LightSample& s, const Vec3& v) { s.L = v; })
+        .def_prop_rw(
+            "L", [](const LightSample& s) { return s.L; }, [](LightSample& s, const Vec3& v) { s.L = v; })
         .def_rw("distance", &LightSample::distance)
         .def_rw("attenuation", &LightSample::attenuation)
-        .def_prop_rw("radiance",
+        .def_prop_rw(
+            "radiance",
             [](const LightSample& s) { return s.radiance; },
             [](LightSample& s, const Vec3& v) { s.radiance = v; });
 
     // Light
     nb::class_<Light>(m, "Light")
         .def(nb::init<>())
-        .def("__init__", [](Light* self, LightType type, std::optional<Vec3> color, double intensity,
-                         std::optional<Vec3> direction, std::optional<Vec3> position,
-                         nb::object range, double inner_angle, double outer_angle,
-                         nb::object attenuation, nb::object shadows, const std::string& name) {
-            new (self) Light();
-            self->type = type;
-            self->color = color.value_or(Vec3(1.0, 1.0, 1.0));
-            self->intensity = intensity;
-            self->direction = direction.value_or(Vec3(0.0, 1.0, 0.0)).normalized();
-            self->position = position.value_or(Vec3(0.0, 0.0, 0.0));
-            if (!range.is_none()) self->range = nb::cast<double>(range);
-            self->inner_angle = inner_angle;
-            self->outer_angle = outer_angle;
-            if (!attenuation.is_none()) {
-                self->attenuation = nb::cast<AttenuationCoefficients>(attenuation);
-            }
-            if (!shadows.is_none()) {
-                self->shadows = nb::cast<LightShadowParams>(shadows);
-            }
-            self->name = name;
-        },
-             nb::arg("type") = LightType::Directional,
-             nb::arg("color").none() = nb::none(),
-             nb::arg("intensity") = 1.0,
-             nb::arg("direction").none() = nb::none(),
-             nb::arg("position").none() = nb::none(),
-             nb::arg("range") = nb::none(),
-             nb::arg("inner_angle") = 15.0 * M_PI / 180.0,
-             nb::arg("outer_angle") = 30.0 * M_PI / 180.0,
-             nb::arg("attenuation") = nb::none(),
-             nb::arg("shadows") = nb::none(),
-             nb::arg("name") = "")
+        .def(
+            "__init__",
+            [](Light* self,
+               LightType type,
+               std::optional<Vec3> color,
+               double intensity,
+               std::optional<Vec3> direction,
+               std::optional<Vec3> position,
+               nb::object range,
+               double inner_angle,
+               double outer_angle,
+               nb::object attenuation,
+               nb::object shadows,
+               const std::string& name) {
+                new (self) Light();
+                self->type = type;
+                self->color = color.value_or(Vec3(1.0, 1.0, 1.0));
+                self->intensity = intensity;
+                self->direction = direction.value_or(Vec3(0.0, 1.0, 0.0)).normalized();
+                self->position = position.value_or(Vec3(0.0, 0.0, 0.0));
+                if (!range.is_none())
+                    self->range = nb::cast<double>(range);
+                self->inner_angle = inner_angle;
+                self->outer_angle = outer_angle;
+                if (!attenuation.is_none()) {
+                    self->attenuation = nb::cast<AttenuationCoefficients>(attenuation);
+                }
+                if (!shadows.is_none()) {
+                    self->shadows = nb::cast<LightShadowParams>(shadows);
+                }
+                self->name = name;
+            },
+            nb::arg("type") = LightType::Directional,
+            nb::arg("color").none() = nb::none(),
+            nb::arg("intensity") = 1.0,
+            nb::arg("direction").none() = nb::none(),
+            nb::arg("position").none() = nb::none(),
+            nb::arg("range") = nb::none(),
+            nb::arg("inner_angle") = 15.0 * M_PI / 180.0,
+            nb::arg("outer_angle") = 30.0 * M_PI / 180.0,
+            nb::arg("attenuation") = nb::none(),
+            nb::arg("shadows") = nb::none(),
+            nb::arg("name") = "")
         .def_rw("type", &Light::type)
-        .def_prop_rw("color",
-            [](const Light& l) { return l.color; },
-            [](Light& l, const Vec3& v) { l.color = v; })
+        .def_prop_rw(
+            "color", [](const Light& l) { return l.color; }, [](Light& l, const Vec3& v) { l.color = v; })
         .def_rw("intensity", &Light::intensity)
-        .def_prop_rw("direction",
+        .def_prop_rw(
+            "direction",
             [](const Light& l) { return l.direction; },
             [](Light& l, const Vec3& v) { l.direction = v.normalized(); })
-        .def_prop_rw("position",
-            [](const Light& l) { return l.position; },
-            [](Light& l, const Vec3& v) { l.position = v; })
-        .def_prop_rw("range",
+        .def_prop_rw(
+            "position", [](const Light& l) { return l.position; }, [](Light& l, const Vec3& v) { l.position = v; })
+        .def_prop_rw(
+            "range",
             [](const Light& l) -> nb::object {
-                if (l.range.has_value()) return nb::float_(l.range.value());
+                if (l.range.has_value())
+                    return nb::float_(l.range.value());
                 return nb::none();
             },
             [](Light& l, nb::object v) {
-                if (v.is_none()) l.range = std::nullopt;
-                else l.range = nb::cast<double>(v);
+                if (v.is_none())
+                    l.range = std::nullopt;
+                else
+                    l.range = nb::cast<double>(v);
             })
         .def_rw("inner_angle", &Light::inner_angle)
         .def_rw("outer_angle", &Light::outer_angle)
         .def_rw("attenuation", &Light::attenuation)
         .def_rw("shadows", &Light::shadows)
         .def_rw("name", &Light::name)
-        .def_prop_ro("intensity_rgb", [](const Light& l) {
-            return l.intensity_rgb();
-        })
-        .def("sample", [](const Light& l, const Vec3& point) {
-            return l.sample(point);
-        }, nb::arg("point"), "Evaluate light contribution at a surface point")
-        .def("to_uniform_dict", [](const Light& l) {
-            nb::dict d;
-            d["type"] = light_type_to_string(l.type);
-            nb::list color_list;
-            color_list.append(l.color.x);
-            color_list.append(l.color.y);
-            color_list.append(l.color.z);
-            d["color"] = color_list;
-            d["intensity"] = l.intensity;
-            Vec3 dir = l.direction.normalized();
-            nb::list dir_list;
-            dir_list.append(dir.x);
-            dir_list.append(dir.y);
-            dir_list.append(dir.z);
-            d["direction"] = dir_list;
-            nb::list pos_list;
-            pos_list.append(l.position.x);
-            pos_list.append(l.position.y);
-            pos_list.append(l.position.z);
-            d["position"] = pos_list;
-            d["range"] = l.range.has_value() ? nb::cast(l.range.value()) : nb::none();
-            d["inner_angle"] = l.inner_angle;
-            d["outer_angle"] = l.outer_angle;
-            nb::dict atten;
-            atten["constant"] = l.attenuation.constant;
-            atten["linear"] = l.attenuation.linear;
-            atten["quadratic"] = l.attenuation.quadratic;
-            d["attenuation"] = atten;
-            nb::dict shad;
-            shad["enabled"] = l.shadows.enabled;
-            shad["bias"] = l.shadows.bias;
-            shad["normal_bias"] = l.shadows.normal_bias;
-            shad["map_resolution"] = l.shadows.map_resolution;
-            shad["cascade_count"] = l.shadows.cascade_count;
-            shad["max_distance"] = l.shadows.max_distance;
-            shad["split_lambda"] = l.shadows.split_lambda;
-            shad["cascade_blend"] = l.shadows.cascade_blend;
-            shad["blend_distance"] = l.shadows.blend_distance;
-            d["shadows"] = shad;
-            d["name"] = l.name;
-            return d;
-        }, "Pack parameters into dict for uniform uploads")
+        .def_prop_ro("intensity_rgb", [](const Light& l) { return l.intensity_rgb(); })
+        .def(
+            "sample",
+            [](const Light& l, const Vec3& point) { return l.sample(point); },
+            nb::arg("point"),
+            "Evaluate light contribution at a surface point")
+        .def(
+            "to_uniform_dict",
+            [](const Light& l) {
+                nb::dict d;
+                d["type"] = light_type_to_string(l.type);
+                nb::list color_list;
+                color_list.append(l.color.x);
+                color_list.append(l.color.y);
+                color_list.append(l.color.z);
+                d["color"] = color_list;
+                d["intensity"] = l.intensity;
+                Vec3 dir = l.direction.normalized();
+                nb::list dir_list;
+                dir_list.append(dir.x);
+                dir_list.append(dir.y);
+                dir_list.append(dir.z);
+                d["direction"] = dir_list;
+                nb::list pos_list;
+                pos_list.append(l.position.x);
+                pos_list.append(l.position.y);
+                pos_list.append(l.position.z);
+                d["position"] = pos_list;
+                d["range"] = l.range.has_value() ? nb::cast(l.range.value()) : nb::none();
+                d["inner_angle"] = l.inner_angle;
+                d["outer_angle"] = l.outer_angle;
+                nb::dict atten;
+                atten["constant"] = l.attenuation.constant;
+                atten["linear"] = l.attenuation.linear;
+                atten["quadratic"] = l.attenuation.quadratic;
+                d["attenuation"] = atten;
+                nb::dict shad;
+                shad["enabled"] = l.shadows.enabled;
+                shad["bias"] = l.shadows.bias;
+                shad["normal_bias"] = l.shadows.normal_bias;
+                shad["map_resolution"] = l.shadows.map_resolution;
+                shad["cascade_count"] = l.shadows.cascade_count;
+                shad["max_distance"] = l.shadows.max_distance;
+                shad["split_lambda"] = l.shadows.split_lambda;
+                shad["cascade_blend"] = l.shadows.cascade_blend;
+                shad["blend_distance"] = l.shadows.blend_distance;
+                d["shadows"] = shad;
+                d["name"] = l.name;
+                return d;
+            },
+            "Pack parameters into dict for uniform uploads")
         .def("__repr__", [](const Light& l) {
             return "Light(type=" + std::string(light_type_to_string(l.type)) +
-                   ", intensity=" + std::to_string(l.intensity) +
-                   ", name='" + l.name + "')";
+                   ", intensity=" + std::to_string(l.intensity) + ", name='" + l.name + "')";
         });
-
 }

@@ -1,12 +1,12 @@
 // tc_viewport_input_manager.c - Per-viewport input manager implementation
 #include "render/tc_viewport_input_manager.h"
-#include "render/tc_viewport.h"
-#include "core/tc_scene.h"
 #include "core/tc_component.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_input_component.h"
 #include "core/tc_input_entity_pool.h"
 #include "core/tc_input_scene.h"
+#include "core/tc_scene.h"
+#include "render/tc_viewport.h"
 #include "tc_input_event.h"
 #include <tcbase/tc_log.h>
 
@@ -76,12 +76,9 @@ static bool dispatch_focus_lost_cb(tc_component* c, void* user_data) {
 // Internal Entities Dispatch
 // ============================================================================
 
-static void dispatch_to_internal_entities(
-    tc_viewport_handle viewport,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
-    if (!tc_viewport_has_internal_entities(viewport)) return;
+static void dispatch_to_internal_entities(tc_viewport_handle viewport, tc_component_iter_fn callback, void* user_data) {
+    if (!tc_viewport_has_internal_entities(viewport))
+        return;
 
     tc_entity_handle ent = tc_viewport_get_internal_entities(viewport);
     tc_entity_pool* pool = tc_entity_pool_registry_get(ent.pool);
@@ -95,20 +92,13 @@ static void dispatch_to_internal_entities(
 // Scene Dispatch
 // ============================================================================
 
-static void dispatch_to_scene(
-    tc_viewport_handle viewport,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
+static void dispatch_to_scene(tc_viewport_handle viewport, tc_component_iter_fn callback, void* user_data) {
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    if (!tc_scene_handle_valid(scene)) return;
+    if (!tc_scene_handle_valid(scene))
+        return;
 
     tc_scene_foreach_input_handler(
-        scene,
-        callback,
-        user_data,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED
-    );
+        scene, callback, user_data, TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
 // ============================================================================
@@ -119,9 +109,7 @@ static inline tc_viewport_input_manager* vim_from(tc_input_manager* self) {
     return self ? (tc_viewport_input_manager*)self->userdata : NULL;
 }
 
-static const tc_input_platform_services* vim_platform_services(
-    tc_viewport_input_manager* m
-) {
+static const tc_input_platform_services* vim_platform_services(tc_viewport_input_manager* m) {
     return &m->base.platform_services;
 }
 
@@ -133,34 +121,28 @@ typedef struct tc_viewport_pointer_state {
     struct tc_viewport_pointer_state* next;
 } tc_viewport_pointer_state;
 
-static tc_viewport_pointer_state* vim_find_pointer(
-    tc_viewport_input_manager* m,
-    uint64_t pointer_id,
-    int device,
-    tc_viewport_pointer_state** previous
-) {
+static tc_viewport_pointer_state*
+vim_find_pointer(tc_viewport_input_manager* m, uint64_t pointer_id, int device, tc_viewport_pointer_state** previous) {
     tc_viewport_pointer_state* prev = NULL;
-    tc_viewport_pointer_state* current =
-        (tc_viewport_pointer_state*)m->pointer_states;
+    tc_viewport_pointer_state* current = (tc_viewport_pointer_state*)m->pointer_states;
     while (current) {
         if (current->pointer_id == pointer_id && current->device == device) {
-            if (previous) *previous = prev;
+            if (previous)
+                *previous = prev;
             return current;
         }
         prev = current;
         current = current->next;
     }
-    if (previous) *previous = NULL;
+    if (previous)
+        *previous = NULL;
     return NULL;
 }
 
-static tc_viewport_pointer_state* vim_ensure_pointer(
-    tc_viewport_input_manager* m,
-    uint64_t pointer_id,
-    int device
-) {
+static tc_viewport_pointer_state* vim_ensure_pointer(tc_viewport_input_manager* m, uint64_t pointer_id, int device) {
     tc_viewport_pointer_state* state = vim_find_pointer(m, pointer_id, device, NULL);
-    if (state) return state;
+    if (state)
+        return state;
     state = (tc_viewport_pointer_state*)calloc(1, sizeof(tc_viewport_pointer_state));
     if (!state) {
         tc_log(TC_LOG_ERROR, "[tc_viewport_input_manager] pointer state allocation failed");
@@ -173,15 +155,11 @@ static tc_viewport_pointer_state* vim_ensure_pointer(
     return state;
 }
 
-static void vim_remove_pointer(
-    tc_viewport_input_manager* m,
-    uint64_t pointer_id,
-    int device
-) {
+static void vim_remove_pointer(tc_viewport_input_manager* m, uint64_t pointer_id, int device) {
     tc_viewport_pointer_state* previous = NULL;
-    tc_viewport_pointer_state* state =
-        vim_find_pointer(m, pointer_id, device, &previous);
-    if (!state) return;
+    tc_viewport_pointer_state* state = vim_find_pointer(m, pointer_id, device, &previous);
+    if (!state)
+        return;
     if (previous) {
         previous->next = state->next;
     } else {
@@ -194,10 +172,11 @@ static void vim_remove_pointer(
 // VTable Callbacks
 // ============================================================================
 
-static void vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phase,
-                           double x, double y, float pressure) {
+static void
+vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phase, double x, double y, float pressure) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
     tc_viewport_pointer_state* state = vim_find_pointer(m, pointer_id, device, NULL);
     double dx = 0.0;
@@ -216,8 +195,7 @@ static void vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int devi
 
     tc_pointer_event event;
     tc_pointer_event_init_source(
-        &event, m->viewport, pointer_id, device, phase, x, y, dx, dy, pressure,
-        TC_INPUT_SOURCE_RUNTIME);
+        &event, m->viewport, pointer_id, device, phase, x, y, dx, dy, pressure, TC_INPUT_SOURCE_RUNTIME);
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_pointer_cb, &event);
@@ -230,33 +208,27 @@ static void vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int devi
     }
 }
 
-static void vim_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
-                                uint32_t click_count) {
+static void vim_on_mouse_button(tc_input_manager* self, int button, int action, int mods, uint32_t click_count) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
     tc_mouse_button_event event;
     const tc_mouse_button_event_init_info info = {
-        m->viewport,
-        m->last_cursor_x,
-        m->last_cursor_y,
-        button,
-        action,
-        mods,
-        click_count,
-        TC_INPUT_SOURCE_RUNTIME
-    };
+        m->viewport, m->last_cursor_x, m->last_cursor_y, button, action, mods, click_count, TC_INPUT_SOURCE_RUNTIME};
     tc_mouse_button_event_init_source(&event, &info);
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_button_cb, &event);
-    if (event.handled) return;
+    if (event.handled)
+        return;
     dispatch_to_scene(m->viewport, dispatch_mouse_button_cb, &event);
 }
 
 static void vim_on_mouse_move(tc_input_manager* self, double x, double y) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
     double dx = 0.0, dy = 0.0;
     if (m->has_cursor) {
@@ -272,42 +244,40 @@ static void vim_on_mouse_move(tc_input_manager* self, double x, double y) {
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_move_cb, &event);
-    if (event.handled) return;
+    if (event.handled)
+        return;
     dispatch_to_scene(m->viewport, dispatch_mouse_move_cb, &event);
 }
 
 static void vim_on_scroll(tc_input_manager* self, double xoffset, double yoffset, int mods) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
     tc_scroll_event event;
     const tc_scroll_event_init_info info = {
-        m->viewport,
-        m->last_cursor_x,
-        m->last_cursor_y,
-        xoffset,
-        yoffset,
-        mods,
-        TC_INPUT_SOURCE_RUNTIME
-    };
+        m->viewport, m->last_cursor_x, m->last_cursor_y, xoffset, yoffset, mods, TC_INPUT_SOURCE_RUNTIME};
     tc_scroll_event_init_source(&event, &info);
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_scroll_cb, &event);
-    if (event.handled) return;
+    if (event.handled)
+        return;
     dispatch_to_scene(m->viewport, dispatch_scroll_cb, &event);
 }
 
 static void vim_on_key(tc_input_manager* self, int key, int scancode, int action, int mods) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
     tc_key_event event;
     tc_key_event_init_source(&event, m->viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_key_cb, &event);
-    if (event.handled) return;
+    if (event.handled)
+        return;
     dispatch_to_scene(m->viewport, dispatch_key_cb, &event);
 }
 
@@ -340,11 +310,11 @@ static void vim_on_char(tc_input_manager* self, uint32_t codepoint) {
 
 static void vim_on_text(tc_input_manager* self, const char* text_utf8) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport) || !text_utf8 || !text_utf8[0]) return;
+    if (!m || !tc_viewport_alive(m->viewport) || !text_utf8 || !text_utf8[0])
+        return;
 
     tc_text_event event;
-    tc_text_event_init_source(
-        &event, m->viewport, text_utf8, TC_INPUT_SOURCE_RUNTIME);
+    tc_text_event_init_source(&event, m->viewport, text_utf8, TC_INPUT_SOURCE_RUNTIME);
     event.platform_services = vim_platform_services(m);
     dispatch_to_internal_entities(m->viewport, dispatch_text_cb, &event);
     if (!event.handled) {
@@ -354,26 +324,18 @@ static void vim_on_text(tc_input_manager* self, const char* text_utf8) {
 
 static void vim_on_focus_lost(tc_input_manager* self) {
     tc_viewport_input_manager* m = vim_from(self);
-    if (!m || !tc_viewport_alive(m->viewport)) return;
+    if (!m || !tc_viewport_alive(m->viewport))
+        return;
 
-    tc_viewport_pointer_state* state =
-        (tc_viewport_pointer_state*)m->pointer_states;
+    tc_viewport_pointer_state* state = (tc_viewport_pointer_state*)m->pointer_states;
     while (state) {
         tc_viewport_pointer_state* next = state->next;
-        vim_on_pointer(
-            self,
-            state->pointer_id,
-            state->device,
-            TC_POINTER_CANCEL,
-            state->x,
-            state->y,
-            0.0f);
+        vim_on_pointer(self, state->pointer_id, state->device, TC_POINTER_CANCEL, state->x, state->y, 0.0f);
         state = next;
     }
 
     tc_input_focus_event event;
-    tc_input_focus_event_init_source(
-        &event, m->viewport, TC_INPUT_SOURCE_RUNTIME);
+    tc_input_focus_event_init_source(&event, m->viewport, TC_INPUT_SOURCE_RUNTIME);
     event.platform_services = vim_platform_services(m);
     dispatch_to_internal_entities(m->viewport, dispatch_focus_lost_cb, &event);
     dispatch_to_scene(m->viewport, dispatch_focus_lost_cb, &event);
@@ -406,7 +368,8 @@ static const tc_input_manager_vtable g_vim_vtable = {
 
 tc_viewport_input_manager* tc_viewport_input_manager_new(tc_viewport_handle viewport) {
     tc_viewport_input_manager* m = (tc_viewport_input_manager*)calloc(1, sizeof(tc_viewport_input_manager));
-    if (!m) return NULL;
+    if (!m)
+        return NULL;
 
     tc_input_manager_init(&m->base, &g_vim_vtable);
     m->base.userdata = m;
@@ -423,7 +386,8 @@ tc_viewport_input_manager* tc_viewport_input_manager_new(tc_viewport_handle view
 }
 
 void tc_viewport_input_manager_free(tc_viewport_input_manager* m) {
-    if (!m) return;
+    if (!m)
+        return;
 
     vim_on_focus_lost(&m->base);
 
@@ -434,8 +398,7 @@ void tc_viewport_input_manager_free(tc_viewport_input_manager* m) {
         }
     }
 
-    tc_viewport_pointer_state* state =
-        (tc_viewport_pointer_state*)m->pointer_states;
+    tc_viewport_pointer_state* state = (tc_viewport_pointer_state*)m->pointer_states;
     while (state) {
         tc_viewport_pointer_state* next = state->next;
         free(state);

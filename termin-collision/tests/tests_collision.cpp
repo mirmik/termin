@@ -21,15 +21,13 @@ using termin::Vec3;
 
 // ==================== BVH tests ====================
 
-TEST_CASE("BVH empty")
-{
+TEST_CASE("BVH empty") {
     BVH bvh;
     CHECK(bvh.empty());
     CHECK_EQ(bvh.node_count(), 0u);
 }
 
-TEST_CASE("BVH insert single")
-{
+TEST_CASE("BVH insert single") {
     BVH bvh;
     SphereCollider sphere(1.0); // at origin
 
@@ -40,8 +38,7 @@ TEST_CASE("BVH insert single")
     CHECK(bvh.validate());
 }
 
-TEST_CASE("BVH insert multiple")
-{
+TEST_CASE("BVH insert multiple") {
     BVH bvh;
     SphereCollider s1(1.0); // at origin
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -55,8 +52,7 @@ TEST_CASE("BVH insert multiple")
     CHECK(bvh.validate());
 }
 
-TEST_CASE("BVH remove")
-{
+TEST_CASE("BVH remove") {
     BVH bvh;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -73,8 +69,7 @@ TEST_CASE("BVH remove")
     CHECK(bvh.empty());
 }
 
-TEST_CASE("BVH update no change")
-{
+TEST_CASE("BVH update no change") {
     BVH bvh;
     SphereCollider sphere(1.0);
     bvh.insert(&sphere, sphere.aabb());
@@ -84,22 +79,19 @@ TEST_CASE("BVH update no change")
     CHECK(!changed);
 }
 
-TEST_CASE("BVH update with movement")
-{
+TEST_CASE("BVH update with movement") {
     BVH bvh;
     SphereCollider sphere(1.0);
     bvh.insert(&sphere, sphere.aabb());
 
     // Large movement outside fattened AABB
-    sphere =
-        SphereCollider(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
+    sphere = SphereCollider(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
     bool changed = bvh.update(&sphere, sphere.aabb());
     CHECK(changed);
     CHECK(bvh.validate());
 }
 
-TEST_CASE("BVH query_aabb")
-{
+TEST_CASE("BVH query_aabb") {
     BVH bvh;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -118,8 +110,7 @@ TEST_CASE("BVH query_aabb")
     CHECK_EQ(result[0], &s1);
 }
 
-TEST_CASE("BVH query_aabb multiple")
-{
+TEST_CASE("BVH query_aabb multiple") {
     BVH bvh;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));
@@ -136,8 +127,7 @@ TEST_CASE("BVH query_aabb multiple")
     CHECK_EQ(result.size(), 2u);
 }
 
-TEST_CASE("BVH query_ray")
-{
+TEST_CASE("BVH query_ray") {
     BVH bvh;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -150,28 +140,23 @@ TEST_CASE("BVH query_ray")
     Ray3 ray(Vec3(-10, 0, 0), Vec3(1, 0, 0));
 
     std::vector<Collider*> result;
-    bvh.query_ray(ray,
-                  [&](Collider* c, double, double) { result.push_back(c); });
+    bvh.query_ray(ray, [&](Collider* c, double, double) { result.push_back(c); });
 
     CHECK_EQ(result.size(), 2u); // s1 and s2 are on the ray path
 }
 
-TEST_CASE("BVH query_all_pairs")
-{
+TEST_CASE("BVH query_all_pairs") {
     CollisionWorld world;
     SphereCollider s1(2.0);
-    SphereCollider s2(
-        2.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0))); // Overlaps with s1
-    SphereCollider s3(
-        1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0))); // Far away
+    SphereCollider s2(2.0, GeneralPose3(Quat::identity(), Vec3(3, 0, 0)));  // Overlaps with s1
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0))); // Far away
 
     world.add(&s1);
     world.add(&s2);
     world.add(&s3);
 
     std::vector<std::pair<Collider*, Collider*>> pairs;
-    world.bvh().query_all_pairs([&](Collider* a, Collider* b)
-                                { pairs.push_back({a, b}); });
+    world.bvh().query_all_pairs([&](Collider* a, Collider* b) { pairs.push_back({a, b}); });
 
     // s1 and s2 should be a pair (overlapping AABBs)
     CHECK(pairs.size() >= 1u);
@@ -179,8 +164,7 @@ TEST_CASE("BVH query_all_pairs")
 
 // ==================== CollisionWorld tests ====================
 
-TEST_CASE("CollisionWorld empty")
-{
+TEST_CASE("CollisionWorld empty") {
     CollisionWorld world;
     CHECK_EQ(world.size(), 0u);
 
@@ -188,8 +172,7 @@ TEST_CASE("CollisionWorld empty")
     CHECK(manifolds.empty());
 }
 
-TEST_CASE("CollisionWorld add/remove")
-{
+TEST_CASE("CollisionWorld add/remove") {
     CollisionWorld world;
     SphereCollider sphere(1.0);
 
@@ -202,8 +185,7 @@ TEST_CASE("CollisionWorld add/remove")
     CHECK(!world.contains(&sphere));
 }
 
-TEST_CASE("CollisionWorld broad phase mode")
-{
+TEST_CASE("CollisionWorld broad phase mode") {
     CollisionWorld world;
 
     CHECK(world.broad_phase_mode() == BroadPhaseMode::BVH);
@@ -215,8 +197,7 @@ TEST_CASE("CollisionWorld broad phase mode")
     CHECK(world.broad_phase_mode() == BroadPhaseMode::BVH);
 }
 
-TEST_CASE("CollisionWorld detect_contacts no collision")
-{
+TEST_CASE("CollisionWorld detect_contacts no collision") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -228,12 +209,10 @@ TEST_CASE("CollisionWorld detect_contacts no collision")
     CHECK(manifolds.empty());
 }
 
-TEST_CASE("CollisionWorld detect_contacts with collision")
-{
+TEST_CASE("CollisionWorld detect_contacts with collision") {
     CollisionWorld world;
     SphereCollider s1(1.0);
-    SphereCollider s2(
-        1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0))); // Overlapping
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0))); // Overlapping
 
     world.add(&s1);
     world.add(&s2);
@@ -246,8 +225,7 @@ TEST_CASE("CollisionWorld detect_contacts with collision")
     CHECK(m.points[0].signed_gap < 0); // Negative = penetrating
 }
 
-TEST_CASE("CollisionWorld detect_contacts multiple")
-{
+TEST_CASE("CollisionWorld detect_contacts multiple") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
@@ -261,9 +239,7 @@ TEST_CASE("CollisionWorld detect_contacts multiple")
     CHECK_EQ(manifolds.size(), 2u); // s1-s2 and s1-s3
 }
 
-TEST_CASE(
-    "CollisionWorld naive broad phase detects contacts with current AABBs")
-{
+TEST_CASE("CollisionWorld naive broad phase detects contacts with current AABBs") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
@@ -286,8 +262,7 @@ TEST_CASE(
     CHECK_EQ(manifolds.size(), 1u);
 }
 
-TEST_CASE("CollisionWorld naive broad phase matches BVH broad phase")
-{
+TEST_CASE("CollisionWorld naive broad phase matches BVH broad phase") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
@@ -307,8 +282,7 @@ TEST_CASE("CollisionWorld naive broad phase matches BVH broad phase")
     CHECK_EQ(naive_manifolds.size(), bvh_manifolds.size());
 }
 
-TEST_CASE("CollisionWorld update_pose")
-{
+TEST_CASE("CollisionWorld update_pose") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -327,8 +301,7 @@ TEST_CASE("CollisionWorld update_pose")
     CHECK_EQ(manifolds.size(), 1u);
 }
 
-TEST_CASE("CollisionWorld query_aabb")
-{
+TEST_CASE("CollisionWorld query_aabb") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -341,8 +314,7 @@ TEST_CASE("CollisionWorld query_aabb")
     CHECK_EQ(result[0], &s1);
 }
 
-TEST_CASE("CollisionWorld raycast")
-{
+TEST_CASE("CollisionWorld raycast") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -360,8 +332,7 @@ TEST_CASE("CollisionWorld raycast")
     CHECK(hits[0].distance < hits[1].distance);
 }
 
-TEST_CASE("CollisionWorld raycast_closest")
-{
+TEST_CASE("CollisionWorld raycast_closest") {
     CollisionWorld world;
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(5, 0, 0)));
@@ -378,8 +349,7 @@ TEST_CASE("CollisionWorld raycast_closest")
              Approx(9.0).epsilon(1e-6)); // Ray starts at -10, hits at -1
 }
 
-TEST_CASE("CollisionWorld raycast miss")
-{
+TEST_CASE("CollisionWorld raycast miss") {
     CollisionWorld world;
     SphereCollider s1(1.0);
 
@@ -393,18 +363,15 @@ TEST_CASE("CollisionWorld raycast miss")
 
 // ==================== Mixed collider tests ====================
 
-TEST_CASE("CollisionWorld mixed colliders")
-{
+TEST_CASE("CollisionWorld mixed colliders") {
     CollisionWorld world;
     SphereCollider sphere(1.0);
     // Overlapping with sphere: box center at (1.2, 0, 0), half_size
     // (0.5,0.5,0.5) extends to 0.7 in x
-    BoxCollider box(Vec3(0.5, 0.5, 0.5),
-                    GeneralPose3(Quat::identity(), Vec3(1.2, 0, 0)));
+    BoxCollider box(Vec3(0.5, 0.5, 0.5), GeneralPose3(Quat::identity(), Vec3(1.2, 0, 0)));
     // Overlapping with sphere: capsule axis at y=1.2, radius 0.5 => surface at
     // y=0.7
-    CapsuleCollider capsule(
-        0.5, 0.5, GeneralPose3(Quat::identity(), Vec3(0, 1.2, 0)));
+    CapsuleCollider capsule(0.5, 0.5, GeneralPose3(Quat::identity(), Vec3(0, 1.2, 0)));
 
     world.add(&sphere);
     world.add(&box);
@@ -416,8 +383,7 @@ TEST_CASE("CollisionWorld mixed colliders")
 
 // ==================== AttachedCollider tests ====================
 
-TEST_CASE("AttachedCollider basic")
-{
+TEST_CASE("AttachedCollider basic") {
     // Create entity pool for test
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(16);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
@@ -441,8 +407,7 @@ TEST_CASE("AttachedCollider basic")
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider in CollisionWorld")
-{
+TEST_CASE("AttachedCollider in CollisionWorld") {
     // Create entity pool for test
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(16);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
@@ -483,8 +448,7 @@ TEST_CASE("AttachedCollider in CollisionWorld")
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider projects affine ancestry through lossy scale")
-{
+TEST_CASE("AttachedCollider projects affine ancestry through lossy scale") {
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(4);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
     tc_entity_id parent = tc_entity_pool_alloc(pool, "scaled_parent");
@@ -495,8 +459,7 @@ TEST_CASE("AttachedCollider projects affine ancestry through lossy scale")
     tc_entity_pool_set_local_scale(pool, parent, parent_scale);
     const double sin_eighth_turn = std::sin(0.125 * std::acos(-1.0));
     const double cos_eighth_turn = std::cos(0.125 * std::acos(-1.0));
-    const double child_rotation[4] = {
-        0.0, 0.0, sin_eighth_turn, cos_eighth_turn};
+    const double child_rotation[4] = {0.0, 0.0, sin_eighth_turn, cos_eighth_turn};
     tc_entity_pool_set_local_rotation(pool, child, child_rotation);
 
     GeneralTransform3 transform(pool_h, child);
@@ -515,8 +478,7 @@ TEST_CASE("AttachedCollider projects affine ancestry through lossy scale")
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider projects rotated local collider under axis scale")
-{
+TEST_CASE("AttachedCollider projects rotated local collider under axis scale") {
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(2);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
     tc_entity_id entity = tc_entity_pool_alloc(pool, "axis_scaled");
@@ -524,9 +486,7 @@ TEST_CASE("AttachedCollider projects rotated local collider under axis scale")
     tc_entity_pool_set_local_scale(pool, entity, scale);
 
     const double half_sqrt2 = std::sqrt(0.5);
-    BoxCollider box(
-        Vec3(0.5, 0.5, 0.5),
-        GeneralPose3(Quat(0.0, 0.0, half_sqrt2, half_sqrt2), Vec3::zero()));
+    BoxCollider box(Vec3(0.5, 0.5, 0.5), GeneralPose3(Quat(0.0, 0.0, half_sqrt2, half_sqrt2), Vec3::zero()));
     GeneralTransform3 transform(pool_h, entity);
     AttachedCollider attached(&box, &transform);
     const GeneralPose3 projected = attached.world_transform();
@@ -540,8 +500,7 @@ TEST_CASE("AttachedCollider projects rotated local collider under axis scale")
     tc_entity_pool_registry_destroy(pool_h);
 }
 
-TEST_CASE("AttachedCollider rejects singular lossy projection")
-{
+TEST_CASE("AttachedCollider rejects singular lossy projection") {
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_create(2);
     tc_entity_pool* pool = tc_entity_pool_registry_get(pool_h);
     tc_entity_id entity = tc_entity_pool_alloc(pool, "singular");
@@ -552,12 +511,9 @@ TEST_CASE("AttachedCollider rejects singular lossy projection")
     GeneralTransform3 transform(pool_h, entity);
     AttachedCollider attached(&box, &transform);
     bool threw = false;
-    try
-    {
+    try {
         (void)attached.center();
-    }
-    catch (const std::runtime_error&)
-    {
+    } catch (const std::runtime_error&) {
         threw = true;
     }
     CHECK(threw);
@@ -567,8 +523,7 @@ TEST_CASE("AttachedCollider rejects singular lossy projection")
 
 // ==================== ContactPatch tests ====================
 
-TEST_CASE("ContactPatch same_pair")
-{
+TEST_CASE("ContactPatch same_pair") {
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
     SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(2, 0, 0)));
@@ -589,8 +544,7 @@ TEST_CASE("ContactPatch same_pair")
     CHECK(!m1.same_pair(m3));
 }
 
-TEST_CASE("ContactPatch pair_key")
-{
+TEST_CASE("ContactPatch pair_key") {
     SphereCollider s1(1.0);
     SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1, 0, 0)));
 
@@ -608,8 +562,7 @@ TEST_CASE("ContactPatch pair_key")
 
 // ==================== AABB on colliders tests ====================
 
-TEST_CASE("SphereCollider aabb")
-{
+TEST_CASE("SphereCollider aabb") {
     SphereCollider sphere(0.5, GeneralPose3(Quat::identity(), Vec3(1, 2, 3)));
     AABB box = sphere.aabb();
 
@@ -621,8 +574,7 @@ TEST_CASE("SphereCollider aabb")
     CHECK_EQ(box.max_point.z, Approx(3.5).epsilon(1e-12));
 }
 
-TEST_CASE("BoxCollider aabb identity")
-{
+TEST_CASE("BoxCollider aabb identity") {
     BoxCollider box(Vec3(1, 2, 3)); // half_size, at origin
     AABB aabb = box.aabb();
 
@@ -634,8 +586,7 @@ TEST_CASE("BoxCollider aabb identity")
     CHECK_EQ(aabb.max_point.z, Approx(3.0).epsilon(1e-12));
 }
 
-TEST_CASE("CapsuleCollider aabb")
-{
+TEST_CASE("CapsuleCollider aabb") {
     CapsuleCollider capsule(1.0,
                             0.5); // half_height=1, radius=0.5, axis along Z
     AABB aabb = capsule.aabb();

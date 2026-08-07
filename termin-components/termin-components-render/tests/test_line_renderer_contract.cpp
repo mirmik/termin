@@ -6,9 +6,9 @@ GUARD_TEST_MAIN();
 #include <vector>
 
 #include <components/mesh_component.hpp>
-#include <termin/render/mesh_renderer.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/render_task.hpp>
@@ -26,7 +26,7 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kVertexSource = R"(
+    constexpr const char* kVertexSource = R"(
 struct VertexOutput { float4 position : SV_Position; };
 
 [shader("vertex")]
@@ -37,7 +37,7 @@ VertexOutput vs_main() {
 }
 )";
 
-constexpr const char* kFragmentSource = R"(
+    constexpr const char* kFragmentSource = R"(
 struct FragmentInput
 {
     float4 screen_pos : SV_Position;
@@ -56,203 +56,179 @@ FragmentOutput fs_main(FragmentInput input)
 }
 )";
 
-termin::TcShader make_test_material_shader(const char* uuid)
-{
-    const tc_shader_create_desc shader_desc = {
-        {
-            kVertexSource,
-            kFragmentSource,
-            nullptr,
-            "LineRendererContractMaterial",
-            "/virtual/line_renderer_contract.shader",
-            "vs_main",
-            "fs_main",
-            nullptr
-        },
-        uuid,
-        TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED
-    };
-    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
-    return termin::TcShader(handle);
-}
+    termin::TcShader make_test_material_shader(const char* uuid) {
+        const tc_shader_create_desc shader_desc = {{kVertexSource,
+                                                    kFragmentSource,
+                                                    nullptr,
+                                                    "LineRendererContractMaterial",
+                                                    "/virtual/line_renderer_contract.shader",
+                                                    "vs_main",
+                                                    "fs_main",
+                                                    nullptr},
+                                                   uuid,
+                                                   TC_SHADER_LANGUAGE_SLANG,
+                                                   TC_SHADER_ARTIFACT_REQUIRED};
+        tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
+        return termin::TcShader(handle);
+    }
 
-termin::MaterialPipelinePassContract line_material_fragment_contract()
-{
-    termin::MaterialPipelinePassContract contract;
-    contract.debug_name = "custom_line_material_fragment";
-    contract.required_material_fragment_input =
-        termin::material_pipeline_standard_material_fragment_interface();
-    return contract;
-}
+    termin::MaterialPipelinePassContract line_material_fragment_contract() {
+        termin::MaterialPipelinePassContract contract;
+        contract.debug_name = "custom_line_material_fragment";
+        contract.required_material_fragment_input = termin::material_pipeline_standard_material_fragment_interface();
+        return contract;
+    }
 
-termin::MaterialPipelinePassContract line_auxiliary_contract()
-{
-    termin::MaterialPipelinePassContract contract;
-    contract.debug_name = "custom_line_auxiliary";
-    contract.required_material_fragment_input = termin::MaterialFragmentInterface{};
-    return contract;
-}
+    termin::MaterialPipelinePassContract line_auxiliary_contract() {
+        termin::MaterialPipelinePassContract contract;
+        contract.debug_name = "custom_line_auxiliary";
+        contract.required_material_fragment_input = termin::MaterialFragmentInterface{};
+        return contract;
+    }
 
-bool has_variant(
-    const std::vector<termin::TcShader>& shaders,
-    tc_shader_variant_op variant_op)
-{
-    for (const termin::TcShader& shader : shaders) {
-        if (shader.variant_op() == variant_op) {
-            return true;
+    bool has_variant(const std::vector<termin::TcShader>& shaders, tc_shader_variant_op variant_op) {
+        for (const termin::TcShader& shader : shaders) {
+            if (shader.variant_op() == variant_op) {
+                return true;
+            }
         }
+        return false;
     }
-    return false;
-}
 
-std::vector<termin::TcShader> plan_line_shader_usages(
-    termin::TcShader candidate,
-    const termin::MaterialPipelinePassContract& shader_contract)
-{
-    termin::LineRenderer::register_type();
-    tc_render_item item{};
-    item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-    item.payload.line_batch.render_mode =
-        static_cast<uint32_t>(termin::LineRenderMode::WorldTube);
+    std::vector<termin::TcShader> plan_line_shader_usages(termin::TcShader candidate,
+                                                          const termin::MaterialPipelinePassContract& shader_contract) {
+        termin::LineRenderer::register_type();
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
+        item.payload.line_batch.render_mode = static_cast<uint32_t>(termin::LineRenderMode::WorldTube);
 
-    termin::RenderItemTaskPlanningContract contract{};
-    contract.phase = TC_PHASE_OPAQUE;
-    contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
-    contract.provided_input_mask = termin::render_item_task_input_bit(
-        termin::RenderItemTaskInput::DrawContext);
-    contract.required_input_mask = termin::render_item_task_input_bit(
-        termin::RenderItemTaskInput::DrawContext);
-    contract.shader_contract = &shader_contract;
-    contract.debug_pass_name = "LineRendererContractTest";
+        termin::RenderItemTaskPlanningContract contract{};
+        contract.phase = TC_PHASE_OPAQUE;
+        contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
+        contract.provided_input_mask = termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext);
+        contract.required_input_mask = termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext);
+        contract.shader_contract = &shader_contract;
+        contract.debug_pass_name = "LineRendererContractTest";
 
-    termin::RenderItemTaskPlanningRequest request{};
-    request.item = &item;
-    request.candidate_shader = candidate.handle;
-    request.contract = &contract;
-    termin::RenderTaskList tasks;
-    termin::RenderItemTaskPlanningResult result =
-        termin::plan_render_item_task(request, tasks);
-    REQUIRE(result.accepted());
+        termin::RenderItemTaskPlanningRequest request{};
+        request.item = &item;
+        request.candidate_shader = candidate.handle;
+        request.contract = &contract;
+        termin::RenderTaskList tasks;
+        termin::RenderItemTaskPlanningResult result = termin::plan_render_item_task(request, tasks);
+        REQUIRE(result.accepted());
 
-    const termin::RenderTask& task = tasks.at(result.task_index);
-    std::vector<termin::TcShader> usages;
-    for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
-        usages.emplace_back(task.shader_usages[i]);
-    }
-    return usages;
-}
-
-const termin::RenderTask& plan_line_shader_task(
-    termin::TcShader candidate,
-    termin::LineRenderMode mode,
-    const termin::MaterialPipelinePassContract& shader_contract,
-    tc_render_item& item,
-    termin::RenderTaskList& tasks)
-{
-    termin::LineRenderer::register_type();
-    item = {};
-    item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-    item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
-
-    termin::RenderItemTaskPlanningContract contract{};
-    contract.phase = TC_PHASE_OPAQUE;
-    contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
-    contract.provided_input_mask = termin::render_item_task_input_bit(
-        termin::RenderItemTaskInput::DrawContext);
-    contract.required_input_mask = termin::render_item_task_input_bit(
-        termin::RenderItemTaskInput::DrawContext);
-    contract.shader_contract = &shader_contract;
-    contract.debug_pass_name = "LineRendererLifetimeContractTest";
-
-    termin::RenderItemTaskPlanningRequest request{};
-    request.item = &item;
-    request.candidate_shader = candidate.handle;
-    request.contract = &contract;
-    const termin::RenderItemTaskPlanningResult result =
-        termin::plan_render_item_task(request, tasks);
-    REQUIRE(result.accepted());
-    return tasks.at(result.task_index);
-}
-
-const termin::TcShader* find_owned_variant(
-    const termin::RenderTask& task,
-    tc_shader_variant_op variant_op)
-{
-    for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
-        if (task.owned_shader_usages[i].variant_op() == variant_op) {
-            return &task.owned_shader_usages[i];
+        const termin::RenderTask& task = tasks.at(result.task_index);
+        std::vector<termin::TcShader> usages;
+        for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+            usages.emplace_back(task.shader_usages[i]);
         }
+        return usages;
     }
-    return nullptr;
-}
 
-termin::TcMesh make_two_submesh_mesh()
-{
-    const float vertices[] = {
-        0.0f, 0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,
-        2.0f, 0.0f, 0.0f,
-        3.0f, 0.0f, 0.0f,
-        2.0f, 1.0f, 0.0f,
-    };
-    const uint32_t indices[] = {0, 1, 2, 3, 4, 5};
-    auto make_submesh = [](uint32_t first_index, uint32_t index_count, uint32_t material_slot, const char* name) {
-        tc_submesh submesh{};
-        submesh.first_index = first_index;
-        submesh.index_count = index_count;
-        submesh.material_slot = material_slot;
-        submesh.draw_mode = TC_DRAW_TRIANGLES;
-        std::strncpy(submesh.name, name, TC_SUBMESH_NAME_MAX - 1);
-        return submesh;
-    };
-    const std::vector<tc_submesh> submeshes = {
-        make_submesh(0, 3, 0, "left"),
-        make_submesh(3, 3, 1, "right"),
-    };
-    tc_vertex_layout layout = tc_vertex_layout_pos();
-    termin::TcMeshCreateInfo create_info;
-    create_info.data = termin::TcMeshInterleavedDataView{
-        vertices,
-        6,
-        indices,
-        6,
-        &layout};
-    create_info.submeshes = submeshes.data();
-    create_info.submesh_count = submeshes.size();
-    create_info.name = "mesh-renderer-geometry-ids-test";
-    create_info.uuid_hint = "mesh-renderer-geometry-ids-test";
-    return termin::TcMesh::from_interleaved(create_info);
-}
+    const termin::RenderTask& plan_line_shader_task(termin::TcShader candidate,
+                                                    termin::LineRenderMode mode,
+                                                    const termin::MaterialPipelinePassContract& shader_contract,
+                                                    tc_render_item& item,
+                                                    termin::RenderTaskList& tasks) {
+        termin::LineRenderer::register_type();
+        item = {};
+        item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
+        item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
+
+        termin::RenderItemTaskPlanningContract contract{};
+        contract.phase = TC_PHASE_OPAQUE;
+        contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
+        contract.provided_input_mask = termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext);
+        contract.required_input_mask = termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext);
+        contract.shader_contract = &shader_contract;
+        contract.debug_pass_name = "LineRendererLifetimeContractTest";
+
+        termin::RenderItemTaskPlanningRequest request{};
+        request.item = &item;
+        request.candidate_shader = candidate.handle;
+        request.contract = &contract;
+        const termin::RenderItemTaskPlanningResult result = termin::plan_render_item_task(request, tasks);
+        REQUIRE(result.accepted());
+        return tasks.at(result.task_index);
+    }
+
+    const termin::TcShader* find_owned_variant(const termin::RenderTask& task, tc_shader_variant_op variant_op) {
+        for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+            if (task.owned_shader_usages[i].variant_op() == variant_op) {
+                return &task.owned_shader_usages[i];
+            }
+        }
+        return nullptr;
+    }
+
+    termin::TcMesh make_two_submesh_mesh() {
+        const float vertices[] = {
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f,
+            0.0f,
+            2.0f,
+            0.0f,
+            0.0f,
+            3.0f,
+            0.0f,
+            0.0f,
+            2.0f,
+            1.0f,
+            0.0f,
+        };
+        const uint32_t indices[] = {0, 1, 2, 3, 4, 5};
+        auto make_submesh = [](uint32_t first_index, uint32_t index_count, uint32_t material_slot, const char* name) {
+            tc_submesh submesh{};
+            submesh.first_index = first_index;
+            submesh.index_count = index_count;
+            submesh.material_slot = material_slot;
+            submesh.draw_mode = TC_DRAW_TRIANGLES;
+            std::strncpy(submesh.name, name, TC_SUBMESH_NAME_MAX - 1);
+            return submesh;
+        };
+        const std::vector<tc_submesh> submeshes = {
+            make_submesh(0, 3, 0, "left"),
+            make_submesh(3, 3, 1, "right"),
+        };
+        tc_vertex_layout layout = tc_vertex_layout_pos();
+        termin::TcMeshCreateInfo create_info;
+        create_info.data = termin::TcMeshInterleavedDataView{vertices, 6, indices, 6, &layout};
+        create_info.submeshes = submeshes.data();
+        create_info.submesh_count = submeshes.size();
+        create_info.name = "mesh-renderer-geometry-ids-test";
+        create_info.uuid_hint = "mesh-renderer-geometry-ids-test";
+        return termin::TcMesh::from_interleaved(create_info);
+    }
 
 } // namespace
 
 TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
     tc_shader_init();
 
-    termin::TcShader material_shader = make_test_material_shader(
-        "line-contract-material");
+    termin::TcShader material_shader = make_test_material_shader("line-contract-material");
     REQUIRE(material_shader.is_valid());
 
-    std::vector<termin::TcShader> emitted = plan_line_shader_usages(
-        material_shader,
-        line_material_fragment_contract());
+    std::vector<termin::TcShader> emitted = plan_line_shader_usages(material_shader, line_material_fragment_contract());
 
     CHECK(emitted.size() >= 3u);
     CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
     CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
 
-    std::vector<termin::TcShader> auxiliary_emitted = plan_line_shader_usages(
-        material_shader,
-        line_auxiliary_contract());
+    std::vector<termin::TcShader> auxiliary_emitted =
+        plan_line_shader_usages(material_shader, line_auxiliary_contract());
 
     CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
     CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
 
-    std::vector<termin::TcShader> material_emitted = plan_line_shader_usages(
-        material_shader,
-        line_material_fragment_contract());
+    std::vector<termin::TcShader> material_emitted =
+        plan_line_shader_usages(material_shader, line_material_fragment_contract());
 
     CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
     CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
@@ -260,17 +236,9 @@ TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
     tc_render_item owned_item{};
     termin::RenderTaskList owned_tasks;
     const termin::RenderTask& owned_task = plan_line_shader_task(
-        material_shader,
-        termin::LineRenderMode::WorldTube,
-        line_material_fragment_contract(),
-        owned_item,
-        owned_tasks);
-    const termin::TcShader* body_variant = find_owned_variant(
-        owned_task,
-        TC_SHADER_VARIANT_LINE_TUBE_BODY);
-    const termin::TcShader* cap_variant = find_owned_variant(
-        owned_task,
-        TC_SHADER_VARIANT_LINE_TUBE_CAP);
+        material_shader, termin::LineRenderMode::WorldTube, line_material_fragment_contract(), owned_item, owned_tasks);
+    const termin::TcShader* body_variant = find_owned_variant(owned_task, TC_SHADER_VARIANT_LINE_TUBE_BODY);
+    const termin::TcShader* cap_variant = find_owned_variant(owned_task, TC_SHADER_VARIANT_LINE_TUBE_CAP);
     REQUIRE(body_variant != nullptr);
     REQUIRE(cap_variant != nullptr);
     CHECK(body_variant->is_valid());
@@ -290,31 +258,23 @@ TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
 TEST_CASE("LineRenderer task owns Slang variants and preserves fragment contract") {
     tc_shader_init();
 
-    termin::TcShader material_shader = make_test_material_shader(
-        "line-contract-owned-slang-material");
+    termin::TcShader material_shader = make_test_material_shader("line-contract-owned-slang-material");
     REQUIRE(material_shader.is_valid());
 
-    const termin::MaterialPipelinePassContract shader_contract =
-        line_material_fragment_contract();
+    const termin::MaterialPipelinePassContract shader_contract = line_material_fragment_contract();
     tc_render_item billboard_item{};
     termin::RenderTaskList billboard_tasks;
     const termin::RenderTask& billboard_task = plan_line_shader_task(
-        material_shader,
-        termin::LineRenderMode::WorldBillboard,
-        shader_contract,
-        billboard_item,
-        billboard_tasks);
+        material_shader, termin::LineRenderMode::WorldBillboard, shader_contract, billboard_item, billboard_tasks);
 
-    const termin::TcShader* fragment_variant = find_owned_variant(
-        billboard_task,
-        TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
+    const termin::TcShader* fragment_variant =
+        find_owned_variant(billboard_task, TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
     REQUIRE(fragment_variant != nullptr);
     REQUIRE(fragment_variant->is_valid());
     CHECK(tc_shader_handle_eq(billboard_task.final_shader, fragment_variant->handle));
     CHECK(fragment_variant->language() == TC_SHADER_LANGUAGE_SLANG);
     CHECK(fragment_variant->artifact_policy() == TC_SHADER_ARTIFACT_REQUIRED);
-    CHECK(std::strcmp(fragment_variant->source_path(),
-                      "/virtual/line_renderer_contract.shader") == 0);
+    CHECK(std::strcmp(fragment_variant->source_path(), "/virtual/line_renderer_contract.shader") == 0);
     REQUIRE(fragment_variant->get() != nullptr);
     CHECK(std::strcmp(fragment_variant->get()->fragment_entry, "fs_main") == 0);
 
@@ -328,17 +288,12 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     tc_material_init();
     tc_mesh_init();
 
-    tc_material_handle material_handle = tc_material_create(
-        "mesh-renderer-permissive-material",
-        "mesh-renderer-permissive-material");
+    tc_material_handle material_handle =
+        tc_material_create("mesh-renderer-permissive-material", "mesh-renderer-permissive-material");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    REQUIRE(tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        0) != nullptr);
+    REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0) != nullptr);
 
     termin::TcMesh mesh = make_two_submesh_mesh();
     REQUIRE(mesh.is_valid());
@@ -362,10 +317,7 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     REQUIRE(collection.items.size() == 2u);
     CHECK(collection.items[0].kind == TC_RENDER_ITEM_KIND_MESH);
@@ -381,19 +333,15 @@ TEST_CASE("MeshRenderer override data treats builtin textures as symbolic defaul
     tc_material_init();
     tc_texture_init();
 
-    tc_material_handle material_handle = tc_material_create(
-        "mesh-renderer-symbolic-default-material",
-        "mesh-renderer-symbolic-default-material");
+    tc_material_handle material_handle =
+        tc_material_create("mesh-renderer-symbolic-default-material", "mesh-renderer-symbolic-default-material");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    tc_material_phase* phase = tc_material_add_phase(
-        material, tc_shader_handle_invalid(), "opaque", 0);
+    tc_material_phase* phase = tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0);
     REQUIRE(phase != nullptr);
-    REQUIRE(tc_material_phase_declare_texture(
-        phase, "u_albedo", TC_TEXTURE_ENCODING_SRGB));
-    REQUIRE(tc_material_phase_set_texture(
-        phase, "u_albedo", tc_texture_get_white_1x1_srgb()));
+    REQUIRE(tc_material_phase_declare_texture(phase, "u_albedo", TC_TEXTURE_ENCODING_SRGB));
+    REQUIRE(tc_material_phase_set_texture(phase, "u_albedo", tc_texture_get_white_1x1_srgb()));
 
     termin::MeshRenderer renderer;
     renderer.set_material(termin::TcMaterial(material_handle));
@@ -412,10 +360,8 @@ TEST_CASE("MeshRenderer override data treats builtin textures as symbolic defaul
     tc_value legacy_phases = tc_value_list_new();
     tc_value legacy_phase = tc_value_dict_new();
     tc_value legacy_texture = tc_value_dict_new();
-    tc_value_dict_set(
-        &legacy_texture, "uuid", tc_value_string("__white_1x1__"));
-    tc_value_dict_set(
-        &legacy_texture, "name", tc_value_string("__white_1x1__"));
+    tc_value_dict_set(&legacy_texture, "uuid", tc_value_string("__white_1x1__"));
+    tc_value_dict_set(&legacy_texture, "name", tc_value_string("__white_1x1__"));
     tc_value_dict_set(&legacy_phase, "u_albedo", legacy_texture);
     tc_value_list_push(&legacy_phases, legacy_phase);
     tc_value_dict_set(&legacy, "phases_textures", legacy_phases);
@@ -424,8 +370,7 @@ TEST_CASE("MeshRenderer override data treats builtin textures as symbolic defaul
 
     termin::TcMaterial overridden = renderer.get_overridden_material();
     REQUIRE(overridden.is_valid());
-    tc_material_texture* binding = tc_material_phase_find_texture(
-        overridden.default_phase(), "u_albedo");
+    tc_material_texture* binding = tc_material_phase_find_texture(overridden.default_phase(), "u_albedo");
     REQUIRE(binding != nullptr);
     const tc_texture* texture = tc_texture_get(binding->texture);
     REQUIRE(texture != nullptr);
@@ -439,17 +384,12 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     tc_material_init();
     tc_mesh_init();
 
-    tc_material_handle material_handle = tc_material_create(
-        "mesh-renderer-render-item-material",
-        "mesh-renderer-render-item-material");
+    tc_material_handle material_handle =
+        tc_material_create("mesh-renderer-render-item-material", "mesh-renderer-render-item-material");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    tc_material_phase* phase = tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        11);
+    tc_material_phase* phase = tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 11);
     REQUIRE(phase != nullptr);
 
     termin::TcMesh mesh = make_two_submesh_mesh();
@@ -472,10 +412,7 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 2u);
@@ -502,17 +439,12 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     tc_material_init();
     tc_mesh_init();
 
-    tc_material_handle material_handle = tc_material_create(
-        "mesh-renderer-render-item-opaque-only",
-        "mesh-renderer-render-item-opaque-only");
+    tc_material_handle material_handle =
+        tc_material_create("mesh-renderer-render-item-opaque-only", "mesh-renderer-render-item-opaque-only");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    REQUIRE(tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        0) != nullptr);
+    REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0) != nullptr);
 
     termin::TcMesh mesh = make_two_submesh_mesh();
     REQUIRE(mesh.is_valid());
@@ -535,10 +467,7 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     collect_context.debug_pass_name = "IdPass";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 2u);
@@ -571,10 +500,7 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
@@ -584,8 +510,7 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     CHECK(items[0].payload.line_batch.points != nullptr);
     CHECK(items[0].payload.line_batch.point_count == 2u);
     CHECK(items[0].payload.line_batch.width == 0.25f);
-    CHECK(items[0].payload.line_batch.render_mode ==
-          static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
+    CHECK(items[0].payload.line_batch.render_mode == static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
 
@@ -604,20 +529,16 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     tc_shader_init();
 
     termin::LineRenderer::register_type();
-    CHECK(termin::render_item_encoder_supports_phase(
-        TC_RENDER_ITEM_KIND_LINE_BATCH,
-        TC_PHASE_ID));
+    CHECK(termin::render_item_encoder_supports_phase(TC_RENDER_ITEM_KIND_LINE_BATCH, TC_PHASE_ID));
     termin::RenderItemEncoderCapabilities line_capabilities{};
-    REQUIRE(termin::get_render_item_encoder_capabilities(
-        TC_RENDER_ITEM_KIND_LINE_BATCH,
-        line_capabilities));
+    REQUIRE(termin::get_render_item_encoder_capabilities(TC_RENDER_ITEM_KIND_LINE_BATCH, line_capabilities));
     CHECK(line_capabilities.phase_mask != TC_PHASE_NONE);
     CHECK(line_capabilities.supported_task_input_mask ==
-        (termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext)
-         | termin::render_item_task_input_bit(termin::RenderItemTaskInput::ModelMatrix)
-         | termin::render_item_task_input_bit(termin::RenderItemTaskInput::OverrideColor)));
+          (termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext) |
+           termin::render_item_task_input_bit(termin::RenderItemTaskInput::ModelMatrix) |
+           termin::render_item_task_input_bit(termin::RenderItemTaskInput::OverrideColor)));
     CHECK(line_capabilities.required_task_input_mask ==
-        termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext));
+          termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext));
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-render-items-pick");
     termin::Entity entity = scene.create_entity("line");
@@ -625,17 +546,12 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     auto* renderer = new termin::LineRenderer();
     renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
     renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
-    tc_material_handle material_handle = tc_material_create(
-        "line-renderer-render-item-pick-opaque-only",
-        "line-renderer-render-item-pick-opaque-only");
+    tc_material_handle material_handle =
+        tc_material_create("line-renderer-render-item-pick-opaque-only", "line-renderer-render-item-pick-opaque-only");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    REQUIRE(tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        0) != nullptr);
+    REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0) != nullptr);
     renderer->set_material(termin::TcMaterial(material_handle));
     entity.add_component(renderer);
 
@@ -645,10 +561,7 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     collect_context.debug_pass_name = "IdPass";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
@@ -672,17 +585,12 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     auto* renderer = new termin::LineRenderer();
     renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
     renderer->set_render_mode(termin::LineRenderMode::WorldMesh);
-    tc_material_handle material_handle = tc_material_create(
-        "line-renderer-mesh-render-item-material",
-        "line-renderer-mesh-render-item-material");
+    tc_material_handle material_handle =
+        tc_material_create("line-renderer-mesh-render-item-material", "line-renderer-mesh-render-item-material");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    REQUIRE(tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        0) != nullptr);
+    REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0) != nullptr);
     renderer->set_material(termin::TcMaterial(material_handle));
     entity.add_component(renderer);
 
@@ -691,10 +599,7 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
 
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
@@ -729,10 +634,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     collect_context.debug_pass_name = "ColorPass";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        text->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(text->tc_component_ptr(), collect_context, collection));
 
     REQUIRE(collection.items.size() == 1u);
     const tc_render_item& item = collection.items[0];
@@ -745,10 +647,8 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
     CHECK(std::strcmp(item.payload.text_batch.font_path, "font-a.ttf") == 0);
     CHECK(item.payload.text_batch.size == 0.75f);
-    CHECK(item.payload.text_batch.anchor ==
-          static_cast<uint32_t>(termin::WorldTextAnchor::Right));
-    CHECK(item.payload.text_batch.orientation ==
-          static_cast<uint32_t>(termin::WorldTextOrientation::Fixed));
+    CHECK(item.payload.text_batch.anchor == static_cast<uint32_t>(termin::WorldTextAnchor::Right));
+    CHECK(item.payload.text_batch.orientation == static_cast<uint32_t>(termin::WorldTextOrientation::Fixed));
     CHECK(item.payload.text_batch.local_offset.x == 1.0);
     CHECK(item.payload.text_batch.local_offset.y == 2.0);
     CHECK(item.payload.text_batch.local_offset.z == 3.0);
@@ -757,10 +657,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     id_collect_context.phase = TC_PHASE_ID;
     id_collect_context.debug_pass_name = "IdPass";
     termin::RenderItemCollection id_collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        text->tc_component_ptr(),
-        id_collect_context,
-        id_collection));
+    REQUIRE(termin::collect_drawable_render_items(text->tc_component_ptr(), id_collect_context, id_collection));
     REQUIRE(id_collection.items.size() == 1u);
     CHECK(id_collection.items[0].kind == TC_RENDER_ITEM_KIND_TEXT_BATCH);
 

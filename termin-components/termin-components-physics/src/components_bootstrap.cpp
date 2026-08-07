@@ -4,9 +4,9 @@
 
 namespace termin {
 
-void register_builtin_physics_component_types() {
-    PhysicsWorldComponent::register_type();
-    RigidBodyComponent::register_type();
-}
+    void register_builtin_physics_component_types() {
+        PhysicsWorldComponent::register_type();
+        RigidBodyComponent::register_type();
+    }
 
 } // namespace termin

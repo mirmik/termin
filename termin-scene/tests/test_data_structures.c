@@ -1,18 +1,18 @@
 // test_data_structures.c - Tests for tc_pool, tc_hash_map, tc_dlist
+#include "core/tc_dlist.h"
+#include "tc_hash_map.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <tcbase/tc_pool.h>
-#include "tc_hash_map.h"
-#include "core/tc_dlist.h"
 
-#define TEST_ASSERT(cond, msg) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL: %s (line %d)\n", msg, __LINE__); \
-            return 1; \
-        } \
-    } while(0)
+#define TEST_ASSERT(cond, msg)                                                                                         \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            printf("FAIL: %s (line %d)\n", msg, __LINE__);                                                             \
+            return 1;                                                                                                  \
+        }                                                                                                              \
+    } while (0)
 
 // ============================================================================
 // tc_pool tests
@@ -448,7 +448,7 @@ static int test_dlist_add_front(void) {
     for (int i = 0; i < 3; i++) {
         items[i].value = i + 1;
         tc_dlist_init_node(&items[i].node);
-        tc_dlist_add(&items[i].node, &list);  // add to front
+        tc_dlist_add(&items[i].node, &list); // add to front
     }
 
     // Order should be 3, 2, 1 (reverse)
@@ -487,7 +487,7 @@ static int test_dlist_remove(void) {
     TEST_ASSERT(last->value == 3, "last is 3");
 
     // Double remove is safe
-    tc_dlist_del(&items[1].node);  // should be no-op
+    tc_dlist_del(&items[1].node); // should be no-op
     TEST_ASSERT(tc_dlist_size(&list) == 2, "size still 2");
 
     printf("  DList Remove: PASS\n");
@@ -502,7 +502,7 @@ static int test_dlist_iteration(void) {
 
     ListItem items[5];
     for (int i = 0; i < 5; i++) {
-        items[i].value = (i + 1) * 10;  // 10, 20, 30, 40, 50
+        items[i].value = (i + 1) * 10; // 10, 20, 30, 40, 50
         tc_dlist_init_node(&items[i].node);
         tc_dlist_add_tail(&items[i].node, &list);
     }

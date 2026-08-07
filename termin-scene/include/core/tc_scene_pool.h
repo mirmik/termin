@@ -2,9 +2,9 @@
 #pragma once
 
 #include "tc_types.h"
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,9 +20,9 @@ typedef struct {
 } tc_scene_handle;
 
 #ifdef __cplusplus
-    #define TC_SCENE_HANDLE_INVALID (tc_scene_handle{0xFFFFFFFF, 0})
+#define TC_SCENE_HANDLE_INVALID (tc_scene_handle{0xFFFFFFFF, 0})
 #else
-    #define TC_SCENE_HANDLE_INVALID ((tc_scene_handle){0xFFFFFFFF, 0})
+#define TC_SCENE_HANDLE_INVALID ((tc_scene_handle){0xFFFFFFFF, 0})
 #endif
 
 static inline bool tc_scene_handle_valid(tc_scene_handle h) {

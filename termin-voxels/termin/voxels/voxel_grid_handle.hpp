@@ -4,6 +4,6 @@
 
 namespace termin {
 
-using VoxelGridHandle = voxels::TcVoxelGrid;
+    using VoxelGridHandle = voxels::TcVoxelGrid;
 
 } // namespace termin

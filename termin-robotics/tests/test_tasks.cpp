@@ -10,44 +10,35 @@
 using namespace termin;
 using namespace termin::robotics;
 
-namespace
-{
+namespace {
     constexpr double tolerance = 1e-12;
 
-    SpatialInertia3 unit_inertia()
-    {
+    SpatialInertia3 unit_inertia() {
         return {1.0, {0.2, 0.3, 0.4}, Pose3::identity()};
     }
 
-    ArticulationUnit3D unit()
-    {
+    ArticulationUnit3D unit() {
         return {
             .parent_unit = articulation_root_frame,
             .parent_to_unit_zero = Pose3::translation(1.0, 0.0, 0.0),
-            .motion_twist_at_unit =
-                Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
-                    Pose3::translation(1.0, 0.0, 0.0)),
+            .motion_twist_at_unit = Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(Pose3::translation(1.0, 0.0, 0.0)),
             .inertia = unit_inertia(),
             .limits = {.minimum = -1.0, .maximum = 1.0},
             .diagnostic_name = "unit",
         };
     }
 
-    Articulation3D model()
-    {
+    Articulation3D model() {
         return Articulation3D({unit()}, {{0.25}, {0.1}}, "task-model");
     }
 
-    void check_near(double actual, double expected)
-    {
+    void check_near(double actual, double expected) {
         TERMIN_ROBOTICS_CHECK(std::abs(actual - expected) < tolerance);
     }
 
-    void test_frame_jacobian()
-    {
+    void test_frame_jacobian() {
         Articulation3D articulation = model();
-        const ArticulationFrameKinematics3DResult frame =
-            articulation.frame_kinematics(0);
+        const ArticulationFrameKinematics3DResult frame = articulation.frame_kinematics(0);
         TERMIN_ROBOTICS_CHECK(frame.ok());
         const auto jacobian = frame.value.spatial_jacobian_world();
         TERMIN_ROBOTICS_CHECK(jacobian.rows == 6);
@@ -61,8 +52,7 @@ namespace
         check_near(jacobian(5, 0) * 0.1, frame.value.velocity_world.ang.z);
     }
 
-    void test_point_and_pose_objectives()
-    {
+    void test_point_and_pose_objectives() {
         Articulation3D articulation = model();
         const TaskLinearizationContext3D context{
             .articulation = &articulation,
@@ -72,13 +62,10 @@ namespace
         PointVelocityTask3D point_task(0,
                                        Vec3::zero(),
                                        {1.0, 2.0, 3.0},
-                                       {.priority = 2,
-                                        .diagonal_weight = {2.0, 3.0, 4.0},
-                                        .diagnostic_name = "point"});
+                                       {.priority = 2, .diagonal_weight = {2.0, 3.0, 4.0}, .diagnostic_name = "point"});
         const TaskLinearization3DResult point = point_task.linearize(context);
         TERMIN_ROBOTICS_CHECK(point.ok());
-        TERMIN_ROBOTICS_CHECK(point.value.relation ==
-                              TaskRelation3D::Objective);
+        TERMIN_ROBOTICS_CHECK(point.value.relation == TaskRelation3D::Objective);
         TERMIN_ROBOTICS_CHECK(point.value.priority == 2);
         TERMIN_ROBOTICS_CHECK(point.value.matrix().rows == 3);
         TERMIN_ROBOTICS_CHECK(point.value.matrix().columns == 1);
@@ -92,8 +79,7 @@ namespace
         const Pose3 current = articulation.unit_poses_world()[0];
         const Screw3 local_error{Vec3{0.0, 0.0, 0.2}, Vec3{0.1, -0.2, 0.3}};
         const Pose3 target = current * se3_exp(local_error);
-        PoseTrackingTask3D pose_task(
-            0, target, Screw3::zero(), 2.0, 3.0, {.diagnostic_name = "pose"});
+        PoseTrackingTask3D pose_task(0, target, Screw3::zero(), 2.0, 3.0, {.diagnostic_name = "pose"});
         const TaskLinearization3DResult pose = pose_task.linearize(context);
         TERMIN_ROBOTICS_CHECK(pose.ok());
         TERMIN_ROBOTICS_CHECK(pose.value.matrix().rows == 6);
@@ -106,31 +92,25 @@ namespace
         check_near(pose.value.target()[5], error_world.ang.z * 3.0);
     }
 
-    void test_joint_objectives_and_floating_offset()
-    {
+    void test_joint_objectives_and_floating_offset() {
         Articulation3D articulation = model();
         TaskLinearizationContext3D velocity_context{
             .articulation = &articulation,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
         };
-        JointPositionTask3D position(
-            {}, {0.75}, 2.0, {0.1}, {.diagnostic_name = "position"});
-        const TaskLinearization3DResult position_result =
-            position.linearize(velocity_context);
+        JointPositionTask3D position({}, {0.75}, 2.0, {0.1}, {.diagnostic_name = "position"});
+        const TaskLinearization3DResult position_result = position.linearize(velocity_context);
         TERMIN_ROBOTICS_CHECK(position_result.ok());
         check_near(position_result.value.matrix()(0, 0), 1.0);
         check_near(position_result.value.target()[0], 1.1);
 
-        JointVelocityTask3D velocity(
-            {}, {0.5}, 4.0, {.diagnostic_name = "velocity"});
-        const TaskLinearization3DResult velocity_result =
-            velocity.linearize(velocity_context);
+        JointVelocityTask3D velocity({}, {0.5}, 4.0, {.diagnostic_name = "velocity"});
+        const TaskLinearization3DResult velocity_result = velocity.linearize(velocity_context);
         TERMIN_ROBOTICS_CHECK(velocity_result.ok());
         check_near(velocity_result.value.target()[0], 0.5);
 
         velocity_context.derivative_order = TaskDerivativeOrder3D::Acceleration;
-        const TaskLinearization3DResult acceleration_result =
-            velocity.linearize(velocity_context);
+        const TaskLinearization3DResult acceleration_result = velocity.linearize(velocity_context);
         TERMIN_ROBOTICS_CHECK(acceleration_result.ok());
         check_near(acceleration_result.value.target()[0], 1.6);
 
@@ -140,48 +120,40 @@ namespace
             .velocity_local = Screw3::zero(),
             .diagnostic_name = "base",
         };
-        Articulation3D floating(
-            base, {unit()}, {{0.0}, {0.0}}, "floating-task-model");
+        Articulation3D floating(base, {unit()}, {{0.0}, {0.0}}, "floating-task-model");
         const TaskLinearizationContext3D floating_context{
             .articulation = &floating,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
         };
-        JointVelocityTask3D floating_joint(
-            {0}, {0.25}, 1.0, {.diagnostic_name = "floating-joint"});
-        const TaskLinearization3DResult floating_result =
-            floating_joint.linearize(floating_context);
+        JointVelocityTask3D floating_joint({0}, {0.25}, 1.0, {.diagnostic_name = "floating-joint"});
+        const TaskLinearization3DResult floating_result = floating_joint.linearize(floating_context);
         TERMIN_ROBOTICS_CHECK(floating_result.ok());
         TERMIN_ROBOTICS_CHECK(floating_result.value.variable_count == 7);
-        for (std::size_t column = 0; column < 6; ++column)
-        {
+        for (std::size_t column = 0; column < 6; ++column) {
             check_near(floating_result.value.matrix()(0, column), 0.0);
         }
         check_near(floating_result.value.matrix()(0, 6), 1.0);
     }
 
-    void test_cartesian_acceleration_objectives()
-    {
+    void test_cartesian_acceleration_objectives() {
         Articulation3D articulation = model();
         const TaskLinearizationContext3D context{
             .articulation = &articulation,
             .derivative_order = TaskDerivativeOrder3D::Acceleration,
         };
         const auto point = articulation.point_kinematics(0, Vec3::zero());
-        PointAccelerationTask3D point_task(
-            0,
-            Vec3::zero(),
-            point.value.position_world + Vec3{0.1, -0.2, 0.3},
-            point.value.velocity_world + Vec3{0.4, 0.5, -0.6},
-            {0.7, -0.8, 0.9},
-            2.0,
-            3.0,
-            {.diagnostic_name = "point-acceleration"});
-        const TaskLinearization3DResult point_result =
-            point_task.linearize(context);
+        PointAccelerationTask3D point_task(0,
+                                           Vec3::zero(),
+                                           point.value.position_world + Vec3{0.1, -0.2, 0.3},
+                                           point.value.velocity_world + Vec3{0.4, 0.5, -0.6},
+                                           {0.7, -0.8, 0.9},
+                                           2.0,
+                                           3.0,
+                                           {.diagnostic_name = "point-acceleration"});
+        const TaskLinearization3DResult point_result = point_task.linearize(context);
         TERMIN_ROBOTICS_CHECK(point_result.ok());
-        const Vec3 expected_point =
-            Vec3{0.7, -0.8, 0.9} + Vec3{0.1, -0.2, 0.3} * 2.0 +
-            Vec3{0.4, 0.5, -0.6} * 3.0 - point.value.bias_acceleration_world;
+        const Vec3 expected_point = Vec3{0.7, -0.8, 0.9} + Vec3{0.1, -0.2, 0.3} * 2.0 + Vec3{0.4, 0.5, -0.6} * 3.0 -
+                                    point.value.bias_acceleration_world;
         check_near(point_result.value.target()[0], expected_point.x);
         check_near(point_result.value.target()[1], expected_point.y);
         check_near(point_result.value.target()[2], expected_point.z);
@@ -190,26 +162,21 @@ namespace
         const Screw3 local_error{{0.0, 0.0, 0.1}, {0.2, -0.1, 0.3}};
         const Screw3 velocity_delta{{0.1, 0.2, -0.1}, {-0.2, 0.3, 0.1}};
         const Screw3 feedforward{{-0.4, 0.5, 0.6}, {0.7, -0.8, 0.9}};
-        PoseAccelerationTask3D pose_task(
-            0,
-            frame.value.pose_world * se3_exp(local_error),
-            frame.value.velocity_world + velocity_delta,
-            feedforward,
-            2.0,
-            3.0,
-            4.0,
-            5.0,
-            {.diagnostic_name = "pose-acceleration"});
-        const TaskLinearization3DResult pose_result =
-            pose_task.linearize(context);
+        PoseAccelerationTask3D pose_task(0,
+                                         frame.value.pose_world * se3_exp(local_error),
+                                         frame.value.velocity_world + velocity_delta,
+                                         feedforward,
+                                         2.0,
+                                         3.0,
+                                         4.0,
+                                         5.0,
+                                         {.diagnostic_name = "pose-acceleration"});
+        const TaskLinearization3DResult pose_result = pose_task.linearize(context);
         TERMIN_ROBOTICS_CHECK(pose_result.ok());
-        const Screw3 error_world =
-            local_error.rotated_by(frame.value.pose_world.ang);
-        const Vec3 expected_linear = feedforward.lin + error_world.lin * 2.0 +
-                                     velocity_delta.lin * 4.0 -
+        const Screw3 error_world = local_error.rotated_by(frame.value.pose_world.ang);
+        const Vec3 expected_linear = feedforward.lin + error_world.lin * 2.0 + velocity_delta.lin * 4.0 -
                                      frame.value.bias_acceleration_world.lin;
-        const Vec3 expected_angular = feedforward.ang + error_world.ang * 3.0 +
-                                      velocity_delta.ang * 5.0 -
+        const Vec3 expected_angular = feedforward.ang + error_world.ang * 3.0 + velocity_delta.ang * 5.0 -
                                       frame.value.bias_acceleration_world.ang;
         check_near(pose_result.value.target()[0], expected_linear.x);
         check_near(pose_result.value.target()[1], expected_linear.y);
@@ -219,8 +186,7 @@ namespace
         check_near(pose_result.value.target()[5], expected_angular.z);
     }
 
-    void test_joint_limit_inequality_signs()
-    {
+    void test_joint_limit_inequality_signs() {
         Articulation3D articulation = model();
         JointLimitConstraint3D limits({.diagnostic_name = "limits"});
         TaskLinearizationContext3D context{
@@ -230,16 +196,14 @@ namespace
         };
         const TaskLinearization3DResult velocity = limits.linearize(context);
         TERMIN_ROBOTICS_CHECK(velocity.ok());
-        TERMIN_ROBOTICS_CHECK(velocity.value.relation ==
-                              TaskRelation3D::Inequality);
+        TERMIN_ROBOTICS_CHECK(velocity.value.relation == TaskRelation3D::Inequality);
         check_near(velocity.value.matrix()(0, 0), 0.2);
         check_near(velocity.value.target()[0], 0.75);
         check_near(velocity.value.matrix()(1, 0), -0.2);
         check_near(velocity.value.target()[1], 1.25);
 
         context.derivative_order = TaskDerivativeOrder3D::Acceleration;
-        const TaskLinearization3DResult acceleration =
-            limits.linearize(context);
+        const TaskLinearization3DResult acceleration = limits.linearize(context);
         TERMIN_ROBOTICS_CHECK(acceleration.ok());
         check_near(acceleration.value.matrix()(0, 0), 0.02);
         check_near(acceleration.value.target()[0], 0.73);
@@ -247,11 +211,9 @@ namespace
         check_near(acceleration.value.target()[1], 1.27);
     }
 
-    void test_joint_velocity_limit_inequality_signs()
-    {
+    void test_joint_velocity_limit_inequality_signs() {
         Articulation3D articulation = model();
-        JointVelocityLimitConstraint3D limits(
-            {0}, {-0.2}, {0.3}, {.diagnostic_name = "velocity-limits"});
+        JointVelocityLimitConstraint3D limits({0}, {-0.2}, {0.3}, {.diagnostic_name = "velocity-limits"});
         TaskLinearizationContext3D context{
             .articulation = &articulation,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
@@ -265,8 +227,7 @@ namespace
         check_near(velocity.value.target()[1], 0.2);
 
         context.derivative_order = TaskDerivativeOrder3D::Acceleration;
-        const TaskLinearization3DResult acceleration =
-            limits.linearize(context);
+        const TaskLinearization3DResult acceleration = limits.linearize(context);
         TERMIN_ROBOTICS_CHECK(acceleration.ok());
         check_near(acceleration.value.matrix()(0, 0), 0.5);
         check_near(acceleration.value.target()[0], 0.2);
@@ -274,26 +235,17 @@ namespace
         check_near(acceleration.value.target()[1], 0.3);
     }
 
-    void test_avoidance_inequality_sign()
-    {
+    void test_avoidance_inequality_sign() {
         Articulation3D articulation = model();
-        const ArticulationPointKinematics3DResult point =
-            articulation.point_kinematics(0, Vec3::zero());
+        const ArticulationPointKinematics3DResult point = articulation.point_kinematics(0, Vec3::zero());
         TERMIN_ROBOTICS_CHECK(point.ok());
         const auto jacobian = point.value.linear_jacobian_world();
-        const Vec3 normal =
-            articulation.unit_poses_world()[0].ang.rotate(Vec3::unit_y());
-        const double normal_jacobian = normal.x * jacobian(0, 0) +
-                                       normal.y * jacobian(1, 0) +
-                                       normal.z * jacobian(2, 0);
+        const Vec3 normal = articulation.unit_poses_world()[0].ang.rotate(Vec3::unit_y());
+        const double normal_jacobian =
+            normal.x * jacobian(0, 0) + normal.y * jacobian(1, 0) + normal.z * jacobian(2, 0);
 
-        PointAvoidanceConstraint3D avoidance(0,
-                                             Vec3::zero(),
-                                             normal * 3.0,
-                                             0.05,
-                                             0.1,
-                                             0.5,
-                                             {.diagnostic_name = "avoidance"});
+        PointAvoidanceConstraint3D avoidance(
+            0, Vec3::zero(), normal * 3.0, 0.05, 0.1, 0.5, {.diagnostic_name = "avoidance"});
         const TaskLinearizationContext3D context{
             .articulation = &articulation,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
@@ -303,64 +255,40 @@ namespace
         check_near(result.value.matrix()(0, 0), -normal_jacobian);
         check_near(result.value.target()[0], -0.1);
         // C*dq <= d therefore requires positive separation velocity here.
-        TERMIN_ROBOTICS_CHECK(result.value.matrix()(0, 0) * 0.1 <=
-                              result.value.target()[0] + tolerance);
-        TERMIN_ROBOTICS_CHECK(result.value.matrix()(0, 0) * 0.0 >
-                              result.value.target()[0]);
+        TERMIN_ROBOTICS_CHECK(result.value.matrix()(0, 0) * 0.1 <= result.value.target()[0] + tolerance);
+        TERMIN_ROBOTICS_CHECK(result.value.matrix()(0, 0) * 0.0 > result.value.target()[0]);
     }
 
-    void test_activation_and_diagnostics()
-    {
+    void test_activation_and_diagnostics() {
         Articulation3D articulation = model();
         const TaskLinearizationContext3D velocity_context{
             .articulation = &articulation,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
         };
-        PointVelocityTask3D disabled(
-            std::numeric_limits<std::size_t>::max(),
-            {std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0},
-            Vec3::zero(),
-            {.enabled = false, .diagnostic_name = "disabled"});
-        const TaskLinearization3DResult disabled_result =
-            disabled.linearize(velocity_context);
+        PointVelocityTask3D disabled(std::numeric_limits<std::size_t>::max(),
+                                     {std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0},
+                                     Vec3::zero(),
+                                     {.enabled = false, .diagnostic_name = "disabled"});
+        const TaskLinearization3DResult disabled_result = disabled.linearize(velocity_context);
         TERMIN_ROBOTICS_CHECK(disabled_result.ok());
         TERMIN_ROBOTICS_CHECK(!disabled_result.value.active);
 
-        PointVelocityTask3D invalid_unit(
-            8, Vec3::zero(), Vec3::zero(), {.diagnostic_name = "bad-unit"});
-        TERMIN_ROBOTICS_CHECK(
-            invalid_unit.linearize(velocity_context).diagnostic ==
-            TaskDiagnostic3D::InvalidUnit);
+        PointVelocityTask3D invalid_unit(8, Vec3::zero(), Vec3::zero(), {.diagnostic_name = "bad-unit"});
+        TERMIN_ROBOTICS_CHECK(invalid_unit.linearize(velocity_context).diagnostic == TaskDiagnostic3D::InvalidUnit);
 
-        JointVelocityTask3D duplicate(
-            {0, 0}, {0.0, 0.0}, 1.0, {.diagnostic_name = "duplicate"});
-        TERMIN_ROBOTICS_CHECK(
-            duplicate.linearize(velocity_context).diagnostic ==
-            TaskDiagnostic3D::DuplicateJoint);
+        JointVelocityTask3D duplicate({0, 0}, {0.0, 0.0}, 1.0, {.diagnostic_name = "duplicate"});
+        TERMIN_ROBOTICS_CHECK(duplicate.linearize(velocity_context).diagnostic == TaskDiagnostic3D::DuplicateJoint);
 
         PointVelocityTask3D bad_weight(
-            0,
-            Vec3::zero(),
-            Vec3::zero(),
-            {.diagonal_weight = {1.0, -1.0, 1.0}, .diagnostic_name = "weight"});
-        TERMIN_ROBOTICS_CHECK(
-            bad_weight.linearize(velocity_context).diagnostic ==
-            TaskDiagnostic3D::InvalidWeight);
+            0, Vec3::zero(), Vec3::zero(), {.diagonal_weight = {1.0, -1.0, 1.0}, .diagnostic_name = "weight"});
+        TERMIN_ROBOTICS_CHECK(bad_weight.linearize(velocity_context).diagnostic == TaskDiagnostic3D::InvalidWeight);
 
-        PointAvoidanceConstraint3D bad_normal(0,
-                                              Vec3::zero(),
-                                              Vec3::zero(),
-                                              0.0,
-                                              0.1,
-                                              1.0,
-                                              {.diagnostic_name = "normal"});
-        TERMIN_ROBOTICS_CHECK(
-            bad_normal.linearize(velocity_context).diagnostic ==
-            TaskDiagnostic3D::InvalidNormal);
+        PointAvoidanceConstraint3D bad_normal(
+            0, Vec3::zero(), Vec3::zero(), 0.0, 0.1, 1.0, {.diagnostic_name = "normal"});
+        TERMIN_ROBOTICS_CHECK(bad_normal.linearize(velocity_context).diagnostic == TaskDiagnostic3D::InvalidNormal);
 
         TaskLinearizationContext3D acceleration_context = velocity_context;
-        acceleration_context.derivative_order =
-            TaskDerivativeOrder3D::Acceleration;
+        acceleration_context.derivative_order = TaskDerivativeOrder3D::Acceleration;
         PoseTrackingTask3D pose(0, Pose3::identity(), Screw3::zero(), 1.0, 1.0);
         TERMIN_ROBOTICS_CHECK(pose.linearize(acceleration_context).diagnostic ==
                               TaskDiagnostic3D::UnsupportedDerivativeOrder);
@@ -370,14 +298,11 @@ namespace
             .articulation = &invalid_model,
             .derivative_order = TaskDerivativeOrder3D::Velocity,
         };
-        TERMIN_ROBOTICS_CHECK(
-            invalid_unit.linearize(invalid_context).diagnostic ==
-            TaskDiagnostic3D::InvalidModel);
+        TERMIN_ROBOTICS_CHECK(invalid_unit.linearize(invalid_context).diagnostic == TaskDiagnostic3D::InvalidModel);
     }
-}
+} // namespace
 
-int main()
-{
+int main() {
     test_frame_jacobian();
     test_point_and_pose_objectives();
     test_joint_objectives_and_floating_offset();

@@ -9,17 +9,17 @@
 #include "termin/python_host/python_host.hpp"
 
 #include <cstdlib>
-#include <iostream>
 #include <cstring>
 #include <filesystem>
+#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 #ifdef __linux__
-#include <unistd.h>
 #include <linux/limits.h>
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -51,7 +51,8 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
     return {};
 #else
     fs::path lib_dir = install_root / "lib";
-    if (!fs::exists(lib_dir)) return {};
+    if (!fs::exists(lib_dir))
+        return {};
 
     for (const auto& entry : fs::directory_iterator(lib_dir)) {
         if (entry.is_directory()) {
@@ -74,12 +75,15 @@ static fs::path find_site_packages_termin(const fs::path& install_root) {
     return {};
 #else
     fs::path lib_dir = install_root / "lib";
-    if (!fs::exists(lib_dir)) return {};
+    if (!fs::exists(lib_dir))
+        return {};
 
     for (const auto& entry : fs::directory_iterator(lib_dir)) {
-        if (!entry.is_directory()) continue;
+        if (!entry.is_directory())
+            continue;
         std::string name = entry.path().filename().string();
-        if (name.find("python3.") != 0) continue;
+        if (name.find("python3.") != 0)
+            continue;
         fs::path termin_dir = entry.path() / "site-packages" / "termin";
         if (fs::exists(termin_dir)) {
             return termin_dir;
@@ -164,8 +168,7 @@ int main(int argc, char* argv[]) {
         python_config.home = install_root;
 #endif
     }
-    const termin::python_host::InitResult initialized =
-        termin::python_host::initialize(python_config);
+    const termin::python_host::InitResult initialized = termin::python_host::initialize(python_config);
     if (!initialized.ok) {
         std::cerr << initialized.error << std::endl;
         return 1;
@@ -175,21 +178,21 @@ int main(int argc, char* argv[]) {
     std::string path_code;
     if (bundled_python) {
         fs::path site_packages = python_stdlib / "site-packages";
-        path_code =
-            "import sys\n"
-            "sys.path.insert(0, r'" + site_packages.string() + "')\n";
+        path_code = "import sys\n"
+                    "sys.path.insert(0, r'" +
+                    site_packages.string() + "')\n";
     } else if (installed_site_packages) {
-        path_code =
-            "import sys\n"
-            "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
-            "for p in reversed(host_paths):\n"
-            "    if p and p not in sys.path:\n"
-            "        sys.path.insert(0, p)\n"
-            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n";
+        path_code = "import sys\n"
+                    "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
+                    "for p in reversed(host_paths):\n"
+                    "    if p and p not in sys.path:\n"
+                    "        sys.path.insert(0, p)\n"
+                    "sys.path.insert(0, r'" +
+                    termin_path.parent_path().string() + "')\n";
     } else {
-        path_code =
-            "import sys\n"
-            "sys.path.insert(0, r'" + termin_path.string() + "')\n";
+        path_code = "import sys\n"
+                    "sys.path.insert(0, r'" +
+                    termin_path.string() + "')\n";
     }
 
     if (PyRun_SimpleString(path_code.c_str()) != 0) {
@@ -209,8 +212,7 @@ print(json.dumps({"tcbase": tcbase.__file__, "termin_launcher": termin.launcher.
             PyErr_Print();
         }
         if (termin::python_host::finalize() != 0) {
-            std::cerr << "termin_launcher: Python finalization failed after layout smoke"
-                      << std::endl;
+            std::cerr << "termin_launcher: Python finalization failed after layout smoke" << std::endl;
             return 1;
         }
         return result == 0 ? 0 : 1;

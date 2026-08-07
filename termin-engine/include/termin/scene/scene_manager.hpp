@@ -3,10 +3,10 @@
 #define TC_SCENE_MANAGER_HPP
 
 #include "termin/engine/termin_engine_api.hpp"
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <functional>
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -16,100 +16,99 @@ extern "C" {
 
 namespace termin {
 
-// SceneManager - manages multiple scenes and their update cycles
-class TERMIN_ENGINE_API SceneManager {
-public:
-    using AfterRenderCallback = std::function<void()>;
-    using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
-    using BeforeSceneDestroyGuard = std::function<void(tc_scene_handle)>;
+    // SceneManager - manages multiple scenes and their update cycles
+    class TERMIN_ENGINE_API SceneManager {
+    public:
+        using AfterRenderCallback = std::function<void()>;
+        using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
+        using BeforeSceneDestroyGuard = std::function<void(tc_scene_handle)>;
 
-protected:
-    // Registered scenes: name -> tc_scene_handle
-    std::unordered_map<std::string, tc_scene_handle> _scenes;
+    protected:
+        // Registered scenes: name -> tc_scene_handle
+        std::unordered_map<std::string, tc_scene_handle> _scenes;
 
-    // Scene file paths: name -> path
-    std::unordered_map<std::string, std::string> _paths;
+        // Scene file paths: name -> path
+        std::unordered_map<std::string, std::string> _paths;
 
-    // Render request flag
-    bool _render_requested = false;
+        // Render request flag
+        bool _render_requested = false;
 
-    // Callbacks
-    AfterRenderCallback _on_after_render;
-    BeforeSceneCloseCallback _on_before_scene_close;
-    BeforeSceneDestroyGuard _before_scene_destroy_guard;
+        // Callbacks
+        AfterRenderCallback _on_after_render;
+        BeforeSceneCloseCallback _on_before_scene_close;
+        BeforeSceneDestroyGuard _before_scene_destroy_guard;
 
-public:
-    SceneManager();
-    virtual ~SceneManager();
+    public:
+        SceneManager();
+        virtual ~SceneManager();
 
-    // Disable copy
-    SceneManager(const SceneManager&) = delete;
-    SceneManager& operator=(const SceneManager&) = delete;
+        // Disable copy
+        SceneManager(const SceneManager&) = delete;
+        SceneManager& operator=(const SceneManager&) = delete;
 
-    // --- Scene lifecycle ---
+        // --- Scene lifecycle ---
 
-    // Create a new scene in the pool, attach requested extensions, and register it
-    tc_scene_handle create_scene(const std::string& name, const std::vector<tc_scene_ext_type_id>& extensions = {});
+        // Create a new scene in the pool, attach requested extensions, and register it
+        tc_scene_handle create_scene(const std::string& name, const std::vector<tc_scene_ext_type_id>& extensions = {});
 
-    // Close and destroy a scene
-    void close_scene(const std::string& name);
+        // Close and destroy a scene
+        void close_scene(const std::string& name);
 
-    // Close all scenes
-    void close_all_scenes();
+        // Close all scenes
+        void close_all_scenes();
 
-    // --- Scene registration (for external scenes) ---
+        // --- Scene registration (for external scenes) ---
 
-    void register_scene(const std::string& name, tc_scene_handle scene);
-    void unregister_scene(const std::string& name);
+        void register_scene(const std::string& name, tc_scene_handle scene);
+        void unregister_scene(const std::string& name);
 
-    // --- Scene access ---
+        // --- Scene access ---
 
-    tc_scene_handle get_scene(const std::string& name) const;
-    bool has_scene(const std::string& name) const;
-    std::vector<std::string> scene_names() const;
+        tc_scene_handle get_scene(const std::string& name) const;
+        bool has_scene(const std::string& name) const;
+        std::vector<std::string> scene_names() const;
 
-    // --- Path management ---
+        // --- Path management ---
 
-    std::string get_scene_path(const std::string& name) const;
-    void set_scene_path(const std::string& name, const std::string& path);
+        std::string get_scene_path(const std::string& name) const;
+        void set_scene_path(const std::string& name, const std::string& path);
 
-    // --- File I/O (JSON only, scene data handled by TcScene) ---
+        // --- File I/O (JSON only, scene data handled by TcScene) ---
 
-    // Read JSON file and return as string
-    static std::string read_json_file(const std::string& path);
+        // Read JSON file and return as string
+        static std::string read_json_file(const std::string& path);
 
-    // Write JSON string to file (atomic write)
-    static void write_json_file(const std::string& path, const std::string& json);
+        // Write JSON string to file (atomic write)
+        static void write_json_file(const std::string& path, const std::string& json);
 
-    // --- Scene mode management ---
+        // --- Scene mode management ---
 
-    tc_scene_mode get_mode(const std::string& name) const;
-    void set_mode(const std::string& name, tc_scene_mode mode);
+        tc_scene_mode get_mode(const std::string& name) const;
+        void set_mode(const std::string& name, tc_scene_mode mode);
 
-    // Check if any scene is in PLAY mode
-    bool has_play_scenes() const;
+        // Check if any scene is in PLAY mode
+        bool has_play_scenes() const;
 
-    // --- Update cycle ---
+        // --- Update cycle ---
 
-    // Main update loop - updates all scenes based on their mode
-    // Returns true if render is needed (has PLAY scenes or render_requested)
-    virtual bool tick(double dt);
+        // Main update loop - updates all scenes based on their mode
+        // Returns true if render is needed (has PLAY scenes or render_requested)
+        virtual bool tick(double dt);
 
-    // Render request flag
-    void request_render();
-    bool consume_render_request();
+        // Render request flag
+        void request_render();
+        bool consume_render_request();
 
-    // --- Callbacks ---
-    void set_on_after_render(AfterRenderCallback callback);
-    void set_on_before_scene_close(BeforeSceneCloseCallback callback);
-    // Engine-owned invariant guard. Unlike the host callback, this is not
-    // exposed to Python and cannot be replaced by editor wiring.
-    void set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard);
+        // --- Callbacks ---
+        void set_on_after_render(AfterRenderCallback callback);
+        void set_on_before_scene_close(BeforeSceneCloseCallback callback);
+        // Engine-owned invariant guard. Unlike the host callback, this is not
+        // exposed to Python and cannot be replaced by editor wiring.
+        void set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard);
 
-    void invoke_after_render();
-    void invoke_before_scene_close(const std::string& name);
-
-};
+        void invoke_after_render();
+        void invoke_before_scene_close(const std::string& name);
+    };
 
 } // namespace termin
 

@@ -7,6 +7,6 @@
 #endif
 
 int main() {
-  TERMIN_QOPT_CHECK(termin::qopt::termin_qopt_version() == "0.1.0");
-  return 0;
+    TERMIN_QOPT_CHECK(termin::qopt::termin_qopt_version() == "0.1.0");
+    return 0;
 }

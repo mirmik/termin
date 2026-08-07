@@ -15,15 +15,14 @@ GUARD_TEST_MAIN();
 
 namespace {
 
-bool contract_has_required_input(const tc_shader_contract_view& contract, const char* semantic) {
-    for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
-        if (contract.vertex_inputs[i].required &&
-            std::strcmp(contract.vertex_inputs[i].semantic, semantic) == 0) {
-            return true;
+    bool contract_has_required_input(const tc_shader_contract_view& contract, const char* semantic) {
+        for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
+            if (contract.vertex_inputs[i].required && std::strcmp(contract.vertex_inputs[i].semantic, semantic) == 0) {
+                return true;
+            }
         }
+        return false;
     }
-    return false;
-}
 
 } // namespace
 
@@ -68,13 +67,10 @@ TEST_CASE("navmesh debug shader publishes its authored vertex interface") {
 
     termin::MaterialPipelinePassContract color_contract{};
     color_contract.debug_name = "color";
-    color_contract.required_material_fragment_input =
-        termin::material_pipeline_standard_material_fragment_interface();
-    color_contract.vertex_output_adapter =
-        termin::material_pipeline_standard_material_vertex_output_adapter();
-    color_contract.static_vertex_transform =
-        termin::material_pipeline_make_static_mesh_vertex_transform_provider(
-            "static", termin::MeshVertexTransformProfile::Material, "draw_data.u_model");
+    color_contract.required_material_fragment_input = termin::material_pipeline_standard_material_fragment_interface();
+    color_contract.vertex_output_adapter = termin::material_pipeline_standard_material_vertex_output_adapter();
+    color_contract.static_vertex_transform = termin::material_pipeline_make_static_mesh_vertex_transform_provider(
+        "static", termin::MeshVertexTransformProfile::Material, "draw_data.u_model");
 
     termin::RenderItemTaskPlanningContract planning_contract{};
     planning_contract.phase = TC_PHASE_EDITOR_DEBUG;
@@ -95,8 +91,7 @@ TEST_CASE("navmesh debug shader publishes its authored vertex interface") {
     request.contract = &planning_contract;
 
     termin::RenderTaskList tasks;
-    const termin::RenderItemTaskPlanningResult result =
-        termin::plan_render_item_task(request, tasks);
+    const termin::RenderItemTaskPlanningResult result = termin::plan_render_item_task(request, tasks);
     REQUIRE(result.accepted());
     REQUIRE_EQ(tasks.size(), 1u);
     CHECK(tc_shader_handle_eq(tasks.at(result.task_index).final_shader, phase->shader));

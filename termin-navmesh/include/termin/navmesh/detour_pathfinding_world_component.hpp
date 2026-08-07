@@ -9,70 +9,53 @@
 
 namespace termin {
 
-class TERMIN_NAVMESH_COMPONENTS_API DetourPathfindingWorldComponent : public CxxComponent {
-private:
-    mutable std::string _loaded_navmesh_uuid;
-    mutable std::string _loaded_asset_path;
-    mutable bool _load_failed = false;
-    std::vector<std::vector<unsigned char>> _tile_blobs;
-    DetourQuerySession _query_session;
+    class TERMIN_NAVMESH_COMPONENTS_API DetourPathfindingWorldComponent : public CxxComponent {
+    private:
+        mutable std::string _loaded_navmesh_uuid;
+        mutable std::string _loaded_asset_path;
+        mutable bool _load_failed = false;
+        std::vector<std::vector<unsigned char>> _tile_blobs;
+        DetourQuerySession _query_session;
 
-public:
-    std::string navmesh_uuid;
-    float query_extent_x = 2.0f;
-    float query_extent_y = 4.0f;
-    float query_extent_z = 2.0f;
-    int max_polys = 256;
-    int max_straight_path = 256;
+    public:
+        std::string navmesh_uuid;
+        float query_extent_x = 2.0f;
+        float query_extent_y = 4.0f;
+        float query_extent_z = 2.0f;
+        int max_polys = 256;
+        int max_straight_path = 256;
 
-    DetourPathfindingWorldComponent();
-    ~DetourPathfindingWorldComponent() override;
+        DetourPathfindingWorldComponent();
+        ~DetourPathfindingWorldComponent() override;
 
-    static void register_type();
+        static void register_type();
 
-    void on_added() override;
-    void on_removed() override;
+        void on_added() override;
+        void on_removed() override;
 
-    bool rebuild();
-    void clear();
-    bool is_ready() const;
+        bool rebuild();
+        void clear();
+        bool is_ready() const;
 
-    std::vector<Vec3f> find_path(
-        const Vec3f& start,
-        const Vec3f& end);
+        std::vector<Vec3f> find_path(const Vec3f& start, const Vec3f& end);
 
-    DetourPathResult find_detailed_path(
-        const Vec3f& start,
-        const Vec3f& end);
+        DetourPathResult find_detailed_path(const Vec3f& start, const Vec3f& end);
 
-    DetourRaycastResult raycast(
-        const Vec3f& start,
-        const Vec3f& end);
+        DetourRaycastResult raycast(const Vec3f& start, const Vec3f& end);
 
-    DetourClosestPointResult closest_point(const Vec3f& point);
+        DetourClosestPointResult closest_point(const Vec3f& point);
 
-    std::vector<Vec3f> find_path_world(
-        const Pose3& bake_frame,
-        const Vec3f& start,
-        const Vec3f& end);
+        std::vector<Vec3f> find_path_world(const Pose3& bake_frame, const Vec3f& start, const Vec3f& end);
 
-    DetourPathResult find_detailed_path_world(
-        const Pose3& bake_frame,
-        const Vec3f& start,
-        const Vec3f& end);
+        DetourPathResult find_detailed_path_world(const Pose3& bake_frame, const Vec3f& start, const Vec3f& end);
 
-    DetourRaycastResult raycast_world(
-        const Pose3& bake_frame,
-        const Vec3f& start,
-        const Vec3f& end);
+        DetourRaycastResult raycast_world(const Pose3& bake_frame, const Vec3f& start, const Vec3f& end);
 
-    DetourClosestPointResult closest_point_world(
-        const Pose3& bake_frame,
-        const Vec3f& point);
+        DetourClosestPointResult closest_point_world(const Pose3& bake_frame, const Vec3f& point);
 
-private:
-    bool ensure_query_loaded();
-    void sync_query_settings();
-};
+    private:
+        bool ensure_query_loaded();
+        void sync_query_settings();
+    };
 
 } // namespace termin

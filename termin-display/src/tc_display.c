@@ -2,12 +2,12 @@
 #include "render/tc_display.h"
 #include "tc_display_input_router_internal.h"
 #include "tc_input_event.h"
-#include <tcbase/tc_log.h>
-#include <tcbase/tc_pool.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tcbase/tc_log.h>
+#include <tcbase/tc_pool.h>
 
 #define MAX_DISPLAYS 256u
 #define INITIAL_POOL_CAPACITY 16u
@@ -34,10 +34,12 @@ static bool g_display_pool_initialized = false;
 // ============================================================================
 
 static char* tc_strdup(const char* s) {
-    if (s == NULL) return NULL;
+    if (s == NULL)
+        return NULL;
     size_t len = strlen(s) + 1;
     char* copy = (char*)malloc(len);
-    if (copy) memcpy(copy, s, len);
+    if (copy)
+        memcpy(copy, s, len);
     return copy;
 }
 
@@ -52,14 +54,12 @@ static void tc_display_init_empty(tc_display* display) {
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
 }
 
-static bool tc_display_surface_can_be_adopted(
-    tc_render_surface* surface,
-    const char* operation
-) {
-    if (!surface) return true;
+static bool tc_display_surface_can_be_adopted(tc_render_surface* surface, const char* operation) {
+    if (!surface)
+        return true;
     if (!surface->vtable || !surface->vtable->get_size || !surface->vtable->resize ||
-        !surface->vtable->get_color_texture_id ||
-        !surface->vtable->get_graphics_domain_key || !surface->vtable->destroy) {
+        !surface->vtable->get_color_texture_id || !surface->vtable->get_graphics_domain_key ||
+        !surface->vtable->destroy) {
         tc_log(TC_LOG_ERROR, "[%s] surface has an incomplete vtable", operation);
         return false;
     }
@@ -70,12 +70,10 @@ static bool tc_display_surface_can_be_adopted(
     return true;
 }
 
-static bool tc_display_destroy_owned_surface(
-    tc_display_handle handle,
-    tc_render_surface* surface,
-    const char* operation
-) {
-    if (!surface) return true;
+static bool
+tc_display_destroy_owned_surface(tc_display_handle handle, tc_render_surface* surface, const char* operation) {
+    if (!surface)
+        return true;
     surface->on_resize = NULL;
     surface->on_resize_userdata = NULL;
     if (!tc_render_surface_detach(surface, handle)) {
@@ -90,16 +88,13 @@ static tc_display* tc_display_get_alive(tc_display_handle handle, const char* op
         tc_log(TC_LOG_ERROR, "[%s] display pool is not initialized", operation);
         return NULL;
     }
-    if (!tc_display_handle_valid(handle) ||
-        handle.index >= g_display_pool.capacity) {
-        tc_log(TC_LOG_ERROR, "[%s] invalid display handle (%u, %u)", operation,
-               handle.index, handle.generation);
+    if (!tc_display_handle_valid(handle) || handle.index >= g_display_pool.capacity) {
+        tc_log(TC_LOG_ERROR, "[%s] invalid display handle (%u, %u)", operation, handle.index, handle.generation);
         return NULL;
     }
     tc_handle pool_handle = {handle.index, handle.generation};
     if (!tc_pool_is_valid(&g_display_pool, pool_handle)) {
-        tc_log(TC_LOG_ERROR, "[%s] stale display handle (%u, %u)", operation,
-               handle.index, handle.generation);
+        tc_log(TC_LOG_ERROR, "[%s] stale display handle (%u, %u)", operation, handle.index, handle.generation);
         return NULL;
     }
     return (tc_display*)tc_pool_get_unchecked(&g_display_pool, handle.index);
@@ -121,18 +116,12 @@ void tc_display_pool_init(void) {
         .name = "tc_display_pool",
         .generation_epoch = &g_display_generation_epoch,
     };
-    if (!tc_pool_init_ex(
-            &g_display_pool,
-            sizeof(tc_display),
-            INITIAL_POOL_CAPACITY,
-            &config)) {
+    if (!tc_pool_init_ex(&g_display_pool, sizeof(tc_display), INITIAL_POOL_CAPACITY, &config)) {
         tc_log(TC_LOG_ERROR, "[tc_display_pool] storage allocation failed");
         return;
     }
     for (uint32_t i = 0; i < g_display_pool.capacity; ++i) {
-        tc_display_init_empty(
-            (tc_display*)tc_pool_get_unchecked(&g_display_pool, i)
-        );
+        tc_display_init_empty((tc_display*)tc_pool_get_unchecked(&g_display_pool, i));
     }
     g_display_pool_initialized = true;
 }
@@ -162,15 +151,16 @@ static void tc_display_cleanup(tc_display_handle handle, tc_display* display) {
 }
 
 void tc_display_pool_shutdown(void) {
-    if (!g_display_pool_initialized) return;
+    if (!g_display_pool_initialized)
+        return;
     if (tc_pool_count(&g_display_pool) != 0u) {
-        tc_log(TC_LOG_ERROR, "[tc_display_pool] shutdown with %zu live display(s)",
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_pool] shutdown with %zu live display(s)",
                (size_t)tc_pool_count(&g_display_pool));
     }
     for (uint32_t i = 0; i < g_display_pool.capacity; ++i) {
         if (g_display_pool.states[i] == TC_SLOT_OCCUPIED) {
-            tc_display* display =
-                (tc_display*)tc_pool_get_unchecked(&g_display_pool, i);
+            tc_display* display = (tc_display*)tc_pool_get_unchecked(&g_display_pool, i);
             tc_display_handle handle = {i, g_display_pool.generations[i]};
             tc_display_cleanup(handle, display);
         }
@@ -181,9 +171,8 @@ void tc_display_pool_shutdown(void) {
 
 bool tc_display_alive(tc_display_handle handle) {
     const tc_handle pool_handle = {handle.index, handle.generation};
-    return g_display_pool_initialized &&
-        tc_display_handle_valid(handle) &&
-        tc_pool_is_valid(&g_display_pool, pool_handle);
+    return g_display_pool_initialized && tc_display_handle_valid(handle) &&
+           tc_pool_is_valid(&g_display_pool, pool_handle);
 }
 
 size_t tc_display_pool_count(void) {
@@ -202,8 +191,7 @@ tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
     if (tc_handle_is_invalid(pool_handle)) {
         return TC_DISPLAY_HANDLE_INVALID;
     }
-    tc_display* display =
-        (tc_display*)tc_pool_get_unchecked(&g_display_pool, pool_handle.index);
+    tc_display* display = (tc_display*)tc_pool_get_unchecked(&g_display_pool, pool_handle.index);
     tc_display_init_empty(display);
     tc_display_handle handle = {pool_handle.index, pool_handle.generation};
 
@@ -244,7 +232,8 @@ tc_display_handle tc_display_new(const char* name, tc_render_surface* surface) {
 
 bool tc_display_free(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_free");
-    if (!display) return false;
+    if (!display)
+        return false;
     tc_display_cleanup(handle, display);
     tc_display_init_empty(display);
     const tc_handle pool_handle = {handle.index, handle.generation};
@@ -257,7 +246,8 @@ bool tc_display_free(tc_display_handle handle) {
 
 void tc_display_set_name(tc_display_handle handle, const char* name) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_name");
-    if (display) tc_display_strset(&display->name, name);
+    if (display)
+        tc_display_strset(&display->name, name);
 }
 
 const char* tc_display_get_name(tc_display_handle handle) {
@@ -267,7 +257,8 @@ const char* tc_display_get_name(tc_display_handle handle) {
 
 void tc_display_set_uuid(tc_display_handle handle, const char* uuid) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_uuid");
-    if (display) tc_display_strset(&display->uuid, uuid);
+    if (display)
+        tc_display_strset(&display->uuid, uuid);
 }
 
 const char* tc_display_get_uuid(tc_display_handle handle) {
@@ -277,7 +268,8 @@ const char* tc_display_get_uuid(tc_display_handle handle) {
 
 void tc_display_set_editor_only(tc_display_handle handle, bool editor_only) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_editor_only");
-    if (display) display->editor_only = editor_only;
+    if (display)
+        display->editor_only = editor_only;
 }
 
 bool tc_display_get_editor_only(tc_display_handle handle) {
@@ -287,7 +279,8 @@ bool tc_display_get_editor_only(tc_display_handle handle) {
 
 void tc_display_set_enabled(tc_display_handle handle, bool enabled) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_enabled");
-    if (display) display->enabled = enabled;
+    if (display)
+        display->enabled = enabled;
 }
 
 bool tc_display_get_enabled(tc_display_handle handle) {
@@ -297,7 +290,8 @@ bool tc_display_get_enabled(tc_display_handle handle) {
 
 void tc_display_set_auto_remove_when_empty(tc_display_handle handle, bool value) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_auto_remove_when_empty");
-    if (display) display->auto_remove_when_empty = value;
+    if (display)
+        display->auto_remove_when_empty = value;
 }
 
 bool tc_display_get_auto_remove_when_empty(tc_display_handle handle) {
@@ -310,21 +304,21 @@ bool tc_display_set_surface(tc_display_handle handle, tc_render_surface* surface
     if (!display) {
         return false;
     }
-    if (surface == display->surface) return true;
+    if (surface == display->surface)
+        return true;
 
     if (!tc_display_surface_can_be_adopted(surface, "tc_display_set_surface")) {
         return false;
     }
-    if (display->surface &&
-        !tc_display_handle_eq(display->surface->attached_display, handle)) {
-        tc_log(TC_LOG_ERROR,
-               "[tc_display_set_surface] current owned surface attachment is inconsistent");
+    if (display->surface && !tc_display_handle_eq(display->surface->attached_display, handle)) {
+        tc_log(TC_LOG_ERROR, "[tc_display_set_surface] current owned surface attachment is inconsistent");
         return false;
     }
 
     // Claim the replacement before touching the current attachment. A failed
     // duplicate attach therefore leaves both displays unchanged.
-    if (surface && !tc_render_surface_attach(surface, handle)) return false;
+    if (surface && !tc_render_surface_attach(surface, handle))
+        return false;
 
     tc_render_surface* previous = display->surface;
     display->surface = surface;
@@ -336,10 +330,8 @@ bool tc_display_set_surface(tc_display_handle handle, tc_render_surface* surface
         // Update pixel rects with new surface size
         tc_display_update_all_pixel_rects(handle);
     }
-    if (previous &&
-        !tc_display_destroy_owned_surface(handle, previous, "tc_display_set_surface")) {
-        tc_log(TC_LOG_ERROR,
-               "[tc_display_set_surface] failed to destroy replaced owned surface");
+    if (previous && !tc_display_destroy_owned_surface(handle, previous, "tc_display_set_surface")) {
+        tc_log(TC_LOG_ERROR, "[tc_display_set_surface] failed to destroy replaced owned surface");
     }
     return true;
 }
@@ -360,8 +352,7 @@ bool tc_display_resize(tc_display_handle handle, int width, int height) {
         return false;
     }
     if (!tc_render_surface_resize(display->surface, width, height)) {
-        tc_log(TC_LOG_ERROR, "[tc_display_resize] surface rejected resize to %dx%d",
-               width, height);
+        tc_log(TC_LOG_ERROR, "[tc_display_resize] surface rejected resize to %dx%d", width, height);
         return false;
     }
     return true;
@@ -369,35 +360,28 @@ bool tc_display_resize(tc_display_handle handle, int width, int height) {
 
 uint32_t tc_display_get_color_texture_id(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_get_color_texture_id");
-    return display && display->surface
-        ? tc_render_surface_get_color_texture_id(display->surface)
-        : 0u;
+    return display && display->surface ? tc_render_surface_get_color_texture_id(display->surface) : 0u;
 }
 
 uintptr_t tc_display_get_graphics_domain_key(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_get_graphics_domain_key");
-    return display && display->surface
-        ? tc_render_surface_get_graphics_domain_key(display->surface)
-        : 0u;
+    return display && display->surface ? tc_render_surface_get_graphics_domain_key(display->surface) : 0u;
 }
 
-bool tc_display_validate_output(
-    tc_display_handle handle,
-    uintptr_t expected_graphics_domain_key,
-    uint32_t* color_texture_id
-) {
+bool tc_display_validate_output(tc_display_handle handle,
+                                uintptr_t expected_graphics_domain_key,
+                                uint32_t* color_texture_id) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_validate_output");
     if (!display || !display->surface) {
-        if (color_texture_id) *color_texture_id = 0u;
+        if (color_texture_id)
+            *color_texture_id = 0u;
         tc_log(TC_LOG_ERROR, "[tc_display_validate_output] display has no render surface");
         return false;
     }
-    return tc_render_surface_validate_output(
-        display->surface, expected_graphics_domain_key, color_texture_id);
+    return tc_render_surface_validate_output(display->surface, expected_graphics_domain_key, color_texture_id);
 }
 
-static bool tc_display_validate_pointer_event(tc_display* display, double x, double y,
-                                              const char* operation) {
+static bool tc_display_validate_pointer_event(tc_display* display, double x, double y, const char* operation) {
     if (!display || !display->input_endpoint) {
         tc_log(TC_LOG_ERROR, "[%s] display input endpoint is unavailable", operation);
         return false;
@@ -418,17 +402,10 @@ tc_input_manager* tc_display_get_input_manager(tc_display_handle handle) {
 }
 
 bool tc_display_dispatch_pointer(
-    tc_display_handle handle,
-    uint64_t pointer_id,
-    int device,
-    int phase,
-    double x,
-    double y,
-    float pressure
-) {
+    tc_display_handle handle, uint64_t pointer_id, int device, int phase, double x, double y, float pressure) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_pointer");
-    if (!tc_display_validate_pointer_event(display, x, y,
-                                           "tc_display_dispatch_pointer")) return false;
+    if (!tc_display_validate_pointer_event(display, x, y, "tc_display_dispatch_pointer"))
+        return false;
     if (device < TC_POINTER_DEVICE_MOUSE || device > TC_POINTER_DEVICE_PEN) {
         tc_log(TC_LOG_ERROR, "[tc_display_dispatch_pointer] invalid pointer device %d", device);
         return false;
@@ -441,35 +418,32 @@ bool tc_display_dispatch_pointer(
         tc_log(TC_LOG_ERROR, "[tc_display_dispatch_pointer] non-finite pressure");
         return false;
     }
-    tc_input_manager_on_pointer(
-        display->input_endpoint, pointer_id, device, phase, x, y, pressure);
+    tc_input_manager_on_pointer(display->input_endpoint, pointer_id, device, phase, x, y, pressure);
     return true;
 }
 
 bool tc_display_dispatch_pointer_move(tc_display_handle handle, double x, double y) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_pointer_move");
-    if (!tc_display_validate_pointer_event(display, x, y,
-                                           "tc_display_dispatch_pointer_move")) return false;
+    if (!tc_display_validate_pointer_event(display, x, y, "tc_display_dispatch_pointer_move"))
+        return false;
     tc_input_manager_on_mouse_move(display->input_endpoint, x, y);
     return true;
 }
 
-bool tc_display_dispatch_pointer_button(tc_display_handle handle, double x, double y,
-                                        int button, int action, int mods,
-                                        uint32_t click_count) {
+bool tc_display_dispatch_pointer_button(
+    tc_display_handle handle, double x, double y, int button, int action, int mods, uint32_t click_count) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_pointer_button");
-    if (!tc_display_validate_pointer_event(display, x, y,
-                                           "tc_display_dispatch_pointer_button")) return false;
+    if (!tc_display_validate_pointer_event(display, x, y, "tc_display_dispatch_pointer_button"))
+        return false;
     tc_input_manager_on_mouse_move(display->input_endpoint, x, y);
     tc_input_manager_on_mouse_button(display->input_endpoint, button, action, mods, click_count);
     return true;
 }
 
-bool tc_display_dispatch_wheel(tc_display_handle handle, double x, double y,
-                               double wheel_x, double wheel_y, int mods) {
+bool tc_display_dispatch_wheel(tc_display_handle handle, double x, double y, double wheel_x, double wheel_y, int mods) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_wheel");
-    if (!tc_display_validate_pointer_event(display, x, y,
-                                           "tc_display_dispatch_wheel")) return false;
+    if (!tc_display_validate_pointer_event(display, x, y, "tc_display_dispatch_wheel"))
+        return false;
     if (!isfinite(wheel_x) || !isfinite(wheel_y)) {
         tc_log(TC_LOG_ERROR, "[tc_display_dispatch_wheel] non-finite wheel delta");
         return false;
@@ -479,8 +453,7 @@ bool tc_display_dispatch_wheel(tc_display_handle handle, double x, double y,
     return true;
 }
 
-bool tc_display_dispatch_key(tc_display_handle handle, int key, int scancode,
-                             int action, int mods) {
+bool tc_display_dispatch_key(tc_display_handle handle, int key, int scancode, int action, int mods) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_key");
     if (!display || !display->input_endpoint) {
         tc_log(TC_LOG_ERROR, "[tc_display_dispatch_key] display input endpoint is unavailable");
@@ -500,17 +473,12 @@ bool tc_display_dispatch_text(tc_display_handle handle, uint32_t codepoint) {
     return true;
 }
 
-bool tc_display_dispatch_text_utf8(
-    tc_display_handle handle,
-    const char* text_utf8
-) {
-    tc_display* display =
-        tc_display_get_alive(handle, "tc_display_dispatch_text_utf8");
+bool tc_display_dispatch_text_utf8(tc_display_handle handle, const char* text_utf8) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_text_utf8");
     if (!display || !display->input_endpoint || !text_utf8) {
-        tc_log(
-            TC_LOG_ERROR,
-            "[tc_display_dispatch_text_utf8] display input endpoint or text "
-            "is unavailable");
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_dispatch_text_utf8] display input endpoint or text "
+               "is unavailable");
         return false;
     }
     tc_input_manager_on_text(display->input_endpoint, text_utf8);
@@ -518,34 +486,26 @@ bool tc_display_dispatch_text_utf8(
 }
 
 bool tc_display_dispatch_focus_lost(tc_display_handle handle) {
-    tc_display* display =
-        tc_display_get_alive(handle, "tc_display_dispatch_focus_lost");
+    tc_display* display = tc_display_get_alive(handle, "tc_display_dispatch_focus_lost");
     if (!display || !display->input_endpoint) {
-        tc_log(
-            TC_LOG_ERROR,
-            "[tc_display_dispatch_focus_lost] display input endpoint is "
-            "unavailable");
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_dispatch_focus_lost] display input endpoint is "
+               "unavailable");
         return false;
     }
     tc_input_manager_on_focus_lost(display->input_endpoint);
     return true;
 }
 
-bool tc_display_set_input_platform_services(
-    tc_display_handle handle,
-    const tc_input_platform_services* services
-) {
-    tc_display* display = tc_display_get_alive(
-        handle, "tc_display_set_input_platform_services");
+bool tc_display_set_input_platform_services(tc_display_handle handle, const tc_input_platform_services* services) {
+    tc_display* display = tc_display_get_alive(handle, "tc_display_set_input_platform_services");
     if (!display || !display->input_endpoint) {
-        tc_log(
-            TC_LOG_ERROR,
-            "[tc_display_set_input_platform_services] display input endpoint "
-            "is unavailable");
+        tc_log(TC_LOG_ERROR,
+               "[tc_display_set_input_platform_services] display input endpoint "
+               "is unavailable");
         return false;
     }
-    tc_input_manager_set_platform_services(
-        display->input_endpoint, services);
+    tc_input_manager_set_platform_services(display->input_endpoint, services);
     return true;
 }
 
@@ -558,8 +518,10 @@ void tc_display_get_size(tc_display_handle handle, int* width, int* height) {
     if (display && display->surface) {
         tc_render_surface_get_size(display->surface, width, height);
     } else {
-        if (width) *width = 0;
-        if (height) *height = 0;
+        if (width)
+            *width = 0;
+        if (height)
+            *height = 0;
     }
 }
 
@@ -569,13 +531,15 @@ void tc_display_get_size(tc_display_handle handle, int* width, int* height) {
 
 void tc_display_add_viewport(tc_display_handle handle, tc_viewport_handle viewport) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_add_viewport");
-    if (!display || !tc_viewport_handle_valid(viewport)) return;
+    if (!display || !tc_viewport_handle_valid(viewport))
+        return;
 
     // Check if already in a display (has prev or next links)
     tc_viewport_handle prev = tc_viewport_get_display_prev(viewport);
     tc_viewport_handle next = tc_viewport_get_display_next(viewport);
     if (tc_viewport_handle_valid(prev) || tc_viewport_handle_valid(next)) {
-        tc_log(TC_LOG_WARN, "[tc_display_add_viewport] viewport '%s' already in a display",
+        tc_log(TC_LOG_WARN,
+               "[tc_display_add_viewport] viewport '%s' already in a display",
                tc_viewport_get_name(viewport) ? tc_viewport_get_name(viewport) : "(null)");
         return;
     }
@@ -605,7 +569,8 @@ void tc_display_add_viewport(tc_display_handle handle, tc_viewport_handle viewpo
 
 void tc_display_remove_viewport(tc_display_handle handle, tc_viewport_handle viewport) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_remove_viewport");
-    if (!display || !tc_viewport_handle_valid(viewport)) return;
+    if (!display || !tc_viewport_handle_valid(viewport))
+        return;
 
     // Check if viewport is in this display
     bool found = false;
@@ -655,7 +620,8 @@ tc_viewport_handle tc_display_get_first_viewport(tc_display_handle handle) {
 
 tc_viewport_handle tc_display_get_viewport_at_index(tc_display_handle handle, size_t index) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_get_viewport_at_index");
-    if (!display || index >= display->viewport_count) return TC_VIEWPORT_HANDLE_INVALID;
+    if (!display || index >= display->viewport_count)
+        return TC_VIEWPORT_HANDLE_INVALID;
 
     tc_viewport_handle vp = display->first_viewport;
     for (size_t i = 0; i < index && tc_viewport_handle_valid(vp); i++) {
@@ -670,7 +636,8 @@ tc_viewport_handle tc_display_get_viewport_at_index(tc_display_handle handle, si
 
 tc_viewport_handle tc_display_viewport_at(tc_display_handle handle, float x, float y) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_viewport_at");
-    if (!display) return TC_VIEWPORT_HANDLE_INVALID;
+    if (!display)
+        return TC_VIEWPORT_HANDLE_INVALID;
 
     tc_viewport_handle best = TC_VIEWPORT_HANDLE_INVALID;
     int best_depth = -1;
@@ -701,12 +668,14 @@ tc_viewport_handle tc_display_viewport_at(tc_display_handle handle, float x, flo
 
 tc_viewport_handle tc_display_viewport_at_screen(tc_display_handle handle, float px, float py) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_viewport_at_screen");
-    if (!display) return TC_VIEWPORT_HANDLE_INVALID;
+    if (!display)
+        return TC_VIEWPORT_HANDLE_INVALID;
 
     int width, height;
     tc_display_get_size(handle, &width, &height);
 
-    if (width <= 0 || height <= 0) return TC_VIEWPORT_HANDLE_INVALID;
+    if (width <= 0 || height <= 0)
+        return TC_VIEWPORT_HANDLE_INVALID;
 
     // Convert screen coordinates (origin top-left) to normalized (origin bottom-left)
     float nx = px / (float)width;
@@ -721,7 +690,8 @@ tc_viewport_handle tc_display_viewport_at_screen(tc_display_handle handle, float
 
 void tc_display_update_all_pixel_rects(tc_display_handle handle) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_update_all_pixel_rects");
-    if (!display) return;
+    if (!display)
+        return;
 
     int width, height;
     tc_display_get_size(handle, &width, &height);
@@ -737,15 +707,11 @@ void tc_display_update_all_pixel_rects(tc_display_handle handle) {
 // Resize Handler
 // ============================================================================
 
-void tc_display_on_surface_resize(
-    tc_render_surface* surface,
-    int width,
-    int height,
-    void* userdata
-) {
+void tc_display_on_surface_resize(tc_render_surface* surface, int width, int height, void* userdata) {
     (void)width;
     (void)height;
     tc_render_surface* callback_surface = (tc_render_surface*)userdata;
-    if (callback_surface != surface) return;
+    if (callback_surface != surface)
+        return;
     tc_display_update_all_pixel_rects(surface->attached_display);
 }

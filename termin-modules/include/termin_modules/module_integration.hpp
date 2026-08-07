@@ -8,34 +8,36 @@
 
 namespace termin_modules {
 
-struct IModuleReloadState {
-    virtual ~IModuleReloadState() = default;
-};
+    struct IModuleReloadState {
+        virtual ~IModuleReloadState() = default;
+    };
 
-struct CppModuleCallbacks {
-    std::function<void(const ModuleRecord&)> before_load;
-    std::function<void(const ModuleRecord&)> after_load;
-    std::function<void(const ModuleRecord&)> before_native_init;
-    std::function<void(const ModuleRecord&)> after_native_init;
-    std::function<bool(const ModuleRecord&, std::string&)> before_unload;
-    std::function<void(const ModuleRecord&)> after_unload;
-    std::function<void(const ModuleRecord&)> after_reload;
-    std::function<bool(const ModuleRecord&, const std::string&, std::string&)> after_failed_load;
-    std::function<bool(const ModuleRecord&, std::string&)> before_native_close;
-    std::function<std::shared_ptr<IModuleReloadState>(const ModuleRecord&)> capture_reload_state;
-    std::function<bool(const ModuleRecord&, const std::shared_ptr<IModuleReloadState>&, std::string&)> restore_reload_state;
-};
+    struct CppModuleCallbacks {
+        std::function<void(const ModuleRecord&)> before_load;
+        std::function<void(const ModuleRecord&)> after_load;
+        std::function<void(const ModuleRecord&)> before_native_init;
+        std::function<void(const ModuleRecord&)> after_native_init;
+        std::function<bool(const ModuleRecord&, std::string&)> before_unload;
+        std::function<void(const ModuleRecord&)> after_unload;
+        std::function<void(const ModuleRecord&)> after_reload;
+        std::function<bool(const ModuleRecord&, const std::string&, std::string&)> after_failed_load;
+        std::function<bool(const ModuleRecord&, std::string&)> before_native_close;
+        std::function<std::shared_ptr<IModuleReloadState>(const ModuleRecord&)> capture_reload_state;
+        std::function<bool(const ModuleRecord&, const std::shared_ptr<IModuleReloadState>&, std::string&)>
+            restore_reload_state;
+    };
 
-struct PythonModuleCallbacks {
-    std::function<void(const ModuleRecord&)> before_load;
-    std::function<void(const ModuleRecord&)> after_load;
-    std::function<void(const ModuleRecord&)> before_unload;
-    std::function<bool(const ModuleRecord&, std::string&)> before_module_remove;
-    std::function<void(const ModuleRecord&)> after_unload;
-    std::function<void(const ModuleRecord&)> after_reload;
-    std::function<bool(const ModuleRecord&, const std::string&, std::string&)> after_failed_load;
-    std::function<std::shared_ptr<IModuleReloadState>(const ModuleRecord&)> capture_reload_state;
-    std::function<bool(const ModuleRecord&, const std::shared_ptr<IModuleReloadState>&, std::string&)> restore_reload_state;
-};
+    struct PythonModuleCallbacks {
+        std::function<void(const ModuleRecord&)> before_load;
+        std::function<void(const ModuleRecord&)> after_load;
+        std::function<void(const ModuleRecord&)> before_unload;
+        std::function<bool(const ModuleRecord&, std::string&)> before_module_remove;
+        std::function<void(const ModuleRecord&)> after_unload;
+        std::function<void(const ModuleRecord&)> after_reload;
+        std::function<bool(const ModuleRecord&, const std::string&, std::string&)> after_failed_load;
+        std::function<std::shared_ptr<IModuleReloadState>(const ModuleRecord&)> capture_reload_state;
+        std::function<bool(const ModuleRecord&, const std::shared_ptr<IModuleReloadState>&, std::string&)>
+            restore_reload_state;
+    };
 
 } // namespace termin_modules

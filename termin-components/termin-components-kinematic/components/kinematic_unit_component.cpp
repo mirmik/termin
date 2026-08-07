@@ -6,22 +6,17 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/geom/pose3.hpp>
 
-namespace termin
-{
+namespace termin {
 
-    static double degrees(double rad)
-    {
+    static double degrees(double rad) {
         return rad * (180.0 / std::numbers::pi_v<double>);
     }
-    static double radians(double deg)
-    {
+    static double radians(double deg) {
         return deg * (std::numbers::pi_v<double> / 180.0);
     }
 
-    static bool tc_value_to_vec3(const tc_value& v, tc_vec3& out)
-    {
-        if (v.type == TC_VALUE_LIST && v.data.list.count >= 3)
-        {
+    static bool tc_value_to_vec3(const tc_value& v, tc_vec3& out) {
+        if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {
             out.x = tc::tc_value_to_double(&v.data.list.items[0]);
             out.y = tc::tc_value_to_double(&v.data.list.items[1]);
             out.z = tc::tc_value_to_double(&v.data.list.items[2]);
@@ -30,10 +25,8 @@ namespace termin
         return false;
     }
 
-    static bool tc_value_to_quat(const tc_value& v, tc_quat& out)
-    {
-        if (v.type == TC_VALUE_LIST && v.data.list.count >= 4)
-        {
+    static bool tc_value_to_quat(const tc_value& v, tc_quat& out) {
+        if (v.type == TC_VALUE_LIST && v.data.list.count >= 4) {
             out.x = tc::tc_value_to_double(&v.data.list.items[0]);
             out.y = tc::tc_value_to_double(&v.data.list.items[1]);
             out.z = tc::tc_value_to_double(&v.data.list.items[2]);
@@ -43,17 +36,13 @@ namespace termin
         return false;
     }
 
-    void KinematicUnitComponent::register_type()
-    {
+    void KinematicUnitComponent::register_type() {
         auto descriptor = ComponentTypeDescriptorBuilder::abstract_native(
-            "KinematicUnitComponent",
-            "termin-components-kinematic",
-            "Component");
+            "KinematicUnitComponent", "termin-components-kinematic", "Component");
         descriptor.category("Kinematic");
         auto& inspect = descriptor.inspect();
 
-        if (!inspect.find_field("KinematicUnitComponent", "axis"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "axis")) {
             tc::InspectFieldInfo info;
             info.type_name = "KinematicUnitComponent";
             info.path = "axis";
@@ -62,8 +51,7 @@ namespace termin
             info.min = -100000.0;
             info.max = 100000.0;
             info.step = 0.001;
-            info.getter = [](void* obj) -> tc_value
-            {
+            info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 const Vec3 axis = c->get_axis();
                 tc_value list = tc_value_list_new();
@@ -72,12 +60,10 @@ namespace termin
                 tc_value_list_push(&list, tc_value_double(axis.z));
                 return list;
             };
-            info.setter = [](void* obj, tc_value value, void*) -> bool
-            {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_vec3 v;
-                if (tc_value_to_vec3(value, v))
-                {
+                if (tc_value_to_vec3(value, v)) {
                     c->set_axis(v.x, v.y, v.z);
                     return true;
                 }
@@ -86,15 +72,13 @@ namespace termin
             (void)inspect.add_field(std::move(info));
         }
 
-        if (!inspect.find_field("KinematicUnitComponent", "coordinate"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "coordinate")) {
             tc::InspectFieldInfo info;
             info.type_name = "KinematicUnitComponent";
             info.path = "coordinate";
             info.label = "Coordinate";
             info.kind = "interval_slider";
-            info.getter = [](void* obj) -> tc_value
-            {
+            info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_value list = tc_value_list_new();
                 tc_value_list_push(&list, tc_value_double(c->coordinate));
@@ -102,20 +86,13 @@ namespace termin
                 tc_value_list_push(&list, tc_value_double(c->max_coordinate));
                 return list;
             };
-            info.setter = [](void* obj, tc_value value, void*) -> bool
-            {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                if (value.type == TC_VALUE_LIST && value.data.list.count >= 3)
-                {
-                    c->min_coordinate =
-                        tc::tc_value_to_double(&value.data.list.items[1]);
-                    c->max_coordinate =
-                        tc::tc_value_to_double(&value.data.list.items[2]);
-                    c->set_coordinate(
-                        tc::tc_value_to_double(&value.data.list.items[0]));
-                }
-                else
-                {
+                if (value.type == TC_VALUE_LIST && value.data.list.count >= 3) {
+                    c->min_coordinate = tc::tc_value_to_double(&value.data.list.items[1]);
+                    c->max_coordinate = tc::tc_value_to_double(&value.data.list.items[2]);
+                    c->set_coordinate(tc::tc_value_to_double(&value.data.list.items[0]));
+                } else {
                     // Backward compat: plain scalar serialized values.
                     double v = 0.0;
                     if (value.type == TC_VALUE_DOUBLE)
@@ -133,8 +110,7 @@ namespace termin
             (void)inspect.add_field(std::move(info));
         }
 
-        if (!inspect.find_field("KinematicUnitComponent", "origin_position"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "origin_position")) {
             tc::InspectFieldInfo info;
             info.type_name = "KinematicUnitComponent";
             info.path = "origin_position";
@@ -143,24 +119,18 @@ namespace termin
             info.min = -100000.0;
             info.max = 100000.0;
             info.step = 0.001;
-            info.getter = [](void* obj) -> tc_value
-            {
+            info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_value list = tc_value_list_new();
-                tc_value_list_push(&list,
-                                   tc_value_double(c->origin_position.x));
-                tc_value_list_push(&list,
-                                   tc_value_double(c->origin_position.y));
-                tc_value_list_push(&list,
-                                   tc_value_double(c->origin_position.z));
+                tc_value_list_push(&list, tc_value_double(c->origin_position.x));
+                tc_value_list_push(&list, tc_value_double(c->origin_position.y));
+                tc_value_list_push(&list, tc_value_double(c->origin_position.z));
                 return list;
             };
-            info.setter = [](void* obj, tc_value value, void*) -> bool
-            {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_vec3 v;
-                if (tc_value_to_vec3(value, v))
-                {
+                if (tc_value_to_vec3(value, v)) {
                     c->origin_position = v;
                     c->apply();
                     return true;
@@ -170,8 +140,7 @@ namespace termin
             (void)inspect.add_field(std::move(info));
         }
 
-        if (!inspect.find_field("KinematicUnitComponent", "origin_rotation"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "origin_rotation")) {
             tc::InspectFieldInfo info;
             info.type_name = "KinematicUnitComponent";
             info.path = "origin_rotation";
@@ -180,13 +149,9 @@ namespace termin
             info.min = -360.0;
             info.max = 360.0;
             info.step = 0.1;
-            info.getter = [](void* obj) -> tc_value
-            {
+            info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                Quat q{c->origin_rotation.x,
-                       c->origin_rotation.y,
-                       c->origin_rotation.z,
-                       c->origin_rotation.w};
+                Quat q{c->origin_rotation.x, c->origin_rotation.y, c->origin_rotation.z, c->origin_rotation.w};
                 Pose3 p{q, Vec3::zero()};
                 Vec3 euler = p.to_euler();
                 tc_value list = tc_value_list_new();
@@ -195,14 +160,11 @@ namespace termin
                 tc_value_list_push(&list, tc_value_double(degrees(euler.z)));
                 return list;
             };
-            info.setter = [](void* obj, tc_value value, void*) -> bool
-            {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_vec3 v;
-                if (tc_value_to_vec3(value, v))
-                {
-                    Pose3 p = Pose3::from_euler(
-                        radians(v.x), radians(v.y), radians(v.z));
+                if (tc_value_to_vec3(value, v)) {
+                    Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
                     c->origin_rotation = {p.ang.x, p.ang.y, p.ang.z, p.ang.w};
                     c->apply();
                     return true;
@@ -212,27 +174,19 @@ namespace termin
             (void)inspect.add_field(std::move(info));
         }
 
-        if (!inspect.find_field("KinematicUnitComponent", "mass"))
-        {
-            (void)tc::stage_inspect_field(inspect,
-                                          &KinematicUnitComponent::mass,
-                                          "KinematicUnitComponent",
-                                          "mass",
-                                          "Mass",
-                                          "double");
-        }
-        if (!inspect.find_field("KinematicUnitComponent", "inertia_diagonal"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "mass")) {
             (void)tc::stage_inspect_field(
-                inspect,
-                &KinematicUnitComponent::inertia_diagonal,
-                "KinematicUnitComponent",
-                "inertia_diagonal",
-                "Inertia (diagonal)",
-                "vec3");
+                inspect, &KinematicUnitComponent::mass, "KinematicUnitComponent", "mass", "Mass", "double");
         }
-        if (!inspect.find_field("KinematicUnitComponent", "center_of_mass"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "inertia_diagonal")) {
+            (void)tc::stage_inspect_field(inspect,
+                                          &KinematicUnitComponent::inertia_diagonal,
+                                          "KinematicUnitComponent",
+                                          "inertia_diagonal",
+                                          "Inertia (diagonal)",
+                                          "vec3");
+        }
+        if (!inspect.find_field("KinematicUnitComponent", "center_of_mass")) {
             (void)tc::stage_inspect_field(inspect,
                                           &KinematicUnitComponent::center_of_mass,
                                           "KinematicUnitComponent",
@@ -241,13 +195,9 @@ namespace termin
                                           "vec3");
         }
 
-        if (!inspect.find_field("KinematicUnitComponent", "recalculate_origin"))
-        {
+        if (!inspect.find_field("KinematicUnitComponent", "recalculate_origin")) {
             (void)inspect.add_button(
-                "recalculate_origin",
-                "Recalculate Origin",
-                [](void* obj, const tc::InspectContext&)
-                {
+                "recalculate_origin", "Recalculate Origin", [](void* obj, const tc::InspectContext&) {
                     auto* component = static_cast<KinematicUnitComponent*>(obj);
                     component->recalculate_origin();
                 });
@@ -257,50 +207,37 @@ namespace termin
 
     // KinematicUnitComponent implementation
 
-    KinematicUnitComponent::KinematicUnitComponent(
-        const char* type_name,
-        Vec3 default_axis,
-        double default_coordinate_scale)
-        : CxxComponent(type_name)
-    {
+    KinematicUnitComponent::KinematicUnitComponent(const char* type_name,
+                                                   Vec3 default_axis,
+                                                   double default_coordinate_scale)
+        : CxxComponent(type_name) {
         const double length = default_axis.norm();
-        if (default_axis.is_finite() && length > 1.0e-12)
-        {
+        if (default_axis.is_finite() && length > 1.0e-12) {
             axis_ = default_axis / length;
         }
-        if (std::isfinite(default_coordinate_scale) &&
-            default_coordinate_scale > 0.0)
-        {
+        if (std::isfinite(default_coordinate_scale) && default_coordinate_scale > 0.0) {
             coordinate_scale_ = default_coordinate_scale;
         }
     }
 
-    void KinematicUnitComponent::on_added()
-    {
+    void KinematicUnitComponent::on_added() {
         CxxComponent::on_added();
-        if (deserialized_state_)
-        {
+        if (deserialized_state_) {
             apply();
-        }
-        else
-        {
+        } else {
             recalculate_origin();
         }
     }
 
-    void KinematicUnitComponent::deserialize_data(const tc_value* data,
-                                                  tc_scene_handle scene)
-    {
+    void KinematicUnitComponent::deserialize_data(const tc_value* data, tc_scene_handle scene) {
         CxxComponent::deserialize_data(data, scene);
         deserialized_state_ = true;
     }
 
-    void KinematicUnitComponent::set_axis(double x, double y, double z)
-    {
+    void KinematicUnitComponent::set_axis(double x, double y, double z) {
         const Vec3 value{x, y, z};
         const double length = value.norm();
-        if (!value.is_finite() || length <= 1.0e-12)
-        {
+        if (!value.is_finite() || length <= 1.0e-12) {
             tc::Log::error("[KinematicUnitComponent] rejected non-finite or "
                            "degenerate axis");
             return;
@@ -309,56 +246,45 @@ namespace termin
         apply();
     }
 
-    Vec3 KinematicUnitComponent::get_axis() const noexcept
-    {
+    Vec3 KinematicUnitComponent::get_axis() const noexcept {
         return axis_;
     }
 
-    void KinematicUnitComponent::set_coordinate_scale(double value)
-    {
-        if (!std::isfinite(value) || value <= 0.0)
-        {
-            tc::Log::error(
-                "[KinematicUnitComponent] rejected invalid coordinate scale");
+    void KinematicUnitComponent::set_coordinate_scale(double value) {
+        if (!std::isfinite(value) || value <= 0.0) {
+            tc::Log::error("[KinematicUnitComponent] rejected invalid coordinate scale");
             return;
         }
         coordinate_scale_ = value;
         apply();
     }
 
-    double KinematicUnitComponent::get_coordinate_scale() const noexcept
-    {
+    double KinematicUnitComponent::get_coordinate_scale() const noexcept {
         return coordinate_scale_;
     }
 
-    double KinematicUnitComponent::physical_coordinate() const noexcept
-    {
+    double KinematicUnitComponent::physical_coordinate() const noexcept {
         return coordinate * coordinate_scale_;
     }
 
-    SpatialInertia3 KinematicUnitComponent::spatial_inertia() const noexcept
-    {
+    SpatialInertia3 KinematicUnitComponent::spatial_inertia() const noexcept {
         return {
             mass,
             {inertia_diagonal.x, inertia_diagonal.y, inertia_diagonal.z},
-            Pose3::translation(
-                center_of_mass.x, center_of_mass.y, center_of_mass.z),
+            Pose3::translation(center_of_mass.x, center_of_mass.y, center_of_mass.z),
         };
     }
 
-    void KinematicUnitComponent::set_coordinate(double value)
-    {
+    void KinematicUnitComponent::set_coordinate(double value) {
         coordinate = value;
         apply();
     }
 
-    void KinematicUnitComponent::apply()
-    {
+    void KinematicUnitComponent::apply() {
         // Default: no-op. Subclasses override.
     }
 
-    void KinematicUnitComponent::recalculate_origin()
-    {
+    void KinematicUnitComponent::recalculate_origin() {
         // Default: use the current transform as the origin pose.
         double pos[3], rot[4];
         if (!read_entity_transform(pos, rot))
@@ -368,9 +294,7 @@ namespace termin
         origin_rotation = {rot[0], rot[1], rot[2], rot[3]};
     }
 
-    bool KinematicUnitComponent::read_entity_transform(double pos[3],
-                                                       double rot[4]) const
-    {
+    bool KinematicUnitComponent::read_entity_transform(double pos[3], double rot[4]) const {
         Entity ent = entity();
         if (!ent.valid())
             return false;

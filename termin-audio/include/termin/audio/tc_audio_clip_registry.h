@@ -10,11 +10,9 @@ TERMIN_AUDIO_API void tc_audio_clip_registry_init(void);
 TERMIN_AUDIO_API void tc_audio_clip_registry_shutdown(void);
 
 TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_create(const char* uuid);
-TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_declare(
-    const char* uuid,
-    const char* name,
-    const char* source_path
-);
+TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_declare(const char* uuid,
+                                                            const char* name,
+                                                            const char* source_path);
 TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_find(const char* uuid);
 TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_find_by_name(const char* name);
 TERMIN_AUDIO_API tc_audio_clip_handle tc_audio_clip_get_or_create(const char* uuid);

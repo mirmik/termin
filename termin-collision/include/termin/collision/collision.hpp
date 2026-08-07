@@ -25,5 +25,5 @@
  */
 
 #include "bvh.hpp"
-#include "contact_patch.hpp"
 #include "collision_world.hpp"
+#include "contact_patch.hpp"

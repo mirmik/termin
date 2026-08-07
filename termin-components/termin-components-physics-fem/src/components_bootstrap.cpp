@@ -2,11 +2,9 @@
 
 #include <termin/physics_fem/components.hpp>
 
-namespace termin
-{
+namespace termin {
 
-    void register_builtin_physics_fem_component_types()
-    {
+    void register_builtin_physics_fem_component_types() {
         FEMPhysicsWorldComponent::register_type();
         FEMArticulationComponent::register_type();
         FEMArticulationMotorComponent::register_type();

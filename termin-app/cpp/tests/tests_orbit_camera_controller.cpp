@@ -25,33 +25,28 @@ using termin::ScrollEvent;
 
 namespace {
 
-struct CameraRig {
-    Entity entity;
-    CameraComponent* camera = nullptr;
-    OrbitCameraController* controller = nullptr;
-};
+    struct CameraRig {
+        Entity entity;
+        CameraComponent* camera = nullptr;
+        OrbitCameraController* controller = nullptr;
+    };
 
-CameraRig make_camera_rig(
-    const char* name,
-    tc_entity_pool_handle pool = Entity::standalone_pool_handle())
-{
-    CameraRig rig;
-    rig.entity = Entity::create(pool, name);
-    rig.camera = new CameraComponent();
-    rig.controller = new OrbitCameraController();
-    rig.entity.add_component(rig.camera);
-    rig.entity.add_component(rig.controller);
-    return rig;
-}
+    CameraRig make_camera_rig(const char* name, tc_entity_pool_handle pool = Entity::standalone_pool_handle()) {
+        CameraRig rig;
+        rig.entity = Entity::create(pool, name);
+        rig.camera = new CameraComponent();
+        rig.controller = new OrbitCameraController();
+        rig.entity.add_component(rig.camera);
+        rig.entity.add_component(rig.controller);
+        return rig;
+    }
 
 } // namespace
 
-TEST_CASE("OrbitCameraController only handles events from viewports rendered by its camera")
-{
+TEST_CASE("OrbitCameraController only handles events from viewports rendered by its camera") {
     tc_scene_handle scene = tc_scene_new_named("orbit-camera-controller-test");
     REQUIRE(tc_scene_alive(scene));
-    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(
-        tc_scene_entity_pool(scene));
+    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
     REQUIRE(tc_entity_pool_handle_valid(scene_pool));
 
     CameraRig primary = make_camera_rig("primary-camera", scene_pool);
@@ -94,8 +89,7 @@ TEST_CASE("OrbitCameraController only handles events from viewports rendered by 
     tc_scene_free(scene);
 }
 
-TEST_CASE("OrbitCameraController center_on keeps camera offset from target")
-{
+TEST_CASE("OrbitCameraController center_on keeps camera offset from target") {
     CameraRig rig = make_camera_rig("focus-camera");
 
     const termin::Vec3 initial_eye = rig.entity.transform().global_position();
@@ -120,12 +114,10 @@ TEST_CASE("OrbitCameraController center_on keeps camera offset from target")
     tc_entity_free(rig.entity.handle());
 }
 
-TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
-{
+TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch") {
     tc_scene_handle scene = tc_scene_new_named("orbit-camera-touch-test");
     REQUIRE(tc_scene_alive(scene));
-    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(
-        tc_scene_entity_pool(scene));
+    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
     REQUIRE(tc_entity_pool_handle_valid(scene_pool));
 
     CameraRig rig = make_camera_rig("touch-camera", scene_pool);
@@ -134,44 +126,28 @@ TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
     tc_render_target_set_scene(render_target, scene);
     tc_render_target_set_camera(render_target, rig.camera->tc_component_ptr());
 
-    tc_viewport_handle viewport =
-        tc_viewport_new("touch-viewport", TC_SCENE_HANDLE_INVALID);
+    tc_viewport_handle viewport = tc_viewport_new("touch-viewport", TC_SCENE_HANDLE_INVALID);
     REQUIRE(tc_viewport_handle_valid(viewport));
     tc_viewport_set_render_target(viewport, render_target);
 
-    const termin::Vec3 initial_position =
-        rig.entity.transform().global_position();
-    PointerEvent first_down(
-        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
-        20.0, 20.0);
+    const termin::Vec3 initial_position = rig.entity.transform().global_position();
+    PointerEvent first_down(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 20.0, 20.0);
     rig.controller->on_pointer(&first_down);
-    PointerEvent first_move(
-        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
-        40.0, 20.0, 20.0, 0.0);
+    PointerEvent first_move(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 40.0, 20.0, 20.0, 0.0);
     rig.controller->on_pointer(&first_move);
-    const termin::Vec3 orbited_position =
-        rig.entity.transform().global_position();
-    CHECK(
-        std::abs(orbited_position.x - initial_position.x) > 1e-6 ||
-        std::abs(orbited_position.y - initial_position.y) > 1e-6);
+    const termin::Vec3 orbited_position = rig.entity.transform().global_position();
+    CHECK(std::abs(orbited_position.x - initial_position.x) > 1e-6 ||
+          std::abs(orbited_position.y - initial_position.y) > 1e-6);
 
-    PointerEvent second_down(
-        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN,
-        140.0, 20.0);
+    PointerEvent second_down(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 140.0, 20.0);
     rig.controller->on_pointer(&second_down);
     const double radius_before_pinch = rig.controller->radius;
-    PointerEvent second_move(
-        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE,
-        160.0, 20.0, 20.0, 0.0);
+    PointerEvent second_move(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 160.0, 20.0, 20.0, 0.0);
     rig.controller->on_pointer(&second_move);
     CHECK(rig.controller->radius < radius_before_pinch);
 
-    PointerEvent first_cancel(
-        viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL,
-        40.0, 20.0);
-    PointerEvent second_cancel(
-        viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL,
-        160.0, 20.0);
+    PointerEvent first_cancel(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 40.0, 20.0);
+    PointerEvent second_cancel(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 160.0, 20.0);
     rig.controller->on_pointer(&first_cancel);
     rig.controller->on_pointer(&second_cancel);
 

@@ -7,11 +7,11 @@
 
 namespace termin {
 
-void register_builtin_kinematic_component_types() {
-    KinematicUnitComponent::register_type();
-    ArticulationComponent::register_type();
-    ActuatorComponent::register_type();
-    RotatorComponent::register_type();
-}
+    void register_builtin_kinematic_component_types() {
+        KinematicUnitComponent::register_type();
+        ArticulationComponent::register_type();
+        ActuatorComponent::register_type();
+        RotatorComponent::register_type();
+    }
 
 } // namespace termin

@@ -5,9 +5,9 @@
 
 namespace termin {
 
-void register_builtin_ui_component_types() {
-    UIComponent::register_type();
-    WorldUiSurfaceComponent::register_type();
-}
+    void register_builtin_ui_component_types() {
+        UIComponent::register_type();
+        WorldUiSurfaceComponent::register_type();
+    }
 
 } // namespace termin

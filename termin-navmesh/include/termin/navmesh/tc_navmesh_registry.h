@@ -24,17 +24,9 @@ TERMIN_NAVMESH_API size_t tc_navmesh_count(void);
 TERMIN_NAVMESH_API bool tc_navmesh_is_loaded(tc_navmesh_handle h);
 TERMIN_NAVMESH_API bool tc_navmesh_ensure_loaded(tc_navmesh_handle h);
 
-TERMIN_NAVMESH_API bool tc_navmesh_set_metadata(
-    tc_navmesh* navmesh,
-    const char* name,
-    const char* agent_type,
-    const char* coordinate_system
-);
-TERMIN_NAVMESH_API bool tc_navmesh_set_tiles(
-    tc_navmesh* navmesh,
-    const tc_navmesh_tile* tiles,
-    size_t tile_count
-);
+TERMIN_NAVMESH_API bool
+tc_navmesh_set_metadata(tc_navmesh* navmesh, const char* name, const char* agent_type, const char* coordinate_system);
+TERMIN_NAVMESH_API bool tc_navmesh_set_tiles(tc_navmesh* navmesh, const tc_navmesh_tile* tiles, size_t tile_count);
 TERMIN_NAVMESH_API void tc_navmesh_clear_tiles(tc_navmesh* navmesh);
 
 typedef struct tc_navmesh_info {

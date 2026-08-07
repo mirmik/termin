@@ -14,23 +14,23 @@ NB_MODULE(_components_collision_native, m) {
     nb::module_::import_("termin.colliders._colliders_native");
 
     nb::class_<ColliderComponent, CxxComponent>(m, "ColliderComponent")
-        .def("__init__", [](nb::handle self) {
-            cxx_component_init<ColliderComponent>(self);
-        })
-        .def_prop_rw("collider_type",
+        .def("__init__", [](nb::handle self) { cxx_component_init<ColliderComponent>(self); })
+        .def_prop_rw(
+            "collider_type",
             [](ColliderComponent& c) { return c.collider_type; },
             [](ColliderComponent& c, const std::string& v) { c.set_collider_type(v); })
-        .def_prop_rw("convex_hull_mesh_source",
+        .def_prop_rw(
+            "convex_hull_mesh_source",
             [](ColliderComponent& c) { return c.convex_hull_mesh_source; },
             [](ColliderComponent& c, const std::string& v) { c.set_convex_hull_mesh_source(v); })
-        .def_prop_rw("box_size",
-            [](ColliderComponent& c) {
-                return nb::make_tuple(c.box_size.x, c.box_size.y, c.box_size.z);
-            },
+        .def_prop_rw(
+            "box_size",
+            [](ColliderComponent& c) { return nb::make_tuple(c.box_size.x, c.box_size.y, c.box_size.z); },
             [](ColliderComponent& c, nb::tuple v) {
                 c.set_box_size(nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2]));
             })
-        .def_prop_rw("collider_offset_enabled",
+        .def_prop_rw(
+            "collider_offset_enabled",
             [](ColliderComponent& c) { return c.collider_offset_enabled; },
             [](ColliderComponent& c, bool v) {
                 if (c.collider_offset_enabled != v) {
@@ -38,47 +38,33 @@ NB_MODULE(_components_collision_native, m) {
                     c.rebuild_collider();
                 }
             })
-        .def_prop_rw("collider_offset_position",
+        .def_prop_rw(
+            "collider_offset_position",
             [](ColliderComponent& c) {
                 return nb::make_tuple(
-                    c.collider_offset_position.x,
-                    c.collider_offset_position.y,
-                    c.collider_offset_position.z
-                );
+                    c.collider_offset_position.x, c.collider_offset_position.y, c.collider_offset_position.z);
             },
             [](ColliderComponent& c, nb::tuple v) {
-                c.collider_offset_position = tc_vec3{
-                    nb::cast<double>(v[0]),
-                    nb::cast<double>(v[1]),
-                    nb::cast<double>(v[2])
-                };
+                c.collider_offset_position =
+                    tc_vec3{nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2])};
                 c.rebuild_collider();
             })
-        .def_prop_rw("collider_offset_euler",
+        .def_prop_rw(
+            "collider_offset_euler",
             [](ColliderComponent& c) {
-                return nb::make_tuple(
-                    c.collider_offset_euler.x,
-                    c.collider_offset_euler.y,
-                    c.collider_offset_euler.z
-                );
+                return nb::make_tuple(c.collider_offset_euler.x, c.collider_offset_euler.y, c.collider_offset_euler.z);
             },
             [](ColliderComponent& c, nb::tuple v) {
-                c.collider_offset_euler = tc_vec3{
-                    nb::cast<double>(v[0]),
-                    nb::cast<double>(v[1]),
-                    nb::cast<double>(v[2])
-                };
+                c.collider_offset_euler =
+                    tc_vec3{nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2])};
                 c.rebuild_collider();
             })
-        .def_prop_ro("collider", [](ColliderComponent& c) {
-            return c.collider();
-        }, nb::rv_policy::reference)
-        .def_prop_ro("attached_collider", [](ColliderComponent& c) {
-            return c.attached_collider();
-        }, nb::rv_policy::reference)
-        .def_prop_ro("attached", [](ColliderComponent& c) {
-            return c.attached_collider();
-        }, nb::rv_policy::reference)
+        .def_prop_ro(
+            "collider", [](ColliderComponent& c) { return c.collider(); }, nb::rv_policy::reference)
+        .def_prop_ro(
+            "attached_collider", [](ColliderComponent& c) { return c.attached_collider(); }, nb::rv_policy::reference)
+        .def_prop_ro(
+            "attached", [](ColliderComponent& c) { return c.attached_collider(); }, nb::rv_policy::reference)
         .def_prop_ro("collider_revision", &ColliderComponent::collider_revision)
         .def("rebuild_collider", &ColliderComponent::rebuild_collider);
 }

@@ -1,18 +1,19 @@
 #include "core/tc_input_entity_pool.h"
 
-static bool foreach_input_handler_recursive(
-    tc_entity_pool* pool,
-    tc_entity_id entity_id,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
-    if (!pool || !tc_entity_pool_alive(pool, entity_id)) return true;
-    if (!tc_entity_pool_enabled(pool, entity_id)) return true;
+static bool foreach_input_handler_recursive(tc_entity_pool* pool,
+                                            tc_entity_id entity_id,
+                                            tc_component_iter_fn callback,
+                                            void* user_data) {
+    if (!pool || !tc_entity_pool_alive(pool, entity_id))
+        return true;
+    if (!tc_entity_pool_enabled(pool, entity_id))
+        return true;
 
     size_t comp_count = tc_entity_pool_component_count(pool, entity_id);
     for (size_t i = 0; i < comp_count; i++) {
         tc_component* c = tc_entity_pool_component_at(pool, entity_id, i);
-        if (!c || !c->enabled) continue;
+        if (!c || !c->enabled)
+            continue;
 
         if (tc_component_is_input_handler(c)) {
             if (!callback(c, user_data)) {
@@ -32,12 +33,11 @@ static bool foreach_input_handler_recursive(
     return true;
 }
 
-void tc_entity_pool_foreach_input_handler_subtree(
-    tc_entity_pool* pool,
-    tc_entity_id root_id,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
-    if (!pool || !callback) return;
+void tc_entity_pool_foreach_input_handler_subtree(tc_entity_pool* pool,
+                                                  tc_entity_id root_id,
+                                                  tc_component_iter_fn callback,
+                                                  void* user_data) {
+    if (!pool || !callback)
+        return;
     foreach_input_handler_recursive(pool, root_id, callback, user_data);
 }

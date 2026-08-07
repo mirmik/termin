@@ -13,6 +13,6 @@
 
 namespace termin::physics {
 
-TERMIN_PHYSICS_API std::string_view termin_physics_version();
+    TERMIN_PHYSICS_API std::string_view termin_physics_version();
 
 } // namespace termin::physics

@@ -18,429 +18,424 @@ namespace nb = nanobind;
 
 namespace termin {
 
-static nb::object scene_from_handle(tc_scene_handle h) {
-  nb::module_ scene_module = nb::module_::import_("termin.scene._scene_native");
-  nb::object tc_scene_class = scene_module.attr("TcScene");
-  return tc_scene_class.attr("from_handle")(h.index, h.generation);
-}
-
-// Trampoline class for Python inheritance
-class PySceneManager : public SceneManager {
-public:
-  NB_TRAMPOLINE(SceneManager, 1);
-
-  bool tick(double dt) override { NB_OVERRIDE(tick, dt); }
-};
-
-void bind_scene_manager(nb::module_ &m) {
-  // Bind SceneMode enum
-  nb::enum_<tc_scene_mode>(m, "SceneMode")
-      .value("INACTIVE", TC_SCENE_MODE_INACTIVE, "Loaded but not updated")
-      .value("STOP", TC_SCENE_MODE_STOP, "Editor update (gizmos, selection)")
-      .value("PLAY", TC_SCENE_MODE_PLAY, "Full simulation")
-      .export_values();
-
-  // Bind SceneManager class
-  nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
-      .def(nb::init<>())
-
-      // --- Scene lifecycle ---
-
-      .def(
-          "create_scene",
-          [](SceneManager &self, const std::string &name,
-             nb::object extensions_obj) -> nb::object {
-            std::vector<tc_scene_ext_type_id> extensions;
-            if (!extensions_obj.is_none()) {
-              extensions =
-                  nb::cast<std::vector<tc_scene_ext_type_id>>(extensions_obj);
-            }
-            tc_scene_handle h = self.create_scene(name, extensions);
-            if (!tc_scene_handle_valid(h)) {
-              return nb::none();
-            }
-            return scene_from_handle(h);
-          },
-          nb::arg("name"), nb::arg("extensions") = nb::none(),
-          "Create a new scene and register it. Returns TcScene.")
-
-      .def("close_scene", &SceneManager::close_scene, nb::arg("name"),
-           "Close and destroy a scene.")
-
-      .def("close_all_scenes", &SceneManager::close_all_scenes,
-           "Close all scenes.")
-
-      .def(
-          "copy_scene",
-          [](SceneManager &self, const std::string &src_name,
-             const std::string &dst_name) -> nb::object {
-            tc_scene_handle src_h = self.get_scene(src_name);
-            if (!tc_scene_handle_valid(src_h)) {
-              return nb::none();
-            }
-
-            nb::object src_scene = scene_from_handle(src_h);
-
-            // Serialize source
-            nb::object data = src_scene.attr("serialize")();
-
-            tc_scene_handle dst_h = self.create_scene(dst_name, {});
-            if (!tc_scene_handle_valid(dst_h)) {
-              return nb::none();
-            }
-            nb::object dst_scene = scene_from_handle(dst_h);
-            dst_scene.attr("load_from_data")(data, nb::none(), true);
-
-            return dst_scene;
-          },
-          nb::arg("source_name"), nb::arg("dest_name"),
-          "Copy scene. Returns new TcScene.")
-
-      .def(
-          "load_scene",
-          [](SceneManager &self, const std::string &name,
-             const std::string &path) -> nb::object {
-            // Check if scene already exists
-            if (self.has_scene(name)) {
-              return nb::none();
-            }
-
-            // Read file
-            std::string json_str = SceneManager::read_json_file(path);
-            if (json_str.empty()) {
-              return nb::none();
-            }
-
-            // Parse JSON
-            nb::module_ json_module = nb::module_::import_("json");
-            nb::object data = json_module.attr("loads")(json_str);
-
-            // Extract scene data (support both formats)
-            nb::object scene_data = data.attr("get")("scene");
-            if (scene_data.is_none()) {
-              nb::object scenes = data.attr("get")("scenes");
-              if (!scenes.is_none() && nb::len(scenes) > 0) {
-                scene_data = scenes[nb::int_(0)];
-              }
-            }
-
-            tc_scene_handle handle = self.create_scene(name, {});
-            if (!tc_scene_handle_valid(handle)) {
-              return nb::none();
-            }
-            nb::object scene = scene_from_handle(handle);
-
-            // Load data if present
-            if (!scene_data.is_none()) {
-              scene.attr("load_from_data")(scene_data, nb::none(), true);
-            }
-
-            self.set_scene_path(name, path);
-
-            // Notify editor start
-            scene.attr("notify_editor_start")();
-
-            return scene;
-          },
-          nb::arg("name"), nb::arg("path"),
-          "Load scene from file. Returns TcScene or None.")
-
-      .def(
-          "save_scene",
-          [](SceneManager &self, const std::string &name,
-             const std::string &path, nb::object editor_data) -> bool {
-            tc_scene_handle h = self.get_scene(name);
-            if (!tc_scene_handle_valid(h)) {
-              return false;
-            }
-
-            nb::object scene = scene_from_handle(h);
-
-            // Serialize scene
-            nb::object scene_data = scene.attr("serialize")();
-
-            // Build full data dict
-            nb::dict data;
-            data["version"] = "1.0";
-            data["scene"] = scene_data;
-            if (!editor_data.is_none()) {
-              data["editor"] = editor_data;
-            }
-
-            // Convert to JSON
-            nb::module_ json_module = nb::module_::import_("json");
-            nb::object json_str = json_module.attr("dumps")(
-                data, nb::arg("indent") = 2, nb::arg("ensure_ascii") = false);
-
-            // Write file
-            SceneManager::write_json_file(path,
-                                          nb::cast<std::string>(json_str));
-            self.set_scene_path(name, path);
-
-            return true;
-          },
-          nb::arg("name"), nb::arg("path"), nb::arg("editor_data") = nb::none(),
-          "Save scene to file. Returns true on success.")
-
-      // --- Scene registration (for external scenes) ---
-
-      .def(
-          "register_scene",
-          [](SceneManager &self, const std::string &name, tc_scene_handle h) {
-            self.register_scene(name, h);
-          },
-          nb::arg("name"), nb::arg("handle"))
-
-      .def("unregister_scene", &SceneManager::unregister_scene, nb::arg("name"),
-           "Unregister a scene by name (does not destroy it).")
-
-      // --- Scene access ---
-
-      .def(
-          "get_scene",
-          [](const SceneManager &self, const std::string &name) -> nb::object {
-            tc_scene_handle h = self.get_scene(name);
-            if (!tc_scene_handle_valid(h)) {
-              return nb::none();
-            }
-            return scene_from_handle(h);
-          },
-          nb::arg("name"), "Get scene by name. Returns TcScene or None.")
-
-      .def("has_scene", &SceneManager::has_scene, nb::arg("name"),
-           "Check if scene exists.")
-
-      .def("scene_names", &SceneManager::scene_names,
-           "Get list of all scene names.")
-
-      // --- Path management ---
-
-      .def("get_scene_path", &SceneManager::get_scene_path, nb::arg("name"),
-           "Get file path for scene (empty if not set).")
-
-      .def("set_scene_path", &SceneManager::set_scene_path, nb::arg("name"),
-           nb::arg("path"), "Set file path for scene.")
-
-      // --- Mode management ---
-
-      .def(
-          "get_mode",
-          [](const SceneManager &self, const std::string &name) {
-            return self.get_mode(name);
-          },
-          nb::arg("name"), "Get scene mode.")
-
-      .def(
-          "set_mode",
-          [](SceneManager &self, const std::string &name, tc_scene_mode mode) {
-            self.set_mode(name, mode);
-          },
-          nb::arg("name"), nb::arg("mode"), "Set scene mode.")
-
-      .def("has_play_scenes", &SceneManager::has_play_scenes,
-           "Check if any scene is in PLAY mode.")
-
-      // --- Update cycle ---
-
-      .def("tick", &SceneManager::tick, nb::arg("dt"),
-           "Update all scenes based on their mode. Returns true if render "
-           "needed.")
-
-      // --- Render request ---
-
-      .def("request_render", &SceneManager::request_render,
-           "Request render on next tick.")
-
-      .def("consume_render_request", &SceneManager::consume_render_request,
-           "Consume and return render request flag.")
-
-      // --- File I/O ---
-
-      .def_static(
-          "read_json_file", &SceneManager::read_json_file, nb::arg("path"),
-          "Read JSON file and return as string. Returns empty string on error.")
-
-      .def_static("write_json_file", &SceneManager::write_json_file,
-                  nb::arg("path"), nb::arg("json"),
-                  "Write JSON string to file (atomic write).")
-
-      // --- Callbacks ---
-
-      .def(
-          "set_on_after_render",
-          [](SceneManager &self, nb::object callback) {
-            if (callback.is_none()) {
-              self.set_on_after_render(nullptr);
-            } else {
-              // Store callback as shared_ptr to prevent preventing Python
-              // shutdown
-              auto cb = std::make_shared<nb::object>(callback);
-              self.set_on_after_render([cb]() {
-                nb::gil_scoped_acquire guard;
-                (*cb)();
-              });
-            }
-          },
-          nb::arg("callback").none(),
-          "Set callback to run after render. Pass None to clear.")
-
-      .def(
-          "set_on_before_scene_close",
-          [](SceneManager &self, nb::object callback) {
-            if (callback.is_none()) {
-              self.set_on_before_scene_close(nullptr);
-            } else {
-              auto cb = std::make_shared<nb::object>(callback);
-              self.set_on_before_scene_close([cb](const std::string &name) {
-                nb::gil_scoped_acquire guard;
-                (*cb)(name);
-              });
-            }
-          },
-          nb::arg("callback").none(),
-          "Set callback to run before scene close. Pass None to clear.")
-
-      .def("invoke_after_render", &SceneManager::invoke_after_render,
-           "Invoke after_render callback (if set).")
-
-      .def("invoke_before_scene_close",
-           &SceneManager::invoke_before_scene_close, nb::arg("name"),
-           "Invoke before_scene_close callback (if set).");
-
-  // Scene pool query functions (used by CoreRegistryViewer)
-
-  m.def("tc_scene_registry_count",
-        []() -> size_t { return tc_scene_pool_count(); });
-
-  m.def("tc_scene_registry_get_all_info", []() {
-    size_t count = 0;
-    tc_scene_info *infos = tc_scene_pool_get_all_info(&count);
-    nb::list result;
-    for (size_t i = 0; i < count; ++i) {
-      nb::dict d;
-      d["handle"] =
-          nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
-      d["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
-      d["entity_count"] = infos[i].entity_count;
-      d["pending_count"] = infos[i].pending_count;
-      d["update_count"] = infos[i].update_count;
-      d["fixed_update_count"] = infos[i].fixed_update_count;
-      result.append(d);
+    static nb::object scene_from_handle(tc_scene_handle h) {
+        nb::module_ scene_module = nb::module_::import_("termin.scene._scene_native");
+        nb::object tc_scene_class = scene_module.attr("TcScene");
+        return tc_scene_class.attr("from_handle")(h.index, h.generation);
     }
-    free(infos);
-    return result;
-  });
 
-  m.def(
-      "tc_scene_get_entities",
-      [](nb::tuple handle_tuple) {
-        tc_scene_handle h;
-        h.index = nb::cast<uint32_t>(handle_tuple[0]);
-        h.generation = nb::cast<uint32_t>(handle_tuple[1]);
+    // Trampoline class for Python inheritance
+    class PySceneManager : public SceneManager {
+    public:
+        NB_TRAMPOLINE(SceneManager, 1);
 
-        if (!tc_scene_pool_alive(h)) {
-          return nb::list();
+        bool tick(double dt) override {
+            NB_OVERRIDE(tick, dt);
         }
+    };
 
-        tc_entity_pool *pool = tc_scene_entity_pool(h);
-        if (!pool) {
-          return nb::list();
-        }
+    void bind_scene_manager(nb::module_& m) {
+        // Bind SceneMode enum
+        nb::enum_<tc_scene_mode>(m, "SceneMode")
+            .value("INACTIVE", TC_SCENE_MODE_INACTIVE, "Loaded but not updated")
+            .value("STOP", TC_SCENE_MODE_STOP, "Editor update (gizmos, selection)")
+            .value("PLAY", TC_SCENE_MODE_PLAY, "Full simulation")
+            .export_values();
 
-        struct CollectCtx {
-          tc_entity_pool *pool;
-          nb::list result;
-        };
-        CollectCtx ctx{pool, nb::list()};
+        // Bind SceneManager class
+        nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
+            .def(nb::init<>())
 
-        tc_entity_pool_foreach(
-            pool,
-            [](tc_entity_pool *p, tc_entity_id id, void *ud) -> bool {
-              auto *c = static_cast<CollectCtx *>(ud);
-              nb::dict d;
-              const char *name = tc_entity_pool_name(c->pool, id);
-              const char *uuid = tc_entity_pool_uuid(c->pool, id);
-              tc_entity_id parent = tc_entity_pool_parent(c->pool, id);
-              size_t component_count =
-                  tc_entity_pool_component_count(c->pool, id);
-              nb::list components;
-              for (size_t i = 0; i < component_count; ++i) {
-                tc_component *component =
-                    tc_entity_pool_component_at(c->pool, id, i);
-                nb::dict component_info;
-                const char *type_name = tc_component_type_name(component);
-                component_info["type_name"] =
-                    type_name ? nb::str(type_name) : nb::str("<unknown>");
-                component_info["enabled"] =
-                    component ? component->enabled : false;
-                component_info["active_in_editor"] =
-                    component ? component->active_in_editor : false;
-                component_info["started"] =
-                    component ? component->_started : false;
-                component_info["has_update"] =
-                    component ? component->has_update : false;
-                component_info["has_fixed_update"] =
-                    component ? component->has_fixed_update : false;
-                component_info["has_late_update"] =
-                    component ? component->has_late_update : false;
-                component_info["ptr"] = reinterpret_cast<uintptr_t>(component);
-                components.append(component_info);
-              }
+            // --- Scene lifecycle ---
 
-              d["name"] = name ? nb::str(name) : nb::none();
-              d["uuid"] = uuid ? nb::str(uuid) : nb::str("");
-              d["id_index"] = id.index;
-              d["id_generation"] = id.generation;
-              d["runtime_id"] = tc_entity_pool_runtime_id(c->pool, id);
-              d["pick_id"] = tc_entity_pool_pick_id(c->pool, id);
-              d["enabled"] = tc_entity_pool_enabled(c->pool, id);
-              d["visible"] = tc_entity_pool_visible(c->pool, id);
-              d["pickable"] = tc_entity_pool_pickable(c->pool, id);
-              d["selectable"] = tc_entity_pool_selectable(c->pool, id);
-              d["priority"] = tc_entity_pool_priority(c->pool, id);
-              d["layer"] = tc_entity_pool_layer(c->pool, id);
-              d["flags"] = tc_entity_pool_flags(c->pool, id);
-              if (tc_entity_id_valid(parent)) {
-                d["parent_index"] = parent.index;
-                d["parent_generation"] = parent.generation;
-              } else {
-                d["parent_index"] = nb::none();
-                d["parent_generation"] = nb::none();
-              }
-              d["children_count"] = tc_entity_pool_children_count(c->pool, id);
-              d["component_count"] = component_count;
-              d["components"] = components;
-              c->result.append(d);
-              return true;
+            .def(
+                "create_scene",
+                [](SceneManager& self, const std::string& name, nb::object extensions_obj) -> nb::object {
+                    std::vector<tc_scene_ext_type_id> extensions;
+                    if (!extensions_obj.is_none()) {
+                        extensions = nb::cast<std::vector<tc_scene_ext_type_id>>(extensions_obj);
+                    }
+                    tc_scene_handle h = self.create_scene(name, extensions);
+                    if (!tc_scene_handle_valid(h)) {
+                        return nb::none();
+                    }
+                    return scene_from_handle(h);
+                },
+                nb::arg("name"),
+                nb::arg("extensions") = nb::none(),
+                "Create a new scene and register it. Returns TcScene.")
+
+            .def("close_scene", &SceneManager::close_scene, nb::arg("name"), "Close and destroy a scene.")
+
+            .def("close_all_scenes", &SceneManager::close_all_scenes, "Close all scenes.")
+
+            .def(
+                "copy_scene",
+                [](SceneManager& self, const std::string& src_name, const std::string& dst_name) -> nb::object {
+                    tc_scene_handle src_h = self.get_scene(src_name);
+                    if (!tc_scene_handle_valid(src_h)) {
+                        return nb::none();
+                    }
+
+                    nb::object src_scene = scene_from_handle(src_h);
+
+                    // Serialize source
+                    nb::object data = src_scene.attr("serialize")();
+
+                    tc_scene_handle dst_h = self.create_scene(dst_name, {});
+                    if (!tc_scene_handle_valid(dst_h)) {
+                        return nb::none();
+                    }
+                    nb::object dst_scene = scene_from_handle(dst_h);
+                    dst_scene.attr("load_from_data")(data, nb::none(), true);
+
+                    return dst_scene;
+                },
+                nb::arg("source_name"),
+                nb::arg("dest_name"),
+                "Copy scene. Returns new TcScene.")
+
+            .def(
+                "load_scene",
+                [](SceneManager& self, const std::string& name, const std::string& path) -> nb::object {
+                    // Check if scene already exists
+                    if (self.has_scene(name)) {
+                        return nb::none();
+                    }
+
+                    // Read file
+                    std::string json_str = SceneManager::read_json_file(path);
+                    if (json_str.empty()) {
+                        return nb::none();
+                    }
+
+                    // Parse JSON
+                    nb::module_ json_module = nb::module_::import_("json");
+                    nb::object data = json_module.attr("loads")(json_str);
+
+                    // Extract scene data (support both formats)
+                    nb::object scene_data = data.attr("get")("scene");
+                    if (scene_data.is_none()) {
+                        nb::object scenes = data.attr("get")("scenes");
+                        if (!scenes.is_none() && nb::len(scenes) > 0) {
+                            scene_data = scenes[nb::int_(0)];
+                        }
+                    }
+
+                    tc_scene_handle handle = self.create_scene(name, {});
+                    if (!tc_scene_handle_valid(handle)) {
+                        return nb::none();
+                    }
+                    nb::object scene = scene_from_handle(handle);
+
+                    // Load data if present
+                    if (!scene_data.is_none()) {
+                        scene.attr("load_from_data")(scene_data, nb::none(), true);
+                    }
+
+                    self.set_scene_path(name, path);
+
+                    // Notify editor start
+                    scene.attr("notify_editor_start")();
+
+                    return scene;
+                },
+                nb::arg("name"),
+                nb::arg("path"),
+                "Load scene from file. Returns TcScene or None.")
+
+            .def(
+                "save_scene",
+                [](SceneManager& self, const std::string& name, const std::string& path, nb::object editor_data)
+                    -> bool {
+                    tc_scene_handle h = self.get_scene(name);
+                    if (!tc_scene_handle_valid(h)) {
+                        return false;
+                    }
+
+                    nb::object scene = scene_from_handle(h);
+
+                    // Serialize scene
+                    nb::object scene_data = scene.attr("serialize")();
+
+                    // Build full data dict
+                    nb::dict data;
+                    data["version"] = "1.0";
+                    data["scene"] = scene_data;
+                    if (!editor_data.is_none()) {
+                        data["editor"] = editor_data;
+                    }
+
+                    // Convert to JSON
+                    nb::module_ json_module = nb::module_::import_("json");
+                    nb::object json_str =
+                        json_module.attr("dumps")(data, nb::arg("indent") = 2, nb::arg("ensure_ascii") = false);
+
+                    // Write file
+                    SceneManager::write_json_file(path, nb::cast<std::string>(json_str));
+                    self.set_scene_path(name, path);
+
+                    return true;
+                },
+                nb::arg("name"),
+                nb::arg("path"),
+                nb::arg("editor_data") = nb::none(),
+                "Save scene to file. Returns true on success.")
+
+            // --- Scene registration (for external scenes) ---
+
+            .def(
+                "register_scene",
+                [](SceneManager& self, const std::string& name, tc_scene_handle h) { self.register_scene(name, h); },
+                nb::arg("name"),
+                nb::arg("handle"))
+
+            .def("unregister_scene",
+                 &SceneManager::unregister_scene,
+                 nb::arg("name"),
+                 "Unregister a scene by name (does not destroy it).")
+
+            // --- Scene access ---
+
+            .def(
+                "get_scene",
+                [](const SceneManager& self, const std::string& name) -> nb::object {
+                    tc_scene_handle h = self.get_scene(name);
+                    if (!tc_scene_handle_valid(h)) {
+                        return nb::none();
+                    }
+                    return scene_from_handle(h);
+                },
+                nb::arg("name"),
+                "Get scene by name. Returns TcScene or None.")
+
+            .def("has_scene", &SceneManager::has_scene, nb::arg("name"), "Check if scene exists.")
+
+            .def("scene_names", &SceneManager::scene_names, "Get list of all scene names.")
+
+            // --- Path management ---
+
+            .def("get_scene_path",
+                 &SceneManager::get_scene_path,
+                 nb::arg("name"),
+                 "Get file path for scene (empty if not set).")
+
+            .def("set_scene_path",
+                 &SceneManager::set_scene_path,
+                 nb::arg("name"),
+                 nb::arg("path"),
+                 "Set file path for scene.")
+
+            // --- Mode management ---
+
+            .def(
+                "get_mode",
+                [](const SceneManager& self, const std::string& name) { return self.get_mode(name); },
+                nb::arg("name"),
+                "Get scene mode.")
+
+            .def(
+                "set_mode",
+                [](SceneManager& self, const std::string& name, tc_scene_mode mode) { self.set_mode(name, mode); },
+                nb::arg("name"),
+                nb::arg("mode"),
+                "Set scene mode.")
+
+            .def("has_play_scenes", &SceneManager::has_play_scenes, "Check if any scene is in PLAY mode.")
+
+            // --- Update cycle ---
+
+            .def("tick",
+                 &SceneManager::tick,
+                 nb::arg("dt"),
+                 "Update all scenes based on their mode. Returns true if render "
+                 "needed.")
+
+            // --- Render request ---
+
+            .def("request_render", &SceneManager::request_render, "Request render on next tick.")
+
+            .def("consume_render_request",
+                 &SceneManager::consume_render_request,
+                 "Consume and return render request flag.")
+
+            // --- File I/O ---
+
+            .def_static("read_json_file",
+                        &SceneManager::read_json_file,
+                        nb::arg("path"),
+                        "Read JSON file and return as string. Returns empty string on error.")
+
+            .def_static("write_json_file",
+                        &SceneManager::write_json_file,
+                        nb::arg("path"),
+                        nb::arg("json"),
+                        "Write JSON string to file (atomic write).")
+
+            // --- Callbacks ---
+
+            .def(
+                "set_on_after_render",
+                [](SceneManager& self, nb::object callback) {
+                    if (callback.is_none()) {
+                        self.set_on_after_render(nullptr);
+                    } else {
+                        // Store callback as shared_ptr to prevent preventing Python
+                        // shutdown
+                        auto cb = std::make_shared<nb::object>(callback);
+                        self.set_on_after_render([cb]() {
+                            nb::gil_scoped_acquire guard;
+                            (*cb)();
+                        });
+                    }
+                },
+                nb::arg("callback").none(),
+                "Set callback to run after render. Pass None to clear.")
+
+            .def(
+                "set_on_before_scene_close",
+                [](SceneManager& self, nb::object callback) {
+                    if (callback.is_none()) {
+                        self.set_on_before_scene_close(nullptr);
+                    } else {
+                        auto cb = std::make_shared<nb::object>(callback);
+                        self.set_on_before_scene_close([cb](const std::string& name) {
+                            nb::gil_scoped_acquire guard;
+                            (*cb)(name);
+                        });
+                    }
+                },
+                nb::arg("callback").none(),
+                "Set callback to run before scene close. Pass None to clear.")
+
+            .def("invoke_after_render", &SceneManager::invoke_after_render, "Invoke after_render callback (if set).")
+
+            .def("invoke_before_scene_close",
+                 &SceneManager::invoke_before_scene_close,
+                 nb::arg("name"),
+                 "Invoke before_scene_close callback (if set).");
+
+        // Scene pool query functions (used by CoreRegistryViewer)
+
+        m.def("tc_scene_registry_count", []() -> size_t { return tc_scene_pool_count(); });
+
+        m.def("tc_scene_registry_get_all_info", []() {
+            size_t count = 0;
+            tc_scene_info* infos = tc_scene_pool_get_all_info(&count);
+            nb::list result;
+            for (size_t i = 0; i < count; ++i) {
+                nb::dict d;
+                d["handle"] = nb::make_tuple(infos[i].handle.index, infos[i].handle.generation);
+                d["name"] = infos[i].name ? nb::str(infos[i].name) : nb::none();
+                d["entity_count"] = infos[i].entity_count;
+                d["pending_count"] = infos[i].pending_count;
+                d["update_count"] = infos[i].update_count;
+                d["fixed_update_count"] = infos[i].fixed_update_count;
+                result.append(d);
+            }
+            free(infos);
+            return result;
+        });
+
+        m.def(
+            "tc_scene_get_entities",
+            [](nb::tuple handle_tuple) {
+                tc_scene_handle h;
+                h.index = nb::cast<uint32_t>(handle_tuple[0]);
+                h.generation = nb::cast<uint32_t>(handle_tuple[1]);
+
+                if (!tc_scene_pool_alive(h)) {
+                    return nb::list();
+                }
+
+                tc_entity_pool* pool = tc_scene_entity_pool(h);
+                if (!pool) {
+                    return nb::list();
+                }
+
+                struct CollectCtx {
+                    tc_entity_pool* pool;
+                    nb::list result;
+                };
+                CollectCtx ctx{pool, nb::list()};
+
+                tc_entity_pool_foreach(
+                    pool,
+                    [](tc_entity_pool* p, tc_entity_id id, void* ud) -> bool {
+                        auto* c = static_cast<CollectCtx*>(ud);
+                        nb::dict d;
+                        const char* name = tc_entity_pool_name(c->pool, id);
+                        const char* uuid = tc_entity_pool_uuid(c->pool, id);
+                        tc_entity_id parent = tc_entity_pool_parent(c->pool, id);
+                        size_t component_count = tc_entity_pool_component_count(c->pool, id);
+                        nb::list components;
+                        for (size_t i = 0; i < component_count; ++i) {
+                            tc_component* component = tc_entity_pool_component_at(c->pool, id, i);
+                            nb::dict component_info;
+                            const char* type_name = tc_component_type_name(component);
+                            component_info["type_name"] = type_name ? nb::str(type_name) : nb::str("<unknown>");
+                            component_info["enabled"] = component ? component->enabled : false;
+                            component_info["active_in_editor"] = component ? component->active_in_editor : false;
+                            component_info["started"] = component ? component->_started : false;
+                            component_info["has_update"] = component ? component->has_update : false;
+                            component_info["has_fixed_update"] = component ? component->has_fixed_update : false;
+                            component_info["has_late_update"] = component ? component->has_late_update : false;
+                            component_info["ptr"] = reinterpret_cast<uintptr_t>(component);
+                            components.append(component_info);
+                        }
+
+                        d["name"] = name ? nb::str(name) : nb::none();
+                        d["uuid"] = uuid ? nb::str(uuid) : nb::str("");
+                        d["id_index"] = id.index;
+                        d["id_generation"] = id.generation;
+                        d["runtime_id"] = tc_entity_pool_runtime_id(c->pool, id);
+                        d["pick_id"] = tc_entity_pool_pick_id(c->pool, id);
+                        d["enabled"] = tc_entity_pool_enabled(c->pool, id);
+                        d["visible"] = tc_entity_pool_visible(c->pool, id);
+                        d["pickable"] = tc_entity_pool_pickable(c->pool, id);
+                        d["selectable"] = tc_entity_pool_selectable(c->pool, id);
+                        d["priority"] = tc_entity_pool_priority(c->pool, id);
+                        d["layer"] = tc_entity_pool_layer(c->pool, id);
+                        d["flags"] = tc_entity_pool_flags(c->pool, id);
+                        if (tc_entity_id_valid(parent)) {
+                            d["parent_index"] = parent.index;
+                            d["parent_generation"] = parent.generation;
+                        } else {
+                            d["parent_index"] = nb::none();
+                            d["parent_generation"] = nb::none();
+                        }
+                        d["children_count"] = tc_entity_pool_children_count(c->pool, id);
+                        d["component_count"] = component_count;
+                        d["components"] = components;
+                        c->result.append(d);
+                        return true;
+                    },
+                    &ctx);
+
+                return ctx.result;
             },
-            &ctx);
+            nb::arg("handle"));
 
-        return ctx.result;
-      },
-      nb::arg("handle"));
+        m.def(
+            "tc_scene_get_component_types",
+            [](nb::tuple handle_tuple) {
+                tc_scene_handle h;
+                h.index = nb::cast<uint32_t>(handle_tuple[0]);
+                h.generation = nb::cast<uint32_t>(handle_tuple[1]);
 
-  m.def(
-      "tc_scene_get_component_types",
-      [](nb::tuple handle_tuple) {
-        tc_scene_handle h;
-        h.index = nb::cast<uint32_t>(handle_tuple[0]);
-        h.generation = nb::cast<uint32_t>(handle_tuple[1]);
-
-        size_t count = 0;
-        tc_scene_component_type *types =
-            tc_scene_get_all_component_types(h, &count);
-        nb::list result;
-        for (size_t i = 0; i < count; ++i) {
-          nb::dict d;
-          d["type_name"] = types[i].type_name ? nb::str(types[i].type_name)
-                                              : nb::str("unknown");
-          d["count"] = types[i].count;
-          result.append(d);
-        }
-        free(types);
-        return result;
-      },
-      nb::arg("handle"));
-}
+                size_t count = 0;
+                tc_scene_component_type* types = tc_scene_get_all_component_types(h, &count);
+                nb::list result;
+                for (size_t i = 0; i < count; ++i) {
+                    nb::dict d;
+                    d["type_name"] = types[i].type_name ? nb::str(types[i].type_name) : nb::str("unknown");
+                    d["count"] = types[i].count;
+                    result.append(d);
+                }
+                free(types);
+                return result;
+            },
+            nb::arg("handle"));
+    }
 
 } // namespace termin

@@ -4,5 +4,5 @@
 #include <nanobind/nanobind.h>
 
 namespace termin {
-void bind_tc_scene_core(nanobind::module_& m);
+    void bind_tc_scene_core(nanobind::module_& m);
 }

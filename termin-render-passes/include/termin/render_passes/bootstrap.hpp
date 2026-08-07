@@ -4,6 +4,6 @@
 
 namespace termin {
 
-TERMIN_RENDER_PASSES_API void register_builtin_render_passes();
+    TERMIN_RENDER_PASSES_API void register_builtin_render_passes();
 
 } // namespace termin

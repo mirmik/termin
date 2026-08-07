@@ -2,12 +2,12 @@
 #ifndef TC_SCENE_EXTENSION_H
 #define TC_SCENE_EXTENSION_H
 
-#include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension_ids.h"
+#include "core/tc_scene_pool.h"
 #include "tc_value.h"
 #include <stdbool.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,28 +21,18 @@ typedef struct tc_scene_ext_vtable {
     void* (*create)(tc_scene_handle scene, void* type_userdata);
     void (*destroy)(void* ext, void* type_userdata);
     void (*on_scene_update)(void* ext, double dt, void* type_userdata);
-    void (*on_component_registered)(
-        void* ext,
-        struct tc_component* component,
-        void* type_userdata
-    );
-    void (*on_component_unregistering)(
-        void* ext,
-        struct tc_component* component,
-        void* type_userdata
-    );
+    void (*on_component_registered)(void* ext, struct tc_component* component, void* type_userdata);
+    void (*on_component_unregistering)(void* ext, struct tc_component* component, void* type_userdata);
     bool (*serialize)(void* ext, tc_value* out_data, void* type_userdata);
     bool (*deserialize)(void* ext, const tc_value* in_data, void* type_userdata);
 } tc_scene_ext_vtable;
 
 // Register extension type globally.
-TC_API bool tc_scene_ext_register(
-    tc_scene_ext_type_id type_id,
-    const char* debug_name,
-    const char* persistence_key,
-    const tc_scene_ext_vtable* vtable,
-    void* type_userdata
-);
+TC_API bool tc_scene_ext_register(tc_scene_ext_type_id type_id,
+                                  const char* debug_name,
+                                  const char* persistence_key,
+                                  const tc_scene_ext_vtable* vtable,
+                                  void* type_userdata);
 
 TC_API bool tc_scene_ext_is_registered(tc_scene_ext_type_id type_id);
 
@@ -57,11 +47,7 @@ TC_API bool tc_scene_ext_has(tc_scene_handle scene, tc_scene_ext_type_id type_id
 
 // Enumerate attached extension type ids for scene.
 // Returns number of ids written to out_ids (up to max_count).
-TC_API size_t tc_scene_ext_get_attached_types(
-    tc_scene_handle scene,
-    tc_scene_ext_type_id* out_ids,
-    size_t max_count
-);
+TC_API size_t tc_scene_ext_get_attached_types(tc_scene_handle scene, tc_scene_ext_type_id* out_ids, size_t max_count);
 
 // Serialize all attached extensions for scene into dict:
 // { "<persistence_key>": <extension data dict>, ... }
@@ -77,14 +63,8 @@ TC_API const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id);
 
 // Internal lifecycle hooks (called from tc_scene update/component registry).
 TC_API void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
-TC_API void tc_scene_ext_on_component_registered(
-    tc_scene_handle scene,
-    struct tc_component* component
-);
-TC_API void tc_scene_ext_on_component_unregistering(
-    tc_scene_handle scene,
-    struct tc_component* component
-);
+TC_API void tc_scene_ext_on_component_registered(tc_scene_handle scene, struct tc_component* component);
+TC_API void tc_scene_ext_on_component_unregistering(tc_scene_handle scene, struct tc_component* component);
 
 // Internal storage accessors implemented by tc_scene.c.
 TC_API void* tc_scene_ext_slot_get(tc_scene_handle scene, tc_scene_ext_type_id type_id);

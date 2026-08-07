@@ -19,7 +19,8 @@ static uint64_t g_audio_clip_next_uuid = 1;
 static bool g_audio_clip_initialized = false;
 
 static void audio_clip_free_pcm(tc_audio_clip* clip) {
-    if (!clip) return;
+    if (!clip)
+        return;
     free(clip->pcm_frames);
     clip->pcm_frames = NULL;
     clip->frame_count = 0;
@@ -30,12 +31,9 @@ static void audio_clip_free_pcm(tc_audio_clip* clip) {
 }
 
 void tc_audio_clip_registry_init(void) {
-    if (g_audio_clip_initialized) return;
-    if (!tc_pool_init_rebootstrap(
-            &g_audio_clip_pool,
-            sizeof(tc_audio_clip),
-            32,
-            &g_audio_clip_generation_epoch)) {
+    if (g_audio_clip_initialized)
+        return;
+    if (!tc_pool_init_rebootstrap(&g_audio_clip_pool, sizeof(tc_audio_clip), 32, &g_audio_clip_generation_epoch)) {
         tc_log_error("tc_audio_clip_registry_init: failed to initialize clip pool");
         return;
     }
@@ -50,7 +48,8 @@ void tc_audio_clip_registry_init(void) {
 }
 
 void tc_audio_clip_registry_shutdown(void) {
-    if (!g_audio_clip_initialized) return;
+    if (!g_audio_clip_initialized)
+        return;
     for (uint32_t i = 0; i < g_audio_clip_pool.capacity; ++i) {
         if (g_audio_clip_pool.states[i] == TC_SLOT_OCCUPIED) {
             audio_clip_free_pcm((tc_audio_clip*)tc_pool_get_unchecked(&g_audio_clip_pool, i));
@@ -64,18 +63,15 @@ void tc_audio_clip_registry_shutdown(void) {
 }
 
 tc_audio_clip_handle tc_audio_clip_create(const char* uuid) {
-    if (!g_audio_clip_initialized) tc_audio_clip_registry_init();
-    if (!g_audio_clip_initialized) return tc_audio_clip_handle_invalid();
+    if (!g_audio_clip_initialized)
+        tc_audio_clip_registry_init();
+    if (!g_audio_clip_initialized)
+        return tc_audio_clip_handle_invalid();
 
     char generated_uuid[TC_UUID_SIZE];
     const char* final_uuid = uuid;
     if (!final_uuid || !final_uuid[0]) {
-        tc_generate_prefixed_uuid(
-            generated_uuid,
-            sizeof(generated_uuid),
-            "audio-clip",
-            &g_audio_clip_next_uuid
-        );
+        tc_generate_prefixed_uuid(generated_uuid, sizeof(generated_uuid), "audio-clip", &g_audio_clip_next_uuid);
         final_uuid = generated_uuid;
     }
     if (tc_resource_map_contains(g_audio_clip_uuid_map, final_uuid)) {
@@ -100,11 +96,7 @@ tc_audio_clip_handle tc_audio_clip_create(const char* uuid) {
     return handle;
 }
 
-tc_audio_clip_handle tc_audio_clip_declare(
-    const char* uuid,
-    const char* name,
-    const char* source_path
-) {
+tc_audio_clip_handle tc_audio_clip_declare(const char* uuid, const char* name, const char* source_path) {
     if (!uuid || !uuid[0]) {
         tc_log_error("tc_audio_clip_declare: UUID is required");
         return tc_audio_clip_handle_invalid();
@@ -113,9 +105,12 @@ tc_audio_clip_handle tc_audio_clip_declare(
     if (tc_audio_clip_handle_is_invalid(handle)) {
         handle = tc_audio_clip_create(uuid);
     }
-    if (tc_audio_clip_handle_is_invalid(handle)) return handle;
-    if (name && name[0]) tc_audio_clip_set_name(handle, name);
-    if (source_path && source_path[0]) tc_audio_clip_set_source_path(handle, source_path);
+    if (tc_audio_clip_handle_is_invalid(handle))
+        return handle;
+    if (name && name[0])
+        tc_audio_clip_set_name(handle, name);
+    if (source_path && source_path[0])
+        tc_audio_clip_set_source_path(handle, source_path);
     return handle;
 }
 
@@ -124,10 +119,10 @@ tc_audio_clip_handle tc_audio_clip_find(const char* uuid) {
         return tc_audio_clip_handle_invalid();
     }
     void* packed_index = tc_resource_map_get(g_audio_clip_uuid_map, uuid);
-    if (!tc_has_index(packed_index)) return tc_audio_clip_handle_invalid();
+    if (!tc_has_index(packed_index))
+        return tc_audio_clip_handle_invalid();
     const uint32_t index = tc_unpack_index(packed_index);
-    if (index >= g_audio_clip_pool.capacity ||
-        g_audio_clip_pool.states[index] != TC_SLOT_OCCUPIED) {
+    if (index >= g_audio_clip_pool.capacity || g_audio_clip_pool.states[index] != TC_SLOT_OCCUPIED) {
         tc_log_error("tc_audio_clip_find: UUID map contains stale index for '%s'", uuid);
         return tc_audio_clip_handle_invalid();
     }
@@ -140,7 +135,8 @@ tc_audio_clip_handle tc_audio_clip_find_by_name(const char* name) {
         return tc_audio_clip_handle_invalid();
     }
     for (uint32_t i = 0; i < g_audio_clip_pool.capacity; ++i) {
-        if (g_audio_clip_pool.states[i] != TC_SLOT_OCCUPIED) continue;
+        if (g_audio_clip_pool.states[i] != TC_SLOT_OCCUPIED)
+            continue;
         tc_audio_clip* clip = (tc_audio_clip*)tc_pool_get_unchecked(&g_audio_clip_pool, i);
         if (clip->header.name && strcmp(clip->header.name, name) == 0) {
             tc_audio_clip_handle handle = {i, g_audio_clip_pool.generations[i]};
@@ -160,7 +156,8 @@ tc_audio_clip_handle tc_audio_clip_get_or_create(const char* uuid) {
 }
 
 tc_audio_clip* tc_audio_clip_get(tc_audio_clip_handle handle) {
-    if (!g_audio_clip_initialized) return NULL;
+    if (!g_audio_clip_initialized)
+        return NULL;
     return (tc_audio_clip*)tc_pool_get(&g_audio_clip_pool, handle);
 }
 
@@ -171,19 +168,12 @@ bool tc_audio_clip_is_valid(tc_audio_clip_handle handle) {
 bool tc_audio_clip_destroy(tc_audio_clip_handle handle) {
     tc_audio_clip* clip = tc_audio_clip_get(handle);
     if (!clip) {
-        tc_log_warn(
-            "tc_audio_clip_destroy: stale handle index=%u generation=%u",
-            handle.index,
-            handle.generation
-        );
+        tc_log_warn("tc_audio_clip_destroy: stale handle index=%u generation=%u", handle.index, handle.generation);
         return false;
     }
     if (clip->header.ref_count != 0) {
         tc_log_warn(
-            "tc_audio_clip_destroy: clip '%s' still has %u references",
-            clip->header.uuid,
-            clip->header.ref_count
-        );
+            "tc_audio_clip_destroy: clip '%s' still has %u references", clip->header.uuid, clip->header.ref_count);
         return false;
     }
     if (tc_audio_voice_pool_uses_clip(handle)) {
@@ -226,40 +216,46 @@ bool tc_audio_clip_set_source_path(tc_audio_clip_handle handle, const char* sour
 }
 
 void tc_audio_clip_add_ref(tc_audio_clip* clip) {
-    if (clip) ++clip->header.ref_count;
+    if (clip)
+        ++clip->header.ref_count;
 }
 
 bool tc_audio_clip_release(tc_audio_clip* clip) {
-    if (!clip) return false;
+    if (!clip)
+        return false;
     if (clip->header.ref_count == 0) {
         tc_log_warn("tc_audio_clip_release: clip '%s' refcount is already zero", clip->header.uuid);
         return false;
     }
     --clip->header.ref_count;
-    if (clip->header.ref_count != 0) return false;
+    if (clip->header.ref_count != 0)
+        return false;
     tc_audio_clip_handle handle = tc_audio_clip_find(clip->header.uuid);
     return !tc_audio_clip_handle_is_invalid(handle) && tc_audio_clip_destroy(handle);
 }
 
 size_t tc_audio_sample_size(tc_audio_sample_format format) {
     switch (format) {
-        case TC_AUDIO_SAMPLE_FORMAT_U8: return 1;
-        case TC_AUDIO_SAMPLE_FORMAT_S16: return 2;
-        case TC_AUDIO_SAMPLE_FORMAT_S24: return 3;
-        case TC_AUDIO_SAMPLE_FORMAT_S32:
-        case TC_AUDIO_SAMPLE_FORMAT_F32: return 4;
-        default: return 0;
+    case TC_AUDIO_SAMPLE_FORMAT_U8:
+        return 1;
+    case TC_AUDIO_SAMPLE_FORMAT_S16:
+        return 2;
+    case TC_AUDIO_SAMPLE_FORMAT_S24:
+        return 3;
+    case TC_AUDIO_SAMPLE_FORMAT_S32:
+    case TC_AUDIO_SAMPLE_FORMAT_F32:
+        return 4;
+    default:
+        return 0;
     }
 }
 
-bool tc_audio_clip_set_pcm(
-    tc_audio_clip_handle handle,
-    const void* frames,
-    uint64_t frame_count,
-    uint32_t sample_rate,
-    uint16_t channels,
-    tc_audio_sample_format format
-) {
+bool tc_audio_clip_set_pcm(tc_audio_clip_handle handle,
+                           const void* frames,
+                           uint64_t frame_count,
+                           uint32_t sample_rate,
+                           uint16_t channels,
+                           tc_audio_sample_format format) {
     tc_audio_clip* clip = tc_audio_clip_get(handle);
     const size_t sample_size = tc_audio_sample_size(format);
     if (!clip || !frames || frame_count == 0 || sample_rate == 0 || channels == 0 || sample_size == 0) {
@@ -329,7 +325,8 @@ bool tc_audio_clip_ensure_loaded(tc_audio_clip_handle handle) {
         tc_log_error("tc_audio_clip_ensure_loaded: stale clip handle");
         return false;
     }
-    if (clip->header.is_loaded) return true;
+    if (clip->header.is_loaded)
+        return true;
     if (!clip->source_path || !clip->source_path[0]) {
         tc_log_error("tc_audio_clip_ensure_loaded: clip '%s' has no source path", clip->header.uuid);
         return false;
@@ -354,12 +351,14 @@ bool tc_audio_clip_unload(tc_audio_clip_handle handle) {
 
 double tc_audio_clip_duration_seconds(tc_audio_clip_handle handle) {
     tc_audio_clip* clip = tc_audio_clip_get(handle);
-    if (!clip || clip->sample_rate == 0) return 0.0;
+    if (!clip || clip->sample_rate == 0)
+        return 0.0;
     return (double)clip->frame_count / (double)clip->sample_rate;
 }
 
 uint64_t tc_audio_clip_duration_ms(tc_audio_clip_handle handle) {
     tc_audio_clip* clip = tc_audio_clip_get(handle);
-    if (!clip || clip->sample_rate == 0) return 0;
+    if (!clip || clip->sample_rate == 0)
+        return 0;
     return (clip->frame_count * 1000u) / clip->sample_rate;
 }

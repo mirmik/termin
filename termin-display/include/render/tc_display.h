@@ -2,14 +2,14 @@
 #ifndef TC_DISPLAY_H
 #define TC_DISPLAY_H
 
-#include "tc_types.h"
 #include "core/tc_input_platform_services.h"
-#include "render/termin_display_api.h"
-#include "render/tc_input_manager.h"
 #include "render/tc_display_pool.h"
+#include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "render/termin_display_api.h"
+#include "tc_types.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,8 +28,7 @@ extern "C" {
 TERMIN_DISPLAY_API tc_display_handle tc_display_new(const char* name, tc_render_surface* surface);
 // Creates a display-owned offscreen render surface on the process-wide tgfx2
 // device. The device must have been claimed by GraphicsHost before this call.
-TERMIN_DISPLAY_API tc_display_handle tc_display_new_d3d11_offscreen_current(
-    int width, int height, const char* name);
+TERMIN_DISPLAY_API tc_display_handle tc_display_new_d3d11_offscreen_current(int width, int height, const char* name);
 TERMIN_DISPLAY_API bool tc_display_free(tc_display_handle display);
 
 // ============================================================================
@@ -56,11 +55,9 @@ TERMIN_DISPLAY_API tc_render_surface* tc_display_get_surface(tc_display_handle d
 TERMIN_DISPLAY_API bool tc_display_resize(tc_display_handle display, int width, int height);
 TERMIN_DISPLAY_API uint32_t tc_display_get_color_texture_id(tc_display_handle display);
 TERMIN_DISPLAY_API uintptr_t tc_display_get_graphics_domain_key(tc_display_handle display);
-TERMIN_DISPLAY_API bool tc_display_validate_output(
-    tc_display_handle display,
-    uintptr_t expected_graphics_domain_key,
-    uint32_t* color_texture_id
-);
+TERMIN_DISPLAY_API bool tc_display_validate_output(tc_display_handle display,
+                                                   uintptr_t expected_graphics_domain_key,
+                                                   uint32_t* color_texture_id);
 
 // ============================================================================
 // Display Input Endpoint (pixel coordinates, origin top-left)
@@ -68,30 +65,18 @@ TERMIN_DISPLAY_API bool tc_display_validate_output(
 
 TERMIN_DISPLAY_API tc_input_manager* tc_display_get_input_manager(tc_display_handle display);
 TERMIN_DISPLAY_API bool tc_display_dispatch_pointer(
-    tc_display_handle display,
-    uint64_t pointer_id,
-    int device,
-    int phase,
-    double x,
-    double y,
-    float pressure);
+    tc_display_handle display, uint64_t pointer_id, int device, int phase, double x, double y, float pressure);
 TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_move(tc_display_handle display, double x, double y);
 TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_button(
-    tc_display_handle display, double x, double y, int button, int action, int mods,
-    uint32_t click_count);
-TERMIN_DISPLAY_API bool tc_display_dispatch_wheel(
-    tc_display_handle display, double x, double y, double wheel_x, double wheel_y, int mods);
-TERMIN_DISPLAY_API bool tc_display_dispatch_key(
-    tc_display_handle display, int key, int scancode, int action, int mods);
+    tc_display_handle display, double x, double y, int button, int action, int mods, uint32_t click_count);
+TERMIN_DISPLAY_API bool
+tc_display_dispatch_wheel(tc_display_handle display, double x, double y, double wheel_x, double wheel_y, int mods);
+TERMIN_DISPLAY_API bool tc_display_dispatch_key(tc_display_handle display, int key, int scancode, int action, int mods);
 TERMIN_DISPLAY_API bool tc_display_dispatch_text(tc_display_handle display, uint32_t codepoint);
-TERMIN_DISPLAY_API bool tc_display_dispatch_text_utf8(
-    tc_display_handle display,
-    const char* text_utf8);
-TERMIN_DISPLAY_API bool tc_display_dispatch_focus_lost(
-    tc_display_handle display);
-TERMIN_DISPLAY_API bool tc_display_set_input_platform_services(
-    tc_display_handle display,
-    const tc_input_platform_services* services);
+TERMIN_DISPLAY_API bool tc_display_dispatch_text_utf8(tc_display_handle display, const char* text_utf8);
+TERMIN_DISPLAY_API bool tc_display_dispatch_focus_lost(tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_display_set_input_platform_services(tc_display_handle display,
+                                                               const tc_input_platform_services* services);
 
 // Get display size in pixels (delegates to surface)
 TERMIN_DISPLAY_API void tc_display_get_size(tc_display_handle display, int* width, int* height);
@@ -122,18 +107,10 @@ TERMIN_DISPLAY_API tc_viewport_handle tc_display_get_viewport_at_index(tc_displa
 // Find viewport at normalized coordinates (0..1), origin bottom-left (OpenGL convention)
 // For screen coordinates (origin top-left), use tc_display_viewport_at_screen
 // Returns viewport with highest depth if multiple overlap, invalid handle if none
-TERMIN_DISPLAY_API tc_viewport_handle tc_display_viewport_at(
-    tc_display_handle display,
-    float x,
-    float y
-);
+TERMIN_DISPLAY_API tc_viewport_handle tc_display_viewport_at(tc_display_handle display, float x, float y);
 
 // Find viewport at screen coordinates (pixels, origin top-left)
-TERMIN_DISPLAY_API tc_viewport_handle tc_display_viewport_at_screen(
-    tc_display_handle display,
-    float px,
-    float py
-);
+TERMIN_DISPLAY_API tc_viewport_handle tc_display_viewport_at_screen(tc_display_handle display, float px, float py);
 
 // ============================================================================
 // Pixel Rect Updates
@@ -148,12 +125,7 @@ TERMIN_DISPLAY_API void tc_display_update_all_pixel_rects(tc_display_handle disp
 
 // Called when surface resizes - updates all viewport pixel_rects
 // This is set as the surface's on_resize callback automatically
-void tc_display_on_surface_resize(
-    tc_render_surface* surface,
-    int width,
-    int height,
-    void* userdata
-);
+void tc_display_on_surface_resize(tc_render_surface* surface, int width, int height, void* userdata);
 
 #ifdef __cplusplus
 }

@@ -1,35 +1,26 @@
 // tc_component_csharp.cpp - C# component implementation
 // Analogous to tc_component_python.cpp
-#include <termin_csharp/tc_component_csharp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termin_csharp/tc_component_csharp.h>
 
 // Global C# callbacks (set once at initialization)
 static tc_csharp_callbacks g_cs_callbacks = {0};
 static tc_csharp_render_lifecycle_callbacks g_cs_render_callbacks = {0};
 
-static void cs_render_attach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
+static void cs_render_attach(tc_component* c, const tc_render_attachment_context* context) {
     if (g_cs_render_callbacks.on_render_attach && c->body) {
         g_cs_render_callbacks.on_render_attach(c->body, context);
     }
 }
 
-static void cs_render_prepare(
-    tc_component* c,
-    const tc_render_prepare_context* context
-) {
+static void cs_render_prepare(tc_component* c, const tc_render_prepare_context* context) {
     if (g_cs_render_callbacks.prepare_render && c->body) {
         g_cs_render_callbacks.prepare_render(c->body, context);
     }
 }
 
-static void cs_render_detach(
-    tc_component* c,
-    const tc_render_attachment_context* context
-) {
+static void cs_render_detach(tc_component* c, const tc_render_attachment_context* context) {
     if (g_cs_render_callbacks.on_render_detach && c->body) {
         g_cs_render_callbacks.on_render_detach(c->body, context);
     }
@@ -117,7 +108,7 @@ static void cs_ref_release(tc_component* c) {
 static const tc_component_ref_vtable g_cs_ref_vtable = {
     cs_ref_retain,
     cs_ref_release,
-    NULL,  // drop: C# GC owns the object
+    NULL, // drop: C# GC owns the object
 };
 
 // ============================================================================
@@ -152,22 +143,20 @@ void tc_component_set_csharp_callbacks(const tc_csharp_callbacks* callbacks) {
     }
 }
 
-void tc_component_set_csharp_render_lifecycle_callbacks(
-    const tc_csharp_render_lifecycle_callbacks* callbacks
-) {
+void tc_component_set_csharp_render_lifecycle_callbacks(const tc_csharp_render_lifecycle_callbacks* callbacks) {
     if (callbacks) {
         g_cs_render_callbacks = *callbacks;
     }
 }
 
 bool tc_component_install_csharp_render_lifecycle(tc_component* component) {
-    return tc_render_lifecycle_capability_attach(
-        component, &g_cs_render_vtable, component ? component->body : NULL);
+    return tc_render_lifecycle_capability_attach(component, &g_cs_render_vtable, component ? component->body : NULL);
 }
 
 tc_component* tc_component_new_csharp(void* cs_self, const char* type_name) {
     tc_component* c = (tc_component*)calloc(1, sizeof(tc_component));
-    if (!c) return NULL;
+    if (!c)
+        return NULL;
 
     tc_component_init(c, &g_csharp_vtable);
     c->ref_vtable = &g_cs_ref_vtable;

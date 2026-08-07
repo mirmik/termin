@@ -4,8 +4,8 @@
 
 namespace termin {
 
-void register_builtin_foliage_component_types() {
-    FoliageLayerComponent::register_type();
-}
+    void register_builtin_foliage_component_types() {
+        FoliageLayerComponent::register_type();
+    }
 
 } // namespace termin
