@@ -76,9 +76,12 @@ Managed `Termin.Native.Chart2D` доказал, что текущих retained p
 - `fit_plot_range2d`, tick generation/formatting и native text measurement;
 - retained semantic annotations and data markers;
 - typed C# wrappers для visual-scene и plot items;
-- managed single-panel `Chart2D`, служащий reference implementation layout;
+- native open single-panel `RetainedChart2D`, публичные parts и thin C#
+  `Chart2D` facade;
+- pooled native tick labels без allocation churn при range/layout updates;
 - `SceneView` и widget portals в `termin-gui-native`;
-- WPF D3D11 texture presentation через `Tgfx2D3D11ImageHost`.
+- generic WPF retained-scene host, portals и D3D11 texture presentation через
+  `Tgfx2D3D11ImageHost`.
 
 `PlotEngine2D` уже использует те же series GPU bodies, что retained items.
 Новый renderer для этой миграции не нужен.
@@ -87,18 +90,14 @@ Managed `Termin.Native.Chart2D` доказал, что текущих retained p
 
 - `PlotView2D` и `PlotView2DMulti` остаются monolithic facade с hidden layout и
   offscreen ownership;
-- managed `Chart2D` строит стандартный layout только на C#-стороне;
 - у retained series нет managed/native semantic identity с name, legend и
   data bounds;
-- `Chart2D` не предоставляет `Fit`, legend и multi-panel composition;
-- generic WPF host для произвольной `TcVisualScene` отсутствует;
-- WPF portal mapping отсутствует;
+- `Chart2D` предоставляет native `Fit`/`FitX`/`FitY`, но ещё не предоставляет
+  retained legend и multi-panel composition;
 - `tcplot-gui-native::Plot2D` является отдельным упрощённым composer с
   hard-coded layout и immediate chrome;
 - `tcplot-gui-native::Plot2D` рисует scene напрямую, минует `SceneView` и не
   поддерживает widget portals;
-- текущий managed layout уничтожает и создаёт tick label items при каждом
-  recalculation, что неприемлемо как неограниченная multi-panel стратегия.
 
 ## Целевые границы модулей
 
@@ -316,44 +315,45 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 1. Native open single-panel composer
 
-- [ ] Ввести `RetainedChart2D` и `ChartParts2D` в `tcplot`.
-- [ ] Собрать standard chart только из public `TcVisualScene` items.
-- [ ] Перенести managed reference layout в общий native implementation,
+- [x] Ввести `RetainedChart2D` и `ChartParts2D` в `tcplot`.
+- [x] Собрать standard chart только из public `TcVisualScene` items.
+- [x] Перенести managed reference layout в общий native implementation,
   переиспользовав существующие tick/text utilities.
-- [ ] Представить background, axes, tick marks, labels и title retained items,
+- [x] Представить background, axes, tick marks, labels и title retained items,
   исключив hidden immediate chrome.
-- [ ] Обеспечить stable handles standard parts.
-- [ ] Добавить theme/layout value descriptors без закрытого setter explosion.
-- [ ] Добавить explicit resize/range/pixel-scale transaction.
+- [x] Обеспечить stable handles standard parts.
+- [x] Добавить theme/layout value descriptors без закрытого setter explosion.
+- [x] Добавить explicit resize/range/pixel-scale mutation.
 
 ### Этап 2. Semantic series and fit
 
 - [ ] Ввести stable `ChartSeriesHandle2D`.
 - [ ] Добавить name, visibility, legend policy, item handle и data bounds.
-- [ ] Реализовать `fit`, `fit_x`, `fit_y` по native bounds видимых series.
+- [x] Реализовать `fit`, `fit_x`, `fit_y` по native bounds видимых series.
 - [ ] Сохранить `set_data`, `append`, style mutation и nearest query без
   пересоздания item/GPU body.
 - [ ] Добавить retained legend composition с заменяемыми public parts.
-- [ ] Не хранить отдельную копию large series data в composer или C#.
+- [x] Не хранить отдельную копию large series data в composer или C#.
 
 ### Этап 3. Interaction and annotations
 
-- [ ] Отделить reusable `ChartInteraction2D` от WPF/SDL event classes.
-- [ ] Реализовать pan, anchored zoom, fit/reset и nearest selection через
-  compact chart mutations.
+- [x] Отделить reusable `ChartInteraction2D` от WPF/SDL event classes.
+- [x] Реализовать pan, anchored zoom и fit/reset через compact chart
+  mutations.
+- [ ] Реализовать nearest selection через compact chart mutations.
 - [ ] Подключить существующие retained annotations к public
   `AnnotationsRoot`.
 - [ ] Добавить overlay anchor helpers на основе generic hit-region/group items.
-- [ ] Гарантировать portal-first input routing в frontend hosts.
+- [x] Гарантировать portal-first input routing в WPF host.
 
 ### Этап 4. Thin C# projection
 
-- [ ] Экспортировать chart/parts/series C ABI с generation handles.
-- [ ] Добавить idiomatic wrappers в `Termin.Native`.
-- [ ] Сохранить доступ к raw `TcVisualScene2D` и typed item wrappers.
-- [ ] Перевести текущий managed `Chart2D` на native composer либо заменить его
+- [x] Экспортировать chart/parts/series C ABI с generation handles.
+- [x] Добавить idiomatic wrappers в `Termin.Native`.
+- [x] Сохранить доступ к raw `TcVisualScene2D` и typed item wrappers.
+- [x] Перевести текущий managed `Chart2D` на native composer либо заменить его
   новым wrapper после migration window.
-- [ ] Удалить вторую C# реализацию layout/ticks/panel composition.
+- [x] Удалить вторую C# реализацию layout/ticks/panel composition.
 - [x] Добавить C# example с заменой part и custom overlay
   (`RetainedChartWpfExample`; installed-SDK packaging ещё проверить после
   стабилизации native composer ABI).
@@ -363,7 +363,9 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 - [x] Добавить в `Termin.Wpf` control для произвольной retained scene.
 - [x] Переиспользовать `Tgfx2Host` и `Tgfx2D3D11ImageHost` presentation path.
 - [x] Реализовать resize/DPI и deterministic GPU teardown.
-- [ ] Маршрутизировать pointer/wheel/key events в chart interaction controller.
+- [x] Маршрутизировать pointer/wheel events в chart interaction controller.
+- [ ] Добавить chart-level keyboard shortcuts после определения общего
+  frontend-neutral command contract.
 - [x] Добавить overlay layer и portal mapping
   `GraphicItemRef2D -> FrameworkElement`.
 - [x] Обновлять portal bounds из world bounds после layout/camera changes.
@@ -374,7 +376,9 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 Managed vertical prototype готов в `AllianceStreamingChartsExample`: четыре
 компонуемых `Chart2D` используют borrowed shared scene, один renderer/texture,
 общий moving X window, независимые Y ranges и WPF portals. Он доказывает
-контракт, но не заменяет перечисленный ниже native composer. Перед Alliance
+контракт, включая middle-drag pan, cursor-anchored zoom, shared X и
+отключаемый follow-latest mode, но не заменяет перечисленный ниже native
+composer. Перед Alliance
 нужно также отделить дешёвое обновление projection от полного layout/tick-label
 rebuild и добавить bounded native streaming/ring-buffer policy.
 

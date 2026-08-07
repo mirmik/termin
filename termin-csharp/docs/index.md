@@ -27,9 +27,10 @@ C# project: `Termin.Native`.
 `HitRegionItemRef2D`. Each factory creates an existing native item body,
 adopts it into the scene and returns a full generation-handle wrapper.
 
-Managed code owns topology, transforms and presentation policy. Item bodies,
-paint execution and backend resources remain native. Disposing a scene makes
-all wrappers stale; wrong-type casts and stale operations fail explicitly.
+Low-level consumers may own topology, transforms and presentation policy.
+Standard chart topology and layout belong to the native tcplot composer. Item
+bodies, paint execution and backend resources remain native. Disposing a scene
+makes all wrappers stale; wrong-type casts and stale operations fail explicitly.
 User-defined C#/Python item bodies and managed paint callbacks are not part of
 this surface.
 
@@ -44,22 +45,28 @@ Retained chart bindings build on the same base references:
 - `RetainedPlotLayout2D` exposes native fit/tick/UTF-8 formatting and text
   measurement through the active `GpuHost` font.
 
-These types are the parts consumed by the managed `Chart2D` composer; they do
-not introduce another renderer or a hidden native chart layout.
+These types are the public bodies used by tcplot's native open chart composer;
+they do not introduce another renderer or an inaccessible layout tree.
 
-`Chart2D` assembles a single panel into one public `TcVisualScene2D`. It owns
-managed layout policy and exposes its root, plot-area, series, annotation,
-chrome and tick-label groups. Backgrounds, grid, axes, title and axis labels
-are typed `ChartPart2D<T>` slots: applications can mutate the current item,
-replace it with another item from the same scene, or remove it. Line and
-scatter items keep their native handles and native data across `Resize`,
-`PanBy`, `ZoomAt`, range and theme updates; those operations update the compact
-projection and the small managed chrome only.
+`Chart2D` is a thin managed projection of native `RetainedChart2D`. The native
+composer assembles a single panel into one public `TcVisualScene2D`, owns the
+projection and standard layout policy, and exposes root, plot-area, series,
+annotation, chrome, axis, legend, overlay and tick-label groups. Backgrounds,
+grid, axes, title and axis labels are typed `ChartPart2D<T>` slots:
+applications can mutate the current native item, replace it with another item
+from the same scene, or remove it. Line and scatter items keep their native
+handles and data across `Resize`, `PanBy`, `ZoomAt`, range and theme updates.
 
-Text measurement and tick values still come from `RetainedPlotLayout2D`.
-`Chart2D` borrows its `GpuHost`, owns its scene and projection, and must be
-disposed before the host. `Annotations` is an ordinary clipped group into
-which callers can insert built-in retained items. See
+Text measurement, tick generation, pooling, clipping and projection updates
+remain native. `Chart2D` borrows its `GpuHost`, exposes its chart-owned scene
+and projection through non-owning wrappers, and must be disposed before the
+host. `Annotations` and `Overlay` are ordinary public groups into which callers
+can insert built-in retained items. `Fit()`, `FitX()` and `FitY()` scan the
+effective-visible native series without copying their data into the composer or
+C#. `ChartInteraction2D` owns frontend-neutral middle-drag pan and
+cursor-anchored wheel zoom state. `Chart2DWpfInteraction` only adapts WPF
+framebuffer events; Ctrl+wheel selects X-only zoom and real WPF portals retain
+input priority over the rendered scene. See
 `examples/RetainedChartComposition` for replacement of a standard plot
 background without extending the native ABI.
 
