@@ -71,6 +71,7 @@ struct WebPlayerState {
     std::vector<std::string> registered_scene_names;
     std::vector<tc_viewport_handle> viewports;
     std::vector<tc_viewport_input_manager*> viewport_input_managers;
+    std::vector<tc_display_handle> owned_displays;
     tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
     uint32_t width = 640;
     uint32_t height = 360;
@@ -126,6 +127,12 @@ void unload_web_host_package() {
     web_player->viewports.clear();
     web_player->presentation_display = TC_DISPLAY_HANDLE_INVALID;
     web_player->registered_scene_names.clear();
+    for (tc_display_handle display : web_player->owned_displays) {
+        if (tc_display_alive(display) && !tc_display_free(display)) {
+            tc_log_error("TerminWebHost: failed to release owned display");
+        }
+    }
+    web_player->owned_displays.clear();
     if (web_player->graphics_host) {
         tc_log_info("TerminWebHost unload: closing GraphicsHost");
         web_player->graphics_host->close();
@@ -143,11 +150,15 @@ tc_display_handle create_web_player_display(const std::string& requested_name) {
         return TC_DISPLAY_HANDLE_INVALID;
     }
     const std::string name = requested_name.empty() ? "Main" : requested_name;
-    return termin::create_offscreen_display(
+    const tc_display_handle display = termin::create_offscreen_display(
         web_player->device,
         static_cast<int>(web_player->width),
         static_cast<int>(web_player->height),
         name.c_str());
+    if (tc_display_alive(display)) {
+        web_player->owned_displays.push_back(display);
+    }
+    return display;
 }
 
 bool present_web_player_canvas() {
