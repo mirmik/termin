@@ -4,9 +4,9 @@
 
 > Эта setter-based поверхность является переходной. Целевая архитектура
 > описана в
-> [C# Retained Chart Composition](../../docs/architecture/2026-07-30-csharp-retained-chart-composition.md):
-> C# собирает chart из типизированных `GraphicItem`, а native сторона сохраняет
-> тяжёлую обработку данных и GPU rendering.
+> [Open retained chart composer](../../docs/plans/2026-08-06-open-retained-chart-composer-plan.md):
+> native `tcplot` собирает стандартный chart как публичное дерево
+> `TcVisualScene2D`, а C# получает thin wrappers и полный доступ к его parts.
 
 ---
 

@@ -6,8 +6,8 @@ Projects:
 
 - `PlotDemoApp` - WPF/D3D11 D3DImage hosts for 2D, multi-panel 2D, and 3D plot demos.
 - `RetainedChartComposition` - platform-neutral construction and customization
-  of a managed `Chart2D` backed by native retained items. It replaces the
-  standard plot background without adding a native layout forwarding method.
+  of native `RetainedChart2D` through its thin C# `Chart2D` facade. It replaces
+  the standard plot background without adding a layout forwarding method.
 - `RetainedChartWpfExample` - renders that retained scene through the generic
   D3D11 WPF scene host, customizes native chart parts from C#, and anchors a
   real WPF button to a retained scene item. The button callback stays in C#.

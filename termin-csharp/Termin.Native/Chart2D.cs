@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace Termin.Native;
 
@@ -26,58 +26,79 @@ public sealed class Chart2DTheme
     public float YTickSpacingLogicalPx { get; set; } = 50;
 
     public static Chart2DTheme Default => new();
+
+    internal Chart2DNative.Theme ToNative() => new(this);
 }
 
+[StructLayout(LayoutKind.Sequential)]
 public readonly struct ChartLayout2D
 {
     public readonly PlotRect2D Viewport;
     public readonly PlotRect2D PlotArea;
     public readonly float PixelScale;
+    public readonly ulong Revision;
 
-    public ChartLayout2D(
-        PlotRect2D viewport,
-        PlotRect2D plotArea,
-        float pixelScale)
+    internal ChartLayout2D(Chart2DNative.Layout value)
     {
-        Viewport = viewport;
-        PlotArea = plotArea;
-        PixelScale = pixelScale;
+        Viewport = value.Viewport;
+        PlotArea = value.PlotArea;
+        PixelScale = value.PixelScale;
+        Revision = value.Revision;
     }
 }
 
+internal enum ChartPartKind2D
+{
+    Root,
+    Background,
+    PlotArea,
+    PlotBackground,
+    Grid,
+    SeriesRoot,
+    AnnotationsRoot,
+    ChromeRoot,
+    XAxisRoot,
+    YAxisRoot,
+    XAxis,
+    YAxis,
+    XTickLabelsRoot,
+    YTickLabelsRoot,
+    Title,
+    XAxisLabel,
+    YAxisLabel,
+    LegendRoot,
+    OverlayRoot,
+}
+
 /// <summary>
-/// A named, replaceable chart part. The item body is always native and owned
-/// by the chart's visual scene; this slot only owns composition policy.
+/// A named native chart slot. The item body belongs to the chart's public
+/// visual scene; this wrapper carries no layout or ownership policy.
 /// </summary>
 public sealed class ChartPart2D<T> where T : GraphicItemRef2D
 {
-    private readonly TcVisualScene2D _scene;
-    private readonly GraphicItemRef2D _parent;
-    private readonly long _zOrder;
-    private readonly Action<T?> _changed;
-    private T? _item;
+    private readonly Chart2D _chart;
+    private readonly ChartPartKind2D _kind;
+    private readonly Func<GraphicItemRef2D, T> _cast;
 
     internal ChartPart2D(
-        TcVisualScene2D scene,
-        GraphicItemRef2D parent,
-        T item,
-        long zOrder,
-        Action<T?> changed)
+        Chart2D chart,
+        ChartPartKind2D kind,
+        Func<GraphicItemRef2D, T> cast)
     {
-        _scene = scene;
-        _parent = parent;
-        _item = item;
-        _zOrder = zOrder;
-        _changed = changed;
-        item.ZOrder = zOrder;
+        _chart = chart;
+        _kind = kind;
+        _cast = cast;
     }
 
     public T? Item
     {
         get
         {
-            var item = _item;
-            return item is { IsValid: true } ? item : null;
+            GraphicItemHandle2D handle = _chart.GetPartHandle(_kind);
+            return handle.IsValid
+                ? _cast(new GraphicItemRef2D(
+                    _chart.Scene.NativeHandle, handle))
+                : null;
         }
     }
 
@@ -85,55 +106,25 @@ public sealed class ChartPart2D<T> where T : GraphicItemRef2D
     {
         if (replacement is null)
             throw new ArgumentNullException(nameof(replacement));
-        if (!replacement.IsValid ||
-            !replacement.Scene.Equals(_scene.NativeHandle))
-            throw new ArgumentException(
-                "The replacement must be a valid item from the chart scene.",
-                nameof(replacement));
-
-        var previous = Item;
-        if (previous?.Handle == replacement.Handle)
-            return;
-        if (!replacement.SetParent(_parent))
-            throw new InvalidOperationException(
-                "The replacement could not be adopted by the chart part.");
-        replacement.ZOrder = _zOrder;
-        _item = replacement;
-        _changed(replacement);
-        if (previous is not null)
-            previous.Destroy();
+        _chart.ReplacePart(_kind, replacement);
     }
 
-    public void Remove()
-    {
-        var previous = Item;
-        _item = null;
-        _changed(null);
-        if (previous is not null)
-            previous.Destroy();
-    }
+    public void Remove() => _chart.RemovePart(_kind);
 }
 
 /// <summary>
-/// Managed single-panel chart composition over native retained scene items.
-/// Layout and part selection live here; large series data and painting remain
-/// in native item bodies.
+/// Thin managed projection of tcplot's native open retained chart composer.
+/// Layout, ticks, text measurement, projection synchronization and standard
+/// part topology live in tcplot. Scene items remain directly customizable.
 /// </summary>
 public sealed class Chart2D : IDisposable
 {
     private readonly GpuHost _host;
-    private readonly bool _ownsScene;
     private readonly List<PlotLineSeriesItemRef2D> _lines = new();
     private readonly List<PlotScatterSeriesItemRef2D> _scatters = new();
-    private readonly List<TextItemRef2D> _xTickLabels = new();
-    private readonly List<TextItemRef2D> _yTickLabels = new();
+    private readonly bool _disposeSceneView;
+    private IntPtr _native;
     private bool _disposed;
-    private float _xPx;
-    private float _yPx;
-    private float _widthPx;
-    private float _heightPx;
-    private float _pixelScale;
-    private PlotRange2D _range;
     private string _title = string.Empty;
     private string _xLabel = string.Empty;
     private string _yLabel = string.Empty;
@@ -154,13 +145,13 @@ public sealed class Chart2D : IDisposable
             fontUri,
             pixelScale,
             theme,
-            ownsScene: true)
+            borrowedMarker: false)
     {
     }
 
     /// <summary>
-    /// Creates a chart panel inside a scene owned by the caller. Disposing the
-    /// chart removes only its retained subtree and does not destroy the scene.
+    /// Adds one native chart subtree to a caller-owned scene. This is the
+    /// composition seam used while RetainedMultiChart2D is being introduced.
     /// </summary>
     public Chart2D(
         GpuHost host,
@@ -178,123 +169,96 @@ public sealed class Chart2D : IDisposable
             fontUri,
             pixelScale,
             theme,
-            ownsScene: false)
+            borrowedMarker: true)
     {
     }
 
     private Chart2D(
         GpuHost host,
-        TcVisualScene2D? scene,
+        TcVisualScene2D? borrowedScene,
         VisualRect2f viewport,
         PlotRange2D range,
         string fontUri,
         float pixelScale,
         Chart2DTheme? theme,
-        bool ownsScene)
+        bool borrowedMarker)
     {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
+        if (host is null)
+            throw new ArgumentNullException(nameof(host));
+        _host = host;
         if (string.IsNullOrWhiteSpace(fontUri))
             throw new ArgumentException(
                 "A retained text font URI is required.", nameof(fontUri));
-        FontUri = fontUri;
-        ValidateViewport(
-            viewport.X,
-            viewport.Y,
-            viewport.Width,
-            viewport.Height,
-            pixelScale);
-        ValidateRange(range);
-        _xPx = viewport.X;
-        _yPx = viewport.Y;
-        _widthPx = viewport.Width;
-        _heightPx = viewport.Height;
-        _pixelScale = pixelScale;
-        _range = range;
-        Theme = theme ?? Chart2DTheme.Default;
+        borrowedScene?.ThrowIfDisposed();
 
-        _ownsScene = ownsScene;
-        Scene = scene ?? new TcVisualScene2D();
-        PlotProjectionRef2D? projection = null;
-        GroupItemRef2D? root = null;
+        Theme = theme ?? Chart2DTheme.Default;
+        Chart2DNative.Theme nativeTheme = Theme.ToNative();
+        var nativeViewport = new PlotRect2D(
+            viewport.X, viewport.Y, viewport.Width, viewport.Height);
+        IntPtr hostPointer = GpuHost.getCPtr(host).Handle;
+        _native = borrowedScene is null
+            ? Chart2DNative.Create(
+                hostPointer,
+                nativeViewport,
+                range,
+                fontUri,
+                pixelScale,
+                ref nativeTheme)
+            : Chart2DNative.CreateInScene(
+                hostPointer,
+                borrowedScene.NativeHandle,
+                nativeViewport,
+                range,
+                fontUri,
+                pixelScale,
+                ref nativeTheme);
+        if (_native == IntPtr.Zero)
+            throw new InvalidOperationException(
+                "Failed to create native RetainedChart2D. See native log.");
+
         try
         {
-            root = GroupItemRef2D.Create(Scene);
-            Root = root;
-            PlotArea = GroupItemRef2D.Create(Scene, Root);
-            Series = GroupItemRef2D.Create(Scene, PlotArea);
-            Annotations = GroupItemRef2D.Create(Scene, PlotArea);
-            Chrome = GroupItemRef2D.Create(Scene, Root);
-            XTickLabels = GroupItemRef2D.Create(Scene, Chrome);
-            YTickLabels = GroupItemRef2D.Create(Scene, Chrome);
+            VisualSceneNativeHandle sceneHandle =
+                Chart2DNative.Scene(_native);
+            Scene = borrowedScene ?? TcVisualScene2D.Borrow(sceneHandle);
+            _disposeSceneView = borrowedScene is null;
+            Projection = PlotProjectionRef2D.Borrow(
+                Chart2DNative.Projection(_native));
+            FontUri = fontUri;
 
-            var provisional = new PlotRect2D(
-                viewport.X,
-                viewport.Y,
-                viewport.Width,
-                viewport.Height);
-            projection = PlotProjectionRef2D.Create(
-                Scene,
-                new PlotProjectionDescriptor2D(
-                    provisional, provisional, range, provisional, pixelScale));
-            Projection = projection;
+            Root = GetGroup(ChartPartKind2D.Root);
+            PlotArea = GetGroup(ChartPartKind2D.PlotArea);
+            Series = GetGroup(ChartPartKind2D.SeriesRoot);
+            Annotations = GetGroup(ChartPartKind2D.AnnotationsRoot);
+            Chrome = GetGroup(ChartPartKind2D.ChromeRoot);
+            XAxisRoot = GetGroup(ChartPartKind2D.XAxisRoot);
+            YAxisRoot = GetGroup(ChartPartKind2D.YAxisRoot);
+            XTickLabels = GetGroup(ChartPartKind2D.XTickLabelsRoot);
+            YTickLabels = GetGroup(ChartPartKind2D.YTickLabelsRoot);
+            Legend = GetGroup(ChartPartKind2D.LegendRoot);
+            Overlay = GetGroup(ChartPartKind2D.OverlayRoot);
 
-            Background = new ChartPart2D<RectItemRef2D>(
-                Scene,
-                Root,
-                RectItemRef2D.Create(
-                    Scene, ToVisual(provisional),
-                    Fill(Theme.BackgroundColor), parent: Root),
-                -100,
-                _ => ApplyLayout());
-            PlotBackground = new ChartPart2D<RectItemRef2D>(
-                Scene,
-                PlotArea,
-                RectItemRef2D.Create(
-                    Scene, ToVisual(provisional),
-                    Fill(Theme.PlotBackgroundColor), parent: PlotArea),
-                0,
-                _ => ApplyLayout());
-            Grid = new ChartPart2D<PlotGridItemRef2D>(
-                Scene,
-                PlotArea,
-                PlotGridItemRef2D.Create(
-                    Scene, Projection, style: Theme.GridStyle,
-                    parent: PlotArea),
-                10,
-                _ => ApplyLayout());
-            XAxis = new ChartPart2D<PathItemRef2D>(
-                Scene,
-                Chrome,
-                PathItemRef2D.Create(
-                    Scene, LinePath(0, 0, 1, 0),
-                    stroke: AxisStroke(), parent: Chrome),
-                20,
-                _ => ApplyLayout());
-            YAxis = new ChartPart2D<PathItemRef2D>(
-                Scene,
-                Chrome,
-                PathItemRef2D.Create(
-                    Scene, LinePath(0, 0, 0, 1),
-                    stroke: AxisStroke(), parent: Chrome),
-                20,
-                _ => ApplyLayout());
-            Title = CreateTextPart(30, VisualTextAnchor2D.Center);
-            XAxisLabel = CreateTextPart(30, VisualTextAnchor2D.Center);
-            YAxisLabel = CreateTextPart(30, VisualTextAnchor2D.Center);
-
-            PlotArea.ZOrder = 0;
-            Series.ZOrder = 20;
-            Annotations.ZOrder = 30;
-            Chrome.ZOrder = 40;
-            ApplyLayout();
+            Background = Part(
+                ChartPartKind2D.Background, RectItemRef2D.Cast);
+            PlotBackground = Part(
+                ChartPartKind2D.PlotBackground, RectItemRef2D.Cast);
+            Grid = Part(
+                ChartPartKind2D.Grid, PlotGridItemRef2D.Cast);
+            XAxis = Part(
+                ChartPartKind2D.XAxis, PathItemRef2D.Cast);
+            YAxis = Part(
+                ChartPartKind2D.YAxis, PathItemRef2D.Cast);
+            Title = Part(
+                ChartPartKind2D.Title, TextItemRef2D.Cast);
+            XAxisLabel = Part(
+                ChartPartKind2D.XAxisLabel, TextItemRef2D.Cast);
+            YAxisLabel = Part(
+                ChartPartKind2D.YAxisLabel, TextItemRef2D.Cast);
         }
         catch
         {
-            projection?.Dispose();
-            if (root is { IsValid: true })
-                root.Destroy();
-            if (_ownsScene)
-                Scene.Dispose();
+            Chart2DNative.Destroy(_native);
+            _native = IntPtr.Zero;
             throw;
         }
     }
@@ -306,8 +270,12 @@ public sealed class Chart2D : IDisposable
     public GroupItemRef2D Series { get; }
     public GroupItemRef2D Annotations { get; }
     public GroupItemRef2D Chrome { get; }
+    public GroupItemRef2D XAxisRoot { get; }
+    public GroupItemRef2D YAxisRoot { get; }
     public GroupItemRef2D XTickLabels { get; }
     public GroupItemRef2D YTickLabels { get; }
+    public GroupItemRef2D Legend { get; }
+    public GroupItemRef2D Overlay { get; }
     public ChartPart2D<RectItemRef2D> Background { get; }
     public ChartPart2D<RectItemRef2D> PlotBackground { get; }
     public ChartPart2D<PlotGridItemRef2D> Grid { get; }
@@ -318,12 +286,32 @@ public sealed class Chart2D : IDisposable
     public ChartPart2D<TextItemRef2D> YAxisLabel { get; }
     public string FontUri { get; }
     public Chart2DTheme Theme { get; private set; }
-    public ChartLayout2D Layout { get; private set; }
-    public PlotRange2D Range => _range;
     public IReadOnlyList<PlotLineSeriesItemRef2D> Lines => _lines;
     public IReadOnlyList<PlotScatterSeriesItemRef2D> Scatters => _scatters;
-    public IReadOnlyList<TextItemRef2D> XTicks => _xTickLabels;
-    public IReadOnlyList<TextItemRef2D> YTicks => _yTickLabels;
+
+    public ChartLayout2D Layout
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (!Chart2DNative.GetLayout(_native, out var value))
+                throw new InvalidOperationException(
+                    "Failed to snapshot native chart layout.");
+            return new ChartLayout2D(value);
+        }
+    }
+
+    public PlotRange2D Range
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (!Chart2DNative.GetRange(_native, out var value))
+                throw new InvalidOperationException(
+                    "Failed to snapshot native chart range.");
+            return value;
+        }
+    }
 
     public string TitleText
     {
@@ -331,8 +319,9 @@ public sealed class Chart2D : IDisposable
         set
         {
             ThrowIfDisposed();
-            _title = value ?? string.Empty;
-            ApplyLayout();
+            string resolved = value ?? string.Empty;
+            Require(Chart2DNative.SetTitle(_native, resolved));
+            _title = resolved;
         }
     }
 
@@ -342,8 +331,9 @@ public sealed class Chart2D : IDisposable
         set
         {
             ThrowIfDisposed();
-            _xLabel = value ?? string.Empty;
-            ApplyLayout();
+            string resolved = value ?? string.Empty;
+            Require(Chart2DNative.SetXAxisLabel(_native, resolved));
+            _xLabel = resolved;
         }
     }
 
@@ -353,8 +343,9 @@ public sealed class Chart2D : IDisposable
         set
         {
             ThrowIfDisposed();
-            _yLabel = value ?? string.Empty;
-            ApplyLayout();
+            string resolved = value ?? string.Empty;
+            Require(Chart2DNative.SetYAxisLabel(_native, resolved));
+            _yLabel = resolved;
         }
     }
 
@@ -364,9 +355,17 @@ public sealed class Chart2D : IDisposable
         double[]? scalar = null,
         PlotLineSeriesStyle2D? style = null)
     {
+        ValidateLineData(x, y, scalar);
         ThrowIfDisposed();
-        var item = PlotLineSeriesItemRef2D.Create(
-            Scene, Projection, x, y, scalar, style, Series);
+        GraphicItemHandle2D handle = Chart2DNative.AddLine(
+            _native,
+            x,
+            y,
+            scalar,
+            (nuint)x.Length,
+            style ?? PlotLineSeriesStyle2D.Default);
+        var item = PlotLineSeriesItemRef2D.Cast(
+            new GraphicItemRef2D(Scene.NativeHandle, RequireHandle(handle)));
         _lines.Add(item);
         return item;
     }
@@ -376,9 +375,19 @@ public sealed class Chart2D : IDisposable
         double[] y,
         PlotScatterSeriesStyle2D? style = null)
     {
+        if (x is null || y is null)
+            throw new ArgumentNullException(x is null ? nameof(x) : nameof(y));
+        if (x.Length != y.Length)
+            throw new ArgumentException("Series arrays must have equal lengths.");
         ThrowIfDisposed();
-        var item = PlotScatterSeriesItemRef2D.Create(
-            Scene, Projection, x, y, style, Series);
+        GraphicItemHandle2D handle = Chart2DNative.AddScatter(
+            _native,
+            x,
+            y,
+            (nuint)x.Length,
+            style ?? PlotScatterSeriesStyle2D.Default);
+        var item = PlotScatterSeriesItemRef2D.Cast(
+            new GraphicItemRef2D(Scene.NativeHandle, RequireHandle(handle)));
         _scatters.Add(item);
         return item;
     }
@@ -388,30 +397,47 @@ public sealed class Chart2D : IDisposable
         if (item is null)
             throw new ArgumentNullException(nameof(item));
         ThrowIfDisposed();
-        if (!item.Scene.Equals(Scene.NativeHandle))
+        if (!item.Scene.Equals(Scene.NativeHandle) ||
+            !Chart2DNative.RemoveSeries(_native, item.Handle))
             return false;
-
-        var removed = item is PlotLineSeriesItemRef2D line &&
-                      _lines.Remove(line);
-        removed |= item is PlotScatterSeriesItemRef2D scatter &&
-                   _scatters.Remove(scatter);
-        return removed && (!item.IsValid || item.Destroy());
+        _lines.RemoveAll(line => line.Handle.Equals(item.Handle));
+        _scatters.RemoveAll(scatter => scatter.Handle.Equals(item.Handle));
+        return true;
     }
 
     public void SetRange(PlotRange2D range)
     {
         ThrowIfDisposed();
-        ValidateRange(range);
-        _range = range;
-        ApplyLayout();
+        Require(Chart2DNative.SetRange(_native, range));
     }
 
-    public void PanBy(double deltaX, double deltaY) =>
+    public void Fit(double paddingFraction = 0.05)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.Fit(_native, paddingFraction));
+    }
+
+    public void FitX(double paddingFraction = 0.05)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.FitX(_native, paddingFraction));
+    }
+
+    public void FitY(double paddingFraction = 0.05)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.FitY(_native, paddingFraction));
+    }
+
+    public void PanBy(double deltaX, double deltaY)
+    {
+        PlotRange2D range = Range;
         SetRange(new PlotRange2D(
-            _range.XMin + deltaX,
-            _range.XMax + deltaX,
-            _range.YMin + deltaY,
-            _range.YMax + deltaY));
+            range.XMin + deltaX,
+            range.XMax + deltaX,
+            range.YMin + deltaY,
+            range.YMax + deltaY));
+    }
 
     public void ZoomAt(double factor, double centerX, double centerY)
     {
@@ -419,384 +445,293 @@ public sealed class Chart2D : IDisposable
             !double.IsFinite(centerX) || !double.IsFinite(centerY))
             throw new ArgumentOutOfRangeException(
                 nameof(factor), "Zoom inputs must be finite and positive.");
+        PlotRange2D range = Range;
         SetRange(new PlotRange2D(
-            centerX + (_range.XMin - centerX) / factor,
-            centerX + (_range.XMax - centerX) / factor,
-            centerY + (_range.YMin - centerY) / factor,
-            centerY + (_range.YMax - centerY) / factor));
+            centerX + (range.XMin - centerX) / factor,
+            centerX + (range.XMax - centerX) / factor,
+            centerY + (range.YMin - centerY) / factor,
+            centerY + (range.YMax - centerY) / factor));
     }
 
     public void Resize(float widthPx, float heightPx, float pixelScale = 1)
     {
+        PlotRect2D viewport = Layout.Viewport;
         SetViewport(
-            new VisualRect2f(_xPx, _yPx, widthPx, heightPx),
+            new VisualRect2f(viewport.X, viewport.Y, widthPx, heightPx),
             pixelScale);
     }
 
     public void SetViewport(VisualRect2f viewport, float pixelScale = 1)
     {
         ThrowIfDisposed();
-        ValidateViewport(
-            viewport.X,
-            viewport.Y,
-            viewport.Width,
-            viewport.Height,
-            pixelScale);
-        _xPx = viewport.X;
-        _yPx = viewport.Y;
-        _widthPx = viewport.Width;
-        _heightPx = viewport.Height;
-        _pixelScale = pixelScale;
-        ApplyLayout();
+        Require(Chart2DNative.SetViewport(
+            _native,
+            new PlotRect2D(
+                viewport.X, viewport.Y, viewport.Width, viewport.Height),
+            pixelScale));
     }
 
     public void ApplyTheme(Chart2DTheme theme)
     {
-        ThrowIfDisposed();
         if (theme is null)
             throw new ArgumentNullException(nameof(theme));
-        ValidateTheme(theme);
+        ThrowIfDisposed();
+        Chart2DNative.Theme value = theme.ToNative();
+        Require(Chart2DNative.SetTheme(_native, ref value));
         Theme = theme;
-        ApplyLayout();
     }
 
     public void Dispose()
     {
         if (_disposed)
             return;
+        if (_native != IntPtr.Zero)
+            Chart2DNative.Destroy(_native);
+        _native = IntPtr.Zero;
         Projection.Dispose();
-        if (_ownsScene)
+        if (_disposeSceneView)
             Scene.Dispose();
-        else if (Root.IsValid)
-            Root.Destroy();
         _disposed = true;
         GC.SuppressFinalize(this);
     }
 
-    private ChartPart2D<TextItemRef2D> CreateTextPart(
-        long zOrder,
-        VisualTextAnchor2D anchor)
+    internal GraphicItemHandle2D GetPartHandle(ChartPartKind2D kind)
     {
-        var item = TextItemRef2D.Create(
-            Scene, " ", FontUri, new VisualVec2f(0, 0),
-            Theme.FontSizeLogicalPx * _pixelScale,
-            Theme.ForegroundColor,
-            ViewportBounds(),
-            anchor,
-            Chrome);
-        return new ChartPart2D<TextItemRef2D>(
-            Scene, Chrome, item, zOrder, _ => ApplyLayout());
+        ThrowIfDisposed();
+        return Chart2DNative.PartHandle(_native, kind);
     }
 
-    private void ApplyLayout()
+    internal void ReplacePart(
+        ChartPartKind2D kind,
+        GraphicItemRef2D replacement)
     {
-        if (_disposed || !Scene.IsValid)
-            return;
-        ValidateTheme(Theme);
-
-        var scale = _pixelScale;
-        var padding = Theme.OuterPaddingLogicalPx * scale;
-        var gap = Theme.GapLogicalPx * scale;
-        var tickLength = Theme.TickLengthLogicalPx * scale;
-        var tickFontPx = Theme.FontSizeLogicalPx * scale;
-        var titleFontPx = Theme.TitleFontSizeLogicalPx * scale;
-
-        var provisionalWidth = Math.Max(1, _widthPx - padding * 2);
-        var provisionalHeight = Math.Max(1, _heightPx - padding * 2);
-        var xTicks = RetainedPlotLayout2D.MakeAxisTicks(
-            _range.XMin, _range.XMax, provisionalWidth,
-            Theme.XTickSpacingLogicalPx, scale);
-        var yTicks = RetainedPlotLayout2D.MakeAxisTicks(
-            _range.YMin, _range.YMax, provisionalHeight,
-            Theme.YTickSpacingLogicalPx, scale);
-
-        var tickMetrics = RetainedPlotLayout2D.MeasureText(
-            _host, "Mg", Theme.FontSizeLogicalPx, scale);
-        var widestY = yTicks.Length == 0
-            ? 0
-            : yTicks.Max(tick => RetainedPlotLayout2D.MeasureText(
-                _host, tick.Label, Theme.FontSizeLogicalPx, scale).Width);
-        var titleHeight = string.IsNullOrEmpty(_title)
-            ? 0
-            : RetainedPlotLayout2D.MeasureText(
-                _host, _title, Theme.TitleFontSizeLogicalPx, scale).LineHeight;
-        var xLabelHeight = string.IsNullOrEmpty(_xLabel)
-            ? 0
-            : tickMetrics.LineHeight + gap;
-        var yLabelWidth = string.IsNullOrEmpty(_yLabel)
-            ? 0
-            : RetainedPlotLayout2D.MeasureText(
-                _host, _yLabel, Theme.FontSizeLogicalPx, scale).Width + gap;
-
-        var left = _xPx + padding + yLabelWidth + widestY + tickLength + gap * 2;
-        var top = _yPx + padding + titleHeight + (titleHeight > 0 ? gap : 0);
-        var right = padding;
-        var bottom = padding + tickLength + gap + tickMetrics.LineHeight +
-                     xLabelHeight;
-        var plot = new PlotRect2D(
-            left,
-            top,
-            Math.Max(1, _xPx + _widthPx - left - right),
-            Math.Max(1, _yPx + _heightPx - top - bottom));
-        var viewport = new PlotRect2D(_xPx, _yPx, _widthPx, _heightPx);
-        Layout = new ChartLayout2D(viewport, plot, scale);
-        Projection.Update(new PlotProjectionDescriptor2D(
-            viewport, plot, _range, plot, scale));
-
-        var visualViewport = ToVisual(viewport);
-        var visualPlot = ToVisual(plot);
-        Root.SetClip(visualViewport);
-        PlotArea.SetClip(visualPlot);
-        SetRect(Background.Item, visualViewport, Theme.BackgroundColor);
-        SetRect(
-            PlotBackground.Item, visualPlot, Theme.PlotBackgroundColor);
-
-        var exactXTicks = RetainedPlotLayout2D.MakeAxisTicks(
-            _range.XMin, _range.XMax, plot.Width,
-            Theme.XTickSpacingLogicalPx, scale);
-        var exactYTicks = RetainedPlotLayout2D.MakeAxisTicks(
-            _range.YMin, _range.YMax, plot.Height,
-            Theme.YTickSpacingLogicalPx, scale);
-        var xValues = exactXTicks.Select(tick => tick.Value).ToArray();
-        var yValues = exactYTicks.Select(tick => tick.Value).ToArray();
-        if (Grid.Item is { } grid)
-        {
-            grid.Projection = Projection;
-            grid.Style = Theme.GridStyle;
-            grid.SetTicks(xValues, yValues);
-        }
-
-        SetAxisPaths(exactXTicks, exactYTicks, tickLength);
-        RebuildTickLabels(exactXTicks, exactYTicks, tickFontPx, tickMetrics);
-        SetText(
-            Title.Item, _title,
-            new VisualVec2f(
-                _xPx + _widthPx / 2,
-                _yPx + padding + titleFontPx),
-            titleFontPx, VisualTextAnchor2D.Center);
-        SetText(
-            XAxisLabel.Item, _xLabel,
-            new VisualVec2f(
-                plot.X + plot.Width / 2,
-                _yPx + _heightPx - padding),
-            tickFontPx, VisualTextAnchor2D.Center);
-        SetText(
-            YAxisLabel.Item, _yLabel,
-            new VisualVec2f(
-                _xPx + padding,
-                plot.Y + plot.Height / 2),
-            tickFontPx, VisualTextAnchor2D.Left);
-    }
-
-    private void SetAxisPaths(
-        PlotAxisTick2D[] xTicks,
-        PlotAxisTick2D[] yTicks,
-        float tickLength)
-    {
-        var plot = Layout.PlotArea;
-        var xVerbs = new List<VisualPathVerb2D>();
-        var xPoints = new List<VisualVec2f>();
-        AddLine(xVerbs, xPoints, plot.X, plot.Y + plot.Height,
-            plot.X + plot.Width, plot.Y + plot.Height);
-        foreach (var tick in xTicks)
-        {
-            var p = Projection.DataToVisual(
-                new PlotPoint2D(tick.Value, _range.YMin));
-            AddLine(xVerbs, xPoints, p.X, plot.Y + plot.Height,
-                p.X, plot.Y + plot.Height + tickLength);
-        }
-
-        var yVerbs = new List<VisualPathVerb2D>();
-        var yPoints = new List<VisualVec2f>();
-        AddLine(yVerbs, yPoints, plot.X, plot.Y, plot.X, plot.Y + plot.Height);
-        foreach (var tick in yTicks)
-        {
-            var p = Projection.DataToVisual(
-                new PlotPoint2D(_range.XMin, tick.Value));
-            AddLine(yVerbs, yPoints, plot.X - tickLength, p.Y, plot.X, p.Y);
-        }
-
-        XAxis.Item?.Set(
-            new VisualPath2D(xVerbs.ToArray(), xPoints.ToArray()),
-            stroke: AxisStroke());
-        YAxis.Item?.Set(
-            new VisualPath2D(yVerbs.ToArray(), yPoints.ToArray()),
-            stroke: AxisStroke());
-    }
-
-    private void RebuildTickLabels(
-        PlotAxisTick2D[] xTicks,
-        PlotAxisTick2D[] yTicks,
-        float fontSizePx,
-        PlotTextMetrics2D metrics)
-    {
-        DestroyItems(_xTickLabels);
-        DestroyItems(_yTickLabels);
-        var plot = Layout.PlotArea;
-        var bounds = ViewportBounds();
-        var gap = Theme.GapLogicalPx * _pixelScale;
-        var tickLength = Theme.TickLengthLogicalPx * _pixelScale;
-
-        foreach (var tick in xTicks)
-        {
-            var p = Projection.DataToVisual(
-                new PlotPoint2D(tick.Value, _range.YMin));
-            _xTickLabels.Add(TextItemRef2D.Create(
-                Scene, tick.Label, FontUri,
-                new VisualVec2f(
-                    p.X,
-                    plot.Y + plot.Height + tickLength + gap + metrics.Ascent),
-                fontSizePx, Theme.ForegroundColor, bounds,
-                VisualTextAnchor2D.Center, XTickLabels));
-        }
-        foreach (var tick in yTicks)
-        {
-            var p = Projection.DataToVisual(
-                new PlotPoint2D(_range.XMin, tick.Value));
-            _yTickLabels.Add(TextItemRef2D.Create(
-                Scene, tick.Label, FontUri,
-                new VisualVec2f(
-                    plot.X - tickLength - gap,
-                    p.Y + metrics.Ascent * 0.5f),
-                fontSizePx, Theme.ForegroundColor, bounds,
-                VisualTextAnchor2D.Right, YTickLabels));
-        }
-    }
-
-    private void SetText(
-        TextItemRef2D? item,
-        string text,
-        VisualVec2f origin,
-        float fontSizePx,
-        VisualTextAnchor2D anchor)
-    {
-        if (item is null)
-            return;
-        item.Set(
-            string.IsNullOrEmpty(text) ? " " : text,
-            FontUri, origin, fontSizePx, Theme.ForegroundColor,
-            ViewportBounds(), anchor);
-        item.Visible = !string.IsNullOrEmpty(text);
-    }
-
-    private void SetRect(
-        RectItemRef2D? item,
-        VisualRect2f rect,
-        VisualColor4f color) =>
-        item?.Set(rect, Fill(color));
-
-    private VisualStrokePaint2D AxisStroke() =>
-        new(
-            Theme.AxisColor,
-            Theme.AxisWidthLogicalPx * _pixelScale,
-            cap: VisualStrokeCap2D.Square);
-
-    private static VisualFillPaint2D Fill(VisualColor4f color) => new(color);
-
-    private VisualBounds2f ViewportBounds() => new(
-        _xPx,
-        _yPx,
-        _xPx + _widthPx,
-        _yPx + _heightPx);
-
-    private static VisualRect2f ToVisual(PlotRect2D rect) =>
-        new(rect.X, rect.Y, rect.Width, rect.Height);
-
-    private static VisualPath2D LinePath(
-        float x0,
-        float y0,
-        float x1,
-        float y1) =>
-        new(
-            new[]
-            {
-                VisualPathVerb2D.MoveTo,
-                VisualPathVerb2D.LineTo,
-            },
-            new[]
-            {
-                new VisualVec2f(x0, y0),
-                new VisualVec2f(x1, y1),
-            });
-
-    private static void AddLine(
-        List<VisualPathVerb2D> verbs,
-        List<VisualVec2f> points,
-        float x0,
-        float y0,
-        float x1,
-        float y1)
-    {
-        verbs.Add(VisualPathVerb2D.MoveTo);
-        verbs.Add(VisualPathVerb2D.LineTo);
-        points.Add(new VisualVec2f(x0, y0));
-        points.Add(new VisualVec2f(x1, y1));
-    }
-
-    private static void DestroyItems<T>(List<T> items)
-        where T : GraphicItemRef2D
-    {
-        foreach (var item in items)
-            if (item.IsValid)
-                item.Destroy();
-        items.Clear();
-    }
-
-    private static void ValidateRange(PlotRange2D range)
-    {
-        if (!double.IsFinite(range.XMin) ||
-            !double.IsFinite(range.XMax) ||
-            !double.IsFinite(range.YMin) ||
-            !double.IsFinite(range.YMax) ||
-            range.XMax <= range.XMin ||
-            range.YMax <= range.YMin)
+        ThrowIfDisposed();
+        replacement.ThrowIfStale();
+        if (!replacement.Scene.Equals(Scene.NativeHandle))
             throw new ArgumentException(
-                "Chart range must be finite and non-empty.", nameof(range));
+                "Replacement must belong to the chart scene.",
+                nameof(replacement));
+        Require(Chart2DNative.ReplacePart(
+            _native, kind, replacement.Handle));
     }
 
-    private static void ValidateViewport(
-        float xPx,
-        float yPx,
-        float widthPx,
-        float heightPx,
-        float pixelScale)
+    internal void RemovePart(ChartPartKind2D kind)
     {
-        if (!float.IsFinite(xPx) ||
-            !float.IsFinite(yPx) ||
-            !float.IsFinite(widthPx) || widthPx <= 0 ||
-            !float.IsFinite(heightPx) || heightPx <= 0 ||
-            !float.IsFinite(pixelScale) || pixelScale <= 0)
-            throw new ArgumentOutOfRangeException(
-                nameof(widthPx),
-                "Viewport dimensions and pixel scale must be finite and positive.");
+        ThrowIfDisposed();
+        Require(Chart2DNative.RemovePart(_native, kind));
     }
 
-    private static void ValidateTheme(Chart2DTheme theme)
+    private GroupItemRef2D GetGroup(ChartPartKind2D kind) =>
+        GroupItemRef2D.Cast(new GraphicItemRef2D(
+            Scene.NativeHandle,
+            RequireHandle(Chart2DNative.PartHandle(_native, kind))));
+
+    private ChartPart2D<T> Part<T>(
+        ChartPartKind2D kind,
+        Func<GraphicItemRef2D, T> cast)
+        where T : GraphicItemRef2D => new(this, kind, cast);
+
+    private static GraphicItemHandle2D RequireHandle(
+        GraphicItemHandle2D handle) => handle.IsValid
+        ? handle
+        : throw new InvalidOperationException(
+            "Native chart returned an invalid item handle.");
+
+    private static void Require(bool success)
     {
-        if (!float.IsFinite(theme.FontSizeLogicalPx) ||
-            theme.FontSizeLogicalPx <= 0 ||
-            !float.IsFinite(theme.TitleFontSizeLogicalPx) ||
-            theme.TitleFontSizeLogicalPx <= 0 ||
-            !float.IsFinite(theme.XTickSpacingLogicalPx) ||
-            theme.XTickSpacingLogicalPx <= 0 ||
-            !float.IsFinite(theme.YTickSpacingLogicalPx) ||
-            theme.YTickSpacingLogicalPx <= 0 ||
-            !float.IsFinite(theme.AxisWidthLogicalPx) ||
-            theme.AxisWidthLogicalPx <= 0 ||
-            !float.IsFinite(theme.TickLengthLogicalPx) ||
-            theme.TickLengthLogicalPx < 0 ||
-            !float.IsFinite(theme.GapLogicalPx) ||
-            theme.GapLogicalPx < 0 ||
-            !float.IsFinite(theme.OuterPaddingLogicalPx) ||
-            theme.OuterPaddingLogicalPx < 0)
-            throw new ArgumentException(
-                "Chart theme sizes and tick spacing must be finite and positive.",
-                nameof(theme));
+        if (!success)
+            throw new InvalidOperationException(
+                "Native RetainedChart2D operation was rejected. See native log.");
+    }
+
+    private static void ValidateLineData(
+        double[] x,
+        double[] y,
+        double[]? scalar)
+    {
+        if (x is null || y is null)
+            throw new ArgumentNullException(x is null ? nameof(x) : nameof(y));
+        if (x.Length != y.Length ||
+            (scalar is not null && scalar.Length != x.Length))
+            throw new ArgumentException("Series arrays must have equal lengths.");
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed || !Scene.IsValid)
+        if (_disposed || _native == IntPtr.Zero)
             throw new ObjectDisposedException(nameof(Chart2D));
     }
+}
+
+internal static class Chart2DNative
+{
+    private const string Dll = "tcplot";
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly struct Theme
+    {
+        internal readonly VisualColor4f BackgroundColor;
+        internal readonly VisualColor4f PlotBackgroundColor;
+        internal readonly VisualColor4f ForegroundColor;
+        internal readonly VisualColor4f AxisColor;
+        internal readonly PlotGridStyle2D GridStyle;
+        internal readonly float AxisWidthLogicalPx;
+        internal readonly float FontSizeLogicalPx;
+        internal readonly float TitleFontSizeLogicalPx;
+        internal readonly float TickLengthLogicalPx;
+        internal readonly float GapLogicalPx;
+        internal readonly float OuterPaddingLogicalPx;
+        internal readonly float XTickSpacingLogicalPx;
+        internal readonly float YTickSpacingLogicalPx;
+
+        internal Theme(Chart2DTheme value)
+        {
+            BackgroundColor = value.BackgroundColor;
+            PlotBackgroundColor = value.PlotBackgroundColor;
+            ForegroundColor = value.ForegroundColor;
+            AxisColor = value.AxisColor;
+            GridStyle = value.GridStyle;
+            AxisWidthLogicalPx = value.AxisWidthLogicalPx;
+            FontSizeLogicalPx = value.FontSizeLogicalPx;
+            TitleFontSizeLogicalPx = value.TitleFontSizeLogicalPx;
+            TickLengthLogicalPx = value.TickLengthLogicalPx;
+            GapLogicalPx = value.GapLogicalPx;
+            OuterPaddingLogicalPx = value.OuterPaddingLogicalPx;
+            XTickSpacingLogicalPx = value.XTickSpacingLogicalPx;
+            YTickSpacingLogicalPx = value.YTickSpacingLogicalPx;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly struct Layout
+    {
+        internal readonly PlotRect2D Viewport;
+        internal readonly PlotRect2D PlotArea;
+        internal readonly float PixelScale;
+        internal readonly ulong Revision;
+    }
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_create")]
+    internal static extern IntPtr Create(
+        IntPtr gpuHost,
+        PlotRect2D viewport,
+        PlotRange2D range,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string fontUri,
+        float pixelScale,
+        ref Theme theme);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_create_in_scene")]
+    internal static extern IntPtr CreateInScene(
+        IntPtr gpuHost,
+        VisualSceneNativeHandle scene,
+        PlotRect2D viewport,
+        PlotRange2D range,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string fontUri,
+        float pixelScale,
+        ref Theme theme);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_destroy")]
+    internal static extern void Destroy(IntPtr chart);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_scene")]
+    internal static extern VisualSceneNativeHandle Scene(IntPtr chart);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_projection")]
+    internal static extern PlotProjectionHandle2D Projection(IntPtr chart);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_part_handle")]
+    internal static extern GraphicItemHandle2D PartHandle(
+        IntPtr chart,
+        ChartPartKind2D part);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_layout")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool GetLayout(IntPtr chart, out Layout layout);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_range")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool GetRange(
+        IntPtr chart,
+        out PlotRange2D range);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_viewport")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetViewport(
+        IntPtr chart,
+        PlotRect2D viewport,
+        float pixelScale);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_range")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetRange(IntPtr chart, PlotRange2D range);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_fit")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool Fit(IntPtr chart, double paddingFraction);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_fit_x")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool FitX(IntPtr chart, double paddingFraction);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_fit_y")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool FitY(IntPtr chart, double paddingFraction);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_theme")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetTheme(IntPtr chart, ref Theme theme);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_title")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetTitle(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_x_axis_label")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetXAxisLabel(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_y_axis_label")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetYAxisLabel(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_replace_part")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool ReplacePart(
+        IntPtr chart,
+        ChartPartKind2D part,
+        GraphicItemHandle2D replacement);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_remove_part")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool RemovePart(
+        IntPtr chart,
+        ChartPartKind2D part);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_line")]
+    internal static extern GraphicItemHandle2D AddLine(
+        IntPtr chart,
+        double[] x,
+        double[] y,
+        double[]? scalar,
+        nuint count,
+        PlotLineSeriesStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_scatter")]
+    internal static extern GraphicItemHandle2D AddScatter(
+        IntPtr chart,
+        double[] x,
+        double[] y,
+        nuint count,
+        PlotScatterSeriesStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_remove_series")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool RemoveSeries(
+        IntPtr chart,
+        GraphicItemHandle2D series);
 }

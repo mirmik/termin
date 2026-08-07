@@ -76,9 +76,12 @@ Managed `Termin.Native.Chart2D` доказал, что текущих retained p
 - `fit_plot_range2d`, tick generation/formatting и native text measurement;
 - retained semantic annotations and data markers;
 - typed C# wrappers для visual-scene и plot items;
-- managed single-panel `Chart2D`, служащий reference implementation layout;
+- native open single-panel `RetainedChart2D`, публичные parts и thin C#
+  `Chart2D` facade;
+- pooled native tick labels без allocation churn при range/layout updates;
 - `SceneView` и widget portals в `termin-gui-native`;
-- WPF D3D11 texture presentation через `Tgfx2D3D11ImageHost`.
+- generic WPF retained-scene host, portals и D3D11 texture presentation через
+  `Tgfx2D3D11ImageHost`.
 
 `PlotEngine2D` уже использует те же series GPU bodies, что retained items.
 Новый renderer для этой миграции не нужен.
@@ -87,18 +90,14 @@ Managed `Termin.Native.Chart2D` доказал, что текущих retained p
 
 - `PlotView2D` и `PlotView2DMulti` остаются monolithic facade с hidden layout и
   offscreen ownership;
-- managed `Chart2D` строит стандартный layout только на C#-стороне;
 - у retained series нет managed/native semantic identity с name, legend и
   data bounds;
-- `Chart2D` не предоставляет `Fit`, legend и multi-panel composition;
-- generic WPF host для произвольной `TcVisualScene` отсутствует;
-- WPF portal mapping отсутствует;
+- `Chart2D` предоставляет native `Fit`/`FitX`/`FitY`, но ещё не предоставляет
+  retained legend и multi-panel composition;
 - `tcplot-gui-native::Plot2D` является отдельным упрощённым composer с
   hard-coded layout и immediate chrome;
 - `tcplot-gui-native::Plot2D` рисует scene напрямую, минует `SceneView` и не
   поддерживает widget portals;
-- текущий managed layout уничтожает и создаёт tick label items при каждом
-  recalculation, что неприемлемо как неограниченная multi-panel стратегия.
 
 ## Целевые границы модулей
 
@@ -316,25 +315,25 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 1. Native open single-panel composer
 
-- [ ] Ввести `RetainedChart2D` и `ChartParts2D` в `tcplot`.
-- [ ] Собрать standard chart только из public `TcVisualScene` items.
-- [ ] Перенести managed reference layout в общий native implementation,
+- [x] Ввести `RetainedChart2D` и `ChartParts2D` в `tcplot`.
+- [x] Собрать standard chart только из public `TcVisualScene` items.
+- [x] Перенести managed reference layout в общий native implementation,
   переиспользовав существующие tick/text utilities.
-- [ ] Представить background, axes, tick marks, labels и title retained items,
+- [x] Представить background, axes, tick marks, labels и title retained items,
   исключив hidden immediate chrome.
-- [ ] Обеспечить stable handles standard parts.
-- [ ] Добавить theme/layout value descriptors без закрытого setter explosion.
-- [ ] Добавить explicit resize/range/pixel-scale transaction.
+- [x] Обеспечить stable handles standard parts.
+- [x] Добавить theme/layout value descriptors без закрытого setter explosion.
+- [x] Добавить explicit resize/range/pixel-scale mutation.
 
 ### Этап 2. Semantic series and fit
 
 - [ ] Ввести stable `ChartSeriesHandle2D`.
 - [ ] Добавить name, visibility, legend policy, item handle и data bounds.
-- [ ] Реализовать `fit`, `fit_x`, `fit_y` по native bounds видимых series.
+- [x] Реализовать `fit`, `fit_x`, `fit_y` по native bounds видимых series.
 - [ ] Сохранить `set_data`, `append`, style mutation и nearest query без
   пересоздания item/GPU body.
 - [ ] Добавить retained legend composition с заменяемыми public parts.
-- [ ] Не хранить отдельную копию large series data в composer или C#.
+- [x] Не хранить отдельную копию large series data в composer или C#.
 
 ### Этап 3. Interaction and annotations
 
@@ -348,12 +347,12 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 4. Thin C# projection
 
-- [ ] Экспортировать chart/parts/series C ABI с generation handles.
-- [ ] Добавить idiomatic wrappers в `Termin.Native`.
-- [ ] Сохранить доступ к raw `TcVisualScene2D` и typed item wrappers.
-- [ ] Перевести текущий managed `Chart2D` на native composer либо заменить его
+- [x] Экспортировать chart/parts/series C ABI с generation handles.
+- [x] Добавить idiomatic wrappers в `Termin.Native`.
+- [x] Сохранить доступ к raw `TcVisualScene2D` и typed item wrappers.
+- [x] Перевести текущий managed `Chart2D` на native composer либо заменить его
   новым wrapper после migration window.
-- [ ] Удалить вторую C# реализацию layout/ticks/panel composition.
+- [x] Удалить вторую C# реализацию layout/ticks/panel composition.
 - [x] Добавить C# example с заменой part и custom overlay
   (`RetainedChartWpfExample`; installed-SDK packaging ещё проверить после
   стабилизации native composer ABI).
