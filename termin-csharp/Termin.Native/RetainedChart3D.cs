@@ -64,6 +64,10 @@ public readonly struct SurfaceItemStyle3D
     public readonly uint SurfaceGridRowStep;
     public readonly uint SurfaceGridColumnStep;
     public readonly float SurfaceGridWidthPx;
+    public readonly float SurfaceGridR;
+    public readonly float SurfaceGridG;
+    public readonly float SurfaceGridB;
+    public readonly float SurfaceGridA;
 
     public SurfaceItemStyle3D(
         float colorR = 1,
@@ -76,7 +80,11 @@ public readonly struct SurfaceItemStyle3D
         bool surfaceGridVisible = false,
         uint surfaceGridRowStep = 8,
         uint surfaceGridColumnStep = 8,
-        float surfaceGridWidthPx = 1.25f)
+        float surfaceGridWidthPx = 1.25f,
+        float surfaceGridR = 0.04f,
+        float surfaceGridG = 0.04f,
+        float surfaceGridB = 0.04f,
+        float surfaceGridA = 1)
     {
         ColorR = colorR;
         ColorG = colorG;
@@ -89,6 +97,10 @@ public readonly struct SurfaceItemStyle3D
         SurfaceGridRowStep = surfaceGridRowStep;
         SurfaceGridColumnStep = surfaceGridColumnStep;
         SurfaceGridWidthPx = surfaceGridWidthPx;
+        SurfaceGridR = surfaceGridR;
+        SurfaceGridG = surfaceGridG;
+        SurfaceGridB = surfaceGridB;
+        SurfaceGridA = surfaceGridA;
     }
 
     public bool ColorMapReversed => _colorMapReversed != 0;
@@ -290,6 +302,27 @@ public sealed class SurfaceItemRef3D : PlotItemRef3D
                     "Failed to update retained surface style. See native log.");
         }
     }
+
+    public void SetData(
+        double[] x,
+        double[] y,
+        double[] z,
+        uint rows,
+        uint columns)
+    {
+        PlotScene3D.ValidateSurface(x, y, z, rows, columns);
+        ThrowIfStale();
+        if (RetainedChart3DNative.SurfaceSetData(
+                Chart.NativeHandle,
+                Handle,
+                x,
+                y,
+                z,
+                rows,
+                columns) == 0)
+            throw new InvalidOperationException(
+                "Failed to update retained surface data. See native log.");
+    }
 }
 
 public sealed class ScatterItemRef3D : PlotItemRef3D
@@ -317,6 +350,23 @@ public sealed class ScatterItemRef3D : PlotItemRef3D
                 throw new InvalidOperationException(
                     "Failed to update retained scatter style. See native log.");
         }
+    }
+
+    public void SetData(double[] x, double[] y, double[] z)
+    {
+        PlotScene3D.ValidateEqualArrays(x, y, z);
+        if (x.Length == 0)
+            throw new ArgumentException("Scatter data must not be empty.");
+        ThrowIfStale();
+        if (RetainedChart3DNative.ScatterSetData(
+                Chart.NativeHandle,
+                Handle,
+                x,
+                y,
+                z,
+                (nuint)x.Length) == 0)
+            throw new InvalidOperationException(
+                "Failed to update retained scatter data. See native log.");
     }
 }
 
@@ -426,7 +476,7 @@ public sealed class PlotScene3D
         : throw new InvalidOperationException(
             $"Failed to create retained {kind}. See native log.");
 
-    private static void ValidateSurface(
+    internal static void ValidateSurface(
         double[] x,
         double[] y,
         double[] z,
@@ -440,7 +490,7 @@ public sealed class PlotScene3D
                 "Surface arrays must describe a rectangular grid of at least 2x2.");
     }
 
-    private static void ValidateEqualArrays(
+    internal static void ValidateEqualArrays(
         double[] x,
         double[] y,
         double[] z)
@@ -540,6 +590,12 @@ public sealed class Chart3DCamera
         _chart.ThrowIfDisposed();
         RetainedChart3DNative.ResetCamera(_chart.NativeHandle);
     }
+
+    public void Fit()
+    {
+        _chart.ThrowIfDisposed();
+        RetainedChart3DNative.FitCamera(_chart.NativeHandle);
+    }
 }
 
 public sealed class RetainedChart3D : IDisposable
@@ -566,6 +622,23 @@ public sealed class RetainedChart3D : IDisposable
     public PlotScene3D Scene { get; }
     public Chart3DParts Parts { get; }
     public Chart3DCamera Camera { get; }
+
+    public int MsaaSamples
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return RetainedChart3DNative.MsaaSamples(_native);
+        }
+        set
+        {
+            ThrowIfDisposed();
+            if (RetainedChart3DNative.SetMsaaSamples(_native, value) == 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(value),
+                    "MSAA samples must be a power of two between 1 and 16.");
+        }
+    }
 
     public void SetAxisLabels(string x, string y, string z)
     {
@@ -700,6 +773,16 @@ internal static class RetainedChart3DNative
         uint columns,
         ref SurfaceItemStyle3D style);
 
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_surface_set_data")]
+    internal static extern int SurfaceSetData(
+        IntPtr chart,
+        PlotItemHandle3D surface,
+        [In] double[] x,
+        [In] double[] y,
+        [In] double[] z,
+        uint rows,
+        uint columns);
+
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_surface_set_style")]
     internal static extern int SurfaceSetStyle(
         IntPtr chart,
@@ -720,6 +803,15 @@ internal static class RetainedChart3DNative
         [In] double[] z,
         nuint count,
         ref ScatterItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_scatter_set_data")]
+    internal static extern int ScatterSetData(
+        IntPtr chart,
+        PlotItemHandle3D scatter,
+        [In] double[] x,
+        [In] double[] y,
+        [In] double[] z,
+        nuint count);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_scatter_set_style")]
     internal static extern int ScatterSetStyle(
@@ -780,6 +872,12 @@ internal static class RetainedChart3DNative
     internal static extern int SetAxisScale(
         IntPtr chart, float x, float y, float z);
 
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_msaa_samples")]
+    internal static extern int SetMsaaSamples(IntPtr chart, int samples);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_msaa_samples")]
+    internal static extern int MsaaSamples(IntPtr chart);
+
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_get_camera")]
     internal static extern int GetCamera(
         IntPtr chart, out OrbitCameraState3D state);
@@ -790,6 +888,9 @@ internal static class RetainedChart3DNative
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_reset_camera")]
     internal static extern void ResetCamera(IntPtr chart);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_fit_camera")]
+    internal static extern void FitCamera(IntPtr chart);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_pointer_down")]
     internal static extern int PointerDown(
