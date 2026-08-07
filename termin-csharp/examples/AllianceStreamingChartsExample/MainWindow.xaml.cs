@@ -100,10 +100,15 @@ public partial class MainWindow : Window
     private readonly StreamPanel[] _panels;
     private readonly RectItemRef2D _pauseAnchor;
     private readonly RectItemRef2D _resetAnchor;
+    private readonly RectItemRef2D _followAnchor;
     private readonly Button _pauseButton;
     private readonly Button _resetButton;
+    private readonly Button _followButton;
+    private readonly Chart2DWpfInteraction[] _interactions;
     private readonly DispatcherTimer _timer;
     private bool _paused;
+    private bool _followLatest = true;
+    private bool _synchronizingNavigation;
     private bool _closed;
     private double _time;
 
@@ -114,6 +119,7 @@ public partial class MainWindow : Window
         _gpuHost = Tgfx2Host.Acquire(FindFont(), BackendType.D3D11);
         _scene = new TcVisualScene2D();
         var panels = new List<StreamPanel>();
+        var interactions = new List<Chart2DWpfInteraction>();
         try
         {
             panels.Add(CreatePanel(
@@ -145,16 +151,28 @@ public partial class MainWindow : Window
 
             _pauseAnchor = CreatePortalAnchor();
             _resetAnchor = CreatePortalAnchor();
+            _followAnchor = CreatePortalAnchor();
             _pauseButton = CreateToolbarButton("Pause");
             _resetButton = CreateToolbarButton("Reset");
+            _followButton = CreateToolbarButton("Stop following");
             _pauseButton.Click += OnPauseClick;
             _resetButton.Click += OnResetClick;
+            _followButton.Click += OnFollowClick;
 
             SceneHost.FramebufferChanged += OnFramebufferChanged;
             SceneHost.RenderFailed += OnRenderFailed;
             SceneHost.Attach(_gpuHost, _scene);
+            foreach (StreamPanel panel in _panels)
+            {
+                var interaction = new Chart2DWpfInteraction(
+                    SceneHost, panel.Chart);
+                interaction.Navigated += OnChartNavigated;
+                interactions.Add(interaction);
+            }
+            _interactions = interactions.ToArray();
             SceneHost.AddPortal(_pauseAnchor, _pauseButton);
             SceneHost.AddPortal(_resetAnchor, _resetButton);
+            SceneHost.AddPortal(_followAnchor, _followButton);
 
             _timer = new DispatcherTimer(
                 TimeSpan.FromMilliseconds(40),
@@ -165,6 +183,8 @@ public partial class MainWindow : Window
         }
         catch
         {
+            foreach (Chart2DWpfInteraction interaction in interactions)
+                interaction.Dispose();
             SceneHost.Dispose();
             foreach (StreamPanel panel in panels)
                 panel.Chart.Dispose();
@@ -247,7 +267,7 @@ public partial class MainWindow : Window
                 scale);
         }
 
-        float buttonWidth = 94 * scale;
+        float buttonWidth = 116 * scale;
         float buttonHeight = 32 * scale;
         float right = e.Width - margin;
         SetAnchor(
@@ -262,6 +282,12 @@ public partial class MainWindow : Window
             margin,
             buttonWidth,
             buttonHeight);
+        SetAnchor(
+            _followAnchor,
+            right - buttonWidth * 3 - margin * 2,
+            margin,
+            buttonWidth,
+            buttonHeight);
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
@@ -273,21 +299,13 @@ public partial class MainWindow : Window
         foreach (StreamPanel panel in _panels)
             panel.Append(_time);
 
-        double xMaximum = Math.Max(WindowSeconds, _time);
-        double xMinimum = xMaximum - WindowSeconds;
-        foreach (StreamPanel panel in _panels)
-        {
-            PlotRange2D range = panel.Chart.Range;
-            panel.Chart.SetRange(new PlotRange2D(
-                xMinimum,
-                xMaximum,
-                range.YMin,
-                range.YMax));
-        }
+        if (_followLatest)
+            SnapToLatest();
 
         StatusText.Text =
             $"Streaming {_panels.Length * 2} series in one scene; " +
-            $"t = {_time:F1} s, retained items = {_scene.Count}.";
+            $"t = {_time:F1} s, " +
+            $"{(_followLatest ? "following latest" : "manual navigation")}.";
     }
 
     private void OnPauseClick(object sender, RoutedEventArgs e)
@@ -312,7 +330,74 @@ public partial class MainWindow : Window
                 range.YMin,
                 range.YMax));
         }
+        _followLatest = true;
+        UpdateFollowButton();
         StatusText.Text = "All native series were reset by the C# callback.";
+    }
+
+    private void OnFollowClick(object sender, RoutedEventArgs e)
+    {
+        _followLatest = !_followLatest;
+        if (_followLatest)
+            SnapToLatest();
+        UpdateFollowButton();
+        StatusText.Text = _followLatest
+            ? "Shared X returned to the live window."
+            : "Follow mode disabled; the visible X range is now stable.";
+    }
+
+    private void OnChartNavigated(
+        object? sender,
+        ChartNavigatedEventArgs2D e)
+    {
+        if (_synchronizingNavigation ||
+            sender is not Chart2DWpfInteraction interaction)
+            return;
+
+        _followLatest = false;
+        UpdateFollowButton();
+        SetSharedX(interaction.Chart, e.Range.XMin, e.Range.XMax);
+        StatusText.Text =
+            $"{e.Kind}: shared X updated; selected panel keeps its own Y.";
+    }
+
+    private void SnapToLatest()
+    {
+        double xMaximum = Math.Max(WindowSeconds, _time);
+        SetSharedX(null, xMaximum - WindowSeconds, xMaximum);
+    }
+
+    private void SetSharedX(
+        Chart2D? source,
+        double xMinimum,
+        double xMaximum)
+    {
+        _synchronizingNavigation = true;
+        try
+        {
+            foreach (StreamPanel panel in _panels)
+            {
+                if (ReferenceEquals(panel.Chart, source))
+                    continue;
+                PlotRange2D range = panel.Chart.Range;
+                panel.Chart.SetRange(new PlotRange2D(
+                    xMinimum,
+                    xMaximum,
+                    range.YMin,
+                    range.YMax));
+            }
+        }
+        finally
+        {
+            _synchronizingNavigation = false;
+        }
+    }
+
+    private void UpdateFollowButton()
+    {
+        _followButton.Content = _followLatest
+            ? "Stop following"
+            : "Follow latest";
     }
 
     private void OnRenderFailed(
@@ -332,6 +417,12 @@ public partial class MainWindow : Window
         _timer.Stop();
         _pauseButton.Click -= OnPauseClick;
         _resetButton.Click -= OnResetClick;
+        _followButton.Click -= OnFollowClick;
+        foreach (Chart2DWpfInteraction interaction in _interactions)
+        {
+            interaction.Navigated -= OnChartNavigated;
+            interaction.Dispose();
+        }
         SceneHost.FramebufferChanged -= OnFramebufferChanged;
         SceneHost.RenderFailed -= OnRenderFailed;
         try
