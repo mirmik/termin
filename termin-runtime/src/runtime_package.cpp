@@ -601,6 +601,85 @@ void copy_shader_metadata_text(char (&destination)[N], const std::string& source
     std::snprintf(destination, N, "%s", source.c_str());
 }
 
+bool restore_shader_contract(
+    const nos::trent& spec,
+    tc_shader* shader,
+    std::string& error
+) {
+    const nos::trent* contract = dict_get(spec, "shader_contract");
+    if (!contract) {
+        return true;
+    }
+    if (!contract->is_dict()) {
+        error = "shader_contract must be an object";
+        return false;
+    }
+
+    const uint32_t schema_version = uint32_field(
+        *contract, "schema_version", TC_SHADER_CONTRACT_SCHEMA_VERSION);
+    if (schema_version != TC_SHADER_CONTRACT_SCHEMA_VERSION) {
+        error = "shader_contract has an unsupported schema_version";
+        return false;
+    }
+
+    const nos::trent* input_list = dict_get(*contract, "vertex_inputs");
+    if (!input_list || !input_list->is_list()) {
+        error = "shader_contract.vertex_inputs must be a list";
+        return false;
+    }
+
+    std::vector<tc_shader_contract_vertex_input> vertex_inputs;
+    vertex_inputs.reserve(input_list->as_list().size());
+    std::unordered_set<std::string> semantics;
+    for (const nos::trent& item : input_list->as_list()) {
+        if (!item.is_dict()) {
+            error = "shader_contract vertex input must be an object";
+            return false;
+        }
+        const std::string semantic = string_field(item, "semantic");
+        const uint32_t type = uint32_field(item, "type");
+        if (semantic.empty() || semantic.size() >= TC_SHADER_RESOURCE_NAME_MAX
+            || type == TC_SHADER_CONTRACT_VALUE_UNKNOWN
+            || type > TC_SHADER_CONTRACT_VALUE_MATRIX4) {
+            error = "shader_contract vertex input is incomplete or invalid";
+            return false;
+        }
+        if (!semantics.insert(semantic).second) {
+            error = "shader_contract contains duplicate vertex input '" + semantic + "'";
+            return false;
+        }
+        tc_shader_contract_vertex_input input{};
+        copy_shader_metadata_text(input.semantic, semantic);
+        input.type = type;
+        const nos::trent* required = dict_get(item, "required");
+        if (required && !required->is_bool()) {
+            error = "shader_contract vertex input required flag must be boolean";
+            return false;
+        }
+        input.required = !required || required->as_bool() ? 1u : 0u;
+        vertex_inputs.push_back(input);
+    }
+
+    const std::string debug_name = string_field(*contract, "debug_name");
+    const std::string source_debug_name = string_field(
+        *contract, "source_debug_name", "runtime package declaration");
+    const tc_shader_contract_desc descriptor{
+        schema_version,
+        TC_SHADER_CONTRACT_SOURCE_DECLARED,
+        vertex_inputs.data(),
+        static_cast<uint32_t>(vertex_inputs.size()),
+        nullptr,
+        0u,
+        debug_name.empty() ? nullptr : debug_name.c_str(),
+        source_debug_name.c_str(),
+    };
+    if (!tc_shader_set_contract(shader, &descriptor)) {
+        error = "failed to restore shader_contract metadata";
+        return false;
+    }
+    return true;
+}
+
 bool restore_shader_surface_producer(
     const nos::trent& spec,
     tc_shader* shader,
@@ -813,6 +892,11 @@ bool load_shader_resource(
     shader.set_features(uint32_field(spec, "features", 0));
     detail::set_shader_features_from_glsl(raw, fragment_source);
     detail::set_shader_material_ubo_layout_from_glsl(raw, fragment_source);
+    if (!restore_shader_contract(spec, raw, error)) {
+        error = "shader '" + uuid + "': " + error;
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
     if (!restore_shader_surface_producer(spec, raw, error)) {
         error = "shader '" + uuid + "': " + error;
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
