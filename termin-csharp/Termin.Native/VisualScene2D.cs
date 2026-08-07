@@ -262,14 +262,31 @@ public sealed class VisualStrokePaint2D
 public sealed class TcVisualScene2D : IDisposable
 {
     private VisualSceneNativeHandle _handle;
+    private readonly bool _ownsHandle;
     private bool _disposed;
 
-    public TcVisualScene2D()
+    public TcVisualScene2D() : this(VisualSceneNative.CreateScene(), true)
     {
-        _handle = VisualSceneNative.CreateScene();
         if (!_handle.IsValid)
             throw new InvalidOperationException(
                 "Failed to create TcVisualScene2D.");
+    }
+
+    private TcVisualScene2D(
+        VisualSceneNativeHandle handle,
+        bool ownsHandle)
+    {
+        _handle = handle;
+        _ownsHandle = ownsHandle;
+    }
+
+    internal static TcVisualScene2D Borrow(
+        VisualSceneNativeHandle handle)
+    {
+        if (!handle.IsValid || !VisualSceneNative.SceneIsValid(handle))
+            throw new ArgumentException(
+                "Cannot borrow a stale visual scene.", nameof(handle));
+        return new TcVisualScene2D(handle, false);
     }
 
     internal VisualSceneNativeHandle NativeHandle => _handle;
@@ -313,7 +330,8 @@ public sealed class TcVisualScene2D : IDisposable
     {
         if (_disposed)
             return;
-        VisualSceneNative.DestroyScene(_handle);
+        if (_ownsHandle)
+            VisualSceneNative.DestroyScene(_handle);
         _disposed = true;
         _handle = default;
         GC.SuppressFinalize(this);
