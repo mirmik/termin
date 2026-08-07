@@ -1,42 +1,61 @@
-# Установка и начало работы
+# Разработка termin-app
 
-## Требования
+Эта страница описывает окружение разработчика редактора. Пользовательский
+маршрут — от сборки SDK до первой собственной сцены — находится в
+[корневых «Первых шагах»](https://github.com/mirmik/termin/blob/master/docs/getting-started.md).
 
-- Python/CMake/C++ toolchain, совместимый с корневым SDK build.
-- Для разработки Python-кода используйте bundled Python из собранного SDK и
-  checkout-local test environment, создаваемый `setup-sdk-python-env.sh`.
+## Соберите SDK
 
-## Установка
-
-### Первичная сборка SDK
+Редактор и его bundled Python-библиотеки входят в общий SDK. Из корня
+репозитория выполните:
 
 ```bash
 ./build-sdk.sh
+```
+
+После сборки запускайте редактор напрямую с явным проектом:
+
+```bash
+./sdk/bin/termin_editor /path/to/Project.terminproj
+```
+
+Путь к директории проекта также допустим, если в ней находится ровно один
+`.terminproj`. Launcher удобен для ручного выбора и создания проектов:
+
+```bash
+./run-termin.sh
+```
+
+## Подготовьте Python-тесты
+
+Тестовые и lint-зависимости не входят в runtime SDK. Checkout-local окружение
+и source overlay создаются отдельной командой:
+
+```bash
 ./setup-sdk-python-env.sh
 ```
 
-`setup-sdk-python-env.sh` ставит только test/lint-зависимости в
-`build/python-envs/test` и генерирует явный source overlay. Python-исходники
-берутся из checkout, а native-модули и runtime-зависимости — из SDK. После
-пересборки SDK достаточно повторно запустить setup, чтобы обновить fingerprint;
-переустановка Termin-пакетов не нужна.
+Python-исходники тестируются из checkout, а native-модули и runtime-зависимости
+берутся непосредственно из SDK. После пересборки bindings копировать `.so` или
+`.pyd` в исходники не нужно. Повторный setup требуется только для обновления
+fingerprint overlay после изменения SDK.
 
-### Ежедневная проверка Python
+Запуск Python-тестов:
 
 ```bash
-bash run-tests-python.sh
+./run-tests-python.sh
 ```
 
-Скрипт запускает `sdk/bin/termin_python` с generated overlay и не зависит от
-активного venv, `PYTHONPATH` или user site-packages.
+Полный тестовый контур проекта запускается через:
 
-## Редактор
+```bash
+./run-tests.sh
+```
 
-Единственная версия редактора использует native UI. Архитектура слоев и правила добавления
-операций описаны в [editor-architecture](editor-architecture.md).
+## Связанные документы
 
-## Следующие шаги
-
-- [Build System](https://github.com/mirmik/termin-monorepo/blob/master/docs/build-system.md) — текущий SDK workflow.
-- [Documentation System](https://github.com/mirmik/termin-monorepo/blob/master/docs/documentation-system.md) — где держать разные типы документов.
-- [Editor Architecture](editor-architecture.md) — структура editor-core и native frontend.
+- [Архитектура редактора](editor-architecture.md)
+- [Termin CLI](termin-cli.md)
+- [Project build manifest](project-build-manifest.md)
+- [Editor MCP diagnostics](editor-mcp.md)
+- [Корневая система сборки](https://github.com/mirmik/termin/blob/master/docs/build-system.md)

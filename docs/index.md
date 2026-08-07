@@ -1,56 +1,92 @@
-# Termin Documentation Hub
+# Termin
 
-Документация монорепозитория **Termin** — 3D-движка с ECS-архитектурой, физикой, рендерингом, анимацией и навигацией.
+Termin — 3D-движок и нативный редактор для интерактивных приложений, игр,
+робототехники и физического моделирования. Он объединяет визуальное
+редактирование сцен, компонентную модель, рендеринг, симуляцию и сборку
+приложений для нескольких платформ.
 
----
+Termin активно развивается и пока ориентирован на сборку из исходников. Если
+вы открыли документацию впервые, начните с [первых шагов](getting-started.md):
+там есть готовая физическая сцена и маршрут создания собственного проекта.
 
-## Как поддерживается документация
+## Что можно делать в Termin
 
-- [Documentation System](./documentation-system.md) — где должны жить разные типы документов.
-- [Module Map](./modules.md) — границы ответственности модулей и правила переноса кода.
-- [Linting And Static Analysis](./linting.md) — общий план Python и C/C++ lint/static-analysis.
-- [Python Linting](./python-linting.md) — Ruff baseline для Python-кода.
-- [C++ Style Guide](./cpp-style.md) — порядок членов C++-классов и структур.
-- [Code Duplication Check](./code-duplication.md) — jscpd-прогон для поиска copy/paste-дублей.
-- [Render Phase Semantics](./render-phase-semantics.md) — контракт `phase_mark`, pass-owned shader contracts, allowed/forbidden responsibilities.
-- [Android Emulator Vulkan Smoke](./android-emulator-vulkan.md) — поддерживаемый x86_64 AVD backend и контракт совместимости Slang SPIR-V.
-- [Web Runtime Browser Gate](./web-runtime-browser-gate.md) — Chromium/WebGPU CI gate, отчёт, Firefox manual scenario и deployment contract.
-- [Adaptive Native UI Regression Matrix](./adaptive-ui-regression-matrix.md) — автоматические scale/layout/input проверки и platform gates.
-- [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
-- [Python Package Naming](./python-package-naming.md) — canonical source path / distribution / import namespace policy.
-- [Taskboard CLI](./taskboard-tool.md) — использование глобального Kanboard-инструмента для доски Termin.
-- [Taskboard Guidelines](./taskboard-guidelines.md) — короткие правила ведения Kanboard-карточек.
-- [Native Editor UI Style Guide](./ui/native-editor-ui-style-guide.md) — визуальные токены и правила композиции `termin-gui-native`.
-- [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
-- [Plans And Migration Notes](./plans/index.md) — исторические планы и миграционные чеклисты.
-- [Главный вход Obsidian](https://github.com/mirmik/termin-monorepo/blob/master/docs.md) — навигационная страница vault.
+### Создавать сцены
 
-## Проекты
+Редактор предоставляет иерархию сущностей, 3D viewport, инспектор свойств,
+project browser, undo/redo и Play Mode. Сцена хранит авторское состояние, а
+симуляция запускается отдельно и не перезаписывает его при остановке.
 
-| Проект | Описание |
-|--------|----------|
-| [termin-app](./modules.md#termin-app) | Основное приложение/редактор |
-| [termin-base](https://github.com/mirmik/termin-monorepo/blob/master/termin-base/docs/index.md) | Базовые типы, logging, settings, geometry, low-level utilities |
-| [termin-mesh](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
-| [termin-default-assets](https://github.com/mirmik/termin-monorepo/blob/master/termin-default-assets/docs/index.md) | Default asset adapters for domain packages |
-| [termin-graphics](https://github.com/mirmik/termin-monorepo/blob/master/termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
-| [termin-visual-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-visual-scene/docs/index.md) | Retained 2D visual identity, topology and interaction |
-| [termin-render](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md) | Render framework, pipelines, frame graph |
-| [termin-display](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md) | Windows/display/platform integration |
-| [termin-window](https://github.com/mirmik/termin-monorepo/blob/master/termin-window/docs/index.md) | Lightweight native windows, portable events and texture presentation |
-| [termin-inspect](https://github.com/mirmik/termin-monorepo/blob/master/termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
-| [termin-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
-| [termin-collision](https://github.com/mirmik/termin-monorepo/blob/master/termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
-| [termin-physics](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics/docs/index.md) | C++ rigid-body physics bindings |
-| [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md) | Native contribution-based FEM scene integration; legacy Python reference package |
-| [termin-input](https://github.com/mirmik/termin-monorepo/blob/master/termin-input/docs/index.md) | Input abstractions |
-| [termin-gui](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
-| [termin-modules](https://github.com/mirmik/termin-monorepo/blob/master/termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
-| [termin-components](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/docs/index.md) | Component packages |
-| [tcplot](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md) | Plotting library поверх tgfx/tcgui |
+### Настраивать графику
 
-## Архитектура
+В проекте доступны меши, материалы, текстуры, PBR-освещение, тени, камеры,
+render targets и настраиваемые pipelines. GLB/glTF может приносить сразу
+геометрию, материалы, skeleton, анимации и иерархию сцены.
 
-- [Граф зависимостей библиотек](./library-dependencies.md)
-- [Карта модулей](./modules.md)
-- [Архитектурные заметки](./architecture/index.md)
+### Собирать поведение из компонентов
+
+Сущности получают данные и поведение через компоненты. В одном проекте могут
+сочетаться встроенные C++-компоненты, Python-код и project-local C++-модули.
+
+### Запускать симуляции
+
+Termin включает коллизии и rigid-body physics, а также подсистемы кинематики,
+навигации, анимации, FEM и QP-моделей. Готовые acceptance-проекты показывают
+как обычную игровую физику, так и специализированные механические сценарии.
+
+### Выпускать приложения
+
+Build profiles описывают entry scene, ресурсы, runtime backend и целевую
+платформу. Текущий pipeline умеет формировать desktop bundles, Android/Vulkan
+APK и Quest/OpenXR APK.
+
+## Начните отсюда
+
+| Задача | Документ |
+|---|---|
+| Увидеть Termin в работе | [Первые шаги](getting-started.md) |
+| Разобраться с командами проекта | [Termin CLI](https://github.com/mirmik/termin/blob/master/termin-app/docs/termin-cli.md) |
+| Собрать SDK | [Система сборки](build-system.md) |
+| Посмотреть готовые проекты | [Test projects](https://github.com/mirmik/termin/tree/master/test-projects) |
+| Понять устройство репозитория | [Карта модулей](modules.md) |
+| Начать разработку движка | [Сборка и smoke-проверки](smoke-checks.md) |
+
+## Пользовательская документация
+
+- [Первые шаги](getting-started.md) — сборка SDK, showcase, новый проект и
+  первый запуск сцены.
+- [Termin CLI](https://github.com/mirmik/termin/blob/master/termin-app/docs/termin-cli.md) — `init`, `editor`, `play`, build profiles и packaged runtime.
+- [Тестовые проекты](https://github.com/mirmik/termin/tree/master/test-projects) —
+  editor-openable примеры для desktop, Android, Quest/OpenXR, physics,
+  кинематики и FEM.
+
+## Разработка Termin
+
+- [Система документации](documentation-system.md) — где живут пользовательские,
+  модульные и архитектурные документы.
+- [Система сборки](build-system.md) — SDK stages, build profiles и Python
+  runtime.
+- [Smoke-проверки](smoke-checks.md) — поддерживаемые проверки редактора и
+  runtime.
+- [Linting и статический анализ](linting.md) — общий quality workflow.
+- [C++ Style Guide](cpp-style.md) и [Python Linting](python-linting.md).
+- [Карта модулей](modules.md) и
+  [граф зависимостей библиотек](library-dependencies.md).
+- [Документация доски](taskboard-tool.md) и
+  [правила ведения карточек](taskboard-guidelines.md).
+
+## Архитектура и инженерные материалы
+
+Эти документы нужны при изменении самого движка; для первого знакомства с
+Termin читать их не требуется.
+
+- [Архитектурные заметки](architecture/index.md) — текущие cross-module
+  контракты и принятые решения.
+- [Планы и миграции](plans/index.md) — рабочие и исторические планы изменений.
+- [Architecture Council](architecture-council/index.md) — разбор спорных
+  системных границ.
+- [Анализы и аудиты](https://github.com/mirmik/termin/tree/master/docs/analysis) —
+  исследования технического состояния отдельных подсистем.
+- [Каталог встроенных шейдеров](builtin-shader-catalog.md),
+  [render phase semantics](render-phase-semantics.md) и
+  [GPU pipeline layout](gpu-pipeline-layout.md).
