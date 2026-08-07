@@ -590,6 +590,7 @@ namespace termin::physics_qopt
                     continue;
                 }
                 const auto registration = topology.register_contact(
+                    step_contacts_[index].row,
                     prefix + ".friction." +
                     std::to_string(contacts_[index].key));
                 if (!registration.ok())

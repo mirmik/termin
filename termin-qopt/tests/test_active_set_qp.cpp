@@ -205,6 +205,52 @@ void test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set() {
   TERMIN_QOPT_CHECK(result.inequality_linf == 0.0);
 }
 
+void test_dependent_tight_rows_do_not_enter_zero_step_cycle() {
+  const std::vector<double> hessian{2.0, 0.0, 0.0, 2.0};
+  const std::vector<double> gradient{0.0, -2.0};
+  const std::vector<double> equality{1.0, 0.0};
+  const std::vector<double> target{0.0};
+  const std::vector<double> inequalities{
+      1.0,  0.0, // Equality duplicate.
+      -1.0, 0.0, // Opposing equality duplicate.
+      0.0,  1.0,
+      0.0,  2.0, // Parallel inequality.
+      0.0,  -1.0,
+      0.0,  0.0, // Structurally empty row.
+  };
+  const std::vector<double> limits(6, 0.0);
+  const std::vector<double> no_values;
+  std::vector<double> primal(2);
+  std::vector<double> equality_dual(1);
+  std::vector<double> inequality_dual(6);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 2, 2),
+          const_vector(gradient),
+          row_major(equality, 1, 2),
+          const_vector(target),
+          row_major(inequalities, 6, 2),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          vector(equality_dual),
+          vector(inequality_dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0]) <= 1e-12);
+  TERMIN_QOPT_CHECK(std::abs(primal[1]) <= 1e-12);
+  TERMIN_QOPT_CHECK(result.active_set_size == 1);
+  TERMIN_QOPT_CHECK(result.constraint_rank == 2);
+  TERMIN_QOPT_CHECK(result.iterations < 128);
+}
+
 void test_linear_recession_is_blocked_or_reported_unbounded() {
   const std::vector<double> hessian{0.0};
   const std::vector<double> gradient{-1.0};
@@ -431,6 +477,167 @@ void test_invalid_warm_start_and_iteration_limit_do_not_write() {
   TERMIN_QOPT_CHECK(all_equal(dual, 456.0));
 }
 
+void test_unrelated_large_inequality_does_not_corrupt_phase_one() {
+  const std::vector<double> hessian{2.0};
+  const std::vector<double> gradient{-1.4};
+  const std::vector<double> inequalities{1.0e12, 1.0, -1.0};
+  const std::vector<double> limits{1.0e15, 1.0, -0.6};
+  const std::vector<double> no_values;
+  std::vector<double> primal(1, 123.0);
+  std::vector<double> dual(3, 456.0);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 1, 1),
+          const_vector(gradient),
+          row_major(no_values, 0, 1),
+          const_vector(no_values),
+          row_major(inequalities, 3, 1),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          {nullptr, 0, 1},
+          vector(dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0] - 0.7) <= 1e-10);
+  TERMIN_QOPT_CHECK(result.stationarity_linf <= 1e-10);
+  TERMIN_QOPT_CHECK(result.inequality_linf == 0.0);
+}
+
+void test_active_inequality_scaling_preserves_original_unit_dual() {
+  const std::vector<double> hessian{2.0};
+  const std::vector<double> gradient{-4.0};
+  const std::vector<double> no_values;
+  const double scales[] = {1.0e-12, 1.0e-6, 1.0, 1.0e6, 1.0e12};
+
+  for (double scale : scales) {
+    const std::vector<double> inequalities{scale};
+    const std::vector<double> limits{scale};
+    std::vector<double> primal(1);
+    std::vector<double> dual(1);
+    const QpSolveResult result = solve_active_set_qp(
+        {
+            row_major(hessian, 1, 1),
+            const_vector(gradient),
+            row_major(no_values, 0, 1),
+            const_vector(no_values),
+            row_major(inequalities, 1, 1),
+            const_vector(limits),
+            const_vector(no_values),
+            const_vector(no_values),
+        },
+        {
+            vector(primal),
+            {nullptr, 0, 1},
+            vector(dual),
+            {nullptr, 0, 1},
+            {nullptr, 0, 1},
+        });
+
+    TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(std::abs(primal[0] - 1.0) <= 1e-10);
+    TERMIN_QOPT_CHECK(std::abs(dual[0] * scale - 2.0) <= 1e-9);
+    TERMIN_QOPT_CHECK(result.stationarity_linf <= 1e-9);
+    TERMIN_QOPT_CHECK(result.inequality_linf <= scale * 1e-10);
+  }
+}
+
+void test_scaled_phase_one_with_equality_bound_and_warm_start() {
+  const std::vector<double> hessian{2.0, 0.0, 0.0, 2.0};
+  const std::vector<double> gradient{0.0, 0.0};
+  const std::vector<double> equality{1.0, 1.0};
+  const std::vector<double> target{1.0};
+  const std::vector<double> lower{-std::numeric_limits<double>::infinity(),
+                                  0.0};
+  const std::vector<double> no_values;
+  const std::vector<double> warm_primal{0.8, 0.2};
+  const std::vector<double> active_inequality{1.0};
+  const std::vector<double> inactive_lower{0.0, 0.0};
+  const double scales[] = {1.0e-12, 1.0, 1.0e12};
+
+  for (double scale : scales) {
+    const std::vector<double> inequality{-scale, 0.0};
+    const std::vector<double> limit{-0.8 * scale};
+    for (bool warm : {false, true}) {
+      std::vector<double> primal(2);
+      std::vector<double> equality_dual(1);
+      std::vector<double> inequality_dual(1);
+      std::vector<double> lower_dual(2);
+      const ActiveSetQpWarmStartView warm_start =
+          warm ? ActiveSetQpWarmStartView{
+                     const_vector(warm_primal),
+                     const_vector(active_inequality),
+                     const_vector(inactive_lower),
+                     {},
+                 }
+               : ActiveSetQpWarmStartView{};
+      const QpSolveResult result = solve_active_set_qp(
+          {
+              row_major(hessian, 2, 2),
+              const_vector(gradient),
+              row_major(equality, 1, 2),
+              const_vector(target),
+              row_major(inequality, 1, 2),
+              const_vector(limit),
+              const_vector(lower),
+              const_vector(no_values),
+          },
+          {
+              vector(primal),
+              vector(equality_dual),
+              vector(inequality_dual),
+              vector(lower_dual),
+              {nullptr, 0, 1},
+          },
+          warm_start);
+
+      TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+      TERMIN_QOPT_CHECK(std::abs(primal[0] - 0.8) <= 1e-9);
+      TERMIN_QOPT_CHECK(std::abs(primal[1] - 0.2) <= 1e-9);
+      TERMIN_QOPT_CHECK(std::abs(inequality_dual[0] * scale - 1.2) <= 1e-8);
+    }
+
+    const std::vector<double> infeasible_hessian{2.0};
+    const std::vector<double> infeasible_gradient{0.0};
+    const std::vector<double> fixed_zero{1.0};
+    const std::vector<double> zero_target{0.0};
+    const std::vector<double> requires_one{-scale};
+    const std::vector<double> requires_one_limit{-scale};
+    std::vector<double> primal(1, 123.0);
+    std::vector<double> equality_dual(1, 456.0);
+    std::vector<double> inequality_dual(1, 789.0);
+    const QpSolveResult infeasible = solve_active_set_qp(
+        {
+            row_major(infeasible_hessian, 1, 1),
+            const_vector(infeasible_gradient),
+            row_major(fixed_zero, 1, 1),
+            const_vector(zero_target),
+            row_major(requires_one, 1, 1),
+            const_vector(requires_one_limit),
+            const_vector(no_values),
+            const_vector(no_values),
+        },
+        {
+            vector(primal),
+            vector(equality_dual),
+            vector(inequality_dual),
+            {nullptr, 0, 1},
+            {nullptr, 0, 1},
+        });
+    TERMIN_QOPT_CHECK(infeasible.status == QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(all_equal(primal, 123.0));
+    TERMIN_QOPT_CHECK(all_equal(equality_dual, 456.0));
+    TERMIN_QOPT_CHECK(all_equal(inequality_dual, 789.0));
+  }
+}
+
 void test_nonconvexity_and_output_overlap_are_rejected() {
   const std::vector<double> negative_hessian{-1.0};
   const std::vector<double> gradient{0.0};
@@ -585,11 +792,15 @@ int main() {
   test_bounds_and_full_duals();
   test_warm_start_can_drop_an_incorrect_constraint();
   test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set();
+  test_dependent_tight_rows_do_not_enter_zero_step_cycle();
   test_linear_recession_is_blocked_or_reported_unbounded();
   test_recession_nullspace_is_invariant_to_constraint_row_scale();
   test_tiny_resolvable_recession_direction_reaches_a_blocker();
   test_inconsistent_bounds_are_infeasible();
   test_invalid_warm_start_and_iteration_limit_do_not_write();
+  test_unrelated_large_inequality_does_not_corrupt_phase_one();
+  test_active_inequality_scaling_preserves_original_unit_dual();
+  test_scaled_phase_one_with_equality_bound_and_warm_start();
   test_nonconvexity_and_output_overlap_are_rejected();
   test_deterministic_2d_corpus_against_active_subset_oracle();
   return 0;
