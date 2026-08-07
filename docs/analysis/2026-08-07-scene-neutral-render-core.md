@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1366, surface encoder slice #1368 и scatter encoder slice #1371
+#1359–#1366 и item encoder slices #1368, #1371, #1372
 
 ## Контекст
 
@@ -268,21 +268,16 @@ retained composition/model layer над общим renderer. Универсал�
 ## Что происходит с текущим `RetainedChart3D`
 
 Первый retained slice хранил отдельный `PlotEngine3D` как renderer-side body
-каждого item. В #1368 surface body удалён, а #1371 переносит scatter; только
-grid пока сохраняет временный путь. Он позволил быстро подтвердить stable
-handles, per-item revisions и C# API, однако не должен становиться конечной
-архитектурой:
+каждого item. В #1368, #1371 и #1372 surface, scatter и grid последовательно
+переведены на immutable streams и общий RenderItem planner/submission path.
+Последний per-item `PlotEngine3D` удалён без изменения public handles и typed
+interop API.
 
-- каждый item получает тяжёлый engine body;
-- дублируются camera, shader и text state;
-- порядок surface/grid/scatter зашит в chart render loop;
-- grid строится через временную legacy engine model;
-- старые global dirty paths остаются внутри каждого body.
-
-После появления scene-neutral core retained items должны создавать generic
-RenderItems либо специализированные renderer bodies/encoders. Один pipeline и
-один executor обслуживают весь chart. `PlotEngine3D` на item после этого
-удаляется без изменения public handles и typed interop API.
+Grid migration также зафиксировал границу между scene item и chart chrome:
+линии сетки и осей являются обычной геометрией RenderItem, а viewport/font-
+зависимые tick/axis labels рисуются отдельным chart-owned renderer после
+геометрии. Text renderer больше не дублируется в item slots и использует тот же
+immutable frame state, что и соответствующий grid snapshot.
 
 ## Предлагаемый порядок миграции
 
@@ -374,10 +369,15 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
   Retained offscreen path планирует surface через `plan_render_item_task()` и
   отправляет через `submit_render_item_draw()`; immutable CPU stream загружается
   общим transient vertex ring, а per-slot surface `PlotEngine3D` удалён.
-- В #1371 scatter получает такой же planner/encoder contract, immutable
+- В #1371 scatter получил такой же planner/encoder contract, immutable
   three-axis cross stream и generic retained submission; per-slot scatter
-  `PlotEngine3D` удаляется.
-- Ввести line, grid and world-text item encoders.
+  `PlotEngine3D` удалён.
+- В #1372 grid получил bounds-aware immutable line stream и общий
+  planner/encoder. Tick/axis labels отделены в chart-owned chrome renderer;
+  последний retained slot с `PlotEngine3D` удалён.
+- Ввести line item encoder при добавлении retained line series. World-text
+  item encoder остаётся отдельным общим направлением и не требуется для
+  chart-owned chrome.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
 - Добавить chart-specific passes только там, где generic material pass
@@ -386,7 +386,7 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
 
 ### Этап 5. Удалить временную архитектуру
 
-- Удалить `PlotEngine3D` renderer body из retained slots.
+- Выполнено в #1372: `PlotEngine3D` renderer body удалён из retained slots.
 - Перевести legacy `PlotView3D` на `RetainedChart3D` facade.
 - Удалить global dirty meshes и index-based mutation.
 - Не сохранять fallback на второй renderer после cutover.
