@@ -3,15 +3,15 @@
 #include <vector>
 
 #include <termin/geom/mat44.hpp>
-#include <termin/render/render_export.hpp>
-
 #include <termin/lighting/shadow_settings.hpp>
-#include "tgfx/frame_graph_resource.hpp"
-#include "tgfx2/handles.hpp"
+#include <termin/render_passes/export.h>
+
+#include <tgfx/frame_graph_resource.hpp>
+#include <tgfx2/handles.hpp>
 
 namespace termin {
 
-struct RENDER_API ShadowMapArrayEntry {
+struct TERMIN_RENDER_PASSES_API ShadowMapArrayEntry {
 public:
     tgfx::TextureHandle depth_tex2;
     int width = 0;
@@ -21,16 +21,14 @@ public:
     int cascade_index = 0;
     float cascade_split_near = 0.0f;
     float cascade_split_far = 0.0f;
-
-public:
 };
 
-class RENDER_API ShadowMapArrayResource : public FrameGraphResource {
+class TERMIN_RENDER_PASSES_API ShadowMapArrayResource
+    : public FrameGraphResource {
 public:
     std::vector<ShadowMapArrayEntry> entries;
     int resolution = 1024;
 
-public:
     ShadowMapArrayResource() = default;
     explicit ShadowMapArrayResource(int res) : resolution(res) {}
 
@@ -39,21 +37,14 @@ public:
     size_t size() const { return entries.size(); }
     bool empty() const { return entries.empty(); }
 
-    void clear() {
-        entries.clear();
-    }
-
-    void add_entry(const ShadowMapArrayEntry& entry) {
-        entries.push_back(entry);
-    }
+    void clear() { entries.clear(); }
+    void add_entry(const ShadowMapArrayEntry& entry) { entries.push_back(entry); }
 
     const ShadowMapArrayEntry& operator[](size_t index) const {
         return entries[index];
     }
 
-    ShadowMapArrayEntry& operator[](size_t index) {
-        return entries[index];
-    }
+    ShadowMapArrayEntry& operator[](size_t index) { return entries[index]; }
 
     ShadowMapArrayEntry* get_by_light_index(int light_index) {
         for (auto& entry : entries) {
@@ -71,5 +62,9 @@ public:
     auto begin() const { return entries.begin(); }
     auto end() const { return entries.end(); }
 };
+
+// Idempotent built-in bootstrap wrapper. The underlying generic registry still
+// rejects accidental duplicate registrations from independent owners.
+TERMIN_RENDER_PASSES_API bool register_shadow_map_array_resource_type();
 
 } // namespace termin

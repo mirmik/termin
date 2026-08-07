@@ -1308,9 +1308,10 @@ void ColorPass::execute(ExecuteContext& ctx) {
 
     std::vector<ShadowMapArrayEntry> shadow_maps;
     if (!shadow_res.empty()) {
-        auto shadow_it = ctx.shadow_arrays.find(shadow_res);
-        if (shadow_it != ctx.shadow_arrays.end() && shadow_it->second != nullptr) {
-            shadow_maps = shadow_it->second->entries;
+        ShadowMapArrayResource* shadow_array =
+            ctx.get_frame_graph_resource_as<ShadowMapArrayResource>(shadow_res);
+        if (shadow_array) {
+            shadow_maps = shadow_array->entries;
         }
     }
 
