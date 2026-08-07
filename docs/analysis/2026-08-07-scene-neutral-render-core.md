@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1366
+#1359–#1366 и surface encoder slice #1368
 
 ## Контекст
 
@@ -267,9 +267,10 @@ retained composition/model layer над общим renderer. Универсал�
 
 ## Что происходит с текущим `RetainedChart3D`
 
-Первый retained slice сейчас хранит отдельный `PlotEngine3D` как renderer-side
-body каждого item. Это позволило быстро подтвердить stable handles,
-per-item revisions и C# API, но не должно становиться конечной архитектурой:
+Первый retained slice хранил отдельный `PlotEngine3D` как renderer-side body
+каждого item. В #1368 surface body удалён, но scatter/grid пока сохраняют этот
+временный путь. Он позволил быстро подтвердить stable handles, per-item
+revisions и C# API, однако не должен становиться конечной архитектурой:
 
 - каждый item получает тяжёлый engine body;
 - дублируются camera, shader и text state;
@@ -368,7 +369,11 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
 - В #1366 подготовлены snapshot-owned immutable geometry/style/chart-state
   payloads. Тесты подтверждают, что старые snapshots переживают mutation,
   slot reuse и уничтожение source chart без dangling pointers.
-- Ввести surface, scatter, line, grid and world-text item encoders.
+- В #1368 surface получил tcplot-owned task shader planner и draw encoder.
+  Retained offscreen path планирует surface через `plan_render_item_task()` и
+  отправляет через `submit_render_item_draw()`; immutable CPU stream загружается
+  общим transient vertex ring, а per-slot surface `PlotEngine3D` удалён.
+- Ввести scatter, line, grid and world-text item encoders.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
 - Добавить chart-specific passes только там, где generic material pass
