@@ -30,6 +30,7 @@ const core = await createTerminCore({
     locateFile: (file) => path.join(outputDirectory, file),
 });
 core.smoke();
+core.lifecycleSmoke();
 
 assert.deepEqual(terminWebEnvironment({
     isSecureContext: true,
@@ -225,6 +226,9 @@ for (const [fixture, expected] of [
     }
 }
 await host.teardown();
+core.shutdown();
+core.lifecycleSmoke();
+core.shutdown();
 
 const simulatedDeviceLossModule = {
     _termin_web_host_frame_count() { return 1; },

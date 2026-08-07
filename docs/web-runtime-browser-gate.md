@@ -39,6 +39,7 @@ Gate поднимает временный HTTP server только на loopbac
 - создание adapter/device и canvas surface;
 - strict package load и первый текстурированный кадр;
 - reload, teardown и ожидаемые package errors;
+- финальный shutdown Render bootstrap и повторную инициализацию без дубликатов;
 - orbit, wheel, keyboard, focus и canvas resize/DPR;
 - изменение пикселей сцены после input, а не только рост event counter;
 - тот же orbit path непосредственно в полноэкранном `viewer.html`.
@@ -92,4 +93,3 @@ wrapper и публикует JSON как artifact `web-runtime-chromium-gate`.
   только вместе с отдельным threaded-Wasm этапом.
 - WebGPU uncaptured errors и device loss логируются native backend-ом и
   переводят host в явное error state на следующем frame tick.
-
