@@ -36,6 +36,7 @@ struct ConstraintOrigin {
 struct NormalizedInequalities {
   Matrix matrix;
   Vector limits;
+  Vector row_scales;
   std::vector<ConstraintOrigin> origins;
 };
 
@@ -249,8 +250,10 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
     Vector primal, std::vector<std::size_t> active,
     const ActiveSetQpOptions &options, std::size_t &iterations) {
   const Eigen::Index equality_count = equalities.rows();
-  const double direction_tolerance =
-      scaled_tolerance(options.tolerance, matrix_linf(inequalities));
+  // Every inequality row is normalized before it reaches the core. Direction
+  // tests can therefore use one dimensionless threshold without allowing an
+  // unrelated, large row to hide a blocker.
+  const double direction_tolerance = scaled_tolerance(options.tolerance, 1.0);
 
   while (iterations < options.max_iterations) {
     ++iterations;
@@ -402,12 +405,26 @@ normalize_inequalities(const Matrix &inequalities, const Vector &limits,
   NormalizedInequalities normalized;
   normalized.matrix = Matrix::Zero(rows, inequalities.cols());
   normalized.limits.resize(rows);
+  normalized.row_scales = Vector::Ones(rows);
   normalized.origins.reserve(static_cast<std::size_t>(rows));
 
   Eigen::Index row = 0;
   for (Eigen::Index index = 0; index < inequalities.rows(); ++index, ++row) {
     normalized.matrix.row(row) = inequalities.row(index);
     normalized.limits[row] = limits[index];
+    const double coefficient_scale =
+        normalized.matrix.row(row).cwiseAbs().maxCoeff();
+    if (coefficient_scale > 0.0) {
+      normalized.row_scales[row] = coefficient_scale;
+      normalized.matrix.row(row) /= coefficient_scale;
+      normalized.limits[row] /= coefficient_scale;
+    } else if (normalized.limits[row] != 0.0) {
+      // A constant constraint has no coefficient scale. Canonicalizing
+      // its nonzero limit still makes 0 <= d invariant to positive row
+      // scaling.
+      normalized.row_scales[row] = std::abs(normalized.limits[row]);
+      normalized.limits[row] /= normalized.row_scales[row];
+    }
     normalized.origins.push_back(
         {ConstraintFamily::Inequality, static_cast<std::size_t>(index)});
   }
@@ -458,17 +475,53 @@ normalize_inequalities(const Matrix &inequalities, const Vector &limits,
   return true;
 }
 
+struct ConstraintResidual {
+  double value = 0.0;
+  double residual = 0.0;
+  double tolerance = 0.0;
+};
+
+[[nodiscard]] ConstraintResidual constraint_residual(const Matrix &inequalities,
+                                                     const Vector &limits,
+                                                     const Vector &primal,
+                                                     Eigen::Index row,
+                                                     QpTolerance tolerance) {
+  const double value = inequalities.row(row).dot(primal);
+  return {
+      value,
+      value - limits[row],
+      scaled_tolerance(tolerance,
+                       std::max(std::abs(value), std::abs(limits[row]))),
+  };
+}
+
 [[nodiscard]] std::vector<std::size_t>
 tight_constraints(const Matrix &inequalities, const Vector &limits,
-                  const Vector &primal, double active_tolerance) {
+                  const Vector &primal, QpTolerance tolerance) {
   std::vector<std::size_t> active;
   for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
-    if (std::abs(inequalities.row(row).dot(primal) - limits[row]) <=
-        active_tolerance) {
+    const ConstraintResidual checked =
+        constraint_residual(inequalities, limits, primal, row, tolerance);
+    if (std::abs(checked.residual) <= checked.tolerance) {
       active.push_back(static_cast<std::size_t>(row));
     }
   }
   return active;
+}
+
+[[nodiscard]] bool constraints_feasible(const Matrix &inequalities,
+                                        const Vector &limits,
+                                        const Vector &primal,
+                                        double active_tolerance,
+                                        QpTolerance tolerance) {
+  for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
+    const ConstraintResidual checked =
+        constraint_residual(inequalities, limits, primal, row, tolerance);
+    if (checked.residual > std::max(active_tolerance, checked.tolerance)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 [[nodiscard]] CoreResult
@@ -509,11 +562,8 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   phase_start.head(variables) = seed;
   phase_start[variables] = maximum_violation + margin;
 
-  const double working_set_tolerance = scaled_tolerance(
-      options.tolerance,
-      std::max(matrix_linf(phase_inequalities), linf(phase_limits)));
   std::vector<std::size_t> active = tight_constraints(
-      phase_inequalities, phase_limits, phase_start, working_set_tolerance);
+      phase_inequalities, phase_limits, phase_start, options.tolerance);
   return solve_feasible_core(phase_hessian, phase_gradient, phase_equalities,
                              targets, phase_inequalities, phase_limits,
                              std::move(phase_start), std::move(active), options,
@@ -660,9 +710,6 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
 
   const NormalizedInequalities normalized =
       normalize_inequalities(inequalities, inequality_limits, lower, upper);
-  const double working_set_tolerance = scaled_tolerance(
-      options.tolerance,
-      std::max(matrix_linf(normalized.matrix), linf(normalized.limits)));
 
   Matrix feasibility_hessian =
       Matrix::Identity(static_cast<Eigen::Index>(variables),
@@ -692,14 +739,9 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   if (!warm_start.primal.empty()) {
     primal = warm_primal;
     const double equality_error = linf(equalities * primal - equality_targets);
-    const double inequality_error =
-        normalized.matrix.rows() == 0
-            ? 0.0
-            : std::max(
-                  0.0,
-                  (normalized.matrix * primal - normalized.limits).maxCoeff());
     if (equality_error > options.active_tolerance ||
-        inequality_error > options.active_tolerance) {
+        !constraints_feasible(normalized.matrix, normalized.limits, primal,
+                              options.active_tolerance, options.tolerance)) {
       return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
     }
 
@@ -711,32 +753,26 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
                                 warm_start.active_upper_bounds)) {
           continue;
         }
-        const double residual = std::abs(
-            normalized.matrix.row(static_cast<Eigen::Index>(row)).dot(primal) -
-            normalized.limits[static_cast<Eigen::Index>(row)]);
-        if (residual > options.active_tolerance) {
+        const ConstraintResidual checked = constraint_residual(
+            normalized.matrix, normalized.limits, primal,
+            static_cast<Eigen::Index>(row), options.tolerance);
+        if (std::abs(checked.residual) >
+            std::max(options.active_tolerance, checked.tolerance)) {
           return failure(QpStatus::InvalidInput,
                          QpDiagnostic::InvalidWarmStart);
         }
-        if (residual <= working_set_tolerance) {
+        if (std::abs(checked.residual) <= checked.tolerance) {
           initial_active.push_back(row);
         }
       }
     } else {
       initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                         primal, working_set_tolerance);
+                                         primal, options.tolerance);
     }
   } else {
     primal = equality_feasible.primal;
-    const double seed_violation =
-        normalized.matrix.rows() == 0
-            ? 0.0
-            : std::max(
-                  0.0,
-                  (normalized.matrix * primal - normalized.limits).maxCoeff());
-    const double seed_tolerance =
-        scaled_tolerance(options.tolerance, std::max(1.0, seed_violation));
-    if (seed_violation > seed_tolerance) {
+    if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0,
+                              options.tolerance)) {
       CoreResult phase =
           find_feasible_point(equalities, equality_targets, normalized.matrix,
                               normalized.limits, primal, options, iterations);
@@ -758,7 +794,7 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
       }
     }
     initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                       primal, working_set_tolerance);
+                                       primal, options.tolerance);
   }
 
   CoreResult solved = solve_feasible_core(
@@ -779,7 +815,9 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   Vector lower_dual = Vector::Zero(lower.size());
   Vector upper_dual = Vector::Zero(upper.size());
   for (std::size_t row = 0; row < normalized.origins.size(); ++row) {
-    const double multiplier = normalized_dual[static_cast<Eigen::Index>(row)];
+    const double multiplier =
+        normalized_dual[static_cast<Eigen::Index>(row)] /
+        normalized.row_scales[static_cast<Eigen::Index>(row)];
     const ConstraintOrigin origin = normalized.origins[row];
     switch (origin.family) {
     case ConstraintFamily::Inequality:
@@ -798,18 +836,38 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
                               equalities.transpose() * solved.equality_dual +
                               normalized.matrix.transpose() * normalized_dual;
   const Vector equality_error = equalities * solved.primal - equality_targets;
-  const Vector inequality_slack =
+  const Vector normalized_inequality_slack =
       normalized.matrix * solved.primal - normalized.limits;
-  const Vector complementarity = normalized_dual.cwiseProduct(inequality_slack);
+  const Vector complementarity =
+      normalized_dual.cwiseProduct(normalized_inequality_slack);
+
+  double original_inequality_violation = 0.0;
+  if (inequalities.rows() > 0) {
+    original_inequality_violation = std::max(
+        0.0, (inequalities * solved.primal - inequality_limits).maxCoeff());
+  }
+  for (Eigen::Index index = 0; index < lower.size(); ++index) {
+    if (std::isfinite(lower[index])) {
+      original_inequality_violation = std::max(
+          original_inequality_violation, lower[index] - solved.primal[index]);
+    }
+  }
+  for (Eigen::Index index = 0; index < upper.size(); ++index) {
+    if (std::isfinite(upper[index])) {
+      original_inequality_violation = std::max(
+          original_inequality_violation, solved.primal[index] - upper[index]);
+    }
+  }
 
   solved.result.stationarity_linf = linf(stationarity);
   solved.result.equality_linf = linf(equality_error);
-  solved.result.inequality_linf =
-      inequality_slack.size() == 0 ? 0.0
-                                   : std::max(0.0, inequality_slack.maxCoeff());
-  solved.result.dual_linf = normalized_dual.size() == 0
-                                ? 0.0
-                                : std::max(0.0, -normalized_dual.minCoeff());
+  solved.result.inequality_linf = original_inequality_violation;
+  solved.result.dual_linf = std::max({
+      inequality_dual.size() == 0 ? 0.0
+                                  : std::max(0.0, -inequality_dual.minCoeff()),
+      lower_dual.size() == 0 ? 0.0 : std::max(0.0, -lower_dual.minCoeff()),
+      upper_dual.size() == 0 ? 0.0 : std::max(0.0, -upper_dual.minCoeff()),
+  });
   solved.result.complementarity_linf = linf(complementarity);
   solved.result.iterations = iterations;
 
@@ -824,10 +882,14 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
       scaled_tolerance(options.tolerance, residual_scale);
   const double feasibility_tolerance =
       std::max(options.active_tolerance, residual_tolerance);
+  const double normalized_dual_violation =
+      normalized_dual.size() == 0 ? 0.0
+                                  : std::max(0.0, -normalized_dual.minCoeff());
   if (solved.result.stationarity_linf > residual_tolerance ||
       solved.result.equality_linf > feasibility_tolerance ||
-      solved.result.inequality_linf > feasibility_tolerance ||
-      solved.result.dual_linf > residual_tolerance ||
+      !constraints_feasible(normalized.matrix, normalized.limits, solved.primal,
+                            options.active_tolerance, options.tolerance) ||
+      normalized_dual_violation > residual_tolerance ||
       solved.result.complementarity_linf > feasibility_tolerance) {
     solved.result.status = QpStatus::NumericalFailure;
     solved.result.diagnostic = QpDiagnostic::ResidualTooLarge;
