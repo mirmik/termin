@@ -57,6 +57,31 @@ def _fake_builtin_contract(package_dir: Path) -> dict[str, object]:
     }
 
 
+def test_bundled_android_triangle_matches_its_authored_shader_contract() -> None:
+    assets = _bundled_smoke_assets()
+    mesh = json.loads(
+        (assets / "meshes/android-triangle.tmesh.json").read_text(encoding="utf-8")
+    )
+    shader = json.loads(
+        (assets / "shaders/termin-android-scene-color.shader.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    mesh_attributes = {item["name"]: item for item in mesh["layout"]}
+    required_inputs = {
+        item["semantic"]: item
+        for item in shader["shader_contract"]["vertex_inputs"]
+        if item.get("required", True)
+    }
+    assert set(required_inputs) == {"position", "color"}
+    assert set(required_inputs) <= set(mesh_attributes)
+    assert all(
+        required_inputs[name]["type"] == mesh_attributes[name]["components"]
+        for name in required_inputs
+    )
+
+
 def test_prepare_android_runtime_assets_generates_missing_builtin_closure(
     tmp_path: Path,
     monkeypatch,
