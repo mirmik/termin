@@ -11,7 +11,6 @@
 #include <termin/render/line_batch_render_item.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
-#include <tgfx/tgfx_mesh_handle.hpp>
 
 namespace termin {
 
@@ -19,23 +18,14 @@ namespace termin {
     public:
         TcMaterial material;
         float width = 0.1f;
-        LineRenderMode render_mode = LineRenderMode::WorldBillboard;
-        bool raw_lines = false;
         bool cast_shadow = false;
-        tc_vec3 up_hint = {0.0, 1.0, 0.0};
         int tube_sides = 6;
 
     private:
         std::vector<tc_vec3> points_;
-        TcMesh mesh_;
-        bool dirty_ = true;
 
         static TcMaterial default_material();
         TcMaterial effective_material() const;
-        bool effective_render_mode(LineRenderMode& mode) const;
-        void rebuild_geometry();
-        void ensure_geometry();
-        tc_mesh* current_mesh_ptr() const;
 
     public:
         explicit LineRenderer(const char* type_name = "LineRenderer");
@@ -52,10 +42,7 @@ namespace termin {
         void add_point(const tc_vec3& point);
         void set_segment(const tc_vec3& start, const tc_vec3& end);
         void set_width(float value);
-        void set_render_mode(LineRenderMode value);
-        void set_raw_lines(bool value);
         void set_cast_shadow(bool value);
-        void set_up_hint(const tc_vec3& value);
         void set_tube_sides(int value);
         void set_material(const TcMaterial& value);
         void set_material_by_name(const std::string& name);
@@ -70,7 +57,6 @@ namespace termin {
         bool encode_render_item_tgfx2(tgfx::RenderContext2& ctx2,
                                       const tc_render_item& item,
                                       const RenderItemDrawSubmitRequest& request);
-        TcMesh get_mesh();
     };
 
 } // namespace termin

@@ -957,12 +957,16 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     }
     catalog_shader_uuids = {entry["uuid"] for entry in catalog["shaders"]}
     assert "termin-engine-line-default" in catalog_shader_uuids
-    assert "termin-engine-world-tube-line" in catalog_shader_uuids
-    assert "termin-engine-world-tube-line-cap" in catalog_shader_uuids
+    assert "termin-engine-world-tube-line" not in catalog_shader_uuids
     assert (
         result.package_dir
         / "builtin_shaders"
-        / "termin-engine-world-tube-line.slang"
+        / "termin_world_tube_line_transform.slang"
+    ).is_file()
+    assert (
+        result.package_dir
+        / "builtin_shaders"
+        / "termin_multiview_material_vertex_output_adapter.slang"
     ).is_file()
     assert (
         result.package_dir
@@ -1257,7 +1261,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
 def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_path: Path) -> None:
     from termin.bootstrap import bootstrap_player
     from termin.geombase import Vec3
-    from termin.render_components import LineRenderMode, LineRenderer
+    from termin.render_components import LineRenderer
     from termin.render_framework import RenderPipeline
     from termin.render_passes import ColorPass
     from termin.scene import TcScene
@@ -1273,10 +1277,7 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
     try:
         entity = scene.create_entity("line")
         entity.add_component(
-            LineRenderer(
-                points=[Vec3(0, 0, 0), Vec3(1, 0, 0)],
-                render_mode=LineRenderMode.WorldTube,
-            )
+            LineRenderer(points=[Vec3(0, 0, 0), Vec3(1, 0, 0)])
         )
         scene_data = scene.serialize()
         scene_data["uuid"] = "scene-uuid"

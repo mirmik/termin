@@ -60,23 +60,10 @@ ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
 ENGINE_WORLD2D_SHADER_UUID = "termin-engine-world2d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 
-# LineRenderer builds its final shaders from these catalog entries at runtime.
-# The derived shader artifacts are collected from the scene, but the source
-# catalog entries remain required to reconstruct the same variant handles in a
-# packaged runtime.
+# LineRenderer builds its final material variants from one canonical material
+# shader. Its catalog entry owns the runtime source closure for the tube
+# transform and pass-owned output adapters.
 ENGINE_LINE_SHADER_UUIDS = (
-    "termin-engine-screen-line",
-    "termin-engine-screen-line-cap",
-    "termin-engine-screen-line-join",
-    "termin-engine-screen-line-round-join",
-    "termin-engine-world-line",
-    "termin-engine-world-line-cap",
-    "termin-engine-world-line-join",
-    "termin-engine-world-line-round-join",
-    "termin-engine-world-line-lit",
-    "termin-engine-world-tube-line",
-    "termin-engine-world-tube-line-cap",
-    "termin-engine-world-tube-line-lit",
     "termin-engine-line-default",
 )
 

@@ -152,9 +152,10 @@ namespace {
 
         auto* renderer = new termin::LineRenderer();
         renderer->set_material(material);
-        renderer->set_render_mode(termin::LineRenderMode::ScreenSpace);
-        renderer->set_width(8.0f);
-        renderer->set_points({tc_vec3{-0.75f, 0.0f, 0.0f}, tc_vec3{0.75f, 0.0f, 0.0f}});
+        renderer->set_width(0.2f);
+        // Identity projection uses Vulkan's [0, 1] clip-depth range. Keep the
+        // entire tube in front of the near plane instead of bisecting it at z=0.
+        renderer->set_points({tc_vec3{-0.75f, 0.0f, 0.5f}, tc_vec3{0.75f, 0.0f, 0.5f}});
         entity.add_component(renderer);
 
         return scene;

@@ -105,7 +105,8 @@ namespace termin {
                 {"perspective_depth", MaterialPipelineValueType::Float},
                 {"log_depth", MaterialPipelineValueType::Float},
             };
-            adapter.resources = material_pipeline_pass_vertex_resources("depth_draw");
+            adapter.resources.push_back(material_pipeline_abi_resource_decl(
+                ShaderAbiResourceId::PerFrame, TC_SHADER_STAGE_VERTEX, MaterialPipelineResourceOwner::Pass));
             return adapter;
         }
 
@@ -116,8 +117,12 @@ namespace termin {
             contract.vertex_output_adapter = depth_vertex_output_adapter();
             contract.static_vertex_transform = material_pipeline_make_static_mesh_vertex_transform_provider(
                 "static_depth", MeshVertexTransformProfile::Position, "depth_draw.u_model");
+            contract.static_vertex_transform->resources.push_back(
+                material_pipeline_draw_resource_decl("depth_draw", TC_SHADER_STAGE_VERTEX, 64u));
             contract.skinned_vertex_transform = material_pipeline_make_skinned_mesh_vertex_transform_provider(
                 "skinned_depth", MeshVertexTransformProfile::Position, "depth_draw.u_model");
+            contract.skinned_vertex_transform->resources.push_back(
+                material_pipeline_draw_resource_decl("depth_draw", TC_SHADER_STAGE_VERTEX, 64u));
             contract.foliage_vertex_transform = material_pipeline_make_foliage_vertex_transform_provider(
                 "foliage_depth", MeshVertexTransformProfile::Position);
             return contract;

@@ -31,20 +31,18 @@ responsible for material, shadow participation, and material overrides.
 ## LineRenderer
 
 `LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.
-By default it draws through the tgfx2 GPU line path instead of baking a
-`tc_mesh`: `LineRenderMode.WorldBillboard` expands camera-facing thick line
-quads in `termin-graphics` and uses round caps/joins. `LineRenderMode.ScreenSpace`
-uses the same renderer family for pixel-width lines. `LineRenderMode.WorldTube`
-draws a world-space GPU-expanded tube; `tube_sides` defaults to `6`.
-In the editor inspector, `render_mode` is exposed as an enum dropdown with
-these modes instead of a raw integer field.
+The accepted production contract is one world-space tube with width in world
+units. Tube geometry is view-independent; material/pass composition and
+mono/multiview projection belong to the common material pipeline and its
+pass-owned `VertexOutputAdapter`.
 
-The old CPU mesh path is still available as `LineRenderMode.WorldMesh`, and
-the legacy `raw_lines` flag remains supported for compatibility. Those modes
-continue to expose a mesh through `get_mesh()`.
+The previous public modes (`WorldBillboard`, `ScreenSpace`, `WorldMesh` and
+`RawLines`) and the duplicate `raw_lines` switch have been removed.
+Camera-facing and screen-space renderers remain low-level unlit debug/overlay
+utilities in `termin-graphics`, not material-bearing scene modes. See the
+[architecture council protocol](../../../docs/architecture-council/2026-08-07-line-renderer-contract.md).
 
-`cast_shadow` is opt-in for all line modes. Direct GPU modes only participate
-in the `shadow` phase when this flag is enabled. Object picking uses the
+`cast_shadow` is opt-in. Object picking uses the
 engine-owned `pick` phase and pass contract; `id` remains ordinary
 resource/pass terminology, not a built-in line renderer phase alias.
 
