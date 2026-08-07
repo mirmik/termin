@@ -16,9 +16,9 @@ Projects:
   Pause and reset are WPF portals whose handlers and streaming timer live in
   C#.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable
-  handles, an independently replaceable grid part, public camera state, one
-  color/depth renderer, and WPF wireframe/shading/reset-camera portals whose
-  callbacks stay in C#.
+  handles, transactional data mutation, an independently replaceable grid,
+  axis-scale-aware camera fit, MSAA, and WPF portals whose callbacks stay in
+  C#.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,
   OpenGL, raw framebuffer, or raw display-pointer dependency.

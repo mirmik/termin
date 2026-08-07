@@ -1,4 +1,42 @@
-# tcplot - кастомизация 3D графика (C# / `PlotView3D`)
+# tcplot - кастомизация 3D графика (C#)
+
+> `PlotView3D` ниже остаётся legacy facade. Для нового WPF-кода используйте
+> `RetainedChart3D`: stable `SurfaceItemRef3D` / `ScatterItemRef3D`, заменяемую
+> grid part, `SetData` без замены handle, axis-scale-aware `Camera.Fit()` /
+> `Camera.Reset()`, `MsaaSamples` и `RetainedChart3DHost` с обычными WPF
+> controls поверх изображения. Полный пример находится в
+> `examples/RetainedChart3DWpfExample`.
+
+## Retained API для нового кода
+
+```csharp
+using var chart = new RetainedChart3D(host)
+{
+    MsaaSamples = 4,
+};
+chart.SetAxisScale(1, 1, 2.5f);
+
+SurfaceItemRef3D surface = chart.Scene.AddSurface(
+    x, y, z, rows, columns,
+    new SurfaceItemStyle3D(
+        colorMap: PlotColorMap3D.Viridis,
+        surfaceGridVisible: true,
+        surfaceGridRowStep: 8,
+        surfaceGridColumnStep: 8,
+        surfaceGridR: 0.8f,
+        surfaceGridG: 0.9f,
+        surfaceGridB: 1.0f,
+        surfaceGridA: 0.6f));
+
+// Меняет geometry revision, но сохраняет handle и style.
+surface.SetData(nextX, nextY, nextZ, rows, columns);
+chart.Camera.Fit();   // сохраняет текущий azimuth/elevation
+chart.Camera.Reset(); // также возвращает каноническую ориентацию
+```
+
+`SetData` не двигает камеру автоматически: streaming и смена выбранного кадра
+не должны неожиданно сбрасывать пользовательский ракурс. Если новые bounds
+нужно вписать, потребитель вызывает `Camera.Fit()` явно.
 
 Справочник по тому, что сейчас доступно из `Termin.Native.PlotView3D` для
 3D-графиков в Alliance. Методы ниже - это SWIG C# API, поэтому имена остаются

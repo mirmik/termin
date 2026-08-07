@@ -19,12 +19,14 @@ public partial class MainWindow : Window
     private readonly ScatterItemRef3D _scatter;
     private readonly GridItemRef3D _customGrid;
     private readonly TextBlock _title;
+    private readonly Button _dataButton;
     private readonly Button _wireframeButton;
     private readonly Button _shadingButton;
     private readonly Button _resetCameraButton;
     private bool _wireframe;
     private bool _shading = true;
     private bool _closed;
+    private double _surfacePhase;
 
     public MainWindow()
     {
@@ -36,11 +38,14 @@ public partial class MainWindow : Window
         {
             chart = new RetainedChart3D(_gpuHost);
             _chart = chart;
+            _chart.MsaaSamples = 4;
+            _chart.SetAxisScale(1, 1, 1.25f);
             _chart.SetAxisLabels("phase x", "phase y", "amplitude");
             _chart.SetSurfaceShading(true, 0.42f);
             _chart.SetLightDirection(-0.45f, -0.55f, 0.72f);
 
-            (double[] x, double[] y, double[] z) = CreateSurface();
+            (double[] x, double[] y, double[] z) =
+                CreateSurface(_surfacePhase);
             _surface = _chart.Scene.AddSurface(
                 x, y, z, SurfaceRows, SurfaceColumns,
                 new SurfaceItemStyle3D(
@@ -48,7 +53,11 @@ public partial class MainWindow : Window
                     surfaceGridVisible: true,
                     surfaceGridRowStep: 8,
                     surfaceGridColumnStep: 8,
-                    surfaceGridWidthPx: 1.1f));
+                    surfaceGridWidthPx: 1.1f,
+                    surfaceGridR: 0.78f,
+                    surfaceGridG: 0.88f,
+                    surfaceGridB: 0.92f,
+                    surfaceGridA: 0.58f));
 
             (double[] sx, double[] sy, double[] sz) = CreateScatter();
             _scatter = _chart.Scene.AddScatter(
@@ -88,15 +97,18 @@ public partial class MainWindow : Window
                 Padding = new Thickness(8, 4, 8, 4),
                 Background = new SolidColorBrush(Color.FromArgb(150, 20, 24, 31)),
             };
+            _dataButton = CreateButton("Advance wave");
             _wireframeButton = CreateButton("Wireframe");
             _shadingButton = CreateButton("Shading: on");
             _resetCameraButton = CreateButton("Reset camera");
+            _dataButton.Click += OnDataClick;
             _wireframeButton.Click += OnWireframeClick;
             _shadingButton.Click += OnShadingClick;
             _resetCameraButton.Click += OnResetCameraClick;
 
             ChartHost.Attach(_chart);
             ChartHost.AddPortal(_title, new Rect(12, 10, 390, 36));
+            ChartHost.AddPortal(_dataButton, new Rect(496, 10, 116, 34));
             ChartHost.AddPortal(_wireframeButton, new Rect(620, 10, 116, 34));
             ChartHost.AddPortal(_shadingButton, new Rect(744, 10, 116, 34));
             ChartHost.AddPortal(_resetCameraButton, new Rect(868, 10, 128, 34));
@@ -120,6 +132,7 @@ public partial class MainWindow : Window
     {
         double width = e.Width / e.PixelScale;
         const double gap = 8;
+        const double dataWidth = 116;
         const double wireWidth = 112;
         const double shadingWidth = 116;
         const double resetWidth = 124;
@@ -127,6 +140,9 @@ public partial class MainWindow : Window
         double resetX = width - right - resetWidth;
         double shadingX = resetX - gap - shadingWidth;
         double wireX = shadingX - gap - wireWidth;
+        double dataX = wireX - gap - dataWidth;
+        ChartHost.SetPortalBounds(
+            _dataButton, new Rect(dataX, 10, dataWidth, 34));
         ChartHost.SetPortalBounds(
             _wireframeButton, new Rect(wireX, 10, wireWidth, 34));
         ChartHost.SetPortalBounds(
@@ -135,7 +151,17 @@ public partial class MainWindow : Window
             _resetCameraButton, new Rect(resetX, 10, resetWidth, 34));
         ChartHost.SetPortalBounds(
             _title,
-            new Rect(12, 10, Math.Max(180, wireX - 24), 36));
+            new Rect(12, 10, Math.Max(180, dataX - 24), 36));
+    }
+
+    private void OnDataClick(object sender, RoutedEventArgs e)
+    {
+        _surfacePhase += 0.45;
+        (double[] x, double[] y, double[] z) =
+            CreateSurface(_surfacePhase);
+        _surface.SetData(x, y, z, SurfaceRows, SurfaceColumns);
+        _chart.Camera.Fit();
+        ReportCallback("Surface data changed in C# without replacing its handle");
     }
 
     private void OnWireframeClick(object sender, RoutedEventArgs e)
@@ -153,7 +179,11 @@ public partial class MainWindow : Window
             style.SurfaceGridVisible,
             style.SurfaceGridRowStep,
             style.SurfaceGridColumnStep,
-            style.SurfaceGridWidthPx);
+            style.SurfaceGridWidthPx,
+            style.SurfaceGridR,
+            style.SurfaceGridG,
+            style.SurfaceGridB,
+            style.SurfaceGridA);
         _wireframeButton.Content = _wireframe ? "Filled surface" : "Wireframe";
         ReportCallback("Surface style changed in C#");
     }
@@ -195,6 +225,7 @@ public partial class MainWindow : Window
         if (_closed)
             return;
         _closed = true;
+        _dataButton.Click -= OnDataClick;
         _wireframeButton.Click -= OnWireframeClick;
         _shadingButton.Click -= OnShadingClick;
         _resetCameraButton.Click -= OnResetCameraClick;
@@ -226,7 +257,8 @@ public partial class MainWindow : Window
         BorderBrush = new SolidColorBrush(Color.FromRgb(111, 190, 255)),
     };
 
-    private static (double[] X, double[] Y, double[] Z) CreateSurface()
+    private static (double[] X, double[] Y, double[] Z) CreateSurface(
+        double phase)
     {
         int count = checked((int)(SurfaceRows * SurfaceColumns));
         var x = new double[count];
@@ -243,7 +275,8 @@ public partial class MainWindow : Window
                 x[index] = px;
                 y[index] = py;
                 z[index] =
-                    1.35 * Math.Sin(radius * 1.8) * Math.Exp(-radius * 0.22) +
+                    1.35 * Math.Sin(radius * 1.8 + phase) *
+                    Math.Exp(-radius * 0.22) +
                     0.18 * px - 0.08 * py;
             }
         }

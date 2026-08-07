@@ -119,6 +119,16 @@ public handles или C# API.
   детерминированно восстанавливает meshes и render targets.
 - [x] Ошибочные shading/light/axis-scale значения наблюдаемы через C ABI и
   преобразуются thin C# wrapper в managed exceptions.
+- [x] `SurfaceItem3D` и `ScatterItem3D` поддерживают transactional `SetData`
+  без замены generation handle; geometry и GPU revisions меняются локально.
+- [x] Camera fit/reset учитывает visual axis scale, а отдельный `Fit()`
+  сохраняет текущую orbit orientation.
+- [x] Retained 3D render target и generic 2D scene renderer поддерживают
+  настраиваемый MSAA с детерминированным пересозданием attachments.
+- [x] WPF retained hosts приостанавливают `CompositionTarget.Rendering` при
+  effective invisibility, включая `Collapsed` ancestor.
+- [x] Цвет разреженной data-grid поверхности входит в typed retained style и
+  больше не зашит в renderer body.
 - [x] Добавлен Vulkan lifecycle/invalidation test для generation handles,
   cross-scene isolation, camera/resize/style/release/render transitions.
 - [x] Linux SDK build, central C++/Python test entrypoints и `Termin.Native`
@@ -128,7 +138,7 @@ public handles или C# API.
 ## Этап 2. Complete series model
 
 - [ ] Добавить `LineSeriesItem3D`.
-- [ ] Добавить granular data/style mutations and append APIs.
+- [ ] Дополнить готовые `SetData`/style mutations append API для line/scatter.
 - [ ] Добавить bounded streaming/ring-buffer policy.
 - [ ] Реализовать visibility/order/removal without global mesh rebuild.
 - [ ] Перевести data bounds на incremental scene aggregation.
