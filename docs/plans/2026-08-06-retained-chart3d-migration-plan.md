@@ -118,6 +118,10 @@ public handles или C# API.
   `RenderItemSource::publish()` lifecycle.
 - [x] Chart snapshot исполняется generic probe pipeline через общий
   `RenderEngine`.
+- [x] Snapshot владеет immutable surface/scatter/grid CPU payload; geometry и
+  style data разделяются между неизменившимися публикациями и заменяются по
+  revision, а chart state копируется по значению. Payload не заимствует slot
+  или renderer body и остаётся валиден после destroy/reuse/chart destruction.
 - [ ] Добавить surface/scatter/grid encoders и framegraph output поверх этих
   kinds, после чего удалить временные per-item `PlotEngine3D` bodies.
 
