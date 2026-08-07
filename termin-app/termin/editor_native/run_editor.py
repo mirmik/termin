@@ -1595,6 +1595,9 @@ def _compose_native_editor(
         unregister_tool_inspector=inspector_host.unregister_tool_panel,
         show_tool_inspector=inspector_host.show_tool_panel,
     )
+    from termin.launcher.recent import RecentProjects
+
+    recent_projects = RecentProjects()
     project_session_controller = NativeProjectSessionController(
         document=host.document,
         viewport=editor_viewport,
@@ -1608,6 +1611,7 @@ def _compose_native_editor(
         get_render_engine=lambda: engine.rendering_manager.render_engine,
         show_error=dialog_service.show_error,
         show_warning=dialog_service.show_warning,
+        on_project_opened=lambda path: recent_projects.add(str(path)),
     )
 
     from termin.editor_core.project_operations import sync_stdlib

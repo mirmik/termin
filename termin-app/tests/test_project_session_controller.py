@@ -38,6 +38,8 @@ def _controller(
     monkeypatch,
     calls: list[str],
     errors: list[tuple[str, str]],
+    *,
+    on_project_opened=None,
 ) -> ProjectSessionController:
     monkeypatch.setattr(
         session_module.log,
@@ -58,6 +60,7 @@ def _controller(
         resolve_slangc=lambda: None,
         get_render_engine=lambda: object(),
         show_error=lambda title, message: errors.append((title, message)),
+        on_project_opened=on_project_opened,
     )
 
 
@@ -115,7 +118,12 @@ def test_descriptor_validation_fails_before_publishing(
         "sync_stdlib",
         lambda _root: calls.append("sync_stdlib"),
     )
-    controller = _controller(monkeypatch, calls, errors)
+    controller = _controller(
+        monkeypatch,
+        calls,
+        errors,
+        on_project_opened=lambda path: calls.append(f"recent:{path}"),
+    )
 
     completed: list[bool] = []
     assert controller.initialize_project(str(project_file), completed.append) is False
@@ -139,7 +147,12 @@ def test_stdlib_failure_fails_before_publishing(tmp_path, monkeypatch) -> None:
         raise RuntimeError("copy failed")
 
     monkeypatch.setattr(session_module, "sync_stdlib", fail_sync)
-    controller = _controller(monkeypatch, calls, errors)
+    controller = _controller(
+        monkeypatch,
+        calls,
+        errors,
+        on_project_opened=lambda path: calls.append(f"recent:{path}"),
+    )
 
     assert controller.initialize_project(str(project_file)) is False
 
@@ -169,7 +182,12 @@ def test_initialization_order_and_init_script_after_modules(
         "configure_shader_runtime_for_project",
         staticmethod(lambda _root, **_kwargs: calls.append("shader_runtime")),
     )
-    controller = _controller(monkeypatch, calls, errors)
+    controller = _controller(
+        monkeypatch,
+        calls,
+        errors,
+        on_project_opened=lambda path: calls.append(f"recent:{path}"),
+    )
     monkeypatch.setattr(
         controller,
         "load_project_modules",
@@ -195,6 +213,7 @@ def test_initialization_order_and_init_script_after_modules(
         "browser_root",
         "resource_scan",
         f"log:Project: {tmp_path}",
+        f"recent:{project_file.resolve()}",
         "modules",
         "init_script",
     ]
