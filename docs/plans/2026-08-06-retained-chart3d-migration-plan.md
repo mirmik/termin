@@ -104,11 +104,10 @@ Consumers must not receive raw native pointers or index-based identities.
   wireframe/shading/reset-camera portal buttons with C# callbacks.
 
 Первый slice первоначально использовал отдельный `PlotEngine3D` как временный
-renderer-side body каждого retained item. Surface body уже удалён: immutable
-payload кэширует CPU draw stream по revisions, а общий RenderItem encoder
-загружает его через transient vertex ring. Scatter и grid пока сохраняют
-временные bodies до следующих encoder slices; public handles и C# API при этом
-не меняются.
+renderer-side body каждого retained item. Surface, scatter и grid bodies уже
+удалены: immutable payload кэширует CPU draw stream по revisions, а RenderItem
+encoders загружают его через transient vertex ring. Grid labels отделены в
+chart-owned chrome renderer; public handles и C# API при этом не изменились.
 
 ### Интеграция с scene-neutral render core
 
@@ -127,8 +126,16 @@ payload кэширует CPU draw stream по revisions, а общий RenderIte
   рисует snapshot-owned stream через transient vertex ring, а retained
   offscreen path использует `submit_render_item_draw()` без surface
   `PlotEngine3D` body.
-- [ ] Добавить scatter/grid encoders и framegraph output поверх этих kinds,
-  после чего удалить оставшиеся временные per-item `PlotEngine3D` bodies.
+- [x] Scatter planner/encoder сохраняет legacy three-axis cross semantics,
+  планируется тем же retained task loop и больше не использует per-item
+  `PlotEngine3D` body.
+- [x] Grid planner/encoder строит bounds-aware line stream; tick/axis labels
+  использует отдельный chart-owned chrome renderer, последний per-item
+  `PlotEngine3D` body удалён.
+- [x] Добавить chart framegraph output поверх этих kinds: tcplot-owned geometry
+  и chrome passes исполняются общим `RenderEngine`, используют external
+  color/depth/MSAA target и публикуют pass/resource boundaries для framegraph
+  diagnostics/capture.
 
 ### Hardening первого slice
 
@@ -158,7 +165,10 @@ payload кэширует CPU draw stream по revisions, а общий RenderIte
 
 ## Этап 2. Complete series model
 
-- [ ] Добавить `LineSeriesItem3D`.
+- [x] Добавить retained line item со stable handle, transactional data/style
+  mutation и generic line-list encoder. Толщина пока входит в typed style и
+  revisions, но backend-neutral wide-line rendering остаётся частью доведения
+  line series.
 - [ ] Дополнить готовые `SetData`/style mutations append API для line/scatter.
 - [ ] Добавить bounded streaming/ring-buffer policy.
 - [ ] Реализовать visibility/order/removal without global mesh rebuild.
@@ -182,7 +192,12 @@ payload кэширует CPU draw stream по revisions, а общий RenderIte
 ## Этап 5. Compatibility cutover
 
 - [ ] Перевести `PlotView3D` на `RetainedChart3D` compatibility facade.
-- [ ] Перевести Python and C# examples.
+- [x] Перевести Python `Plot3D` и `tcplot/examples/demo_3d_*` на detached
+  `RetainedChart3D`: данные принимаются до появления GPU, а canonical
+  `GraphicsHost` и font atlas присоединяются лениво при первом render.
+- [x] Добавить отдельный C# `RetainedChart3DWpfExample`.
+- [ ] Перевести оставшиеся C# `PlotDemoApp` 3D examples вместе с legacy
+  `PlotView3D` facade.
 - [ ] Сопоставить surface colormap, grid, shading, marker and axis scaling.
 - [ ] Удалить legacy global dirty mesh state and index-based surface mutation.
 
