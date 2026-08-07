@@ -212,7 +212,7 @@ void World2DPass::execute(ExecuteContext& ctx) {
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
     const tgfx::TextureHandle depth =
         depth_it == ctx.tex2_depth_writes.end() ? tgfx::TextureHandle{} : depth_it->second;
-    auto* snapshot = ensure_render_item_snapshot(ctx, "World2DPass");
+    const auto* snapshot = require_render_item_snapshot(ctx, "World2DPass");
     if (!snapshot) {
         return;
     }

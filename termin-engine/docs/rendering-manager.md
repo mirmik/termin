@@ -88,6 +88,12 @@ Pipeline     = как рендерим
 скрытый rig: он ссылается на `XrOriginComponent`, а OpenXR runtime каждый кадр
 создает per-eye `RenderCamera` из transform этого origin и позы OpenXR view.
 
+Перед исполнением scene pipeline `RenderingManager` передаёт нейтральные target
+contexts в scene adapter. Adapter публикует immutable `RenderItemSnapshot` и
+`SceneRenderServices` для каждого target, после чего вызывает единственный
+`RenderEngine::execute_pipeline()`. Generic executor не обходит `tc_scene` и не
+владеет entity/light semantics.
+
 Viewport ссылается на render target; он не является доменным владельцем этого render target.
 Любой viewport, участвующий в кадре, должен быть явно зарегистрирован в
 `RenderTopology`. Display list больше не используется как второй неявный индекс

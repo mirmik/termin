@@ -615,8 +615,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    RenderItemSnapshot* scene_items =
-        ensure_render_item_snapshot(ctx, "ShadowPass");
+    const RenderItemSnapshot* scene_items =
+        require_render_item_snapshot(ctx, "ShadowPass");
     if (!scene_items) {
         return results;
     }

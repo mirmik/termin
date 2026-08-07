@@ -19,6 +19,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/render_topology.hpp"
+#include <termin/lighting/light.hpp>
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -445,6 +446,7 @@ private:
         int render_width,
         int render_height,
         std::unordered_map<std::string, RenderTargetContext>& contexts,
+        std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context,
         std::string& default_context_name
     );
 

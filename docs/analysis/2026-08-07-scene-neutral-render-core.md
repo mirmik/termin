@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359 и #1360
+#1359, #1360 и #1361
 
 ## Контекст
 
@@ -92,11 +92,8 @@ Surface chart может быть generic mesh item с chart material либо �
 
 Конкретные coupling points:
 
-- `RenderEngine::render_scene_pipeline_offscreen()` обязательно принимает
-  `tc_scene_handle`;
-- scene adapter всё ещё создаётся внутри
-  `RenderEngine::render_scene_pipeline_offscreen()`, хотя нижележащий
-  `ExecuteContext` уже не хранит scene/entity/light types;
+- scene adapter и generic executor пока физически находятся в одном
+  `termin-render` target, хотя их публичные контракты уже разделены;
 - `RenderSceneItemCollector` умеет получать items только обходом
   `tc_scene_foreach_drawable()`;
 - `RenderTask` содержит `Entity`, `tc_component*` и entity name;
@@ -293,9 +290,22 @@ capability диагностируется в логе. Scene shader discovery в
 `CxxFramePass` в отдельный `SceneShaderUsageProvider`, поэтому generic pass
 interface больше не принимает `tc_scene_handle`.
 
-Следующая граница этапа — отделить generic pipeline execution entry point от
-`RenderEngine::render_scene_pipeline_offscreen()` и превратить нынешний
-scene collector в один из подключаемых источников immutable snapshots.
+В #1361 добавлен единый `RenderEngine::execute_pipeline(RenderExecution)`.
+Его request содержит только pipeline, targets, заранее опубликованные immutable
+snapshots и type-safe `RenderExecutionCapabilities`. Concrete services хранятся
+через polymorphic marker contract; неструктурированного `void*` context нет.
+
+`render_scene_pipeline_offscreen()` теперь является отдельным `tc_scene`
+adapter: он до входа в executor собирает по одному snapshot и
+`SceneRenderServices` на target, удерживает их lifetime до конца execution и
+затем вызывает общий executor. Ленивый scene traversal из geometry passes
+удалён; pass может только потребовать уже опубликованный snapshot. Generic
+executor header не содержит scene, entity или light APIs и покрыт исполнением
+probe pipeline без создания сцены.
+
+Следующая граница этапа — превратить scene collector и будущий PlotScene3D
+collector в реализации явного item-source contract, после чего начать
+физическое выделение `termin-render-core`.
 
 ### Этап 2. Выделить `termin-render-core`
 

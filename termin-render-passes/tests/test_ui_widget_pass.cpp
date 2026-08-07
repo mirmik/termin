@@ -87,11 +87,11 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     make_component(disabled_entity, asset, 2, "ui-disabled-entity");
 
     ExecuteContext ctx;
-    SceneRenderServices scene_services{
-        .scene = scene,
-        .layer_mask = UINT64_C(1) << 0u,
-    };
-    ctx.scene_services = &scene_services;
+    SceneRenderServices scene_services(scene);
+    scene_services.layer_mask = UINT64_C(1) << 0u;
+    RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     auto submissions =
         collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 1u);
@@ -151,11 +151,11 @@ TEST_CASE("UIWidgetPass includes internal hierarchy without duplicates") {
         make_component(internal_child, asset, 3, "internal-ui");
 
     ExecuteContext ctx;
-    SceneRenderServices scene_services{
-        .scene = scene,
-        .internal_entities = internal_root.handle(),
-    };
-    ctx.scene_services = &scene_services;
+    SceneRenderServices scene_services(scene);
+    scene_services.internal_entities = internal_root.handle();
+    RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     auto submissions =
         collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 1u);

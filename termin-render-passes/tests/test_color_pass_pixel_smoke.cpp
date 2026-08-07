@@ -1,5 +1,6 @@
 #include <termin/render/color_pass.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/scene_render_services.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/camera/camera_component.hpp>
@@ -369,13 +370,23 @@ int run_smoke(const char* argv0) {
     termin::ColorPass pass(pass_config);
 
     termin::RenderItemSnapshot render_item_snapshot;
+    termin::RenderSceneItemCollectRequest collect_request{};
+    collect_request.scene = scene.handle();
+    collect_request.debug_pass_name = "ColorPassPixelSmoke";
+    if (!termin::collect_scene_render_item_snapshot(
+            render_item_snapshot, collect_request)) {
+        std::fprintf(stderr, "Failed to publish ColorPass RenderItem snapshot\n");
+        return false;
+    }
     termin::ExecuteContext exec_ctx;
     exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;
     exec_ctx.tex2_writes.emplace("color", target);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    const termin::SceneRenderServices scene_services{.scene = scene};
-    exec_ctx.scene_services = &scene_services;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    exec_ctx.capabilities = &capabilities;
 
     const float clear_color[4] = {0.02f, 0.03f, 0.04f, 1.0f};
     render_ctx.begin_frame();

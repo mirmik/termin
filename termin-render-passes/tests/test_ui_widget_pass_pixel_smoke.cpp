@@ -192,8 +192,10 @@ bool render_and_check(
 
     termin::ExecuteContext ctx;
     ctx.ctx2 = &render_context;
-    const termin::SceneRenderServices scene_services{.scene = scene};
-    ctx.scene_services = &scene_services;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     ctx.render_rect = {
         0,
         0,

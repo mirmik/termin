@@ -7,6 +7,7 @@
 #include <tgfx2/render_context.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <iomanip>

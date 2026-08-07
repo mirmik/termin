@@ -771,8 +771,8 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    RenderItemSnapshot* scene_items =
-        ensure_render_item_snapshot(ctx, "ColorPass");
+    const RenderItemSnapshot* scene_items =
+        require_render_item_snapshot(ctx, "ColorPass");
     if (!scene_items) {
         return;
     }

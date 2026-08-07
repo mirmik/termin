@@ -4,6 +4,7 @@
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/frame_graph_capture.hpp"
+#include "termin/render/frame_pass.hpp"
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/tc_scene_render_ext.hpp"
@@ -12,6 +13,7 @@
 
 #include <cmath>
 #include <optional>
+#include <set>
 #include <string>
 #include <tcbase/trent/json.h>
 
