@@ -63,6 +63,16 @@ which callers can insert built-in retained items. See
 `examples/RetainedChartComposition` for replacement of a standard plot
 background without extending the native ABI.
 
+`RetainedChart3D` exposes a plot-specific retained scene with generation-
+checked surface, scatter and grid references. Surface/scatter `SetData`
+preserves item identity, style and unrelated GPU caches. `Camera.Fit()` frames
+axis-scaled data without changing orbit orientation; `Camera.Reset()` also
+restores the canonical orientation. `MsaaSamples` owns render-target sampling,
+and `RetainedChart3DHost` suspends rendering while effectively invisible. See
+`examples/RetainedChart3DWpfExample` for the complete D3D11 vertical slice.
+The generic `RetainedScene2DHost` exposes the same MSAA policy and visibility
+suspension for composed 2D scenes.
+
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 
 ```powershell
