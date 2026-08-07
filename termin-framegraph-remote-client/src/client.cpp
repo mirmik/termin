@@ -306,7 +306,8 @@ namespace termin::framegraph_remote_client
             if (config.address != "127.0.0.1" || config.port == 0 ||
                 config.authentication_token.empty() || !message_handler ||
                 config.authentication_token.size() >
-                    WireLimits::max_token_bytes)
+                    WireLimits::max_token_bytes || config.max_blob_bytes == 0 ||
+                config.max_blob_bytes > WireLimits::max_blob_bytes)
             {
                 throw std::invalid_argument(
                     "invalid remote framegraph client config");
@@ -476,7 +477,11 @@ namespace termin::framegraph_remote_client
                 std::uint64_t sequence = 1;
                 ClientHello hello;
                 hello.capabilities =
-                    static_cast<std::uint64_t>(Capability::topology);
+                    static_cast<std::uint64_t>(Capability::topology) |
+                    static_cast<std::uint64_t>(Capability::exact_snapshot) |
+                    static_cast<std::uint64_t>(Capability::hdr_pixels) |
+                    static_cast<std::uint64_t>(Capability::depth_pixels);
+                hello.max_blob_bytes = config.max_blob_bytes;
                 hello.authentication_token = config.authentication_token;
                 if (!send_message(socket, hello, sequence, 0))
                 {

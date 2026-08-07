@@ -8,7 +8,10 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
+#include <cstring>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -299,16 +302,33 @@ namespace termin::framegraph_remote_target
         {
             std::uint64_t session_id = 0;
             std::uint32_t max_payload_bytes = WireLimits::max_payload_bytes;
+            std::uint64_t max_blob_bytes = WireLimits::max_blob_bytes;
+            std::uint32_t max_chunk_bytes = WireLimits::max_chunk_bytes;
             Command command;
+        };
+
+        struct CaptureBlob
+        {
+            CaptureMetadata metadata;
+            std::vector<std::uint8_t> bytes;
+            std::uint32_t chunk_bytes = 0;
         };
 
         struct OutboundPacket
         {
             std::uint64_t session_id = 0;
             std::optional<TopologySnapshot> topology;
+            std::shared_ptr<const CaptureBlob> capture;
             std::optional<Status> status;
             std::optional<DropEvent> drop;
             std::optional<ErrorEvent> error;
+        };
+
+        struct PendingCapture
+        {
+            QueuedCommand queued;
+            std::uint64_t debugger_generation = 0;
+            Clock::time_point requested_at;
         };
 
         struct TargetBinding
@@ -490,6 +510,10 @@ namespace termin::framegraph_remote_target
             while (outbound_queue.try_pop(packet))
             {
             }
+            if (pending_capture && std::this_thread::get_id() == owner_thread)
+                debugger->cancel_request();
+            pending_capture.reset();
+            queued_capture_bytes.store(0, std::memory_order_relaxed);
             pending_dropped_outbound = 0;
             tc_log_info("remote framegraph target: stopped");
         }
@@ -503,6 +527,7 @@ namespace termin::framegraph_remote_target
             {
                 apply_command(queued);
             }
+            poll_capture();
         }
 
         TargetServiceStatus status() const
@@ -517,6 +542,10 @@ namespace termin::framegraph_remote_target
                 rejected_commands.load(std::memory_order_relaxed),
                 dropped_outbound_messages.load(std::memory_order_relaxed),
                 transmitted_bytes.load(std::memory_order_relaxed),
+                completed_captures.load(std::memory_order_relaxed),
+                readback_time_ns.load(std::memory_order_relaxed),
+                transfer_encode_time_ns.load(std::memory_order_relaxed),
+                captured_bytes.load(std::memory_order_relaxed),
             };
         }
 
@@ -533,6 +562,12 @@ namespace termin::framegraph_remote_target
 
         void validate_config() const
         {
+            if (config.capture_memory_budget_bytes == 0 ||
+                config.capture_memory_budget_bytes > WireLimits::max_blob_bytes)
+            {
+                throw std::invalid_argument(
+                    "remote framegraph target capture budget is invalid");
+            }
             if (config.authentication_token.size() >
                 WireLimits::max_token_bytes)
             {
@@ -755,7 +790,7 @@ namespace termin::framegraph_remote_target
                 project_state(debugger->state()),
                 code,
                 static_cast<std::uint32_t>(outbound_queue.size_approximate()),
-                0,
+                completed_captures.load(std::memory_order_relaxed),
                 dropped_outbound_messages.load(std::memory_order_relaxed),
                 now_ns(),
                 std::move(detail),
@@ -788,6 +823,8 @@ namespace termin::framegraph_remote_target
 
         void enqueue(OutboundPacket packet)
         {
+            const std::uint64_t capture_bytes = packet.capture
+                ? packet.capture->bytes.size() : 0;
             if (pending_dropped_outbound != 0)
             {
                 packet.drop = DropEvent{
@@ -797,6 +834,11 @@ namespace termin::framegraph_remote_target
             {
                 pending_dropped_outbound = 0;
                 return;
+            }
+            if (capture_bytes != 0)
+            {
+                queued_capture_bytes.fetch_sub(capture_bytes,
+                                               std::memory_order_relaxed);
             }
             ++pending_dropped_outbound;
             dropped_outbound_messages.fetch_add(1, std::memory_order_relaxed);
@@ -813,6 +855,270 @@ namespace termin::framegraph_remote_target
             packet.status =
                 make_status(queued.command.request_id, code, detail);
             enqueue(std::move(packet));
+        }
+
+        bool begin_capture(const QueuedCommand& queued)
+        {
+            const Command& command = queued.command;
+            if (pending_capture)
+            {
+                reject_command(queued,
+                               StatusCode::limit_exceeded,
+                               "an exact capture is already pending");
+                return false;
+            }
+            if (command.encoding != CaptureEncoding::native_pixels)
+            {
+                reject_command(queued,
+                               StatusCode::limit_exceeded,
+                               "exact target currently supports native_pixels only");
+                return false;
+            }
+            if (command.target_id != topology.selected_target_id)
+            {
+                reject_command(queued,
+                               StatusCode::target_unavailable,
+                               "capture target must be selected first");
+                return false;
+            }
+            bool requested = false;
+            if (command.selector_kind == CaptureSelectorKind::resource)
+            {
+                if (std::find(topology.resources.begin(),
+                              topology.resources.end(),
+                              command.resource) == topology.resources.end())
+                {
+                    reject_command(queued,
+                                   StatusCode::resource_unavailable,
+                                   "capture resource is absent from topology");
+                    return false;
+                }
+                debugger->request_resource(command.resource);
+                requested = true;
+            }
+            else
+            {
+                const auto pass = std::find_if(
+                    topology.passes.begin(),
+                    topology.passes.end(),
+                    [&command](const WirePass& value)
+                    { return value.id == command.pass_id; });
+                if (pass != topology.passes.end() &&
+                    std::find(pass->internal_symbols.begin(),
+                              pass->internal_symbols.end(),
+                              command.symbol) != pass->internal_symbols.end())
+                {
+                    requested = debugger->request_internal(
+                        pass->authored_index, command.symbol);
+                }
+            }
+            if (!requested)
+            {
+                reject_command(queued,
+                               StatusCode::resource_unavailable,
+                               "capture selector is unavailable");
+                return false;
+            }
+            pending_capture = PendingCapture{queued,
+                                             debugger->request_generation(),
+                                             Clock::now()};
+            OutboundPacket packet;
+            packet.session_id = queued.session_id;
+            packet.status = make_status(command.request_id,
+                                        StatusCode::accepted,
+                                        "exact capture accepted");
+            enqueue(std::move(packet));
+            return true;
+        }
+
+        void finish_capture(StatusCode code, std::string detail)
+        {
+            if (!pending_capture)
+                return;
+            OutboundPacket packet;
+            packet.session_id = pending_capture->queued.session_id;
+            packet.status = make_status(
+                pending_capture->queued.command.request_id,
+                code,
+                std::move(detail));
+            enqueue(std::move(packet));
+            debugger->cancel_request();
+            pending_capture.reset();
+        }
+
+        void poll_capture()
+        {
+            if (!pending_capture)
+                return;
+            if (active_session.load(std::memory_order_acquire) !=
+                pending_capture->queued.session_id)
+            {
+                debugger->cancel_request();
+                pending_capture.reset();
+                return;
+            }
+            if (!refresh_topology())
+            {
+                finish_capture(StatusCode::resource_unavailable,
+                               "topology refresh failed during capture");
+                return;
+            }
+            if (graph_revision !=
+                pending_capture->queued.command.graph_revision)
+            {
+                finish_capture(StatusCode::stale_revision,
+                               "topology changed while capture was pending");
+                return;
+            }
+            debugger->finish_frame();
+            if (debugger->request_generation() !=
+                pending_capture->debugger_generation)
+            {
+                finish_capture(StatusCode::cancelled,
+                               "capture was superseded by local debugger state");
+                return;
+            }
+            if (debugger->capture_status() ==
+                FrameGraphCaptureRequestStatus::ResourceUnavailable)
+            {
+                finish_capture(StatusCode::resource_unavailable,
+                               "capture resource became unavailable");
+                return;
+            }
+            if (debugger->state() != FrameGraphDebuggerState::Captured)
+                return;
+
+            const FrameGraphCapture& capture = debugger->capture();
+            if (!capture.has_capture() || capture.width() <= 0 ||
+                capture.height() <= 0)
+            {
+                finish_capture(StatusCode::resource_unavailable,
+                               "capture completed without a readable texture");
+                return;
+            }
+            const std::uint64_t pixels =
+                static_cast<std::uint64_t>(capture.width()) *
+                static_cast<std::uint64_t>(capture.height());
+            const bool depth = capture.is_depth();
+            const bool rgba8 = !depth &&
+                (capture.format() == tgfx::PixelFormat::RGBA8_UNorm ||
+                 capture.format() == tgfx::PixelFormat::RGBA8_sRGB ||
+                 capture.format() == tgfx::PixelFormat::BGRA8_UNorm ||
+                 capture.format() == tgfx::PixelFormat::BGRA8_sRGB);
+            const std::uint64_t output_bytes = pixels * (rgba8 ? 4ULL :
+                depth ? sizeof(float) : 4ULL * sizeof(float));
+            const std::uint64_t temporary_bytes =
+                pixels * (depth ? sizeof(float) : 4ULL * sizeof(float));
+            const std::uint64_t peer_limit = std::min(
+                pending_capture->queued.max_blob_bytes,
+                config.capture_memory_budget_bytes);
+            const std::uint64_t already_queued =
+                queued_capture_bytes.load(std::memory_order_relaxed);
+            if (output_bytes > peer_limit || temporary_bytes > peer_limit ||
+                output_bytes > peer_limit - temporary_bytes ||
+                already_queued > peer_limit - output_bytes)
+            {
+                tc_log_error("remote framegraph target: exact capture exceeds "
+                             "memory/peer budget (%llu bytes)",
+                             static_cast<unsigned long long>(output_bytes));
+                finish_capture(StatusCode::limit_exceeded,
+                               "exact capture exceeds memory or peer budget");
+                return;
+            }
+
+            auto blob = std::make_shared<CaptureBlob>();
+            const auto readback_started = Clock::now();
+            std::vector<float> values;
+            const bool read = depth ? capture.read_depth_float(values)
+                                    : capture.read_color_rgba_float(values);
+            const std::uint64_t elapsed = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    Clock::now() - readback_started).count());
+            if (!read)
+            {
+                finish_capture(StatusCode::resource_unavailable,
+                               "GPU readback failed");
+                return;
+            }
+            blob->bytes.resize(static_cast<std::size_t>(output_bytes));
+            if (rgba8)
+            {
+                std::transform(values.begin(), values.end(),
+                               blob->bytes.begin(),
+                               [](float value)
+                               {
+                                   const float bounded =
+                                       std::clamp(value, 0.0F, 1.0F);
+                                   return static_cast<std::uint8_t>(
+                                       std::lround(bounded * 255.0F));
+                               });
+            }
+            else
+            {
+                std::memcpy(blob->bytes.data(),
+                            values.data(),
+                            blob->bytes.size());
+            }
+            const std::uint32_t chunk_bytes = std::min(
+                pending_capture->queued.max_chunk_bytes,
+                WireLimits::max_chunk_bytes);
+            if (chunk_bytes == 0)
+            {
+                finish_capture(StatusCode::limit_exceeded,
+                               "capture chunk size is zero");
+                return;
+            }
+            const std::uint64_t chunks64 =
+                (output_bytes + chunk_bytes - 1) / chunk_bytes;
+            if (chunks64 == 0 ||
+                chunks64 > WireLimits::max_chunks_per_blob)
+            {
+                finish_capture(StatusCode::limit_exceeded,
+                               "capture chunk count exceeds protocol limits");
+                return;
+            }
+            blob->chunk_bytes = chunk_bytes;
+            blob->metadata = {
+                pending_capture->queued.command.request_id,
+                graph_revision,
+                next_blob_id++,
+                static_cast<std::int64_t>(debugger->request_generation()),
+                CaptureKind::snapshot,
+                CaptureEncoding::native_pixels,
+                depth ? PixelFormat::depth32_float
+                      : rgba8 ? PixelFormat::rgba8_unorm
+                              : PixelFormat::rgba32_float,
+                static_cast<std::uint32_t>(capture.width()),
+                static_cast<std::uint32_t>(capture.height()),
+                depth,
+                true,
+                output_bytes,
+                static_cast<std::uint32_t>(chunks64),
+                0,
+                0,
+            };
+            queued_capture_bytes.fetch_add(output_bytes,
+                                           std::memory_order_relaxed);
+            readback_time_ns.fetch_add(elapsed, std::memory_order_relaxed);
+            captured_bytes.fetch_add(output_bytes, std::memory_order_relaxed);
+            completed_captures.fetch_add(1, std::memory_order_relaxed);
+
+            OutboundPacket packet;
+            packet.session_id = pending_capture->queued.session_id;
+            packet.capture = std::move(blob);
+            packet.status = make_status(
+                pending_capture->queued.command.request_id,
+                StatusCode::completed,
+                "exact capture completed; readback_ns=" +
+                    std::to_string(elapsed) + "; bytes=" +
+                    std::to_string(output_bytes) + "; capture_ns=" +
+                    std::to_string(static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            Clock::now() - pending_capture->requested_at)
+                            .count())));
+            enqueue(std::move(packet));
+            debugger->cancel_request();
+            pending_capture.reset();
         }
 
         void apply_command(const QueuedCommand& queued)
@@ -909,8 +1215,27 @@ namespace termin::framegraph_remote_target
                 return;
             }
 
+            if (command.kind == CommandKind::capture_snapshot)
+            {
+                begin_capture(queued);
+                return;
+            }
+
             if (command.kind == CommandKind::cancel)
             {
+                if (pending_capture)
+                {
+                    finish_capture(StatusCode::cancelled,
+                                   "exact capture cancelled");
+                    OutboundPacket acknowledgement;
+                    acknowledgement.session_id = queued.session_id;
+                    acknowledgement.status = make_status(
+                        command.request_id,
+                        StatusCode::cancelled,
+                        "capture cancellation processed");
+                    enqueue(std::move(acknowledgement));
+                    return;
+                }
                 OutboundPacket packet;
                 packet.session_id = queued.session_id;
                 packet.status =
@@ -927,7 +1252,7 @@ namespace termin::framegraph_remote_target
                 501,
                 command.request_id,
                 graph_revision,
-                "capture commands are not enabled by the topology-only target"};
+                "streaming and burst capture are not enabled"};
             enqueue(std::move(packet));
         }
 
@@ -966,7 +1291,9 @@ namespace termin::framegraph_remote_target
         bool handshake(Socket socket,
                        std::uint64_t& sequence,
                        std::uint64_t session_id,
-                       std::uint32_t& negotiated_payload_bytes)
+                       std::uint32_t& negotiated_payload_bytes,
+                       std::uint64_t& negotiated_blob_bytes,
+                       std::uint32_t& negotiated_chunk_bytes)
         {
             auto decoded = receive_message(socket, running);
             if (!decoded ||
@@ -1001,19 +1328,28 @@ namespace termin::framegraph_remote_target
             }
             TargetHello target;
             target.capabilities =
-                static_cast<std::uint64_t>(Capability::topology);
+                static_cast<std::uint64_t>(Capability::topology) |
+                static_cast<std::uint64_t>(Capability::exact_snapshot) |
+                static_cast<std::uint64_t>(Capability::hdr_pixels) |
+                static_cast<std::uint64_t>(Capability::depth_pixels);
             target.process_id = config.process_id;
             target.max_payload_bytes = std::min(hello.max_payload_bytes,
                                                 WireLimits::max_payload_bytes);
             target.max_blob_bytes =
                 std::min(hello.max_blob_bytes, WireLimits::max_blob_bytes);
             target.max_chunk_bytes =
-                std::min(hello.max_chunk_bytes, WireLimits::max_chunk_bytes);
+                std::min({hello.max_chunk_bytes,
+                          WireLimits::max_chunk_bytes,
+                          target.max_payload_bytes > 64
+                              ? target.max_payload_bytes - 64
+                              : 0U});
             target.platform = config.platform;
             target.abi = config.abi;
             target.build_type = config.build_type;
             target.build_id = config.build_id;
             negotiated_payload_bytes = target.max_payload_bytes;
+            negotiated_blob_bytes = target.max_blob_bytes;
+            negotiated_chunk_bytes = target.max_chunk_bytes;
             return send_wire(
                 socket, target, sequence, session_id, negotiated_payload_bytes);
         }
@@ -1024,8 +1360,14 @@ namespace termin::framegraph_remote_target
                          std::uint64_t session_id,
                          std::uint32_t max_payload_bytes)
         {
+            std::uint64_t capture_transfer_ns = 0;
             if (packet.session_id != session_id)
+            {
+                if (packet.capture)
+                    queued_capture_bytes.fetch_sub(packet.capture->bytes.size(),
+                                                   std::memory_order_relaxed);
                 return true;
+            }
             if (packet.drop && !send_wire(socket,
                                           *packet.drop,
                                           sequence,
@@ -1044,12 +1386,62 @@ namespace termin::framegraph_remote_target
                                               session_id,
                                               max_payload_bytes))
                 return false;
-            if (packet.status && !send_wire(socket,
-                                            *packet.status,
-                                            sequence,
-                                            session_id,
-                                            max_payload_bytes))
-                return false;
+            if (packet.capture)
+            {
+                const auto transfer_started = Clock::now();
+                const CaptureBlob& capture = *packet.capture;
+                bool sent = send_wire(socket,
+                                      capture.metadata,
+                                      sequence,
+                                      session_id,
+                                      max_payload_bytes);
+                for (std::uint32_t index = 0;
+                     sent && index < capture.metadata.chunk_count;
+                     ++index)
+                {
+                    const std::uint64_t offset =
+                        static_cast<std::uint64_t>(index) *
+                        capture.chunk_bytes;
+                    const std::size_t count = static_cast<std::size_t>(
+                        std::min<std::uint64_t>(capture.chunk_bytes,
+                            capture.bytes.size() - offset));
+                    BlobChunk chunk;
+                    chunk.blob_id = capture.metadata.blob_id;
+                    chunk.chunk_index = index;
+                    chunk.chunk_count = capture.metadata.chunk_count;
+                    chunk.offset = offset;
+                    chunk.total_bytes = capture.bytes.size();
+                    chunk.bytes.assign(capture.bytes.begin() + offset,
+                                       capture.bytes.begin() + offset + count);
+                    sent = send_wire(socket,
+                                     chunk,
+                                     sequence,
+                                     session_id,
+                                     max_payload_bytes);
+                }
+                queued_capture_bytes.fetch_sub(capture.bytes.size(),
+                                               std::memory_order_relaxed);
+                capture_transfer_ns = static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now() - transfer_started).count());
+                transfer_encode_time_ns.fetch_add(capture_transfer_ns,
+                                                  std::memory_order_relaxed);
+                if (!sent)
+                    return false;
+            }
+            if (packet.status)
+            {
+                Status status = *packet.status;
+                if (capture_transfer_ns != 0)
+                    status.detail += "; transfer_encode_ns=" +
+                        std::to_string(capture_transfer_ns);
+                if (!send_wire(socket,
+                               status,
+                               sequence,
+                               session_id,
+                               max_payload_bytes))
+                    return false;
+            }
             return true;
         }
 
@@ -1098,7 +1490,14 @@ namespace termin::framegraph_remote_target
                     next_session_id.fetch_add(1, std::memory_order_relaxed);
                 std::uint64_t sequence = 1;
                 std::uint32_t max_payload_bytes = WireLimits::max_payload_bytes;
-                if (!handshake(client, sequence, session_id, max_payload_bytes))
+                std::uint64_t max_blob_bytes = WireLimits::max_blob_bytes;
+                std::uint32_t max_chunk_bytes = WireLimits::max_chunk_bytes;
+                if (!handshake(client,
+                               sequence,
+                               session_id,
+                               max_payload_bytes,
+                               max_blob_bytes,
+                               max_chunk_bytes))
                 {
                     rejected_clients.fetch_add(1, std::memory_order_relaxed);
                     release_client(client);
@@ -1109,7 +1508,12 @@ namespace termin::framegraph_remote_target
                 tc_log_info(
                     "remote framegraph target: client connected (session=%llu)",
                     static_cast<unsigned long long>(session_id));
-                serve_client(client, sequence, session_id, max_payload_bytes);
+                serve_client(client,
+                             sequence,
+                             session_id,
+                             max_payload_bytes,
+                             max_blob_bytes,
+                             max_chunk_bytes);
                 client_connected.store(false, std::memory_order_release);
                 active_session.store(0, std::memory_order_release);
                 release_client(client);
@@ -1122,7 +1526,9 @@ namespace termin::framegraph_remote_target
         void serve_client(Socket socket,
                           std::uint64_t sequence,
                           std::uint64_t session_id,
-                          std::uint32_t max_payload_bytes)
+                          std::uint32_t max_payload_bytes,
+                          std::uint64_t max_blob_bytes,
+                          std::uint32_t max_chunk_bytes)
         {
             while (running.load(std::memory_order_acquire))
             {
@@ -1214,8 +1620,11 @@ namespace termin::framegraph_remote_target
                               max_payload_bytes);
                     return;
                 }
-                if (!command_queue.try_push(
-                        {session_id, max_payload_bytes, command}))
+                    if (!command_queue.try_push({session_id,
+                                                 max_payload_bytes,
+                                                 max_blob_bytes,
+                                                 max_chunk_bytes,
+                                                 command}))
                 {
                     rejected_commands.fetch_add(1, std::memory_order_relaxed);
                     tc_log_error("remote framegraph target: command queue "
@@ -1270,7 +1679,14 @@ namespace termin::framegraph_remote_target
         std::uint64_t next_target_id = 1;
         std::uint64_t graph_revision = 0;
         std::uint64_t pending_dropped_outbound = 0;
+        std::optional<PendingCapture> pending_capture;
+        std::uint64_t next_blob_id = 1;
         std::string topology_error;
+        std::atomic<std::uint64_t> queued_capture_bytes{0};
+        std::atomic<std::uint64_t> completed_captures{0};
+        std::atomic<std::uint64_t> readback_time_ns{0};
+        std::atomic<std::uint64_t> transfer_encode_time_ns{0};
+        std::atomic<std::uint64_t> captured_bytes{0};
 #if defined(_WIN32)
         bool winsock_started = false;
 #endif

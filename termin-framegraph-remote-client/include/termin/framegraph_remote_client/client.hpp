@@ -26,6 +26,8 @@ namespace termin::framegraph_remote_client
         std::uint16_t port = 0;
         std::string authentication_token;
         std::size_t command_queue_capacity = 64;
+        std::uint64_t max_blob_bytes =
+            framegraph_remote::WireLimits::max_blob_bytes;
         bool reconnect = true;
     };
 

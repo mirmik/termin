@@ -72,6 +72,28 @@ struct FrameGraphDebuggerImageSnapshot {
     std::uint64_t generation = 0;
 };
 
+enum class FrameGraphDebuggerPixelFormat {
+    Unknown,
+    Rgba8Unorm,
+    Rgba16Float,
+    Rgba32Float,
+    Depth16Unorm,
+    Depth32Float,
+};
+
+struct FrameGraphDebuggerCpuCaptureSnapshot {
+    std::uint64_t request_id = 0;
+    std::uint64_t graph_revision = 0;
+    std::int64_t frame_number = 0;
+    FrameGraphDebuggerPixelFormat pixel_format =
+        FrameGraphDebuggerPixelFormat::Unknown;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    bool is_depth = false;
+    bool exact = false;
+    std::shared_ptr<const std::vector<std::uint8_t>> bytes;
+};
+
 struct FrameGraphDebuggerSnapshot {
     std::uint64_t revision = 0;
     std::uint64_t graph_revision = 0;
@@ -108,6 +130,7 @@ struct FrameGraphDebuggerSnapshot {
     std::string timing;
     FrameGraphDebuggerImageSnapshot main_image;
     FrameGraphDebuggerImageSnapshot depth_image;
+    std::optional<FrameGraphDebuggerCpuCaptureSnapshot> cpu_capture;
 };
 
 class IFrameGraphDebuggerSource {

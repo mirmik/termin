@@ -411,6 +411,60 @@ TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
     target.stop();
 }
 
+TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work")
+{
+    RenderFixture fixture;
+    TargetServiceConfig config;
+    config.authentication_token = "capture-token";
+    RemoteFrameGraphTarget target(*fixture.debugger, config);
+    REQUIRE(target.start());
+    ClientSession client = handshake(target, "capture-token");
+    REQUIRE(client.socket != invalid_test_socket);
+
+    Command refresh;
+    refresh.request_id = 30;
+    refresh.kind = CommandKind::refresh_topology;
+    REQUIRE(send_wire(client.socket, refresh, 2, client.id));
+    allow_io_and_pump(target);
+    const auto topology_message = receive_wire(client.socket);
+    REQUIRE(topology_message.has_value());
+    REQUIRE(std::holds_alternative<TopologySnapshot>(
+        topology_message->message));
+    const TopologySnapshot topology =
+        std::get<TopologySnapshot>(topology_message->message);
+    REQUIRE(receive_wire(client.socket).has_value());
+    REQUIRE(topology.selected_target_id != 0);
+    REQUIRE_FALSE(topology.resources.empty());
+
+    Command capture;
+    capture.request_id = 31;
+    capture.kind = CommandKind::capture_snapshot;
+    capture.target_id = topology.selected_target_id;
+    capture.graph_revision = topology.graph_revision;
+    capture.selector_kind = CaptureSelectorKind::resource;
+    capture.resource = topology.resources.front();
+    capture.encoding = CaptureEncoding::native_pixels;
+    REQUIRE(send_wire(client.socket, capture, 3, client.id));
+    allow_io_and_pump(target);
+    const auto accepted = receive_wire(client.socket);
+    REQUIRE(accepted.has_value());
+    REQUIRE(std::holds_alternative<Status>(accepted->message));
+    CHECK(std::get<Status>(accepted->message).code == StatusCode::accepted);
+
+    Command cancel;
+    cancel.request_id = 32;
+    cancel.kind = CommandKind::cancel;
+    REQUIRE(send_wire(client.socket, cancel, 4, client.id));
+    allow_io_and_pump(target);
+    const auto cancelled = receive_wire(client.socket);
+    REQUIRE(cancelled.has_value());
+    REQUIRE(std::holds_alternative<Status>(cancelled->message));
+    CHECK(std::get<Status>(cancelled->message).code == StatusCode::cancelled);
+
+    close_test_socket(client.socket);
+    target.stop();
+}
+
 TEST_CASE("Remote framegraph command queue rejects the newest command")
 {
     RenderFixture fixture;
