@@ -109,6 +109,22 @@ body каждого retained item. Это обеспечивает незави�
 миграции body будет сужен до специализированного renderer item без изменения
 public handles или C# API.
 
+### Hardening первого slice
+
+- [x] Style mutation обновляет существующий renderer body без повторного
+  копирования CPU geometry и без замены item identity.
+- [x] Повторная установка идентичного style является no-op по revisions.
+- [x] Style mutation инвалидирует только GPU revision изменённого item.
+- [x] `release_gpu()` инвалидирует item GPU revisions, а следующий render
+  детерминированно восстанавливает meshes и render targets.
+- [x] Ошибочные shading/light/axis-scale значения наблюдаемы через C ABI и
+  преобразуются thin C# wrapper в managed exceptions.
+- [x] Добавлен Vulkan lifecycle/invalidation test для generation handles,
+  cross-scene isolation, camera/resize/style/release/render transitions.
+- [x] Linux SDK build, central C++/Python test entrypoints и `Termin.Native`
+  build подтверждены.
+- [ ] Выполнить ручной WPF/D3D11 smoke на Windows.
+
 ## Этап 2. Complete series model
 
 - [ ] Добавить `LineSeriesItem3D`.
@@ -141,13 +157,14 @@ public handles или C# API.
 
 ## Проверка
 
-- item handle invalidation after removal and scene teardown;
-- changing one surface does not rebuild unrelated items;
-- camera orbit does not rebuild geometry;
-- D3D11/Vulkan/OpenGL orientation parity;
-- color+depth target resize and deterministic GPU teardown;
-- C# scene access, part replacement and portal callbacks;
-- screenshot smoke with asymmetric surface, scatter and world labels.
+- [x] item handle invalidation after removal, slot reuse and cross-scene use;
+- [x] changing one surface does not invalidate unrelated items;
+- [x] camera orbit does not rebuild geometry;
+- [ ] D3D11/Vulkan/OpenGL orientation parity;
+- [x] color+depth target resize and deterministic GPU teardown/recovery;
+- [x] C# retained wrapper compiles with scene access and part replacement API;
+- [ ] portal callbacks and screenshot smoke with asymmetric surface, scatter
+  and world labels on Windows/D3D11.
 
 ## Первый completion gate
 
@@ -155,4 +172,5 @@ public handles или C# API.
 и scatter, consumer меняет retained surface/grid/camera через typed wrappers,
 а три WPF buttons вызывают C# handlers. Camera/style changes не должны
 перестраивать неизменившуюся CPU geometry и не должны требовать chart-specific
-логики на WPF стороне.
+логики на WPF стороне. Автоматизированная Linux/Vulkan часть gate подтверждена;
+для полного закрытия остаётся ручной Windows/D3D11 WPF smoke.
