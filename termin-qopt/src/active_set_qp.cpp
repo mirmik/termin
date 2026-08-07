@@ -326,6 +326,12 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
   active = independent_active_set(equalities, inequalities, active);
   std::array<PivotEvent, 16> pivot_trace{};
   std::size_t pivot_event_count = 0;
+  std::optional<std::size_t> last_dropped_constraint;
+  std::vector<std::uint8_t> zero_step_readded(
+      static_cast<std::size_t>(inequalities.rows()), 0);
+  std::vector<std::size_t> zero_step_readd_counts(
+      static_cast<std::size_t>(inequalities.rows()), 0);
+  Vector limit_perturbations = Vector::Zero(inequalities.rows());
   const auto record_pivot = [&](PivotEvent event) {
     pivot_trace[pivot_event_count % pivot_trace.size()] = event;
     ++pivot_event_count;
@@ -350,7 +356,8 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
       working.row(equality_count + static_cast<Eigen::Index>(offset)) =
           inequalities.row(static_cast<Eigen::Index>(active[offset]));
       working_targets[equality_count + static_cast<Eigen::Index>(offset)] =
-          limits[static_cast<Eigen::Index>(active[offset])];
+          limits[static_cast<Eigen::Index>(active[offset])] +
+          limit_perturbations[static_cast<Eigen::Index>(active[offset])];
     }
 
     const EqualityResult subproblem = solve_equalities(
@@ -401,7 +408,8 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
                .has_value()) {
         continue;
       }
-      const double slack = limits[row] - inequalities.row(row).dot(primal);
+      const double perturbed_limit = limits[row] + limit_perturbations[row];
+      const double slack = perturbed_limit - inequalities.row(row).dot(primal);
       const double candidate = std::max(0.0, slack / rate);
       const double tie_tolerance =
           scaled_tolerance(options.tolerance, std::max(step, candidate));
@@ -414,7 +422,6 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
         blocker = index;
       }
     }
-
     const double step_tolerance =
         scaled_tolerance(options.tolerance, std::max(1.0, std::abs(step)));
     const bool blocked_before_target =
@@ -423,6 +430,10 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
       primal += step * direction;
       active.push_back(*blocker);
       record_pivot({true, *blocker, step});
+      const bool repeats_last_drop = last_dropped_constraint == blocker &&
+                                     step <= step_tolerance;
+      zero_step_readded[*blocker] = repeats_last_drop ? 1 : 0;
+      last_dropped_constraint.reset();
       continue;
     }
 
@@ -448,12 +459,31 @@ independent_row_direction(const Vector &input, const RowBasis &basis) {
       }
     }
     if (removal_offset.has_value()) {
+      const std::size_t removed_constraint = active[*removal_offset];
       record_pivot({
           false,
-          active[*removal_offset],
+          removed_constraint,
           subproblem.dual[equality_count +
                           static_cast<Eigen::Index>(*removal_offset)],
       });
+      if (zero_step_readded[removed_constraint] != 0) {
+        std::size_t &repeat_count =
+            zero_step_readd_counts[removed_constraint];
+        ++repeat_count;
+        if (repeat_count >= 2) {
+          // Distinct row-specific perturbations break a repeated degenerate
+          // drop/add tie. The largest shift remains strictly below
+          // active_tolerance, and the final solution is still validated
+          // against the original, unperturbed constraints.
+          const double lexicographic_fraction =
+              static_cast<double>(removed_constraint + 1) /
+              static_cast<double>(zero_step_readd_counts.size() + 1);
+          limit_perturbations[static_cast<Eigen::Index>(removed_constraint)] =
+              options.active_tolerance * lexicographic_fraction;
+        }
+      }
+      zero_step_readded[removed_constraint] = 0;
+      last_dropped_constraint = removed_constraint;
       active.erase(active.begin() +
                    static_cast<std::ptrdiff_t>(*removal_offset));
       continue;

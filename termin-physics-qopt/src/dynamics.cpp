@@ -1972,6 +1972,19 @@ namespace termin::physics_qopt
                         unilateral_constraint_count - friction_support_count +
                         friction_contact_count *
                             (options.friction_cone_facets + 1);
+                    std::size_t friction_max_iterations =
+                        ActiveSetQpOptions{}.max_iterations;
+                    if (options.friction_cone_facets >
+                        DynamicsSystemStepOptions{}.friction_cone_facets)
+                    {
+                        const std::size_t scaled_budget =
+                            friction_inequality_count >
+                                    std::numeric_limits<std::size_t>::max() / 2
+                                ? std::numeric_limits<std::size_t>::max()
+                                : friction_inequality_count * 2;
+                        friction_max_iterations =
+                            std::max(friction_max_iterations, scaled_budget);
+                    }
                     const QpSolveResult friction_result =
                         solve_contact_friction(
                             {
@@ -2028,7 +2041,10 @@ namespace termin::physics_qopt
                             },
                             {
                                 .cone_facets = options.friction_cone_facets,
-                                .qp = {.tolerance = friction_tolerance},
+                                .qp = {
+                                    .tolerance = friction_tolerance,
+                                    .max_iterations = friction_max_iterations,
+                                },
                             });
                     result.friction_projection = friction_result;
                     if (friction_result.status != QpStatus::Optimal)

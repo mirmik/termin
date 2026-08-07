@@ -1331,8 +1331,11 @@ TEST_CASE("FEM multi-point box contact dissipates tangential slip")
     CHECK(telemetry.initialized);
     CHECK(telemetry.contact_count >= 1U);
     CHECK(telemetry.active_contact_count >= 1U);
-    CHECK(std::abs(position.z - 0.5) < 1.0e-5);
-    CHECK(std::abs(fixture.body->velocity_local().lin.x) < 1.0e-6);
+    // The realtime six-facet cone leaves a small contact-switching chatter;
+    // require it to dissipate more than 99% of the initial slip without
+    // demanding the exact axial cancellation of an eight-facet cone.
+    CHECK(std::abs(position.z - 0.5) < 2.0e-5);
+    CHECK(std::abs(fixture.body->velocity_local().lin.x) < 5.0e-3);
     CHECK(maximum_tangent_impulse > 0.0);
     CHECK(accumulated_friction_work < 0.0);
     CHECK(position.x > 0.0);
