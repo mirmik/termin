@@ -128,21 +128,27 @@ if (multi.Panels.Count != multiPanelCount ||
         "Coordinated native multi-chart group smoke check failed.");
 
 double[] multiX = { 40, 45, 50 };
+var leftSeries = new ChartLineSeries2D[multiPanelCount];
+var rightSeries = new ChartLineSeries2D[multiPanelCount];
 for (int index = 0; index < multiPanelCount; ++index)
 {
     Chart2D leftPanel = multi.Panels[index].Chart;
     Chart2D rightPanel = peerMulti.Panels[index].Chart;
     leftPanel.SetRange(new PlotRange2D(40, 50, -2, 2));
     rightPanel.SetRange(new PlotRange2D(40, 50, -3, 3));
-    leftPanel.AddLineSeries(
+    leftSeries[index] = leftPanel.AddLineSeries(
         $"left-{index}",
         multiX,
         new[] { -1.0, index / 15.0, 1.0 },
         showInLegend: false);
-    rightPanel.AddLineSeries(
+    rightSeries[index] = rightPanel.AddLineSeries(
         $"right-{index}",
         multiX,
         new[] { 1.5, -index / 10.0, -1.5 },
+        style: new PlotLineSeriesStyle2D(
+            new PlotColor2D(0.95f, 0.55f, 0.2f),
+            thicknessPx: 1.5f,
+            lineStyle: PlotLineStyle2D.Dash),
         showInLegend: false);
 }
 
@@ -152,13 +158,26 @@ using var peerMultiRenderer = new RetainedSceneRenderer2D(
 multiGroup.ScrollOffset = 0;
 uint multiTopTexture = multiRenderer.RenderToTextureHandleId(640, 480);
 uint peerTopTexture = peerMultiRenderer.RenderToTextureHandleId(640, 480);
+for (int index = 0; index < multiPanelCount; ++index)
+{
+    leftSeries[index].Item.Append(
+        new[] { 51.0 },
+        new[] { 0.5 + index / 30.0 });
+    rightSeries[index].Item.Append(
+        new[] { 51.0 },
+        new[] { -0.5 - index / 20.0 });
+}
+multiGroup.SetSharedX(41, 51);
+uint multiAppendedTexture = multiRenderer.RenderToTextureHandleId(640, 480);
+uint peerAppendedTexture = peerMultiRenderer.RenderToTextureHandleId(640, 480);
 multiGroup.ScrollOffset = multiGroup.MaximumScrollOffset;
 uint multiBottomTexture = multiRenderer.RenderToTextureHandleId(640, 480);
 uint peerBottomTexture = peerMultiRenderer.RenderToTextureHandleId(640, 480);
 if (multiTopTexture == 0 || peerTopTexture == 0 ||
+    multiAppendedTexture == 0 || peerAppendedTexture == 0 ||
     multiBottomTexture == 0 || peerBottomTexture == 0)
     throw new InvalidOperationException(
         "Native 2x15 multi-chart retained render smoke check failed.");
 
 Console.WriteLine(FormattableString.Invariant(
-    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK. Multi scenes {multi.Scene.Id}/{peerMulti.Scene.Id}: 2x{multiPanelCount} stable panels, coordinated reconfigure, virtual scroll, deferred shared X and top/bottom retained D3D render OK."));
+    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK. Multi scenes {multi.Scene.Id}/{peerMulti.Scene.Id}: 2x{multiPanelCount} stable panels, coordinated reconfigure, virtual scroll, deferred shared X, styled append, and top/bottom retained D3D render OK."));

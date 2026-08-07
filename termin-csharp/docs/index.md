@@ -103,7 +103,12 @@ restores the canonical orientation. `MsaaSamples` owns render-target sampling,
 and `RetainedChart3DHost` suspends rendering while effectively invisible. See
 `examples/RetainedChart3DWpfExample` for the complete D3D11 vertical slice.
 The generic `RetainedScene2DHost` exposes the same MSAA policy and visibility
-suspension for composed 2D scenes.
+suspension for composed 2D scenes. It renders continuously by default for
+backward compatibility. Consumers with explicitly scheduled scene mutations
+can set `ContinuousRendering = false` and call `RequestRender()` after each
+mutation; resize, DPI and visibility changes still invalidate automatically.
+The WPF interaction adapters request a frame after navigation. The Alliance
+streaming example uses this mode for both coordinated scenes and 2x MSAA.
 
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 

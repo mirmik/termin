@@ -59,6 +59,8 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
     private RetainedSceneRenderer2D? _renderer;
     private TcVisualScene2D? _scene;
     private bool _renderingSubscribed;
+    private bool _renderRequested = true;
+    private bool _continuousRendering = true;
     private bool _disposed;
     private int _lastWidth;
     private int _lastHeight;
@@ -79,6 +81,19 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     public TcVisualScene2D? Scene => _scene;
     public Tgfx2D3D11ImageHost RenderHost => _renderHost;
+    public bool ContinuousRendering
+    {
+        get => _continuousRendering;
+        set
+        {
+            ThrowIfDisposed();
+            if (_continuousRendering == value)
+                return;
+            _continuousRendering = value;
+            RequestRender();
+        }
+    }
+
     public int MsaaSamples
     {
         get => _msaaSamples;
@@ -92,6 +107,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
             _msaaSamples = value;
             if (_renderer is not null)
                 _renderer.MsaaSamples = value;
+            RequestRender();
         }
     }
 
@@ -115,6 +131,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
+        _renderRequested = true;
         SubscribeRendering();
     }
 
@@ -128,6 +145,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
+        _renderRequested = false;
     }
 
     public void AddPortal(
@@ -204,6 +222,18 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
             throw new InvalidOperationException(
                 "Failed to present retained scene through the WPF D3DImage bridge.");
         UpdatePortals();
+        _renderRequested = false;
+    }
+
+    /// <summary>
+    /// Schedules one composition render when ContinuousRendering is false.
+    /// Call this after mutating the attached native scene.
+    /// </summary>
+    public void RequestRender()
+    {
+        ThrowIfDisposed();
+        _renderRequested = true;
+        SubscribeRendering();
     }
 
     public void Dispose()
@@ -225,6 +255,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -233,12 +264,15 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         UnsubscribeRendering();
         _renderHost.ReleaseNativeResources();
         _renderer?.ReleaseGpuResources();
+        _renderRequested = true;
     }
 
     private void OnIsVisibleChanged(
         object sender,
         DependencyPropertyChangedEventArgs e)
     {
+        if (IsVisible)
+            _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -268,6 +302,9 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        if (!_continuousRendering && !_renderRequested &&
+            !FramebufferStateChanged())
+            return;
         try
         {
             RenderFrame();
@@ -280,6 +317,16 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
             RenderFailed?.Invoke(
                 this, new RetainedSceneRenderFailedEventArgs(error));
         }
+    }
+
+    private bool FramebufferStateChanged()
+    {
+        int width = Math.Max(1, _renderHost.FramebufferWidth);
+        int height = Math.Max(1, _renderHost.FramebufferHeight);
+        float pixelScale =
+            (float)VisualTreeHelper.GetDpi(this).DpiScaleX;
+        return width != _lastWidth || height != _lastHeight ||
+            Math.Abs(pixelScale - _lastPixelScale) > 0.0001f;
     }
 
     private void UpdatePortals()

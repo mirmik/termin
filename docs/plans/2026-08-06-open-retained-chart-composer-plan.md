@@ -382,12 +382,18 @@ virtual scroll без product-side projection math. В сумме пример �
 native series, сохраняет независимые Y, использует общий внешний WPF scrollbar
 и portal-кнопки. Hidden panels не перестраиваются на shared-X update; при
 появлении панель получает deferred X и viewport одной frame mutation.
-Headless D3D11 acceptance рендерит верх и низ обеих 15-panel scenes.
+Headless D3D11 acceptance рендерит верх и низ обеих 15-panel scenes и
+проверяет append для styled line. Solid и styled line append загружают только
+изменившийся GPU tail (для styled line также перезаписывается прежняя последняя
+точка, потому что у неё меняется `next`). WPF hosts работают в opt-in on-demand
+режиме: кадр запрашивается после data/input/layout mutation; resize/DPI всё ещё
+инвалидируют кадр автоматически. Пример использует MSAA x2.
 
 Это topology/load vertical slice, а не завершённый performance baseline.
-Текущий пример ограничивает managed history периодическим `SetData`; перед
-production streaming остаются bounded native ring-buffer policy, измерение
-render/append cost и проверка на реальных данных Alliance.
+Текущий пример использует дешёвый `Append`, но ограничивает managed history
+периодическим `SetData`; перед production streaming остаются bounded native
+ring-buffer policy, измерение render/append cost и проверка на реальных данных
+Alliance.
 
 - [x] Ввести `RetainedMultiChart2D` поверх общего panel composer.
 - [x] Реализовать stable panel handles и safe dynamic reconfiguration.
