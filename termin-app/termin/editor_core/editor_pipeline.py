@@ -20,7 +20,7 @@ def make_editor_pipeline() -> RenderPipeline:
         HighlightPass,
         IdPass,
         ImmediateDepthPass,
-        PresentToScreenPass,
+        OutputTransformPass,
         ResolvePass,
         ShadowPass,
         SkyBoxPass,
@@ -157,11 +157,7 @@ def make_editor_pipeline() -> RenderPipeline:
         input_res="color_bloom",
         output_res="color_tonemapped",
         pass_name="Tonemap",
-        # Editor materials and project pipelines are authored against the
-        # unmodified display response. Keep this as an explicit copy pass:
-        # applying ACES here changes editor-only midtones and makes the scene
-        # disagree with custom game viewports.
-        method=2,
+        method=0,
     )
 
     bloom_pass = BloomPass(
@@ -193,14 +189,16 @@ def make_editor_pipeline() -> RenderPipeline:
             output_res="color+widgets",
             include_internal_entities=True,
         ),
-        PresentToScreenPass(
+        OutputTransformPass(
             input_res="color+widgets",
-            pass_name="Present",
+            pass_name="OutputTransform",
         ),
     ]
 
     msaa_samples = 4
-    color_fbo_format = "render_target"
+    # Every intermediate remains linear HDR. Only OutputTransformPass encodes
+    # for the caller-owned UNORM display target.
+    color_fbo_format = "rgba16f"
     pipeline_specs = [
         ResourceSpec(
             resource="empty",

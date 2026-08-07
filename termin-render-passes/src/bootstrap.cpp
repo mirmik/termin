@@ -6,6 +6,7 @@
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/ground_grid_pass.hpp>
 #include <termin/render/id_pass.hpp>
+#include <termin/render/output_transform_pass.hpp>
 #include <termin/render/present_pass.hpp>
 #include <termin/render/resolve_pass.hpp>
 #include <termin/render/shadow_pass.hpp>
@@ -27,6 +28,7 @@ namespace termin {
         GrayscalePass::register_type();
         GroundGridPass::register_type();
         IdPass::register_type();
+        OutputTransformPass::register_type();
         PresentToScreenPass::register_type();
         BlitPass::register_type();
         ResolvePass::register_type();

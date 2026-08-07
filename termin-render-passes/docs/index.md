@@ -8,6 +8,28 @@ consume these passes through the public C++ headers under `<termin/render/...>`
 or Python package `termin.render_passes`, not compile pass sources from
 `termin-app`.
 
+## Color pipeline contract
+
+The built-in default and editor pipelines keep every internal scene and
+post-processing color resource in linear `RGBA16F`. Their terminal path is:
+
+```text
+linear HDR scene -> bloom -> TonemapPass -> linear UI -> OutputTransformPass -> OUTPUT
+```
+
+`TonemapPass` owns exposure and the selected tone curve (ACES by default). Its
+result is still linear; it never performs gamma or sRGB encoding.
+`OutputTransformPass` is the single display boundary. It applies the IEC sRGB
+optical-electrical transfer function to RGB, preserves alpha as a linear
+coverage value, clamps to the display range, and writes the caller-owned UNORM
+output. `PresentToScreenPass` remains a color-preserving copy for custom
+pipelines that explicitly need no display transform.
+
+UI is composited before the output transform so scene and UI receive exactly
+one encoding step. UI color literals therefore participate in the linear
+compositing contract; wide-gamut and HDR-display transforms remain separate
+future work.
+
 `DebugGeometryPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
 debug/editor render passes. Debug-producing components publish backend-neutral
 primitives through the scene render lifecycle; the pass library does not depend
