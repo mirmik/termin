@@ -191,7 +191,7 @@ bool matches_pick_color(uint32_t pick_id, const float pixel[4])
 termin::ExecuteContext make_context(
     tgfx::RenderContext2& render_context,
     const termin::TcSceneRef& scene,
-    termin::RenderSceneItemSnapshot& snapshot)
+    termin::RenderItemSnapshot& snapshot)
 {
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
@@ -224,7 +224,7 @@ bool run_id_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
+    termin::RenderItemSnapshot snapshot;
     termin::ExecuteContext context = make_context(render_context, scene, snapshot);
     context.tex2_writes.emplace("id", color);
     context.tex2_depth_writes.emplace("id", depth);
@@ -267,7 +267,7 @@ bool run_depth_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
+    termin::RenderItemSnapshot snapshot;
     termin::ExecuteContext context = make_context(render_context, scene, snapshot);
     context.tex2_writes.emplace("depth", color);
     context.tex2_depth_writes.emplace("depth", depth);
@@ -308,7 +308,7 @@ bool run_depth_only_pass(
 {
     const tgfx::TextureHandle depth = create_depth(device);
     if (!depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
+    termin::RenderItemSnapshot snapshot;
     termin::ExecuteContext context = make_context(render_context, scene, snapshot);
     termin::RenderCamera camera;
     context.camera = &camera;
@@ -342,7 +342,7 @@ bool run_normal_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
+    termin::RenderItemSnapshot snapshot;
     termin::ExecuteContext context = make_context(render_context, scene, snapshot);
     context.tex2_writes.emplace("normal", color);
     context.tex2_depth_writes.emplace("normal", depth);

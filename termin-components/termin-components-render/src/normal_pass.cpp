@@ -158,7 +158,7 @@ void NormalPass::execute_with_data_tgfx2(
 
     // Use the UBO-based engine shader as the base shader key for RenderItem
     // shader overrides.
-    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "NormalPass");
+    RenderItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "NormalPass");
     if (!snapshot) {
         return;
     }

@@ -569,7 +569,7 @@ void ColorPass::collect_draw_calls(
     const std::string& phase_mark,
     const RenderContext& render_context,
     uint64_t layer_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) {
     (void)render_context;
     (void)layer_mask;
@@ -587,7 +587,7 @@ void ColorPass::collect_draw_calls(
     cached_draw_calls_.reserve(routed_items.size());
     for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
-        tc_component* tc = item.component;
+        tc_component* tc = render_scene_item_component(item);
         if (!tc) {
             tc::Log::error(
                 "[ColorPass] collect_draw_calls: collected item %zu has null component",
@@ -770,7 +770,7 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    RenderSceneItemSnapshot* scene_items =
+    RenderItemSnapshot* scene_items =
         ensure_render_item_snapshot(ctx, "ColorPass");
     if (!scene_items) {
         return;

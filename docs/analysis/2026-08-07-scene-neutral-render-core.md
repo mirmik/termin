@@ -1,7 +1,7 @@
 # Scene-neutral render core для retained 3D composition
 
 Дата: 2026-08-07  
-Статус: analysis
+Статус: принято к поэтапной реализации; umbrella #1358, текущий slice #1359
 
 ## Контекст
 
@@ -218,6 +218,20 @@ adapter-owned metadata. Game adapter по-прежнему сможет связ
 component/entity для инспекции, но chart не будет создавать фиктивные
 components.
 
+Первый vertical slice реализует эту границу как
+`tc_render_item_source { domain_id, namespace_id, object_id, generation,
+subobject_id, adapter_data }`. Первые пять полей составляют стабильную
+adapter-owned identity. `adapter_data` живёт только в пределах immutable
+frame/view snapshot и не интерпретируется generic render code. Для `tc_scene`
+адаптер кладёт туда `tc_component*`; scene-specific passes получают его через
+явный `render_scene_item_component()`. Retained chart сможет назначить свой
+domain и не создавать component/entity.
+
+`RenderItemCollection` и `RenderItemSnapshot` теперь являются нейтральными
+контрактами. Обход `tc_scene` остался в `RenderSceneItemCollector`, который
+только наполняет общий snapshot. Phase buckets, ownership borrowed payloads и
+snapshot lifetime больше не принадлежат scene adapter.
+
 ## Роль `PlotScene3D`
 
 Общий renderer не заменяет retained scene. Через interop всё ещё необходимы:
@@ -264,6 +278,13 @@ RenderItems либо специализированные renderer bodies/encode
   generic execution/submission contract.
 - Ввести нейтральную source identity и immutable RenderItem snapshot boundary.
 - Сохранить нынешний scene path через адаптер без параллельного renderer.
+
+Текущее состояние этапа: neutral source identity и immutable snapshot boundary
+реализованы в #1359. Удалён неиспользуемый legacy C `tc_execute_context`,
+который протаскивал scene/entity types в низкоуровневый pass header. Разделение
+C++ `ExecuteContext` и adapter services остаётся следующим самостоятельным
+срезом; `CxxFramePass::collect_shader_usages(tc_scene_handle)` пока намеренно
+сохраняет явную scene dependency, а не скрывает её транзитивным include.
 
 ### Этап 2. Выделить `termin-render-core`
 

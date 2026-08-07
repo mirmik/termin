@@ -270,7 +270,7 @@ int run_smoke(const char* argv0)
     tgfx::RenderContext2 render_ctx(*device, cache);
     termin::IdPass pass("empty", "id", "IdPassLinePixelSmoke");
 
-    termin::RenderSceneItemSnapshot render_item_snapshot;
+    termin::RenderItemSnapshot render_item_snapshot;
     termin::ExecuteContext exec_ctx;
     exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;
@@ -379,7 +379,7 @@ int run_world_text_smoke(const char* argv0)
     tgfx::PipelineCache cache(*device);
     tgfx::RenderContext2 render_ctx(*device, cache);
     termin::IdPass pass("empty", "id", "IdPassWorldTextPixelSmoke");
-    termin::RenderSceneItemSnapshot render_item_snapshot;
+    termin::RenderItemSnapshot render_item_snapshot;
     termin::ExecuteContext exec_ctx;
     exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;

@@ -135,7 +135,6 @@ bool NavMeshKeeperComponent::collect_render_items(
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_MESH;
         item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-        item.component = tc_component_ptr();
         item.geometry_id = 0;
         item.material_phase = phase;
         item.material = mat.handle;

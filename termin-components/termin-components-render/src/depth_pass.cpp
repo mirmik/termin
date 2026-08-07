@@ -271,7 +271,7 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as the base shader key for RenderItem
     // shader overrides. The old source-based GeometryPassBase shader path has
     // been removed.
-    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "DepthPass");
+    RenderItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "DepthPass");
     if (!snapshot) {
         return;
     }
@@ -512,7 +512,7 @@ void DepthOnlyPass::collect_draw_calls(
     tc_scene_handle scene,
     uint64_t layer_mask,
     uint64_t render_category_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) const {
     (void)layer_mask;
     (void)render_category_mask;
@@ -543,13 +543,14 @@ void DepthOnlyPass::collect_draw_calls(
         const tc_render_item& representative = items[group_begin];
         size_t group_end = group_begin + 1;
         while (group_end < items.size() &&
-               items[group_end].component == representative.component &&
+               items[group_end].source.adapter_data ==
+                   representative.source.adapter_data &&
                items[group_end].kind == representative.kind &&
                items[group_end].geometry_id == representative.geometry_id) {
             ++group_end;
         }
 
-        tc_component* component = representative.component;
+        tc_component* component = render_scene_item_component(representative);
         Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
         if (!component || !ent.valid() ||
             !tc_phase_mask_contains(tc_component_phase_mask(component), requested_phase) ||
@@ -783,7 +784,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
-    RenderSceneItemSnapshot* snapshot =
+    RenderItemSnapshot* snapshot =
         ensure_render_item_snapshot(ctx, "DepthOnlyPass");
     if (!snapshot) {
         return;
