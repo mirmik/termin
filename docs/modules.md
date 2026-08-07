@@ -59,6 +59,35 @@ Editor-side источник и UI остаются в `termin-app`, а вклю
 security policy принадлежат конкретному host. `termin-runtime` не получает
 обязательный diagnostics server.
 
+### termin-framegraph-remote
+
+Source of truth: [termin-framegraph-remote docs](../termin-framegraph-remote/docs/index.md)
+
+Опциональный нативный versioned contract сетевого Framegraph Debugger. Модуль
+описывает topology revisions, session-scoped target/pass identity, команды
+Snapshot/Live Preview/Burst, hard limits и chunked capture blobs. Codec не
+зависит от editor, Python, sockets, RenderingManager или graphics backend;
+target/client services подключаются отдельными слоями.
+
+### termin-framegraph-remote-target
+
+Source of truth: [remote Framegraph target service](../termin-framegraph-remote-target/docs/index.md)
+
+Опциональный native target-side слой над `termin-framegraph-remote` и
+`termin-engine`. Сетевой поток владеет loopback TCP transport и handshake, а
+render-thread pump — единственный код сервиса, который обращается к
+`FrameGraphDebugger`. Между ними находятся bounded очереди команд и immutable
+topology/status сообщений.
+
+### termin-framegraph-remote-client
+
+Source of truth: [remote Framegraph client](../termin-framegraph-remote-client/docs/index.md)
+
+Опциональный desktop transport над `termin-framegraph-remote`, не зависящий от
+editor, Python, engine или GPU. Network thread обслуживает loopback TCP,
+handshake и reconnect, а bounded SPSC очередь принимает session-scoped команды
+с editor thread и отбрасывает их при разрыве соединения.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)

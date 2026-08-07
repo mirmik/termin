@@ -28,6 +28,51 @@ owns callbacks and selection synchronization, and presents both captures. The
 legacy tcgui dialog remains a compatibility frontend; it does not discover
 targets or mutate pipelines itself.
 
+## Frontend source boundary
+
+`IFrameGraphDebuggerSource` is the only debugger interface consumed by
+`FrameGraphDebuggerView`. It publishes immutable value snapshots containing
+topology, selection, status, formatted diagnostics, and capture-image
+descriptors, and accepts selection/session commands. `LocalFrameGraphDebuggerSource`
+projects the sole `FrameGraphDebugger` into that contract; it neither owns nor
+duplicates native debugger state.
+
+Image descriptors contain dimensions, format, depth classification, and a
+source-local generation, but no transport identity or remote GPU handle. The
+source is responsible for rendering its image into a client-local preview
+target and for depth readback. Consequently a remote implementation can upload
+decoded bytes into a local texture while the view follows exactly the same
+path as an in-process capture. Transport, reconnect, and packet handling do not
+belong in the view or in Python.
+
+`RemoteFrameGraphDebuggerSource` implements that boundary for topology-only
+sessions. `termin-framegraph-remote-client` owns loopback TCP, authentication,
+framing and reconnect on a network thread; callbacks publish copied immutable
+snapshots under a mutex and never touch widgets or rendering objects. Commands
+cross a bounded SPSC queue from the editor thread and are discarded at a
+session boundary. A disconnect retains the latest bounded topology but marks
+it `stale`, while a new session clears session-scoped target/pass identities.
+
+The production view contains explicit port/token Connect, Disconnect and Use
+Local controls. The token is launch-scoped input and is not persisted. Source
+switching replaces only the source behind the existing widget tree; no second
+debugger UI or Python data plane is created. Topology refresh is rate-limited,
+stale-revision responses schedule reconciliation, and remote errors/drop counts
+are surfaced in the existing status bar.
+
+Exact remote snapshots reuse the same frame-local capture instrumentation as
+the local debugger. The target render thread performs capture and bounded
+readback, then hands an immutable CPU blob to the network thread for chunking
+and transmission; graphics handles never cross that boundary. The remote
+source assembles chunks in order under a memory budget and publishes a shared
+immutable CPU capture. Incomplete, duplicate or out-of-order transfers are
+rejected visibly rather than exposed as partial images. The source lazily
+uploads completed bytes into the debugger window's own graphics domain and
+uses the existing `FrameGraphPresenter`, so Canvas fit/zoom, channel selection,
+HDR highlighting and depth inspection follow the local path. Selection starts
+one exact request, Pause cancels pending work, and disconnect/source switch
+release both the CPU blob and source-owned local texture deterministically.
+
 ## Capture lifecycle
 
 `RenderingManager` is the authoritative source of renderable targets and the

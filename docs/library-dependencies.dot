@@ -149,6 +149,9 @@ digraph termin_dependencies {
 	"termin-default-assets";
 	"termin-dispatch";
 	"termin-glb";
+	"termin-framegraph-remote";
+	"termin-framegraph-remote-client";
+	"termin-framegraph-remote-target";
 	"termin-gui-native";
 	"termin-image";
 	"termin-materials";
@@ -190,6 +193,10 @@ digraph termin_dependencies {
 	"termin-base" -> "termin-audio";
 	"termin-base" -> "termin-cli";
 	"termin-base" -> "termin-dispatch";
+	"termin-base" -> "termin-framegraph-remote";
+	"termin-framegraph-remote" -> "termin-framegraph-remote-client";
+	"termin-engine" -> "termin-framegraph-remote-target";
+	"termin-framegraph-remote" -> "termin-framegraph-remote-target";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
