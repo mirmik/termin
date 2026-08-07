@@ -1,6 +1,7 @@
 #include <termin/framegraph_remote_target/target_service.hpp>
 
 #include <termin/framegraph_remote/bounded_spsc_queue.hpp>
+#include <termin/framegraph_remote/latest_value_slot.hpp>
 #include <termin/framegraph_remote/wire_codec.hpp>
 #include <termin/render/frame_graph_debugger.hpp>
 
@@ -309,6 +310,7 @@ namespace termin::framegraph_remote_target
 
         struct CaptureBlob
         {
+            std::uint64_t session_id = 0;
             CaptureMetadata metadata;
             std::vector<std::uint8_t> bytes;
             std::uint32_t chunk_bytes = 0;
@@ -329,6 +331,24 @@ namespace termin::framegraph_remote_target
             QueuedCommand queued;
             std::uint64_t debugger_generation = 0;
             Clock::time_point requested_at;
+            CaptureKind kind = CaptureKind::snapshot;
+            std::uint16_t burst_index = 0;
+            std::uint16_t burst_count = 0;
+        };
+
+        struct StreamState
+        {
+            QueuedCommand queued;
+            Clock::time_point next_capture_at{};
+            Clock::time_point started_at{};
+            std::uint64_t delivered_frames = 0;
+        };
+
+        struct BurstState
+        {
+            QueuedCommand queued;
+            std::uint16_t next_index = 0;
+            std::uint64_t retained_bytes = 0;
         };
 
         struct TargetBinding
@@ -381,12 +401,13 @@ namespace termin::framegraph_remote_target
     class RemoteFrameGraphTarget::Impl
     {
     public:
-        Impl(FrameGraphDebugger& target_debugger,
+        Impl(FrameGraphDebugger* target_debugger,
              TargetServiceConfig target_config)
-            : debugger(&target_debugger), config(std::move(target_config)),
+            : debugger(target_debugger), config(std::move(target_config)),
               command_queue(config.command_queue_capacity),
               outbound_queue(config.outbound_queue_capacity),
-              owner_thread(std::this_thread::get_id())
+              owner_thread(std::this_thread::get_id()),
+              debugger_attached(target_debugger != nullptr)
         {
             validate_config();
             refresh_topology();
@@ -500,6 +521,8 @@ namespace termin::framegraph_remote_target
                 io_thread.join();
             client_connected.store(false, std::memory_order_release);
             active_session.store(0, std::memory_order_release);
+            active_max_payload_bytes.store(
+                WireLimits::max_payload_bytes, std::memory_order_release);
             listening_port.store(0, std::memory_order_release);
             cleanup_socket_runtime();
             QueuedCommand command;
@@ -510,12 +533,70 @@ namespace termin::framegraph_remote_target
             while (outbound_queue.try_pop(packet))
             {
             }
-            if (pending_capture && std::this_thread::get_id() == owner_thread)
+            if (pending_capture && debugger &&
+                std::this_thread::get_id() == owner_thread)
                 debugger->cancel_request();
             pending_capture.reset();
+            stream.reset();
+            burst.reset();
+            clear_ready_preview();
             queued_capture_bytes.store(0, std::memory_order_relaxed);
             pending_dropped_outbound = 0;
             tc_log_info("remote framegraph target: stopped");
+        }
+
+        bool attach_debugger(FrameGraphDebugger& target_debugger)
+        {
+            if (!require_owner("attach_debugger"))
+                return false;
+            if (debugger == &target_debugger)
+                return true;
+            if (debugger)
+                detach_debugger();
+            debugger = &target_debugger;
+            if (!refresh_topology())
+            {
+                debugger = nullptr;
+                debugger_attached.store(false, std::memory_order_release);
+                (void)refresh_topology();
+                return false;
+            }
+            debugger_attached.store(true, std::memory_order_release);
+            emit_lifecycle_update("render runtime attached");
+            tc_log_info("remote framegraph target: render debugger attached");
+            return true;
+        }
+
+        void detach_debugger()
+        {
+            if (!require_owner("detach_debugger") || !debugger)
+                return;
+            if (pending_capture)
+                finish_operation(StatusCode::resource_unavailable,
+                                 "render runtime was detached");
+            if (stream)
+            {
+                emit_status(stream->queued,
+                            StatusCode::resource_unavailable,
+                            "render runtime was detached");
+                stream.reset();
+            }
+            if (burst)
+            {
+                emit_status(burst->queued,
+                            StatusCode::resource_unavailable,
+                            "render runtime was detached");
+                burst.reset();
+            }
+            clear_ready_preview();
+            debugger = nullptr;
+            debugger_attached.store(false, std::memory_order_release);
+            target_bindings.clear();
+            if (!refresh_topology())
+                tc_log_error("remote framegraph target: failed to publish "
+                             "detached runtime topology");
+            emit_lifecycle_update("render runtime detached");
+            tc_log_info("remote framegraph target: render debugger detached");
         }
 
         void pump_render_thread()
@@ -527,7 +608,10 @@ namespace termin::framegraph_remote_target
             {
                 apply_command(queued);
             }
+            if (!debugger)
+                return;
             poll_capture();
+            schedule_continuous_capture();
         }
 
         TargetServiceStatus status() const
@@ -535,6 +619,7 @@ namespace termin::framegraph_remote_target
             return {
                 running.load(std::memory_order_acquire),
                 client_connected.load(std::memory_order_acquire),
+                debugger_attached.load(std::memory_order_acquire),
                 listening_port.load(std::memory_order_acquire),
                 active_session.load(std::memory_order_acquire),
                 published_graph_revision.load(std::memory_order_acquire),
@@ -543,9 +628,15 @@ namespace termin::framegraph_remote_target
                 dropped_outbound_messages.load(std::memory_order_relaxed),
                 transmitted_bytes.load(std::memory_order_relaxed),
                 completed_captures.load(std::memory_order_relaxed),
+                dropped_captures.load(std::memory_order_relaxed),
+                preview_captures.load(std::memory_order_relaxed),
+                burst_captures.load(std::memory_order_relaxed),
+                capture_time_ns.load(std::memory_order_relaxed),
                 readback_time_ns.load(std::memory_order_relaxed),
+                conversion_time_ns.load(std::memory_order_relaxed),
                 transfer_encode_time_ns.load(std::memory_order_relaxed),
                 captured_bytes.load(std::memory_order_relaxed),
+                effective_preview_millifps.load(std::memory_order_relaxed),
             };
         }
 
@@ -627,6 +718,8 @@ namespace termin::framegraph_remote_target
                             std::vector<TargetBinding>& next_bindings,
                             std::string& error)
         {
+            if (!debugger)
+                return true;
             const auto& targets = debugger->targets();
             const auto passes = debugger->passes();
             const auto schedule = debugger->schedule();
@@ -742,7 +835,8 @@ namespace termin::framegraph_remote_target
 
         bool refresh_topology()
         {
-            debugger->refresh();
+            if (debugger)
+                debugger->refresh();
             TopologySnapshot next;
             std::vector<TargetBinding> next_bindings;
             std::string error;
@@ -787,11 +881,13 @@ namespace termin::framegraph_remote_target
             return {
                 request_id,
                 graph_revision,
-                project_state(debugger->state()),
+                stream ? SessionState::streaming
+                       : debugger ? project_state(debugger->state())
+                                  : SessionState::suspended,
                 code,
                 static_cast<std::uint32_t>(outbound_queue.size_approximate()),
                 completed_captures.load(std::memory_order_relaxed),
-                dropped_outbound_messages.load(std::memory_order_relaxed),
+                dropped_captures.load(std::memory_order_relaxed),
                 now_ns(),
                 std::move(detail),
             };
@@ -825,25 +921,76 @@ namespace termin::framegraph_remote_target
         {
             const std::uint64_t capture_bytes = packet.capture
                 ? packet.capture->bytes.size() : 0;
+            const std::int64_t capture_frame = packet.capture
+                ? packet.capture->metadata.frame_number : 0;
             if (pending_dropped_outbound != 0)
             {
                 packet.drop = DropEvent{
-                    DropKind::receiver, pending_dropped_outbound, 0, 0};
+                    DropKind::receiver,
+                    pending_dropped_outbound,
+                    pending_dropped_after_frame,
+                    0};
             }
             if (outbound_queue.try_push(std::move(packet)))
             {
                 pending_dropped_outbound = 0;
+                pending_dropped_after_frame = 0;
                 return;
             }
             if (capture_bytes != 0)
             {
                 queued_capture_bytes.fetch_sub(capture_bytes,
                                                std::memory_order_relaxed);
+                dropped_captures.fetch_add(1, std::memory_order_relaxed);
+                pending_dropped_after_frame = capture_frame;
             }
             ++pending_dropped_outbound;
             dropped_outbound_messages.fetch_add(1, std::memory_order_relaxed);
             tc_log_error("remote framegraph target: outbound queue full; "
                          "message dropped");
+        }
+
+        void note_preview_drop()
+        {
+            preview_slot.note_drop();
+        }
+
+        void publish_ready_preview(std::shared_ptr<CaptureBlob> blob)
+        {
+            const std::size_t new_bytes = blob->bytes.size();
+            queued_capture_bytes.fetch_add(new_bytes,
+                                           std::memory_order_relaxed);
+            if (auto replaced = preview_slot.publish(std::move(blob)))
+            {
+                queued_capture_bytes.fetch_sub((*replaced)->bytes.size(),
+                                               std::memory_order_relaxed);
+                dropped_captures.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
+        void discard_obsolete_preview()
+        {
+            if (auto discarded = preview_slot.discard_ready())
+            {
+                queued_capture_bytes.fetch_sub((*discarded)->bytes.size(),
+                                               std::memory_order_relaxed);
+                dropped_captures.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
+        std::optional<LatestValueSlot<std::shared_ptr<CaptureBlob>>::Delivery>
+        take_ready_preview()
+        {
+            return preview_slot.take();
+        }
+
+        void clear_ready_preview()
+        {
+            if (auto discarded = preview_slot.clear())
+            {
+                queued_capture_bytes.fetch_sub((*discarded)->bytes.size(),
+                                               std::memory_order_relaxed);
+            }
         }
 
         void reject_command(const QueuedCommand& queued,
@@ -857,23 +1004,57 @@ namespace termin::framegraph_remote_target
             enqueue(std::move(packet));
         }
 
-        bool begin_capture(const QueuedCommand& queued)
+        void emit_status(const QueuedCommand& queued,
+                         StatusCode code,
+                         std::string detail)
+        {
+            OutboundPacket packet;
+            packet.session_id = queued.session_id;
+            packet.status = make_status(
+                queued.command.request_id, code, std::move(detail));
+            enqueue(std::move(packet));
+        }
+
+        void emit_lifecycle_update(std::string detail)
+        {
+            const std::uint64_t session =
+                active_session.load(std::memory_order_acquire);
+            if (session == 0)
+            {
+                tc_log_info("remote framegraph target: lifecycle update has "
+                            "no active client; revision=%llu",
+                            static_cast<unsigned long long>(graph_revision));
+                return;
+            }
+            OutboundPacket packet;
+            packet.session_id = session;
+            const std::uint32_t payload_limit =
+                active_max_payload_bytes.load(std::memory_order_acquire);
+            const auto encoded = encode_message(topology, 1, session);
+            if (encoded &&
+                encoded.value->size() - envelope_size <= payload_limit)
+            {
+                packet.topology = topology;
+            }
+            else
+            {
+                detail += "; topology omitted because it exceeds the peer "
+                          "payload limit";
+            }
+            packet.status =
+                make_status(0, StatusCode::completed, std::move(detail));
+            enqueue(std::move(packet));
+            tc_log_info("remote framegraph target: queued lifecycle update "
+                        "session=%llu revision=%llu attached=%d",
+                        static_cast<unsigned long long>(session),
+                        static_cast<unsigned long long>(graph_revision),
+                        debugger ? 1 : 0);
+        }
+
+        bool configure_capture_selector(const QueuedCommand& queued,
+                                        std::uint32_t max_long_edge)
         {
             const Command& command = queued.command;
-            if (pending_capture)
-            {
-                reject_command(queued,
-                               StatusCode::limit_exceeded,
-                               "an exact capture is already pending");
-                return false;
-            }
-            if (command.encoding != CaptureEncoding::native_pixels)
-            {
-                reject_command(queued,
-                               StatusCode::limit_exceeded,
-                               "exact target currently supports native_pixels only");
-                return false;
-            }
             if (command.target_id != topology.selected_target_id)
             {
                 reject_command(queued,
@@ -881,7 +1062,7 @@ namespace termin::framegraph_remote_target
                                "capture target must be selected first");
                 return false;
             }
-            bool requested = false;
+            debugger->set_capture_max_long_edge(max_long_edge);
             if (command.selector_kind == CaptureSelectorKind::resource)
             {
                 if (std::find(topology.resources.begin(),
@@ -894,56 +1075,164 @@ namespace termin::framegraph_remote_target
                     return false;
                 }
                 debugger->request_resource(command.resource);
-                requested = true;
+                return true;
             }
-            else
+            const auto pass = std::find_if(
+                topology.passes.begin(),
+                topology.passes.end(),
+                [&command](const WirePass& value)
+                { return value.id == command.pass_id; });
+            if (pass != topology.passes.end() &&
+                std::find(pass->internal_symbols.begin(),
+                          pass->internal_symbols.end(),
+                          command.symbol) != pass->internal_symbols.end() &&
+                debugger->request_internal(pass->authored_index,
+                                           command.symbol))
             {
-                const auto pass = std::find_if(
-                    topology.passes.begin(),
-                    topology.passes.end(),
-                    [&command](const WirePass& value)
-                    { return value.id == command.pass_id; });
-                if (pass != topology.passes.end() &&
-                    std::find(pass->internal_symbols.begin(),
-                              pass->internal_symbols.end(),
-                              command.symbol) != pass->internal_symbols.end())
+                return true;
+            }
+            reject_command(queued,
+                           StatusCode::resource_unavailable,
+                           "capture selector is unavailable");
+            return false;
+        }
+
+        bool issue_capture(const QueuedCommand& queued,
+                           CaptureKind kind,
+                           std::uint16_t burst_index = 0,
+                           std::uint16_t burst_count = 0,
+                           bool announce = false)
+        {
+            if (pending_capture)
+            {
+                if (announce)
                 {
-                    requested = debugger->request_internal(
-                        pass->authored_index, command.symbol);
+                    reject_command(queued,
+                                   StatusCode::limit_exceeded,
+                                   "a framegraph capture is already pending");
                 }
-            }
-            if (!requested)
-            {
-                reject_command(queued,
-                               StatusCode::resource_unavailable,
-                               "capture selector is unavailable");
                 return false;
             }
+            const CaptureEncoding required = kind == CaptureKind::preview
+                ? CaptureEncoding::rgba8
+                : CaptureEncoding::native_pixels;
+            if (queued.command.encoding != required)
+            {
+                reject_command(
+                    queued,
+                    StatusCode::limit_exceeded,
+                    kind == CaptureKind::preview
+                        ? "preview capture requires rgba8 encoding"
+                        : "exact capture requires native_pixels encoding");
+                return false;
+            }
+            const std::uint32_t max_long_edge = kind == CaptureKind::preview
+                ? queued.command.max_preview_long_edge
+                : 0;
+            if (!configure_capture_selector(queued, max_long_edge))
+                return false;
             pending_capture = PendingCapture{queued,
                                              debugger->request_generation(),
-                                             Clock::now()};
-            OutboundPacket packet;
-            packet.session_id = queued.session_id;
-            packet.status = make_status(command.request_id,
-                                        StatusCode::accepted,
-                                        "exact capture accepted");
-            enqueue(std::move(packet));
+                                             Clock::now(),
+                                             kind,
+                                             burst_index,
+                                             burst_count};
+            if (announce)
+            {
+                emit_status(queued,
+                            StatusCode::accepted,
+                            kind == CaptureKind::snapshot
+                                ? "exact capture accepted"
+                                : kind == CaptureKind::preview
+                                    ? "live preview accepted"
+                                    : "burst capture accepted");
+            }
             return true;
         }
 
-        void finish_capture(StatusCode code, std::string detail)
+        bool begin_capture(const QueuedCommand& queued)
+        {
+            if (stream || burst)
+            {
+                reject_command(queued,
+                               StatusCode::limit_exceeded,
+                               "continuous capture operation is active");
+                return false;
+            }
+            return issue_capture(queued, CaptureKind::snapshot, 0, 0, true);
+        }
+
+        void reset_pending_capture()
+        {
+            if (debugger)
+            {
+                debugger->cancel_request();
+                debugger->set_capture_max_long_edge(0);
+            }
+            pending_capture.reset();
+        }
+
+        void finish_operation(StatusCode code, std::string detail)
         {
             if (!pending_capture)
                 return;
-            OutboundPacket packet;
-            packet.session_id = pending_capture->queued.session_id;
-            packet.status = make_status(
-                pending_capture->queued.command.request_id,
-                code,
-                std::move(detail));
-            enqueue(std::move(packet));
-            debugger->cancel_request();
-            pending_capture.reset();
+            const PendingCapture pending = *pending_capture;
+            reset_pending_capture();
+            if (pending.kind == CaptureKind::preview && stream)
+            {
+                emit_status(stream->queued, code, std::move(detail));
+                stream.reset();
+                clear_ready_preview();
+                return;
+            }
+            if (pending.kind == CaptureKind::burst && burst)
+            {
+                emit_status(burst->queued, code, std::move(detail));
+                burst.reset();
+                return;
+            }
+            emit_status(pending.queued, code, std::move(detail));
+        }
+
+        std::chrono::nanoseconds preview_interval() const
+        {
+            if (!stream || stream->queued.command.max_preview_millifps == 0)
+                return std::chrono::seconds(1);
+            return std::chrono::nanoseconds(
+                1'000'000'000'000ULL /
+                stream->queued.command.max_preview_millifps);
+        }
+
+        void schedule_continuous_capture()
+        {
+            if (pending_capture)
+                return;
+            if (stream)
+            {
+                if (Clock::now() < stream->next_capture_at)
+                    return;
+                if (!issue_capture(stream->queued, CaptureKind::preview))
+                {
+                    emit_status(stream->queued,
+                                StatusCode::resource_unavailable,
+                                "live preview selector became unavailable");
+                    stream.reset();
+                }
+                return;
+            }
+            if (burst)
+            {
+                if (!issue_capture(burst->queued,
+                                   CaptureKind::burst,
+                                   burst->next_index,
+                                   burst->queued.command.burst_frames))
+                {
+                    emit_status(burst->queued,
+                                StatusCode::resource_unavailable,
+                                "burst selector became unavailable");
+                    burst.reset();
+                }
+            }
         }
 
         void poll_capture()
@@ -953,36 +1242,39 @@ namespace termin::framegraph_remote_target
             if (active_session.load(std::memory_order_acquire) !=
                 pending_capture->queued.session_id)
             {
-                debugger->cancel_request();
-                pending_capture.reset();
+                reset_pending_capture();
+                stream.reset();
+                burst.reset();
+                clear_ready_preview();
                 return;
             }
             if (!refresh_topology())
             {
-                finish_capture(StatusCode::resource_unavailable,
-                               "topology refresh failed during capture");
+                finish_operation(StatusCode::resource_unavailable,
+                                 "topology refresh failed during capture");
                 return;
             }
             if (graph_revision !=
                 pending_capture->queued.command.graph_revision)
             {
-                finish_capture(StatusCode::stale_revision,
-                               "topology changed while capture was pending");
+                finish_operation(StatusCode::stale_revision,
+                                 "topology changed while capture was pending");
                 return;
             }
             debugger->finish_frame();
             if (debugger->request_generation() !=
                 pending_capture->debugger_generation)
             {
-                finish_capture(StatusCode::cancelled,
-                               "capture was superseded by local debugger state");
+                finish_operation(
+                    StatusCode::cancelled,
+                    "capture was superseded by local debugger state");
                 return;
             }
             if (debugger->capture_status() ==
                 FrameGraphCaptureRequestStatus::ResourceUnavailable)
             {
-                finish_capture(StatusCode::resource_unavailable,
-                               "capture resource became unavailable");
+                finish_operation(StatusCode::resource_unavailable,
+                                 "capture resource became unavailable");
                 return;
             }
             if (debugger->state() != FrameGraphDebuggerState::Captured)
@@ -992,37 +1284,58 @@ namespace termin::framegraph_remote_target
             if (!capture.has_capture() || capture.width() <= 0 ||
                 capture.height() <= 0)
             {
-                finish_capture(StatusCode::resource_unavailable,
-                               "capture completed without a readable texture");
+                finish_operation(
+                    StatusCode::resource_unavailable,
+                    "capture completed without a readable texture");
                 return;
             }
+            const PendingCapture pending = *pending_capture;
             const std::uint64_t pixels =
                 static_cast<std::uint64_t>(capture.width()) *
                 static_cast<std::uint64_t>(capture.height());
             const bool depth = capture.is_depth();
-            const bool rgba8 = !depth &&
+            const bool source_rgba8 = !depth &&
                 (capture.format() == tgfx::PixelFormat::RGBA8_UNorm ||
                  capture.format() == tgfx::PixelFormat::RGBA8_sRGB ||
                  capture.format() == tgfx::PixelFormat::BGRA8_UNorm ||
                  capture.format() == tgfx::PixelFormat::BGRA8_sRGB);
-            const std::uint64_t output_bytes = pixels * (rgba8 ? 4ULL :
-                depth ? sizeof(float) : 4ULL * sizeof(float));
+            const bool preview = pending.kind == CaptureKind::preview;
+            const std::uint64_t output_bytes = preview
+                ? pixels * 4ULL
+                : pixels * (source_rgba8 ? 4ULL
+                                         : depth ? sizeof(float)
+                                                 : 4ULL * sizeof(float));
             const std::uint64_t temporary_bytes =
                 pixels * (depth ? sizeof(float) : 4ULL * sizeof(float));
             const std::uint64_t peer_limit = std::min(
-                pending_capture->queued.max_blob_bytes,
+                pending.queued.max_blob_bytes,
                 config.capture_memory_budget_bytes);
+            if (preview)
+                discard_obsolete_preview();
             const std::uint64_t already_queued =
                 queued_capture_bytes.load(std::memory_order_relaxed);
-            if (output_bytes > peer_limit || temporary_bytes > peer_limit ||
-                output_bytes > peer_limit - temporary_bytes ||
-                already_queued > peer_limit - output_bytes)
+            if (output_bytes > peer_limit ||
+                temporary_bytes > peer_limit - output_bytes ||
+                already_queued >
+                    peer_limit - output_bytes - temporary_bytes ||
+                (pending.kind == CaptureKind::burst && burst &&
+                 burst->retained_bytes > peer_limit - output_bytes))
             {
-                tc_log_error("remote framegraph target: exact capture exceeds "
+                tc_log_error("remote framegraph target: capture exceeds "
                              "memory/peer budget (%llu bytes)",
                              static_cast<unsigned long long>(output_bytes));
-                finish_capture(StatusCode::limit_exceeded,
-                               "exact capture exceeds memory or peer budget");
+                if (preview)
+                {
+                    dropped_captures.fetch_add(1, std::memory_order_relaxed);
+                    note_preview_drop();
+                    reset_pending_capture();
+                    if (stream)
+                        stream->next_capture_at = Clock::now() +
+                            preview_interval();
+                    return;
+                }
+                finish_operation(StatusCode::limit_exceeded,
+                                 "capture exceeds memory or peer budget");
                 return;
             }
 
@@ -1036,12 +1349,29 @@ namespace termin::framegraph_remote_target
                     Clock::now() - readback_started).count());
             if (!read)
             {
-                finish_capture(StatusCode::resource_unavailable,
-                               "GPU readback failed");
+                finish_operation(StatusCode::resource_unavailable,
+                                 "GPU readback failed");
                 return;
             }
+            const auto conversion_started = Clock::now();
             blob->bytes.resize(static_cast<std::size_t>(output_bytes));
-            if (rgba8)
+            if (preview && depth)
+            {
+                for (std::uint64_t pixel = 0; pixel < pixels; ++pixel)
+                {
+                    const auto value = static_cast<std::uint8_t>(std::lround(
+                        std::clamp(values[static_cast<std::size_t>(pixel)],
+                                   0.0F,
+                                   1.0F) * 255.0F));
+                    const std::size_t offset =
+                        static_cast<std::size_t>(pixel) * 4;
+                    blob->bytes[offset] = value;
+                    blob->bytes[offset + 1] = value;
+                    blob->bytes[offset + 2] = value;
+                    blob->bytes[offset + 3] = 255;
+                }
+            }
+            else if (preview || source_rgba8)
             {
                 std::transform(values.begin(), values.end(),
                                blob->bytes.begin(),
@@ -1059,13 +1389,17 @@ namespace termin::framegraph_remote_target
                             values.data(),
                             blob->bytes.size());
             }
+            const std::uint64_t conversion_elapsed =
+                static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now() - conversion_started).count());
             const std::uint32_t chunk_bytes = std::min(
-                pending_capture->queued.max_chunk_bytes,
+                pending.queued.max_chunk_bytes,
                 WireLimits::max_chunk_bytes);
             if (chunk_bytes == 0)
             {
-                finish_capture(StatusCode::limit_exceeded,
-                               "capture chunk size is zero");
+                finish_operation(StatusCode::limit_exceeded,
+                                 "capture chunk size is zero");
                 return;
             }
             const std::uint64_t chunks64 =
@@ -1073,57 +1407,109 @@ namespace termin::framegraph_remote_target
             if (chunks64 == 0 ||
                 chunks64 > WireLimits::max_chunks_per_blob)
             {
-                finish_capture(StatusCode::limit_exceeded,
-                               "capture chunk count exceeds protocol limits");
+                finish_operation(
+                    StatusCode::limit_exceeded,
+                    "capture chunk count exceeds protocol limits");
                 return;
             }
+            const std::uint64_t capture_elapsed =
+                static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now() - pending.requested_at).count());
+            blob->session_id = pending.queued.session_id;
             blob->chunk_bytes = chunk_bytes;
             blob->metadata = {
-                pending_capture->queued.command.request_id,
+                pending.queued.command.request_id,
                 graph_revision,
                 next_blob_id++,
-                static_cast<std::int64_t>(debugger->request_generation()),
-                CaptureKind::snapshot,
-                CaptureEncoding::native_pixels,
-                depth ? PixelFormat::depth32_float
-                      : rgba8 ? PixelFormat::rgba8_unorm
-                              : PixelFormat::rgba32_float,
+                next_capture_frame_number++,
+                pending.kind,
+                preview ? CaptureEncoding::rgba8
+                        : CaptureEncoding::native_pixels,
+                preview ? PixelFormat::rgba8_unorm
+                        : depth ? PixelFormat::depth32_float
+                                : source_rgba8 ? PixelFormat::rgba8_unorm
+                                               : PixelFormat::rgba32_float,
                 static_cast<std::uint32_t>(capture.width()),
                 static_cast<std::uint32_t>(capture.height()),
-                depth,
-                true,
+                preview ? false : depth,
+                !preview,
                 output_bytes,
                 static_cast<std::uint32_t>(chunks64),
-                0,
-                0,
+                pending.burst_index,
+                pending.burst_count,
             };
-            queued_capture_bytes.fetch_add(output_bytes,
-                                           std::memory_order_relaxed);
             readback_time_ns.fetch_add(elapsed, std::memory_order_relaxed);
+            conversion_time_ns.fetch_add(conversion_elapsed,
+                                         std::memory_order_relaxed);
+            capture_time_ns.fetch_add(capture_elapsed,
+                                      std::memory_order_relaxed);
             captured_bytes.fetch_add(output_bytes, std::memory_order_relaxed);
             completed_captures.fetch_add(1, std::memory_order_relaxed);
+            reset_pending_capture();
 
+            if (preview)
+            {
+                preview_captures.fetch_add(1, std::memory_order_relaxed);
+                publish_ready_preview(std::move(blob));
+                if (stream)
+                {
+                    ++stream->delivered_frames;
+                    stream->next_capture_at = Clock::now() +
+                        preview_interval();
+                }
+                return;
+            }
+
+            queued_capture_bytes.fetch_add(output_bytes,
+                                           std::memory_order_relaxed);
             OutboundPacket packet;
-            packet.session_id = pending_capture->queued.session_id;
+            packet.session_id = pending.queued.session_id;
             packet.capture = std::move(blob);
-            packet.status = make_status(
-                pending_capture->queued.command.request_id,
-                StatusCode::completed,
-                "exact capture completed; readback_ns=" +
-                    std::to_string(elapsed) + "; bytes=" +
-                    std::to_string(output_bytes) + "; capture_ns=" +
-                    std::to_string(static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            Clock::now() - pending_capture->requested_at)
-                            .count())));
+            if (pending.kind == CaptureKind::burst && burst)
+            {
+                burst_captures.fetch_add(1, std::memory_order_relaxed);
+                burst->retained_bytes += output_bytes;
+                ++burst->next_index;
+                if (burst->next_index == burst->queued.command.burst_frames)
+                {
+                    packet.status = make_status(
+                        burst->queued.command.request_id,
+                        StatusCode::completed,
+                        "burst completed; frames=" +
+                            std::to_string(burst->next_index) +
+                            "; bytes=" +
+                            std::to_string(burst->retained_bytes) +
+                            "; last_readback_ns=" + std::to_string(elapsed));
+                    burst.reset();
+                }
+            }
+            else
+            {
+                packet.status = make_status(
+                    pending.queued.command.request_id,
+                    StatusCode::completed,
+                    "exact capture completed; readback_ns=" +
+                        std::to_string(elapsed) + "; bytes=" +
+                        std::to_string(output_bytes) + "; capture_ns=" +
+                        std::to_string(capture_elapsed));
+            }
             enqueue(std::move(packet));
-            debugger->cancel_request();
-            pending_capture.reset();
         }
 
         void apply_command(const QueuedCommand& queued)
         {
             const Command& command = queued.command;
+            if (!debugger && command.kind != CommandKind::refresh_topology &&
+                command.kind != CommandKind::request_status &&
+                command.kind != CommandKind::ping &&
+                command.kind != CommandKind::disconnect)
+            {
+                reject_command(queued,
+                               StatusCode::resource_unavailable,
+                               "render runtime is not attached");
+                return;
+            }
             const auto validation = validate_command(command, graph_revision);
             if (!validation)
             {
@@ -1221,12 +1607,140 @@ namespace termin::framegraph_remote_target
                 return;
             }
 
+            if (command.kind == CommandKind::start_stream ||
+                command.kind == CommandKind::update_stream)
+            {
+                if (burst || (pending_capture &&
+                    pending_capture->kind != CaptureKind::preview))
+                {
+                    reject_command(queued,
+                                   StatusCode::limit_exceeded,
+                                   "another capture operation is active");
+                    return;
+                }
+                if (command.kind == CommandKind::update_stream && !stream)
+                {
+                    emit_status(queued,
+                                StatusCode::completed,
+                                "live preview is already stopped");
+                    return;
+                }
+                if (stream)
+                {
+                    const QueuedCommand previous = stream->queued;
+                    if (pending_capture)
+                    {
+                        dropped_captures.fetch_add(
+                            1, std::memory_order_relaxed);
+                        reset_pending_capture();
+                    }
+                    discard_obsolete_preview();
+                    emit_status(previous,
+                                StatusCode::completed,
+                                "live preview configuration replaced");
+                }
+                stream = StreamState{
+                    queued, Clock::now(), Clock::now(), 0};
+                emit_status(queued,
+                            StatusCode::accepted,
+                            command.kind == CommandKind::start_stream
+                                ? "live preview started"
+                                : "live preview updated");
+                return;
+            }
+
+            if (command.kind == CommandKind::stop_stream)
+            {
+                if (!stream)
+                {
+                    emit_status(queued,
+                                StatusCode::completed,
+                                "live preview is already stopped");
+                    return;
+                }
+                const StreamState stopped = *stream;
+                if (pending_capture &&
+                    pending_capture->kind == CaptureKind::preview)
+                {
+                    reset_pending_capture();
+                }
+                stream.reset();
+                clear_ready_preview();
+                const auto elapsed_ns = std::max<std::uint64_t>(
+                    1,
+                    static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            Clock::now() - stopped.started_at).count()));
+                const std::uint64_t effective_millifps =
+                    stopped.delivered_frames * 1'000'000'000'000ULL /
+                    elapsed_ns;
+                effective_preview_millifps.store(
+                    effective_millifps, std::memory_order_relaxed);
+                emit_status(stopped.queued,
+                            StatusCode::completed,
+                            "live preview stopped; frames=" +
+                                std::to_string(stopped.delivered_frames) +
+                                "; effective_millifps=" +
+                                std::to_string(effective_millifps) +
+                                "; readback_ns=" +
+                                std::to_string(readback_time_ns.load(
+                                    std::memory_order_relaxed)) +
+                                "; convert_ns=" +
+                                std::to_string(conversion_time_ns.load(
+                                    std::memory_order_relaxed)) +
+                                "; bytes=" +
+                                std::to_string(captured_bytes.load(
+                                    std::memory_order_relaxed)) +
+                                "; dropped=" +
+                                std::to_string(dropped_captures.load(
+                                    std::memory_order_relaxed)));
+                emit_status(queued,
+                            StatusCode::completed,
+                            "live preview stop processed");
+                return;
+            }
+
+            if (command.kind == CommandKind::capture_burst)
+            {
+                if (pending_capture || stream || burst)
+                {
+                    reject_command(queued,
+                                   StatusCode::limit_exceeded,
+                                   "another capture operation is active");
+                    return;
+                }
+                const std::size_t required_slots =
+                    outbound_queue.size_approximate() +
+                    static_cast<std::size_t>(command.burst_frames) + 1;
+                if (required_slots > outbound_queue.capacity())
+                {
+                    reject_command(
+                        queued,
+                        StatusCode::limit_exceeded,
+                        "burst exceeds the target outbound queue capacity");
+                    return;
+                }
+                if (command.encoding != CaptureEncoding::native_pixels)
+                {
+                    reject_command(queued,
+                                   StatusCode::limit_exceeded,
+                                   "burst capture requires native_pixels");
+                    return;
+                }
+                burst = BurstState{queued, 0, 0};
+                emit_status(queued,
+                            StatusCode::accepted,
+                            "burst capture accepted; frames=" +
+                                std::to_string(command.burst_frames));
+                return;
+            }
+
             if (command.kind == CommandKind::cancel)
             {
                 if (pending_capture)
                 {
-                    finish_capture(StatusCode::cancelled,
-                                   "exact capture cancelled");
+                    finish_operation(StatusCode::cancelled,
+                                     "capture operation cancelled");
                     OutboundPacket acknowledgement;
                     acknowledgement.session_id = queued.session_id;
                     acknowledgement.status = make_status(
@@ -1234,6 +1748,29 @@ namespace termin::framegraph_remote_target
                         StatusCode::cancelled,
                         "capture cancellation processed");
                     enqueue(std::move(acknowledgement));
+                    return;
+                }
+                if (stream)
+                {
+                    emit_status(stream->queued,
+                                StatusCode::cancelled,
+                                "live preview cancelled");
+                    stream.reset();
+                    clear_ready_preview();
+                    emit_status(queued,
+                                StatusCode::cancelled,
+                                "capture cancellation processed");
+                    return;
+                }
+                else if (burst)
+                {
+                    emit_status(burst->queued,
+                                StatusCode::cancelled,
+                                "burst capture cancelled");
+                    burst.reset();
+                    emit_status(queued,
+                                StatusCode::cancelled,
+                                "capture cancellation processed");
                     return;
                 }
                 OutboundPacket packet;
@@ -1245,15 +1782,6 @@ namespace termin::framegraph_remote_target
                 enqueue(std::move(packet));
                 return;
             }
-
-            OutboundPacket packet;
-            packet.session_id = queued.session_id;
-            packet.error = ErrorEvent{
-                501,
-                command.request_id,
-                graph_revision,
-                "streaming and burst capture are not enabled"};
-            enqueue(std::move(packet));
         }
 
         bool send_wire(
@@ -1330,6 +1858,8 @@ namespace termin::framegraph_remote_target
             target.capabilities =
                 static_cast<std::uint64_t>(Capability::topology) |
                 static_cast<std::uint64_t>(Capability::exact_snapshot) |
+                static_cast<std::uint64_t>(Capability::live_preview) |
+                static_cast<std::uint64_t>(Capability::burst_capture) |
                 static_cast<std::uint64_t>(Capability::hdr_pixels) |
                 static_cast<std::uint64_t>(Capability::depth_pixels);
             target.process_id = config.process_id;
@@ -1503,6 +2033,8 @@ namespace termin::framegraph_remote_target
                     release_client(client);
                     continue;
                 }
+                active_max_payload_bytes.store(max_payload_bytes,
+                                               std::memory_order_release);
                 active_session.store(session_id, std::memory_order_release);
                 client_connected.store(true, std::memory_order_release);
                 tc_log_info(
@@ -1516,6 +2048,8 @@ namespace termin::framegraph_remote_target
                              max_chunk_bytes);
                 client_connected.store(false, std::memory_order_release);
                 active_session.store(0, std::memory_order_release);
+                active_max_payload_bytes.store(
+                    WireLimits::max_payload_bytes, std::memory_order_release);
                 release_client(client);
                 tc_log_info("remote framegraph target: client disconnected "
                             "(session=%llu)",
@@ -1537,6 +2071,26 @@ namespace termin::framegraph_remote_target
                 {
                     if (!send_packet(socket,
                                      packet,
+                                     sequence,
+                                     session_id,
+                                     max_payload_bytes))
+                        return;
+                }
+                if (auto preview = take_ready_preview())
+                {
+                    OutboundPacket preview_packet;
+                    preview_packet.session_id = preview->value->session_id;
+                    if (preview->dropped_before != 0)
+                    {
+                        preview_packet.drop = DropEvent{
+                            DropKind::receiver,
+                            preview->dropped_before,
+                            preview->value->metadata.frame_number,
+                            sequence};
+                    }
+                    preview_packet.capture = std::move(preview->value);
+                    if (!send_packet(socket,
+                                     preview_packet,
                                      sequence,
                                      session_id,
                                      max_payload_bytes))
@@ -1664,11 +2218,14 @@ namespace termin::framegraph_remote_target
         std::thread io_thread;
         std::atomic<bool> running{false};
         std::atomic<bool> client_connected{false};
+        std::atomic<bool> debugger_attached{false};
         std::atomic<Socket> listener_socket{invalid_socket};
         std::atomic<Socket> client_socket{invalid_socket};
         std::atomic<std::uint16_t> listening_port{0};
         std::atomic<std::uint64_t> next_session_id{1};
         std::atomic<std::uint64_t> active_session{0};
+        std::atomic<std::uint32_t> active_max_payload_bytes{
+            WireLimits::max_payload_bytes};
         std::atomic<std::uint64_t> published_graph_revision{0};
         std::atomic<std::uint64_t> rejected_clients{0};
         std::atomic<std::uint64_t> rejected_commands{0};
@@ -1679,22 +2236,38 @@ namespace termin::framegraph_remote_target
         std::uint64_t next_target_id = 1;
         std::uint64_t graph_revision = 0;
         std::uint64_t pending_dropped_outbound = 0;
+        std::int64_t pending_dropped_after_frame = 0;
         std::optional<PendingCapture> pending_capture;
+        std::optional<StreamState> stream;
+        std::optional<BurstState> burst;
         std::uint64_t next_blob_id = 1;
+        std::int64_t next_capture_frame_number = 1;
         std::string topology_error;
+        LatestValueSlot<std::shared_ptr<CaptureBlob>> preview_slot;
         std::atomic<std::uint64_t> queued_capture_bytes{0};
         std::atomic<std::uint64_t> completed_captures{0};
+        std::atomic<std::uint64_t> dropped_captures{0};
+        std::atomic<std::uint64_t> preview_captures{0};
+        std::atomic<std::uint64_t> burst_captures{0};
+        std::atomic<std::uint64_t> capture_time_ns{0};
         std::atomic<std::uint64_t> readback_time_ns{0};
+        std::atomic<std::uint64_t> conversion_time_ns{0};
         std::atomic<std::uint64_t> transfer_encode_time_ns{0};
         std::atomic<std::uint64_t> captured_bytes{0};
+        std::atomic<std::uint64_t> effective_preview_millifps{0};
 #if defined(_WIN32)
         bool winsock_started = false;
 #endif
     };
 
+    RemoteFrameGraphTarget::RemoteFrameGraphTarget(TargetServiceConfig config)
+        : impl_(std::make_unique<Impl>(nullptr, std::move(config)))
+    {
+    }
+
     RemoteFrameGraphTarget::RemoteFrameGraphTarget(FrameGraphDebugger& debugger,
                                                    TargetServiceConfig config)
-        : impl_(std::make_unique<Impl>(debugger, std::move(config)))
+        : impl_(std::make_unique<Impl>(&debugger, std::move(config)))
     {
     }
 
@@ -1707,6 +2280,14 @@ namespace termin::framegraph_remote_target
     void RemoteFrameGraphTarget::stop()
     {
         impl_->stop();
+    }
+    bool RemoteFrameGraphTarget::attach_debugger(FrameGraphDebugger& debugger)
+    {
+        return impl_->attach_debugger(debugger);
+    }
+    void RemoteFrameGraphTarget::detach_debugger()
+    {
+        impl_->detach_debugger();
     }
     void RemoteFrameGraphTarget::pump_render_thread()
     {

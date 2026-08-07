@@ -3,4 +3,4 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-exec "$script_dir/android-diagnostics-forward" --service profiler "$@"
+exec "$script_dir/android-diagnostics-forward" --service framegraph "$@"

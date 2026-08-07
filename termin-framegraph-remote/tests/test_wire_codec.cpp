@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <termin/framegraph_remote/wire_codec.hpp>
+#include <termin/framegraph_remote/latest_value_slot.hpp>
 
 using namespace termin::framegraph_remote;
 
@@ -204,6 +205,25 @@ TEST_CASE("Command validation rejects stale and incomplete selectors") {
           SelectorError::invalid_burst_options);
     command.burst_frames = 16;
     CHECK(validate_command(command, 9));
+}
+
+TEST_CASE("Latest preview slot bounds a slow receiver to one ready frame") {
+    LatestValueSlot<int> slot;
+    for (int frame = 1; frame <= 100; ++frame)
+        slot.publish(frame);
+    const auto latest = slot.take();
+    REQUIRE(latest.has_value());
+    CHECK_EQ(latest->value, 100);
+    CHECK_EQ(latest->dropped_before, 99u);
+    CHECK_FALSE(slot.take().has_value());
+
+    slot.note_drop();
+    slot.note_drop();
+    slot.publish(101);
+    const auto after_rejection = slot.take();
+    REQUIRE(after_rejection.has_value());
+    CHECK_EQ(after_rejection->value, 101);
+    CHECK_EQ(after_rejection->dropped_before, 2u);
 }
 
 TEST_CASE("Blob assembler enforces identity ordering offsets and final size") {

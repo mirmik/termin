@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+service=""
+serial=""
+package="org.termin.android"
+host_port=""
+device_port=""
+token=""
+launch=1
+
+usage() {
+    echo "Usage: $0 --service profiler|framegraph [--serial SERIAL] [--package ID] [--host-port PORT] [--device-port PORT] [--token TOKEN] [--no-launch]"
+    echo
+    echo "Creates an adb TCP forward to a loopback-only Termin diagnostic service."
+    echo "When launching, the APK must be debuggable. A random token is generated"
+    echo "unless --token is supplied."
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --service)
+            service="$2"
+            shift
+            ;;
+        --service=*) service="${1#--service=}" ;;
+        --serial)
+            serial="$2"
+            shift
+            ;;
+        --serial=*) serial="${1#--serial=}" ;;
+        --package)
+            package="$2"
+            shift
+            ;;
+        --package=*) package="${1#--package=}" ;;
+        --host-port)
+            host_port="$2"
+            shift
+            ;;
+        --host-port=*) host_port="${1#--host-port=}" ;;
+        --device-port)
+            device_port="$2"
+            shift
+            ;;
+        --device-port=*) device_port="${1#--device-port=}" ;;
+        --token)
+            token="$2"
+            shift
+            ;;
+        --token=*) token="${1#--token=}" ;;
+        --no-launch) launch=0 ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+case "$service" in
+    profiler)
+        default_port="46051"
+        extra_prefix="termin.profiler"
+        service_label="remote profiler"
+        ;;
+    framegraph)
+        default_port="46052"
+        extra_prefix="termin.framegraph"
+        service_label="remote framegraph debugger"
+        ;;
+    *)
+        echo "--service must be profiler or framegraph" >&2
+        exit 2
+        ;;
+esac
+
+host_port="${host_port:-$default_port}"
+device_port="${device_port:-$default_port}"
+
+validate_port() {
+    local name="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[0-9]+$ ]] || (( value < 1 || value > 65535 )); then
+        echo "$name must be an integer in 1..65535: $value" >&2
+        exit 2
+    fi
+}
+
+validate_port "host port" "$host_port"
+validate_port "device port" "$device_port"
+
+if [[ -z "$serial" ]]; then
+    mapfile -t devices < <(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+    if (( ${#devices[@]} != 1 )); then
+        echo "Expected exactly one connected adb device, found ${#devices[@]}; pass --serial." >&2
+        exit 1
+    fi
+    serial="${devices[0]}"
+fi
+
+adb -s "$serial" get-state >/dev/null
+adb -s "$serial" forward "tcp:$host_port" "tcp:$device_port"
+
+if [[ -z "$token" ]]; then
+    token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+fi
+
+if (( launch )); then
+    adb -s "$serial" shell am force-stop "$package"
+    adb -s "$serial" shell am start \
+        -n "$package/org.termin.android.TerminActivity" \
+        --ez "$extra_prefix.remote" true \
+        --ei "$extra_prefix.port" "$device_port" \
+        --es "$extra_prefix.token" "$token"
+fi
+
+echo
+echo "Android $service_label ADB route is configured:"
+echo "  device serial: $serial"
+echo "  editor host:   127.0.0.1"
+echo "  editor port:   $host_port"
+echo "  token:         $token"
+echo "  remove forward: adb -s $serial forward --remove tcp:$host_port"

@@ -179,6 +179,37 @@ void FrameGraphDebuggerView::build() {
     remote_controls.add_fixed_child(use_local_button, 82.0f);
     settings.add_fixed_child(remote_controls, 30.0f);
 
+    auto& capture_controls = builder.make<BoxLayout>(
+        Orientation::Horizontal, "framegraph-remote-capture-controls");
+    capture_controls.set_stable_id(
+        "editor.framegraph.remote-capture-controls");
+    capture_controls.set_spacing(4.0f);
+    preview_fps_input_ = &builder.make<TextInput>();
+    preview_fps_input_->set_stable_id("editor.framegraph.preview-fps");
+    preview_fps_input_->set_placeholder("FPS");
+    preview_fps_input_->set_text("10");
+    preview_edge_input_ = &builder.make<TextInput>();
+    preview_edge_input_->set_stable_id("editor.framegraph.preview-edge");
+    preview_edge_input_->set_placeholder("Long edge");
+    preview_edge_input_->set_text("960");
+    burst_frames_input_ = &builder.make<TextInput>();
+    burst_frames_input_->set_stable_id("editor.framegraph.burst-frames");
+    burst_frames_input_->set_placeholder("Burst");
+    burst_frames_input_->set_text("4");
+    auto& start_preview = builder.make<Button>("Start Live");
+    start_preview.set_stable_id("editor.framegraph.preview-start");
+    auto& stop_preview = builder.make<Button>("Stop Live");
+    stop_preview.set_stable_id("editor.framegraph.preview-stop");
+    auto& capture_burst = builder.make<Button>("Burst");
+    capture_burst.set_stable_id("editor.framegraph.burst-capture");
+    capture_controls.add_fixed_child(*preview_fps_input_, 54.0f);
+    capture_controls.add_fixed_child(*preview_edge_input_, 76.0f);
+    capture_controls.add_fixed_child(start_preview, 82.0f);
+    capture_controls.add_fixed_child(stop_preview, 82.0f);
+    capture_controls.add_fixed_child(*burst_frames_input_, 58.0f);
+    capture_controls.add_fixed_child(capture_burst, 68.0f);
+    settings.add_fixed_child(capture_controls, 30.0f);
+
     target_combo_ = &builder.make<ComboBox>();
     target_combo_->set_stable_id("editor.framegraph.target");
     settings.add_fixed_child(
@@ -494,6 +525,52 @@ void FrameGraphDebuggerView::build() {
         disconnect_remote();
     });
     use_local_button.clicked().connect([this](Button&) { use_local(); });
+    start_preview.clicked().connect([this](Button&) {
+        unsigned fps = 0;
+        unsigned edge = 0;
+        const std::string& fps_text = preview_fps_input_->text();
+        const std::string& edge_text = preview_edge_input_->text();
+        const auto fps_result = std::from_chars(
+            fps_text.data(), fps_text.data() + fps_text.size(), fps);
+        const auto edge_result = std::from_chars(
+            edge_text.data(), edge_text.data() + edge_text.size(), edge);
+        if (fps_result.ec != std::errc{} ||
+            fps_result.ptr != fps_text.data() + fps_text.size() ||
+            edge_result.ec != std::errc{} ||
+            edge_result.ptr != edge_text.data() + edge_text.size() ||
+            fps == 0 || fps > 60 || edge == 0 || edge > 4096 ||
+            !source_->start_live_preview(fps * 1000, edge)) {
+            state_status_->set_text(
+                "Live preview requires remote capability, FPS 1..60 and edge 1..4096");
+            request_render();
+            return;
+        }
+        refresh_info();
+    });
+    stop_preview.clicked().connect([this](Button&) {
+        if (!source_->stop_live_preview()) {
+            state_status_->set_text("No remote live preview to stop");
+            request_render();
+            return;
+        }
+        refresh_info();
+    });
+    capture_burst.clicked().connect([this](Button&) {
+        unsigned frames = 0;
+        const std::string& text = burst_frames_input_->text();
+        const auto result = std::from_chars(
+            text.data(), text.data() + text.size(), frames);
+        if (result.ec != std::errc{} ||
+            result.ptr != text.data() + text.size() ||
+            frames < 2 || frames > 16 ||
+            !source_->capture_burst(static_cast<std::uint16_t>(frames))) {
+            state_status_->set_text(
+                "Burst requires remote capability and 2..16 frames");
+            request_render();
+            return;
+        }
+        refresh_info();
+    });
 }
 
 bool FrameGraphDebuggerView::activate() {
@@ -591,6 +668,23 @@ bool FrameGraphDebuggerView::use_local() {
 
 bool FrameGraphDebuggerView::using_remote() const {
     return remote_source_ && source_ == remote_source_;
+}
+
+bool FrameGraphDebuggerView::start_live_preview(
+    std::uint32_t max_millifps, std::uint32_t max_long_edge
+) {
+    require_open();
+    return source_->start_live_preview(max_millifps, max_long_edge);
+}
+
+bool FrameGraphDebuggerView::stop_live_preview() {
+    require_open();
+    return source_->stop_live_preview();
+}
+
+bool FrameGraphDebuggerView::capture_burst(std::uint16_t frames) {
+    require_open();
+    return source_->capture_burst(frames);
 }
 
 std::shared_ptr<const FrameGraphDebuggerSnapshot>
@@ -711,6 +805,9 @@ void FrameGraphDebuggerView::refresh_info() {
     if (snapshot->source_kind == FrameGraphDebuggerSourceKind::Remote &&
         snapshot->stale) {
         state += " [STALE]";
+    }
+    if (snapshot->live_preview_active) {
+        state += " [LIVE]";
     }
     if (snapshot->state == FrameGraphDebuggerState::Suspended) {
         state += ": ";
