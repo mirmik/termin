@@ -83,11 +83,20 @@ independent panel Y ranges, safe dynamic panel count, fixed or distributed
 panel height, virtual extent and scroll offset. Hidden panel roots do not
 render or rebuild layout during shared-X updates; a panel entering the viewport
 receives its deferred X range and new viewport in one native frame mutation.
+For an already visible panel, shared-X uses the composer's X-only invalidation
+path: projection, grid and X-axis chrome update without remeasuring text or
+rebuilding Y-axis/layout geometry.
 Each panel is exposed as a borrowed `Chart2D`, so customization and semantic
 series APIs stay identical. `MultiChart2DWpfInteraction` maps middle drag,
 wheel scrolling and Ctrl+wheel shared-X zoom without moving chart layout into
 WPF. A non-owning `MultiChart2DGroup` coordinates shared X, panel count/layout,
 theme and clamped scroll across separate time/frequency chart columns.
+`examples/AllianceStreamingChartsExample` exercises that contract with two
+15-panel columns, 60 streaming native series, synchronized navigation and a
+shared external scrollbar. `RetainedChartComposition` additionally renders
+the top and bottom of both 15-panel scenes through the installed-SDK D3D11
+offscreen path, so the multi-chart acceptance reaches GPU execution rather
+than stopping at scene construction.
 
 `RetainedChart3D` exposes a plot-specific retained scene with generation-
 checked surface, scatter and grid references. Surface/scatter `SetData`
@@ -97,7 +106,18 @@ restores the canonical orientation. `MsaaSamples` owns render-target sampling,
 and `RetainedChart3DHost` suspends rendering while effectively invisible. See
 `examples/RetainedChart3DWpfExample` for the complete D3D11 vertical slice.
 The generic `RetainedScene2DHost` exposes the same MSAA policy and visibility
-suspension for composed 2D scenes.
+suspension for composed 2D scenes. It renders continuously by default for
+backward compatibility. Consumers with explicitly scheduled scene mutations
+can set `ContinuousRendering = false` and call `RequestRender()` after each
+mutation; resize, DPI and visibility changes still invalidate automatically.
+`FrameRendered` reports native paint/freeze/CPU-submit, D3DImage present and
+portal-update durations without forcing GPU synchronization; submit duration
+is not presented as GPU wall time.
+The native host reuses draw-command storage across frames. Visual-scene order
+is cached independently from mutable item content, and retained plot series
+reuse their batch objects instead of allocating one during every paint.
+The WPF interaction adapters request a frame after navigation. The Alliance
+streaming example uses this mode for both coordinated scenes and 2x MSAA.
 
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 

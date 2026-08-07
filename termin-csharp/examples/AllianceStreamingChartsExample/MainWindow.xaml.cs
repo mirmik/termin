@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -23,6 +24,9 @@ public partial class MainWindow : Window
         private readonly List<double> _x = new() { 0 };
         private readonly List<double> _primary = new();
         private readonly List<double> _secondary = new();
+        private readonly double[] _appendX = new double[1];
+        private readonly double[] _appendPrimary = new double[1];
+        private readonly double[] _appendSecondary = new double[1];
 
         public StreamPanel(
             Chart2D chart,
@@ -60,6 +64,7 @@ public partial class MainWindow : Window
         public Chart2D Chart { get; }
         public ChartLineSeries2D Primary { get; }
         public ChartLineSeries2D Secondary { get; }
+        public int PointCount => _x.Count;
 
         public void Append(double time)
         {
@@ -68,8 +73,11 @@ public partial class MainWindow : Window
             _x.Add(time);
             _primary.Add(primary);
             _secondary.Add(secondary);
-            Primary.Append(new[] { time }, new[] { primary });
-            Secondary.Append(new[] { time }, new[] { secondary });
+            _appendX[0] = time;
+            _appendPrimary[0] = primary;
+            _appendSecondary[0] = secondary;
+            Primary.Append(_appendX, _appendPrimary);
+            Secondary.Append(_appendX, _appendSecondary);
 
             if (_x.Count >= CompactAt)
                 Compact();
@@ -99,8 +107,11 @@ public partial class MainWindow : Window
     }
 
     private const double WindowSeconds = 20;
+    private const int PanelsPerColumn = 15;
     private readonly GpuHost _gpuHost;
-    private readonly MultiChart2D _multiChart;
+    private readonly MultiChart2D _leftChart;
+    private readonly MultiChart2D _rightChart;
+    private readonly MultiChart2DGroup _chartGroup;
     private readonly StreamPanel[] _panels;
     private readonly RectItemRef2D _pauseAnchor;
     private readonly RectItemRef2D _resetAnchor;
@@ -108,65 +119,74 @@ public partial class MainWindow : Window
     private readonly Button _pauseButton;
     private readonly Button _resetButton;
     private readonly Button _followButton;
-    private readonly MultiChart2DWpfInteraction _interaction;
+    private readonly MultiChart2DWpfInteraction _leftInteraction;
+    private readonly MultiChart2DWpfInteraction _rightInteraction;
     private readonly DispatcherTimer _timer;
     private bool _paused;
     private bool _followLatest = true;
     private bool _synchronizingScrollBar;
     private bool _closed;
     private double _time;
+    private long _appendDurationTicks;
+    private long _rangeDurationTicks;
+    private int _updateSamples;
+    private double _renderPaintMilliseconds;
+    private double _renderFreezeMilliseconds;
+    private double _renderSubmitMilliseconds;
+    private double _renderNativeOtherMilliseconds;
+    private double _renderPresentMilliseconds;
+    private double _renderPortalMilliseconds;
+    private double _renderTotalMilliseconds;
+    private int _renderSamples;
 
     public MainWindow()
     {
         InitializeComponent();
 
         _gpuHost = Tgfx2Host.Acquire(FindFont(), BackendType.D3D11);
-        MultiChart2D? multiChart = null;
-        MultiChart2DWpfInteraction? interaction = null;
+        MultiChart2D? leftChart = null;
+        MultiChart2D? rightChart = null;
+        MultiChart2DWpfInteraction? leftInteraction = null;
+        MultiChart2DWpfInteraction? rightInteraction = null;
         var panels = new List<StreamPanel>();
         try
         {
-            multiChart = new MultiChart2D(
+            Chart2DTheme theme = CreatePanelTheme();
+            leftChart = new MultiChart2D(
                 _gpuHost,
                 800,
                 720,
-                panelCount: 4,
+                panelCount: PanelsPerColumn,
                 initialRange: new PlotRange2D(0, WindowSeconds, -1, 1),
                 panelHeight: 190,
                 panelGap: 5,
-                theme: CreatePanelTheme());
-            _multiChart = multiChart;
-            ValidateNativeMultiChartContract(_multiChart);
-            panels.Add(CreatePanel(
-                0, "Pressure A / B", "kPa", 10, 30,
-                t => 20 + 4.2 * Math.Sin(t * 0.82),
-                t => 19 + 2.6 * Math.Sin(t * 0.82 + 1.15),
-                new PlotColor2D(0.20f, 0.72f, 1.0f),
-                new PlotColor2D(0.35f, 0.95f, 0.70f)));
-            panels.Add(CreatePanel(
-                1, "Temperature inlet / outlet", "°C", 35, 90,
-                t => 62 + 13 * Math.Sin(t * 0.24),
-                t => 55 + 9 * Math.Sin(t * 0.24 - 0.7),
-                new PlotColor2D(1.0f, 0.45f, 0.20f),
-                new PlotColor2D(1.0f, 0.78f, 0.24f)));
-            panels.Add(CreatePanel(
-                2, "Drive speed / command", "rpm", 600, 1800,
-                t => 1200 + 280 * Math.Sin(t * 0.55) + 65 * Math.Sin(t * 2.4),
-                t => 1230 + 240 * Math.Sin(t * 0.55 + 0.18),
-                new PlotColor2D(0.72f, 0.48f, 1.0f),
-                new PlotColor2D(0.95f, 0.45f, 0.82f)));
-            panels.Add(CreatePanel(
-                3, "Tracking error X / Y", "mm", -1.6, 1.6,
-                t => 0.72 * Math.Sin(t * 1.35) + 0.18 * Math.Sin(t * 4.7),
-                t => 0.58 * Math.Cos(t * 1.1) - 0.12 * Math.Sin(t * 5.2),
-                new PlotColor2D(0.32f, 0.90f, 0.46f),
-                new PlotColor2D(1.0f, 0.34f, 0.35f)));
-            _panels = panels.ToArray();
-            _panels[^1].Chart.XAxisText = "time, s";
+                theme: theme);
+            rightChart = new MultiChart2D(
+                _gpuHost,
+                800,
+                720,
+                panelCount: PanelsPerColumn,
+                initialRange: new PlotRange2D(0, WindowSeconds, -1, 1),
+                panelHeight: 190,
+                panelGap: 5,
+                theme: theme);
+            _leftChart = leftChart;
+            _rightChart = rightChart;
+            _chartGroup = new MultiChart2DGroup(_leftChart, _rightChart);
+            ValidateNativeMultiChartContract(_chartGroup);
 
-            _pauseAnchor = CreatePortalAnchor();
-            _resetAnchor = CreatePortalAnchor();
-            _followAnchor = CreatePortalAnchor();
+            for (int index = 0; index < PanelsPerColumn; ++index)
+            {
+                panels.Add(CreateSyntheticPanel(_leftChart, 0, index));
+                panels.Add(CreateSyntheticPanel(_rightChart, 1, index));
+            }
+            _panels = panels.ToArray();
+            _leftChart.Panels[^1].Chart.XAxisText = "time, s";
+            _rightChart.Panels[^1].Chart.XAxisText = "time, s";
+
+            _pauseAnchor = CreatePortalAnchor(_leftChart.Scene);
+            _resetAnchor = CreatePortalAnchor(_leftChart.Scene);
+            _followAnchor = CreatePortalAnchor(_leftChart.Scene);
             _pauseButton = CreateToolbarButton("Pause");
             _resetButton = CreateToolbarButton("Reset");
             _followButton = CreateToolbarButton("Stop following");
@@ -174,18 +194,32 @@ public partial class MainWindow : Window
             _resetButton.Click += OnResetClick;
             _followButton.Click += OnFollowClick;
 
-            SceneHost.FramebufferChanged += OnFramebufferChanged;
-            SceneHost.RenderFailed += OnRenderFailed;
-            SceneHost.Attach(_gpuHost, _multiChart.Scene);
-            interaction = new MultiChart2DWpfInteraction(
-                SceneHost, _multiChart);
-            _interaction = interaction;
-            _interaction.Navigated += OnChartNavigated;
-            _interaction.Scrolled += OnChartScrolled;
+            LeftSceneHost.FramebufferChanged += OnFramebufferChanged;
+            RightSceneHost.FramebufferChanged += OnFramebufferChanged;
+            LeftSceneHost.RenderFailed += OnRenderFailed;
+            RightSceneHost.RenderFailed += OnRenderFailed;
+            LeftSceneHost.FrameRendered += OnFrameRendered;
+            RightSceneHost.FrameRendered += OnFrameRendered;
+            LeftSceneHost.MsaaSamples = 2;
+            RightSceneHost.MsaaSamples = 2;
+            LeftSceneHost.ContinuousRendering = false;
+            RightSceneHost.ContinuousRendering = false;
+            LeftSceneHost.Attach(_gpuHost, _leftChart.Scene);
+            RightSceneHost.Attach(_gpuHost, _rightChart.Scene);
+            leftInteraction = new MultiChart2DWpfInteraction(
+                LeftSceneHost, _leftChart, _chartGroup);
+            rightInteraction = new MultiChart2DWpfInteraction(
+                RightSceneHost, _rightChart, _chartGroup);
+            _leftInteraction = leftInteraction;
+            _rightInteraction = rightInteraction;
+            _leftInteraction.Navigated += OnChartNavigated;
+            _rightInteraction.Navigated += OnChartNavigated;
+            _leftInteraction.Scrolled += OnChartScrolled;
+            _rightInteraction.Scrolled += OnChartScrolled;
             PanelScrollBar.ValueChanged += OnPanelScrollBarValueChanged;
-            SceneHost.AddPortal(_pauseAnchor, _pauseButton);
-            SceneHost.AddPortal(_resetAnchor, _resetButton);
-            SceneHost.AddPortal(_followAnchor, _followButton);
+            LeftSceneHost.AddPortal(_pauseAnchor, _pauseButton);
+            LeftSceneHost.AddPortal(_resetAnchor, _resetButton);
+            LeftSceneHost.AddPortal(_followAnchor, _followButton);
 
             _timer = new DispatcherTimer(
                 TimeSpan.FromMilliseconds(40),
@@ -196,10 +230,43 @@ public partial class MainWindow : Window
         }
         catch
         {
-            interaction?.Dispose();
-            SceneHost.Dispose();
-            multiChart?.Dispose();
-            Tgfx2Host.Release();
+            try
+            {
+                rightInteraction?.Dispose();
+                leftInteraction?.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    try
+                    {
+                        RightSceneHost.Dispose();
+                    }
+                    finally
+                    {
+                        LeftSceneHost.Dispose();
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        try
+                        {
+                            rightChart?.Dispose();
+                        }
+                        finally
+                        {
+                            leftChart?.Dispose();
+                        }
+                    }
+                    finally
+                    {
+                        Tgfx2Host.Release();
+                    }
+                }
+            }
             throw;
         }
 
@@ -207,6 +274,7 @@ public partial class MainWindow : Window
     }
 
     private StreamPanel CreatePanel(
+        MultiChart2D owner,
         int index,
         string title,
         string yAxis,
@@ -217,7 +285,7 @@ public partial class MainWindow : Window
         PlotColor2D primaryColor,
         PlotColor2D secondaryColor)
     {
-        Chart2D chart = _multiChart.Panels[index].Chart;
+        Chart2D chart = owner.Panels[index].Chart;
         chart.SetRange(new PlotRange2D(
             0, WindowSeconds, yMinimum, yMaximum));
         chart.TitleText = title;
@@ -231,10 +299,64 @@ public partial class MainWindow : Window
             secondaryColor);
     }
 
-    private RectItemRef2D CreatePortalAnchor()
+    private StreamPanel CreateSyntheticPanel(
+        MultiChart2D owner,
+        int column,
+        int index)
+    {
+        (string name, string unit, double center, double amplitude,
+            double minimum, double maximum) = (index % 5) switch
+        {
+            0 => ("Pressure", "kPa", 20.0 + index, 5.0, 8.0, 42.0),
+            1 => ("Temperature", "°C", 58.0 + index, 14.0, 28.0, 96.0),
+            2 => ("Drive speed", "rpm", 1100.0 + index * 25.0,
+                320.0, 450.0, 1900.0),
+            3 => ("Tracking error", "mm", 0.0, 0.9, -1.8, 1.8),
+            _ => ("Bus voltage", "V", 24.0 + index * 0.1,
+                3.2, 15.0, 34.0),
+        };
+        double phase = column * 0.73 + index * 0.19;
+        double speed = 0.19 + index * 0.055;
+        string columnName = column == 0 ? "A" : "B";
+        return CreatePanel(
+            owner,
+            index,
+            $"{columnName}{index + 1:00} · {name}",
+            unit,
+            minimum,
+            maximum,
+            t => center + amplitude * (
+                0.78 * Math.Sin(t * speed + phase) +
+                0.22 * Math.Sin(t * (speed * 4.3) - phase * 0.4)),
+            t => center + amplitude * 0.72 *
+                Math.Sin(t * speed + phase + 0.68),
+            PrimaryColor(index),
+            SecondaryColor(index));
+    }
+
+    private static PlotColor2D PrimaryColor(int index) => (index % 5) switch
+    {
+        0 => new PlotColor2D(0.20f, 0.72f, 1.0f),
+        1 => new PlotColor2D(1.0f, 0.45f, 0.20f),
+        2 => new PlotColor2D(0.72f, 0.48f, 1.0f),
+        3 => new PlotColor2D(0.32f, 0.90f, 0.46f),
+        _ => new PlotColor2D(1.0f, 0.78f, 0.24f),
+    };
+
+    private static PlotColor2D SecondaryColor(int index) =>
+        (index % 5) switch
+        {
+            0 => new PlotColor2D(0.35f, 0.95f, 0.70f),
+            1 => new PlotColor2D(1.0f, 0.78f, 0.24f),
+            2 => new PlotColor2D(0.95f, 0.45f, 0.82f),
+            3 => new PlotColor2D(1.0f, 0.34f, 0.35f),
+            _ => new PlotColor2D(0.50f, 0.82f, 1.0f),
+        };
+
+    private static RectItemRef2D CreatePortalAnchor(TcVisualScene2D scene)
     {
         var anchor = RectItemRef2D.Create(
-            _multiChart.Scene,
+            scene,
             new VisualRect2f(0, 0, 1, 1),
             new VisualFillPaint2D(new VisualColor4f(0, 0, 0, 0)));
         anchor.ZOrder = 1_000;
@@ -261,15 +383,22 @@ public partial class MainWindow : Window
         float contentTop = toolbarHeight;
         float available = Math.Max(
             4, e.Height - contentTop - margin);
-        _multiChart.SetViewport(
+        MultiChart2D chart = ReferenceEquals(sender, LeftSceneHost)
+            ? _leftChart
+            : _rightChart;
+        chart.SetViewport(
             new VisualRect2f(
                 margin,
                 contentTop,
                 Math.Max(1, e.Width - margin * 2),
                 available),
             scale);
-        _multiChart.SetPanelLayout(190 * scale, panelGap);
+        _chartGroup.SetPanelLayout(190 * scale, panelGap);
         UpdatePanelScrollBar();
+        RequestBothRenders();
+
+        if (!ReferenceEquals(sender, LeftSceneHost))
+            return;
 
         float buttonWidth = 116 * scale;
         float buttonHeight = 32 * scale;
@@ -300,16 +429,78 @@ public partial class MainWindow : Window
             return;
 
         _time += 0.04;
+        long appendStarted = Stopwatch.GetTimestamp();
         foreach (StreamPanel panel in _panels)
             panel.Append(_time);
+        _appendDurationTicks +=
+            Stopwatch.GetTimestamp() - appendStarted;
 
+        long rangeStarted = Stopwatch.GetTimestamp();
         if (_followLatest)
             SnapToLatest();
+        _rangeDurationTicks += Stopwatch.GetTimestamp() - rangeStarted;
+        RequestBothRenders();
 
-        StatusText.Text =
-            $"Streaming {_panels.Length * 2} series in one scene; " +
-            $"t = {_time:F1} s, " +
-            $"{(_followLatest ? "following latest" : "manual navigation")}.";
+        ++_updateSamples;
+        if (_updateSamples >= 25)
+        {
+            double averageAppendMs = _appendDurationTicks * 1000.0 /
+                Stopwatch.Frequency / _updateSamples;
+            double averageRangeMs = _rangeDurationTicks * 1000.0 /
+                Stopwatch.Frequency / _updateSamples;
+            int renderSamples = Math.Max(1, _renderSamples);
+            double averageRenderTotal =
+                _renderTotalMilliseconds / renderSamples;
+            StatusText.Text =
+                $"2×{PanelsPerColumn}, {_panels.Length * 2} native series, " +
+                $"{_panels[0].PointCount} points/series; " +
+                $"append {averageAppendMs:F2} + X {averageRangeMs:F2} ms/tick; " +
+                $"t = {_time:F1} s, " +
+                $"{(_followLatest ? "following latest" : "manual navigation")}.\n" +
+                $"render/host avg ({_renderSamples}): " +
+                $"paint {_renderPaintMilliseconds / renderSamples:F2}, " +
+                $"freeze {_renderFreezeMilliseconds / renderSamples:F2}, " +
+                $"submit* {_renderSubmitMilliseconds / renderSamples:F2}, " +
+                $"native-other {_renderNativeOtherMilliseconds / renderSamples:F2}, " +
+                $"present {_renderPresentMilliseconds / renderSamples:F2}, " +
+                $"portals {_renderPortalMilliseconds / renderSamples:F2}, " +
+                $"total {averageRenderTotal:F2} ms; " +
+                $"pair≈{averageRenderTotal * 2:F2} ms. " +
+                $"*CPU command submission, not GPU timestamp.";
+            _appendDurationTicks = 0;
+            _rangeDurationTicks = 0;
+            _updateSamples = 0;
+            ResetRenderTelemetry();
+        }
+    }
+
+    private void OnFrameRendered(
+        object? sender,
+        RetainedSceneFrameRenderedEventArgs e)
+    {
+        _renderPaintMilliseconds += e.Native.PaintMilliseconds;
+        _renderFreezeMilliseconds += e.Native.FreezeMilliseconds;
+        _renderSubmitMilliseconds += e.Native.GpuSubmitMilliseconds;
+        _renderNativeOtherMilliseconds += Math.Max(
+            0,
+            e.NativeCallMilliseconds - e.Native.PaintMilliseconds -
+            e.Native.FreezeMilliseconds - e.Native.GpuSubmitMilliseconds);
+        _renderPresentMilliseconds += e.PresentMilliseconds;
+        _renderPortalMilliseconds += e.PortalMilliseconds;
+        _renderTotalMilliseconds += e.TotalMilliseconds;
+        ++_renderSamples;
+    }
+
+    private void ResetRenderTelemetry()
+    {
+        _renderPaintMilliseconds = 0;
+        _renderFreezeMilliseconds = 0;
+        _renderSubmitMilliseconds = 0;
+        _renderNativeOtherMilliseconds = 0;
+        _renderPresentMilliseconds = 0;
+        _renderPortalMilliseconds = 0;
+        _renderTotalMilliseconds = 0;
+        _renderSamples = 0;
     }
 
     private void OnPauseClick(object sender, RoutedEventArgs e)
@@ -326,7 +517,8 @@ public partial class MainWindow : Window
         _time = 0;
         foreach (StreamPanel panel in _panels)
             panel.Reset();
-        _multiChart.SetSharedX(0, WindowSeconds);
+        _chartGroup.SetSharedX(0, WindowSeconds);
+        RequestBothRenders();
         _followLatest = true;
         UpdateFollowButton();
         StatusText.Text = "All native series were reset by the C# callback.";
@@ -337,6 +529,7 @@ public partial class MainWindow : Window
         _followLatest = !_followLatest;
         if (_followLatest)
             SnapToLatest();
+        RequestBothRenders();
         UpdateFollowButton();
         StatusText.Text = _followLatest
             ? "Shared X returned to the live window."
@@ -348,6 +541,7 @@ public partial class MainWindow : Window
         MultiChartNavigatedEventArgs2D e)
     {
         _followLatest = false;
+        RequestBothRenders();
         UpdateFollowButton();
         StatusText.Text =
             $"{e.Kind}: shared X updated; selected panel keeps its own Y.";
@@ -355,6 +549,7 @@ public partial class MainWindow : Window
 
     private void OnChartScrolled(object? sender, EventArgs e)
     {
+        RequestBothRenders();
         UpdatePanelScrollBar();
     }
 
@@ -364,22 +559,23 @@ public partial class MainWindow : Window
     {
         if (_synchronizingScrollBar)
             return;
-        _multiChart.ScrollOffset = (float)e.NewValue;
+        _chartGroup.ScrollOffset = (float)e.NewValue;
+        RequestBothRenders();
         UpdatePanelScrollBar();
     }
 
     private void UpdatePanelScrollBar()
     {
-        MultiChartSnapshot2D state = _multiChart.Snapshot;
+        MultiChartSnapshot2D state = _leftChart.Snapshot;
         _synchronizingScrollBar = true;
         try
         {
-            PanelScrollBar.Maximum = state.MaximumScrollOffset;
+            PanelScrollBar.Maximum = _chartGroup.MaximumScrollOffset;
             PanelScrollBar.ViewportSize = state.Viewport.Height;
             PanelScrollBar.LargeChange = Math.Max(
                 1, state.Viewport.Height * 0.8);
-            PanelScrollBar.Value = state.ScrollOffset;
-            PanelScrollBar.IsEnabled = state.MaximumScrollOffset > 0;
+            PanelScrollBar.Value = _chartGroup.ScrollOffset;
+            PanelScrollBar.IsEnabled = _chartGroup.MaximumScrollOffset > 0;
         }
         finally
         {
@@ -390,7 +586,7 @@ public partial class MainWindow : Window
     private void SnapToLatest()
     {
         double xMaximum = Math.Max(WindowSeconds, _time);
-        _multiChart.SetSharedX(xMaximum - WindowSeconds, xMaximum);
+        _chartGroup.SetSharedX(xMaximum - WindowSeconds, xMaximum);
     }
 
     private void UpdateFollowButton()
@@ -400,12 +596,22 @@ public partial class MainWindow : Window
             : "Follow latest";
     }
 
+    private void RequestBothRenders()
+    {
+        LeftSceneHost.RequestRender();
+        RightSceneHost.RequestRender();
+    }
+
     private void OnRenderFailed(
         object? sender,
         RetainedSceneRenderFailedEventArgs e)
     {
         _timer.Stop();
-        StatusText.Text = $"Rendering stopped: {e.Error.Message}";
+        string column = ReferenceEquals(sender, LeftSceneHost)
+            ? "left"
+            : "right";
+        StatusText.Text =
+            $"Rendering stopped in the {column} column: {e.Error.Message}";
         StatusText.Foreground = Brushes.OrangeRed;
     }
 
@@ -418,21 +624,42 @@ public partial class MainWindow : Window
         _pauseButton.Click -= OnPauseClick;
         _resetButton.Click -= OnResetClick;
         _followButton.Click -= OnFollowClick;
-        _interaction.Navigated -= OnChartNavigated;
-        _interaction.Scrolled -= OnChartScrolled;
-        _interaction.Dispose();
+        _leftInteraction.Navigated -= OnChartNavigated;
+        _rightInteraction.Navigated -= OnChartNavigated;
+        _leftInteraction.Scrolled -= OnChartScrolled;
+        _rightInteraction.Scrolled -= OnChartScrolled;
+        _rightInteraction.Dispose();
+        _leftInteraction.Dispose();
         PanelScrollBar.ValueChanged -= OnPanelScrollBarValueChanged;
-        SceneHost.FramebufferChanged -= OnFramebufferChanged;
-        SceneHost.RenderFailed -= OnRenderFailed;
+        LeftSceneHost.FramebufferChanged -= OnFramebufferChanged;
+        RightSceneHost.FramebufferChanged -= OnFramebufferChanged;
+        LeftSceneHost.RenderFailed -= OnRenderFailed;
+        RightSceneHost.RenderFailed -= OnRenderFailed;
+        LeftSceneHost.FrameRendered -= OnFrameRendered;
+        RightSceneHost.FrameRendered -= OnFrameRendered;
         try
         {
-            SceneHost.Dispose();
+            try
+            {
+                RightSceneHost.Dispose();
+            }
+            finally
+            {
+                LeftSceneHost.Dispose();
+            }
         }
         finally
         {
             try
             {
-                _multiChart.Dispose();
+                try
+                {
+                    _rightChart.Dispose();
+                }
+                finally
+                {
+                    _leftChart.Dispose();
+                }
             }
             finally
             {
@@ -470,26 +697,37 @@ public partial class MainWindow : Window
         YTickSpacingLogicalPx = 48,
     };
 
-    private static void ValidateNativeMultiChartContract(MultiChart2D chart)
+    private static void ValidateNativeMultiChartContract(
+        MultiChart2DGroup group)
     {
-        MultiChartPanel2D stable = chart.Panels[0];
-        chart.SetPanelCount(6);
-        MultiChartPanel2D removed = chart.Panels[5];
-        chart.SetPanelCount(4);
-        if (!ReferenceEquals(stable, chart.Panels[0]) ||
-            !stable.IsValid || removed.IsValid)
+        MultiChart2D left = group.Charts[0];
+        MultiChart2D right = group.Charts[1];
+        MultiChartPanel2D stableLeft = left.Panels[0];
+        MultiChartPanel2D stableRight = right.Panels[0];
+        group.SetPanelCount(PanelsPerColumn + 2);
+        MultiChartPanel2D removedLeft = left.Panels[^1];
+        MultiChartPanel2D removedRight = right.Panels[^1];
+        group.SetPanelCount(PanelsPerColumn);
+        if (!ReferenceEquals(stableLeft, left.Panels[0]) ||
+            !ReferenceEquals(stableRight, right.Panels[0]) ||
+            !stableLeft.IsValid || !stableRight.IsValid ||
+            removedLeft.IsValid || removedRight.IsValid)
             throw new InvalidOperationException(
-                "Native multi-chart panel handle smoke check failed.");
+                "Coordinated native panel handle smoke check failed.");
 
-        MultiChartSnapshot2D state = chart.Snapshot;
-        if (state.PanelCount != 4 || state.MaximumScrollOffset <= 0)
+        MultiChartSnapshot2D leftState = left.Snapshot;
+        MultiChartSnapshot2D rightState = right.Snapshot;
+        if (leftState.PanelCount != PanelsPerColumn ||
+            rightState.PanelCount != PanelsPerColumn ||
+            group.MaximumScrollOffset <= 0)
             throw new InvalidOperationException(
-                "Native multi-chart virtual extent smoke check failed.");
-        chart.ScrollOffset = state.MaximumScrollOffset;
-        if (chart.Snapshot.ScrollOffset <= 0)
+                "Coordinated virtual extent smoke check failed.");
+        group.ScrollOffset = group.MaximumScrollOffset;
+        if (left.Snapshot.ScrollOffset <= 0 ||
+            left.Snapshot.ScrollOffset != right.Snapshot.ScrollOffset)
             throw new InvalidOperationException(
-                "Native multi-chart scroll smoke check failed.");
-        chart.ScrollOffset = 0;
+                "Coordinated scroll smoke check failed.");
+        group.ScrollOffset = 0;
     }
 
     private static string FindFont()
