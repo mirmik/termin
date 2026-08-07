@@ -27,6 +27,7 @@ class ProjectSessionController:
         get_render_engine: Callable[[], object],
         show_error: Callable[[str, str], None] | None = None,
         show_warning: Callable[[str, str], None] | None = None,
+        on_project_opened: Callable[[Path], None] | None = None,
         run_module_operation: Callable[[object, Path, Callable[[bool], None]], None]
         | None = None,
     ) -> None:
@@ -39,6 +40,7 @@ class ProjectSessionController:
         self._get_render_engine = get_render_engine
         self._show_error = show_error
         self._show_warning = show_warning
+        self._on_project_opened = on_project_opened
         self._run_module_operation = run_module_operation
         self._project_file: Path | None = None
         self._initializing = False
@@ -155,6 +157,15 @@ class ProjectSessionController:
             if on_complete is not None:
                 on_complete(False)
             return False
+
+        if self._on_project_opened is not None:
+            try:
+                self._on_project_opened(project_file)
+            except Exception as e:
+                log.error(
+                    "[ProjectSessionController] Failed to update recent projects "
+                    f"after opening '{project_file}': {e}"
+                )
 
         module_load_finished = False
 

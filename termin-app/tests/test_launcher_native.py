@@ -19,13 +19,6 @@ class MemoryRecentProjects:
     def list(self) -> list[dict]:
         return list(self.entries)
 
-    def add(self, project_path: str) -> None:
-        self.remove(project_path)
-        self.entries.insert(0, {"name": Path(project_path).stem, "path": project_path})
-
-    def restore(self, projects: list[dict]) -> None:
-        self.entries = list(projects)
-
     def remove(self, project_path: str) -> None:
         self.entries = [entry for entry in self.entries if entry["path"] != project_path]
 
@@ -108,8 +101,9 @@ def test_native_launcher_activation_and_all_main_actions_use_controller(
 
     projection.widgets["recent_list"].select(0)
     projection._remove_selected()
-    assert len(controller.state.recent_projects) == 2
-    assert all(project.path != "/external/Game.terminproj" for project in controller.state.recent_projects)
+    assert [project.path for project in controller.state.recent_projects] == [
+        "/projects/Second/Second.terminproj"
+    ]
     projection.close()
     tc_ui_document_destroy(document)
 

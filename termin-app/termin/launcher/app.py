@@ -13,7 +13,7 @@ from termin.launcher.controller import (
     LauncherController,
     LauncherServices,
 )
-from termin.launcher.recent import RecentProjects, write_launch_project
+from termin.launcher.recent import RecentProjects
 from termin.project import create_project
 
 
@@ -131,7 +131,6 @@ def _dispatch_editor(project_path: str) -> LaunchResult:
             started=False,
             error="Cannot find termin_editor executable",
         )
-    write_launch_project(project_path)
     started = _launch_editor_process(editor_exe, project_path)
     if not started:
         return LaunchResult(started=False, error="Failed to launch termin_editor")

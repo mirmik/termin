@@ -34,6 +34,10 @@ termin init
 termin editor .
 ```
 
+A project is added or moved to the top of the launcher's recent-project list
+only after the editor has validated and opened it. Selecting a project in the
+launcher does not update the list by itself.
+
 ## Adding the checkout SDK to Bash PATH
 
 From a source checkout, run:
