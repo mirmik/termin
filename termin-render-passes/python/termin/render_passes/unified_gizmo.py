@@ -108,8 +108,8 @@ class UnifiedGizmoPass(PythonFramePass):
                 )
                 ctx2.set_viewport(0, 0, pw, ph)
 
-                view = ctx.camera.get_view_matrix()
-                proj = ctx.camera.get_projection_matrix()
+                view = ctx.view.get_view_matrix()
+                proj = ctx.view.get_projection_matrix()
 
             try:
                 if self._before_render is not None:

@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <termin/export.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <tgfx/tgfx_material_handle.hpp>

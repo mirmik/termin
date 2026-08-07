@@ -1,4 +1,5 @@
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/id_pass.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/world_text_component.hpp>
@@ -277,7 +278,8 @@ int run_smoke(const char* argv0)
     exec_ctx.tex2_writes.emplace("id", color);
     exec_ctx.tex2_depth_writes.emplace("id", depth);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    exec_ctx.scene = scene;
+    const termin::SceneRenderServices scene_services{.scene = scene};
+    exec_ctx.scene_services = &scene_services;
 
     render_ctx.begin_frame();
     pass.execute_with_data_tgfx2(
@@ -386,7 +388,8 @@ int run_world_text_smoke(const char* argv0)
     exec_ctx.tex2_writes.emplace("id", color);
     exec_ctx.tex2_depth_writes.emplace("id", depth);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    exec_ctx.scene = scene;
+    const termin::SceneRenderServices scene_services{.scene = scene};
+    exec_ctx.scene_services = &scene_services;
 
     render_ctx.begin_frame();
     pass.execute_with_data_tgfx2(

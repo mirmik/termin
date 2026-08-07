@@ -2,6 +2,7 @@
 #include "termin/render/skybox_pass.hpp"
 
 #include "termin/render/execute_context.hpp"
+#include "termin/render/scene_render_services.hpp"
 #include "termin/materials/shader_parser.hpp"
 #include "termin/render/render_camera.hpp"
 
@@ -153,10 +154,16 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
         tc::Log::error("[SkyBoxPass] ctx2 is null — tgfx2 path required");
         return;
     }
-    if (!ctx.camera) return;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "SkyBoxPass");
+    if (!services) return;
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[SkyBoxPass] primary render view is missing");
+        return;
+    }
 
-    tc_scene_handle scene = ctx.scene.handle();
-    if (!tc_scene_handle_valid(scene)) return;
+    tc_scene_handle scene = services->scene.handle();
 
     int skybox_type = tc_scene_get_skybox_type(scene);
     if (skybox_type == TC_SKYBOX_NONE) return;
@@ -191,8 +198,8 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     tc_scene_get_skybox_top_color(scene, &top_rgb.x, &top_rgb.y, &top_rgb.z);
     tc_scene_get_skybox_bottom_color(scene, &bot_rgb.x, &bot_rgb.y, &bot_rgb.z);
 
-    Mat44 view64 = ctx.camera->get_view_matrix();
-    Mat44 proj64 = ctx.camera->get_projection_matrix();
+    Mat44 view64 = primary_view->get_view_matrix();
+    Mat44 proj64 = primary_view->get_projection_matrix();
     Mat44 inv_view_projection64 = (proj64 * view64).inverse();
 
     std::vector<double> inv_view_projection_data(

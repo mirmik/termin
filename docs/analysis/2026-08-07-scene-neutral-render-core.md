@@ -1,7 +1,8 @@
 # Scene-neutral render core для retained 3D composition
 
 Дата: 2026-08-07  
-Статус: принято к поэтапной реализации; umbrella #1358, текущий slice #1359
+Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
+#1359 и #1360
 
 ## Контекст
 
@@ -17,8 +18,7 @@ generation handles и typed C# wrappers для surface, scatter и grid.
 после чего использовать один renderer как для engine scene, так и для
 retained chart scene.
 
-Эта записка оценивает именно такой вариант. Она не является принятым
-архитектурным решением и не заменяет
+Эта записка фиксирует принятое направление миграции, но не заменяет
 [`Retained Chart3D migration`](../plans/2026-08-06-retained-chart3d-migration-plan.md).
 
 ## Краткий вывод
@@ -94,13 +94,16 @@ Surface chart может быть generic mesh item с chart material либо �
 
 - `RenderEngine::render_scene_pipeline_offscreen()` обязательно принимает
   `tc_scene_handle`;
-- `ExecuteContext` непосредственно хранит `TcSceneRef`, `RenderCamera`,
-  stereo views, lights и `tc_entity_handle`;
+- scene adapter всё ещё создаётся внутри
+  `RenderEngine::render_scene_pipeline_offscreen()`, хотя нижележащий
+  `ExecuteContext` уже не хранит scene/entity/light types;
 - `RenderSceneItemCollector` умеет получать items только обходом
   `tc_scene_foreach_drawable()`;
 - `RenderTask` содержит `Entity`, `tc_component*` и entity name;
 - `tc_render_item` содержит source `tc_component*`;
-- `CxxFramePass::collect_shader_usages()` принимает `tc_scene_handle`;
+- scene shader discovery всё ещё обходит passes и scene перед исполнением,
+  но вынесен из generic `CxxFramePass` в отдельную capability
+  `SceneShaderUsageProvider`;
 - `PipelineRenderCache` содержит shadow resources, хотя они нужны не каждому
   pipeline;
 - `termin-render` публично зависит одновременно от `termin-graphics`,
@@ -169,7 +172,6 @@ Core `ExecuteContext` должен содержать только:
 ```text
 SceneRenderServices
 ├── TcSceneRef
-├── RenderCamera
 ├── lights and shadows
 ├── layer/category filtering
 └── internal entities
@@ -281,10 +283,19 @@ RenderItems либо специализированные renderer bodies/encode
 
 Текущее состояние этапа: neutral source identity и immutable snapshot boundary
 реализованы в #1359. Удалён неиспользуемый legacy C `tc_execute_context`,
-который протаскивал scene/entity types в низкоуровневый pass header. Разделение
-C++ `ExecuteContext` и adapter services остаётся следующим самостоятельным
-срезом; `CxxFramePass::collect_shader_usages(tc_scene_handle)` пока намеренно
-сохраняет явную scene dependency, а не скрывает её транзитивным include.
+который протаскивал scene/entity types в низкоуровневый pass header.
+
+В #1360 C++ `ExecuteContext` разделён на нейтральный execution context и
+явную capability `SceneRenderServices`. Камера и stereo views представлены
+нейтральным `RenderViewState`; scene, internal entities, lights и маски
+доступны только scene passes через проверяемый service contract. Отсутствующая
+capability диагностируется в логе. Scene shader discovery вынесен из
+`CxxFramePass` в отдельный `SceneShaderUsageProvider`, поэтому generic pass
+interface больше не принимает `tc_scene_handle`.
+
+Следующая граница этапа — отделить generic pipeline execution entry point от
+`RenderEngine::render_scene_pipeline_offscreen()` и превратить нынешний
+scene collector в один из подключаемых источников immutable snapshots.
 
 ### Этап 2. Выделить `termin-render-core`
 
