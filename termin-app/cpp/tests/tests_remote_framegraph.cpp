@@ -5,7 +5,9 @@
 
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <optional>
+#include <span>
 #include <set>
 #include <string>
 #include <thread>
@@ -14,6 +16,8 @@
 #include <termin/framegraph_remote_target/target_service.hpp>
 #include <termin/gui_native/tc_document.hpp>
 #include <termin/gui_native/status_bar.hpp>
+#include <tgfx2/descriptors.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/tc_pass.hpp>
@@ -89,6 +93,60 @@ public:
         if (tc_ui_document_is_valid(handle)) tc_ui_document_destroy(handle);
     }
     tc_ui_document_handle handle = tc_ui_document_handle_invalid();
+};
+
+class CaptureUploadDevice final : public tgfx::IRenderDevice {
+public:
+    tgfx::BackendType backend_type() const override {
+        return tgfx::BackendType::D3D11;
+    }
+    tgfx::BackendCapabilities capabilities() const override { return {}; }
+    void wait_idle() override {}
+    tgfx::BufferHandle create_buffer(const tgfx::BufferDesc&) override { return {}; }
+    tgfx::TextureHandle create_texture(const tgfx::TextureDesc& desc) override {
+        texture_desc_value = desc;
+        return tgfx::TextureHandle{1};
+    }
+    tgfx::SamplerHandle create_sampler(const tgfx::SamplerDesc&) override { return {}; }
+    tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc&) override { return {}; }
+    tgfx::PipelineHandle create_pipeline(const tgfx::PipelineDesc&) override { return {}; }
+    tgfx::ResourceSetHandle create_bound_resource_set(
+        const tgfx::BoundResourceSetDesc&) override { return {}; }
+    void destroy(tgfx::BufferHandle) override {}
+    void destroy(tgfx::TextureHandle) override { ++destroyed_textures; }
+    void destroy(tgfx::SamplerHandle) override {}
+    void destroy(tgfx::ShaderHandle) override {}
+    void destroy(tgfx::PipelineHandle) override {}
+    void destroy(tgfx::ResourceSetHandle) override {}
+    void upload_buffer(tgfx::BufferHandle, std::span<const std::uint8_t>,
+                       std::uint64_t = 0) override {}
+    void upload_texture(tgfx::TextureHandle,
+                        std::span<const std::uint8_t> bytes,
+                        std::uint32_t = 0) override {
+        uploaded.assign(bytes.begin(), bytes.end());
+    }
+    void upload_texture_region(tgfx::TextureHandle,
+                               std::uint32_t, std::uint32_t,
+                               std::uint32_t, std::uint32_t,
+                               std::span<const std::uint8_t>,
+                               std::uint32_t = 0) override {}
+    void read_buffer(tgfx::BufferHandle, std::span<std::uint8_t>,
+                     std::uint64_t = 0) override {}
+    tgfx::TextureDesc texture_desc(tgfx::TextureHandle) const override {
+        return texture_desc_value;
+    }
+    std::unique_ptr<tgfx::ICommandList> create_command_list(
+        tgfx::QueueType = tgfx::QueueType::Graphics) override { return {}; }
+    void submit(tgfx::ICommandList&) override {}
+    void present() override {}
+    bool read_texture_depth_float(tgfx::TextureHandle, float* out) override {
+        std::memcpy(out, uploaded.data(), uploaded.size());
+        return true;
+    }
+
+    tgfx::TextureDesc texture_desc_value;
+    std::vector<std::uint8_t> uploaded;
+    int destroyed_textures = 0;
 };
 
 } // namespace
@@ -230,14 +288,47 @@ TEST_CASE("RemoteFrameGraphDebuggerSource assembles exact color HDR and depth bl
     topology_message.message = topology;
     REQUIRE(source.ingest(topology_message));
     source.set_mode(termin::FrameGraphDebuggerMode::BetweenPasses);
+
     source.set_selected_resource("fixture_resource");
+    REQUIRE_FALSE(commands.empty());
+    const std::uint64_t cancelled_request = commands.back().request_id;
+    CaptureMetadata partial_metadata;
+    partial_metadata.request_id = cancelled_request;
+    partial_metadata.graph_revision = 4;
+    partial_metadata.blob_id = 90;
+    partial_metadata.pixel_format = PixelFormat::rgba8_unorm;
+    partial_metadata.width = 2;
+    partial_metadata.height = 1;
+    partial_metadata.byte_count = 8;
+    partial_metadata.chunk_count = 2;
+    DecodedMessage partial_message;
+    partial_message.envelope.session_id = 19;
+    partial_message.envelope.sequence = sequence++;
+    partial_message.message = partial_metadata;
+    REQUIRE(source.ingest(partial_message));
+    source.set_paused(true);
+    REQUIRE(commands.back().kind == CommandKind::cancel);
+    DecodedMessage cancelled_message;
+    cancelled_message.envelope.session_id = 19;
+    cancelled_message.envelope.sequence = sequence++;
+    Status cancelled_status;
+    cancelled_status.request_id = cancelled_request;
+    cancelled_status.graph_revision = 4;
+    cancelled_status.code = StatusCode::cancelled;
+    cancelled_status.detail = "exact capture cancelled";
+    cancelled_message.message = cancelled_status;
+    REQUIRE(source.ingest(cancelled_message));
+    CHECK(source.snapshot()->state != termin::FrameGraphDebuggerState::Error);
+    CHECK_EQ(source.snapshot()->capture_info, "Remote capture cancelled");
+    source.set_paused(false);
 
     const auto assemble = [&](PixelFormat format,
                               bool depth,
                               std::uint32_t width,
                               std::uint32_t height,
                               std::vector<std::uint8_t> bytes) {
-        REQUIRE(source.request_exact_capture());
+        source.set_selected_resource("fixture_resource");
+        REQUIRE_FALSE(commands.empty());
         const std::uint64_t request_id = commands.back().request_id;
         CaptureMetadata metadata;
         metadata.request_id = request_id;
@@ -291,11 +382,33 @@ TEST_CASE("RemoteFrameGraphDebuggerSource assembles exact color HDR and depth bl
     std::vector<std::uint8_t> hdr_bytes(sizeof(float) * hdr_values.size());
     std::memcpy(hdr_bytes.data(), hdr_values.data(), hdr_bytes.size());
     assemble(PixelFormat::rgba32_float, false, 1, 1, hdr_bytes);
+    CHECK(source.analyze_hdr().find("HDR pixels:</b> 1") !=
+          std::string::npos);
     std::vector<float> depth_values = {0.25F, 0.75F};
     std::vector<std::uint8_t> depth_bytes(
         sizeof(float) * depth_values.size());
     std::memcpy(depth_bytes.data(), depth_values.data(), depth_bytes.size());
     assemble(PixelFormat::depth32_float, true, 2, 1, depth_bytes);
+    CaptureUploadDevice device;
+    int depth_width = 0;
+    int depth_height = 0;
+    const auto normalized = source.read_depth_normalized(
+        device, &depth_width, &depth_height);
+    CHECK_EQ(depth_width, 2);
+    CHECK_EQ(depth_height, 1);
+    REQUIRE_EQ(normalized.size(), 2u);
+    CHECK(device.uploaded == depth_bytes);
+    depth_values = {0.1F, 0.9F};
+    std::memcpy(depth_bytes.data(), depth_values.data(), depth_bytes.size());
+    assemble(PixelFormat::depth32_float, true, 2, 1, depth_bytes);
+    const auto repeated = source.read_depth_normalized(
+        device, &depth_width, &depth_height);
+    REQUIRE_EQ(repeated.size(), 2u);
+    CHECK_EQ(device.destroyed_textures, 1);
+    source.disconnect();
+    CHECK_EQ(device.destroyed_textures, 2);
+    CHECK_FALSE(source.snapshot()->cpu_capture.has_value());
+    CHECK_FALSE(source.snapshot()->main_image.available);
 }
 
 TEST_CASE("FrameGraphDebuggerView switches local remote stale and local in one tree") {

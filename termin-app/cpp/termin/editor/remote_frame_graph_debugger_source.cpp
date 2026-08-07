@@ -1,9 +1,16 @@
 #include "termin/editor/remote_frame_graph_debugger_source.hpp"
 
 #include <termin/framegraph_remote_client/client.hpp>
+#include <termin/render/frame_graph_capture.hpp>
+#include <tgfx2/descriptors.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/render_context.hpp>
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
+#include <iomanip>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -126,6 +133,7 @@ namespace termin
         ~Impl()
         {
             disconnect_live();
+            release_gpu();
         }
 
         std::shared_ptr<const FrameGraphDebuggerSnapshot> snapshot() const
@@ -249,7 +257,7 @@ namespace termin
                 std::lock_guard lock(mutex);
                 if (!state->connected || !state->selected_target_id ||
                     state->graph_revision == 0 || !exact_capture_supported ||
-                    assembler ||
+                    state->paused || assembler ||
                     std::any_of(pending_commands.begin(),
                                 pending_commands.end(),
                                 [](const auto& pending)
@@ -280,6 +288,26 @@ namespace termin
                     command.symbol = state->selected_symbol;
                 }
             }
+            return send(std::move(command));
+        }
+
+        bool cancel_capture()
+        {
+            {
+                std::lock_guard lock(mutex);
+                const bool pending = assembler ||
+                    std::any_of(pending_commands.begin(),
+                                pending_commands.end(),
+                                [](const auto& item)
+                                {
+                                    return item.second ==
+                                        CommandKind::capture_snapshot;
+                                });
+                if (!pending)
+                    return false;
+            }
+            Command command;
+            command.kind = CommandKind::cancel;
             return send(std::move(command));
         }
 
@@ -394,6 +422,10 @@ namespace termin
             next->stale = true;
             next->state = FrameGraphDebuggerState::Unbound;
             next->status_detail = std::move(detail);
+            next->cpu_capture.reset();
+            next->main_image = {};
+            next->depth_image = {};
+            gpu_release_requested.store(true, std::memory_order_release);
             if (was_connected)
             {
                 if (assembler)
@@ -578,18 +610,26 @@ namespace termin
                 assembler->metadata().request_id == status.request_id &&
                 status.code != StatusCode::accepted)
             {
-                append_gap(next,
-                           FrameGraphDebuggerGapKind::TransportDrop,
-                           1,
-                           "capture ended before all chunks arrived");
-                ++next.dropped_messages;
                 assembler.reset();
-                next.state = FrameGraphDebuggerState::Error;
-                next.status_detail =
-                    "capture ended before all chunks arrived";
-                tc_log_error("remote framegraph source: capture request %llu "
-                             "ended before blob completion",
-                             static_cast<unsigned long long>(status.request_id));
+                if (status.code != StatusCode::cancelled)
+                {
+                    append_gap(next,
+                               FrameGraphDebuggerGapKind::TransportDrop,
+                               1,
+                               "capture ended before all chunks arrived");
+                    ++next.dropped_messages;
+                    next.state = FrameGraphDebuggerState::Error;
+                    next.status_detail =
+                        "capture ended before all chunks arrived";
+                    tc_log_error("remote framegraph source: capture request "
+                                 "%llu ended before blob completion",
+                                 static_cast<unsigned long long>(
+                                     status.request_id));
+                }
+                else
+                {
+                    next.capture_info = "Remote capture cancelled";
+                }
             }
             const auto pending = pending_commands.find(status.request_id);
             if (pending != pending_commands.end() &&
@@ -685,6 +725,16 @@ namespace termin
                 metadata.exact,
                 std::move(bytes),
             };
+            next.main_image = {
+                true,
+                metadata.width,
+                metadata.height,
+                upload_format(project_pixel_format(metadata.pixel_format)),
+                metadata.is_depth,
+                metadata.request_id,
+            };
+            next.depth_image = metadata.is_depth ? next.main_image
+                                                 : FrameGraphDebuggerImageSnapshot{};
             next.state = FrameGraphDebuggerState::Captured;
             next.capture_info = "Exact remote capture: " +
                 std::to_string(metadata.width) + "x" +
@@ -780,8 +830,242 @@ namespace termin
         std::optional<RemoteFrameGraphConnectionConfig> configured_client;
         std::uint64_t capture_memory_budget_bytes = WireLimits::max_blob_bytes;
         std::optional<BlobAssembler> assembler;
+        tgfx::IRenderDevice* upload_device = nullptr;
+        tgfx::TextureHandle upload_texture;
+        std::uint64_t uploaded_request_id = 0;
+        FrameGraphPresenter presenter;
+        std::atomic<bool> gpu_release_requested{false};
         std::unique_ptr<framegraph_remote_client::RemoteFrameGraphClient>
             client;
+
+    public:
+        static tgfx::PixelFormat upload_format(
+            FrameGraphDebuggerPixelFormat format)
+        {
+            switch (format)
+            {
+            case FrameGraphDebuggerPixelFormat::Rgba8Unorm:
+                return tgfx::PixelFormat::RGBA8_UNorm;
+            case FrameGraphDebuggerPixelFormat::Rgba16Float:
+                return tgfx::PixelFormat::RGBA16F;
+            case FrameGraphDebuggerPixelFormat::Rgba32Float:
+                return tgfx::PixelFormat::RGBA32F;
+            case FrameGraphDebuggerPixelFormat::Depth32Float:
+                return tgfx::PixelFormat::D32F;
+            case FrameGraphDebuggerPixelFormat::Depth16Unorm:
+            case FrameGraphDebuggerPixelFormat::Unknown:
+                return tgfx::PixelFormat::Undefined;
+            }
+            return tgfx::PixelFormat::Undefined;
+        }
+
+        void release_gpu()
+        {
+            if (upload_device && upload_texture)
+            {
+                try
+                {
+                    upload_device->destroy(upload_texture);
+                }
+                catch (const std::exception& error)
+                {
+                    tc_log_error("remote framegraph source: capture texture "
+                                 "destroy failed: %s", error.what());
+                }
+                catch (...)
+                {
+                    tc_log_error("remote framegraph source: capture texture "
+                                 "destroy failed");
+                }
+            }
+            upload_device = nullptr;
+            upload_texture = {};
+            uploaded_request_id = 0;
+            gpu_release_requested.store(false, std::memory_order_release);
+        }
+
+        void release_gpu_if_requested()
+        {
+            if (gpu_release_requested.load(std::memory_order_acquire))
+                release_gpu();
+        }
+
+        bool ensure_uploaded(
+            tgfx::IRenderDevice& device,
+            const FrameGraphDebuggerCpuCaptureSnapshot& capture)
+        {
+            release_gpu_if_requested();
+            if (!capture.bytes || capture.bytes->empty())
+                return false;
+            if (upload_device == &device && upload_texture &&
+                uploaded_request_id == capture.request_id)
+                return true;
+            release_gpu();
+            const tgfx::PixelFormat format = upload_format(capture.pixel_format);
+            if (format == tgfx::PixelFormat::Undefined)
+            {
+                tc_log_error("remote framegraph source: unsupported local "
+                             "upload pixel format");
+                return false;
+            }
+            try
+            {
+                tgfx::TextureDesc desc;
+                desc.width = capture.width;
+                desc.height = capture.height;
+                desc.format = format;
+                desc.usage = tgfx::TextureUsage::Sampled |
+                             tgfx::TextureUsage::CopySrc |
+                             tgfx::TextureUsage::CopyDst;
+                upload_texture = device.create_texture(desc);
+                if (!upload_texture)
+                {
+                    tc_log_error("remote framegraph source: local capture "
+                                 "texture creation failed");
+                    return false;
+                }
+                device.upload_texture(upload_texture, *capture.bytes);
+                upload_device = &device;
+                uploaded_request_id = capture.request_id;
+                return true;
+            }
+            catch (const std::exception& error)
+            {
+                tc_log_error("remote framegraph source: local capture upload "
+                             "failed: %s", error.what());
+            }
+            catch (...)
+            {
+                tc_log_error("remote framegraph source: local capture upload "
+                             "failed");
+            }
+            if (upload_texture)
+                device.destroy(upload_texture);
+            upload_texture = {};
+            upload_device = nullptr;
+            uploaded_request_id = 0;
+            return false;
+        }
+
+        std::optional<FrameGraphDebuggerCpuCaptureSnapshot> cpu_capture() const
+        {
+            std::lock_guard lock(mutex);
+            return state->cpu_capture;
+        }
+
+        bool render_image(tgfx::RenderContext2& context,
+                          tgfx::TextureHandle target,
+                          FrameGraphDebuggerImageKind kind,
+                          std::uint32_t width,
+                          std::uint32_t height,
+                          int channel_mode,
+                          bool highlight_hdr)
+        {
+            const auto capture = cpu_capture();
+            if (!capture || !target || width == 0 || height == 0 ||
+                (kind == FrameGraphDebuggerImageKind::Depth &&
+                 !capture->is_depth) ||
+                !ensure_uploaded(context.device(), *capture))
+                return false;
+            FrameGraphPresenterDraw draw;
+            draw.capture_tex = upload_texture;
+            draw.dst_rect = Rect2i{0,
+                                   0,
+                                   static_cast<int>(width),
+                                   static_cast<int>(height)};
+            draw.options.channel_mode = channel_mode;
+            draw.options.highlight_hdr = highlight_hdr;
+            presenter.render(&context, target, draw);
+            return true;
+        }
+
+        std::vector<std::uint8_t> read_depth_normalized(
+            tgfx::IRenderDevice& device, int* width, int* height)
+        {
+            const auto capture = cpu_capture();
+            if (!capture || !capture->is_depth ||
+                !ensure_uploaded(device, *capture))
+            {
+                if (width) *width = 0;
+                if (height) *height = 0;
+                return {};
+            }
+            return presenter.read_depth_normalized(
+                &device, upload_texture, width, height);
+        }
+
+        std::string analyze_hdr() const
+        {
+            const auto capture = cpu_capture();
+            if (!capture || !capture->bytes)
+                return "No capture available";
+            if (capture->is_depth)
+                return "HDR stats unavailable for depth texture";
+            const std::uint64_t pixels =
+                static_cast<std::uint64_t>(capture->width) * capture->height;
+            if (pixels == 0)
+                return "No capture available";
+            double sums[3]{};
+            float minima[3]{std::numeric_limits<float>::max(),
+                            std::numeric_limits<float>::max(),
+                            std::numeric_limits<float>::max()};
+            float maxima[3]{std::numeric_limits<float>::lowest(),
+                            std::numeric_limits<float>::lowest(),
+                            std::numeric_limits<float>::lowest()};
+            std::uint64_t hdr_pixels = 0;
+            for (std::uint64_t pixel = 0; pixel < pixels; ++pixel)
+            {
+                float channels[3]{};
+                if (capture->pixel_format ==
+                    FrameGraphDebuggerPixelFormat::Rgba8Unorm)
+                {
+                    const std::size_t offset = pixel * 4;
+                    if (offset + 3 >= capture->bytes->size())
+                        return "Remote capture byte size is invalid";
+                    for (int channel = 0; channel < 3; ++channel)
+                        channels[channel] =
+                            (*capture->bytes)[offset + channel] / 255.0F;
+                }
+                else if (capture->pixel_format ==
+                         FrameGraphDebuggerPixelFormat::Rgba32Float)
+                {
+                    const std::size_t offset = pixel * 4 * sizeof(float);
+                    if (offset + 4 * sizeof(float) > capture->bytes->size())
+                        return "Remote capture byte size is invalid";
+                    std::memcpy(channels,
+                                capture->bytes->data() + offset,
+                                3 * sizeof(float));
+                }
+                else
+                {
+                    return "HDR analysis is unavailable for this pixel format";
+                }
+                bool hdr = false;
+                for (int channel = 0; channel < 3; ++channel)
+                {
+                    minima[channel] = std::min(minima[channel],
+                                               channels[channel]);
+                    maxima[channel] = std::max(maxima[channel],
+                                               channels[channel]);
+                    sums[channel] += channels[channel];
+                    hdr = hdr || channels[channel] > 1.0F;
+                }
+                if (hdr) ++hdr_pixels;
+            }
+            std::ostringstream out;
+            out << std::fixed << std::setprecision(3)
+                << "<b>R:</b> " << minima[0] << " - " << maxima[0]
+                << " (avg: " << sums[0] / pixels << ")<br>"
+                << "<b>G:</b> " << minima[1] << " - " << maxima[1]
+                << " (avg: " << sums[1] / pixels << ")<br>"
+                << "<b>B:</b> " << minima[2] << " - " << maxima[2]
+                << " (avg: " << sums[2] / pixels << ")<br>"
+                << "<b>HDR pixels:</b> " << hdr_pixels << " ("
+                << std::setprecision(2)
+                << (100.0 * static_cast<double>(hdr_pixels) / pixels)
+                << "%)";
+            return out.str();
+        }
     };
 
     RemoteFrameGraphDebuggerSource::RemoteFrameGraphDebuggerSource(
@@ -803,7 +1087,10 @@ namespace termin
         return impl_->refresh();
     }
 
-    void RemoteFrameGraphDebuggerSource::finish_frame() {}
+    void RemoteFrameGraphDebuggerSource::finish_frame()
+    {
+        impl_->release_gpu_if_requested();
+    }
 
     void RemoteFrameGraphDebuggerSource::connect()
     {
@@ -814,11 +1101,13 @@ namespace termin
     {
         impl_->disconnect_live();
         impl_->disconnected("remote source disconnected");
+        impl_->release_gpu();
     }
 
     void RemoteFrameGraphDebuggerSource::close()
     {
         impl_->close();
+        impl_->release_gpu();
     }
 
     bool RemoteFrameGraphDebuggerSource::select_target(std::uint64_t target_id)
@@ -835,12 +1124,14 @@ namespace termin
     void RemoteFrameGraphDebuggerSource::set_mode(FrameGraphDebuggerMode mode)
     {
         impl_->mutate([mode](auto& next) { next.mode = mode; });
+        impl_->request_exact_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_selected_symbol(
         const std::string& symbol)
     {
         impl_->mutate([&symbol](auto& next) { next.selected_symbol = symbol; });
+        impl_->request_exact_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_selected_resource(
@@ -848,6 +1139,7 @@ namespace termin
     {
         impl_->mutate([&resource](auto& next)
                       { next.selected_resource = resource; });
+        impl_->request_exact_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_channel_mode(int mode)
@@ -858,6 +1150,10 @@ namespace termin
     void RemoteFrameGraphDebuggerSource::set_paused(bool paused)
     {
         impl_->mutate([paused](auto& next) { next.paused = paused; });
+        if (paused)
+            impl_->cancel_capture();
+        else
+            impl_->request_exact_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_highlight_hdr(bool enabled)
@@ -867,31 +1163,33 @@ namespace termin
 
     std::string RemoteFrameGraphDebuggerSource::analyze_hdr()
     {
-        return "HDR analysis requires a remote image capture";
+        return impl_->analyze_hdr();
     }
 
-    bool
-    RemoteFrameGraphDebuggerSource::render_image(tgfx::RenderContext2&,
-                                                 tgfx::TextureHandle,
-                                                 FrameGraphDebuggerImageKind,
-                                                 std::uint32_t,
-                                                 std::uint32_t,
-                                                 int,
-                                                 bool)
+    bool RemoteFrameGraphDebuggerSource::render_image(
+        tgfx::RenderContext2& context,
+        tgfx::TextureHandle target,
+        FrameGraphDebuggerImageKind kind,
+        std::uint32_t width,
+        std::uint32_t height,
+        int channel_mode,
+        bool highlight_hdr)
     {
-        return false;
+        return impl_->render_image(context,
+                                   target,
+                                   kind,
+                                   width,
+                                   height,
+                                   channel_mode,
+                                   highlight_hdr);
     }
 
     std::vector<std::uint8_t>
-    RemoteFrameGraphDebuggerSource::read_depth_normalized(tgfx::IRenderDevice&,
+    RemoteFrameGraphDebuggerSource::read_depth_normalized(tgfx::IRenderDevice& device,
                                                           int* width,
                                                           int* height)
     {
-        if (width)
-            *width = 0;
-        if (height)
-            *height = 0;
-        return {};
+        return impl_->read_depth_normalized(device, width, height);
     }
 
     bool RemoteFrameGraphDebuggerSource::ingest(const DecodedMessage& message)
