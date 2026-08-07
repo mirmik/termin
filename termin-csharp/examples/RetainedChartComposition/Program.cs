@@ -76,5 +76,54 @@ if (!chart.Interaction.PointerDown(centerX, centerY, button: 2) ||
 chart.Fit();
 
 var fitted = chart.Range;
+using var multi = new MultiChart2D(
+    host,
+    640,
+    480,
+    panelCount: 4,
+    initialRange: new PlotRange2D(0, 10, -1, 1),
+    panelHeight: 160,
+    panelGap: 4);
+MultiChartPanel2D stablePanel = multi.Panels[0];
+multi.SetPanelCount(6);
+MultiChartPanel2D removedPanel = multi.Panels[5];
+multi.SetPanelCount(4);
+if (!ReferenceEquals(stablePanel, multi.Panels[0]) ||
+    !stablePanel.IsValid || removedPanel.IsValid)
+    throw new InvalidOperationException(
+        "Native multi-chart generation handle smoke check failed.");
+MultiChartSnapshot2D multiState = multi.Snapshot;
+if (multiState.PanelCount != 4 ||
+    multiState.MaximumScrollOffset <= 0 ||
+    multi.Panels[3].Chart.Root.Visible)
+    throw new InvalidOperationException(
+        "Native multi-chart initial virtualization smoke check failed.");
+multi.SetSharedX(20, 30);
+multi.ScrollOffset = multiState.MaximumScrollOffset;
+PlotRange2D revealedRange = multi.Panels[3].Chart.Range;
+if (!multi.Panels[3].Chart.Root.Visible ||
+    revealedRange.XMin != 20 || revealedRange.XMax != 30)
+    throw new InvalidOperationException(
+        "Native multi-chart deferred shared-X smoke check failed.");
+using var peerMulti = new MultiChart2D(
+    host,
+    640,
+    480,
+    panelCount: 4,
+    initialRange: new PlotRange2D(0, 10, -2, 2),
+    panelHeight: 160,
+    panelGap: 4);
+var multiGroup = new MultiChart2DGroup(multi, peerMulti);
+multiGroup.SetPanelCount(5);
+multiGroup.SetPanelCount(4);
+multiGroup.SetSharedX(40, 50);
+multiGroup.ScrollOffset = multiGroup.MaximumScrollOffset;
+if (multi.Panels.Count != 4 || peerMulti.Panels.Count != 4 ||
+    multi.Panels[3].Chart.Range.XMin != 40 ||
+    peerMulti.Panels[3].Chart.Range.XMax != 50 ||
+    multi.Snapshot.ScrollOffset != peerMulti.Snapshot.ScrollOffset)
+    throw new InvalidOperationException(
+        "Coordinated native multi-chart group smoke check failed.");
+
 Console.WriteLine(FormattableString.Invariant(
-    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK."));
+    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK. Multi scenes {multi.Scene.Id}/{peerMulti.Scene.Id}: stable panels, coordinated reconfigure, virtual scroll and deferred shared X OK."));

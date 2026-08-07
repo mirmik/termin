@@ -304,6 +304,7 @@ public sealed class Chart2D : IDisposable
     private readonly List<PlotScatterSeriesItemRef2D> _scatters = new();
     private readonly List<ChartSeries2D> _semanticSeries = new();
     private readonly bool _disposeSceneView;
+    private readonly bool _ownsNative;
     private IntPtr _native;
     private bool _disposed;
     private string _title = string.Empty;
@@ -396,46 +397,13 @@ public sealed class Chart2D : IDisposable
         if (_native == IntPtr.Zero)
             throw new InvalidOperationException(
                 "Failed to create native RetainedChart2D. See native log.");
+        _ownsNative = true;
 
         try
         {
-            VisualSceneNativeHandle sceneHandle =
-                Chart2DNative.Scene(_native);
-            Scene = borrowedScene ?? TcVisualScene2D.Borrow(sceneHandle);
             _disposeSceneView = borrowedScene is null;
-            Projection = PlotProjectionRef2D.Borrow(
-                Chart2DNative.Projection(_native));
-            Interaction = new ChartInteraction2D(this);
             FontUri = fontUri;
-
-            Root = GetGroup(ChartPartKind2D.Root);
-            PlotArea = GetGroup(ChartPartKind2D.PlotArea);
-            Series = GetGroup(ChartPartKind2D.SeriesRoot);
-            Annotations = GetGroup(ChartPartKind2D.AnnotationsRoot);
-            Chrome = GetGroup(ChartPartKind2D.ChromeRoot);
-            XAxisRoot = GetGroup(ChartPartKind2D.XAxisRoot);
-            YAxisRoot = GetGroup(ChartPartKind2D.YAxisRoot);
-            XTickLabels = GetGroup(ChartPartKind2D.XTickLabelsRoot);
-            YTickLabels = GetGroup(ChartPartKind2D.YTickLabelsRoot);
-            Legend = GetGroup(ChartPartKind2D.LegendRoot);
-            Overlay = GetGroup(ChartPartKind2D.OverlayRoot);
-
-            Background = Part(
-                ChartPartKind2D.Background, RectItemRef2D.Cast);
-            PlotBackground = Part(
-                ChartPartKind2D.PlotBackground, RectItemRef2D.Cast);
-            Grid = Part(
-                ChartPartKind2D.Grid, PlotGridItemRef2D.Cast);
-            XAxis = Part(
-                ChartPartKind2D.XAxis, PathItemRef2D.Cast);
-            YAxis = Part(
-                ChartPartKind2D.YAxis, PathItemRef2D.Cast);
-            Title = Part(
-                ChartPartKind2D.Title, TextItemRef2D.Cast);
-            XAxisLabel = Part(
-                ChartPartKind2D.XAxisLabel, TextItemRef2D.Cast);
-            YAxisLabel = Part(
-                ChartPartKind2D.YAxisLabel, TextItemRef2D.Cast);
+            InitializeViews(borrowedScene);
         }
         catch
         {
@@ -445,28 +413,49 @@ public sealed class Chart2D : IDisposable
         }
     }
 
-    public TcVisualScene2D Scene { get; }
-    public PlotProjectionRef2D Projection { get; }
-    public ChartInteraction2D Interaction { get; }
-    public GroupItemRef2D Root { get; }
-    public GroupItemRef2D PlotArea { get; }
-    public GroupItemRef2D Series { get; }
-    public GroupItemRef2D Annotations { get; }
-    public GroupItemRef2D Chrome { get; }
-    public GroupItemRef2D XAxisRoot { get; }
-    public GroupItemRef2D YAxisRoot { get; }
-    public GroupItemRef2D XTickLabels { get; }
-    public GroupItemRef2D YTickLabels { get; }
-    public GroupItemRef2D Legend { get; }
-    public GroupItemRef2D Overlay { get; }
-    public ChartPart2D<RectItemRef2D> Background { get; }
-    public ChartPart2D<RectItemRef2D> PlotBackground { get; }
-    public ChartPart2D<PlotGridItemRef2D> Grid { get; }
-    public ChartPart2D<PathItemRef2D> XAxis { get; }
-    public ChartPart2D<PathItemRef2D> YAxis { get; }
-    public ChartPart2D<TextItemRef2D> Title { get; }
-    public ChartPart2D<TextItemRef2D> XAxisLabel { get; }
-    public ChartPart2D<TextItemRef2D> YAxisLabel { get; }
+    internal Chart2D(
+        GpuHost host,
+        TcVisualScene2D scene,
+        IntPtr borrowedNative,
+        string fontUri,
+        Chart2DTheme theme)
+    {
+        _host = host ?? throw new ArgumentNullException(nameof(host));
+        Scene = scene ?? throw new ArgumentNullException(nameof(scene));
+        if (borrowedNative == IntPtr.Zero)
+            throw new ArgumentException(
+                "A live borrowed native chart is required.",
+                nameof(borrowedNative));
+        _native = borrowedNative;
+        _ownsNative = false;
+        _disposeSceneView = false;
+        FontUri = fontUri;
+        Theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        InitializeViews(scene);
+    }
+
+    public TcVisualScene2D Scene { get; private set; } = null!;
+    public PlotProjectionRef2D Projection { get; private set; } = null!;
+    public ChartInteraction2D Interaction { get; private set; } = null!;
+    public GroupItemRef2D Root { get; private set; } = null!;
+    public GroupItemRef2D PlotArea { get; private set; } = null!;
+    public GroupItemRef2D Series { get; private set; } = null!;
+    public GroupItemRef2D Annotations { get; private set; } = null!;
+    public GroupItemRef2D Chrome { get; private set; } = null!;
+    public GroupItemRef2D XAxisRoot { get; private set; } = null!;
+    public GroupItemRef2D YAxisRoot { get; private set; } = null!;
+    public GroupItemRef2D XTickLabels { get; private set; } = null!;
+    public GroupItemRef2D YTickLabels { get; private set; } = null!;
+    public GroupItemRef2D Legend { get; private set; } = null!;
+    public GroupItemRef2D Overlay { get; private set; } = null!;
+    public ChartPart2D<RectItemRef2D> Background { get; private set; } = null!;
+    public ChartPart2D<RectItemRef2D> PlotBackground { get; private set; } = null!;
+    public ChartPart2D<PlotGridItemRef2D> Grid { get; private set; } = null!;
+    public ChartPart2D<PathItemRef2D> XAxis { get; private set; } = null!;
+    public ChartPart2D<PathItemRef2D> YAxis { get; private set; } = null!;
+    public ChartPart2D<TextItemRef2D> Title { get; private set; } = null!;
+    public ChartPart2D<TextItemRef2D> XAxisLabel { get; private set; } = null!;
+    public ChartPart2D<TextItemRef2D> YAxisLabel { get; private set; } = null!;
     public string FontUri { get; }
     public Chart2DTheme Theme { get; private set; }
     public IReadOnlyList<PlotLineSeriesItemRef2D> Lines => _lines;
@@ -732,7 +721,7 @@ public sealed class Chart2D : IDisposable
     {
         if (_disposed)
             return;
-        if (_native != IntPtr.Zero)
+        if (_ownsNative && _native != IntPtr.Zero)
             Chart2DNative.Destroy(_native);
         _native = IntPtr.Zero;
         Projection.Dispose();
@@ -740,6 +729,39 @@ public sealed class Chart2D : IDisposable
             Scene.Dispose();
         _disposed = true;
         GC.SuppressFinalize(this);
+    }
+
+    private void InitializeViews(TcVisualScene2D? borrowedScene)
+    {
+        VisualSceneNativeHandle sceneHandle = Chart2DNative.Scene(_native);
+        Scene = borrowedScene ?? TcVisualScene2D.Borrow(sceneHandle);
+        Projection = PlotProjectionRef2D.Borrow(
+            Chart2DNative.Projection(_native));
+        Interaction = new ChartInteraction2D(this);
+
+        Root = GetGroup(ChartPartKind2D.Root);
+        PlotArea = GetGroup(ChartPartKind2D.PlotArea);
+        Series = GetGroup(ChartPartKind2D.SeriesRoot);
+        Annotations = GetGroup(ChartPartKind2D.AnnotationsRoot);
+        Chrome = GetGroup(ChartPartKind2D.ChromeRoot);
+        XAxisRoot = GetGroup(ChartPartKind2D.XAxisRoot);
+        YAxisRoot = GetGroup(ChartPartKind2D.YAxisRoot);
+        XTickLabels = GetGroup(ChartPartKind2D.XTickLabelsRoot);
+        YTickLabels = GetGroup(ChartPartKind2D.YTickLabelsRoot);
+        Legend = GetGroup(ChartPartKind2D.LegendRoot);
+        Overlay = GetGroup(ChartPartKind2D.OverlayRoot);
+
+        Background = Part(ChartPartKind2D.Background, RectItemRef2D.Cast);
+        PlotBackground = Part(
+            ChartPartKind2D.PlotBackground, RectItemRef2D.Cast);
+        Grid = Part(ChartPartKind2D.Grid, PlotGridItemRef2D.Cast);
+        XAxis = Part(ChartPartKind2D.XAxis, PathItemRef2D.Cast);
+        YAxis = Part(ChartPartKind2D.YAxis, PathItemRef2D.Cast);
+        Title = Part(ChartPartKind2D.Title, TextItemRef2D.Cast);
+        XAxisLabel = Part(
+            ChartPartKind2D.XAxisLabel, TextItemRef2D.Cast);
+        YAxisLabel = Part(
+            ChartPartKind2D.YAxisLabel, TextItemRef2D.Cast);
     }
 
     internal GraphicItemHandle2D GetPartHandle(ChartPartKind2D kind)
@@ -866,6 +888,12 @@ public sealed class Chart2D : IDisposable
     {
         ThrowIfDisposed();
         Require(Chart2DNative.ScatterSeriesSetStyle(_native, series, style));
+    }
+
+    internal void AdoptTheme(Chart2DTheme theme)
+    {
+        ThrowIfDisposed();
+        Theme = theme;
     }
 
     private GroupItemRef2D GetGroup(ChartPartKind2D kind) =>
