@@ -382,6 +382,9 @@ virtual scroll без product-side projection math. В сумме пример �
 native series, сохраняет независимые Y, использует общий внешний WPF scrollbar
 и portal-кнопки. Hidden panels не перестраиваются на shared-X update; при
 появлении панель получает deferred X и viewport одной frame mutation.
+Moving shared X у уже видимых панелей использует отдельную X-only invalidation:
+обновляются projection, grid и X chrome без повторного измерения текста,
+пересборки Y chrome, legend и геометрии layout.
 Headless D3D11 acceptance рендерит верх и низ обеих 15-panel scenes и
 проверяет append для styled line. Solid и styled line append загружают только
 изменившийся GPU tail (для styled line также перезаписывается прежняя последняя
