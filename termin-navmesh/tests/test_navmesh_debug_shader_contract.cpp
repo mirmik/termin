@@ -67,6 +67,7 @@ TEST_CASE("navmesh debug shader publishes its authored vertex interface") {
 
     termin::MaterialPipelinePassContract color_contract{};
     color_contract.debug_name = "color";
+    color_contract.allows_authored_vertex_stage = true;
     color_contract.required_material_fragment_input = termin::material_pipeline_standard_material_fragment_interface();
     color_contract.vertex_output_adapter = termin::material_pipeline_standard_material_vertex_output_adapter();
     color_contract.static_vertex_transform = termin::material_pipeline_make_static_mesh_vertex_transform_provider(

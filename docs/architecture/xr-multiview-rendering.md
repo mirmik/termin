@@ -81,6 +81,16 @@ does not acquire XR-specific camera classes or hidden globals. Tonemapping
 samples the corresponding layer from a texture array and writes both external
 layers in one multiview render pass.
 
+Procedural scene geometry follows the same boundary. A geometry provider may
+produce world-space position, normal and material semantics, but must not
+apply a representative camera's projection inside a multiview draw. The
+pass-owned output adapter remains the only owner of per-view projection and
+`SV_ViewID` selection. The canonical `LineRenderer` therefore uses
+view-independent world-space tube geometry; camera-facing and screen-space
+line utilities are not material-bearing XR scene renderers. The architectural
+decision is recorded in the
+[LineRenderer council protocol](../architecture-council/2026-08-07-line-renderer-contract.md).
+
 ## Capability and acceptance requirements
 
 The Vulkan device must expose texture arrays, multiview, and at least two

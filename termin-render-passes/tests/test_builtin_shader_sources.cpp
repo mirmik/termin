@@ -597,7 +597,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 47> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 44> kExpectedShaders{{
         {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-present-blit", "PresentBlitVSFS", true, true},
         {"termin-engine-canvas2d-solid", "Canvas2DSolidVSFS", true, true},
@@ -614,9 +614,6 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         {"termin-engine-world-line-join", "WorldSpaceLineJoinVSFS", true, true},
         {"termin-engine-world-line-round-join", "WorldSpaceLineRoundJoinVSFS", true, true},
         {"termin-engine-world-line-lit", "WorldSpaceLineLitFS", false, true},
-        {"termin-engine-world-tube-line", "WorldTubeLineVSFS", true, true},
-        {"termin-engine-world-tube-line-cap", "WorldTubeLineCapVSFS", true, true},
-        {"termin-engine-world-tube-line-lit", "WorldTubeLineLitFS", false, true},
         {"termin-engine-line-default", "DefaultLineShader", true, true},
         {"termin-engine-navmesh-debug", "NavMeshDebugVSFS", true, true},
         {"termin-engine-off-mesh-link-debug", "OffMeshLinkDebugVSFS", true, true},
@@ -770,18 +767,14 @@ TEST_CASE("modular foliage material transform owns instance placement resources"
     CHECK(source.find("per_frame") == std::string::npos);
 }
 
-TEST_CASE("built-in shader catalog resolves world tube line template") {
-    clear_builtin_root();
+TEST_CASE("world tube transform module produces view-independent world semantics") {
+    const std::filesystem::path shader_root =
+        repo_root_from_test_file() / "termin-graphics" / "resources" / "builtin_shaders";
+    const std::string tube_transform = read_text(shader_root / "termin_world_tube_line_transform.slang");
 
-    std::string tube_vertex =
-        tgfx::load_builtin_shader_stage_source_from_catalog("termin-engine-world-tube-line", "vertex");
-    REQUIRE(!tube_vertex.empty());
-    CHECK(tube_vertex.find("world_pos : TEXCOORD0") != std::string::npos);
-    CHECK(tube_vertex.find("normal_world : TEXCOORD1") != std::string::npos);
-    CHECK(tube_vertex.find("uv : TEXCOORD2") != std::string::npos);
-    CHECK(tube_vertex.find("tangent_world : TEXCOORD3") != std::string::npos);
-    CHECK(tube_vertex.find("bitangent_world : TEXCOORD4") != std::string::npos);
-    CHECK(tube_vertex.find("tbn_valid : TEXCOORD5") != std::string::npos);
-    CHECK(tube_vertex.find("world_pos : POSITION1") == std::string::npos);
-    CHECK(tube_vertex.find("normal : NORMAL") == std::string::npos);
+    CHECK(tube_transform.find("TerminWorldVertex termin_world_tube_vertex") != std::string::npos);
+    CHECK(tube_transform.find("output.position") != std::string::npos);
+    CHECK(tube_transform.find("output.normal") != std::string::npos);
+    CHECK(tube_transform.find("uint view_id : SV_ViewID") == std::string::npos);
+    CHECK(tube_transform.find("view_projection") == std::string::npos);
 }
