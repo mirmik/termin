@@ -14,12 +14,27 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border BorderBrush="#4C5362"
-                BorderThickness="1"
-                CornerRadius="4"
-                ClipToBounds="True">
-            <termin:RetainedScene2DHost x:Name="SceneHost" />
-        </Border>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border BorderBrush="#4C5362"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    ClipToBounds="True">
+                <termin:RetainedScene2DHost x:Name="SceneHost" />
+            </Border>
+
+            <ScrollBar x:Name="PanelScrollBar"
+                       Grid.Column="1"
+                       Width="16"
+                       Margin="6,0,0,0"
+                       Orientation="Vertical"
+                       SmallChange="48"
+                       LargeChange="220" />
+        </Grid>
 
         <TextBlock x:Name="StatusText"
                    Grid.Row="1"

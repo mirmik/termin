@@ -373,21 +373,20 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 6. Native multi-panel composer
 
-Managed vertical prototype готов в `AllianceStreamingChartsExample`: четыре
-компонуемых `Chart2D` используют borrowed shared scene, один renderer/texture,
-общий moving X window, независимые Y ranges и WPF portals. Он доказывает
-контракт, включая middle-drag pan, cursor-anchored zoom, shared X и
-отключаемый follow-latest mode, но не заменяет перечисленный ниже native
-composer. Перед Alliance
-нужно также отделить дешёвое обновление projection от полного layout/tick-label
-rebuild и добавить bounded native streaming/ring-buffer policy.
+Native vertical slice готов в `AllianceStreamingChartsExample`: четыре панели
+`MultiChart2D` используют один public scene и renderer/texture, stable panel
+handles, общий moving X, независимые Y, virtual scroll, внешний WPF scrollbar
+и portals. Hidden panels не перестраиваются на shared-X update; при появлении
+панель получает deferred X и viewport одной frame mutation. Перед production
+streaming остаются bounded native ring-buffer policy и profiling на реальных
+двух колонках по 15 панелей.
 
-- [ ] Ввести `RetainedMultiChart2D` поверх общего panel composer.
-- [ ] Реализовать stable panel handles и safe dynamic reconfiguration.
-- [ ] Реализовать shared X и independent Y ranges.
-- [ ] Реализовать panel height, virtual extent и scroll offset.
-- [ ] Исключить per-panel offscreen textures/contexts.
-- [ ] Добавить coordinated state для двух рядом стоящих charts без product-side
+- [x] Ввести `RetainedMultiChart2D` поверх общего panel composer.
+- [x] Реализовать stable panel handles и safe dynamic reconfiguration.
+- [x] Реализовать shared X и independent Y ranges.
+- [x] Реализовать panel height, virtual extent и scroll offset.
+- [x] Исключить per-panel offscreen textures/contexts.
+- [x] Добавить coordinated state для двух рядом стоящих charts без product-side
   projection math.
 
 ### Этап 7. `termin-gui-native` integration
