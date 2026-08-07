@@ -59,6 +59,28 @@ ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
 ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
 ENGINE_WORLD2D_SHADER_UUID = "termin-engine-world2d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
+
+# LineRenderer builds its final shaders from these catalog entries at runtime.
+# The derived shader artifacts are collected from the scene, but the source
+# catalog entries remain required to reconstruct the same variant handles in a
+# packaged runtime.
+ENGINE_LINE_SHADER_UUIDS = (
+    "termin-engine-screen-line",
+    "termin-engine-screen-line-cap",
+    "termin-engine-screen-line-join",
+    "termin-engine-screen-line-round-join",
+    "termin-engine-world-line",
+    "termin-engine-world-line-cap",
+    "termin-engine-world-line-join",
+    "termin-engine-world-line-round-join",
+    "termin-engine-world-line-lit",
+    "termin-engine-world-tube-line",
+    "termin-engine-world-tube-line-cap",
+    "termin-engine-world-tube-line-lit",
+    "termin-engine-line-default",
+)
+
+
 def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
     if shader_targets is None:
         return None
@@ -589,7 +611,7 @@ def _write_runtime_required_builtin_sources(
 
 
 def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
-    return [
+    shaders = [
         builtin_engine_shader_artifact(ENGINE_FSQ_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_SKYBOX_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_SHADOW_SHADER_UUID),
@@ -609,6 +631,11 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
         builtin_engine_shader_artifact(ENGINE_WORLD2D_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_SHADOW_MATERIAL_SHADER_UUID),
     ]
+    shaders.extend(
+        builtin_engine_shader_artifact(shader_uuid)
+        for shader_uuid in ENGINE_LINE_SHADER_UUIDS
+    )
+    return shaders
 
 
 def builtin_engine_shader_artifact(uuid_value: str) -> EngineShaderArtifact:

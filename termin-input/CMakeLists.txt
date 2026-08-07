@@ -30,6 +30,7 @@ set(TERMIN_INPUT_SOURCES
     src/tc_input_scene.c
     src/tc_input_entity_pool.c
     src/tc_component_python_input.c
+    src/tc_world_pointer_surface.c
 )
 
 set(TERMIN_INPUT_CXX_SOURCES

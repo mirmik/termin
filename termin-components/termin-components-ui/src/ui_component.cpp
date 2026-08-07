@@ -360,6 +360,7 @@ void UIComponent::cancel_interaction(
         }
     }
     touch_capture_.reset();
+    world_pointer_owner_.reset();
     sync_platform_state();
 }
 
@@ -377,13 +378,88 @@ void UIComponent::synchronize_presentation_revision() {
     if (!current.valid()) {
         input_presentation_revision_ = 0;
         touch_capture_.reset();
+        world_pointer_owner_.reset();
         return;
     }
     const std::uint64_t revision = current.presentation_revision();
     if (revision != input_presentation_revision_) {
         touch_capture_.reset();
+        world_pointer_owner_.reset();
         input_presentation_revision_ = revision;
     }
+}
+
+bool UIComponent::dispatch_world_pointer(
+    const tc_world_pointer_event& event
+) {
+    if (!has_document()) return false;
+    synchronize_presentation_revision();
+
+    if (world_pointer_owner_ &&
+        *world_pointer_owner_ != event.pointer_id) {
+        return false;
+    }
+    if (!world_pointer_owner_) {
+        if (event.phase == TC_WORLD_POINTER_LEAVE ||
+            event.phase == TC_WORLD_POINTER_CANCEL) {
+            return false;
+        }
+        world_pointer_owner_ = event.pointer_id;
+    }
+
+    tc_ui_pointer_event ui_event{};
+    switch (event.phase) {
+        case TC_WORLD_POINTER_DOWN:
+            ui_event.type = TC_UI_POINTER_DOWN;
+            ui_event.click_count = 1u;
+            break;
+        case TC_WORLD_POINTER_UP:
+            ui_event.type = TC_UI_POINTER_UP;
+            break;
+        case TC_WORLD_POINTER_LEAVE:
+            ui_event.type = TC_UI_POINTER_LEAVE;
+            break;
+        case TC_WORLD_POINTER_CANCEL:
+            ui_event.type = TC_UI_POINTER_CANCEL;
+            ui_event.cancel_reason = TC_UI_POINTER_CANCEL_HOST_CAPTURE_LOST;
+            break;
+        case TC_WORLD_POINTER_MOVE:
+        default:
+            ui_event.type = TC_UI_POINTER_MOVE;
+            break;
+    }
+    ui_event.button = TC_MOUSE_BUTTON_LEFT;
+
+    if (ui_event.type != TC_UI_POINTER_CANCEL &&
+        ui_event.type != TC_UI_POINTER_LEAVE) {
+        tc_ui_presentation_metrics metrics{};
+        const gui_native::TcDocument current = document();
+        if (!current.presentation_metrics(metrics)) {
+            tc::Log::error(
+                "[UIComponent] cannot dispatch world pointer before "
+                "presentation metrics are published");
+            return false;
+        }
+        tc_ui_point logical{};
+        if (!physical_to_logical(
+                static_cast<float>(
+                    event.u * metrics.physical_extent.width),
+                static_cast<float>(
+                    event.v * metrics.physical_extent.height),
+                logical)) {
+            return false;
+        }
+        ui_event.x = logical.x;
+        ui_event.y = logical.y;
+    }
+
+    const bool handled = dispatch_ui_pointer(ui_event);
+    if (event.phase == TC_WORLD_POINTER_UP ||
+        event.phase == TC_WORLD_POINTER_LEAVE ||
+        event.phase == TC_WORLD_POINTER_CANCEL) {
+        world_pointer_owner_.reset();
+    }
+    return handled;
 }
 
 bool UIComponent::physical_to_logical(

@@ -955,6 +955,15 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert {entry["uuid"] for entry in catalog["shaders"]} == {
         shader["uuid"] for shader in contract["shaders"]
     }
+    catalog_shader_uuids = {entry["uuid"] for entry in catalog["shaders"]}
+    assert "termin-engine-line-default" in catalog_shader_uuids
+    assert "termin-engine-world-tube-line" in catalog_shader_uuids
+    assert "termin-engine-world-tube-line-cap" in catalog_shader_uuids
+    assert (
+        result.package_dir
+        / "builtin_shaders"
+        / "termin-engine-world-tube-line.slang"
+    ).is_file()
     assert (
         result.package_dir
         / "builtin_shaders"

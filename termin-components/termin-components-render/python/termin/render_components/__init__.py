@@ -35,6 +35,7 @@ from termin.render_components._components_render_native import (
     XrOriginComponent,
     XrDirectGrabInteractorComponent,
     XrGrabInteractableComponent,
+    XrRayInteractorComponent,
     XrTrackedPoseComponent,
     XrThumbstickLocomotionComponent,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "XrOriginComponent",
     "XrDirectGrabInteractorComponent",
     "XrGrabInteractableComponent",
+    "XrRayInteractorComponent",
     "XrTrackedPoseComponent",
     "XrThumbstickLocomotionComponent",
     "get_texture_inputs_for_material",

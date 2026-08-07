@@ -48,6 +48,21 @@ in the `shadow` phase when this flag is enabled. Object picking uses the
 engine-owned `pick` phase and pass contract; `id` remains ordinary
 resource/pass terminology, not a built-in line renderer phase alias.
 
+## XR ray interaction
+
+`XrRayInteractorComponent` runs after an `XrTrackedPoseComponent`. Aim pose is
+preferred when the runtime exposes it; grip pose is also an explicit supported
+source for runtimes where the aim action is unavailable. It finds the nearest enabled component publishing the
+renderer-independent `world_pointer_surface` capability, maintains
+hover/select/capture state, and sends normalized world-pointer events. The
+select action produces DOWN/UP; tracking or projection loss produces CANCEL.
+
+A `LineRenderer` on the same tracked-pose entity is the explicit ray visualization. Its
+local segment follows the engine's +Y forward axis and is shortened to the
+nearest surface hit. The interactor has no dependency on UI widget types or
+collision shapes, so other world-pointer surfaces can participate without an
+XR-specific protocol.
+
 ## WorldTextComponent
 
 `WorldTextComponent` draws stable world-space labels through the existing

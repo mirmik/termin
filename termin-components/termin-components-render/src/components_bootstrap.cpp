@@ -31,6 +31,7 @@ void register_builtin_render_component_types() {
     XrTrackedPoseComponent::register_type();
     XrGrabInteractableComponent::register_type();
     XrDirectGrabInteractorComponent::register_type();
+    XrRayInteractorComponent::register_type();
 }
 
 void register_builtin_render_component_pass_types() {

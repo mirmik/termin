@@ -27,7 +27,7 @@ root:
           color: [0.92, 0.96, 1.0, 1]
           basis: preferred
         - type: termin.gui.Label
-          text: The controls are decorative for this first rendering slice.
+          text: Aim with the right controller and squeeze the trigger.
           font_size: 15
           color: [0.60, 0.70, 0.84, 1]
           basis: preferred
@@ -43,7 +43,7 @@ root:
             - type: termin.gui.IconButton
               name: launch_button
               icon: START
-              tooltip: Interaction comes next
+              tooltip: Native world-space pointer input
               size: 76
               font_size: 14
               background_color: [0.06, 0.30, 0.56, 1]
@@ -78,7 +78,7 @@ root:
               color: [0.82, 0.90, 0.98, 1]
               basis: preferred
         - type: termin.gui.Label
-          text: Next step: controller ray, focus ownership and pointer capture.
+          text: Controller ray / hover / press / pointer capture online.
           font_size: 13
           color: [0.45, 0.61, 0.76, 1]
           basis: preferred

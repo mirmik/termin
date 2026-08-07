@@ -1,11 +1,14 @@
 #include <termin/xr/xr_interaction_components.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
 #include <termin/entity/component_registry.hpp>
+#include <termin/input/tc_world_pointer_surface.h>
+#include <termin/render/line_renderer.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 
@@ -59,6 +62,78 @@ void register_pose_kind_field(tc::InspectFacetBuilder& inspect) {
         return true;
     };
     (void)inspect.add_field(std::move(info));
+}
+
+struct NearestWorldPointerSurface {
+    const tc_world_pointer_ray* ray = nullptr;
+    tc_component* component = nullptr;
+    tc_world_pointer_hit hit{};
+};
+
+bool collect_nearest_world_pointer_surface(
+    tc_component* component,
+    void* userdata
+) {
+    auto* nearest = static_cast<NearestWorldPointerSurface*>(userdata);
+    if (!nearest || !nearest->ray) return false;
+    tc_world_pointer_hit hit{};
+    if (!tc_world_pointer_surface_project_ray(
+            component, nearest->ray, &hit) || !hit.inside) {
+        return true;
+    }
+    if (!nearest->component || hit.distance < nearest->hit.distance) {
+        nearest->component = component;
+        nearest->hit = hit;
+    }
+    return true;
+}
+
+tc_component* resolve_world_pointer_surface(
+    tc_entity_handle entity,
+    const std::string& source_id
+) {
+    if (!tc_entity_handle_valid(entity) || source_id.empty()) return nullptr;
+    const std::size_t count = tc_entity_component_count(entity);
+    for (std::size_t index = 0; index < count; ++index) {
+        tc_component* component = tc_entity_component_at(entity, index);
+        const char* candidate_source_id =
+            component ? tc_component_get_source_id(component) : nullptr;
+        if (candidate_source_id && source_id == candidate_source_id &&
+            tc_component_get_enabled(component) &&
+            tc_component_has_capability(
+                component, tc_world_pointer_surface_capability_id())) {
+            return component;
+        }
+    }
+    return nullptr;
+}
+
+bool same_world_pointer_surface(
+    tc_component* component,
+    tc_entity_handle entity,
+    const std::string& source_id
+) {
+    if (!component || !tc_entity_handle_valid(entity)) return false;
+    const char* component_source_id = tc_component_get_source_id(component);
+    return tc_entity_handle_eq(component->owner, entity) &&
+        component_source_id && source_id == component_source_id;
+}
+
+bool dispatch_world_pointer(
+    tc_component* surface,
+    std::uint64_t pointer_id,
+    tc_world_pointer_phase phase,
+    const tc_world_pointer_hit* hit,
+    float pressure
+) {
+    if (!surface) return false;
+    tc_world_pointer_event event{};
+    event.pointer_id = pointer_id;
+    event.phase = phase;
+    event.u = hit ? hit->u : 0.0;
+    event.v = hit ? hit->v : 0.0;
+    event.pressure = pressure;
+    return tc_world_pointer_surface_dispatch_pointer(surface, &event);
 }
 
 } // namespace
@@ -261,6 +336,225 @@ void XrDirectGrabInteractorComponent::on_removed() { release_grabbed(); }
 void XrDirectGrabInteractorComponent::on_destroy() { release_grabbed(); }
 void XrDirectGrabInteractorComponent::on_scene_inactive() {
     release_grabbed();
+    was_pressed_ = false;
+}
+
+XrRayInteractorComponent::XrRayInteractorComponent()
+    : CxxComponent("XrRayInteractorComponent") {
+    set_has_update(true);
+}
+
+void XrRayInteractorComponent::register_type() {
+    auto descriptor =
+        ComponentTypeDescriptorBuilder::native<XrRayInteractorComponent>(
+            "XrRayInteractorComponent",
+            "termin-components-render",
+            "CxxComponent");
+    descriptor.category("Input")
+        .require("XrTrackedPoseComponent")
+        .require("LineRenderer");
+    auto& inspect = descriptor.inspect();
+    inspect.add<XrRayInteractorComponent, double>(
+        "XrRayInteractorComponent",
+        &XrRayInteractorComponent::max_distance,
+        "max_distance",
+        "Max Distance",
+        "double");
+    inspect.add<XrRayInteractorComponent, double>(
+        "XrRayInteractorComponent",
+        &XrRayInteractorComponent::select_threshold,
+        "select_threshold",
+        "Select Threshold",
+        "double");
+    (void)descriptor.commit();
+}
+
+void XrRayInteractorComponent::update(float) {
+    XrTrackedPoseComponent* tracker =
+        entity().get_component<XrTrackedPoseComponent>();
+    LineRenderer* line = entity().get_component<LineRenderer>();
+    if (!tracker) {
+        if (!logged_missing_tracker_) {
+            tc_log_error(
+                "[XrRayInteractorComponent] entity '%s' has no "
+                "XrTrackedPoseComponent",
+                entity().name());
+            logged_missing_tracker_ = true;
+        }
+        reset_interaction(true, true);
+        was_pressed_ = false;
+        return;
+    }
+    logged_missing_tracker_ = false;
+    if (!line) {
+        if (!logged_missing_line_renderer_) {
+            tc_log_error(
+                "[XrRayInteractorComponent] entity '%s' has no LineRenderer",
+                entity().name());
+            logged_missing_line_renderer_ = true;
+        }
+        reset_interaction(true, true);
+        was_pressed_ = false;
+        return;
+    }
+    logged_missing_line_renderer_ = false;
+
+    xr::XrRigInputState* input =
+        xr::XrInput::get_state(tracker->input_device_id);
+    if (!input || !tracker->tracking_active()) {
+        reset_interaction(true, true);
+        was_pressed_ = false;
+        return;
+    }
+
+    const double ray_limit = std::max(0.0, max_distance);
+    const Pose3 aim_pose = entity().transform().global_pose();
+    const Vec3 direction = aim_pose.transform_vector({0.0, 1.0, 0.0}).normalized();
+    const tc_world_pointer_ray ray{
+        .origin_x = aim_pose.lin.x,
+        .origin_y = aim_pose.lin.y,
+        .origin_z = aim_pose.lin.z,
+        .direction_x = direction.x,
+        .direction_y = direction.y,
+        .direction_z = direction.z,
+        .max_distance = ray_limit,
+    };
+    const xr::XrScalarState& select = input->hand(tracker->hand).select;
+    const bool pressed = select.pressed(
+        std::clamp(select_threshold, 0.0, 1.0));
+    const std::uint64_t pointer_id = entity().runtime_id();
+    pointing_ = true;
+    visible_ray_length_ = ray_limit;
+
+    tc_component* captured = resolve_world_pointer_surface(
+        captured_surface_.entity, captured_surface_.source_id);
+    if (captured_surface_.valid() && !captured) {
+        captured_surface_.clear();
+    }
+
+    if (captured) {
+        tc_world_pointer_hit hit{};
+        if (!tc_world_pointer_surface_project_ray(captured, &ray, &hit)) {
+            dispatch_world_pointer(
+                captured, pointer_id, TC_WORLD_POINTER_CANCEL, nullptr, 0.0f);
+            captured_surface_.clear();
+            hovered_surface_.clear();
+        } else {
+            visible_ray_length_ = hit.distance;
+            dispatch_world_pointer(
+                captured,
+                pointer_id,
+                TC_WORLD_POINTER_MOVE,
+                &hit,
+                static_cast<float>(select.value));
+            if (!pressed) {
+                dispatch_world_pointer(
+                    captured,
+                    pointer_id,
+                    TC_WORLD_POINTER_UP,
+                    &hit,
+                    0.0f);
+                captured_surface_.clear();
+                if (!hit.inside) hovered_surface_.clear();
+            }
+        }
+    } else {
+        NearestWorldPointerSurface nearest;
+        nearest.ray = &ray;
+        tc_scene_foreach_with_capability(
+            entity().scene().handle(),
+            tc_world_pointer_surface_capability_id(),
+            collect_nearest_world_pointer_surface,
+            &nearest,
+            TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+
+        tc_component* hovered = resolve_world_pointer_surface(
+            hovered_surface_.entity, hovered_surface_.source_id);
+        const bool same_hover = nearest.component && hovered &&
+            same_world_pointer_surface(
+                nearest.component,
+                hovered_surface_.entity,
+                hovered_surface_.source_id);
+        if (hovered && !same_hover) {
+            dispatch_world_pointer(
+                hovered, pointer_id, TC_WORLD_POINTER_LEAVE, nullptr, 0.0f);
+            hovered_surface_.clear();
+        }
+
+        if (nearest.component) {
+            visible_ray_length_ = nearest.hit.distance;
+            const char* source_id =
+                tc_component_ensure_source_id(nearest.component);
+            if (!source_id || source_id[0] == '\0') {
+                tc_log_error(
+                    "[XrRayInteractorComponent] world-pointer surface on '%s' "
+                    "has no stable source id",
+                    tc_entity_name(nearest.component->owner));
+            } else {
+                hovered_surface_.entity = nearest.component->owner;
+                hovered_surface_.source_id = source_id;
+                dispatch_world_pointer(
+                    nearest.component,
+                    pointer_id,
+                    TC_WORLD_POINTER_MOVE,
+                    &nearest.hit,
+                    static_cast<float>(select.value));
+                if (pressed && !was_pressed_ &&
+                    dispatch_world_pointer(
+                        nearest.component,
+                        pointer_id,
+                        TC_WORLD_POINTER_DOWN,
+                        &nearest.hit,
+                        static_cast<float>(select.value))) {
+                    captured_surface_ = hovered_surface_;
+                }
+            }
+        }
+    }
+
+    line->set_segment(
+        tc_vec3{0.0, 0.0, 0.0},
+        tc_vec3{0.0, visible_ray_length_, 0.0});
+    was_pressed_ = pressed;
+}
+
+void XrRayInteractorComponent::reset_interaction(
+    bool cancel_capture,
+    bool clear_runtime_visual
+) {
+    const std::uint64_t pointer_id = entity().valid()
+        ? entity().runtime_id()
+        : 0;
+    tc_component* captured = resolve_world_pointer_surface(
+        captured_surface_.entity, captured_surface_.source_id);
+    tc_component* hovered = resolve_world_pointer_surface(
+        hovered_surface_.entity, hovered_surface_.source_id);
+    if (captured && cancel_capture) {
+        dispatch_world_pointer(
+            captured, pointer_id, TC_WORLD_POINTER_CANCEL, nullptr, 0.0f);
+    } else if (hovered) {
+        dispatch_world_pointer(
+            hovered, pointer_id, TC_WORLD_POINTER_LEAVE, nullptr, 0.0f);
+    }
+    captured_surface_.clear();
+    hovered_surface_.clear();
+    pointing_ = false;
+    visible_ray_length_ = 0.0;
+    if (clear_runtime_visual && entity().valid()) {
+        if (LineRenderer* line = entity().get_component<LineRenderer>()) {
+            line->clear_points();
+        }
+    }
+}
+
+void XrRayInteractorComponent::on_removed() {
+    reset_interaction(true, false);
+}
+void XrRayInteractorComponent::on_destroy() {
+    reset_interaction(true, false);
+}
+void XrRayInteractorComponent::on_scene_inactive() {
+    reset_interaction(true, false);
     was_pressed_ = false;
 }
 

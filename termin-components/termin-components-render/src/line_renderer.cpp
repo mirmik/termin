@@ -1004,6 +1004,18 @@ void LineRenderer::add_point(const tc_vec3& point) {
     dirty_ = true;
 }
 
+void LineRenderer::set_segment(
+    const tc_vec3& start,
+    const tc_vec3& end
+) {
+    if (points_.size() != 2) {
+        points_.resize(2);
+    }
+    points_[0] = start;
+    points_[1] = end;
+    dirty_ = true;
+}
+
 void LineRenderer::set_width(float value) {
     width = value;
     dirty_ = true;
@@ -1117,12 +1129,60 @@ void LineRenderer::rebuild_geometry() {
             return;
         }
 
+        layout = tc_vertex_layout_pos_normal_uv_tangent();
+        std::vector<tgfx::LinePoint3> normals(
+            line_mesh.vertices.size(),
+            tgfx::LinePoint3{0.0f, 0.0f, 1.0f});
+        std::vector<tgfx::LinePoint3> tangents(
+            line_mesh.vertices.size(),
+            tgfx::LinePoint3{1.0f, 0.0f, 0.0f});
+        for (size_t i = 0; i + 2 < line_mesh.indices.size(); i += 3) {
+            const uint32_t ia = line_mesh.indices[i];
+            const uint32_t ib = line_mesh.indices[i + 1];
+            const uint32_t ic = line_mesh.indices[i + 2];
+            const tgfx::LinePoint3& a = line_mesh.vertices[ia].position;
+            const tgfx::LinePoint3& b = line_mesh.vertices[ib].position;
+            const tgfx::LinePoint3& c = line_mesh.vertices[ic].position;
+            tgfx::LinePoint3 normal = (b - a).cross(c - a);
+            const float length = normal.norm();
+            if (length > 1.0e-6f) {
+                normal /= length;
+            } else {
+                normal = tgfx::LinePoint3{0.0f, 0.0f, 1.0f};
+            }
+            normals[ia] = normal;
+            normals[ib] = normal;
+            normals[ic] = normal;
+            tgfx::LinePoint3 tangent = b - a;
+            const float tangent_length = tangent.norm();
+            if (tangent_length > 1.0e-6f) {
+                tangent /= tangent_length;
+            } else {
+                tangent = tgfx::LinePoint3{1.0f, 0.0f, 0.0f};
+            }
+            tangents[ia] = tangent;
+            tangents[ib] = tangent;
+            tangents[ic] = tangent;
+        }
+
         std::vector<float> vertices;
-        vertices.reserve(line_mesh.vertices.size() * 3);
-        for (const tgfx::LineVertex& vertex : line_mesh.vertices) {
-            vertices.push_back(vertex.position.x);
-            vertices.push_back(vertex.position.y);
-            vertices.push_back(vertex.position.z);
+        vertices.reserve(line_mesh.vertices.size() * 12);
+        for (size_t i = 0; i < line_mesh.vertices.size(); ++i) {
+            const tgfx::LinePoint3& position = line_mesh.vertices[i].position;
+            const tgfx::LinePoint3& normal = normals[i];
+            const tgfx::LinePoint3& tangent = tangents[i];
+            vertices.push_back(position.x);
+            vertices.push_back(position.y);
+            vertices.push_back(position.z);
+            vertices.push_back(normal.x);
+            vertices.push_back(normal.y);
+            vertices.push_back(normal.z);
+            vertices.push_back(0.0f);
+            vertices.push_back(0.0f);
+            vertices.push_back(tangent.x);
+            vertices.push_back(tangent.y);
+            vertices.push_back(tangent.z);
+            vertices.push_back(1.0f);
         }
 
         TcMeshCreateInfo create_info;

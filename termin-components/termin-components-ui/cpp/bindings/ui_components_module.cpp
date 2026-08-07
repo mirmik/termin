@@ -4,6 +4,7 @@
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/ui/tc_scene_ui_document_capability.h>
 #include <termin/ui/ui_component.hpp>
+#include <termin/ui/world_ui_surface_component.hpp>
 
 namespace nb = nanobind;
 
@@ -55,6 +56,24 @@ NB_MODULE(_ui_components_native, module) {
         .def_prop_ro("has_document", &termin::UIComponent::has_document)
         .def("reload_document", &termin::UIComponent::reload_document)
         .def("clear_document", &termin::UIComponent::clear_document);
+
+    nb::class_<termin::WorldUiSurfaceComponent, termin::CxxComponent>(
+        module, "WorldUiSurfaceComponent")
+        .def("__init__", [](nb::handle self) {
+            termin::cxx_component_init<termin::WorldUiSurfaceComponent>(self);
+        })
+        .def_rw(
+            "ui_entity_uuid",
+            &termin::WorldUiSurfaceComponent::ui_entity_uuid)
+        .def_rw(
+            "local_width",
+            &termin::WorldUiSurfaceComponent::local_width)
+        .def_rw(
+            "local_height",
+            &termin::WorldUiSurfaceComponent::local_height)
+        .def_rw(
+            "two_sided",
+            &termin::WorldUiSurfaceComponent::two_sided);
 
     module.def(
         "scene_ui_document_capability_id",

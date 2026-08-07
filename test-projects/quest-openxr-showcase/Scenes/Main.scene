@@ -289,6 +289,69 @@
                 }
               }
             ]
+          },
+          {
+            "uuid": "quest-showcase-right-aim",
+            "name": "Right UI Ray",
+            "priority": 0.0,
+            "visible": true,
+            "enabled": true,
+            "pickable": false,
+            "selectable": true,
+            "layer": 0.0,
+            "flags": 0.0,
+            "pose": {
+              "position": [0.25, 0.55, 1.15],
+              "rotation": [0.0, 0.0, 0.0, 1.0]
+            },
+            "scale": [1.0, 1.0, 1.0],
+            "components": [
+              {
+                "source_id": "quest-showcase-right-aim-tracker",
+                "type": "XrTrackedPoseComponent",
+                "data": {
+                  "enabled": true,
+                  "update_priority": 100.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "input_device_id": "xr",
+                  "hand": "right",
+                  "pose_kind": "grip"
+                }
+              },
+              {
+                "source_id": "quest-showcase-right-ray-line",
+                "type": "LineRenderer",
+                "data": {
+                  "enabled": true,
+                  "update_priority": 0.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "width": 0.02,
+                  "render_mode": 2.0,
+                  "raw_lines": false,
+                  "cast_shadow": false,
+                  "up_hint": [0.0, 0.0, 1.0],
+                  "tube_sides": 6.0,
+                  "points": [
+                    [0.0, 0.0, 0.0],
+                    [0.0, 5.0, 0.0]
+                  ]
+                }
+              },
+              {
+                "source_id": "quest-showcase-right-ray-interactor",
+                "type": "XrRayInteractorComponent",
+                "data": {
+                  "enabled": true,
+                  "update_priority": 0.0,
+                  "fixed_update_priority": 0.0,
+                  "late_update_priority": 0.0,
+                  "max_distance": 5.0,
+                  "select_threshold": 0.55
+                }
+              }
+            ]
           }
         ]
       },
@@ -1355,6 +1418,20 @@
               "cast_shadow": false,
               "_override_material": false,
               "materials": []
+            }
+          },
+          {
+            "source_id": "quest-showcase-vr-panel-world-surface",
+            "type": "WorldUiSurfaceComponent",
+            "data": {
+              "enabled": true,
+              "update_priority": 0.0,
+              "fixed_update_priority": 0.0,
+              "late_update_priority": 0.0,
+              "ui_entity_uuid": "quest-showcase-vr-panel-document",
+              "local_width": 1.0,
+              "local_height": 1.0,
+              "two_sided": false
             }
           }
         ]
