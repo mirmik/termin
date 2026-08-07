@@ -27,12 +27,23 @@ chart.YAxisText = "sin(x)";
 var x = Enumerable.Range(0, 100_000)
     .Select(index => index * 2 * Math.PI / 99_999)
     .ToArray();
-chart.AddLine(
+ChartLineSeries2D sine = chart.AddLineSeries(
+    "sin(x)",
     x,
     x.Select(Math.Sin).ToArray(),
     style: new PlotLineSeriesStyle2D(
         new PlotColor2D(0.25f, 0.75f, 1),
         thicknessPx: 2));
+if (sine.Name != "sin(x)" || !sine.Visible || !sine.ShowInLegend ||
+    sine.DataBounds is not PlotRange2D bounds ||
+    bounds.XMin != x[0] || bounds.XMax != x[^1])
+    throw new InvalidOperationException(
+        "Native semantic chart series smoke check failed.");
+sine.Visible = false;
+if (sine.Item.Visible)
+    throw new InvalidOperationException(
+        "Semantic series visibility did not reach the scene item.");
+sine.Visible = true;
 chart.Fit();
 
 // Customization goes through the public retained scene: the replacement is an
@@ -66,4 +77,4 @@ chart.Fit();
 
 var fitted = chart.Range;
 Console.WriteLine(FormattableString.Invariant(
-    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {chart.Lines[0].Snapshot.PointCount} native line points, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK."));
+    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK."));

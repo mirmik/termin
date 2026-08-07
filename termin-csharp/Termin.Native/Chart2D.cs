@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Termin.Native;
 
@@ -145,6 +146,152 @@ public sealed class ChartInteraction2D
     public void Cancel() => _chart.CancelInteraction();
 }
 
+public enum ChartSeriesKind2D
+{
+    Invalid,
+    Line,
+    Scatter,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct ChartSeriesHandle2D
+{
+    internal readonly ulong ChartId;
+    internal readonly uint Index;
+    internal readonly uint Generation;
+
+    internal bool IsValid => ChartId != 0 && Generation != 0;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct ChartSeriesSnapshot2D
+{
+    internal readonly ChartSeriesKind2D Kind;
+    internal readonly GraphicItemHandle2D Item;
+    [MarshalAs(UnmanagedType.I1)]
+    internal readonly bool Visible;
+    [MarshalAs(UnmanagedType.I1)]
+    internal readonly bool ShowInLegend;
+    [MarshalAs(UnmanagedType.I1)]
+    internal readonly bool HasDataBounds;
+    internal readonly PlotRange2D DataBounds;
+}
+
+/// <summary>
+/// Stable semantic identity for one retained chart series. The underlying
+/// public scene item remains available through <see cref="Item"/>.
+/// </summary>
+public class ChartSeries2D
+{
+    private readonly Chart2D _chart;
+    internal ChartSeriesHandle2D Handle { get; }
+
+    internal ChartSeries2D(Chart2D chart, ChartSeriesHandle2D handle)
+    {
+        _chart = chart;
+        Handle = handle;
+    }
+
+    protected Chart2D Chart => _chart;
+
+    public bool IsValid => _chart.IsSeriesValid(Handle);
+
+    public ChartSeriesKind2D Kind => Snapshot.Kind;
+
+    public GraphicItemRef2D Item
+    {
+        get
+        {
+            ChartSeriesSnapshot2D snapshot = Snapshot;
+            return new GraphicItemRef2D(
+                _chart.Scene.NativeHandle, snapshot.Item);
+        }
+    }
+
+    public string Name
+    {
+        get => _chart.GetSeriesName(Handle);
+        set => _chart.SetSeriesName(Handle, value ?? string.Empty);
+    }
+
+    public bool Visible
+    {
+        get => Snapshot.Visible;
+        set => _chart.SetSeriesVisible(Handle, value);
+    }
+
+    public bool ShowInLegend
+    {
+        get => Snapshot.ShowInLegend;
+        set => _chart.SetSeriesLegendVisible(Handle, value);
+    }
+
+    public PlotRange2D? DataBounds
+    {
+        get
+        {
+            ChartSeriesSnapshot2D snapshot = Snapshot;
+            return snapshot.HasDataBounds ? snapshot.DataBounds : null;
+        }
+    }
+
+    internal ChartSeriesSnapshot2D Snapshot =>
+        _chart.GetSeriesSnapshot(Handle);
+}
+
+public sealed class ChartLineSeries2D : ChartSeries2D
+{
+    internal ChartLineSeries2D(Chart2D chart, ChartSeriesHandle2D handle)
+        : base(chart, handle) {}
+
+    public new PlotLineSeriesItemRef2D Item =>
+        PlotLineSeriesItemRef2D.Cast(base.Item);
+
+    public PlotLineSeriesStyle2D Style
+    {
+        get => Item.Style;
+        set => Chart.SetLineSeriesStyle(Handle, value);
+    }
+
+    public void SetData(double[] x, double[] y, double[]? scalar = null) =>
+        Item.SetData(x, y, scalar);
+
+    public void Append(double[] x, double[] y, double[]? scalar = null) =>
+        Item.Append(x, y, scalar);
+
+    public bool TryNearest(
+        float pixelX,
+        float pixelY,
+        float maxDistancePx,
+        out PlotNearestPoint2D point) =>
+        Item.TryNearest(pixelX, pixelY, maxDistancePx, out point);
+}
+
+public sealed class ChartScatterSeries2D : ChartSeries2D
+{
+    internal ChartScatterSeries2D(
+        Chart2D chart,
+        ChartSeriesHandle2D handle) : base(chart, handle) {}
+
+    public new PlotScatterSeriesItemRef2D Item =>
+        PlotScatterSeriesItemRef2D.Cast(base.Item);
+
+    public PlotScatterSeriesStyle2D Style
+    {
+        get => Item.Style;
+        set => Chart.SetScatterSeriesStyle(Handle, value);
+    }
+
+    public void SetData(double[] x, double[] y) => Item.SetData(x, y);
+
+    public bool TryNearest(
+        float pixelX,
+        float pixelY,
+        float maxDistancePx,
+        out PlotNearestPoint2D point) =>
+        Item.TryNearest(pixelX, pixelY, maxDistancePx, out point);
+}
+
 /// <summary>
 /// Thin managed projection of tcplot's native open retained chart composer.
 /// Layout, ticks, text measurement, projection synchronization and standard
@@ -155,6 +302,7 @@ public sealed class Chart2D : IDisposable
     private readonly GpuHost _host;
     private readonly List<PlotLineSeriesItemRef2D> _lines = new();
     private readonly List<PlotScatterSeriesItemRef2D> _scatters = new();
+    private readonly List<ChartSeries2D> _semanticSeries = new();
     private readonly bool _disposeSceneView;
     private IntPtr _native;
     private bool _disposed;
@@ -323,6 +471,7 @@ public sealed class Chart2D : IDisposable
     public Chart2DTheme Theme { get; private set; }
     public IReadOnlyList<PlotLineSeriesItemRef2D> Lines => _lines;
     public IReadOnlyList<PlotScatterSeriesItemRef2D> Scatters => _scatters;
+    public IReadOnlyList<ChartSeries2D> SemanticSeries => _semanticSeries;
 
     public ChartLayout2D Layout
     {
@@ -427,6 +576,57 @@ public sealed class Chart2D : IDisposable
         return item;
     }
 
+    public ChartLineSeries2D AddLineSeries(
+        string name,
+        double[] x,
+        double[] y,
+        double[]? scalar = null,
+        PlotLineSeriesStyle2D? style = null,
+        bool showInLegend = true)
+    {
+        ValidateLineData(x, y, scalar);
+        ThrowIfDisposed();
+        ChartSeriesHandle2D handle = Chart2DNative.AddNamedLine(
+            _native,
+            name ?? string.Empty,
+            showInLegend,
+            x,
+            y,
+            scalar,
+            (nuint)x.Length,
+            style ?? PlotLineSeriesStyle2D.Default);
+        var series = new ChartLineSeries2D(
+            this, RequireSeriesHandle(handle));
+        _semanticSeries.Add(series);
+        return series;
+    }
+
+    public ChartScatterSeries2D AddScatterSeries(
+        string name,
+        double[] x,
+        double[] y,
+        PlotScatterSeriesStyle2D? style = null,
+        bool showInLegend = true)
+    {
+        if (x is null || y is null)
+            throw new ArgumentNullException(x is null ? nameof(x) : nameof(y));
+        if (x.Length != y.Length)
+            throw new ArgumentException("Series arrays must have equal lengths.");
+        ThrowIfDisposed();
+        ChartSeriesHandle2D handle = Chart2DNative.AddNamedScatter(
+            _native,
+            name ?? string.Empty,
+            showInLegend,
+            x,
+            y,
+            (nuint)x.Length,
+            style ?? PlotScatterSeriesStyle2D.Default);
+        var series = new ChartScatterSeries2D(
+            this, RequireSeriesHandle(handle));
+        _semanticSeries.Add(series);
+        return series;
+    }
+
     public bool RemoveSeries(GraphicItemRef2D item)
     {
         if (item is null)
@@ -437,6 +637,18 @@ public sealed class Chart2D : IDisposable
             return false;
         _lines.RemoveAll(line => line.Handle.Equals(item.Handle));
         _scatters.RemoveAll(scatter => scatter.Handle.Equals(item.Handle));
+        return true;
+    }
+
+    public bool RemoveSeries(ChartSeries2D series)
+    {
+        if (series is null)
+            throw new ArgumentNullException(nameof(series));
+        ThrowIfDisposed();
+        if (!_semanticSeries.Contains(series) ||
+            !Chart2DNative.RemoveSemanticSeries(_native, series.Handle))
+            return false;
+        _semanticSeries.Remove(series);
         return true;
     }
 
@@ -586,6 +798,76 @@ public sealed class Chart2D : IDisposable
         Chart2DNative.CancelInteraction(_native);
     }
 
+    internal bool IsSeriesValid(ChartSeriesHandle2D series) =>
+        !_disposed && _native != IntPtr.Zero &&
+        Chart2DNative.SeriesIsValid(_native, series);
+
+    internal ChartSeriesSnapshot2D GetSeriesSnapshot(
+        ChartSeriesHandle2D series)
+    {
+        ThrowIfDisposed();
+        if (!Chart2DNative.SeriesSnapshot(_native, series, out var snapshot))
+            throw new InvalidOperationException(
+                "The retained chart series handle is stale.");
+        return snapshot;
+    }
+
+    internal string GetSeriesName(ChartSeriesHandle2D series)
+    {
+        ThrowIfDisposed();
+        nuint required = Chart2DNative.SeriesNameSize(
+            _native, series, IntPtr.Zero, 0);
+        if (required == 0)
+            throw new InvalidOperationException(
+                "The retained chart series handle is stale.");
+        var bytes = new byte[checked((int)required)];
+        nuint copied = Chart2DNative.SeriesNameCopy(
+            _native, series, bytes, required);
+        if (copied != required)
+            throw new InvalidOperationException(
+                "Failed to copy the retained chart series name.");
+        return Encoding.UTF8.GetString(bytes, 0, bytes.Length - 1);
+    }
+
+    internal void SetSeriesName(ChartSeriesHandle2D series, string name)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.SeriesSetName(_native, series, name));
+    }
+
+    internal void SetSeriesVisible(
+        ChartSeriesHandle2D series,
+        bool visible)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.SeriesSetVisible(_native, series, visible));
+    }
+
+    internal void SetSeriesLegendVisible(
+        ChartSeriesHandle2D series,
+        bool visible)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.SeriesSetLegendVisible(
+            _native, series, visible));
+    }
+
+    internal void SetLineSeriesStyle(
+        ChartSeriesHandle2D series,
+        PlotLineSeriesStyle2D style)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.LineSeriesSetStyle(_native, series, style));
+    }
+
+    internal void SetScatterSeriesStyle(
+        ChartSeriesHandle2D series,
+        PlotScatterSeriesStyle2D style)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.ScatterSeriesSetStyle(_native, series, style));
+    }
+
     private GroupItemRef2D GetGroup(ChartPartKind2D kind) =>
         GroupItemRef2D.Cast(new GraphicItemRef2D(
             Scene.NativeHandle,
@@ -601,6 +883,12 @@ public sealed class Chart2D : IDisposable
         ? handle
         : throw new InvalidOperationException(
             "Native chart returned an invalid item handle.");
+
+    private static ChartSeriesHandle2D RequireSeriesHandle(
+        ChartSeriesHandle2D handle) => handle.IsValid
+        ? handle
+        : throw new InvalidOperationException(
+            "Native chart returned an invalid semantic series handle.");
 
     private static void Require(bool success)
     {
@@ -834,4 +1122,99 @@ internal static class Chart2DNative
     internal static extern bool RemoveSeries(
         IntPtr chart,
         GraphicItemHandle2D series);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_line")]
+    internal static extern ChartSeriesHandle2D AddNamedLine(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        [MarshalAs(UnmanagedType.I1)] bool showInLegend,
+        double[] x,
+        double[] y,
+        double[]? scalar,
+        nuint count,
+        PlotLineSeriesStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_scatter")]
+    internal static extern ChartSeriesHandle2D AddNamedScatter(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        [MarshalAs(UnmanagedType.I1)] bool showInLegend,
+        double[] x,
+        double[] y,
+        nuint count,
+        PlotScatterSeriesStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_is_valid")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SeriesIsValid(
+        IntPtr chart,
+        ChartSeriesHandle2D series);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_snapshot")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SeriesSnapshot(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        out ChartSeriesSnapshot2D snapshot);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_name_copy")]
+    internal static extern nuint SeriesNameSize(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        IntPtr output,
+        nuint capacity);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_name_copy")]
+    internal static extern nuint SeriesNameCopy(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        [Out] byte[] output,
+        nuint capacity);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_set_name")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SeriesSetName(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_set_visible")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SeriesSetVisible(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        [MarshalAs(UnmanagedType.I1)] bool visible);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_chart2d_series_set_legend_visible")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SeriesSetLegendVisible(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        [MarshalAs(UnmanagedType.I1)] bool visible);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_line_series_set_style")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool LineSeriesSetStyle(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        PlotLineSeriesStyle2D style);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_chart2d_scatter_series_set_style")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool ScatterSeriesSetStyle(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        PlotScatterSeriesStyle2D style);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_chart2d_remove_semantic_series")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool RemoveSemanticSeries(
+        IntPtr chart,
+        ChartSeriesHandle2D series);
 }

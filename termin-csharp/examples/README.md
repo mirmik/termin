@@ -9,9 +9,10 @@ Projects:
   of native `RetainedChart2D` through its thin C# `Chart2D` facade. It replaces
   the standard plot background without adding a layout forwarding method.
 - `RetainedChartWpfExample` - renders that retained scene through the generic
-  D3D11 WPF scene host, customizes native chart parts from C#, and anchors a
-  real WPF button to a retained scene item. The button callback stays in C#;
-  middle-drag and wheel exercise the native chart interaction controller.
+  D3D11 WPF scene host, renders chart-owned semantic-series legend entries,
+  customizes native chart parts from C#, and anchors a real WPF button to a
+  retained scene item. The button callback stays in C#; middle-drag and wheel
+  exercise the native chart interaction controller.
 - `AllianceStreamingChartsExample` - composes four independently scaled
   streaming chart panels in one retained scene and one offscreen texture.
   Pan/zoom synchronizes X while retaining per-panel Y, manual navigation stops
