@@ -716,6 +716,7 @@ namespace termin::physics_qopt
         std::vector<double> unilateral_warm_mask;
         std::vector<double> friction_tangent_jacobian;
         std::vector<double> friction_contact_normal_jacobian;
+        std::vector<std::size_t> friction_contact_normal_rows;
         std::vector<double> friction_normal_jacobian;
         std::vector<double> friction_minimum_normal_velocity;
         std::vector<double> friction_normal_impulse;
@@ -876,6 +877,25 @@ namespace termin::physics_qopt
             }
             friction_tangent_jacobian.assign(tangents * dofs, 0.0);
             friction_contact_normal_jacobian.assign(contacts * dofs, 0.0);
+            friction_contact_normal_rows.resize(contacts);
+            for (std::size_t contact = 0; contact < contacts; ++contact)
+            {
+                const DynamicsUnilateralConstraintHandle normal_constraint =
+                    friction_topology.normal_constraint(contact);
+                const DenseBlockInfo normal_info =
+                    unilateral_topology.constraint_topology().block_info(
+                        normal_constraint.block);
+                if (!normal_info.ok() || normal_info.size != 1)
+                {
+                    std::fprintf(
+                        stderr,
+                        "[termin-qopt] friction contact %zu has an invalid "
+                        "normal-row mapping\n",
+                        contact);
+                    return DynamicsSystemDiagnostic::TopologyFailure;
+                }
+                friction_contact_normal_rows[contact] = normal_info.offset;
+            }
             friction_normal_impulse.assign(contacts, 0.0);
             friction_coefficient.assign(contacts, 0.0);
             friction_tangent_impulse.assign(tangents, 0.0);
@@ -1939,6 +1959,19 @@ namespace termin::physics_qopt
                         friction_tolerance.absolute, friction_accuracy);
                     friction_tolerance.relative = std::max(
                         friction_tolerance.relative, friction_accuracy);
+                    const std::size_t friction_support_count =
+                        static_cast<std::size_t>(std::count_if(
+                            impl_->friction_normal_impulse.begin(),
+                            impl_->friction_normal_impulse.end(),
+                            [](double impulse)
+                            {
+                                return impulse >
+                                       ActiveSetQpOptions{}.active_tolerance;
+                            }));
+                    const std::size_t friction_inequality_count =
+                        unilateral_constraint_count - friction_support_count +
+                        friction_contact_count *
+                            (options.friction_cone_facets + 1);
                     const QpSolveResult friction_result =
                         solve_contact_friction(
                             {
@@ -1963,6 +1996,8 @@ namespace termin::physics_qopt
                                         .data(),
                                     friction_contact_count,
                                     dofs),
+                                {impl_->friction_contact_normal_rows.data(),
+                                 impl_->friction_contact_normal_rows.size()},
                                 ConstDenseMatrixView::row_major(
                                     impl_->friction_tangent_jacobian.data(),
                                     impl_->friction_topology.tangent_count(),
@@ -2009,9 +2044,7 @@ namespace termin::physics_qopt
                                 "iterations=%zu active=%zu\n",
                                 friction_contact_count,
                                 options.friction_cone_facets,
-                                unilateral_constraint_count +
-                                    friction_contact_count *
-                                        (options.friction_cone_facets + 2),
+                                friction_inequality_count,
                                 friction_result.iterations,
                                 friction_result.active_set_size);
                         }

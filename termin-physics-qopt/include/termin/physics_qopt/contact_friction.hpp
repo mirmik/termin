@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 
 #include <termin/physics_qopt/termin_physics_qopt_api.hpp>
 #include <termin/qopt/active_set_qp.hpp>
@@ -27,6 +28,10 @@ namespace termin::physics_qopt
         // in normal_jacobian and permit the second pass to redistribute the
         // previously solved normal impulses.
         ConstDenseMatrixView contact_normal_jacobian;
+        // For each friction contact, identifies its row in normal_jacobian.
+        // Supporting contacts replace that unilateral row with a delta-v_n=0
+        // equality instead of adding an opposing inequality.
+        std::span<const std::size_t> contact_normal_rows;
         ConstDenseMatrixView tangent_jacobian;
         ConstDenseVectorView normal_impulse;
         ConstDenseVectorView friction_coefficient;

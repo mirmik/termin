@@ -123,11 +123,16 @@ namespace termin::physics_qopt
 
     DynamicsRegistrationResult<DynamicsFrictionContactHandle>
     DynamicsFrictionTopology::register_contact(
+        DynamicsUnilateralConstraintHandle normal_constraint,
         std::string_view diagnostic_name) noexcept
     {
         if (finalized_)
         {
             return {{}, AssemblyDiagnostic::TopologyFinalized};
+        }
+        if (!normal_constraint.valid())
+        {
+            return {{}, AssemblyDiagnostic::InvalidBlock};
         }
         const DenseBlockRegistrationResult contact =
             contacts_.register_block(1, diagnostic_name);
@@ -143,6 +148,17 @@ namespace termin::physics_qopt
                          "[termin-qopt] friction tangent topology registration "
                          "failed after contact registration\n");
             return {{}, tangent.diagnostic};
+        }
+        try
+        {
+            normal_constraints_.push_back(normal_constraint);
+        }
+        catch (...)
+        {
+            std::fprintf(stderr,
+                         "[termin-qopt] friction normal-row mapping "
+                         "registration failed\n");
+            return {{}, AssemblyDiagnostic::InternalFailure};
         }
         return {{contact.handle, tangent.handle}, AssemblyDiagnostic::None};
     }
@@ -192,5 +208,16 @@ namespace termin::physics_qopt
     DynamicsFrictionTopology::tangent_topology() const noexcept
     {
         return tangents_;
+    }
+
+    DynamicsUnilateralConstraintHandle
+    DynamicsFrictionTopology::normal_constraint(
+        std::size_t contact_index) const noexcept
+    {
+        if (contact_index >= normal_constraints_.size())
+        {
+            return {};
+        }
+        return normal_constraints_[contact_index];
     }
 }
