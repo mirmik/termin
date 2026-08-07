@@ -288,6 +288,8 @@ namespace termin
         // combined coefficient assigned to every generated contact; collider
         // material mixing can replace this policy later without changing qopt.
         double contact_friction_coefficient = 0.0;
+        // Even-sided inscribed approximation of each Coulomb friction disk.
+        int contact_friction_cone_facets = 6;
         std::uint64_t collision_layer_mask = ~std::uint64_t{0};
         bool adjacent_unit_collision_enabled = false;
 
