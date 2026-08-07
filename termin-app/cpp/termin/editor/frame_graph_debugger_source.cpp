@@ -95,6 +95,8 @@ public:
         auto closed = std::make_shared<FrameGraphDebuggerSnapshot>(*snapshot_);
         ++closed->revision;
         closed->state = FrameGraphDebuggerState::Unbound;
+        closed->connected = false;
+        closed->stale = true;
         closed->status_detail = "local source closed";
         closed->main_image = {};
         closed->depth_image = {};
@@ -233,6 +235,10 @@ private:
             return;
         }
         next->revision = debugger_->revision();
+        next->graph_revision = debugger_->revision();
+        next->source_kind = FrameGraphDebuggerSourceKind::Local;
+        next->source_label = "Local";
+        next->connected = true;
         next->state = debugger_->state();
         next->suspend_reason = debugger_->suspend_reason();
         next->targets.reserve(debugger_->targets().size());

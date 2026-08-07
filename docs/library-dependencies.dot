@@ -150,6 +150,7 @@ digraph termin_dependencies {
 	"termin-dispatch";
 	"termin-glb";
 	"termin-framegraph-remote";
+	"termin-framegraph-remote-client";
 	"termin-framegraph-remote-target";
 	"termin-gui-native";
 	"termin-image";
@@ -193,6 +194,7 @@ digraph termin_dependencies {
 	"termin-base" -> "termin-cli";
 	"termin-base" -> "termin-dispatch";
 	"termin-base" -> "termin-framegraph-remote";
+	"termin-framegraph-remote" -> "termin-framegraph-remote-client";
 	"termin-engine" -> "termin-framegraph-remote-target";
 	"termin-framegraph-remote" -> "termin-framegraph-remote-target";
 	"termin-base" -> "termin-inspect";

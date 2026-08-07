@@ -148,6 +148,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_engine REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_framegraph_remote_client termin_framegraph_remote_client::termin_framegraph_remote_client)
+else()
+    find_package(termin_framegraph_remote_client REQUIRED)
+endif()
 # termin-collision (colliders + collision world)
 if(COMMAND termin_require_package)
     termin_require_package(termin_collision termin_collision::termin_collision)
@@ -304,6 +309,12 @@ option(BUILD_TESTS "Build C++ tests" OFF)
 if(BUILD_TESTS)
     enable_testing()
 
+    if(COMMAND termin_require_package)
+        termin_require_package(termin_framegraph_remote_target termin_framegraph_remote_target::termin_framegraph_remote_target)
+    else()
+        find_package(termin_framegraph_remote_target REQUIRED)
+    endif()
+
     set(DEFAULT_CTEST_CONFIG "Debug")
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
@@ -318,6 +329,7 @@ if(BUILD_TESTS)
         termin/editor/editor_interaction_system.cpp
         termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_graph_debugger_source.cpp
+        termin/editor/remote_frame_graph_debugger_source.cpp
         termin/editor/frame_profiler_controller.cpp
         termin/editor/frame_profiler_source.cpp
         termin/editor/remote_frame_profiler_source.cpp
@@ -336,6 +348,7 @@ if(BUILD_TESTS)
         tests/tests_camera_frustum_debug_gizmo.cpp
         tests/tests_transform_gizmo.cpp
         tests/tests_rendering_manager.cpp
+        tests/tests_remote_framegraph.cpp
         tests/tests_frame_profiler_controller.cpp
         tests/tests_shader_parser_std140.cpp
     )
@@ -351,6 +364,8 @@ if(BUILD_TESTS)
         termin_input::termin_input
         termin_engine::termin_engine
         termin_profiler_remote::termin_profiler_remote
+        termin_framegraph_remote_client::termin_framegraph_remote_client
+        termin_framegraph_remote_target::termin_framegraph_remote_target
         termin_gui_native::termin_gui_native
         termin_components_render::termin_components_render
         termin_components_collision::termin_components_collision

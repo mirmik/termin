@@ -1,7 +1,9 @@
 #include "termin/editor/frame_graph_debugger_view.hpp"
 #include "termin/editor/frame_graph_debugger_source.hpp"
+#include "termin/editor/remote_frame_graph_debugger_source.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -19,6 +21,7 @@
 #include <termin/gui_native/rich_text_view.hpp>
 #include <termin/gui_native/status_bar.hpp>
 #include <termin/gui_native/text_area.hpp>
+#include <termin/gui_native/text_input.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/i_render_device.hpp>
@@ -41,6 +44,7 @@ using gui_native::RichTextModel;
 using gui_native::RichTextView;
 using gui_native::StatusBar;
 using gui_native::TextArea;
+using gui_native::TextInput;
 using gui_native::Widget;
 
 BoxLayout& labeled_row(
@@ -113,6 +117,7 @@ FrameGraphDebuggerView::FrameGraphDebuggerView(
     std::function<void()> request_render
 ) : document_(document),
     source_(std::move(source)),
+    local_source_(source_),
     request_render_(std::move(request_render)) {
     if (!document_.valid()) {
         throw std::invalid_argument("FrameGraphDebuggerView requires a valid TcDocument");
@@ -149,6 +154,30 @@ void FrameGraphDebuggerView::build() {
         Orientation::Vertical, "framegraph-settings");
     settings.set_stable_id("editor.framegraph.settings");
     settings.set_spacing(4.0f);
+
+    auto& remote_controls = builder.make<BoxLayout>(
+        Orientation::Horizontal, "framegraph-remote-controls");
+    remote_controls.set_stable_id("editor.framegraph.remote-controls");
+    remote_controls.set_spacing(4.0f);
+    remote_port_input_ = &builder.make<TextInput>();
+    remote_port_input_->set_stable_id("editor.framegraph.remote-port");
+    remote_port_input_->set_placeholder("Port");
+    remote_token_input_ = &builder.make<TextInput>();
+    remote_token_input_->set_stable_id("editor.framegraph.remote-token");
+    remote_token_input_->set_placeholder("Per-launch token");
+    auto& connect_remote_button = builder.make<Button>("Connect");
+    connect_remote_button.set_stable_id("editor.framegraph.remote-connect");
+    auto& disconnect_remote_button = builder.make<Button>("Disconnect");
+    disconnect_remote_button.set_stable_id(
+        "editor.framegraph.remote-disconnect");
+    auto& use_local_button = builder.make<Button>("Use Local");
+    use_local_button.set_stable_id("editor.framegraph.use-local");
+    remote_controls.add_fixed_child(*remote_port_input_, 70.0f);
+    remote_controls.add_stretch_child(*remote_token_input_);
+    remote_controls.add_fixed_child(connect_remote_button, 82.0f);
+    remote_controls.add_fixed_child(disconnect_remote_button, 92.0f);
+    remote_controls.add_fixed_child(use_local_button, 82.0f);
+    settings.add_fixed_child(remote_controls, 30.0f);
 
     target_combo_ = &builder.make<ComboBox>();
     target_combo_->set_stable_id("editor.framegraph.target");
@@ -236,7 +265,7 @@ void FrameGraphDebuggerView::build() {
     pipeline_view.set_word_wrap(false);
     pipeline_view.set_placeholder("No pipeline");
     top.add_stretch_child(pipeline_view);
-    root_->add_fixed_child(top, 320.0f);
+    root_->add_fixed_child(top, 350.0f);
 
     fbo_model_ = std::make_shared<RichTextModel>();
     auto& fbo_view = builder.make<RichTextView>(fbo_model_);
@@ -443,15 +472,37 @@ void FrameGraphDebuggerView::build() {
     refresh_stats.clicked().connect([this](Button&) {
         refresh_info();
     });
+    connect_remote_button.clicked().connect([this](Button&) {
+        const std::string& port_text = remote_port_input_->text();
+        unsigned port = 0;
+        const auto parsed = std::from_chars(
+            port_text.data(), port_text.data() + port_text.size(), port);
+        if (parsed.ec != std::errc{} ||
+            parsed.ptr != port_text.data() + port_text.size() ||
+            port == 0 || port > 65535) {
+            state_status_->set_text("Remote: invalid loopback port");
+            tc_log_error(
+                "[framegraph-debugger-view] invalid remote port '%s'",
+                port_text.c_str());
+            request_render();
+            return;
+        }
+        connect_remote(
+            static_cast<std::uint16_t>(port), remote_token_input_->text());
+    });
+    disconnect_remote_button.clicked().connect([this](Button&) {
+        disconnect_remote();
+    });
+    use_local_button.clicked().connect([this](Button&) { use_local(); });
 }
 
 bool FrameGraphDebuggerView::activate() {
     require_open();
     if (active_) return false;
     active_ = true;
+    source_->connect();
     source_->refresh();
     select_initial_values();
-    source_->connect();
     refresh_lists();
     refresh_selection();
     refresh_info();
@@ -470,6 +521,7 @@ bool FrameGraphDebuggerView::update() {
     if (!active_) return false;
     source_->finish_frame();
     source_->refresh();
+    select_initial_values();
     refresh_lists();
     refresh_selection();
     refresh_info();
@@ -492,6 +544,74 @@ bool FrameGraphDebuggerView::show_resource(const std::string& resource) {
     refresh_selection();
     refresh_info();
     return true;
+}
+
+bool FrameGraphDebuggerView::connect_remote(
+    std::uint16_t port,
+    std::string authentication_token
+) {
+    require_open();
+    if (port == 0 || authentication_token.empty()) {
+        tc_log_error(
+            "[framegraph-debugger-view] remote port and token are required");
+        return false;
+    }
+    auto remote = std::make_shared<RemoteFrameGraphDebuggerSource>();
+    RemoteFrameGraphConnectionConfig config;
+    config.port = port;
+    config.authentication_token = std::move(authentication_token);
+    if (!remote->connect(std::move(config))) {
+        tc_log_error(
+            "[framegraph-debugger-view] failed to start remote source");
+        return false;
+    }
+    remote_source_ = std::move(remote);
+    switch_source(remote_source_, false);
+    return true;
+}
+
+void FrameGraphDebuggerView::disconnect_remote() {
+    require_open();
+    if (!remote_source_) return;
+    remote_source_->disconnect();
+    if (using_remote()) {
+        refresh_lists();
+        refresh_selection();
+        refresh_info();
+    }
+}
+
+bool FrameGraphDebuggerView::use_local() {
+    require_open();
+    if (!local_source_ || source_ == local_source_) return false;
+    if (remote_source_) remote_source_->disconnect();
+    switch_source(local_source_, active_);
+    return true;
+}
+
+bool FrameGraphDebuggerView::using_remote() const {
+    return remote_source_ && source_ == remote_source_;
+}
+
+std::shared_ptr<const FrameGraphDebuggerSnapshot>
+FrameGraphDebuggerView::source_snapshot() const {
+    return source_->snapshot();
+}
+
+void FrameGraphDebuggerView::switch_source(
+    std::shared_ptr<IFrameGraphDebuggerSource> source,
+    bool connect_source
+) {
+    if (!source || source == source_) return;
+    source_->disconnect();
+    release_previews();
+    source_ = std::move(source);
+    if (active_ && connect_source) source_->connect();
+    source_->refresh();
+    select_initial_values();
+    refresh_lists();
+    refresh_selection();
+    refresh_info();
 }
 
 void FrameGraphDebuggerView::select_initial_values() {
@@ -583,13 +703,25 @@ void FrameGraphDebuggerView::refresh_info() {
     stats_bar_->set_text(snapshot->render_stats);
     const std::string& timing = snapshot->timing;
     timing_bar_->set_text(timing.empty() ? "Timing: no selection" : timing);
-    std::string state = state_name(snapshot->state);
+    std::string state;
+    if (snapshot->source_kind == FrameGraphDebuggerSourceKind::Remote) {
+        state = snapshot->source_label + " | ";
+    }
+    state += state_name(snapshot->state);
+    if (snapshot->source_kind == FrameGraphDebuggerSourceKind::Remote &&
+        snapshot->stale) {
+        state += " [STALE]";
+    }
     if (snapshot->state == FrameGraphDebuggerState::Suspended) {
         state += ": ";
         state += suspend_reason_name(snapshot->suspend_reason);
     } else if (!snapshot->status_detail.empty()) {
         state += ": ";
         state += snapshot->status_detail;
+    }
+    if (snapshot->dropped_messages != 0) {
+        state += " | dropped=";
+        state += std::to_string(snapshot->dropped_messages);
     }
     state_status_->set_text(std::move(state));
     request_render();
@@ -729,6 +861,8 @@ void FrameGraphDebuggerView::close() {
     if (closed_) return;
     deactivate();
     source_->close();
+    if (remote_source_ && remote_source_ != source_) remote_source_->close();
+    if (local_source_ && local_source_ != source_) local_source_->close();
     closed_ = true;
     if (document_.valid() && root_ &&
         tc_ui_document_is_alive(document_.handle(), root_->handle())) {

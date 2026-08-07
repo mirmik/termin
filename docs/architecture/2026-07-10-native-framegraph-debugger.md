@@ -45,6 +45,21 @@ decoded bytes into a local texture while the view follows exactly the same
 path as an in-process capture. Transport, reconnect, and packet handling do not
 belong in the view or in Python.
 
+`RemoteFrameGraphDebuggerSource` implements that boundary for topology-only
+sessions. `termin-framegraph-remote-client` owns loopback TCP, authentication,
+framing and reconnect on a network thread; callbacks publish copied immutable
+snapshots under a mutex and never touch widgets or rendering objects. Commands
+cross a bounded SPSC queue from the editor thread and are discarded at a
+session boundary. A disconnect retains the latest bounded topology but marks
+it `stale`, while a new session clears session-scoped target/pass identities.
+
+The production view contains explicit port/token Connect, Disconnect and Use
+Local controls. The token is launch-scoped input and is not persisted. Source
+switching replaces only the source behind the existing widget tree; no second
+debugger UI or Python data plane is created. Topology refresh is rate-limited,
+stale-revision responses schedule reconciliation, and remote errors/drop counts
+are surfaced in the existing status bar.
+
 ## Capture lifecycle
 
 `RenderingManager` is the authoritative source of renderable targets and the
