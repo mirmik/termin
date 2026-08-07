@@ -1,4 +1,5 @@
 #include "guard_main.h"
+#include "termin/editor/frame_graph_debugger_source.hpp"
 #include "termin/editor/frame_graph_debugger_view.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/frame_graph_debugger.hpp"
@@ -53,6 +54,59 @@ using termin::FrameGraphDebuggerState;
 using termin::FrameGraphDebuggerSuspendReason;
 
 namespace {
+
+class TestFrameGraphDebuggerSource final
+    : public termin::IFrameGraphDebuggerSource {
+public:
+    TestFrameGraphDebuggerSource() {
+        state_ = std::make_shared<termin::FrameGraphDebuggerSnapshot>();
+        state_->revision = 9;
+        state_->state = FrameGraphDebuggerState::Error;
+        state_->status_detail = "transport failed";
+    }
+
+    std::shared_ptr<const termin::FrameGraphDebuggerSnapshot>
+    snapshot() const override { return state_; }
+    bool refresh() override { ++refresh_count; return true; }
+    void finish_frame() override { ++finish_count; }
+    void connect() override { ++connect_count; }
+    void disconnect() override { ++disconnect_count; }
+    void close() override { ++close_count; }
+    bool select_target(std::uint64_t) override { return false; }
+    bool select_pass(std::optional<std::uint64_t>) override { return false; }
+    void set_mode(FrameGraphDebuggerMode mode) override { state_->mode = mode; }
+    void set_selected_symbol(const std::string& value) override {
+        state_->selected_symbol = value;
+    }
+    void set_selected_resource(const std::string& value) override {
+        state_->selected_resource = value;
+    }
+    void set_channel_mode(int value) override { state_->channel_mode = value; }
+    void set_paused(bool value) override { state_->paused = value; }
+    void set_highlight_hdr(bool value) override { state_->highlight_hdr = value; }
+    std::string analyze_hdr() override { return "No capture available"; }
+    bool render_image(
+        tgfx::RenderContext2&,
+        tgfx::TextureHandle,
+        termin::FrameGraphDebuggerImageKind,
+        std::uint32_t,
+        std::uint32_t,
+        int,
+        bool) override { return false; }
+    std::vector<std::uint8_t> read_depth_normalized(
+        tgfx::IRenderDevice&,
+        int*,
+        int*) override { return {}; }
+
+    int refresh_count = 0;
+    int finish_count = 0;
+    int connect_count = 0;
+    int disconnect_count = 0;
+    int close_count = 0;
+
+private:
+    std::shared_ptr<termin::FrameGraphDebuggerSnapshot> state_;
+};
 
 struct RenderLifecycleCounter {
     tc_component component;
@@ -1018,6 +1072,101 @@ TEST_CASE("FrameGraphDebuggerView builds a stable C++ tool tree and keeps docume
     CHECK_FALSE(tc_ui_document_is_alive(handle, root));
     CHECK(tc_ui_document_is_valid(handle));
     tc_ui_document_destroy(handle);
+}
+
+TEST_CASE("FrameGraphDebuggerView projects source errors and closes the source session")
+{
+    const tc_ui_document_handle handle = tc_ui_document_create();
+    termin::gui_native::TcDocument document(handle);
+    auto source = std::make_shared<TestFrameGraphDebuggerSource>();
+    FrameGraphDebuggerView view(document, source);
+
+    CHECK(view.activate());
+    CHECK_EQ(view.state_status()->text(), "Error: transport failed");
+    CHECK_EQ(source->refresh_count, 1);
+    CHECK_EQ(source->connect_count, 1);
+    CHECK(view.update());
+    CHECK_EQ(source->finish_count, 1);
+    CHECK_EQ(source->refresh_count, 2);
+
+    view.close();
+    CHECK_EQ(source->disconnect_count, 1);
+    CHECK_EQ(source->close_count, 1);
+    tc_ui_document_destroy(handle);
+}
+
+TEST_CASE("LocalFrameGraphDebuggerSource projects values, commands, revisions and teardown")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    tc_render_target_handle target = tc_render_target_new("SourceTarget");
+    tc_render_target_set_scene(target, scene);
+    tc_pipeline_handle pipeline_handle = tc_pipeline_create("SourcePipeline");
+    RenderPipeline pipeline(pipeline_handle);
+    pipeline.add_pass((new FrameGraphDebuggerProbePass())->tc_pass_ptr());
+    tc_render_target_set_pipeline(target, pipeline_handle);
+    tc_viewport_handle viewport = tc_viewport_new("SourceViewport", scene);
+    tc_viewport_set_render_target(viewport, target);
+    tc_display_handle display = tc_display_new("SourceDisplay", nullptr);
+    tc_display_add_viewport(display, viewport);
+    manager.add_editor_display(display);
+
+    FrameGraphDebugger debugger(manager);
+    auto source = termin::make_local_frame_graph_debugger_source(debugger);
+    auto snapshot = source->snapshot();
+    REQUIRE_EQ(snapshot->targets.size(), 1u);
+    CHECK(snapshot->targets[0].id != 0);
+    CHECK_EQ(
+        snapshot->targets[0].label,
+        "SourceDisplay / SourceViewport / SourceTarget");
+    REQUIRE_EQ(snapshot->passes.size(), 1u);
+    CHECK_EQ(snapshot->passes[0].authored_index, 0u);
+    CHECK_EQ(snapshot->passes[0].name, "DebuggerProbe");
+    REQUIRE_EQ(snapshot->passes[0].internal_symbols.size(), 2u);
+
+    const std::uint64_t initial_revision = snapshot->revision;
+    CHECK(source->select_target(snapshot->targets[0].id));
+    CHECK(source->select_pass(snapshot->passes[0].id));
+    source->set_selected_symbol("before_probe");
+    source->set_mode(FrameGraphDebuggerMode::BetweenPasses);
+    REQUIRE_FALSE(source->snapshot()->resources.empty());
+    source->set_selected_resource(source->snapshot()->resources.front());
+    source->set_channel_mode(3);
+    source->set_paused(true);
+    source->set_highlight_hdr(true);
+    snapshot = source->snapshot();
+    CHECK(snapshot->revision > initial_revision);
+    CHECK_EQ(snapshot->selected_symbol, "before_probe");
+    CHECK(snapshot->mode == FrameGraphDebuggerMode::BetweenPasses);
+    CHECK_FALSE(snapshot->selected_resource.empty());
+    CHECK_EQ(snapshot->channel_mode, 3);
+    CHECK(snapshot->paused);
+    CHECK(snapshot->highlight_hdr);
+    CHECK_FALSE(source->select_target(0));
+    CHECK_FALSE(source->select_pass(0));
+
+    manager.remove_editor_display(display);
+    CHECK(source->refresh());
+    snapshot = source->snapshot();
+    CHECK(snapshot->state == FrameGraphDebuggerState::Suspended);
+    CHECK(snapshot->suspend_reason ==
+          FrameGraphDebuggerSuspendReason::TargetRemoved);
+
+    source->close();
+    snapshot = source->snapshot();
+    CHECK(snapshot->state == FrameGraphDebuggerState::Unbound);
+    CHECK_EQ(snapshot->status_detail, "local source closed");
+    CHECK_FALSE(snapshot->main_image.available);
+    CHECK_FALSE(snapshot->depth_image.available);
+    CHECK_FALSE(source->refresh());
+
+    tc_display_remove_viewport(display, viewport);
+    tc_viewport_free(viewport);
+    tc_pipeline_destroy(pipeline_handle);
+    tc_render_target_free(target);
+    tc_display_free(display);
+    tc_scene_free(scene);
 }
 
 TEST_CASE("FrameGraphDebuggerView projects topology, actions, selection and suspension")

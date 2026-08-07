@@ -18,6 +18,9 @@ class RenderContext2;
 namespace termin {
 
 class FrameGraphDebugger;
+struct FrameGraphDebuggerSnapshot;
+class IFrameGraphDebuggerSource;
+class RemoteFrameGraphDebuggerSource;
 
 namespace gui_native {
 class BoxLayout;
@@ -28,6 +31,7 @@ class ComboBox;
 class RichTextModel;
 class StatusBar;
 class TextArea;
+class TextInput;
 }
 
 // Editor-specific C++ projection of FrameGraphDebugger into an existing
@@ -39,6 +43,10 @@ public:
         gui_native::TcDocument document,
         FrameGraphDebugger& debugger,
         std::function<void()> request_render = {});
+    FrameGraphDebuggerView(
+        gui_native::TcDocument document,
+        std::shared_ptr<IFrameGraphDebuggerSource> source,
+        std::function<void()> request_render = {});
     ~FrameGraphDebuggerView();
 
     FrameGraphDebuggerView(const FrameGraphDebuggerView&) = delete;
@@ -48,6 +56,14 @@ public:
     void deactivate();
     bool update();
     bool show_resource(const std::string& resource);
+    bool connect_remote(
+        std::uint16_t port,
+        std::string authentication_token);
+    void disconnect_remote();
+    bool use_local();
+    bool using_remote() const;
+    std::shared_ptr<const FrameGraphDebuggerSnapshot>
+    source_snapshot() const;
     bool render_previews(tgfx::RenderContext2& context);
     std::string refresh_depth(tgfx::IRenderDevice& device);
     void close();
@@ -102,14 +118,21 @@ private:
     void release_preview(Preview& preview);
     void request_render();
     void require_open() const;
+    void switch_source(
+        std::shared_ptr<IFrameGraphDebuggerSource> source,
+        bool connect_source);
 
     gui_native::TcDocument document_;
-    FrameGraphDebugger* debugger_ = nullptr;
+    std::shared_ptr<IFrameGraphDebuggerSource> source_;
+    std::shared_ptr<IFrameGraphDebuggerSource> local_source_;
+    std::shared_ptr<RemoteFrameGraphDebuggerSource> remote_source_;
     std::function<void()> request_render_;
     tgfx::IRenderDevice* preview_device_ = nullptr;
 
     gui_native::BoxLayout* root_ = nullptr;
     gui_native::ComboBox* target_combo_ = nullptr;
+    gui_native::TextInput* remote_port_input_ = nullptr;
+    gui_native::TextInput* remote_token_input_ = nullptr;
     gui_native::ComboBox* mode_combo_ = nullptr;
     gui_native::ComboBox* pass_combo_ = nullptr;
     gui_native::ComboBox* symbol_combo_ = nullptr;
