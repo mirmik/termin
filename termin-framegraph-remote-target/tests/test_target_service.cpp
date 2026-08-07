@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <thread>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -339,11 +340,17 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
         REQUIRE(std::holds_alternative<Status>(status_message->message));
         return topology;
     };
-    const auto lifecycle_status = [&] {
-        const auto message = receive_wire(client.socket);
-        REQUIRE(message.has_value());
-        REQUIRE(std::holds_alternative<Status>(message->message));
-        return std::get<Status>(message->message);
+    const auto lifecycle_update = [&] {
+        const auto topology_message = receive_wire(client.socket);
+        REQUIRE(topology_message.has_value());
+        REQUIRE(std::holds_alternative<TopologySnapshot>(
+            topology_message->message));
+        const auto status_message = receive_wire(client.socket);
+        REQUIRE(status_message.has_value());
+        REQUIRE(std::holds_alternative<Status>(status_message->message));
+        return std::pair{
+            std::get<TopologySnapshot>(topology_message->message),
+            std::get<Status>(status_message->message)};
     };
 
     const TopologySnapshot detached = refresh(1);
@@ -353,13 +360,17 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
     RenderFixture fixture;
     REQUIRE(target.attach_debugger(*fixture.debugger));
     CHECK(target.status().debugger_attached);
-    CHECK(lifecycle_status().state == SessionState::idle);
+    const auto attached_update = lifecycle_update();
+    CHECK(attached_update.second.state == SessionState::idle);
+    REQUIRE_EQ(attached_update.first.targets.size(), 1u);
     const TopologySnapshot attached = refresh(2);
     REQUIRE_EQ(attached.targets.size(), 1u);
     CHECK(attached.graph_revision > detached_revision);
     const std::uint64_t attached_revision = attached.graph_revision;
     target.detach_debugger();
-    CHECK(lifecycle_status().state == SessionState::suspended);
+    const auto detached_update = lifecycle_update();
+    CHECK(detached_update.second.state == SessionState::suspended);
+    CHECK(detached_update.first.targets.empty());
     CHECK_FALSE(target.status().debugger_attached);
     const TopologySnapshot suspended = refresh(3);
     CHECK(suspended.targets.empty());
@@ -368,12 +379,16 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
     fixture.debugger.reset();
     fixture.debugger.emplace(fixture.manager);
     REQUIRE(target.attach_debugger(*fixture.debugger));
-    CHECK(lifecycle_status().state == SessionState::idle);
+    const auto reattached_update = lifecycle_update();
+    CHECK(reattached_update.second.state == SessionState::idle);
+    REQUIRE_EQ(reattached_update.first.targets.size(), 1u);
     const TopologySnapshot reattached = refresh(4);
     REQUIRE_EQ(reattached.targets.size(), 1u);
     CHECK(reattached.graph_revision > suspended.graph_revision);
     target.detach_debugger();
-    CHECK(lifecycle_status().state == SessionState::suspended);
+    const auto final_update = lifecycle_update();
+    CHECK(final_update.second.state == SessionState::suspended);
+    CHECK(final_update.first.targets.empty());
     close_test_socket(client.socket);
     target.stop();
 }

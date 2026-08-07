@@ -8,9 +8,11 @@ The owner render thread may construct the service around a `FrameGraphDebugger`
 or start it detached and use `attach_debugger()`/`detach_debugger()` as a host
 render runtime is recreated. The listener and authenticated client session stay
 process-scoped; a detached service publishes an empty revised topology and
-reports `suspended` until another debugger is attached. Only the owner-thread
-pump and attach/detach calls read or mutate debugger state. The I/O
-thread owns loopback TCP sockets, authentication, framing, and transmission.
+reports `suspended` until another debugger is attached. Attach and detach push
+the revised topology and lifecycle status directly to the active session, so
+this transition does not depend on another render-frame pump. Only the
+owner-thread pump and attach/detach calls read or mutate debugger state. The
+I/O thread owns loopback TCP sockets, authentication, framing, and transmission.
 Bounded SPSC queues carry copied commands and immutable topology/status values;
 queue overflow rejects or drops a whole logical message and is visible in
 status counters and logs. Exact capture payloads are additionally bounded by a
@@ -52,3 +54,8 @@ target rejects a burst whose cumulative retained payload would exceed the
 negotiated memory budget. Capture, readback, RGBA conversion, transfer time,
 effective preview FPS, bytes and dropped frames are exported by service status
 and terminal status details.
+
+The reciprocal target/client smoke and its one-command runner are documented
+in the remote client module. Its target deliberately uses a real Vulkan
+`RenderingManager` execution and frame-local captures, but a clear-only pass so
+the verification does not depend on runtime shader compilation.

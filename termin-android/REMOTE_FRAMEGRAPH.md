@@ -6,7 +6,9 @@ process-scoped, while its `FrameGraphDebugger` attachment follows the Android
 render runtime. During pause or surface loss the service publishes an empty,
 revised topology and reports a suspended session. When Vulkan, `EngineCore` and
 `RenderingManager` are recreated, the same authenticated connection receives a
-new topology revision. No GPU handle crosses the service boundary.
+new topology revision. Attach and detach push these lifecycle updates directly;
+they do not depend on another render-thread pump. No GPU handle crosses the
+service boundary.
 
 ## Build and connect
 
