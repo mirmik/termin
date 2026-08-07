@@ -19,6 +19,14 @@ Shadow camera helpers (`ShadowCameraParams`, `build_shadow_view_matrix`,
 public `termin.render_passes` Python API. The legacy `termin._native.render`
 surface has been removed; use the canonical package directly.
 
+Модуль владеет `ShadowMapArrayResource` и регистрирует `shadow_map_array` как
+расширение общего non-texture framegraph resource registry. `ShadowPass` и
+`ColorPass` получают typed resource через нейтральную таблицу
+`ExecuteContext::frame_graph_resources`; generic executor не включает shadow
+headers и использует только зарегистрированный depth sampled preview (дальний
+каскад, дающий полный обзор shadow distance) для обычных
+texture/debugger consumers.
+
 `UIWidgetPass` is one native C++ pass on desktop, Android, and OpenXR. It
 collects the `scene_ui_document` component capability, applies component,
 entity, layer, and optional internal-hierarchy filtering, then submits the

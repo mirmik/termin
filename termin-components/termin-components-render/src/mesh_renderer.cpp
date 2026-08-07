@@ -637,7 +637,6 @@ bool MeshRenderer::collect_render_items(
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_MESH;
             item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-            item.component = tc_component_ptr();
             item.geometry_id = static_cast<int>(submesh_index);
             item.material_phase = phase;
             item.material = material_ref.handle;

@@ -17,6 +17,7 @@
 #include <termin/geom/general_transform3.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
@@ -226,7 +227,8 @@ bool foliage_render_item_draw_encoder(
             item.kind);
         return false;
     }
-    CxxComponent* component = CxxComponent::from_tc(item.component);
+    CxxComponent* component = CxxComponent::from_tc(
+        render_scene_item_component(item));
     auto* foliage = dynamic_cast<FoliageLayerComponent*>(component);
     if (!foliage) {
         const char* type_name = component ? component->type_name() : "<null>";
@@ -544,7 +546,6 @@ bool FoliageLayerComponent::collect_render_items(
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_FOLIAGE_BATCH;
         item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-        item.component = tc_component_ptr();
         item.geometry_id = FOLIAGE_GEOMETRY_ID;
         item.material_phase = phase;
         item.material = material.handle;

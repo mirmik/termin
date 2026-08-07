@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <termin/entity/component.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -184,7 +185,8 @@ bool world_text_render_item_draw_encoder(
             item.kind);
         return false;
     }
-    CxxComponent* component = CxxComponent::from_tc(item.component);
+    CxxComponent* component = CxxComponent::from_tc(
+        render_scene_item_component(item));
     auto* renderer = dynamic_cast<WorldTextComponent*>(component);
     if (!renderer) {
         const char* type_name = component ? component->type_name() : "<null>";
@@ -651,7 +653,6 @@ bool WorldTextComponent::collect_render_items(
     tc_render_item item{};
     item.kind = TC_RENDER_ITEM_KIND_TEXT_BATCH;
     item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-    item.component = tc_component_ptr();
     item.geometry_id = 0;
     item.material_phase = phase;
     TcMaterial material = effective_material();

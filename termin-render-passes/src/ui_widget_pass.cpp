@@ -1,4 +1,5 @@
 #include <termin/render/ui_widget_pass.hpp>
+#include <termin/render/scene_render_services.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -227,19 +228,20 @@ collect_ui_document_submissions(
     bool include_internal_entities
 ) {
     SubmissionCollector collector;
-    collector.layer_mask = ctx.layer_mask;
-    if (ctx.scene.valid()) {
-        tc_scene_foreach_with_capability(
-            ctx.scene.handle(),
-            tc_scene_ui_document_capability_id(),
-            collect_scene_component,
-            &collector,
-            TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
-    }
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "UIWidgetPass");
+    if (!services) return {};
+    collector.layer_mask = services->layer_mask;
+    tc_scene_foreach_with_capability(
+        services->scene.handle(),
+        tc_scene_ui_document_capability_id(),
+        collect_scene_component,
+        &collector,
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
     if (include_internal_entities &&
-        tc_entity_handle_valid(ctx.internal_entities)) {
+        tc_entity_handle_valid(services->internal_entities)) {
         collect_internal_hierarchy(
-            ctx.internal_entities, true, collector);
+            services->internal_entities, true, collector);
     }
     std::sort(
         collector.submissions.begin(),

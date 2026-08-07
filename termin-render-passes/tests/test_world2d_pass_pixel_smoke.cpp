@@ -1,6 +1,7 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world2d_pass.hpp>
@@ -161,11 +162,12 @@ int run_smoke(const char* argv0) {
     renderer->set_sprite_uuid(sprite.uuid());
     entity.add_component(renderer);
 
-    termin::RenderSceneItemSnapshot snapshot;
-    termin::RenderSceneItemCollectRequest request;
-    request.scene = scene.handle();
-    request.debug_pass_name = "World2DPassPixelSmoke";
-    if (!snapshot.collect(request) || snapshot.item_count() != 1) {
+    termin::RenderItemSnapshot snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    termin::RenderItemSourceRequest source_request;
+    source_request.debug_name = "World2DPassPixelSmoke";
+    if (!item_source.publish(snapshot, source_request) ||
+        snapshot.item_count() != 1) {
         std::fprintf(stderr, "Failed to collect World2D smoke render item\n");
         scene.destroy();
         return 1;
@@ -212,8 +214,11 @@ int run_smoke(const char* argv0) {
 
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
-    context.scene = scene;
-    context.camera = &camera;
+    context.view.primary = camera;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    context.capabilities = &capabilities;
     context.render_item_snapshot = &snapshot;
     context.tex2_writes.emplace("world2d", color);
     context.tex2_depth_writes.emplace("world2d", depth);

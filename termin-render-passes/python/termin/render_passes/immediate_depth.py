@@ -82,8 +82,8 @@ class ImmediateDepthPass(PythonFramePass):
         ctx2.begin_pass(target_tex2)
         ctx2.set_viewport(0, 0, pw, ph)
 
-        view = ctx.camera.get_view_matrix()
-        proj = ctx.camera.get_projection_matrix()
+        view = ctx.view.get_view_matrix()
+        proj = ctx.view.get_projection_matrix()
 
         try:
             renderer.flush_depth(

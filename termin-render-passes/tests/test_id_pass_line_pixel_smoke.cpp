@@ -1,5 +1,7 @@
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/id_pass.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
@@ -270,14 +272,21 @@ int run_smoke(const char* argv0)
     tgfx::RenderContext2 render_ctx(*device, cache);
     termin::IdPass pass("empty", "id", "IdPassLinePixelSmoke");
 
-    termin::RenderSceneItemSnapshot render_item_snapshot;
+    termin::RenderItemSnapshot render_item_snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(render_item_snapshot, {})) {
+        return false;
+    }
     termin::ExecuteContext exec_ctx;
     exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;
     exec_ctx.tex2_writes.emplace("id", color);
     exec_ctx.tex2_depth_writes.emplace("id", depth);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    exec_ctx.scene = scene;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    exec_ctx.capabilities = &capabilities;
 
     render_ctx.begin_frame();
     pass.execute_with_data_tgfx2(
@@ -379,14 +388,21 @@ int run_world_text_smoke(const char* argv0)
     tgfx::PipelineCache cache(*device);
     tgfx::RenderContext2 render_ctx(*device, cache);
     termin::IdPass pass("empty", "id", "IdPassWorldTextPixelSmoke");
-    termin::RenderSceneItemSnapshot render_item_snapshot;
+    termin::RenderItemSnapshot render_item_snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(render_item_snapshot, {})) {
+        return false;
+    }
     termin::ExecuteContext exec_ctx;
     exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;
     exec_ctx.tex2_writes.emplace("id", color);
     exec_ctx.tex2_depth_writes.emplace("id", depth);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    exec_ctx.scene = scene;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    exec_ctx.capabilities = &capabilities;
 
     render_ctx.begin_frame();
     pass.execute_with_data_tgfx2(

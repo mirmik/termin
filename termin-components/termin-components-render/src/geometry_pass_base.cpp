@@ -118,7 +118,7 @@ int GeometryPassBase::get_pick_id(const Entity& ent) const {
     return 0;
 }
 
-void GeometryPassBase::collect_shader_usages(
+void GeometryPassBase::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -242,7 +242,7 @@ void GeometryPassBase::collect_draw_calls(
     uint64_t layer_mask,
     uint64_t render_category_mask,
     tc_shader_handle base_shader,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) const {
     (void)layer_mask;
     (void)render_category_mask;
@@ -275,13 +275,14 @@ void GeometryPassBase::collect_draw_calls(
         const tc_render_item& representative = items[group_begin];
         size_t group_end = group_begin + 1;
         while (group_end < items.size() &&
-               items[group_end].component == representative.component &&
+               items[group_end].source.adapter_data ==
+                   representative.source.adapter_data &&
                items[group_end].kind == representative.kind &&
                items[group_end].geometry_id == representative.geometry_id) {
             ++group_end;
         }
 
-        tc_component* component = representative.component;
+        tc_component* component = render_scene_item_component(representative);
         Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
         if (!component || !ent.valid() || !entity_filter(ent) ||
             !tc_phase_mask_contains(tc_component_phase_mask(component), collect_phase) ||

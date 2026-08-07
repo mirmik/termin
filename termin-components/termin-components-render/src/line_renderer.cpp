@@ -700,7 +700,6 @@ bool emit_line_batch_render_items(
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
         item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-        item.component = component;
         item.geometry_id = desc.geometry_id;
         item.material_phase = phase;
         item.material = material_handle;
@@ -1253,7 +1252,6 @@ bool LineRenderer::collect_render_items(
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_MESH;
             item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-            item.component = this->tc_component_ptr();
             item.geometry_id = 0;
             item.material_phase = phase;
             item.material = material_handle;

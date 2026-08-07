@@ -8,6 +8,7 @@ GUARD_TEST_MAIN();
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/foliage/foliage_layer_component.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/render_task.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -120,7 +121,7 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     REQUIRE(collection.items.size() == 1u);
     const tc_render_item& item = collection.items[0];
     CHECK(item.kind == TC_RENDER_ITEM_KIND_FOLIAGE_BATCH);
-    CHECK(item.component == layer->tc_component_ptr());
+    CHECK(termin::render_scene_item_component(item) == layer->tc_component_ptr());
     CHECK(item.geometry_id == 0);
     CHECK(item.material_phase == phase);
     CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);

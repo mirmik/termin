@@ -1,5 +1,6 @@
 #include <termin/render/debug_geometry_pass.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/render_camera.hpp>
 #include <termin/tc_scene.hpp>
 
@@ -185,8 +186,11 @@ int run_smoke(const char* argv0) {
         -1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
-    context.scene = scene;
-    context.camera = &camera;
+    context.view.primary = camera;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    context.capabilities = &capabilities;
     context.tex2_writes.emplace("debug", target);
     context.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
     termin::DebugGeometryPass pass("debug", "debug", "DebugGeometryPixelSmoke");

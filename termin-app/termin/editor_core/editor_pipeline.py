@@ -37,7 +37,9 @@ def make_editor_pipeline() -> RenderPipeline:
     def prepare_gizmo_context(ctx):
         sys = EditorInteractionSystem.instance()
         if sys:
-            sys.set_camera_frustum_render_context(ctx.scene, ctx.render_rect)
+            sys.set_camera_frustum_render_context(
+                ctx.scene_services.scene, ctx.render_rect
+            )
 
     def get_selected_pick_id():
         sys = EditorInteractionSystem.instance()

@@ -10,6 +10,7 @@
 #include "termin/render/material_pipeline_shader_assembler.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
+#include "termin/render/scene_render_services.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -466,7 +467,7 @@ void ShadowPass::collect_shadow_casters(
     tc_scene_handle scene,
     uint64_t layer_mask,
     uint64_t render_category_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) {
     cached_draw_calls_.clear();
 
@@ -479,7 +480,6 @@ void ShadowPass::collect_shadow_casters(
     render_context.pass_contract = shadow_material_pass_contract();
     render_context.layer_mask = layer_mask;
     render_context.render_category_mask = render_category_mask;
-    render_context.scene = TcSceneRef(scene);
 
     const auto& items = snapshot.items();
     const std::span<const size_t> routed_items =
@@ -487,7 +487,7 @@ void ShadowPass::collect_shadow_casters(
     cached_draw_calls_.reserve(routed_items.size());
     for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
-        tc_component* tc = item.component;
+        tc_component* tc = render_scene_item_component(item);
         if (!tc) {
             tc::Log::error(
                 "[ShadowPass] collect_shadow_casters: collected item %zu has null component",
@@ -520,7 +520,7 @@ void ShadowPass::collect_shadow_casters(
     }
 }
 
-void ShadowPass::collect_shader_usages(
+void ShadowPass::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -614,15 +614,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    RenderSceneItemSnapshot* scene_items =
-        ensure_render_item_snapshot(ctx, "ShadowPass");
+    const RenderItemSnapshot* scene_items =
+        require_render_item_snapshot(ctx, "ShadowPass");
     if (!scene_items) {
         return results;
     }
     collect_shadow_casters(
         data.scene,
         data.layer_mask,
-        ctx.render_category_mask,
+        data.render_category_mask,
         *scene_items);
 
     const MaterialPipelinePassContract task_shader_contract =
@@ -666,10 +666,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             render_tasks.emplace_extension<ShadowTaskExtension>();
         RenderTask& task = render_tasks.at(planning_result.task_index);
         task.extension = &extension;
-        task.entity = dc.entity;
-        task.component = dc.component;
         const char* entity_name = dc.entity.name();
-        task.entity_name = entity_name ? entity_name : "";
+        task.debug_name = entity_name ? entity_name : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
                 extension.draw_data.u_model,
@@ -691,7 +689,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         task.draw_context.pass_contract = task_shader_contract;
         task.draw_context.current_tc_shader = TcShader(task.final_shader);
         task.draw_context.layer_mask = data.layer_mask;
-        task.draw_context.render_category_mask = ctx.render_category_mask;
+        task.draw_context.render_category_mask = data.render_category_mask;
     }
 
     // Keep the owned task storage stable and sort only non-owning submission
@@ -712,8 +710,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     entity_names.clear();
     std::set<std::string> seen;
     for (const RenderTask* task : sorted_render_tasks) {
-        if (!task->entity_name.empty() && seen.insert(task->entity_name).second) {
-            entity_names.push_back(task->entity_name);
+        if (!task->debug_name.empty() && seen.insert(task->debug_name).second) {
+            entity_names.push_back(task->debug_name);
         }
     }
 
@@ -922,7 +920,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 encode_request.material_phase = task.material_phase;
                 encode_request.phase = TC_PHASE_SHADOW;
                 encode_request.debug_pass_name = "ShadowPass";
-                encode_request.debug_entity_name = task.entity_name.c_str();
+                encode_request.debug_entity_name = task.debug_name.c_str();
                 encode_request.resources = &task.resources;
                 if (!submit_render_item_draw(
                     *ctx.ctx2,
@@ -930,7 +928,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     encode_request)) {
                     continue;
                 }
-                capture_debug_symbol(task.entity_name.c_str());
+                capture_debug_symbol(task.debug_name.c_str());
                 restore_shadow_raster_state();
                 ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
                 ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
@@ -957,33 +955,45 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("ShadowPass");
 
-    auto it = ctx.shadow_arrays.find(output_res);
-    if (it == ctx.shadow_arrays.end() || it->second == nullptr) {
+    ShadowMapArrayResource* shadow_array =
+        ctx.get_frame_graph_resource_as<ShadowMapArrayResource>(output_res);
+    if (!shadow_array) {
+        tc::Log::error(
+            "[ShadowPass] output resource '%s' is missing or is not a shadow_map_array",
+            output_res.c_str());
         if (profile) tc_profiler_end_section();
         return;
     }
-    ShadowMapArrayResource* shadow_array = it->second;
 
     // Clear previous frame's entries
     shadow_array->clear();
 
-    if (ctx.lights.empty()) {
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "ShadowPass");
+    if (!services) {
         if (profile) tc_profiler_end_section();
         return;
     }
 
-    if (!ctx.camera) {
-        tc::Log::error("ShadowPass: camera is null");
+    if (services->lights.empty()) {
+        if (profile) tc_profiler_end_section();
+        return;
+    }
+
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[ShadowPass] primary render view is missing");
+        if (profile) tc_profiler_end_section();
         return;
     }
 
     // Get camera matrices
-    Mat44 view_d = ctx.camera->get_view_matrix();
-    Mat44 proj_d = ctx.camera->get_projection_matrix();
+    Mat44 view_d = primary_view->get_view_matrix();
+    Mat44 proj_d = primary_view->get_projection_matrix();
     Mat44f camera_view = view_d.to_float();
     Mat44f camera_projection = proj_d.to_float();
-    float camera_near = static_cast<float>(ctx.camera->near_clip);
-    float camera_far = static_cast<float>(ctx.camera->far_clip);
+    float camera_near = static_cast<float>(primary_view->near_clip);
+    float camera_far = static_cast<float>(primary_view->far_clip);
 
     if (!ctx.ctx2) {
         tc::Log::error("[ShadowPass] ctx.ctx2 is null — ShadowPass is tgfx2-only");
@@ -992,13 +1002,14 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     }
 
     ShadowPassExecuteData data;
-    data.scene = ctx.scene.handle();
-    data.lights = ctx.lights;
+    data.scene = services->scene.handle();
+    data.lights = services->lights;
     data.camera_view = camera_view;
     data.camera_projection = camera_projection;
     data.camera_near = camera_near;
     data.camera_far = camera_far;
-    data.layer_mask = ctx.layer_mask;
+    data.layer_mask = services->layer_mask;
+    data.render_category_mask = services->render_category_mask;
     std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(ctx, data);
 
     // Add results to shadow array
@@ -1020,6 +1031,7 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
 void ShadowPass::register_type() {
+    (void)register_shadow_map_array_resource_type();
     auto descriptor = FramePassTypeDescriptorBuilder::native<ShadowPass>(
         "ShadowPass", "termin-render-passes");
     auto& inspect = descriptor.inspect();
