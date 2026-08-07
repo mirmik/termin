@@ -13,6 +13,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
+#include "termin/render/scene_shader_usage_provider.hpp"
 #include "tgfx/render_state.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -82,6 +83,7 @@ struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
     float camera_near = 0.1f;
     float camera_far = 100.0f;
     uint64_t layer_mask = 0;
+    uint64_t render_category_mask = UINT64_MAX;
 };
 
 /**
@@ -94,7 +96,9 @@ struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
  *
  * Returns list of ShadowMapResult for use by ColorPass.
  */
-class TERMIN_RENDER_PASSES_API ShadowPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API ShadowPass
+    : public CxxFramePass,
+      public SceneShaderUsageProvider {
 public:
     // Pass configuration
     std::string output_res = "shadow_maps";
@@ -158,7 +162,7 @@ public:
 
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override;
-    void collect_shader_usages(
+    void collect_scene_shader_usages(
         tc_scene_handle scene,
         const std::function<void(TcShader)>& emit
     ) const override;

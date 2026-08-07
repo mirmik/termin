@@ -118,7 +118,7 @@ int GeometryPassBase::get_pick_id(const Entity& ent) const {
     return 0;
 }
 
-void GeometryPassBase::collect_shader_usages(
+void GeometryPassBase::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {

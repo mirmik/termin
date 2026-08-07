@@ -21,6 +21,7 @@
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/resource_spec.hpp>
+#include <termin/render/scene_shader_usage_provider.hpp>
 
 extern "C" {
 #include "core/tc_drawable_protocol.h"
@@ -31,7 +32,9 @@ extern "C" {
 
 namespace termin {
 
-class ENTITY_API GeometryPassBase : public CxxFramePass {
+class ENTITY_API GeometryPassBase
+    : public CxxFramePass,
+      public SceneShaderUsageProvider {
 public:
     struct DrawCall {
     public:
@@ -84,7 +87,7 @@ protected:
 public:
     static void register_type();
     std::vector<std::string> get_internal_symbols() const override;
-    void collect_shader_usages(
+    void collect_scene_shader_usages(
         tc_scene_handle scene,
         const std::function<void(TcShader)>& emit
     ) const override;

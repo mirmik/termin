@@ -720,9 +720,10 @@ struct OpenXRRuntimeScene {
             }
             stereo_contract_logged = true;
         }
-        target.stereo_views = stereo;
-        target.camera = stereo.left;
-        target.camera.position = (stereo.left.position + stereo.right.position) * 0.5;
+        target.view.stereo = stereo;
+        target.view.primary = stereo.left;
+        target.view.primary->position =
+            (stereo.left.position + stereo.right.position) * 0.5;
         target.layer_mask = xr_origin->layer_mask & tc_render_target_get_layer_mask(render_target);
 
         contexts.emplace(name, std::move(target));

@@ -82,7 +82,11 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
         tc::Log::error("[GroundGridPass] ctx.ctx2 is null — GroundGridPass is tgfx2-only");
         return;
     }
-    if (!ctx.camera) return;
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[GroundGridPass] primary render view is missing");
+        return;
+    }
 
     auto color_it = ctx.tex2_writes.find(output_res);
     if (color_it == ctx.tex2_writes.end() || !color_it->second) return;
@@ -92,15 +96,15 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    Mat44 view64  = ctx.camera->get_view_matrix();
-    Mat44 proj64  = ctx.camera->get_projection_matrix();
+    Mat44 view64  = primary_view->get_view_matrix();
+    Mat44 proj64  = primary_view->get_projection_matrix();
     Mat44f view   = view64.to_float();
     Mat44f proj   = proj64.to_float();
     Mat44f vp     = proj * view;
     Mat44f inv_vp = vp.inverse();
 
-    float near_clip = static_cast<float>(ctx.camera->near_clip);
-    float far_clip  = static_cast<float>(ctx.camera->far_clip);
+    float near_clip = static_cast<float>(primary_view->near_clip);
+    float far_clip  = static_cast<float>(primary_view->far_clip);
 
     _ensure_resources(&ctx2->device());
     if (tc_shader_handle_is_invalid(_shader_handle)) return;

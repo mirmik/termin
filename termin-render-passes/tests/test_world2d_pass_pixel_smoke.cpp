@@ -1,6 +1,7 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world2d_pass.hpp>
@@ -213,8 +214,9 @@ int run_smoke(const char* argv0) {
 
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
-    context.scene = scene;
-    context.camera = &camera;
+    context.view.primary = camera;
+    const termin::SceneRenderServices scene_services{.scene = scene};
+    context.scene_services = &scene_services;
     context.render_item_snapshot = &snapshot;
     context.tex2_writes.emplace("world2d", color);
     context.tex2_depth_writes.emplace("world2d", depth);

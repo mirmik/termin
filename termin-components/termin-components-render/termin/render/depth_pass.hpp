@@ -96,7 +96,9 @@ protected:
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
-class ENTITY_API DepthOnlyPass : public CxxFramePass {
+class ENTITY_API DepthOnlyPass
+    : public CxxFramePass,
+      public SceneShaderUsageProvider {
 public:
     struct DrawCall {
     public:
@@ -189,7 +191,7 @@ public:
         return entity_names;
     }
 
-    void collect_shader_usages(
+    void collect_scene_shader_usages(
         tc_scene_handle scene,
         const std::function<void(TcShader)>& emit
     ) const override;

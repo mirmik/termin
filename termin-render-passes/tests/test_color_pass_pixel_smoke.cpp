@@ -1,5 +1,6 @@
 #include <termin/render/color_pass.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/camera/camera_component.hpp>
 #include <termin/tc_scene.hpp>
@@ -373,7 +374,8 @@ int run_smoke(const char* argv0) {
     exec_ctx.ctx2 = &render_ctx;
     exec_ctx.tex2_writes.emplace("color", target);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    exec_ctx.scene = scene;
+    const termin::SceneRenderServices scene_services{.scene = scene};
+    exec_ctx.scene_services = &scene_services;
 
     const float clear_color[4] = {0.02f, 0.03f, 0.04f, 1.0f};
     render_ctx.begin_frame();

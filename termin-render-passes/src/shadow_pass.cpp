@@ -10,6 +10,7 @@
 #include "termin/render/material_pipeline_shader_assembler.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
+#include "termin/render/scene_render_services.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -520,7 +521,7 @@ void ShadowPass::collect_shadow_casters(
     }
 }
 
-void ShadowPass::collect_shader_usages(
+void ShadowPass::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -622,7 +623,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     collect_shadow_casters(
         data.scene,
         data.layer_mask,
-        ctx.render_category_mask,
+        data.render_category_mask,
         *scene_items);
 
     const MaterialPipelinePassContract task_shader_contract =
@@ -691,7 +692,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         task.draw_context.pass_contract = task_shader_contract;
         task.draw_context.current_tc_shader = TcShader(task.final_shader);
         task.draw_context.layer_mask = data.layer_mask;
-        task.draw_context.render_category_mask = ctx.render_category_mask;
+        task.draw_context.render_category_mask = data.render_category_mask;
     }
 
     // Keep the owned task storage stable and sort only non-owning submission
@@ -967,23 +968,32 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     // Clear previous frame's entries
     shadow_array->clear();
 
-    if (ctx.lights.empty()) {
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "ShadowPass");
+    if (!services) {
         if (profile) tc_profiler_end_section();
         return;
     }
 
-    if (!ctx.camera) {
-        tc::Log::error("ShadowPass: camera is null");
+    if (services->lights.empty()) {
+        if (profile) tc_profiler_end_section();
+        return;
+    }
+
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[ShadowPass] primary render view is missing");
+        if (profile) tc_profiler_end_section();
         return;
     }
 
     // Get camera matrices
-    Mat44 view_d = ctx.camera->get_view_matrix();
-    Mat44 proj_d = ctx.camera->get_projection_matrix();
+    Mat44 view_d = primary_view->get_view_matrix();
+    Mat44 proj_d = primary_view->get_projection_matrix();
     Mat44f camera_view = view_d.to_float();
     Mat44f camera_projection = proj_d.to_float();
-    float camera_near = static_cast<float>(ctx.camera->near_clip);
-    float camera_far = static_cast<float>(ctx.camera->far_clip);
+    float camera_near = static_cast<float>(primary_view->near_clip);
+    float camera_far = static_cast<float>(primary_view->far_clip);
 
     if (!ctx.ctx2) {
         tc::Log::error("[ShadowPass] ctx.ctx2 is null — ShadowPass is tgfx2-only");
@@ -992,13 +1002,14 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     }
 
     ShadowPassExecuteData data;
-    data.scene = ctx.scene.handle();
-    data.lights = ctx.lights;
+    data.scene = services->scene.handle();
+    data.lights = services->lights;
     data.camera_view = camera_view;
     data.camera_projection = camera_projection;
     data.camera_near = camera_near;
     data.camera_far = camera_far;
-    data.layer_mask = ctx.layer_mask;
+    data.layer_mask = services->layer_mask;
+    data.render_category_mask = services->render_category_mask;
     std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(ctx, data);
 
     // Add results to shadow array

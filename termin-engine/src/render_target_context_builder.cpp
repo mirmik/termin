@@ -230,7 +230,7 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
 
     RenderTargetContext ctx;
     ctx.name = context_name;
-    ctx.camera = render_camera;
+    ctx.view.primary = render_camera;
     ctx.render_rect = {0, 0, request.render_width, request.render_height};
     ctx.internal_entities = request.internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);

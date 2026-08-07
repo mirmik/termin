@@ -5,6 +5,7 @@
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
+#include "termin/render/scene_render_services.hpp"
 #include "termin/render/shader_abi.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -622,7 +623,7 @@ void ColorPass::collect_draw_calls(
     }
 }
 
-void ColorPass::collect_shader_usages(
+void ColorPass::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -782,16 +783,18 @@ void ColorPass::execute_with_data(
         data.camera_position,
         static_cast<float>(data.rect.width),
         static_cast<float>(data.rect.height),
-        ctx.camera ? static_cast<float>(ctx.camera->near_clip) : 0.1f,
-        ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
+        ctx.view.primary
+            ? static_cast<float>(ctx.view.primary->near_clip) : 0.1f,
+        ctx.view.primary
+            ? static_cast<float>(ctx.view.primary->far_clip) : 100.0f);
     StereoPerFrameStd140 stereo_pf{};
     if (multiview_mode_) {
-        if (!ctx.stereo_views) {
+        if (!ctx.view.stereo) {
             tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
             return;
         }
         stereo_pf = make_stereo_per_frame_uniforms(
-            *ctx.stereo_views,
+            *ctx.view.stereo,
             static_cast<float>(data.rect.width),
             static_cast<float>(data.rect.height));
     }
@@ -890,7 +893,7 @@ void ColorPass::execute_with_data(
     collect_context.viewport_width = data.rect.width;
     collect_context.viewport_height = data.rect.height;
     collect_context.scene = TcSceneRef(data.scene);
-    collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
+    collect_context.camera = const_cast<RenderCamera*>(ctx.view.primary_view());
 
     collect_draw_calls(
         data.scene,
@@ -986,7 +989,8 @@ void ColorPass::execute_with_data(
         task.draw_context.camera_position = data.camera_position;
         task.draw_context.viewport_width = data.rect.width;
         task.draw_context.viewport_height = data.rect.height;
-        task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
+        task.draw_context.camera =
+            const_cast<RenderCamera*>(ctx.view.primary_view());
 
         dc.final_shader = TcShader(task.final_shader);
         tasks_by_item_index[dc.item_index] = &task;
@@ -1190,11 +1194,18 @@ void ColorPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section(("ColorPass:" + get_pass_name()).c_str());
 
-    // Use camera from context, or find by name if camera_name is set
-    const RenderCamera* camera = ctx.camera;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "ColorPass");
+    if (!services) {
+        if (profile) tc_profiler_end_section();
+        return;
+    }
+
+    // Use the scene-neutral primary view, or find a scene camera by name.
+    const RenderCamera* camera = ctx.view.primary_view();
     RenderCamera stereo_sort_camera;
     if (multiview_mode_) {
-        if (!ctx.stereo_views) {
+        if (!ctx.view.stereo) {
             tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
             if (profile) tc_profiler_end_section();
             return;
@@ -1205,20 +1216,15 @@ void ColorPass::execute(ExecuteContext& ctx) {
             if (profile) tc_profiler_end_section();
             return;
         }
-        stereo_sort_camera = ctx.stereo_views->left;
+        stereo_sort_camera = ctx.view.stereo->left;
         stereo_sort_camera.position =
-            (ctx.stereo_views->left.position + ctx.stereo_views->right.position) * 0.5;
+            (ctx.view.stereo->left.position + ctx.view.stereo->right.position) * 0.5;
         camera = &stereo_sort_camera;
     }
-    tc_scene_handle scene = ctx.scene.handle();
-    if (!tc_scene_handle_valid(scene)) {
-        tc::Log::error("[ColorPass] scene is invalid");
-        if (profile) tc_profiler_end_section();
-        return;
-    }
+    tc_scene_handle scene = services->scene.handle();
     RenderCameraSnapshot named_camera_snapshot;
-    uint64_t camera_layer_mask = ctx.layer_mask;
-    uint64_t camera_render_category_mask = ctx.render_category_mask;
+    uint64_t camera_layer_mask = services->layer_mask;
+    uint64_t camera_render_category_mask = services->render_category_mask;
     if (!camera_name.empty()) {
         if (!resolve_named_render_camera_for_pass(
                 scene,
@@ -1319,7 +1325,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     data.view = view;
     data.projection = projection;
     data.camera_position = camera_position;
-    data.lights = ctx.lights;
+    data.lights = services->lights;
     data.ambient_color = ambient_color;
     data.ambient_intensity = ambient_intensity;
     data.shadow_maps = shadow_maps;
