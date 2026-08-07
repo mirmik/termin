@@ -77,7 +77,9 @@ Source of truth: [remote Framegraph target service](https://github.com/mirmik/te
 `termin-engine`. Сетевой поток владеет loopback TCP transport и handshake, а
 render-thread pump — единственный код сервиса, который обращается к
 `FrameGraphDebugger`. Между ними находятся bounded очереди команд и immutable
-topology/status сообщений.
+topology/status сообщений. Process-scoped host может держать loopback listener
+при пересоздании render runtime и явно attach/detach новый debugger; detached
+состояние публикуется как новая пустая topology без удержания GPU objects.
 
 ### termin-framegraph-remote-client
 

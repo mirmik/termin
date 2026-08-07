@@ -23,8 +23,10 @@
 #include <tgfx2/graphics_host.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
+#include <termin/framegraph_remote_target/target_service.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/profiler_remote/target_service.hpp>
+#include <termin/render/frame_graph_debugger.hpp>
 #include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/scene/tc_scene_render_ext.hpp>
@@ -79,6 +81,13 @@ struct AndroidBootstrapState {
     uint64_t remote_profiler_pump_ns = 0;
     uint64_t remote_profiler_last_log_bytes = 0;
     int64_t remote_profiler_last_log_time_nanos = 0;
+    std::unique_ptr<termin::framegraph_remote_target::RemoteFrameGraphTarget>
+        remote_framegraph;
+    std::unique_ptr<termin::FrameGraphDebugger> remote_framegraph_debugger;
+    uint64_t remote_framegraph_pump_calls = 0;
+    uint64_t remote_framegraph_pump_ns = 0;
+    uint64_t remote_framegraph_last_log_bytes = 0;
+    int64_t remote_framegraph_last_log_time_nanos = 0;
 #ifdef __ANDROID__
     struct QueuedPointerEvent {
         uint64_t pointer_id = 0;
@@ -307,6 +316,10 @@ bool apply_player_presentation_metrics_locked() {
 }
 
 void destroy_player_session_locked() {
+    if (g_state.remote_framegraph) {
+        g_state.remote_framegraph->detach_debugger();
+    }
+    g_state.remote_framegraph_debugger.reset();
     termin::RenderingManager* manager = g_state.player_engine
         ? &g_state.player_engine->rendering_manager
         : nullptr;
@@ -577,6 +590,17 @@ bool ensure_player_session_locked() {
     }
 
     setup_player_input_locked();
+    if (g_state.remote_framegraph) {
+        g_state.remote_framegraph_debugger =
+            std::make_unique<termin::FrameGraphDebugger>(manager);
+        if (!g_state.remote_framegraph->attach_debugger(
+                *g_state.remote_framegraph_debugger)) {
+            tc_log_error(
+                "termin_android_player: failed to attach remote framegraph debugger");
+            destroy_player_session_locked();
+            return false;
+        }
+    }
     scene_manager.request_render();
     android_log_info(
         "player: attached runtime package entities=%zu viewports=%zu targets=%zu",
@@ -626,6 +650,18 @@ void pump_remote_profiler_locked() {
     ++g_state.remote_profiler_pump_calls;
 }
 
+void pump_remote_framegraph_locked() {
+    if (!g_state.remote_framegraph) {
+        return;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    g_state.remote_framegraph->pump_render_thread();
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    g_state.remote_framegraph_pump_ns += static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+    ++g_state.remote_framegraph_pump_calls;
+}
+
 int render_player_frame_locked(int64_t frame_time_nanos) {
     if (frame_time_nanos <= 0) {
         tc_log_error("termin_android_player: frame timestamp must be positive");
@@ -635,6 +671,7 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
     // opening this frame. This keeps socket work off the render thread and
     // makes capture state effective for the complete new frame.
     pump_remote_profiler_locked();
+    pump_remote_framegraph_locked();
     if (!g_state.render_device && !create_renderer_locked()) {
         return 0;
     }
@@ -762,6 +799,43 @@ int render_player_frame_locked(int64_t frame_time_nanos) {
             );
             g_state.remote_profiler_last_log_bytes = status.transmitted_bytes;
             g_state.remote_profiler_last_log_time_nanos = frame_time_nanos;
+        }
+        if (g_state.remote_framegraph &&
+            (g_state.player_frame <= 2 || g_state.player_frame % 60 == 0)) {
+            const auto status = g_state.remote_framegraph->status();
+            const double average_pump_us =
+                g_state.remote_framegraph_pump_calls == 0
+                    ? 0.0
+                    : static_cast<double>(g_state.remote_framegraph_pump_ns) /
+                        static_cast<double>(g_state.remote_framegraph_pump_calls) /
+                        1000.0;
+            double transmit_kib_per_second = 0.0;
+            if (g_state.remote_framegraph_last_log_time_nanos > 0 &&
+                frame_time_nanos > g_state.remote_framegraph_last_log_time_nanos) {
+                const double elapsed_seconds = static_cast<double>(
+                    frame_time_nanos -
+                    g_state.remote_framegraph_last_log_time_nanos) / 1.0e9;
+                transmit_kib_per_second = static_cast<double>(
+                    status.transmitted_bytes -
+                    g_state.remote_framegraph_last_log_bytes) /
+                    1024.0 / elapsed_seconds;
+            }
+            android_log_info(
+                "framegraph_remote: connected=%d attached=%d revision=%llu "
+                "captures=%llu preview=%llu burst=%llu bytes=%llu "
+                "tx_kib_s=%.3f drops=%llu avg_pump_us=%.3f",
+                status.client_connected ? 1 : 0,
+                status.debugger_attached ? 1 : 0,
+                static_cast<unsigned long long>(status.graph_revision),
+                static_cast<unsigned long long>(status.completed_captures),
+                static_cast<unsigned long long>(status.preview_captures),
+                static_cast<unsigned long long>(status.burst_captures),
+                static_cast<unsigned long long>(status.transmitted_bytes),
+                transmit_kib_per_second,
+                static_cast<unsigned long long>(status.dropped_captures),
+                average_pump_us);
+            g_state.remote_framegraph_last_log_bytes = status.transmitted_bytes;
+            g_state.remote_framegraph_last_log_time_nanos = frame_time_nanos;
         }
         if (recreate && !resize_renderer_locked(
                 static_cast<uint32_t>(g_state.surface_width),
@@ -947,6 +1021,15 @@ void release_window_locked() {
 }
 
 void rollback_initialize_locked() {
+    if (g_state.remote_framegraph) {
+        g_state.remote_framegraph->stop();
+        g_state.remote_framegraph.reset();
+    }
+    g_state.remote_framegraph_debugger.reset();
+    g_state.remote_framegraph_pump_calls = 0;
+    g_state.remote_framegraph_pump_ns = 0;
+    g_state.remote_framegraph_last_log_bytes = 0;
+    g_state.remote_framegraph_last_log_time_nanos = 0;
     if (g_state.remote_profiler) {
         g_state.remote_profiler->stop();
         g_state.remote_profiler.reset();
@@ -1042,6 +1125,56 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
             "profiler_remote: listening on device loopback port=%u",
             static_cast<unsigned>(config->remote_profiler_port));
     }
+    if (config->enable_remote_framegraph != 0) {
+        if (config->remote_framegraph_port == 0 ||
+            !config->remote_framegraph_token ||
+            config->remote_framegraph_token[0] == '\0') {
+            android_log_error(
+                "initialize: remote framegraph requires a port and token");
+            tc_log_error(
+                "termin_android_initialize: invalid remote framegraph config");
+            rollback_initialize_locked();
+            return 0;
+        }
+        if (config->enable_remote_profiler != 0 &&
+            config->remote_profiler_port == config->remote_framegraph_port) {
+            android_log_error(
+                "initialize: remote profiler and framegraph ports must differ");
+            tc_log_error(
+                "termin_android_initialize: diagnostics ports conflict");
+            rollback_initialize_locked();
+            return 0;
+        }
+        termin::framegraph_remote_target::TargetServiceConfig target;
+        target.port = config->remote_framegraph_port;
+        target.authentication_token = config->remote_framegraph_token;
+        target.platform = "Android";
+#ifdef __ANDROID__
+        target.abi = TERMIN_ANDROID_ABI;
+        target.process_id = static_cast<uint32_t>(getpid());
+#endif
+        target.build_type = "Development";
+        try {
+            g_state.remote_framegraph = std::make_unique<
+                termin::framegraph_remote_target::RemoteFrameGraphTarget>(
+                    std::move(target));
+            if (!g_state.remote_framegraph->start()) {
+                g_state.remote_framegraph.reset();
+                throw std::runtime_error("listener start failed");
+            }
+        } catch (const std::exception& error) {
+            android_log_error(
+                "initialize: remote framegraph failed: %s", error.what());
+            tc_log_error(
+                "termin_android_initialize: remote framegraph failed: %s",
+                error.what());
+            rollback_initialize_locked();
+            return 0;
+        }
+        android_log_info(
+            "framegraph_remote: listening on device loopback port=%u",
+            static_cast<unsigned>(config->remote_framegraph_port));
+    }
     g_state.initialized = true;
 
     android_log_info(
@@ -1073,6 +1206,15 @@ extern "C" void termin_android_shutdown(void) {
     g_state.remote_profiler_last_log_bytes = 0;
     g_state.remote_profiler_last_log_time_nanos = 0;
     release_window_locked();
+    if (g_state.remote_framegraph) {
+        g_state.remote_framegraph->stop();
+        g_state.remote_framegraph.reset();
+    }
+    g_state.remote_framegraph_debugger.reset();
+    g_state.remote_framegraph_pump_calls = 0;
+    g_state.remote_framegraph_pump_ns = 0;
+    g_state.remote_framegraph_last_log_bytes = 0;
+    g_state.remote_framegraph_last_log_time_nanos = 0;
     g_state.app_data_dir.clear();
     g_state.asset_root.clear();
     g_state.shader_artifact_root.clear();
@@ -1279,6 +1421,24 @@ extern "C" void termin_android_on_surface_destroyed(void) {
     release_window_locked();
     android_log_info("surface_destroyed");
     tc_log_info("termin_android_on_surface_destroyed");
+}
+
+extern "C" void termin_android_on_pause(void) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+#ifdef __ANDROID__
+    destroy_renderer_locked();
+#endif
+    android_log_info("pause: render runtime detached");
+    tc_log_info("termin_android_on_pause");
+}
+
+extern "C" void termin_android_on_resume(void) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+#ifdef __ANDROID__
+    g_state.renderer_create_failed = false;
+#endif
+    android_log_info("resume: render runtime will attach on next frame");
+    tc_log_info("termin_android_on_resume");
 }
 
 extern "C" void termin_android_on_pointer(

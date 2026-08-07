@@ -45,7 +45,7 @@ decoded bytes into a local texture while the view follows exactly the same
 path as an in-process capture. Transport, reconnect, and packet handling do not
 belong in the view or in Python.
 
-`RemoteFrameGraphDebuggerSource` implements that boundary for topology-only
+`RemoteFrameGraphDebuggerSource` implements that boundary for network
 sessions. `termin-framegraph-remote-client` owns loopback TCP, authentication,
 framing and reconnect on a network thread; callbacks publish copied immutable
 snapshots under a mutex and never touch widgets or rendering objects. Commands
@@ -53,8 +53,9 @@ cross a bounded SPSC queue from the editor thread and are discarded at a
 session boundary. A disconnect retains the latest bounded topology but marks
 it `stale`, while a new session clears session-scoped target/pass identities.
 
-The production view contains explicit port/token Connect, Disconnect and Use
-Local controls. The token is launch-scoped input and is not persisted. Source
+The production view contains explicit port/token Connect, Disconnect, Use
+Local, Start/Stop Live and Burst controls, including FPS, long-edge and burst
+count limits. The token is launch-scoped input and is not persisted. Source
 switching replaces only the source behind the existing widget tree; no second
 debugger UI or Python data plane is created. Topology refresh is rate-limited,
 stale-revision responses schedule reconciliation, and remote errors/drop counts
@@ -72,6 +73,30 @@ uses the existing `FrameGraphPresenter`, so Canvas fit/zoom, channel selection,
 HDR highlighting and depth inspection follow the local path. Selection starts
 one exact request, Pause cancels pending work, and disconnect/source switch
 release both the CPU blob and source-owned local texture deterministically.
+
+Remote mode also offers bounded Live Preview and exact Burst. Preview applies
+its long-edge bound while copying into the target-owned capture texture, so
+readback sees only the reduced image, converts it to RGBA8, and observes the
+requested FPS ceiling. Its cross-thread handoff is a single latest-wins slot:
+one frame may be in network transfer and only one newer frame can wait. Burst
+captures 2--16 exact frames with one graph revision and explicit ordered
+indices. Revision changes, cancellation and disconnect terminate either mode;
+drops become protocol gaps instead of latent queued video.
+
+The standalone reciprocal smoke is the transport/capture regression gate. A
+real Vulkan `RenderingManager` target and production remote client exercise
+topology, stale revision, exact snapshot, preview, burst, cancellation,
+backpressure drops and reconnect without constructing the editor. The target
+uses a shader-independent clear pass, so the pair is reproducible from the
+installed SDK test build and can also be split across SSH or ADB forwarding.
+
+On lifecycle-driven hosts the target service may outlive the native debugger.
+Android starts the authenticated loopback listener at process initialization,
+detaches before destroying `EngineCore`/Vulkan state on pause or surface loss,
+and attaches a new debugger after `RenderingManager` recreation. Detach
+publishes an empty topology under a new revision and terminates active capture
+operations visibly, so the existing ADB/TCP session never owns stale graphics
+objects.
 
 ## Capture lifecycle
 

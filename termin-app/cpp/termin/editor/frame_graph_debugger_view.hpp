@@ -62,6 +62,10 @@ public:
     void disconnect_remote();
     bool use_local();
     bool using_remote() const;
+    bool start_live_preview(std::uint32_t max_millifps,
+                            std::uint32_t max_long_edge);
+    bool stop_live_preview();
+    bool capture_burst(std::uint16_t frames);
     std::shared_ptr<const FrameGraphDebuggerSnapshot>
     source_snapshot() const;
     bool render_previews(tgfx::RenderContext2& context);
@@ -133,6 +137,9 @@ private:
     gui_native::ComboBox* target_combo_ = nullptr;
     gui_native::TextInput* remote_port_input_ = nullptr;
     gui_native::TextInput* remote_token_input_ = nullptr;
+    gui_native::TextInput* preview_fps_input_ = nullptr;
+    gui_native::TextInput* preview_edge_input_ = nullptr;
+    gui_native::TextInput* burst_frames_input_ = nullptr;
     gui_native::ComboBox* mode_combo_ = nullptr;
     gui_native::ComboBox* pass_combo_ = nullptr;
     gui_native::ComboBox* symbol_combo_ = nullptr;
