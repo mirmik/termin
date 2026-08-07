@@ -14,51 +14,48 @@ struct tc_input_focus_event;
 
 namespace termin {
 
-class TERMIN_INPUT_API InputHandler {
-private:
-    static const tc_input_vtable cxx_input_vtable;
+    class TERMIN_INPUT_API InputHandler {
+    private:
+        static const tc_input_vtable cxx_input_vtable;
 
-public:
-    virtual ~InputHandler() = default;
+    public:
+        virtual ~InputHandler() = default;
 
-    virtual void on_pointer(tc_pointer_event* event) {}
-    virtual void on_mouse_button(tc_mouse_button_event* event) {}
-    virtual void on_mouse_move(tc_mouse_move_event* event) {}
-    virtual void on_scroll(tc_scroll_event* event) {}
-    virtual void on_key(tc_key_event* event) {}
-    virtual void on_text(tc_text_event* event) {}
-    virtual void on_focus_lost(tc_input_focus_event* event) {}
+        virtual void on_pointer(tc_pointer_event* event) {}
+        virtual void on_mouse_button(tc_mouse_button_event* event) {}
+        virtual void on_mouse_move(tc_mouse_move_event* event) {}
+        virtual void on_scroll(tc_scroll_event* event) {}
+        virtual void on_key(tc_key_event* event) {}
+        virtual void on_text(tc_text_event* event) {}
+        virtual void on_focus_lost(tc_input_focus_event* event) {}
 
-
-protected:
-    void install_input_vtable(tc_component* c) {
-        if (c) {
-            tc_input_capability_attach(c, &cxx_input_vtable);
+    protected:
+        void install_input_vtable(tc_component* c) {
+            if (c) {
+                tc_input_capability_attach(c, &cxx_input_vtable);
+            }
         }
-    }
 
-    void set_input_priority(tc_component* c, int priority) {
-        if (c) {
-            tc_component_set_input_priority(c, priority);
+        void set_input_priority(tc_component* c, int priority) {
+            if (c) {
+                tc_component_set_input_priority(c, priority);
+            }
         }
-    }
 
-    void set_input_source_mask(tc_component* c, uint32_t source_mask) {
-        if (c) {
-            tc_component_set_input_source_mask(c, source_mask);
+        void set_input_source_mask(tc_component* c, uint32_t source_mask) {
+            if (c) {
+                tc_component_set_input_source_mask(c, source_mask);
+            }
         }
-    }
 
-private:
-    static void _cb_on_pointer(tc_component* c, tc_pointer_event* event);
-    static void _cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event);
-    static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);
-    static void _cb_on_scroll(tc_component* c, tc_scroll_event* event);
-    static void _cb_on_key(tc_component* c, tc_key_event* event);
-    static void _cb_on_text(tc_component* c, tc_text_event* event);
-    static void _cb_on_focus_lost(
-        tc_component* c,
-        tc_input_focus_event* event);
-};
+    private:
+        static void _cb_on_pointer(tc_component* c, tc_pointer_event* event);
+        static void _cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event);
+        static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);
+        static void _cb_on_scroll(tc_component* c, tc_scroll_event* event);
+        static void _cb_on_key(tc_component* c, tc_key_event* event);
+        static void _cb_on_text(tc_component* c, tc_text_event* event);
+        static void _cb_on_focus_lost(tc_component* c, tc_input_focus_event* event);
+    };
 
 } // namespace termin

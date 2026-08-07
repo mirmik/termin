@@ -11,13 +11,11 @@
 #include <termin/physics_fem/components.hpp>
 #include <termin/robotics/articulation3d.hpp>
 
-namespace termin
-{
+namespace termin {
     class ArticulationComponent;
     class KinematicUnitComponent;
 
-    enum class FEMArticulationSceneDiagnostic : std::uint8_t
-    {
+    enum class FEMArticulationSceneDiagnostic : std::uint8_t {
         None,
         InvalidRoot,
         InvalidBaseMode,
@@ -35,11 +33,9 @@ namespace termin
     };
 
     [[nodiscard]] ENTITY_API std::string_view
-    fem_articulation_scene_diagnostic_name(
-        FEMArticulationSceneDiagnostic diagnostic) noexcept;
+    fem_articulation_scene_diagnostic_name(FEMArticulationSceneDiagnostic diagnostic) noexcept;
 
-    struct FEMArticulationSceneBinding
-    {
+    struct FEMArticulationSceneBinding {
         KinematicUnitComponent* joint = nullptr;
         FEMRigidBodyComponent* body = nullptr;
         FEMArticulationMotorComponent* motor = nullptr;
@@ -51,10 +47,8 @@ namespace termin
         double coordinate_scale = 1.0;
     };
 
-    struct FEMArticulationSceneCompilation
-    {
-        FEMArticulationSceneDiagnostic diagnostic =
-            FEMArticulationSceneDiagnostic::None;
+    struct FEMArticulationSceneCompilation {
+        FEMArticulationSceneDiagnostic diagnostic = FEMArticulationSceneDiagnostic::None;
         std::string diagnostic_entity;
         std::vector<robotics::ArticulationUnit3D> units;
         robotics::Articulation3DState state;
@@ -68,8 +62,7 @@ namespace termin
         Entity base_entity;
         std::vector<FEMArticulationSceneBinding> bindings;
 
-        [[nodiscard]] bool ok() const noexcept
-        {
+        [[nodiscard]] bool ok() const noexcept {
             return diagnostic == FEMArticulationSceneDiagnostic::None;
         }
     };
@@ -77,7 +70,6 @@ namespace termin
     // Compiles the target direct KinematicUnit hierarchy when the root owns an
     // ArticulationComponent. The older alternating joint -> rigid-body scene
     // grammar remains as a migration path, including its floating-base form.
-    [[nodiscard]] ENTITY_API FEMArticulationSceneCompilation
-    compile_fem_articulation_scene(Entity root);
+    [[nodiscard]] ENTITY_API FEMArticulationSceneCompilation compile_fem_articulation_scene(Entity root);
 
 } // namespace termin

@@ -3,12 +3,12 @@
 namespace nb = nanobind;
 
 namespace termin {
-void bind_gizmo(nb::module_& m);
-void bind_editor_interaction(nb::module_& m);
-void bind_frame_graph_debugger(nb::module_& m);
-void bind_frame_profiler(nb::module_& m);
-void bind_solid_primitive(nb::module_& m);
-}
+    void bind_gizmo(nb::module_& m);
+    void bind_editor_interaction(nb::module_& m);
+    void bind_frame_graph_debugger(nb::module_& m);
+    void bind_frame_profiler(nb::module_& m);
+    void bind_solid_primitive(nb::module_& m);
+} // namespace termin
 
 NB_MODULE(_editor_native, m) {
     nb::set_leak_warnings(false);

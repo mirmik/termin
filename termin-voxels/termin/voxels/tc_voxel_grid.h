@@ -1,25 +1,24 @@
 #pragma once
 
-#include <tcbase/tc_binding_types.h>
-#include <tcbase/tc_uuid.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <tcbase/tc_binding_types.h>
+#include <tcbase/tc_uuid.h>
 
 #if defined(_WIN32)
-  #if defined(TERMIN_VOXELS_EXPORTS)
-    #define TERMIN_VOXELS_API __declspec(dllexport)
-  #else
-    #define TERMIN_VOXELS_API __declspec(dllimport)
-  #endif
+#if defined(TERMIN_VOXELS_EXPORTS)
+#define TERMIN_VOXELS_API __declspec(dllexport)
 #else
-  #define TERMIN_VOXELS_API __attribute__((visibility("default")))
+#define TERMIN_VOXELS_API __declspec(dllimport)
+#endif
+#else
+#define TERMIN_VOXELS_API __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 TC_DEFINE_HANDLE(tc_voxel_grid_handle)
 

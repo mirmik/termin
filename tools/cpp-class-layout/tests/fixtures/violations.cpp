@@ -1,64 +1,62 @@
 class FieldsAtBottom {
-  public:
+public:
     void update();
 
-  private:
+private:
     int value_ = 0;
     static inline int revision_ = 1;
 };
 
 class FieldAfterConstructor {
-  public:
+public:
     FieldAfterConstructor() = default;
 
-  private:
+private:
     int value_ = 0;
 };
 
 struct FieldAfterFunctionTemplate {
-    template<typename Value>
-    void set(Value value);
+    template <typename Value> void set(Value value);
 
     int value = 0;
 };
 
 class AccessSectionDoesNotResetOrder {
-  private:
+private:
     int first_ = 0;
 
-  public:
+public:
     void update();
 
-  protected:
+protected:
     int second_ = 0;
 };
 
 class AnonymousUnionAfterMethod {
-  public:
+public:
     void reset();
 
-  private:
+private:
     union {
         int integer_value_;
         float float_value_;
     };
 };
 
-template<typename Value>
-class FieldAtBottomInTemplate {
-  public:
+template <typename Value> class FieldAtBottomInTemplate {
+public:
     const Value& value() const;
 
-  private:
+private:
     Value value_{};
 };
 
 #define TERMIN_TEST_FIELD int macro_field_ = 0
 
 class MacroFieldAfterMethod {
-  public:
+public:
     void update();
 
-  private:
+private:
     TERMIN_TEST_FIELD;
 };

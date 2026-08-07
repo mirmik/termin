@@ -2,55 +2,53 @@
 
 #include <string>
 
-#include <trent/trent.h>
 #include <termin/entity/entity.hpp>
 #include <termin/prefab/export.hpp>
+#include <trent/trent.h>
 
 namespace termin::prefab {
 
-class PrefabDocument;
+    class PrefabDocument;
 
-enum class PrefabInstantiateError {
-    None = 0,
-    InvalidDocument,
-    InvalidTargetScene,
-    InvalidParent,
-    DuplicateSourceUuid,
-    HierarchyCreationFailed,
-    InstanceStatePublicationFailed,
-};
+    enum class PrefabInstantiateError {
+        None = 0,
+        InvalidDocument,
+        InvalidTargetScene,
+        InvalidParent,
+        DuplicateSourceUuid,
+        HierarchyCreationFailed,
+        InstanceStatePublicationFailed,
+    };
 
-struct PrefabInstantiateOptions {
-    std::string root_name;
-    bool has_position = false;
-    double position[3] = {0.0, 0.0, 0.0};
-};
+    struct PrefabInstantiateOptions {
+        std::string root_name;
+        bool has_position = false;
+        double position[3] = {0.0, 0.0, 0.0};
+    };
 
-struct PrefabInstantiateResult {
-    Entity root;
-    PrefabInstantiateError error = PrefabInstantiateError::None;
-    std::string message;
+    struct PrefabInstantiateResult {
+        Entity root;
+        PrefabInstantiateError error = PrefabInstantiateError::None;
+        std::string message;
 
-    bool ok() const { return error == PrefabInstantiateError::None && root.valid(); }
-};
+        bool ok() const {
+            return error == PrefabInstantiateError::None && root.valid();
+        }
+    };
 
-class TERMIN_PREFAB_API PrefabInstantiator {
-public:
-    static PrefabInstantiateResult instantiate(
-        const PrefabDocument& document,
-        tc_scene_handle target_scene,
-        const Entity& parent = Entity(),
-        const PrefabInstantiateOptions& options = {}
-    );
+    class TERMIN_PREFAB_API PrefabInstantiator {
+    public:
+        static PrefabInstantiateResult instantiate(const PrefabDocument& document,
+                                                   tc_scene_handle target_scene,
+                                                   const Entity& parent = Entity(),
+                                                   const PrefabInstantiateOptions& options = {});
 
-    // Legacy hierarchy adapter. Canonical v3 callers should pass a validated
-    // PrefabDocument through the overload above.
-    static PrefabInstantiateResult instantiate(
-        const nos::trent& source_hierarchy,
-        tc_scene_handle target_scene,
-        const Entity& parent = Entity(),
-        const PrefabInstantiateOptions& options = {}
-    );
-};
+        // Legacy hierarchy adapter. Canonical v3 callers should pass a validated
+        // PrefabDocument through the overload above.
+        static PrefabInstantiateResult instantiate(const nos::trent& source_hierarchy,
+                                                   tc_scene_handle target_scene,
+                                                   const Entity& parent = Entity(),
+                                                   const PrefabInstantiateOptions& options = {});
+    };
 
 } // namespace termin::prefab

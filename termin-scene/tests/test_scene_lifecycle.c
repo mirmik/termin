@@ -10,10 +10,7 @@ GUARD_C_TEST(test_scene_slot_reuse_resets_metadata_and_pool_generation) {
 
     tc_entity_pool_handle first_pool = tc_scene_entity_pool_handle(first);
     GUARD_C_REQUIRE(tc_entity_pool_registry_alive(first_pool));
-    GUARD_C_CHECK_PTR_EQ(
-        tc_entity_pool_registry_get(first_pool),
-        tc_scene_entity_pool(first)
-    );
+    GUARD_C_CHECK_PTR_EQ(tc_entity_pool_registry_get(first_pool), tc_scene_entity_pool(first));
 
     tc_scene_set_uuid(first, "scene-generation-one");
     tc_scene_set_source_path(first, "/tmp/generation-one.scene");
@@ -37,10 +34,7 @@ GUARD_C_TEST(test_scene_slot_reuse_resets_metadata_and_pool_generation) {
     GUARD_C_REQUIRE(tc_entity_pool_registry_alive(second_pool));
     GUARD_C_CHECK_EQ_UINT(first_pool.index, second_pool.index);
     GUARD_C_CHECK_EQ_UINT(first_pool.generation + 1, second_pool.generation);
-    GUARD_C_CHECK_PTR_EQ(
-        tc_entity_pool_registry_get(second_pool),
-        tc_scene_entity_pool(second)
-    );
+    GUARD_C_CHECK_PTR_EQ(tc_entity_pool_registry_get(second_pool), tc_scene_entity_pool(second));
 
     GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_uuid(second));
     GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_source_path(second));

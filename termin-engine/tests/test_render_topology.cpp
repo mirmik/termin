@@ -2,8 +2,7 @@
 
 #include <iostream>
 
-int main()
-{
+int main() {
     tc_display_pool_init();
     tc_scene_handle scene_a = tc_scene_new();
     tc_scene_handle scene_b = tc_scene_new();
@@ -18,8 +17,7 @@ int main()
 
     const auto& a_targets = topology.get_pipeline_targets(scene_a, "Main");
     const auto& b_targets = topology.get_pipeline_targets(scene_b, "Main");
-    if (a_targets != std::vector<std::string>{"AViewport"} ||
-        b_targets != std::vector<std::string>{"BViewport"}) {
+    if (a_targets != std::vector<std::string>{"AViewport"} || b_targets != std::vector<std::string>{"BViewport"}) {
         std::cerr << "same-named scene pipelines overwrote target ownership\n";
         return 1;
     }
@@ -61,18 +59,18 @@ int main()
     tc_viewport_handle viewport_b = tc_viewport_new("SharedViewport", scene_b);
     tc_display_add_viewport(display_a, viewport_a);
     tc_display_add_viewport(display_b, viewport_b);
-    if (!topology.register_viewport(scene_a, viewport_a, display_a)
-            || !topology.register_viewport(scene_b, viewport_b, display_b)) {
+    if (!topology.register_viewport(scene_a, viewport_a, display_a) ||
+        !topology.register_viewport(scene_b, viewport_b, display_b)) {
         std::cerr << "failed to register scene viewport attachments\n";
         return 1;
     }
-    if (!tc_viewport_handle_eq(topology.find_viewport(scene_a, "SharedViewport"), viewport_a)
-            || !tc_viewport_handle_eq(topology.find_viewport(scene_b, "SharedViewport"), viewport_b)) {
+    if (!tc_viewport_handle_eq(topology.find_viewport(scene_a, "SharedViewport"), viewport_a) ||
+        !tc_viewport_handle_eq(topology.find_viewport(scene_b, "SharedViewport"), viewport_b)) {
         std::cerr << "same-named viewports crossed scene ownership\n";
         return 1;
     }
-    if (topology.display_for_viewport(viewport_a) != display_a
-            || topology.display_for_viewport(viewport_b) != display_b) {
+    if (topology.display_for_viewport(viewport_a) != display_a ||
+        topology.display_for_viewport(viewport_b) != display_b) {
         std::cerr << "viewport display association was not preserved\n";
         return 1;
     }

@@ -5,6 +5,6 @@
 
 namespace termin {
 
-void bind_engine_core(nanobind::module_& m);
+    void bind_engine_core(nanobind::module_& m);
 
 } // namespace termin

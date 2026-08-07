@@ -1,291 +1,314 @@
 #pragma once
 
-#include <string>
-#include <cstdint>
-#include <cstddef>
-#include <atomic>
-#include <unordered_set>
 #include "core/tc_component.h"
-#include "inspect/tc_inspect_context.h"
-#include "tc_inspect_cpp.hpp"
 #include "core/tc_entity_pool.h"
 #include "core/tc_scene.h"
 #include "entity.hpp"
+#include "inspect/tc_inspect_context.h"
+#include "tc_inspect_cpp.hpp"
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <unordered_set>
 
 namespace termin {
 
-enum class LifecycleStage : int {
-    Update = TC_COMPONENT_LIFECYCLE_UPDATE,
-    FixedUpdate = TC_COMPONENT_LIFECYCLE_FIXED_UPDATE,
-    LateUpdate = TC_COMPONENT_LIFECYCLE_LATE_UPDATE,
-};
+    enum class LifecycleStage : int {
+        Update = TC_COMPONENT_LIFECYCLE_UPDATE,
+        FixedUpdate = TC_COMPONENT_LIFECYCLE_FIXED_UPDATE,
+        LateUpdate = TC_COMPONENT_LIFECYCLE_LATE_UPDATE,
+    };
 
-namespace lifecycle_priority {
-inline constexpr int early = TC_COMPONENT_LIFECYCLE_PRIORITY_EARLY;
-inline constexpr int normal = TC_COMPONENT_LIFECYCLE_PRIORITY_DEFAULT;
-inline constexpr int late = TC_COMPONENT_LIFECYCLE_PRIORITY_LATE;
-} // namespace lifecycle_priority
+    namespace lifecycle_priority {
+        inline constexpr int early = TC_COMPONENT_LIFECYCLE_PRIORITY_EARLY;
+        inline constexpr int normal = TC_COMPONENT_LIFECYCLE_PRIORITY_DEFAULT;
+        inline constexpr int late = TC_COMPONENT_LIFECYCLE_PRIORITY_LATE;
+    } // namespace lifecycle_priority
 
-namespace fixed_update_priority {
-inline constexpr int control = lifecycle_priority::early;
-inline constexpr int physics = lifecycle_priority::normal;
-inline constexpr int post_physics = lifecycle_priority::late;
-} // namespace fixed_update_priority
+    namespace fixed_update_priority {
+        inline constexpr int control = lifecycle_priority::early;
+        inline constexpr int physics = lifecycle_priority::normal;
+        inline constexpr int post_physics = lifecycle_priority::late;
+    } // namespace fixed_update_priority
 
-// Base class for all C++ components.
-// Built-in C++ components are registered from explicit bootstrap code.
-// Module-owned C++ components register from module_init/module bootstrap code.
-//
-// tc_component is embedded as first member, allowing container_of to work.
-// Lifetime is managed via reference counting (_ref_count).
-// Components start with ref_count=0 and are retained when added to entity.
-class ENTITY_API CxxComponent {
-public:
-    // --- Fields (public) ---
+    // Base class for all C++ components.
+    // Built-in C++ components are registered from explicit bootstrap code.
+    // Module-owned C++ components register from module_init/module bootstrap code.
+    //
+    // tc_component is embedded as first member, allowing container_of to work.
+    // Lifetime is managed via reference counting (_ref_count).
+    // Components start with ref_count=0 and are retained when added to entity.
+    class ENTITY_API CxxComponent {
+    public:
+        // --- Fields (public) ---
 
-    // Embedded C component (MUST be first member for from_tc to work)
-    tc_component _c;
+        // Embedded C component (MUST be first member for from_tc to work)
+        tc_component _c;
 
-private:
-    // Reference count for lifetime management
-    // Starts at 0, incremented by entity on add, decremented on remove
-    // When reaches 0 after being >0, component deletes itself
-    std::atomic<int> _ref_count{0};
+    private:
+        // Reference count for lifetime management
+        // Starts at 0, incremented by entity on add, decremented on remove
+        // When reaches 0 after being >0, component deletes itself
+        std::atomic<int> _ref_count{0};
 
-    // Static vtable for C++ components - dispatches to virtual methods
-    static const tc_component_vtable _cxx_vtable;
+        // Static vtable for C++ components - dispatches to virtual methods
+        static const tc_component_vtable _cxx_vtable;
 
-public:
-    // Owner entity - constructed from C-side owner handle
-    Entity entity() const {
-        return Entity(_c.owner);
-    }
+    public:
+        // Owner entity - constructed from C-side owner handle
+        Entity entity() const {
+            return Entity(_c.owner);
+        }
 
-    // --- Methods ---
+        // --- Methods ---
 
-    virtual ~CxxComponent();
+        virtual ~CxxComponent();
 
-    // Get CxxComponent* from tc_component* (uses offsetof since _c is first member)
-    // Returns nullptr if c is not a CxxComponent (e.g., Python component)
-    static CxxComponent* from_tc(tc_component* c) {
-        if (!c || c->kind != TC_CXX_COMPONENT) return nullptr;
+        // Get CxxComponent* from tc_component* (uses offsetof since _c is first member)
+        // Returns nullptr if c is not a CxxComponent (e.g., Python component)
+        static CxxComponent* from_tc(tc_component* c) {
+            if (!c || c->kind != TC_CXX_COMPONENT)
+                return nullptr;
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
-        return reinterpret_cast<CxxComponent*>(
-            reinterpret_cast<char*>(c) - offsetof(CxxComponent, _c)
-        );
+            return reinterpret_cast<CxxComponent*>(reinterpret_cast<char*>(c) - offsetof(CxxComponent, _c));
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
-    }
-
-    // Reference counting for lifetime management
-    void retain() { ++_ref_count; }
-    void release();  // Defined in .cpp - may delete this
-    int ref_count() const { return _ref_count.load(); }
-
-    // Get tc_component pointer (for C API interop)
-    tc_component* tc_component_ptr() { return &_c; }
-    const tc_component* tc_component_ptr() const { return &_c; }
-
-    // Alias for compatibility
-    tc_component* c_component() { return &_c; }
-    const tc_component* c_component() const { return &_c; }
-
-    // Set owner and reference counting vtable.
-    void set_owner_ref(void* owner, const tc_component_ref_vtable* ref_vt) {
-        _c.body = owner;
-        if (ref_vt) _c.ref_vtable = ref_vt;
-    }
-
-    // Type identification for serialization.
-    const char* type_name() const {
-        return tc_component_type_name(&_c);
-    }
-
-public:
-    // Accessors for tc_component flags
-    std::string display_name() const { return tc_component_get_display_name(&_c); }
-    void set_display_name(const std::string& v) { tc_component_set_display_name(&_c, v.c_str()); }
-    std::string source_id() const { return tc_component_get_source_id(&_c); }
-    void set_source_id(const std::string& v) { tc_component_set_source_id(&_c, v.c_str()); }
-
-    bool enabled() const { return tc_component_get_enabled(&_c); }
-    void set_enabled(bool v) { tc_component_set_enabled(&_c, v); }
-
-    bool active_in_editor() const { return tc_component_get_active_in_editor(&_c); }
-    void set_active_in_editor(bool v) {
-        tc_component_set_active_in_editor(&_c, v);
-    }
-
-    bool started() const { return _c._started; }
-    void set_started(bool v) { _c._started = v; }
-
-    bool has_update() const { return _c.has_update; }
-    void set_has_update(bool v) {
-        set_lifecycle_capabilities(
-            v, _c.has_fixed_update, _c.has_late_update);
-    }
-
-    bool has_fixed_update() const { return _c.has_fixed_update; }
-    void set_has_fixed_update(bool v) {
-        set_lifecycle_capabilities(
-            _c.has_update, v, _c.has_late_update);
-    }
-
-    bool has_late_update() const { return _c.has_late_update; }
-    void set_has_late_update(bool v) {
-        set_lifecycle_capabilities(
-            _c.has_update, _c.has_fixed_update, v);
-    }
-
-    int lifecycle_priority(LifecycleStage stage) const {
-        return tc_component_get_lifecycle_priority(
-            &_c, static_cast<tc_component_lifecycle_stage>(stage));
-    }
-    bool set_lifecycle_priority(LifecycleStage stage, int priority) {
-        return tc_component_set_lifecycle_priority(
-            &_c,
-            static_cast<tc_component_lifecycle_stage>(stage),
-            priority);
-    }
-
-    int update_priority() const {
-        return lifecycle_priority(LifecycleStage::Update);
-    }
-    bool set_update_priority(int priority) {
-        return set_lifecycle_priority(LifecycleStage::Update, priority);
-    }
-    int fixed_update_priority() const {
-        return lifecycle_priority(LifecycleStage::FixedUpdate);
-    }
-    bool set_fixed_update_priority(int priority) {
-        return set_lifecycle_priority(LifecycleStage::FixedUpdate, priority);
-    }
-    int late_update_priority() const {
-        return lifecycle_priority(LifecycleStage::LateUpdate);
-    }
-    bool set_late_update_priority(int priority) {
-        return set_lifecycle_priority(LifecycleStage::LateUpdate, priority);
-    }
-    void set_lifecycle_capabilities(
-        bool update,
-        bool fixed_update,
-        bool late_update
-    ) {
-        tc_component_set_lifecycle_capabilities(
-            &_c, update, fixed_update, late_update);
-    }
-
-    // Lifecycle hooks (virtual - subclasses override these)
-    virtual void start() {}
-    virtual void update(float dt) { (void)dt; }
-    virtual void fixed_update(float dt) { (void)dt; }
-    virtual void late_update(float dt) { (void)dt; }
-    virtual void on_destroy() {}
-    virtual void on_editor_start() {}
-
-    // Editor hooks
-    virtual void setup_editor_defaults() {}
-
-    // Called when added/removed from entity
-    virtual void on_added_to_entity() {}
-    virtual void on_removed_from_entity() {}
-
-    // Called after component is fully attached to entity
-    virtual void on_added() {}
-    virtual void on_removed() {}
-    virtual void on_scene_inactive() {}
-    virtual void on_scene_active() {}
-
-    // Serialization uses C API tc_inspect fields registered during bootstrap.
-    virtual tc_value serialize_data() const {
-        tc_value data = tc_inspect_serialize(
-            const_cast<void*>(static_cast<const void*>(this)),
-            type_name()
-        );
-        const char* name = tc_component_get_display_name(&_c);
-        if (data.type == TC_VALUE_DICT && name && name[0] && !tc_value_dict_has(&data, "display_name")) {
-            tc_value_dict_set(&data, "display_name", tc_value_string(name));
         }
-        return data;
-    }
 
-    virtual void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
-        if (!data) return;
-        if (data->type == TC_VALUE_DICT) {
-            tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
-            if (display_name && display_name->type == TC_VALUE_STRING) {
-                tc_component_set_display_name(&_c, display_name->data.s);
+        // Reference counting for lifetime management
+        void retain() {
+            ++_ref_count;
+        }
+        void release(); // Defined in .cpp - may delete this
+        int ref_count() const {
+            return _ref_count.load();
+        }
+
+        // Get tc_component pointer (for C API interop)
+        tc_component* tc_component_ptr() {
+            return &_c;
+        }
+        const tc_component* tc_component_ptr() const {
+            return &_c;
+        }
+
+        // Alias for compatibility
+        tc_component* c_component() {
+            return &_c;
+        }
+        const tc_component* c_component() const {
+            return &_c;
+        }
+
+        // Set owner and reference counting vtable.
+        void set_owner_ref(void* owner, const tc_component_ref_vtable* ref_vt) {
+            _c.body = owner;
+            if (ref_vt)
+                _c.ref_vtable = ref_vt;
+        }
+
+        // Type identification for serialization.
+        const char* type_name() const {
+            return tc_component_type_name(&_c);
+        }
+
+    public:
+        // Accessors for tc_component flags
+        std::string display_name() const {
+            return tc_component_get_display_name(&_c);
+        }
+        void set_display_name(const std::string& v) {
+            tc_component_set_display_name(&_c, v.c_str());
+        }
+        std::string source_id() const {
+            return tc_component_get_source_id(&_c);
+        }
+        void set_source_id(const std::string& v) {
+            tc_component_set_source_id(&_c, v.c_str());
+        }
+
+        bool enabled() const {
+            return tc_component_get_enabled(&_c);
+        }
+        void set_enabled(bool v) {
+            tc_component_set_enabled(&_c, v);
+        }
+
+        bool active_in_editor() const {
+            return tc_component_get_active_in_editor(&_c);
+        }
+        void set_active_in_editor(bool v) {
+            tc_component_set_active_in_editor(&_c, v);
+        }
+
+        bool started() const {
+            return _c._started;
+        }
+        void set_started(bool v) {
+            _c._started = v;
+        }
+
+        bool has_update() const {
+            return _c.has_update;
+        }
+        void set_has_update(bool v) {
+            set_lifecycle_capabilities(v, _c.has_fixed_update, _c.has_late_update);
+        }
+
+        bool has_fixed_update() const {
+            return _c.has_fixed_update;
+        }
+        void set_has_fixed_update(bool v) {
+            set_lifecycle_capabilities(_c.has_update, v, _c.has_late_update);
+        }
+
+        bool has_late_update() const {
+            return _c.has_late_update;
+        }
+        void set_has_late_update(bool v) {
+            set_lifecycle_capabilities(_c.has_update, _c.has_fixed_update, v);
+        }
+
+        int lifecycle_priority(LifecycleStage stage) const {
+            return tc_component_get_lifecycle_priority(&_c, static_cast<tc_component_lifecycle_stage>(stage));
+        }
+        bool set_lifecycle_priority(LifecycleStage stage, int priority) {
+            return tc_component_set_lifecycle_priority(&_c, static_cast<tc_component_lifecycle_stage>(stage), priority);
+        }
+
+        int update_priority() const {
+            return lifecycle_priority(LifecycleStage::Update);
+        }
+        bool set_update_priority(int priority) {
+            return set_lifecycle_priority(LifecycleStage::Update, priority);
+        }
+        int fixed_update_priority() const {
+            return lifecycle_priority(LifecycleStage::FixedUpdate);
+        }
+        bool set_fixed_update_priority(int priority) {
+            return set_lifecycle_priority(LifecycleStage::FixedUpdate, priority);
+        }
+        int late_update_priority() const {
+            return lifecycle_priority(LifecycleStage::LateUpdate);
+        }
+        bool set_late_update_priority(int priority) {
+            return set_lifecycle_priority(LifecycleStage::LateUpdate, priority);
+        }
+        void set_lifecycle_capabilities(bool update, bool fixed_update, bool late_update) {
+            tc_component_set_lifecycle_capabilities(&_c, update, fixed_update, late_update);
+        }
+
+        // Lifecycle hooks (virtual - subclasses override these)
+        virtual void start() {}
+        virtual void update(float dt) {
+            (void)dt;
+        }
+        virtual void fixed_update(float dt) {
+            (void)dt;
+        }
+        virtual void late_update(float dt) {
+            (void)dt;
+        }
+        virtual void on_destroy() {}
+        virtual void on_editor_start() {}
+
+        // Editor hooks
+        virtual void setup_editor_defaults() {}
+
+        // Called when added/removed from entity
+        virtual void on_added_to_entity() {}
+        virtual void on_removed_from_entity() {}
+
+        // Called after component is fully attached to entity
+        virtual void on_added() {}
+        virtual void on_removed() {}
+        virtual void on_scene_inactive() {}
+        virtual void on_scene_active() {}
+
+        // Serialization uses C API tc_inspect fields registered during bootstrap.
+        virtual tc_value serialize_data() const {
+            tc_value data = tc_inspect_serialize(const_cast<void*>(static_cast<const void*>(this)), type_name());
+            const char* name = tc_component_get_display_name(&_c);
+            if (data.type == TC_VALUE_DICT && name && name[0] && !tc_value_dict_has(&data, "display_name")) {
+                tc_value_dict_set(&data, "display_name", tc_value_string(name));
             }
-            tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
-            if (enabled && enabled->type == TC_VALUE_BOOL) {
-                _c.enabled = enabled->data.b;
+            return data;
+        }
+
+        virtual void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
+            if (!data)
+                return;
+            if (data->type == TC_VALUE_DICT) {
+                tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
+                if (display_name && display_name->type == TC_VALUE_STRING) {
+                    tc_component_set_display_name(&_c, display_name->data.s);
+                }
+                tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
+                if (enabled && enabled->type == TC_VALUE_BOOL) {
+                    _c.enabled = enabled->data.b;
+                }
+                tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
+                if (active_in_editor && active_in_editor->type == TC_VALUE_BOOL) {
+                    _c.active_in_editor = active_in_editor->data.b;
+                }
             }
-            tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
-            if (active_in_editor && active_in_editor->type == TC_VALUE_BOOL) {
-                _c.active_in_editor = active_in_editor->data.b;
+            tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
+            tc_inspect_deserialize(static_cast<void*>(this), type_name(), data, &inspect_ctx);
+        }
+
+        // Full serialize (type + data) - returns tc_value dict
+        virtual tc_value serialize() const {
+            tc_value result = tc_value_dict_new();
+            tc_value_dict_set(&result, "type", tc_value_string(type_name()));
+            tc_value data = serialize_data();
+            tc_value_dict_set(&result, "data", data);
+            return result;
+        }
+
+    public:
+        explicit CxxComponent(const char* type_name);
+
+    private:
+        // Static callbacks that dispatch to C++ virtual methods
+        static void _cb_start(tc_component* c);
+        static void _cb_update(tc_component* c, float dt);
+        static void _cb_fixed_update(tc_component* c, float dt);
+        static void _cb_late_update(tc_component* c, float dt);
+        static void _cb_on_destroy(tc_component* c);
+        static void _cb_on_added_to_entity(tc_component* c);
+        static void _cb_on_removed_from_entity(tc_component* c);
+        static void _cb_on_added(tc_component* c);
+        static void _cb_on_removed(tc_component* c);
+        static void _cb_on_scene_inactive(tc_component* c);
+        static void _cb_on_scene_active(tc_component* c);
+        static void _cb_on_editor_start(tc_component* c);
+        static void _cb_setup_editor_defaults(tc_component* c);
+    };
+
+    // Alias for backward compatibility during migration
+    using Component = CxxComponent;
+
+    ENTITY_API void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder);
+    ENTITY_API tc_value serialize_component_data(tc_component* component);
+
+    // Template definition for Entity::get_component<T>()
+    template <typename T> T* Entity::get_component() {
+        size_t count = component_count();
+        for (size_t i = 0; i < count; i++) {
+            tc_component* tc = component_at(i);
+            if (tc && tc->kind == TC_CXX_COMPONENT) {
+                CxxComponent* comp = CxxComponent::from_tc(tc);
+                T* typed = dynamic_cast<T*>(comp);
+                if (typed)
+                    return typed;
             }
         }
-        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
-        tc_inspect_deserialize(
-            static_cast<void*>(this),
-            type_name(),
-            data,
-            &inspect_ctx
-        );
+        return nullptr;
     }
-
-    // Full serialize (type + data) - returns tc_value dict
-    virtual tc_value serialize() const {
-        tc_value result = tc_value_dict_new();
-        tc_value_dict_set(&result, "type", tc_value_string(type_name()));
-        tc_value data = serialize_data();
-        tc_value_dict_set(&result, "data", data);
-        return result;
-    }
-
-public:
-    explicit CxxComponent(const char* type_name);
-
-private:
-    // Static callbacks that dispatch to C++ virtual methods
-    static void _cb_start(tc_component* c);
-    static void _cb_update(tc_component* c, float dt);
-    static void _cb_fixed_update(tc_component* c, float dt);
-    static void _cb_late_update(tc_component* c, float dt);
-    static void _cb_on_destroy(tc_component* c);
-    static void _cb_on_added_to_entity(tc_component* c);
-    static void _cb_on_removed_from_entity(tc_component* c);
-    static void _cb_on_added(tc_component* c);
-    static void _cb_on_removed(tc_component* c);
-    static void _cb_on_scene_inactive(tc_component* c);
-    static void _cb_on_scene_active(tc_component* c);
-    static void _cb_on_editor_start(tc_component* c);
-    static void _cb_setup_editor_defaults(tc_component* c);
-};
-
-// Alias for backward compatibility during migration
-using Component = CxxComponent;
-
-ENTITY_API void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder);
-ENTITY_API tc_value serialize_component_data(tc_component* component);
-
-// Template definition for Entity::get_component<T>()
-template<typename T>
-T* Entity::get_component() {
-    size_t count = component_count();
-    for (size_t i = 0; i < count; i++) {
-        tc_component* tc = component_at(i);
-        if (tc && tc->kind == TC_CXX_COMPONENT) {
-            CxxComponent* comp = CxxComponent::from_tc(tc);
-            T* typed = dynamic_cast<T*>(comp);
-            if (typed) return typed;
-        }
-    }
-    return nullptr;
-}
 
 } // namespace termin

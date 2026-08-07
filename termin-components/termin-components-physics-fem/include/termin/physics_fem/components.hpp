@@ -7,20 +7,18 @@
 #include <vector>
 
 #include <termin/entity/component.hpp>
-#include <termin/render/render_lifecycle.hpp>
 #include <termin/physics_qopt/articulation3d_motor.hpp>
 #include <termin/physics_qopt/contact3d.hpp>
 #include <termin/physics_qopt/multibody3d.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include <termin/robotics/articulation3d.hpp>
 #include <termin/robotics/inverse_dynamics_control.hpp>
 
-extern "C"
-{
+extern "C" {
 #include <tc_types.h>
 }
 
-namespace termin
-{
+namespace termin {
 
     class FEMPhysicsWorldComponent;
     class FEMRigidBodyComponent;
@@ -30,14 +28,12 @@ namespace termin
     class FEMJointLimitComponent;
     class FEMJointServoComponent;
 
-    enum class FEMArticulationBaseMode : int
-    {
+    enum class FEMArticulationBaseMode : int {
         Fixed = 0,
         Floating = 1,
     };
 
-    struct FEMPhysicsTelemetry
-    {
+    struct FEMPhysicsTelemetry {
         bool initialized = false;
         double simulated_time = 0.0;
         std::uint64_t successful_steps = 0;
@@ -67,8 +63,7 @@ namespace termin
         double total_energy = 0.0;
     };
 
-    class ENTITY_API FEMArticulationComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMArticulationComponent final : public CxxComponent {
     public:
         int base_mode = static_cast<int>(FEMArticulationBaseMode::Fixed);
 
@@ -82,14 +77,12 @@ namespace termin
         [[nodiscard]] std::size_t unit_count() const noexcept;
         [[nodiscard]] double total_energy() const noexcept;
         [[nodiscard]] robotics::Articulation3D* articulation() noexcept;
-        [[nodiscard]] const robotics::Articulation3D*
-        articulation() const noexcept;
+        [[nodiscard]] const robotics::Articulation3D* articulation() const noexcept;
         [[nodiscard]] Vec3 gravity_world() const noexcept;
-        [[nodiscard]] std::vector<std::size_t>
-        actuator_dof_indices() const;
+        [[nodiscard]] std::vector<std::size_t> actuator_dof_indices() const;
         [[nodiscard]] std::vector<double> actuator_effort_limits() const;
-        [[nodiscard]] bool apply_inverse_dynamics_control(
-            const robotics::InverseDynamicsControlResult3D& control) noexcept;
+        [[nodiscard]] bool
+        apply_inverse_dynamics_control(const robotics::InverseDynamicsControlResult3D& control) noexcept;
 
     private:
         friend class FEMPhysicsWorldComponent;
@@ -112,8 +105,7 @@ namespace termin
 
     // A bounded physical effort channel for one reduced articulation DOF. It
     // may be commanded directly or by a separate controller component.
-    class ENTITY_API FEMArticulationMotorComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMArticulationMotorComponent final : public CxxComponent {
     public:
         double commanded_effort = 0.0;
         double maximum_effort = 10.0;
@@ -132,8 +124,7 @@ namespace termin
     private:
         friend class FEMPhysicsWorldComponent;
         FEMPhysicsWorldComponent* world_ = nullptr;
-        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
-            nullptr;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ = nullptr;
         physics_qopt::ArticulationMotorContribution* motor_ = nullptr;
         std::size_t dof_index_ = 0;
         std::size_t joint_index_ = 0;
@@ -144,8 +135,7 @@ namespace termin
     // co-located RotatorComponent or ActuatorComponent. Coordinates use the
     // kinematic component's authored units and are converted by its explicit
     // coordinate_scale when the articulation is compiled.
-    class ENTITY_API FEMJointLimitComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMJointLimitComponent final : public CxxComponent {
     public:
         bool minimum_enabled = false;
         bool maximum_enabled = false;
@@ -160,8 +150,7 @@ namespace termin
 
     // A PID control policy for a co-located articulation motor. Target state is
     // expressed in the neighboring kinematic component's authored units.
-    class ENTITY_API FEMJointServoComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMJointServoComponent final : public CxxComponent {
     public:
         bool position_control_enabled = true;
         bool integral_control_enabled = false;
@@ -191,8 +180,7 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
         KinematicUnitComponent* joint_ = nullptr;
         FEMArticulationMotorComponent* motor_component_ = nullptr;
-        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
-            nullptr;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ = nullptr;
         std::size_t dof_index_ = 0;
         double coordinate_scale_ = 1.0;
         double position_effort_ = 0.0;
@@ -201,8 +189,7 @@ namespace termin
         double commanded_effort_ = 0.0;
     };
 
-    class ENTITY_API FEMRigidBodyComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMRigidBodyComponent final : public CxxComponent {
     public:
         double mass = 1.0;
         tc_vec3 inertia_diagonal = {0.1, 0.1, 0.1};
@@ -223,18 +210,13 @@ namespace termin
         friend class FEMPhysicsWorldComponent;
         physics_qopt::RigidBody3DContribution* body_ = nullptr;
         physics_qopt::ForceOnBody3DContribution* force_ = nullptr;
-        physics_qopt::Articulation3DDynamicsContribution* articulation_ =
-            nullptr;
-        std::size_t articulation_unit_index_ =
-            robotics::articulation_root_frame;
+        physics_qopt::Articulation3DDynamicsContribution* articulation_ = nullptr;
+        std::size_t articulation_unit_index_ = robotics::articulation_root_frame;
         bool articulation_base_ = false;
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
-    class ENTITY_API FEMFixedJointComponent final
-        : public CxxComponent,
-          public RenderLifecycle
-    {
+    class ENTITY_API FEMFixedJointComponent final : public CxxComponent, public RenderLifecycle {
     public:
         std::string body_entity_name;
         tc_vec3 joint_axis_in_body = {0.0, 1.0, 0.0};
@@ -254,10 +236,7 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
-    class ENTITY_API FEMRevoluteJointComponent final
-        : public CxxComponent,
-          public RenderLifecycle
-    {
+    class ENTITY_API FEMRevoluteJointComponent final : public CxxComponent, public RenderLifecycle {
     public:
         std::string body_a_entity_name;
         std::string body_b_entity_name;
@@ -280,8 +259,7 @@ namespace termin
         FEMPhysicsWorldComponent* world_ = nullptr;
     };
 
-    class ENTITY_API FEMPhysicsWorldComponent final : public CxxComponent
-    {
+    class ENTITY_API FEMPhysicsWorldComponent final : public CxxComponent {
     public:
         tc_vec3 gravity = {0.0, 0.0, -9.81};
         // Default remains frictionless for scene compatibility. This is the
@@ -333,11 +311,8 @@ namespace termin
         bool register_articulation(FEMArticulationComponent& component);
         void synchronize_articulations();
         bool update_motor_commands(double dt);
-        bool collect_contact_endpoints(const TcSceneRef& scene,
-                                       ContactRefreshState& state);
-        void warn_contact_collider_once(const void* collider,
-                                        const char* message,
-                                        const char* entity_name);
+        bool collect_contact_endpoints(const TcSceneRef& scene, ContactRefreshState& state);
+        void warn_contact_collider_once(const void* collider, const char* message, const char* entity_name);
         bool refresh_contacts();
         void step_simulation(double dt);
         [[nodiscard]] double total_energy() const noexcept;

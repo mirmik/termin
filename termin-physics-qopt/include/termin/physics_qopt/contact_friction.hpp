@@ -7,8 +7,7 @@
 #include <termin/qopt/active_set_qp.hpp>
 #include <termin/qopt/dense_views.hpp>
 
-namespace termin::physics_qopt
-{
+namespace termin::physics_qopt {
     using namespace termin::qopt;
 
     // Global tangent-impulse maximum-dissipation problem evaluated after a
@@ -17,8 +16,7 @@ namespace termin::physics_qopt
     // larger set of unilateral rows which must all remain satisfied. Normal
     // rows use the physical separating-velocity convention
     // N*v >= minimum_normal_velocity.
-    struct ContactFrictionProblemView
-    {
+    struct ContactFrictionProblemView {
         ConstDenseMatrixView mass;
         ConstDenseMatrixView bilateral_jacobian;
         ConstDenseVectorView normal_projected_velocity;
@@ -37,8 +35,7 @@ namespace termin::physics_qopt
         ConstDenseVectorView friction_coefficient;
     };
 
-    struct ContactFrictionSolutionView
-    {
+    struct ContactFrictionSolutionView {
         DenseVectorView velocity;
         // Two physical tangent impulse components per contact, in the same
         // row order as tangent_jacobian.
@@ -52,8 +49,7 @@ namespace termin::physics_qopt
         DenseVectorView bilateral_impulse;
     };
 
-    struct ContactFrictionOptions
-    {
+    struct ContactFrictionOptions {
         // Number of sides in the inscribed regular polygon approximating the
         // circular Coulomb disk. Must be even and at least four.
         std::size_t cone_facets = 6;

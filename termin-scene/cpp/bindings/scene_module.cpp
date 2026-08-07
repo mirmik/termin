@@ -5,12 +5,12 @@
 
 #include <nanobind/nanobind.h>
 
-#include <termin/bindings/entity_bindings.hpp>
-#include <termin/bindings/tc_component_ref_bindings.hpp>
 #include <termin/bindings/component_bindings.hpp>
+#include <termin/bindings/entity_bindings.hpp>
 #include <termin/bindings/scene_bindings.hpp>
 #include <termin/bindings/soa_bindings.hpp>
 #include <termin/bindings/tc_component_python_bindings.hpp>
+#include <termin/bindings/tc_component_ref_bindings.hpp>
 #include <termin/bindings/transform_bindings.hpp>
 
 namespace nb = nanobind;

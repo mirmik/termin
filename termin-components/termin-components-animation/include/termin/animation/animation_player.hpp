@@ -1,117 +1,125 @@
 #pragma once
 
-#include <vector>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
+#include "termin/animation/tc_animation_handle.hpp"
+#include "termin/animation/termin_components_animation_api.hpp"
+#include "termin/entity/cmp_ref.hpp"
+#include "termin/skeleton/skeleton_instance.hpp"
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
-#include "termin/entity/cmp_ref.hpp"
-#include "termin/animation/tc_animation_handle.hpp"
-#include "termin/animation/termin_components_animation_api.hpp"
-#include "termin/skeleton/skeleton_instance.hpp"
 
 namespace termin {
 
-class SkeletonController;
+    class SkeletonController;
 
-// AnimationPlayer - plays animation clips on skeleton.
-//
-// Stores clips, current clip, time. Updates skeleton bones each frame.
-// Can be controlled externally (playing=false) via update_bones_at_time().
-class TERMIN_COMPONENTS_ANIMATION_API AnimationPlayer : public CxxComponent {
-public:
-    // Clip handles for serialization
-    std::vector<animation::TcAnimationClip> clips;
+    // AnimationPlayer - plays animation clips on skeleton.
+    //
+    // Stores clips, current clip, time. Updates skeleton bones each frame.
+    // Can be controlled externally (playing=false) via update_bones_at_time().
+    class TERMIN_COMPONENTS_ANIMATION_API AnimationPlayer : public CxxComponent {
+    public:
+        // Clip handles for serialization
+        std::vector<animation::TcAnimationClip> clips;
 
-    // Non-bone entity targets imported from animation node hierarchies.
-    std::vector<Entity> node_targets;
+        // Non-bone entity targets imported from animation node hierarchies.
+        std::vector<Entity> node_targets;
 
-    // Current clip name (for serialization, underscore prefix for compatibility)
-    std::string _current_clip_name;
+        // Current clip name (for serialization, underscore prefix for compatibility)
+        std::string _current_clip_name;
 
-    // Playback state
-    double time = 0.0;
-    bool playing = false;
+        // Playback state
+        double time = 0.0;
+        bool playing = false;
 
-private:
-    // Cached clips map: name -> index in clips vector
-    std::unordered_map<std::string, size_t> _clips_map;
+    private:
+        // Cached clips map: name -> index in clips vector
+        std::unordered_map<std::string, size_t> _clips_map;
 
-    // Current clip index (-1 if none)
-    int _current_index = -1;
+        // Current clip index (-1 if none)
+        int _current_index = -1;
 
-    // Target skeleton controller (CmpRef validates entity liveness)
-    CmpRef<SkeletonController> _target_skeleton_controller;
+        // Target skeleton controller (CmpRef validates entity liveness)
+        CmpRef<SkeletonController> _target_skeleton_controller;
 
-    struct ChannelMapping {
-        int bone_index = -1;
-        Entity node_entity;
+        struct ChannelMapping {
+            int bone_index = -1;
+            Entity node_entity;
+        };
+
+        // Cached target mapping: channel index -> skeleton bone or node entity
+        // Rebuilt when clip changes
+        std::vector<ChannelMapping> _channel_mappings;
+
+        // Cached samples buffer for reuse
+        std::vector<tc_channel_sample> _samples_buffer;
+
+    public:
+        AnimationPlayer();
+        ~AnimationPlayer() override = default;
+
+        static void register_type();
+
+        // Accessors
+        animation::TcAnimationClip* current() {
+            if (_current_index < 0 || _current_index >= (int)clips.size())
+                return nullptr;
+            return &clips[_current_index];
+        }
+        const animation::TcAnimationClip* current() const {
+            if (_current_index < 0 || _current_index >= (int)clips.size())
+                return nullptr;
+            return &clips[_current_index];
+        }
+        const std::unordered_map<std::string, size_t>& clips_map() const {
+            return _clips_map;
+        }
+
+        // Set current clip by name
+        void set_current(const std::string& name);
+
+        // Play clip by name
+        void play(const std::string& name, bool restart = true);
+
+        // Stop playback
+        void stop() {
+            playing = false;
+        }
+
+        // Update bones at specific time (for external control)
+        void update_bones_at_time(double t);
+
+        // Get/set target skeleton controller
+        SkeletonController* target_skeleton_controller() const {
+            return _target_skeleton_controller.get();
+        }
+        void set_target_skeleton_controller(SkeletonController* controller);
+
+        // Get target skeleton instance (from controller, nullptr if controller is dead)
+        SkeletonInstance* target_skeleton() const;
+
+        // Component lifecycle
+        void start() override;
+        void update(float dt) override;
+
+    private:
+        // Rebuild clips map from handles
+        void _rebuild_clips_map();
+
+        // Find SkeletonController on entity
+        void _acquire_skeleton();
+
+        // Build channel target mapping for current clip
+        void _build_channel_mapping();
+
+        // Resolve non-bone target entity by channel target name
+        Entity _find_node_target(const char* target_name) const;
+
+        // Apply animation sample to skeleton
+        void _apply_sample(const tc_channel_sample* samples, size_t count);
     };
-
-    // Cached target mapping: channel index -> skeleton bone or node entity
-    // Rebuilt when clip changes
-    std::vector<ChannelMapping> _channel_mappings;
-
-    // Cached samples buffer for reuse
-    std::vector<tc_channel_sample> _samples_buffer;
-
-public:
-    AnimationPlayer();
-    ~AnimationPlayer() override = default;
-
-    static void register_type();
-
-    // Accessors
-    animation::TcAnimationClip* current() {
-        if (_current_index < 0 || _current_index >= (int)clips.size()) return nullptr;
-        return &clips[_current_index];
-    }
-    const animation::TcAnimationClip* current() const {
-        if (_current_index < 0 || _current_index >= (int)clips.size()) return nullptr;
-        return &clips[_current_index];
-    }
-    const std::unordered_map<std::string, size_t>& clips_map() const { return _clips_map; }
-
-    // Set current clip by name
-    void set_current(const std::string& name);
-
-    // Play clip by name
-    void play(const std::string& name, bool restart = true);
-
-    // Stop playback
-    void stop() { playing = false; }
-
-    // Update bones at specific time (for external control)
-    void update_bones_at_time(double t);
-
-    // Get/set target skeleton controller
-    SkeletonController* target_skeleton_controller() const { return _target_skeleton_controller.get(); }
-    void set_target_skeleton_controller(SkeletonController* controller);
-
-    // Get target skeleton instance (from controller, nullptr if controller is dead)
-    SkeletonInstance* target_skeleton() const;
-
-    // Component lifecycle
-    void start() override;
-    void update(float dt) override;
-
-private:
-    // Rebuild clips map from handles
-    void _rebuild_clips_map();
-
-    // Find SkeletonController on entity
-    void _acquire_skeleton();
-
-    // Build channel target mapping for current clip
-    void _build_channel_mapping();
-
-    // Resolve non-bone target entity by channel target name
-    Entity _find_node_target(const char* target_name) const;
-
-    // Apply animation sample to skeleton
-    void _apply_sample(const tc_channel_sample* samples, size_t count);
-};
 
 } // namespace termin

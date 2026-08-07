@@ -15,56 +15,46 @@ GUARD_TEST_MAIN();
 
 namespace {
 
-bool near(const termin::Vec3& a, const termin::Vec3& b, double epsilon = 1.0e-9) {
-    return (a - b).norm() <= epsilon;
-}
-
-struct PointerSurfaceProbe {
-    std::vector<tc_world_pointer_event> events;
-};
-
-bool project_pointer_surface(
-    tc_component*,
-    const tc_world_pointer_ray* ray,
-    tc_world_pointer_hit* out_hit
-) {
-    if (!ray || !out_hit || ray->max_distance < 2.0) return false;
-    out_hit->distance = 2.0;
-    out_hit->u = 0.25;
-    out_hit->v = 0.75;
-    out_hit->inside = true;
-    return true;
-}
-
-bool dispatch_pointer_surface(
-    tc_component* component,
-    const tc_world_pointer_event* event
-) {
-    const tc_world_pointer_surface_capability* capability =
-        tc_world_pointer_surface_capability_get(component);
-    auto* probe = capability
-        ? static_cast<PointerSurfaceProbe*>(capability->userdata)
-        : nullptr;
-    if (!probe || !event) return false;
-    probe->events.push_back(*event);
-    return event->phase == TC_WORLD_POINTER_DOWN ||
-        event->phase == TC_WORLD_POINTER_MOVE ||
-        event->phase == TC_WORLD_POINTER_UP;
-}
-
-const tc_world_pointer_surface_vtable kPointerSurfaceVtable = {
-    project_pointer_surface,
-    dispatch_pointer_surface,
-};
-
-class PointerSurfaceComponent final : public termin::CxxComponent {
-public:
-    explicit PointerSurfaceComponent(PointerSurfaceProbe& probe)
-        : CxxComponent("PointerSurfaceComponent") {
-        tc_world_pointer_surface_capability_attach(
-            tc_component_ptr(), &kPointerSurfaceVtable, &probe);
+    bool near(const termin::Vec3& a, const termin::Vec3& b, double epsilon = 1.0e-9) {
+        return (a - b).norm() <= epsilon;
     }
-};
+
+    struct PointerSurfaceProbe {
+        std::vector<tc_world_pointer_event> events;
+    };
+
+    bool project_pointer_surface(tc_component*, const tc_world_pointer_ray* ray, tc_world_pointer_hit* out_hit) {
+        if (!ray || !out_hit || ray->max_distance < 2.0)
+            return false;
+        out_hit->distance = 2.0;
+        out_hit->u = 0.25;
+        out_hit->v = 0.75;
+        out_hit->inside = true;
+        return true;
+    }
+
+    bool dispatch_pointer_surface(tc_component* component, const tc_world_pointer_event* event) {
+        const tc_world_pointer_surface_capability* capability = tc_world_pointer_surface_capability_get(component);
+        auto* probe = capability ? static_cast<PointerSurfaceProbe*>(capability->userdata) : nullptr;
+        if (!probe || !event)
+            return false;
+        probe->events.push_back(*event);
+        return event->phase == TC_WORLD_POINTER_DOWN || event->phase == TC_WORLD_POINTER_MOVE ||
+               event->phase == TC_WORLD_POINTER_UP;
+    }
+
+    const tc_world_pointer_surface_vtable kPointerSurfaceVtable = {
+        project_pointer_surface,
+        dispatch_pointer_surface,
+    };
+
+    class PointerSurfaceComponent final : public termin::CxxComponent {
+    public:
+        explicit PointerSurfaceComponent(PointerSurfaceProbe& probe)
+            : CxxComponent("PointerSurfaceComponent") {
+            tc_world_pointer_surface_capability_attach(tc_component_ptr(), &kPointerSurfaceVtable, &probe);
+        }
+    };
 
 } // namespace
 
@@ -242,9 +232,7 @@ TEST_CASE("XR ray interactor routes hover select and release to nearest world su
     interactor->max_distance = 5.0;
     aim_entity.add_component(interactor);
 
-    line->set_segment(
-        tc_vec3{0.0, 0.0, 0.0},
-        tc_vec3{0.0, 5.0, 0.0});
+    line->set_segment(tc_vec3{0.0, 0.0, 0.0}, tc_vec3{0.0, 5.0, 0.0});
     interactor->on_scene_inactive();
     REQUIRE_EQ(line->points().size(), 2u);
     CHECK(near(line->points()[1], Vec3{0.0, 5.0, 0.0}));
@@ -252,8 +240,7 @@ TEST_CASE("XR ray interactor routes hover select and release to nearest world su
     PointerSurfaceProbe probe;
     Entity surface_entity = scene.create_entity("Pointer Surface");
     auto* surface = new PointerSurfaceComponent(probe);
-    tc_component_set_source_id(
-        surface->tc_component_ptr(), "xr-ray-test-surface");
+    tc_component_set_source_id(surface->tc_component_ptr(), "xr-ray-test-surface");
     surface_entity.add_component(surface);
 
     input.right.grip_pose.active = true;

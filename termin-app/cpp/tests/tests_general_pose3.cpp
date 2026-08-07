@@ -1,7 +1,7 @@
 #include "guard_main.h"
 #include "termin/geom/general_pose3.hpp"
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <type_traits>
 
 using guard::Approx;
@@ -9,8 +9,7 @@ using termin::GeneralPose3;
 using termin::Quat;
 using termin::Vec3;
 
-TEST_CASE("Pose3 and GeneralPose3 alias C ABI pose types")
-{
+TEST_CASE("Pose3 and GeneralPose3 alias C ABI pose types") {
     static_assert(std::is_same_v<termin::Pose3, tc_pose3>);
     static_assert(std::is_same_v<termin::GeneralPose3, tc_general_pose3>);
 
@@ -27,8 +26,7 @@ TEST_CASE("Pose3 and GeneralPose3 alias C ABI pose types")
     CHECK_EQ(gpose.scale.z, Approx(6.0).epsilon(1e-12));
 }
 
-TEST_CASE("Vec3 named directions follow Termin axes")
-{
+TEST_CASE("Vec3 named directions follow Termin axes") {
     CHECK(Vec3::right() == Vec3::unit_x());
     CHECK(Vec3::left() == -Vec3::unit_x());
     CHECK(Vec3::forward() == Vec3::unit_y());
@@ -37,8 +35,7 @@ TEST_CASE("Vec3 named directions follow Termin axes")
     CHECK(Vec3::down() == -Vec3::unit_z());
 }
 
-TEST_CASE("GeneralPose3 identity and projected inverse")
-{
+TEST_CASE("GeneralPose3 identity and projected inverse") {
     GeneralPose3 id = GeneralPose3::identity();
     Vec3 p{1.0, 2.0, -3.0};
     Vec3 t = id.transform_point(p);
@@ -53,17 +50,10 @@ TEST_CASE("GeneralPose3 identity and projected inverse")
     CHECK_EQ(back.z, Approx(p.z).epsilon(1e-12));
 }
 
-TEST_CASE("GeneralPose3 compose with scale")
-{
-    GeneralPose3 parent(
-        Quat::identity(),
-        Vec3{1.0, 0.0, 0.0},
-        Vec3{2.0, 2.0, 2.0});
+TEST_CASE("GeneralPose3 compose with scale") {
+    GeneralPose3 parent(Quat::identity(), Vec3{1.0, 0.0, 0.0}, Vec3{2.0, 2.0, 2.0});
 
-    GeneralPose3 child(
-        Quat::identity(),
-        Vec3{0.5, 0.0, 0.0},
-        Vec3{1.0, 1.0, 1.0});
+    GeneralPose3 child(Quat::identity(), Vec3{0.5, 0.0, 0.0}, Vec3{1.0, 1.0, 1.0});
 
     GeneralPose3 world = parent.compose_trs_projected(child);
 
@@ -78,13 +68,9 @@ TEST_CASE("GeneralPose3 compose with scale")
     CHECK_EQ(world.scale.z, Approx(2.0).epsilon(1e-12));
 }
 
-TEST_CASE("GeneralPose3 transform and inverse")
-{
+TEST_CASE("GeneralPose3 transform and inverse") {
     const double half_pi = std::acos(-1.0) * 0.5;
-    GeneralPose3 pose(
-        Quat::from_axis_angle(Vec3::unit_z(), half_pi),
-        Vec3{1.0, 0.0, 0.0},
-        Vec3{2.0, 1.0, 1.0});
+    GeneralPose3 pose(Quat::from_axis_angle(Vec3::unit_z(), half_pi), Vec3{1.0, 0.0, 0.0}, Vec3{2.0, 1.0, 1.0});
 
     Vec3 p_local{1.0, 0.0, 0.0};
     Vec3 p_world = pose.transform_point(p_local);

@@ -1,9 +1,9 @@
 // tc_entity_pool_registry.c - Registry for entity pools with generational handles
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_entity_pool.h"
-#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tcbase/tc_log.h>
 
 // ============================================================================
 // Registry data structure
@@ -89,7 +89,8 @@ void tc_entity_pool_registry_shutdown(void) {
 static void registry_grow(void) {
     size_t old_cap = g_entity_pool_registry->capacity;
     size_t new_cap = old_cap * 2;
-    if (new_cap > MAX_ENTITY_POOLS) new_cap = MAX_ENTITY_POOLS;
+    if (new_cap > MAX_ENTITY_POOLS)
+        new_cap = MAX_ENTITY_POOLS;
     if (new_cap <= old_cap) {
         tc_log_error("[tc_entity_pool_registry] max capacity reached");
         return;
@@ -107,7 +108,8 @@ static void registry_grow(void) {
 
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
-        g_entity_pool_registry->free_stack[g_entity_pool_registry->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
+        g_entity_pool_registry->free_stack[g_entity_pool_registry->free_count++] =
+            (uint32_t)(new_cap - 1 - (i - old_cap));
     }
 
     g_entity_pool_registry->capacity = new_cap;
@@ -118,8 +120,10 @@ static void registry_grow(void) {
 // ============================================================================
 
 static inline bool handle_alive(tc_entity_pool_handle h) {
-    if (!g_entity_pool_registry) return false;
-    if (h.index >= g_entity_pool_registry->capacity) return false;
+    if (!g_entity_pool_registry)
+        return false;
+    if (h.index >= g_entity_pool_registry->capacity)
+        return false;
     return g_entity_pool_registry->alive[h.index] && g_entity_pool_registry->generations[h.index] == h.generation;
 }
 
@@ -160,12 +164,13 @@ tc_entity_pool_handle tc_entity_pool_registry_create(size_t initial_capacity) {
     g_entity_pool_registry->pools[idx] = pool;
     g_entity_pool_registry->count++;
 
-    tc_entity_pool_handle h = { idx, gen };
+    tc_entity_pool_handle h = {idx, gen};
     return h;
 }
 
 void tc_entity_pool_registry_destroy(tc_entity_pool_handle h) {
-    if (!handle_alive(h)) return;
+    if (!handle_alive(h))
+        return;
 
     uint32_t idx = h.index;
 
@@ -183,16 +188,18 @@ void tc_entity_pool_registry_destroy(tc_entity_pool_handle h) {
 }
 
 tc_entity_pool* tc_entity_pool_registry_get(tc_entity_pool_handle h) {
-    if (!handle_alive(h)) return NULL;
+    if (!handle_alive(h))
+        return NULL;
     return g_entity_pool_registry->pools[h.index];
 }
 
 tc_entity_pool_handle tc_entity_pool_registry_find(tc_entity_pool* pool) {
-    if (!g_entity_pool_registry || !pool) return TC_ENTITY_POOL_HANDLE_INVALID;
+    if (!g_entity_pool_registry || !pool)
+        return TC_ENTITY_POOL_HANDLE_INVALID;
 
     for (size_t i = 0; i < g_entity_pool_registry->capacity; i++) {
         if (g_entity_pool_registry->alive[i] && g_entity_pool_registry->pools[i] == pool) {
-            tc_entity_pool_handle h = { (uint32_t)i, g_entity_pool_registry->generations[i] };
+            tc_entity_pool_handle h = {(uint32_t)i, g_entity_pool_registry->generations[i]};
             return h;
         }
     }
@@ -201,7 +208,8 @@ tc_entity_pool_handle tc_entity_pool_registry_find(tc_entity_pool* pool) {
 }
 
 tc_entity_pool_handle tc_entity_pool_registry_register(tc_entity_pool* pool) {
-    if (!pool) return TC_ENTITY_POOL_HANDLE_INVALID;
+    if (!pool)
+        return TC_ENTITY_POOL_HANDLE_INVALID;
 
     // Auto-init
     if (!g_entity_pool_registry) {
@@ -229,7 +237,7 @@ tc_entity_pool_handle tc_entity_pool_registry_register(tc_entity_pool* pool) {
     g_entity_pool_registry->pools[idx] = pool;
     g_entity_pool_registry->count++;
 
-    tc_entity_pool_handle h = { idx, gen };
+    tc_entity_pool_handle h = {idx, gen};
     return h;
 }
 

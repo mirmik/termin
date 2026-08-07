@@ -3,11 +3,9 @@
 #include <stddef.h>
 
 #define PICKING_COLOR_MASK 0x00FFFFFFu
-#define PICKING_HALF_MASK  0x00000FFFu
+#define PICKING_HALF_MASK 0x00000FFFu
 
-static const uint32_t PICKING_ROUND_KEYS[5] = {
-    0x2C3u, 0xA51u, 0x7E9u, 0x13Bu, 0xD74u
-};
+static const uint32_t PICKING_ROUND_KEYS[5] = {0x2C3u, 0xA51u, 0x7E9u, 0x13Bu, 0xD74u};
 
 static uint32_t picking_round_fn(uint32_t half, uint32_t key) {
     uint32_t x = (half ^ key) & PICKING_HALF_MASK;
@@ -38,7 +36,8 @@ static uint32_t picking_unpermute24(uint32_t value) {
 
     for (size_t i = sizeof(PICKING_ROUND_KEYS) / sizeof(PICKING_ROUND_KEYS[0]); i > 0; i--) {
         uint32_t previous_right = left;
-        uint32_t previous_left = (right ^ picking_round_fn(previous_right, PICKING_ROUND_KEYS[i - 1])) & PICKING_HALF_MASK;
+        uint32_t previous_left =
+            (right ^ picking_round_fn(previous_right, PICKING_ROUND_KEYS[i - 1])) & PICKING_HALF_MASK;
         left = previous_left;
         right = previous_right;
     }
@@ -68,24 +67,28 @@ void tc_picking_id_to_rgb(int id, int* r, int* g, int* b) {
         color = picking_encode_nonzero((uint32_t)id);
     }
 
-    if (r) *r = (int)(color & 0x0000FFu);
-    if (g) *g = (int)((color >> 8) & 0x0000FFu);
-    if (b) *b = (int)((color >> 16) & 0x0000FFu);
+    if (r)
+        *r = (int)(color & 0x0000FFu);
+    if (g)
+        *g = (int)((color >> 8) & 0x0000FFu);
+    if (b)
+        *b = (int)((color >> 16) & 0x0000FFu);
 }
 
 void tc_picking_id_to_rgb_float(int id, float* r, float* g, float* b) {
     int r_int, g_int, b_int;
     tc_picking_id_to_rgb(id, &r_int, &g_int, &b_int);
 
-    if (r) *r = (float)r_int / 255.0f;
-    if (g) *g = (float)g_int / 255.0f;
-    if (b) *b = (float)b_int / 255.0f;
+    if (r)
+        *r = (float)r_int / 255.0f;
+    if (g)
+        *g = (float)g_int / 255.0f;
+    if (b)
+        *b = (float)b_int / 255.0f;
 }
 
 int tc_picking_rgb_to_id(int r, int g, int b) {
-    uint32_t color = ((uint32_t)(r & 0xFF))
-                   | ((uint32_t)(g & 0xFF) << 8)
-                   | ((uint32_t)(b & 0xFF) << 16);
+    uint32_t color = ((uint32_t)(r & 0xFF)) | ((uint32_t)(g & 0xFF) << 8) | ((uint32_t)(b & 0xFF) << 16);
     if (color == 0) {
         return 0;
     }

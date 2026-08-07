@@ -8,35 +8,27 @@
 
 #include <termin/framegraph_remote/wire_codec.hpp>
 
-namespace termin
-{
+namespace termin {
 
-    struct RemoteFrameGraphConnectionConfig
-    {
+    struct RemoteFrameGraphConnectionConfig {
         std::uint16_t port = 0;
         std::string authentication_token;
         std::size_t command_queue_capacity = 64;
-        std::uint64_t capture_memory_budget_bytes =
-            framegraph_remote::WireLimits::max_blob_bytes;
+        std::uint64_t capture_memory_budget_bytes = framegraph_remote::WireLimits::max_blob_bytes;
         bool reconnect = true;
     };
 
     // Thread-safe editor projection of a remote topology session. Complete wire
     // messages are copied into immutable snapshots. On disconnect the most
     // recent topology remains visible and is explicitly marked stale.
-    class RemoteFrameGraphDebuggerSource final
-        : public IFrameGraphDebuggerSource
-    {
+    class RemoteFrameGraphDebuggerSource final : public IFrameGraphDebuggerSource {
     public:
-        using CommandSender =
-            std::function<bool(const framegraph_remote::Command&)>;
+        using CommandSender = std::function<bool(const framegraph_remote::Command&)>;
 
-        explicit RemoteFrameGraphDebuggerSource(std::size_t gap_capacity = 64,
-                                                CommandSender sender = {});
+        explicit RemoteFrameGraphDebuggerSource(std::size_t gap_capacity = 64, CommandSender sender = {});
         ~RemoteFrameGraphDebuggerSource() override;
 
-        std::shared_ptr<const FrameGraphDebuggerSnapshot>
-        snapshot() const override;
+        std::shared_ptr<const FrameGraphDebuggerSnapshot> snapshot() const override;
         bool refresh() override;
         void finish_frame() override;
         void connect() override;
@@ -51,8 +43,7 @@ namespace termin
         void set_channel_mode(int mode) override;
         void set_paused(bool paused) override;
         void set_highlight_hdr(bool enabled) override;
-        bool start_live_preview(std::uint32_t max_millifps,
-                                std::uint32_t max_long_edge) override;
+        bool start_live_preview(std::uint32_t max_millifps, std::uint32_t max_long_edge) override;
         bool stop_live_preview() override;
         bool capture_burst(std::uint16_t frames) override;
         std::string analyze_hdr() override;
@@ -64,8 +55,7 @@ namespace termin
                           std::uint32_t height,
                           int channel_mode,
                           bool highlight_hdr) override;
-        std::vector<std::uint8_t> read_depth_normalized(
-            tgfx::IRenderDevice& device, int* width, int* height) override;
+        std::vector<std::uint8_t> read_depth_normalized(tgfx::IRenderDevice& device, int* width, int* height) override;
 
         bool ingest(const framegraph_remote::DecodedMessage& message);
         bool connect(RemoteFrameGraphConnectionConfig config);

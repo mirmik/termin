@@ -13,12 +13,9 @@ GUARD_TEST_MAIN();
 #include <termin/tc_scene.hpp>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
 
-namespace
-{
-    void register_types()
-    {
-        static const bool registered = []()
-        {
+namespace {
+    void register_types() {
+        static const bool registered = []() {
             tc_inspect_kind_core_init();
             tc_inspect_component_adapter_init();
             tc_scene_ext_registry_init();
@@ -30,11 +27,10 @@ namespace
         }();
         (void)registered;
     }
-}
+} // namespace
 
 TEST_CASE("ArticulationComponent compiles and explicitly integrates a direct "
-          "unit tree")
-{
+          "unit tree") {
     using namespace termin;
 
     register_types();
@@ -76,23 +72,19 @@ TEST_CASE("ArticulationComponent compiles and explicitly integrates a direct "
 
     const double velocity[] = {std::numbers::pi_v<double> / 2.0, 0.0};
     REQUIRE(component->integrate_velocity(velocity, 1.0));
-    CHECK(std::abs(shoulder->coordinate -
-                   std::numbers::pi_v<double> / 2.0) < 1e-10);
+    CHECK(std::abs(shoulder->coordinate - std::numbers::pi_v<double> / 2.0) < 1e-10);
 
     auto advanced = articulation->point_kinematics(1, {1.0, 0.0, 0.0});
     REQUIRE(advanced.ok());
     CHECK(std::abs(advanced.value.position_world.x - 1.0) < 1e-10);
     CHECK(std::abs(advanced.value.position_world.y - 4.0) < 1e-10);
     const Pose3 elbow_world = elbow_entity.transform().global_pose();
-    CHECK(std::abs(elbow_world.lin.x -
-                   articulation->unit_poses_world()[1].lin.x) < 1e-10);
-    CHECK(std::abs(elbow_world.lin.y -
-                   articulation->unit_poses_world()[1].lin.y) < 1e-10);
+    CHECK(std::abs(elbow_world.lin.x - articulation->unit_poses_world()[1].lin.x) < 1e-10);
+    CHECK(std::abs(elbow_world.lin.y - articulation->unit_poses_world()[1].lin.y) < 1e-10);
 }
 
 TEST_CASE("ArticulationComponent rejects units hidden behind fixed scene "
-          "entities")
-{
+          "entities") {
     using namespace termin;
 
     register_types();
@@ -105,7 +97,6 @@ TEST_CASE("ArticulationComponent rejects units hidden behind fixed scene "
     unit_entity.add_component(new RotatorComponent());
 
     CHECK_FALSE(component->rebuild());
-    CHECK(component->diagnostic() ==
-          ArticulationComponentDiagnostic::IndirectUnit);
+    CHECK(component->diagnostic() == ArticulationComponentDiagnostic::IndirectUnit);
     CHECK(component->diagnostic_entity() == "Forbidden Spacer");
 }

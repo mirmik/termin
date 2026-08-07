@@ -11,4 +11,3 @@ void tc_audio_runtime_shutdown(void) {
     tc_audio_engine_shutdown();
     tc_audio_clip_registry_shutdown();
 }
-

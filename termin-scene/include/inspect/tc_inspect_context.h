@@ -19,7 +19,8 @@ static inline tc_scene_inspect_context tc_scene_inspect_context_make(tc_scene_ha
 }
 
 static inline tc_scene_handle tc_scene_inspect_context_scene(const void* context) {
-    if (!context) return TC_SCENE_HANDLE_INVALID;
+    if (!context)
+        return TC_SCENE_HANDLE_INVALID;
     const tc_scene_inspect_context* ctx = (const tc_scene_inspect_context*)context;
     return ctx->scene;
 }

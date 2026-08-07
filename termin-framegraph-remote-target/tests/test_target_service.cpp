@@ -18,8 +18,7 @@
 #include <variant>
 #include <vector>
 
-extern "C"
-{
+extern "C" {
 #include <core/tc_scene.h>
 #include <render/tc_display.h>
 #include <render/tc_display_pool.h>
@@ -48,11 +47,9 @@ using namespace termin::framegraph_remote;
 using termin::framegraph_remote_target::RemoteFrameGraphTarget;
 using termin::framegraph_remote_target::TargetServiceConfig;
 
-namespace
-{
+namespace {
 
-    void close_test_socket(TestSocket socket)
-    {
+    void close_test_socket(TestSocket socket) {
         if (socket == invalid_test_socket)
             return;
 #if defined(_WIN32)
@@ -64,16 +61,13 @@ namespace
 #endif
     }
 
-    bool send_all(TestSocket socket, std::span<const std::uint8_t> bytes)
-    {
+    bool send_all(TestSocket socket, std::span<const std::uint8_t> bytes) {
         std::size_t offset = 0;
-        while (offset < bytes.size())
-        {
-            const int count =
-                send(socket,
-                     reinterpret_cast<const char*>(bytes.data() + offset),
-                     static_cast<int>(bytes.size() - offset),
-                     0);
+        while (offset < bytes.size()) {
+            const int count = send(socket,
+                                   reinterpret_cast<const char*>(bytes.data() + offset),
+                                   static_cast<int>(bytes.size() - offset),
+                                   0);
             if (count <= 0)
                 return false;
             offset += static_cast<std::size_t>(count);
@@ -81,16 +75,11 @@ namespace
         return true;
     }
 
-    bool receive_all(TestSocket socket, std::span<std::uint8_t> bytes)
-    {
+    bool receive_all(TestSocket socket, std::span<std::uint8_t> bytes) {
         std::size_t offset = 0;
-        while (offset < bytes.size())
-        {
-            const int count =
-                recv(socket,
-                     reinterpret_cast<char*>(bytes.data() + offset),
-                     static_cast<int>(bytes.size() - offset),
-                     0);
+        while (offset < bytes.size()) {
+            const int count = recv(
+                socket, reinterpret_cast<char*>(bytes.data() + offset), static_cast<int>(bytes.size() - offset), 0);
             if (count <= 0)
                 return false;
             offset += static_cast<std::size_t>(count);
@@ -98,18 +87,13 @@ namespace
         return true;
     }
 
-    TestSocket connect_client(std::uint16_t port)
-    {
+    TestSocket connect_client(std::uint16_t port) {
         const TestSocket socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (socket == invalid_test_socket)
             return socket;
 #if defined(_WIN32)
         DWORD timeout = 2000;
-        setsockopt(socket,
-                   SOL_SOCKET,
-                   SO_RCVTIMEO,
-                   reinterpret_cast<const char*>(&timeout),
-                   sizeof(timeout));
+        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
 #else
         timeval timeout{2, 0};
         setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
@@ -118,27 +102,19 @@ namespace
         address.sin_family = AF_INET;
         address.sin_port = htons(port);
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if (connect(socket,
-                    reinterpret_cast<const sockaddr*>(&address),
-                    sizeof(address)) != 0)
-        {
+        if (connect(socket, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
             close_test_socket(socket);
             return invalid_test_socket;
         }
         return socket;
     }
 
-    bool send_wire(TestSocket socket,
-                   const Message& message,
-                   std::uint64_t sequence,
-                   std::uint64_t session_id)
-    {
+    bool send_wire(TestSocket socket, const Message& message, std::uint64_t sequence, std::uint64_t session_id) {
         const auto encoded = encode_message(message, sequence, session_id);
         return encoded && send_all(socket, *encoded.value);
     }
 
-    std::optional<DecodedMessage> receive_wire(TestSocket socket)
-    {
+    std::optional<DecodedMessage> receive_wire(TestSocket socket) {
         std::vector<std::uint8_t> bytes(envelope_size);
         if (!receive_all(socket, bytes))
             return std::nullopt;
@@ -147,9 +123,7 @@ namespace
             return std::nullopt;
         bytes.resize(envelope_size + envelope.value->payload_length);
         if (envelope.value->payload_length > 0 &&
-            !receive_all(socket,
-                         std::span<std::uint8_t>(bytes).subspan(envelope_size)))
-        {
+            !receive_all(socket, std::span<std::uint8_t>(bytes).subspan(envelope_size))) {
             return std::nullopt;
         }
         auto decoded = decode_message(bytes);
@@ -158,11 +132,9 @@ namespace
         return std::move(*decoded.value);
     }
 
-    bool wait_until(const auto& predicate)
-    {
+    bool wait_until(const auto& predicate) {
         const auto deadline = std::chrono::steady_clock::now() + 2s;
-        while (std::chrono::steady_clock::now() < deadline)
-        {
+        while (std::chrono::steady_clock::now() < deadline) {
             if (predicate())
                 return true;
             std::this_thread::sleep_for(1ms);
@@ -170,17 +142,14 @@ namespace
         return predicate();
     }
 
-    struct ClientSession
-    {
+    struct ClientSession {
         TestSocket socket = invalid_test_socket;
         std::uint64_t id = 0;
     };
 
-    ClientSession
-    handshake(RemoteFrameGraphTarget& target,
-              const std::string& token,
-              std::uint32_t max_payload_bytes = WireLimits::max_payload_bytes)
-    {
+    ClientSession handshake(RemoteFrameGraphTarget& target,
+                            const std::string& token,
+                            std::uint32_t max_payload_bytes = WireLimits::max_payload_bytes) {
         ClientSession result;
         result.socket = connect_client(target.status().listening_port);
         if (result.socket == invalid_test_socket)
@@ -188,18 +157,14 @@ namespace
         ClientHello hello;
         hello.authentication_token = token;
         hello.max_payload_bytes = max_payload_bytes;
-        hello.max_chunk_bytes =
-            std::min(WireLimits::max_chunk_bytes, max_payload_bytes - 1);
-        if (!send_wire(result.socket, hello, 1, 0))
-        {
+        hello.max_chunk_bytes = std::min(WireLimits::max_chunk_bytes, max_payload_bytes - 1);
+        if (!send_wire(result.socket, hello, 1, 0)) {
             close_test_socket(result.socket);
             result.socket = invalid_test_socket;
             return result;
         }
         const auto response = receive_wire(result.socket);
-        if (!response ||
-            !std::holds_alternative<TargetHello>(response->message))
-        {
+        if (!response || !std::holds_alternative<TargetHello>(response->message)) {
             close_test_socket(result.socket);
             result.socket = invalid_test_socket;
             return result;
@@ -208,41 +173,33 @@ namespace
         return result;
     }
 
-    void allow_io_and_pump(RemoteFrameGraphTarget& target)
-    {
-        for (int attempt = 0; attempt < 30; ++attempt)
-        {
+    void allow_io_and_pump(RemoteFrameGraphTarget& target) {
+        for (int attempt = 0; attempt < 30; ++attempt) {
             std::this_thread::sleep_for(1ms);
             target.pump_render_thread();
         }
     }
 
-    class ProbePass final : public termin::CxxFramePass
-    {
+    class ProbePass final : public termin::CxxFramePass {
     public:
-        ProbePass()
-        {
+        ProbePass() {
             pass_name_set("RemoteProbe");
         }
-        std::set<const char*> compute_reads() const override
-        {
+        std::set<const char*> compute_reads() const override {
             return {"input_color"};
         }
-        std::set<const char*> compute_writes() const override
-        {
+        std::set<const char*> compute_writes() const override {
             return {"probe_color"};
         }
-        std::vector<std::string> get_internal_symbols() const override
-        {
+        std::vector<std::string> get_internal_symbols() const override {
             return {"before_probe", "after_probe"};
         }
     };
 
-    class RenderFixture
-    {
+    class RenderFixture {
     public:
-        RenderFixture() : manager(topology)
-        {
+        RenderFixture()
+            : manager(topology) {
             tc_display_pool_init();
             scene = tc_scene_new();
             target = tc_render_target_new("RemoteTarget");
@@ -259,8 +216,7 @@ namespace
             debugger.emplace(manager);
         }
 
-        ~RenderFixture()
-        {
+        ~RenderFixture() {
             debugger.reset();
             manager.remove_editor_display(display);
             tc_display_remove_viewport(display, viewport);
@@ -285,9 +241,7 @@ namespace
 
 } // namespace
 
-TEST_CASE(
-    "Remote framegraph target validates lifecycle and owner configuration")
-{
+TEST_CASE("Remote framegraph target validates lifecycle and owner configuration") {
     RenderFixture fixture;
 
     TargetServiceConfig forbidden;
@@ -311,8 +265,7 @@ TEST_CASE(
     target.stop();
 }
 
-TEST_CASE("Remote framegraph target survives render debugger recreation")
-{
+TEST_CASE("Remote framegraph target survives render debugger recreation") {
     TargetServiceConfig config;
     config.authentication_token = "lifecycle-token";
     config.platform = "test";
@@ -333,8 +286,7 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
         const auto message = receive_wire(client.socket);
         REQUIRE(message.has_value());
         REQUIRE(std::holds_alternative<TopologySnapshot>(message->message));
-        const TopologySnapshot topology =
-            std::get<TopologySnapshot>(message->message);
+        const TopologySnapshot topology = std::get<TopologySnapshot>(message->message);
         const auto status_message = receive_wire(client.socket);
         REQUIRE(status_message.has_value());
         REQUIRE(std::holds_alternative<Status>(status_message->message));
@@ -343,14 +295,12 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
     const auto lifecycle_update = [&] {
         const auto topology_message = receive_wire(client.socket);
         REQUIRE(topology_message.has_value());
-        REQUIRE(std::holds_alternative<TopologySnapshot>(
-            topology_message->message));
+        REQUIRE(std::holds_alternative<TopologySnapshot>(topology_message->message));
         const auto status_message = receive_wire(client.socket);
         REQUIRE(status_message.has_value());
         REQUIRE(std::holds_alternative<Status>(status_message->message));
-        return std::pair{
-            std::get<TopologySnapshot>(topology_message->message),
-            std::get<Status>(status_message->message)};
+        return std::pair{std::get<TopologySnapshot>(topology_message->message),
+                         std::get<Status>(status_message->message)};
     };
 
     const TopologySnapshot detached = refresh(1);
@@ -394,8 +344,7 @@ TEST_CASE("Remote framegraph target survives render debugger recreation")
 }
 
 TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
-          "selection and reconnect")
-{
+          "selection and reconnect") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "smoke-token";
@@ -429,13 +378,11 @@ TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
     allow_io_and_pump(target);
     const auto topology_message = receive_wire(client.socket);
     REQUIRE(topology_message.has_value());
-    REQUIRE(
-        std::holds_alternative<TopologySnapshot>(topology_message->message));
+    REQUIRE(std::holds_alternative<TopologySnapshot>(topology_message->message));
     const auto topology = std::get<TopologySnapshot>(topology_message->message);
     CHECK_EQ(topology_message->envelope.session_id, client.id);
     REQUIRE_EQ(topology.targets.size(), 1u);
-    CHECK_EQ(topology.targets[0].label,
-             "RemoteDisplay / RemoteViewport / RemoteTarget");
+    CHECK_EQ(topology.targets[0].label, "RemoteDisplay / RemoteViewport / RemoteTarget");
     REQUIRE_EQ(topology.passes.size(), 1u);
     CHECK_EQ(topology.passes[0].name, "RemoteProbe");
     REQUIRE_EQ(topology.passes[0].reads.size(), 1u);
@@ -449,8 +396,7 @@ TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
     const auto refresh_status_message = receive_wire(client.socket);
     REQUIRE(refresh_status_message.has_value());
     REQUIRE(std::holds_alternative<Status>(refresh_status_message->message));
-    CHECK(std::get<Status>(refresh_status_message->message).code ==
-          StatusCode::completed);
+    CHECK(std::get<Status>(refresh_status_message->message).code == StatusCode::completed);
 
     Command stale;
     stale.request_id = 11;
@@ -462,8 +408,7 @@ TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
     const auto stale_message = receive_wire(client.socket);
     REQUIRE(stale_message.has_value());
     REQUIRE(std::holds_alternative<Status>(stale_message->message));
-    CHECK(std::get<Status>(stale_message->message).code ==
-          StatusCode::stale_revision);
+    CHECK(std::get<Status>(stale_message->message).code == StatusCode::stale_revision);
 
     Command select = stale;
     select.request_id = 12;
@@ -494,8 +439,7 @@ TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
     target.stop();
 }
 
-TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work")
-{
+TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "capture-token";
@@ -511,10 +455,8 @@ TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work"
     allow_io_and_pump(target);
     const auto topology_message = receive_wire(client.socket);
     REQUIRE(topology_message.has_value());
-    REQUIRE(std::holds_alternative<TopologySnapshot>(
-        topology_message->message));
-    const TopologySnapshot topology =
-        std::get<TopologySnapshot>(topology_message->message);
+    REQUIRE(std::holds_alternative<TopologySnapshot>(topology_message->message));
+    const TopologySnapshot topology = std::get<TopologySnapshot>(topology_message->message);
     REQUIRE(receive_wire(client.socket).has_value());
     REQUIRE(topology.selected_target_id != 0);
     REQUIRE_FALSE(topology.resources.empty());
@@ -548,8 +490,7 @@ TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work"
     target.stop();
 }
 
-TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and idempotent")
-{
+TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and idempotent") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "continuous-token";
@@ -565,10 +506,8 @@ TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and ide
     allow_io_and_pump(target);
     const auto topology_message = receive_wire(client.socket);
     REQUIRE(topology_message.has_value());
-    REQUIRE(std::holds_alternative<TopologySnapshot>(
-        topology_message->message));
-    const TopologySnapshot topology =
-        std::get<TopologySnapshot>(topology_message->message);
+    REQUIRE(std::holds_alternative<TopologySnapshot>(topology_message->message));
+    const TopologySnapshot topology = std::get<TopologySnapshot>(topology_message->message);
     REQUIRE(receive_wire(client.socket).has_value());
 
     Command stream;
@@ -586,10 +525,8 @@ TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and ide
     const auto stream_status = receive_wire(client.socket);
     REQUIRE(stream_status.has_value());
     REQUIRE(std::holds_alternative<Status>(stream_status->message));
-    CHECK(std::get<Status>(stream_status->message).code ==
-          StatusCode::accepted);
-    CHECK(std::get<Status>(stream_status->message).state ==
-          SessionState::streaming);
+    CHECK(std::get<Status>(stream_status->message).code == StatusCode::accepted);
+    CHECK(std::get<Status>(stream_status->message).state == SessionState::streaming);
 
     Command stop;
     stop.request_id = 62;
@@ -610,8 +547,7 @@ TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and ide
     allow_io_and_pump(target);
     const auto repeated_stop = receive_wire(client.socket);
     REQUIRE(repeated_stop.has_value());
-    CHECK(std::get<Status>(repeated_stop->message).code ==
-          StatusCode::completed);
+    CHECK(std::get<Status>(repeated_stop->message).code == StatusCode::completed);
 
     Command burst = stream;
     burst.request_id = 64;
@@ -624,8 +560,7 @@ TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and ide
     allow_io_and_pump(target);
     const auto burst_status = receive_wire(client.socket);
     REQUIRE(burst_status.has_value());
-    CHECK(std::get<Status>(burst_status->message).code ==
-          StatusCode::accepted);
+    CHECK(std::get<Status>(burst_status->message).code == StatusCode::accepted);
 
     Command cancel;
     cancel.request_id = 65;
@@ -643,8 +578,7 @@ TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and ide
     target.stop();
 }
 
-TEST_CASE("Remote framegraph command queue rejects the newest command")
-{
+TEST_CASE("Remote framegraph command queue rejects the newest command") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "queue-token";
@@ -676,8 +610,7 @@ TEST_CASE("Remote framegraph command queue rejects the newest command")
     target.stop();
 }
 
-TEST_CASE("Remote framegraph target honors the client's payload limit")
-{
+TEST_CASE("Remote framegraph target honors the client's payload limit") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "small-client-token";
@@ -694,15 +627,13 @@ TEST_CASE("Remote framegraph target honors the client's payload limit")
     const auto response = receive_wire(client.socket);
     REQUIRE(response.has_value());
     REQUIRE(std::holds_alternative<Status>(response->message));
-    CHECK(std::get<Status>(response->message).code ==
-          StatusCode::limit_exceeded);
+    CHECK(std::get<Status>(response->message).code == StatusCode::limit_exceeded);
 
     close_test_socket(client.socket);
     target.stop();
 }
 
-TEST_CASE("Remote framegraph outbound queue reports drops after recovery")
-{
+TEST_CASE("Remote framegraph outbound queue reports drops after recovery") {
     RenderFixture fixture;
     TargetServiceConfig config;
     config.authentication_token = "outbound-token";
@@ -713,8 +644,7 @@ TEST_CASE("Remote framegraph outbound queue reports drops after recovery")
     ClientSession client = handshake(target, "outbound-token");
     REQUIRE(client.socket != invalid_test_socket);
 
-    for (std::uint64_t index = 0; index < 16; ++index)
-    {
+    for (std::uint64_t index = 0; index < 16; ++index) {
         Command fill;
         fill.request_id = 30 + index;
         fill.kind = CommandKind::request_status;
@@ -729,32 +659,23 @@ TEST_CASE("Remote framegraph outbound queue reports drops after recovery")
     recovery.kind = CommandKind::request_status;
     const auto encoded_recovery = encode_message(recovery, 18, client.id);
     REQUIRE(encoded_recovery);
-    REQUIRE(send_all(client.socket,
-                     std::span<const std::uint8_t>(*encoded_recovery.value)
-                         .first(envelope_size)));
+    REQUIRE(send_all(client.socket, std::span<const std::uint8_t>(*encoded_recovery.value).first(envelope_size)));
     std::this_thread::sleep_for(50ms);
     target.pump_render_thread();
-    REQUIRE(wait_until(
-        [&] { return target.status().dropped_outbound_messages >= 1; }));
-    REQUIRE(send_all(client.socket,
-                     std::span<const std::uint8_t>(*encoded_recovery.value)
-                         .subspan(envelope_size)));
+    REQUIRE(wait_until([&] { return target.status().dropped_outbound_messages >= 1; }));
+    REQUIRE(send_all(client.socket, std::span<const std::uint8_t>(*encoded_recovery.value).subspan(envelope_size)));
     allow_io_and_pump(target);
 
     bool saw_drop = false;
     bool saw_recovery = false;
-    for (int attempt = 0; attempt < 18 && !saw_recovery; ++attempt)
-    {
+    for (int attempt = 0; attempt < 18 && !saw_recovery; ++attempt) {
         const auto message = receive_wire(client.socket);
         REQUIRE(message.has_value());
-        if (std::holds_alternative<DropEvent>(message->message))
-        {
+        if (std::holds_alternative<DropEvent>(message->message)) {
             saw_drop = true;
             CHECK(std::get<DropEvent>(message->message).dropped_items >= 1);
         }
-        if (std::holds_alternative<Status>(message->message) &&
-            std::get<Status>(message->message).request_id == 50)
-        {
+        if (std::holds_alternative<Status>(message->message) && std::get<Status>(message->message).request_id == 50) {
             saw_recovery = true;
         }
     }

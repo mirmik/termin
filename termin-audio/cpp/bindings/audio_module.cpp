@@ -33,29 +33,30 @@ NB_MODULE(_audio_native, module) {
         .def("set_source_path", &TcAudioClip::set_source_path, nb::arg("source_path"))
         .def_static("from_uuid", &TcAudioClip::from_uuid, nb::arg("uuid"))
         .def_static(
-            "declare",
-            &TcAudioClip::declare,
-            nb::arg("uuid"),
-            nb::arg("name") = "",
-            nb::arg("source_path") = ""
-        )
-        .def("serialize", [](const TcAudioClip& clip) {
-            nb::dict result;
-            if (!clip.is_valid()) {
-                result["type"] = "none";
-                return result;
-            }
-            result["type"] = "uuid";
-            result["uuid"] = clip.uuid();
-            result["name"] = clip.name();
-            return result;
-        })
-        .def_static("deserialize", [](nb::dict data) {
-            if (!data.contains("uuid")) return TcAudioClip();
-            return TcAudioClip::from_uuid(nb::cast<std::string>(data["uuid"]));
-        }, nb::arg("data"))
+            "declare", &TcAudioClip::declare, nb::arg("uuid"), nb::arg("name") = "", nb::arg("source_path") = "")
+        .def("serialize",
+             [](const TcAudioClip& clip) {
+                 nb::dict result;
+                 if (!clip.is_valid()) {
+                     result["type"] = "none";
+                     return result;
+                 }
+                 result["type"] = "uuid";
+                 result["uuid"] = clip.uuid();
+                 result["name"] = clip.name();
+                 return result;
+             })
+        .def_static(
+            "deserialize",
+            [](nb::dict data) {
+                if (!data.contains("uuid"))
+                    return TcAudioClip();
+                return TcAudioClip::from_uuid(nb::cast<std::string>(data["uuid"]));
+            },
+            nb::arg("data"))
         .def("__repr__", [](const TcAudioClip& clip) {
-            if (!clip.is_valid()) return std::string("<TcAudioClip invalid>");
+            if (!clip.is_valid())
+                return std::string("<TcAudioClip invalid>");
             return "<TcAudioClip '" + clip.name() + "' uuid='" + clip.uuid() + "'>";
         });
 
@@ -72,46 +73,60 @@ NB_MODULE(_audio_native, module) {
         .def_prop_rw(
             "looping",
             [](const TcAudioVoice& voice) { return tc_audio_voice_is_looping(voice.handle); },
-            [](TcAudioVoice& voice, bool value) { tc_audio_voice_set_looping(voice.handle, value); }
-        )
+            [](TcAudioVoice& voice, bool value) { tc_audio_voice_set_looping(voice.handle, value); })
         .def_prop_rw(
             "volume",
             [](const TcAudioVoice& voice) { return tc_audio_voice_get_volume(voice.handle); },
-            [](TcAudioVoice& voice, float value) { tc_audio_voice_set_volume(voice.handle, value); }
-        )
+            [](TcAudioVoice& voice, float value) { tc_audio_voice_set_volume(voice.handle, value); })
         .def_prop_rw(
             "pitch",
             [](const TcAudioVoice& voice) { return tc_audio_voice_get_pitch(voice.handle); },
-            [](TcAudioVoice& voice, float value) { tc_audio_voice_set_pitch(voice.handle, value); }
-        )
-        .def("set_spatialization", [](TcAudioVoice& voice, bool enabled) {
-            tc_audio_voice_set_spatialization(voice.handle, enabled);
-        }, nb::arg("enabled"))
-        .def("set_position", [](TcAudioVoice& voice, float x, float y, float z) {
-            tc_audio_voice_set_position(voice.handle, x, y, z);
-        }, nb::arg("x"), nb::arg("y"), nb::arg("z"))
-        .def("get_position", [](const TcAudioVoice& voice) {
-            float x = 0.0f;
-            float y = 0.0f;
-            float z = 0.0f;
-            tc_audio_voice_get_position(voice.handle, &x, &y, &z);
-            return nb::make_tuple(x, y, z);
-        })
-        .def("set_velocity", [](TcAudioVoice& voice, float x, float y, float z) {
-            tc_audio_voice_set_velocity(voice.handle, x, y, z);
-        }, nb::arg("x"), nb::arg("y"), nb::arg("z"))
-        .def("set_distance_range", [](TcAudioVoice& voice, float minimum, float maximum) {
-            tc_audio_voice_set_distance_range(voice.handle, minimum, maximum);
-        }, nb::arg("minimum"), nb::arg("maximum"))
+            [](TcAudioVoice& voice, float value) { tc_audio_voice_set_pitch(voice.handle, value); })
+        .def(
+            "set_spatialization",
+            [](TcAudioVoice& voice, bool enabled) { tc_audio_voice_set_spatialization(voice.handle, enabled); },
+            nb::arg("enabled"))
+        .def(
+            "set_position",
+            [](TcAudioVoice& voice, float x, float y, float z) { tc_audio_voice_set_position(voice.handle, x, y, z); },
+            nb::arg("x"),
+            nb::arg("y"),
+            nb::arg("z"))
+        .def("get_position",
+             [](const TcAudioVoice& voice) {
+                 float x = 0.0f;
+                 float y = 0.0f;
+                 float z = 0.0f;
+                 tc_audio_voice_get_position(voice.handle, &x, &y, &z);
+                 return nb::make_tuple(x, y, z);
+             })
+        .def(
+            "set_velocity",
+            [](TcAudioVoice& voice, float x, float y, float z) { tc_audio_voice_set_velocity(voice.handle, x, y, z); },
+            nb::arg("x"),
+            nb::arg("y"),
+            nb::arg("z"))
+        .def(
+            "set_distance_range",
+            [](TcAudioVoice& voice, float minimum, float maximum) {
+                tc_audio_voice_set_distance_range(voice.handle, minimum, maximum);
+            },
+            nb::arg("minimum"),
+            nb::arg("maximum"))
         .def_static("create", &TcAudioVoice::create, nb::arg("clip"));
 
-    module.def("engine_initialize", [](bool no_device, uint32_t sample_rate, uint16_t channels) {
-        tc_audio_engine_config config = tc_audio_engine_config_default();
-        config.no_device = no_device;
-        config.sample_rate = sample_rate;
-        config.channels = channels;
-        return tc_audio_engine_init(&config);
-    }, nb::arg("no_device") = false, nb::arg("sample_rate") = 48000, nb::arg("channels") = 2);
+    module.def(
+        "engine_initialize",
+        [](bool no_device, uint32_t sample_rate, uint16_t channels) {
+            tc_audio_engine_config config = tc_audio_engine_config_default();
+            config.no_device = no_device;
+            config.sample_rate = sample_rate;
+            config.channels = channels;
+            return tc_audio_engine_init(&config);
+        },
+        nb::arg("no_device") = false,
+        nb::arg("sample_rate") = 48000,
+        nb::arg("channels") = 2);
     module.def("engine_shutdown", &tc_audio_engine_shutdown);
     module.def("engine_is_initialized", &tc_audio_engine_is_initialized);
     module.def("engine_has_device", &tc_audio_engine_has_device);
@@ -131,15 +146,9 @@ NB_MODULE(_audio_native, module) {
     module.def("engine_set_listener_velocity", &tc_audio_engine_set_listener_velocity);
     module.def("voice_count", &tc_audio_voice_count);
     module.def("voice_capacity", &tc_audio_voice_capacity);
-    module.def("voice_is_playing_at", [](size_t index) {
-        return tc_audio_voice_is_playing(tc_audio_voice_at(index));
-    });
-    module.def("voice_is_paused_at", [](size_t index) {
-        return tc_audio_voice_is_paused(tc_audio_voice_at(index));
-    });
-    module.def("voice_volume_at", [](size_t index) {
-        return tc_audio_voice_get_volume(tc_audio_voice_at(index));
-    });
+    module.def("voice_is_playing_at", [](size_t index) { return tc_audio_voice_is_playing(tc_audio_voice_at(index)); });
+    module.def("voice_is_paused_at", [](size_t index) { return tc_audio_voice_is_paused(tc_audio_voice_at(index)); });
+    module.def("voice_volume_at", [](size_t index) { return tc_audio_voice_get_volume(tc_audio_voice_at(index)); });
     module.def("voice_position_at", [](size_t index) {
         float x = 0.0f;
         float y = 0.0f;

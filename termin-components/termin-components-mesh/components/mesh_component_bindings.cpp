@@ -12,15 +12,12 @@ NB_MODULE(_components_mesh_native, m) {
     nb::module_::import_("termin.scene._scene_native");
 
     nb::class_<MeshComponent, CxxComponent>(m, "MeshComponent")
-        .def("__init__", [](nb::handle self) {
-            cxx_component_init<MeshComponent>(self);
-        })
-        .def_prop_rw("mesh",
+        .def("__init__", [](nb::handle self) { cxx_component_init<MeshComponent>(self); })
+        .def_prop_rw(
+            "mesh",
             [](MeshComponent& c) -> TcMesh& { return c.mesh; },
             [](MeshComponent& c, const TcMesh& v) { c.set_mesh(v); })
-        .def("get_mesh", [](MeshComponent& c) -> TcMesh& {
-            return c.get_mesh();
-        })
+        .def("get_mesh", [](MeshComponent& c) -> TcMesh& { return c.get_mesh(); })
         .def("set_mesh", &MeshComponent::set_mesh)
         .def("set_generated_mesh", &MeshComponent::set_generated_mesh)
         .def("set_mesh_by_name", &MeshComponent::set_mesh_by_name)

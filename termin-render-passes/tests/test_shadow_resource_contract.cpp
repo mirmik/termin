@@ -19,8 +19,7 @@ extern "C" {
 #include <render/tc_pass.h>
 }
 
-TEST_CASE("shadow resource is a registered generic non-texture resource")
-{
+TEST_CASE("shadow resource is a registered generic non-texture resource") {
     if (termin::has_frame_graph_resource_type("shadow_map_array")) {
         REQUIRE(termin::unregister_frame_graph_resource_type("shadow_map_array"));
     }
@@ -32,8 +31,7 @@ TEST_CASE("shadow resource is a registered generic non-texture resource")
         "shadow_map_array",
         std::pair<int, int>{2048, 2048},
     };
-    std::unique_ptr<termin::FrameGraphResource> resource(
-        termin::create_frame_graph_resource(spec));
+    std::unique_ptr<termin::FrameGraphResource> resource(termin::create_frame_graph_resource(spec));
     REQUIRE(resource != nullptr);
 
     auto* shadow = dynamic_cast<termin::ShadowMapArrayResource*>(resource.get());
@@ -43,26 +41,21 @@ TEST_CASE("shadow resource is a registered generic non-texture resource")
     termin::ShadowMapArrayEntry entry;
     entry.depth_tex2 = tgfx::TextureHandle{42};
     shadow->add_entry(entry);
-    const termin::FrameGraphResourceSampledTexture sampled =
-        termin::frame_graph_resource_sampled_texture(*resource);
+    const termin::FrameGraphResourceSampledTexture sampled = termin::frame_graph_resource_sampled_texture(*resource);
     CHECK(sampled.texture == entry.depth_tex2);
-    CHECK(sampled.kind
-        == termin::FrameGraphResourceSampledTextureKind::Depth);
+    CHECK(sampled.kind == termin::FrameGraphResourceSampledTextureKind::Depth);
 
     termin::ExecuteContext context;
     context.frame_graph_resources.emplace("shadow_maps", resource.get());
     context.frame_graph_resources.emplace("shadow_maps_alias", resource.get());
-    CHECK(context.get_frame_graph_resource_as<termin::ShadowMapArrayResource>(
-        "shadow_maps") == shadow);
-    CHECK(context.get_frame_graph_resource_as<termin::ShadowMapArrayResource>(
-        "shadow_maps_alias") == shadow);
+    CHECK(context.get_frame_graph_resource_as<termin::ShadowMapArrayResource>("shadow_maps") == shadow);
+    CHECK(context.get_frame_graph_resource_as<termin::ShadowMapArrayResource>("shadow_maps_alias") == shadow);
 
     resource.reset();
     CHECK(termin::unregister_frame_graph_resource_type("shadow_map_array"));
 }
 
-TEST_CASE("ShadowPass receives and reuses its registered generic resource")
-{
+TEST_CASE("ShadowPass receives and reuses its registered generic resource") {
     REQUIRE(termin::register_shadow_map_array_resource_type());
     if (!tc_pass_registry_has("CxxFramePass")) {
         termin::register_builtin_render_pass_types();
@@ -72,10 +65,7 @@ TEST_CASE("ShadowPass receives and reuses its registered generic resource")
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("shadow-resource-contract");
     REQUIRE(scene.valid());
-    termin::TcSceneRenderItemSource source(
-        scene.handle(),
-        nullptr,
-        TC_SCENE_FILTER_NONE);
+    termin::TcSceneRenderItemSource source(scene.handle(), nullptr, TC_SCENE_FILTER_NONE);
     termin::RenderItemSnapshot snapshot;
     REQUIRE(source.publish(snapshot, {}));
 
@@ -93,18 +83,18 @@ TEST_CASE("ShadowPass receives and reuses its registered generic resource")
     target.render_rect = {0, 0, 1, 1};
     termin::RenderExecution execution;
     execution.pipeline = &pipeline;
-    execution.targets.emplace(target.name, termin::RenderExecutionTarget{
-        .context = &target,
-        .render_items = &snapshot,
-        .capabilities = &capabilities,
-    });
+    execution.targets.emplace(target.name,
+                              termin::RenderExecutionTarget{
+                                  .context = &target,
+                                  .render_items = &snapshot,
+                                  .capabilities = &capabilities,
+                              });
 
     termin::RenderEngine engine;
     engine.execute_pipeline(execution);
     auto resource_it = pipeline.cache().frame_graph_resources.find("shadow_maps");
     REQUIRE(resource_it != pipeline.cache().frame_graph_resources.end());
-    auto* shadow = dynamic_cast<termin::ShadowMapArrayResource*>(
-        resource_it->second.get());
+    auto* shadow = dynamic_cast<termin::ShadowMapArrayResource*>(resource_it->second.get());
     REQUIRE(shadow != nullptr);
 
     termin::ShadowMapArrayEntry stale_entry;

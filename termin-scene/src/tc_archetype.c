@@ -1,8 +1,8 @@
 // tc_archetype.c - SoA archetype storage implementation
 #include "core/tc_archetype.h"
-#include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tcbase/tc_log.h>
 
 #ifdef _WIN32
 #define tc_strdup _strdup
@@ -23,10 +23,10 @@ tc_soa_type_registry* tc_soa_global_registry(void) {
 }
 
 tc_soa_type_id tc_soa_register_type(tc_soa_type_registry* reg, const tc_soa_type_desc* desc) {
-    if (!reg || !desc) return TC_SOA_TYPE_INVALID;
+    if (!reg || !desc)
+        return TC_SOA_TYPE_INVALID;
     if (desc->element_size == 0) {
-        tc_log_error("[tc_soa] Cannot register type '%s': element_size is 0",
-                     desc->name ? desc->name : "?");
+        tc_log_error("[tc_soa] Cannot register type '%s': element_size is 0", desc->name ? desc->name : "?");
         return TC_SOA_TYPE_INVALID;
     }
 
@@ -41,7 +41,8 @@ tc_soa_type_id tc_soa_register_type(tc_soa_type_registry* reg, const tc_soa_type
 
     if (reg->count >= TC_SOA_MAX_TYPES) {
         tc_log_error("[tc_soa] Cannot register type '%s': max %d types reached",
-                     desc->name ? desc->name : "?", TC_SOA_MAX_TYPES);
+                     desc->name ? desc->name : "?",
+                     TC_SOA_MAX_TYPES);
         return TC_SOA_TYPE_INVALID;
     }
 
@@ -57,7 +58,8 @@ tc_soa_type_id tc_soa_register_type(tc_soa_type_registry* reg, const tc_soa_type
 }
 
 const tc_soa_type_desc* tc_soa_get_type(const tc_soa_type_registry* reg, tc_soa_type_id id) {
-    if (!reg || id >= reg->count) return NULL;
+    if (!reg || id >= reg->count)
+        return NULL;
     return &reg->types[id];
 }
 
@@ -68,8 +70,10 @@ const tc_soa_type_desc* tc_soa_get_type(const tc_soa_type_registry* reg, tc_soa_
 // Find index of type_id in archetype's type_ids array. Returns -1 if not found.
 static int archetype_find_type_index(const tc_archetype* arch, tc_soa_type_id type_id) {
     for (size_t i = 0; i < arch->type_count; i++) {
-        if (arch->type_ids[i] == type_id) return (int)i;
-        if (arch->type_ids[i] > type_id) return -1; // sorted, no point continuing
+        if (arch->type_ids[i] == type_id)
+            return (int)i;
+        if (arch->type_ids[i] > type_id)
+            return -1; // sorted, no point continuing
     }
     return -1;
 }
@@ -85,8 +89,7 @@ static void archetype_grow(tc_archetype* arch, const tc_soa_type_registry* reg) 
 
         arch->data[i] = realloc(arch->data[i], new_cap * elem_size);
         // Zero-init new slots
-        memset((char*)arch->data[i] + arch->capacity * elem_size, 0,
-               (new_cap - arch->capacity) * elem_size);
+        memset((char*)arch->data[i] + arch->capacity * elem_size, 0, (new_cap - arch->capacity) * elem_size);
     }
 
     arch->capacity = new_cap;
@@ -96,14 +99,13 @@ static void archetype_grow(tc_archetype* arch, const tc_soa_type_registry* reg) 
 // Archetype public API
 // ============================================================================
 
-tc_archetype* tc_archetype_create(
-    uint64_t type_mask,
-    const tc_soa_type_id* type_ids,
-    size_t type_count,
-    const tc_soa_type_registry* reg
-) {
+tc_archetype* tc_archetype_create(uint64_t type_mask,
+                                  const tc_soa_type_id* type_ids,
+                                  size_t type_count,
+                                  const tc_soa_type_registry* reg) {
     tc_archetype* arch = (tc_archetype*)calloc(1, sizeof(tc_archetype));
-    if (!arch) return NULL;
+    if (!arch)
+        return NULL;
 
     arch->type_mask = type_mask;
     arch->type_count = type_count;
@@ -142,7 +144,8 @@ tc_archetype* tc_archetype_create(
 }
 
 void tc_archetype_destroy(tc_archetype* arch, const tc_soa_type_registry* reg) {
-    if (!arch) return;
+    if (!arch)
+        return;
 
     // Call destroy on all live elements
     for (size_t ti = 0; ti < arch->type_count; ti++) {
@@ -161,11 +164,7 @@ void tc_archetype_destroy(tc_archetype* arch, const tc_soa_type_registry* reg) {
     free(arch);
 }
 
-uint32_t tc_archetype_alloc_row(
-    tc_archetype* arch,
-    tc_entity_id entity,
-    const tc_soa_type_registry* reg
-) {
+uint32_t tc_archetype_alloc_row(tc_archetype* arch, tc_entity_id entity, const tc_soa_type_registry* reg) {
     if (arch->count >= arch->capacity) {
         archetype_grow(arch, reg);
     }
@@ -188,11 +187,7 @@ uint32_t tc_archetype_alloc_row(
 }
 
 // Internal swap-remove without calling destroy (shared by free_row and detach_row)
-static tc_entity_id archetype_swap_remove(
-    tc_archetype* arch,
-    uint32_t row,
-    const tc_soa_type_registry* reg
-) {
+static tc_entity_id archetype_swap_remove(tc_archetype* arch, uint32_t row, const tc_soa_type_registry* reg) {
     uint32_t last = (uint32_t)(arch->count - 1);
     tc_entity_id swapped = TC_ENTITY_ID_INVALID;
 
@@ -213,12 +208,9 @@ static tc_entity_id archetype_swap_remove(
     return swapped;
 }
 
-tc_entity_id tc_archetype_free_row(
-    tc_archetype* arch,
-    uint32_t row,
-    const tc_soa_type_registry* reg
-) {
-    if (!arch || row >= arch->count) return TC_ENTITY_ID_INVALID;
+tc_entity_id tc_archetype_free_row(tc_archetype* arch, uint32_t row, const tc_soa_type_registry* reg) {
+    if (!arch || row >= arch->count)
+        return TC_ENTITY_ID_INVALID;
 
     // Call destroy on elements being removed
     for (size_t i = 0; i < arch->type_count; i++) {
@@ -232,34 +224,34 @@ tc_entity_id tc_archetype_free_row(
     return archetype_swap_remove(arch, row, reg);
 }
 
-tc_entity_id tc_archetype_detach_row(
-    tc_archetype* arch,
-    uint32_t row,
-    const tc_soa_type_registry* reg
-) {
-    if (!arch || row >= arch->count) return TC_ENTITY_ID_INVALID;
+tc_entity_id tc_archetype_detach_row(tc_archetype* arch, uint32_t row, const tc_soa_type_registry* reg) {
+    if (!arch || row >= arch->count)
+        return TC_ENTITY_ID_INVALID;
     // Swap-remove WITHOUT calling destroy — data was already copied elsewhere
     return archetype_swap_remove(arch, row, reg);
 }
 
 void* tc_archetype_get_array(const tc_archetype* arch, tc_soa_type_id type_id) {
-    if (!arch) return NULL;
+    if (!arch)
+        return NULL;
     int idx = archetype_find_type_index(arch, type_id);
-    if (idx < 0) return NULL;
+    if (idx < 0)
+        return NULL;
     return arch->data[idx];
 }
 
-void* tc_archetype_get_element(
-    const tc_archetype* arch,
-    uint32_t row,
-    tc_soa_type_id type_id,
-    const tc_soa_type_registry* reg
-) {
-    if (!arch || row >= arch->count) return NULL;
+void* tc_archetype_get_element(const tc_archetype* arch,
+                               uint32_t row,
+                               tc_soa_type_id type_id,
+                               const tc_soa_type_registry* reg) {
+    if (!arch || row >= arch->count)
+        return NULL;
     int idx = archetype_find_type_index(arch, type_id);
-    if (idx < 0) return NULL;
+    if (idx < 0)
+        return NULL;
     const tc_soa_type_desc* desc = tc_soa_get_type(reg, arch->type_ids[idx]);
-    if (!desc) return NULL;
+    if (!desc)
+        return NULL;
     return (char*)arch->data[idx] + row * desc->element_size;
 }
 
@@ -267,14 +259,12 @@ void* tc_archetype_get_element(
 // SoA Query
 // ============================================================================
 
-tc_soa_query tc_soa_query_init(
-    tc_archetype** archetypes,
-    size_t archetype_count,
-    const tc_soa_type_id* required,
-    size_t required_count,
-    const tc_soa_type_id* excluded,
-    size_t excluded_count
-) {
+tc_soa_query tc_soa_query_init(tc_archetype** archetypes,
+                               size_t archetype_count,
+                               const tc_soa_type_id* required,
+                               size_t required_count,
+                               const tc_soa_type_id* excluded,
+                               size_t excluded_count) {
     tc_soa_query q;
     memset(&q, 0, sizeof(q));
 
@@ -299,17 +289,21 @@ tc_soa_query tc_soa_query_init(
 }
 
 bool tc_soa_query_next(tc_soa_query* q, tc_soa_chunk* out) {
-    if (!q || !out) return false;
+    if (!q || !out)
+        return false;
 
     while (q->_archetype_idx < q->_archetype_count) {
         tc_archetype* arch = q->_archetypes[q->_archetype_idx];
         q->_archetype_idx++;
 
-        if (!arch || arch->count == 0) continue;
+        if (!arch || arch->count == 0)
+            continue;
 
         // Check masks
-        if ((arch->type_mask & q->required_mask) != q->required_mask) continue;
-        if (arch->type_mask & q->excluded_mask) continue;
+        if ((arch->type_mask & q->required_mask) != q->required_mask)
+            continue;
+        if (arch->type_mask & q->excluded_mask)
+            continue;
 
         // Fill chunk
         out->entities = arch->entities;

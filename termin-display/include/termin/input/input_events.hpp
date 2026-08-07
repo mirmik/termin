@@ -12,218 +12,255 @@
 #include <tcbase/input_enums.hpp>
 
 extern "C" {
-#include "tc_input_event.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "tc_input_event.h"
 }
 
 namespace termin {
 
-struct MouseButtonEventInit {
-    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
-    double x = 0.0;
-    double y = 0.0;
-    int button = 0;
-    int action = 0;
-    int mods = 0;
-    uint32_t source = TC_INPUT_SOURCE_RUNTIME;
-    uint32_t click_count = 1;
-};
+    struct MouseButtonEventInit {
+        tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+        double x = 0.0;
+        double y = 0.0;
+        int button = 0;
+        int action = 0;
+        int mods = 0;
+        uint32_t source = TC_INPUT_SOURCE_RUNTIME;
+        uint32_t click_count = 1;
+    };
 
-/**
- * Mouse button press/release event.
- * C++ wrapper for tc_mouse_button_event.
- */
-struct MouseButtonEvent : public tc_mouse_button_event {
-    MouseButtonEvent() {
-        viewport = TC_VIEWPORT_HANDLE_INVALID;
-        x = 0; y = 0;
-        button = 0; action = 0; mods = 0; click_count = 1;
-        source = TC_INPUT_SOURCE_RUNTIME;
-        platform_services = nullptr;
-        handled = false;
-    }
+    /**
+     * Mouse button press/release event.
+     * C++ wrapper for tc_mouse_button_event.
+     */
+    struct MouseButtonEvent : public tc_mouse_button_event {
+        MouseButtonEvent() {
+            viewport = TC_VIEWPORT_HANDLE_INVALID;
+            x = 0;
+            y = 0;
+            button = 0;
+            action = 0;
+            mods = 0;
+            click_count = 1;
+            source = TC_INPUT_SOURCE_RUNTIME;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    MouseButtonEvent(tc_viewport_handle viewport_, double x_, double y_, int button_, int action_, int mods_ = 0)
-        : MouseButtonEvent(MouseButtonEventInit{
-              viewport_, x_, y_, button_, action_, mods_, TC_INPUT_SOURCE_RUNTIME, 1}) {
-    }
+        MouseButtonEvent(tc_viewport_handle viewport_, double x_, double y_, int button_, int action_, int mods_ = 0)
+            : MouseButtonEvent(
+                  MouseButtonEventInit{viewport_, x_, y_, button_, action_, mods_, TC_INPUT_SOURCE_RUNTIME, 1}) {}
 
-    explicit MouseButtonEvent(const MouseButtonEventInit& init) {
-        viewport = init.viewport;
-        x = init.x; y = init.y;
-        button = init.button; action = init.action; mods = init.mods; click_count = init.click_count;
-        source = init.source;
-        platform_services = nullptr;
-        handled = false;
-    }
+        explicit MouseButtonEvent(const MouseButtonEventInit& init) {
+            viewport = init.viewport;
+            x = init.x;
+            y = init.y;
+            button = init.button;
+            action = init.action;
+            mods = init.mods;
+            click_count = init.click_count;
+            source = init.source;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    explicit MouseButtonEvent(const tc_mouse_button_event& e) {
-        viewport = e.viewport;
-        x = e.x; y = e.y;
-        button = e.button; action = e.action; mods = e.mods; click_count = e.click_count;
-        source = e.source;
-        platform_services = e.platform_services;
-        handled = e.handled;
-    }
-};
+        explicit MouseButtonEvent(const tc_mouse_button_event& e) {
+            viewport = e.viewport;
+            x = e.x;
+            y = e.y;
+            button = e.button;
+            action = e.action;
+            mods = e.mods;
+            click_count = e.click_count;
+            source = e.source;
+            platform_services = e.platform_services;
+            handled = e.handled;
+        }
+    };
 
-/**
- * Mouse movement event.
- * C++ wrapper for tc_mouse_move_event.
- */
-struct MouseMoveEvent : public tc_mouse_move_event {
-    MouseMoveEvent() {
-        viewport = TC_VIEWPORT_HANDLE_INVALID;
-        x = 0; y = 0;
-        dx = 0; dy = 0;
-        source = TC_INPUT_SOURCE_RUNTIME;
-        platform_services = nullptr;
-        handled = false;
-    }
+    /**
+     * Mouse movement event.
+     * C++ wrapper for tc_mouse_move_event.
+     */
+    struct MouseMoveEvent : public tc_mouse_move_event {
+        MouseMoveEvent() {
+            viewport = TC_VIEWPORT_HANDLE_INVALID;
+            x = 0;
+            y = 0;
+            dx = 0;
+            dy = 0;
+            source = TC_INPUT_SOURCE_RUNTIME;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    MouseMoveEvent(tc_viewport_handle vp, double x_, double y_, double dx_, double dy_,
-                   uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
-        viewport = vp;
-        x = x_; y = y_;
-        dx = dx_; dy = dy_;
-        source = source_;
-        platform_services = nullptr;
-        handled = false;
-    }
+        MouseMoveEvent(tc_viewport_handle vp,
+                       double x_,
+                       double y_,
+                       double dx_,
+                       double dy_,
+                       uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
+            viewport = vp;
+            x = x_;
+            y = y_;
+            dx = dx_;
+            dy = dy_;
+            source = source_;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    explicit MouseMoveEvent(const tc_mouse_move_event& e) {
-        viewport = e.viewport;
-        x = e.x; y = e.y;
-        dx = e.dx; dy = e.dy;
-        source = e.source;
-        platform_services = e.platform_services;
-        handled = e.handled;
-    }
-};
+        explicit MouseMoveEvent(const tc_mouse_move_event& e) {
+            viewport = e.viewport;
+            x = e.x;
+            y = e.y;
+            dx = e.dx;
+            dy = e.dy;
+            source = e.source;
+            platform_services = e.platform_services;
+            handled = e.handled;
+        }
+    };
 
-/**
- * Mouse scroll event.
- * C++ wrapper for tc_scroll_event.
- */
-struct ScrollEvent : public tc_scroll_event {
-    ScrollEvent() {
-        viewport = TC_VIEWPORT_HANDLE_INVALID;
-        x = 0; y = 0;
-        xoffset = 0; yoffset = 0; mods = 0;
-        source = TC_INPUT_SOURCE_RUNTIME;
-        platform_services = nullptr;
-        handled = false;
-    }
+    /**
+     * Mouse scroll event.
+     * C++ wrapper for tc_scroll_event.
+     */
+    struct ScrollEvent : public tc_scroll_event {
+        ScrollEvent() {
+            viewport = TC_VIEWPORT_HANDLE_INVALID;
+            x = 0;
+            y = 0;
+            xoffset = 0;
+            yoffset = 0;
+            mods = 0;
+            source = TC_INPUT_SOURCE_RUNTIME;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    ScrollEvent(tc_viewport_handle vp, double x_, double y_, double xoff, double yoff, int m = 0,
-                uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
-        viewport = vp;
-        x = x_; y = y_;
-        xoffset = xoff; yoffset = yoff; mods = m;
-        source = source_;
-        platform_services = nullptr;
-        handled = false;
-    }
+        ScrollEvent(tc_viewport_handle vp,
+                    double x_,
+                    double y_,
+                    double xoff,
+                    double yoff,
+                    int m = 0,
+                    uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
+            viewport = vp;
+            x = x_;
+            y = y_;
+            xoffset = xoff;
+            yoffset = yoff;
+            mods = m;
+            source = source_;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    explicit ScrollEvent(const tc_scroll_event& e) {
-        viewport = e.viewport;
-        x = e.x; y = e.y;
-        xoffset = e.xoffset; yoffset = e.yoffset; mods = e.mods;
-        source = e.source;
-        platform_services = e.platform_services;
-        handled = e.handled;
-    }
-};
+        explicit ScrollEvent(const tc_scroll_event& e) {
+            viewport = e.viewport;
+            x = e.x;
+            y = e.y;
+            xoffset = e.xoffset;
+            yoffset = e.yoffset;
+            mods = e.mods;
+            source = e.source;
+            platform_services = e.platform_services;
+            handled = e.handled;
+        }
+    };
 
-/**
- * Keyboard event.
- * C++ wrapper for tc_key_event.
- */
-struct KeyEvent : public tc_key_event {
-    KeyEvent() {
-        viewport = TC_VIEWPORT_HANDLE_INVALID;
-        key = 0; scancode = 0;
-        action = 0; mods = 0;
-        source = TC_INPUT_SOURCE_RUNTIME;
-        platform_services = nullptr;
-        handled = false;
-    }
+    /**
+     * Keyboard event.
+     * C++ wrapper for tc_key_event.
+     */
+    struct KeyEvent : public tc_key_event {
+        KeyEvent() {
+            viewport = TC_VIEWPORT_HANDLE_INVALID;
+            key = 0;
+            scancode = 0;
+            action = 0;
+            mods = 0;
+            source = TC_INPUT_SOURCE_RUNTIME;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    KeyEvent(tc_viewport_handle vp, int k, int sc, int act, int m = 0,
-             uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
-        viewport = vp;
-        key = k; scancode = sc;
-        action = act; mods = m;
-        source = source_;
-        platform_services = nullptr;
-        handled = false;
-    }
+        KeyEvent(tc_viewport_handle vp, int k, int sc, int act, int m = 0, uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
+            viewport = vp;
+            key = k;
+            scancode = sc;
+            action = act;
+            mods = m;
+            source = source_;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    explicit KeyEvent(const tc_key_event& e) {
-        viewport = e.viewport;
-        key = e.key; scancode = e.scancode;
-        action = e.action; mods = e.mods;
-        source = e.source;
-        platform_services = e.platform_services;
-        handled = e.handled;
-    }
-};
+        explicit KeyEvent(const tc_key_event& e) {
+            viewport = e.viewport;
+            key = e.key;
+            scancode = e.scancode;
+            action = e.action;
+            mods = e.mods;
+            source = e.source;
+            platform_services = e.platform_services;
+            handled = e.handled;
+        }
+    };
 
-/**
- * Device-neutral pointer event.
- */
-struct PointerEvent : public tc_pointer_event {
-    PointerEvent() {
-        viewport = TC_VIEWPORT_HANDLE_INVALID;
-        pointer_id = 0;
-        device = TC_POINTER_DEVICE_TOUCH;
-        phase = TC_POINTER_MOVE;
-        x = 0.0;
-        y = 0.0;
-        dx = 0.0;
-        dy = 0.0;
-        pressure = 0.0f;
-        source = TC_INPUT_SOURCE_RUNTIME;
-        platform_services = nullptr;
-        handled = false;
-    }
+    /**
+     * Device-neutral pointer event.
+     */
+    struct PointerEvent : public tc_pointer_event {
+        PointerEvent() {
+            viewport = TC_VIEWPORT_HANDLE_INVALID;
+            pointer_id = 0;
+            device = TC_POINTER_DEVICE_TOUCH;
+            phase = TC_POINTER_MOVE;
+            x = 0.0;
+            y = 0.0;
+            dx = 0.0;
+            dy = 0.0;
+            pressure = 0.0f;
+            source = TC_INPUT_SOURCE_RUNTIME;
+            platform_services = nullptr;
+            handled = false;
+        }
 
-    PointerEvent(
-        tc_viewport_handle viewport_,
-        uint64_t pointer_id_,
-        int device_,
-        int phase_,
-        double x_,
-        double y_,
-        double dx_ = 0.0,
-        double dy_ = 0.0,
-        float pressure_ = 0.0f,
-        uint32_t source_ = TC_INPUT_SOURCE_RUNTIME
-    ) {
-        tc_pointer_event_init_source(
-            this, viewport_, pointer_id_, device_, phase_, x_, y_, dx_, dy_,
-            pressure_, source_);
-    }
+        PointerEvent(tc_viewport_handle viewport_,
+                     uint64_t pointer_id_,
+                     int device_,
+                     int phase_,
+                     double x_,
+                     double y_,
+                     double dx_ = 0.0,
+                     double dy_ = 0.0,
+                     float pressure_ = 0.0f,
+                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
+            tc_pointer_event_init_source(
+                this, viewport_, pointer_id_, device_, phase_, x_, y_, dx_, dy_, pressure_, source_);
+        }
 
-    explicit PointerEvent(const tc_pointer_event& e) {
-        viewport = e.viewport;
-        pointer_id = e.pointer_id;
-        device = e.device;
-        phase = e.phase;
-        x = e.x;
-        y = e.y;
-        dx = e.dx;
-        dy = e.dy;
-        pressure = e.pressure;
-        source = e.source;
-        platform_services = e.platform_services;
-        handled = e.handled;
-    }
-};
+        explicit PointerEvent(const tc_pointer_event& e) {
+            viewport = e.viewport;
+            pointer_id = e.pointer_id;
+            device = e.device;
+            phase = e.phase;
+            x = e.x;
+            y = e.y;
+            dx = e.dx;
+            dy = e.dy;
+            pressure = e.pressure;
+            source = e.source;
+            platform_services = e.platform_services;
+            handled = e.handled;
+        }
+    };
 
-using tcbase::Action;
-using tcbase::Mods;
-using tcbase::MouseButton;
+    using tcbase::Action;
+    using tcbase::Mods;
+    using tcbase::MouseButton;
 
 } // namespace termin

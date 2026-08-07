@@ -4,7 +4,6 @@
 
 namespace termin {
 
-ENTITY_API void register_builtin_physics_fem_component_types();
+    ENTITY_API void register_builtin_physics_fem_component_types();
 
 } // namespace termin
-

@@ -6,231 +6,257 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include "core/tc_component.h"
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/component_registry_python.hpp>
 #include <termin/entity/entity.hpp>
-#include "core/tc_component.h"
 // drawable/input capabilities moved to termin-render/termin-input bindings
 
 namespace nb = nanobind;
 
 namespace termin {
 
-void bind_cxx_component(nb::module_& m) {
-    nb::class_<CxxComponent>(m, "Component", nb::dynamic_attr())
-        .def("__init__", [](nb::handle self) {
-            cxx_component_init<CxxComponent>(self, "Component");
-        })
-        .def("start", &CxxComponent::start)
-        .def("update", &CxxComponent::update)
-        .def("fixed_update", &CxxComponent::fixed_update)
-        .def("late_update", &CxxComponent::late_update)
-        .def("on_destroy", &CxxComponent::on_destroy)
-        .def("on_editor_start", &CxxComponent::on_editor_start)
-        .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
-        .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
-        .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
-        .def("on_added", &CxxComponent::on_added)
-        .def("on_removed", &CxxComponent::on_removed)
-        .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
-        .def("on_scene_active", &CxxComponent::on_scene_active)
-        .def("type_name", &CxxComponent::type_name)
-        .def_prop_rw("display_name", &CxxComponent::display_name, &CxxComponent::set_display_name)
-        .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
-        .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
-        .def_prop_ro("started", &CxxComponent::started)
-        .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
-        .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
-        .def_prop_rw("has_late_update", &CxxComponent::has_late_update, &CxxComponent::set_has_late_update)
-        .def_prop_rw("update_priority", &CxxComponent::update_priority, &CxxComponent::set_update_priority)
-        .def_prop_rw("fixed_update_priority", &CxxComponent::fixed_update_priority, &CxxComponent::set_fixed_update_priority)
-        .def_prop_rw("late_update_priority", &CxxComponent::late_update_priority, &CxxComponent::set_late_update_priority)
-        .def_prop_ro("entity",
-            [](CxxComponent& c) -> nb::object {
-                Entity ent = c.entity();
-                if (ent.valid()) {
-                    return nb::cast(ent);
-                }
-                return nb::none();
-            })
-        .def("c_component_ptr", [](CxxComponent& c) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(c.c_component());
-        })
-        .def("serialize", [](CxxComponent& c) -> nb::dict {
-            tc_value v = c.serialize();
-            nb::object result = tc_value_to_py(&v);
-            tc_value_free(&v);
-            return nb::cast<nb::dict>(result);
-        })
-        .def("serialize_data", [](CxxComponent& c) -> nb::dict {
-            tc_value v = c.serialize_data();
-            nb::object result = tc_value_to_py(&v);
-            tc_value_free(&v);
-            return nb::cast<nb::dict>(result);
-        })
-        .def("deserialize_data", [](CxxComponent& c, nb::dict data) {
-            tc_value v = py_to_tc_value(data);
-            c.deserialize_data(&v);
-            tc_value_free(&v);
-        }, nb::arg("data"))
-        .def("__eq__", [](CxxComponent& self, nb::object other) -> bool {
-            if (!nb::isinstance<CxxComponent>(other)) return false;
-            CxxComponent& other_c = nb::cast<CxxComponent&>(other);
-            return self.c_component() == other_c.c_component();
-        })
-        .def("__hash__", [](CxxComponent& self) -> size_t {
-            return reinterpret_cast<size_t>(self.c_component());
-        });
-}
+    void bind_cxx_component(nb::module_& m) {
+        nb::class_<CxxComponent>(m, "Component", nb::dynamic_attr())
+            .def("__init__", [](nb::handle self) { cxx_component_init<CxxComponent>(self, "Component"); })
+            .def("start", &CxxComponent::start)
+            .def("update", &CxxComponent::update)
+            .def("fixed_update", &CxxComponent::fixed_update)
+            .def("late_update", &CxxComponent::late_update)
+            .def("on_destroy", &CxxComponent::on_destroy)
+            .def("on_editor_start", &CxxComponent::on_editor_start)
+            .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
+            .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
+            .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
+            .def("on_added", &CxxComponent::on_added)
+            .def("on_removed", &CxxComponent::on_removed)
+            .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
+            .def("on_scene_active", &CxxComponent::on_scene_active)
+            .def("type_name", &CxxComponent::type_name)
+            .def_prop_rw("display_name", &CxxComponent::display_name, &CxxComponent::set_display_name)
+            .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
+            .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
+            .def_prop_ro("started", &CxxComponent::started)
+            .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
+            .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
+            .def_prop_rw("has_late_update", &CxxComponent::has_late_update, &CxxComponent::set_has_late_update)
+            .def_prop_rw("update_priority", &CxxComponent::update_priority, &CxxComponent::set_update_priority)
+            .def_prop_rw(
+                "fixed_update_priority", &CxxComponent::fixed_update_priority, &CxxComponent::set_fixed_update_priority)
+            .def_prop_rw(
+                "late_update_priority", &CxxComponent::late_update_priority, &CxxComponent::set_late_update_priority)
+            .def_prop_ro("entity",
+                         [](CxxComponent& c) -> nb::object {
+                             Entity ent = c.entity();
+                             if (ent.valid()) {
+                                 return nb::cast(ent);
+                             }
+                             return nb::none();
+                         })
+            .def("c_component_ptr",
+                 [](CxxComponent& c) -> uintptr_t { return reinterpret_cast<uintptr_t>(c.c_component()); })
+            .def("serialize",
+                 [](CxxComponent& c) -> nb::dict {
+                     tc_value v = c.serialize();
+                     nb::object result = tc_value_to_py(&v);
+                     tc_value_free(&v);
+                     return nb::cast<nb::dict>(result);
+                 })
+            .def("serialize_data",
+                 [](CxxComponent& c) -> nb::dict {
+                     tc_value v = c.serialize_data();
+                     nb::object result = tc_value_to_py(&v);
+                     tc_value_free(&v);
+                     return nb::cast<nb::dict>(result);
+                 })
+            .def(
+                "deserialize_data",
+                [](CxxComponent& c, nb::dict data) {
+                    tc_value v = py_to_tc_value(data);
+                    c.deserialize_data(&v);
+                    tc_value_free(&v);
+                },
+                nb::arg("data"))
+            .def("__eq__",
+                 [](CxxComponent& self, nb::object other) -> bool {
+                     if (!nb::isinstance<CxxComponent>(other))
+                         return false;
+                     CxxComponent& other_c = nb::cast<CxxComponent&>(other);
+                     return self.c_component() == other_c.c_component();
+                 })
+            .def("__hash__", [](CxxComponent& self) -> size_t { return reinterpret_cast<size_t>(self.c_component()); });
+    }
 
-void bind_component_registry(nb::module_& m) {
-    nb::class_<ComponentRegistry>(m, "ComponentRegistry")
-        .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
-        .def("register_python", [](
-            ComponentRegistry&,
-            const std::string& name,
-            nb::object cls,
-            const std::string& owner,
-            nb::object parent,
-            nb::dict fields,
-            nb::dict metadata,
-            const std::string& category,
-            const std::string& display_name,
-            nb::list requirements,
-            nb::list capabilities) {
-            std::string parent_storage;
-            const char* parent_name = nullptr;
-            if (!parent.is_none()) {
-                parent_storage = nb::cast<std::string>(parent);
-                parent_name = parent_storage.c_str();
-            }
-            return ComponentRegistryPython::register_python(
-                name, std::move(cls), owner, parent_name, std::move(fields), std::move(metadata),
-                category, display_name, std::move(requirements), std::move(capabilities));
-        },
-        nb::arg("name"), nb::arg("cls"), nb::arg("owner"), nb::arg("parent") = nb::none(),
-        nb::arg("fields") = nb::dict(), nb::arg("metadata") = nb::dict(),
-        nb::arg("category") = "", nb::arg("display_name") = "",
-        nb::arg("requirements") = nb::list(), nb::arg("capabilities") = nb::list())
-        .def("unregister_python", [](ComponentRegistry&, const std::string& name) {
-            return ComponentRegistryPython::unregister_python(name);
-        }, nb::arg("name"))
-        .def("get_class", [](ComponentRegistry&, const std::string& name) {
-            return ComponentRegistryPython::get_class(name);
-        }, nb::arg("name"))
-        .def("bind_class_projection", [](
-            ComponentRegistry&,
-            const std::string& name,
-            nb::object cls) {
-            return ComponentRegistryPython::bind_class_projection(
-                name, std::move(cls));
-        }, nb::arg("name"), nb::arg("cls"))
-        .def("clear_class_projections", [](ComponentRegistry&) {
-            ComponentRegistryPython::clear_class_projections();
-        })
-        .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
-        .def("has", &ComponentRegistry::has, nb::arg("name"))
-        .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
-        .def("display_name_of", &ComponentRegistry::display_name_of, nb::arg("name"))
-        .def("category_of", &ComponentRegistry::category_of, nb::arg("name"))
-        .def("requirements_of", &ComponentRegistry::requirements_of, nb::arg("name"))
-        .def("get_info", [](ComponentRegistry& reg, const std::string& name) {
-            nb::dict info;
-            info["name"] = name;
-            info["display_name"] = reg.display_name_of(name);
-            info["category"] = reg.category_of(name);
-            tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
-            info["kind"] = kind == TC_CXX_COMPONENT ? "cxx" :
-                (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
-            const char* parent = tc_component_registry_get_parent(name.c_str());
-            info["parent"] = parent ? nb::str(parent) : nb::none();
-            const char* owner = tc_component_registry_get_owner(name.c_str());
-            info["owner"] = owner ? nb::str(owner) : nb::str("");
-            info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
-            return info;
-        }, nb::arg("name"))
-        .def("list_info", [](ComponentRegistry& reg) {
+    void bind_component_registry(nb::module_& m) {
+        nb::class_<ComponentRegistry>(m, "ComponentRegistry")
+            .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
+            .def(
+                "register_python",
+                [](ComponentRegistry&,
+                   const std::string& name,
+                   nb::object cls,
+                   const std::string& owner,
+                   nb::object parent,
+                   nb::dict fields,
+                   nb::dict metadata,
+                   const std::string& category,
+                   const std::string& display_name,
+                   nb::list requirements,
+                   nb::list capabilities) {
+                    std::string parent_storage;
+                    const char* parent_name = nullptr;
+                    if (!parent.is_none()) {
+                        parent_storage = nb::cast<std::string>(parent);
+                        parent_name = parent_storage.c_str();
+                    }
+                    return ComponentRegistryPython::register_python(name,
+                                                                    std::move(cls),
+                                                                    owner,
+                                                                    parent_name,
+                                                                    std::move(fields),
+                                                                    std::move(metadata),
+                                                                    category,
+                                                                    display_name,
+                                                                    std::move(requirements),
+                                                                    std::move(capabilities));
+                },
+                nb::arg("name"),
+                nb::arg("cls"),
+                nb::arg("owner"),
+                nb::arg("parent") = nb::none(),
+                nb::arg("fields") = nb::dict(),
+                nb::arg("metadata") = nb::dict(),
+                nb::arg("category") = "",
+                nb::arg("display_name") = "",
+                nb::arg("requirements") = nb::list(),
+                nb::arg("capabilities") = nb::list())
+            .def(
+                "unregister_python",
+                [](ComponentRegistry&, const std::string& name) {
+                    return ComponentRegistryPython::unregister_python(name);
+                },
+                nb::arg("name"))
+            .def(
+                "get_class",
+                [](ComponentRegistry&, const std::string& name) { return ComponentRegistryPython::get_class(name); },
+                nb::arg("name"))
+            .def(
+                "bind_class_projection",
+                [](ComponentRegistry&, const std::string& name, nb::object cls) {
+                    return ComponentRegistryPython::bind_class_projection(name, std::move(cls));
+                },
+                nb::arg("name"),
+                nb::arg("cls"))
+            .def("clear_class_projections",
+                 [](ComponentRegistry&) { ComponentRegistryPython::clear_class_projections(); })
+            .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
+            .def("has", &ComponentRegistry::has, nb::arg("name"))
+            .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
+            .def("display_name_of", &ComponentRegistry::display_name_of, nb::arg("name"))
+            .def("category_of", &ComponentRegistry::category_of, nb::arg("name"))
+            .def("requirements_of", &ComponentRegistry::requirements_of, nb::arg("name"))
+            .def(
+                "get_info",
+                [](ComponentRegistry& reg, const std::string& name) {
+                    nb::dict info;
+                    info["name"] = name;
+                    info["display_name"] = reg.display_name_of(name);
+                    info["category"] = reg.category_of(name);
+                    tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
+                    info["kind"] =
+                        kind == TC_CXX_COMPONENT ? "cxx" : (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
+                    const char* parent = tc_component_registry_get_parent(name.c_str());
+                    info["parent"] = parent ? nb::str(parent) : nb::none();
+                    const char* owner = tc_component_registry_get_owner(name.c_str());
+                    info["owner"] = owner ? nb::str(owner) : nb::str("");
+                    info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
+                    return info;
+                },
+                nb::arg("name"))
+            .def("list_info",
+                 [](ComponentRegistry& reg) {
+                     nb::list result;
+                     for (const std::string& name : reg.list_all()) {
+                         nb::dict info;
+                         info["name"] = name;
+                         info["display_name"] = reg.display_name_of(name);
+                         info["category"] = reg.category_of(name);
+                         tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
+                         info["kind"] =
+                             kind == TC_CXX_COMPONENT ? "cxx" : (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
+                         const char* parent = tc_component_registry_get_parent(name.c_str());
+                         info["parent"] = parent ? nb::str(parent) : nb::none();
+                         const char* owner = tc_component_registry_get_owner(name.c_str());
+                         info["owner"] = owner ? nb::str(owner) : nb::str("");
+                         info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
+                         result.append(info);
+                     }
+                     return result;
+                 })
+            .def_prop_ro("component_names", [](ComponentRegistry& reg) { return reg.list_all(); })
+            .def("list_all", &ComponentRegistry::list_all)
+            .def("list_native", &ComponentRegistry::list_native)
+            .def("list_owned", &ComponentRegistry::list_owned, nb::arg("owner"))
+            .def("unregister_owner", &ComponentRegistry::unregister_owner, nb::arg("owner"))
+            .def("list_python", [](ComponentRegistry& /*self*/) { return ComponentRegistryPython::list_python(); })
+            .def("clear", &ComponentRegistry::clear)
+            .def_static("has_capability",
+                        &ComponentRegistry::has_capability,
+                        nb::arg("name"),
+                        nb::arg("cap_id"),
+                        "Check whether a component type has a capability")
+            // drawable_capability_id moved to termin-render bindings
+            // input_capability_id moved to termin-input bindings
+            .def_static(
+                "get_types_with_capability",
+                [](tc_component_cap_id cap_id) {
+                    const char* types[64];
+                    size_t count = tc_component_registry_get_types_with_capability(cap_id, types, 64);
+                    std::vector<std::string> result;
+                    for (size_t i = 0; i < count; i++) {
+                        result.push_back(types[i]);
+                    }
+                    return result;
+                },
+                nb::arg("cap_id"),
+                "Get all component types with the given capability");
+
+        // component_registry_get_all_info for debug viewer
+        m.def("component_registry_get_all_info", []() {
             nb::list result;
-            for (const std::string& name : reg.list_all()) {
+            size_t count = tc_component_registry_type_count();
+            for (size_t i = 0; i < count; i++) {
+                const char* type_name = tc_component_registry_type_at(i);
+                if (!type_name)
+                    continue;
+
                 nb::dict info;
-                info["name"] = name;
-                info["display_name"] = reg.display_name_of(name);
-                info["category"] = reg.category_of(name);
-                tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
-                info["kind"] = kind == TC_CXX_COMPONENT ? "cxx" :
-                    (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
-                const char* parent = tc_component_registry_get_parent(name.c_str());
+                info["name"] = type_name;
+                info["display_name"] = tc_component_registry_get_display_name(type_name);
+                info["category"] = tc_component_registry_get_category(type_name);
+                info["language"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "C++" : "Python";
+                info["is_abstract"] = tc_component_registry_is_abstract(type_name);
+
+                const char* parent = tc_component_registry_get_parent(type_name);
                 info["parent"] = parent ? nb::str(parent) : nb::none();
-                const char* owner = tc_component_registry_get_owner(name.c_str());
-                info["owner"] = owner ? nb::str(owner) : nb::str("");
-                info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
+
+                const char* descendants[64];
+                size_t desc_count = tc_component_registry_get_type_and_descendants(type_name, descendants, 64);
+                nb::list desc_list;
+                for (size_t j = 1; j < desc_count; j++) {
+                    desc_list.append(descendants[j]);
+                }
+                info["descendants"] = desc_list;
+                // is_drawable requires termin-render; omitted here
+                // is_input_handler requires termin-input; omitted here
+
                 result.append(info);
             }
             return result;
-        })
-        .def_prop_ro("component_names", [](ComponentRegistry& reg) {
-            return reg.list_all();
-        })
-        .def("list_all", &ComponentRegistry::list_all)
-        .def("list_native", &ComponentRegistry::list_native)
-        .def("list_owned", &ComponentRegistry::list_owned, nb::arg("owner"))
-        .def("unregister_owner", &ComponentRegistry::unregister_owner, nb::arg("owner"))
-        .def("list_python", [](ComponentRegistry& /*self*/) {
-            return ComponentRegistryPython::list_python();
-        })
-        .def("clear", &ComponentRegistry::clear)
-        .def_static("has_capability", &ComponentRegistry::has_capability,
-            nb::arg("name"), nb::arg("cap_id"),
-            "Check whether a component type has a capability")
-        // drawable_capability_id moved to termin-render bindings
-        // input_capability_id moved to termin-input bindings
-        .def_static("get_types_with_capability", [](tc_component_cap_id cap_id) {
-            const char* types[64];
-            size_t count = tc_component_registry_get_types_with_capability(cap_id, types, 64);
-            std::vector<std::string> result;
-            for (size_t i = 0; i < count; i++) {
-                result.push_back(types[i]);
-            }
-            return result;
-        }, nb::arg("cap_id"), "Get all component types with the given capability");
+        });
 
-    // component_registry_get_all_info for debug viewer
-    m.def("component_registry_get_all_info", []() {
-        nb::list result;
-        size_t count = tc_component_registry_type_count();
-        for (size_t i = 0; i < count; i++) {
-            const char* type_name = tc_component_registry_type_at(i);
-            if (!type_name) continue;
-
-            nb::dict info;
-            info["name"] = type_name;
-            info["display_name"] = tc_component_registry_get_display_name(type_name);
-            info["category"] = tc_component_registry_get_category(type_name);
-            info["language"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "C++" : "Python";
-            info["is_abstract"] = tc_component_registry_is_abstract(type_name);
-
-            const char* parent = tc_component_registry_get_parent(type_name);
-            info["parent"] = parent ? nb::str(parent) : nb::none();
-
-            const char* descendants[64];
-            size_t desc_count = tc_component_registry_get_type_and_descendants(type_name, descendants, 64);
-            nb::list desc_list;
-            for (size_t j = 1; j < desc_count; j++) {
-                desc_list.append(descendants[j]);
-            }
-            info["descendants"] = desc_list;
-            // is_drawable requires termin-render; omitted here
-            // is_input_handler requires termin-input; omitted here
-
-            result.append(info);
-        }
-        return result;
-    });
-
-    m.def("component_registry_type_count", []() {
-        return tc_component_registry_type_count();
-    });
-}
+        m.def("component_registry_type_count", []() { return tc_component_registry_type_count(); });
+    }
 
 } // namespace termin

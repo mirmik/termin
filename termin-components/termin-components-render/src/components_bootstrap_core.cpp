@@ -7,13 +7,13 @@
 
 namespace termin {
 
-void register_builtin_render_component_types() {
-    CameraComponent::register_type();
-    OrbitCameraController::register_type();
-    LightComponent::register_type();
-    MeshRenderer::register_type();
-}
+    void register_builtin_render_component_types() {
+        CameraComponent::register_type();
+        OrbitCameraController::register_type();
+        LightComponent::register_type();
+        MeshRenderer::register_type();
+    }
 
-void register_builtin_render_component_pass_types() {}
+    void register_builtin_render_component_pass_types() {}
 
 } // namespace termin

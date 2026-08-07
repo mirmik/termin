@@ -5,8 +5,8 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
-#include "termin/scene/scene_manager.hpp"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/scene/scene_manager.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -15,184 +15,191 @@
 
 namespace termin {
 
-namespace engine_detail {
-struct EngineLoopState;
-struct EngineFrameCompletionState;
-}
+    namespace engine_detail {
+        struct EngineLoopState;
+        struct EngineFrameCompletionState;
+    } // namespace engine_detail
 
-// Complete external integration required by EngineCore::run(). Keeping these
-// callbacks in one value prevents frontends from exposing a partially attached
-// loop client.
-struct TERMIN_ENGINE_API EngineLoopClient {
-    std::function<void()> poll_events;
-    std::function<bool()> should_continue;
-    std::function<void()> on_shutdown;
-};
+    // Complete external integration required by EngineCore::run(). Keeping these
+    // callbacks in one value prevents frontends from exposing a partially attached
+    // loop client.
+    struct TERMIN_ENGINE_API EngineLoopClient {
+        std::function<void()> poll_events;
+        std::function<bool()> should_continue;
+        std::function<void()> on_shutdown;
+    };
 
-// Cadence observed by a frontend that owns the application frame loop.
-// start_time_ms must use a monotonic clock. A zero interval means that the
-// host intentionally reset cadence (for example after a surface/lifecycle
-// gap), so the first resumed frame is not classified as a hitch.
-struct TERMIN_ENGINE_API EngineHostFrameCadence {
-    double start_time_ms = 0.0;
-    double interval_ms = 0.0;
-    double target_interval_ms = 0.0;
-    double deadline_lateness_ms = 0.0;
-    int missed_intervals = 0;
-};
+    // Cadence observed by a frontend that owns the application frame loop.
+    // start_time_ms must use a monotonic clock. A zero interval means that the
+    // host intentionally reset cadence (for example after a surface/lifecycle
+    // gap), so the first resumed frame is not classified as a hitch.
+    struct TERMIN_ENGINE_API EngineHostFrameCadence {
+        double start_time_ms = 0.0;
+        double interval_ms = 0.0;
+        double target_interval_ms = 0.0;
+        double deadline_lateness_ms = 0.0;
+        int missed_intervals = 0;
+    };
 
-// Move-only owner of one native profiler frame. Externally-driven frontends
-// use this around all host work that belongs to a frame, including input and
-// presentation. EngineCore::run() uses the same primitive internally.
-//
-// The scope is inert when no capture subscriber is active. Nested scopes are
-// rejected and logged; a scope never closes a frame opened by another owner.
-class TERMIN_ENGINE_API EngineHostFrameScope {
-public:
-    explicit EngineHostFrameScope(const EngineHostFrameCadence& cadence) noexcept;
-    ~EngineHostFrameScope();
+    // Move-only owner of one native profiler frame. Externally-driven frontends
+    // use this around all host work that belongs to a frame, including input and
+    // presentation. EngineCore::run() uses the same primitive internally.
+    //
+    // The scope is inert when no capture subscriber is active. Nested scopes are
+    // rejected and logged; a scope never closes a frame opened by another owner.
+    class TERMIN_ENGINE_API EngineHostFrameScope {
+    public:
+        explicit EngineHostFrameScope(const EngineHostFrameCadence& cadence) noexcept;
+        ~EngineHostFrameScope();
 
-    EngineHostFrameScope(const EngineHostFrameScope&) = delete;
-    EngineHostFrameScope& operator=(const EngineHostFrameScope&) = delete;
-    EngineHostFrameScope(EngineHostFrameScope&& other) noexcept;
-    EngineHostFrameScope& operator=(EngineHostFrameScope&& other) noexcept;
+        EngineHostFrameScope(const EngineHostFrameScope&) = delete;
+        EngineHostFrameScope& operator=(const EngineHostFrameScope&) = delete;
+        EngineHostFrameScope(EngineHostFrameScope&& other) noexcept;
+        EngineHostFrameScope& operator=(EngineHostFrameScope&& other) noexcept;
 
-    bool active() const noexcept { return _frame_number >= 0; }
-    explicit operator bool() const noexcept { return active(); }
+        bool active() const noexcept {
+            return _frame_number >= 0;
+        }
+        explicit operator bool() const noexcept {
+            return active();
+        }
 
-private:
-    void finish() noexcept;
+    private:
+        void finish() noexcept;
 
-    int _frame_number = -1;
-};
+        int _frame_number = -1;
+    };
 
-// Move-only lifetime handle for an attached EngineLoopClient. Destruction or
-// detach() removes the whole client. The weak state reference makes a handle
-// harmless when it outlives its EngineCore.
-class TERMIN_ENGINE_API EngineLoopClientConnection {
-public:
-    EngineLoopClientConnection() = default;
-    ~EngineLoopClientConnection();
+    // Move-only lifetime handle for an attached EngineLoopClient. Destruction or
+    // detach() removes the whole client. The weak state reference makes a handle
+    // harmless when it outlives its EngineCore.
+    class TERMIN_ENGINE_API EngineLoopClientConnection {
+    public:
+        EngineLoopClientConnection() = default;
+        ~EngineLoopClientConnection();
 
-    EngineLoopClientConnection(const EngineLoopClientConnection&) = delete;
-    EngineLoopClientConnection& operator=(const EngineLoopClientConnection&) = delete;
-    EngineLoopClientConnection(EngineLoopClientConnection&& other) noexcept;
-    EngineLoopClientConnection& operator=(EngineLoopClientConnection&& other) noexcept;
+        EngineLoopClientConnection(const EngineLoopClientConnection&) = delete;
+        EngineLoopClientConnection& operator=(const EngineLoopClientConnection&) = delete;
+        EngineLoopClientConnection(EngineLoopClientConnection&& other) noexcept;
+        EngineLoopClientConnection& operator=(EngineLoopClientConnection&& other) noexcept;
 
-    void detach() noexcept;
-    bool connected() const noexcept;
-    explicit operator bool() const noexcept { return connected(); }
+        void detach() noexcept;
+        bool connected() const noexcept;
+        explicit operator bool() const noexcept {
+            return connected();
+        }
 
-private:
-    friend class EngineCore;
-    EngineLoopClientConnection(
-        std::weak_ptr<engine_detail::EngineLoopState> state,
-        std::uint64_t generation
-    );
+    private:
+        friend class EngineCore;
+        EngineLoopClientConnection(std::weak_ptr<engine_detail::EngineLoopState> state, std::uint64_t generation);
 
-    std::weak_ptr<engine_detail::EngineLoopState> _state;
-    std::uint64_t _generation = 0;
-};
+        std::weak_ptr<engine_detail::EngineLoopState> _state;
+        std::uint64_t _generation = 0;
+    };
 
-// Move-only lifetime handle for one host-frame completion callback. The
-// callback runs on the EngineCore frame thread immediately after the owned
-// EngineHostFrameScope has closed. A callback already copied by run() remains
-// alive until that run finishes, so its captures must be safe for the complete
-// run lifetime.
-class TERMIN_ENGINE_API EngineFrameCompletionConnection {
-public:
-    EngineFrameCompletionConnection() = default;
-    ~EngineFrameCompletionConnection();
+    // Move-only lifetime handle for one host-frame completion callback. The
+    // callback runs on the EngineCore frame thread immediately after the owned
+    // EngineHostFrameScope has closed. A callback already copied by run() remains
+    // alive until that run finishes, so its captures must be safe for the complete
+    // run lifetime.
+    class TERMIN_ENGINE_API EngineFrameCompletionConnection {
+    public:
+        EngineFrameCompletionConnection() = default;
+        ~EngineFrameCompletionConnection();
 
-    EngineFrameCompletionConnection(const EngineFrameCompletionConnection&) = delete;
-    EngineFrameCompletionConnection& operator=(const EngineFrameCompletionConnection&) = delete;
-    EngineFrameCompletionConnection(EngineFrameCompletionConnection&& other) noexcept;
-    EngineFrameCompletionConnection& operator=(EngineFrameCompletionConnection&& other) noexcept;
+        EngineFrameCompletionConnection(const EngineFrameCompletionConnection&) = delete;
+        EngineFrameCompletionConnection& operator=(const EngineFrameCompletionConnection&) = delete;
+        EngineFrameCompletionConnection(EngineFrameCompletionConnection&& other) noexcept;
+        EngineFrameCompletionConnection& operator=(EngineFrameCompletionConnection&& other) noexcept;
 
-    void detach() noexcept;
-    bool connected() const noexcept;
-    explicit operator bool() const noexcept { return connected(); }
+        void detach() noexcept;
+        bool connected() const noexcept;
+        explicit operator bool() const noexcept {
+            return connected();
+        }
 
-private:
-    friend class EngineCore;
-    EngineFrameCompletionConnection(
-        std::weak_ptr<engine_detail::EngineFrameCompletionState> state,
-        std::uint64_t generation
-    );
+    private:
+        friend class EngineCore;
+        EngineFrameCompletionConnection(std::weak_ptr<engine_detail::EngineFrameCompletionState> state,
+                                        std::uint64_t generation);
 
-    std::weak_ptr<engine_detail::EngineFrameCompletionState> _state;
-    std::uint64_t _generation = 0;
-};
+        std::weak_ptr<engine_detail::EngineFrameCompletionState> _state;
+        std::uint64_t _generation = 0;
+    };
 
-// EngineCore - owns SceneManager and RenderingManager
-class TERMIN_ENGINE_API EngineCore {
-public:
-    SceneManager scene_manager;
-    RenderTopology render_topology;
-    RenderingManager rendering_manager;
+    // EngineCore - owns SceneManager and RenderingManager
+    class TERMIN_ENGINE_API EngineCore {
+    public:
+        SceneManager scene_manager;
+        RenderTopology render_topology;
+        RenderingManager rendering_manager;
 
-private:
-    std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
-    std::shared_ptr<engine_detail::EngineFrameCompletionState> _frame_completion_state;
-    std::atomic<double> _target_fps{60.0};
-    bool _profile_ui = false;
-    bool _shutdown = false;
+    private:
+        std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
+        std::shared_ptr<engine_detail::EngineFrameCompletionState> _frame_completion_state;
+        std::atomic<double> _target_fps{60.0};
+        bool _profile_ui = false;
+        bool _shutdown = false;
 
-public:
-    EngineCore();
-    ~EngineCore();
+    public:
+        EngineCore();
+        ~EngineCore();
 
-    // Disable copy
-    EngineCore(const EngineCore&) = delete;
-    EngineCore& operator=(const EngineCore&) = delete;
+        // Disable copy
+        EngineCore(const EngineCore&) = delete;
+        EngineCore& operator=(const EngineCore&) = delete;
 
-    // --- Configuration ---
-    // Zero disables the software frame limiter. Positive values cap the
-    // main-loop cadence independently from the presentation mode (VSync).
-    void set_target_fps(double fps);
-    double target_fps() const { return _target_fps.load(); }
+        // --- Configuration ---
+        // Zero disables the software frame limiter. Positive values cap the
+        // main-loop cadence independently from the presentation mode (VSync).
+        void set_target_fps(double fps);
+        double target_fps() const {
+            return _target_fps.load();
+        }
 
-    // When true, run() wraps the poll_events callback in a profiler "UI"
-    // section. When false, run() keeps the frame scope but records UI as a
-    // muted subtree, so cadence and active-frame timing still cover the whole
-    // loop while the section report stays comparable with non-UI hosts.
-    void set_profile_ui(bool v) { _profile_ui = v; }
-    bool profile_ui() const { return _profile_ui; }
+        // When true, run() wraps the poll_events callback in a profiler "UI"
+        // section. When false, run() keeps the frame scope but records UI as a
+        // muted subtree, so cadence and active-frame timing still cover the whole
+        // loop while the section report stays comparable with non-UI hosts.
+        void set_profile_ui(bool v) {
+            _profile_ui = v;
+        }
+        bool profile_ui() const {
+            return _profile_ui;
+        }
 
-    // Attach the complete external loop integration as one atomic operation.
-    // Throws std::invalid_argument for an incomplete client and
-    // std::logic_error while another client is attached or the loop is active.
-    [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
+        // Attach the complete external loop integration as one atomic operation.
+        // Throws std::invalid_argument for an incomplete client and
+        // std::logic_error while another client is attached or the loop is active.
+        [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
 
-    // Attach one frame-thread callback used by optional host services that
-    // consume completed profiler frames. The callback is outside the profiler
-    // frame scope and therefore cannot observe a half-written frame.
-    [[nodiscard]] EngineFrameCompletionConnection attach_frame_completion_callback(
-        std::function<void()> callback
-    );
+        // Attach one frame-thread callback used by optional host services that
+        // consume completed profiler frames. The callback is outside the profiler
+        // frame scope and therefore cannot observe a half-written frame.
+        [[nodiscard]] EngineFrameCompletionConnection attach_frame_completion_callback(std::function<void()> callback);
 
-    // --- Main loop ---
-    // Run one frame: scene tick, RenderingManager render, after_render callback.
-    // Returns true if rendering happened.
-    bool tick_and_render(double dt);
+        // --- Main loop ---
+        // Run one frame: scene tick, RenderingManager render, after_render callback.
+        // Returns true if rendering happened.
+        bool tick_and_render(double dt);
 
-    // Run blocking main loop. Calls poll_events and tick_and_render, applying
-    // target_fps as a software limit when it is greater than zero.
-    // Requires an attached loop client. Returns when should_continue returns
-    // false or stop() is called.
-    void run();
+        // Run blocking main loop. Calls poll_events and tick_and_render, applying
+        // target_fps as a software limit when it is greater than zero.
+        // Requires an attached loop client. Returns when should_continue returns
+        // false or stop() is called.
+        void run();
 
-    // Stop the run() loop
-    void stop();
+        // Stop the run() loop
+        void stop();
 
-    // Check if running
-    bool is_running() const;
+        // Check if running
+        bool is_running() const;
 
-    // Finalize engine-owned scenes and rendering resources. Hosts must call
-    // this after their scene/display integrations are detached and before
-    // destroying a graphics device borrowed by RenderEngine. Idempotent;
-    // returns false when called while the main loop is still running.
-    bool shutdown();
-};
+        // Finalize engine-owned scenes and rendering resources. Hosts must call
+        // this after their scene/display integrations are detached and before
+        // destroying a graphics device borrowed by RenderEngine. Idempotent;
+        // returns false when called while the main loop is still running.
+        bool shutdown();
+    };
 
 } // namespace termin

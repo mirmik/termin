@@ -8,26 +8,22 @@
 #include <utility>
 #include <vector>
 
-namespace termin::framegraph_remote
-{
+namespace termin::framegraph_remote {
 
     // Fixed-capacity single-producer/single-consumer storage. Allocation
     // happens only in the constructor. A rejected push leaves the queue
     // unchanged, so a caller can account for one complete dropped command or
     // packet.
-    template <typename T> class BoundedSpscQueue
-    {
+    template <typename T> class BoundedSpscQueue {
     public:
         explicit BoundedSpscQueue(std::size_t capacity)
-            : slots_(checked_storage_size(capacity)), capacity_(capacity)
-        {
-        }
+            : slots_(checked_storage_size(capacity)),
+              capacity_(capacity) {}
 
         BoundedSpscQueue(const BoundedSpscQueue&) = delete;
         BoundedSpscQueue& operator=(const BoundedSpscQueue&) = delete;
 
-        bool try_push(T value)
-        {
+        bool try_push(T value) {
             const std::size_t tail = tail_.load(std::memory_order_relaxed);
             const std::size_t next = increment(tail);
             if (next == head_.load(std::memory_order_acquire))
@@ -37,8 +33,7 @@ namespace termin::framegraph_remote
             return true;
         }
 
-        bool try_pop(T& value)
-        {
+        bool try_pop(T& value) {
             const std::size_t head = head_.load(std::memory_order_relaxed);
             if (head == tail_.load(std::memory_order_acquire))
                 return false;
@@ -48,32 +43,25 @@ namespace termin::framegraph_remote
             return true;
         }
 
-        std::size_t capacity() const
-        {
+        std::size_t capacity() const {
             return capacity_;
         }
 
-        std::size_t size_approximate() const
-        {
+        std::size_t size_approximate() const {
             const std::size_t head = head_.load(std::memory_order_acquire);
             const std::size_t tail = tail_.load(std::memory_order_acquire);
             return tail >= head ? tail - head : slots_.size() - head + tail;
         }
 
     private:
-        static std::size_t checked_storage_size(std::size_t capacity)
-        {
-            if (capacity == 0 ||
-                capacity == std::numeric_limits<std::size_t>::max())
-            {
-                throw std::invalid_argument(
-                    "BoundedSpscQueue capacity is invalid");
+        static std::size_t checked_storage_size(std::size_t capacity) {
+            if (capacity == 0 || capacity == std::numeric_limits<std::size_t>::max()) {
+                throw std::invalid_argument("BoundedSpscQueue capacity is invalid");
             }
             return capacity + 1;
         }
 
-        std::size_t increment(std::size_t index) const
-        {
+        std::size_t increment(std::size_t index) const {
             return index + 1 == slots_.size() ? 0 : index + 1;
         }
 

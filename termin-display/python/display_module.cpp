@@ -3,11 +3,11 @@
 namespace nb = nanobind;
 
 namespace termin {
-void bind_tc_display(nb::module_& m);
-void bind_tc_input_manager(nb::module_& m);
-void bind_tc_render_surface(nb::module_& m);
-void bind_input_events(nb::module_& m);
-}
+    void bind_tc_display(nb::module_& m);
+    void bind_tc_input_manager(nb::module_& m);
+    void bind_tc_render_surface(nb::module_& m);
+    void bind_input_events(nb::module_& m);
+} // namespace termin
 
 NB_MODULE(_display_native, m) {
     m.doc() = "Display native module";

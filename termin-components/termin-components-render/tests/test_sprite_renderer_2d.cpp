@@ -4,10 +4,10 @@ GUARD_TEST_MAIN();
 
 #include <cmath>
 
+#include <termin/entity/unknown_component.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/sprite_renderer_2d.hpp>
-#include <termin/entity/unknown_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 
@@ -22,40 +22,22 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     termin::SpriteRenderer2D::register_type();
 
     const uint8_t pixels[4 * 8 * 4] = {};
-    termin::TcTexture texture = termin::TcTexture::from_data(
-        termin::TcTextureCreateInfo{
-            {pixels, 8, 4, 4},
-            {},
-            "atlas",
-            "",
-            "sprite-renderer-test-texture",
-        });
+    termin::TcTexture texture = termin::TcTexture::from_data(termin::TcTextureCreateInfo{
+        {pixels, 8, 4, 4},
+        {},
+        "atlas",
+        "",
+        "sprite-renderer-test-texture",
+    });
     REQUIRE(texture.is_valid());
 
-    termin::TcSpriteAsset sprite = termin::TcSpriteAsset::declare(
-        "sprite-renderer-test-sprite", "hero");
-    REQUIRE(sprite.update(
-        texture.uuid(),
-        {2, 1, 4, 2},
-        8,
-        4,
-        0.25f,
-        0.5f,
-        2.0f,
-        termin::SpriteSampling::Nearest));
+    termin::TcSpriteAsset sprite = termin::TcSpriteAsset::declare("sprite-renderer-test-sprite", "hero");
+    REQUIRE(sprite.update(texture.uuid(), {2, 1, 4, 2}, 8, 4, 0.25f, 0.5f, 2.0f, termin::SpriteSampling::Nearest));
     const uint32_t loaded_version = sprite.version();
     sprite.unload();
     CHECK_FALSE(sprite.is_loaded());
     CHECK_EQ(sprite.version(), loaded_version + 1);
-    REQUIRE(sprite.update(
-        texture.uuid(),
-        {2, 1, 4, 2},
-        8,
-        4,
-        0.25f,
-        0.5f,
-        2.0f,
-        termin::SpriteSampling::Nearest));
+    REQUIRE(sprite.update(texture.uuid(), {2, 1, 4, 2}, 8, 4, 0.25f, 0.5f, 2.0f, termin::SpriteSampling::Nearest));
     CHECK(sprite.is_loaded());
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("sprite-renderer-test-scene");
@@ -69,15 +51,13 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     tc_render_item_collect_context context{};
     context.phase = TC_PHASE_NONE;
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        renderer->tc_component_ptr(), context, collection));
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), context, collection));
     REQUIRE_EQ(collection.items.size(), 1u);
     const tc_render_item& item = collection.items.front();
     CHECK_EQ(item.kind, static_cast<uint32_t>(TC_RENDER_ITEM_KIND_WORLD_QUAD));
     CHECK_EQ(item.payload.world_quad.sorting_layer, 3);
     CHECK_EQ(item.payload.world_quad.order_in_layer, -2);
-    CHECK_EQ(item.payload.world_quad.sampling,
-             static_cast<uint32_t>(TC_WORLD_QUAD_SAMPLING_NEAREST));
+    CHECK_EQ(item.payload.world_quad.sampling, static_cast<uint32_t>(TC_WORLD_QUAD_SAMPLING_NEAREST));
     CHECK(std::abs(item.payload.world_quad.min_x - -0.5f) < 1.0e-6f);
     CHECK(std::abs(item.payload.world_quad.max_x - 1.5f) < 1.0e-6f);
     CHECK(std::abs(item.payload.world_quad.min_z - -0.5f) < 1.0e-6f);
@@ -96,8 +76,7 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     tc_value_free(&data);
 
     double distance = 0.0;
-    CHECK(renderer->ray_intersects(
-        {0.0, -2.0, 0.0}, {0.0, 1.0, 0.0}, &distance));
+    CHECK(renderer->ray_intersects({0.0, -2.0, 0.0}, {0.0, 1.0, 0.0}, &distance));
     CHECK(std::abs(distance - 2.0) < 1.0e-6);
 
     scene.destroy();

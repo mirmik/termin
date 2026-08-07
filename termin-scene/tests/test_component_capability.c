@@ -5,8 +5,8 @@
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
-#include <tc_profiler.h>
 #include <math.h>
+#include <tc_profiler.h>
 
 static bool count_components(tc_component* c, void* user_data) {
     (void)c;
@@ -113,8 +113,7 @@ static void scheduler_probe_init(scheduler_probe_component* probe) {
     memset(probe, 0, sizeof(*probe));
     tc_component_init(&probe->component, &scheduler_probe_vtable);
     tc_component_set_declared_type_name(&probe->component, "SchedulerProbe");
-    tc_component_set_lifecycle_capabilities(
-        &probe->component, false, false, false);
+    tc_component_set_lifecycle_capabilities(&probe->component, false, false, false);
 }
 
 typedef struct {
@@ -125,8 +124,7 @@ typedef struct {
 } registering_start_component;
 
 static void registering_start(tc_component* component) {
-    registering_start_component* probe =
-        (registering_start_component*)component;
+    registering_start_component* probe = (registering_start_component*)component;
     probe->start_count++;
     tc_scene_register_component(probe->scene, probe->component_to_register);
 }
@@ -135,40 +133,27 @@ static const tc_component_vtable registering_start_vtable = {
     .start = registering_start,
 };
 
-static void registering_start_init(
-    registering_start_component* probe,
-    tc_scene_handle scene,
-    tc_component* component_to_register
-) {
+static void
+registering_start_init(registering_start_component* probe, tc_scene_handle scene, tc_component* component_to_register) {
     memset(probe, 0, sizeof(*probe));
     tc_component_init(&probe->component, &registering_start_vtable);
-    tc_component_set_declared_type_name(
-        &probe->component,
-        "RegisteringStartProbe"
-    );
+    tc_component_set_declared_type_name(&probe->component, "RegisteringStartProbe");
     probe->scene = scene;
     probe->component_to_register = component_to_register;
 }
 
-static const tc_section_timing* find_profile_section(
-    const tc_frame_profile* frame,
-    int parent_index,
-    const char* name
-) {
+static const tc_section_timing*
+find_profile_section(const tc_frame_profile* frame, int parent_index, const char* name) {
     for (int i = 0; i < frame->section_count; i++) {
         const tc_section_timing* section = &frame->sections[i];
-        if (section->parent_index == parent_index &&
-            strcmp(section->name, name) == 0) {
+        if (section->parent_index == parent_index && strcmp(section->name, name) == 0) {
             return section;
         }
     }
     return NULL;
 }
 
-static int profile_section_index(
-    const tc_frame_profile* frame,
-    const tc_section_timing* section
-) {
+static int profile_section_index(const tc_frame_profile* frame, const tc_section_timing* section) {
     return section ? (int)(section - frame->sections) : -1;
 }
 
@@ -299,10 +284,8 @@ GUARD_C_TEST(test_scene_capability_priority_iteration) {
 }
 
 GUARD_C_TEST(test_scene_capability_detach_repairs_intrusive_index) {
-    tc_component_cap_id cap = tc_component_capability_register_with_destructor(
-        "test.scene_capability_detach",
-        count_capability_destroy
-    );
+    tc_component_cap_id cap =
+        tc_component_capability_register_with_destructor("test.scene_capability_detach", count_capability_destroy);
     GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
 
     uint32_t slot = 0;
@@ -343,8 +326,7 @@ GUARD_C_TEST(test_scene_capability_detach_repairs_intrusive_index) {
     GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_prev[slot]);
     GUARD_C_CHECK_PTR_EQ(NULL, mid.capability_next[slot]);
     component_order order = {0};
-    tc_scene_foreach_with_capability(
-        scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    tc_scene_foreach_with_capability(scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
     GUARD_C_CHECK_EQ_INT(2, order.count);
     GUARD_C_CHECK_PTR_EQ(&high, order.items[0]);
     GUARD_C_CHECK_PTR_EQ(&low, order.items[1]);
@@ -368,8 +350,7 @@ GUARD_C_TEST(test_scene_capability_detach_repairs_intrusive_index) {
     GUARD_C_REQUIRE(tc_component_attach_capability(&low, cap, &low_destroy_count));
 
     order = (component_order){0};
-    tc_scene_foreach_with_capability(
-        scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    tc_scene_foreach_with_capability(scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
     GUARD_C_CHECK_EQ_INT(3, order.count);
     GUARD_C_CHECK_PTR_EQ(&high, order.items[0]);
     GUARD_C_CHECK_PTR_EQ(&mid, order.items[1]);
@@ -438,8 +419,7 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(0, tc_scene_late_update_list_count(scene));
 
-    tc_component_set_lifecycle_capabilities(
-        &probe.component, true, true, true);
+    tc_component_set_lifecycle_capabilities(&probe.component, true, true, true);
     GUARD_C_CHECK_EQ_INT(1, tc_scene_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(1, tc_scene_fixed_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(1, tc_scene_late_update_list_count(scene));
@@ -449,8 +429,7 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     GUARD_C_CHECK_EQ_INT(1, probe.fixed_update_count);
     GUARD_C_CHECK_EQ_INT(1, probe.late_update_count);
 
-    tc_component_set_lifecycle_capabilities(
-        &probe.component, false, false, false);
+    tc_component_set_lifecycle_capabilities(&probe.component, false, false, false);
     GUARD_C_CHECK_EQ_INT(0, tc_scene_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(0, tc_scene_late_update_list_count(scene));
@@ -463,9 +442,7 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     scheduler_probe_component direct_probe;
     scheduler_probe_init(&direct_probe);
     tc_scene_register_component(scene, &direct_probe.component);
-    tc_component_set_lifecycle_capabilities(
-        &direct_probe.component, true, false, true
-    );
+    tc_component_set_lifecycle_capabilities(&direct_probe.component, true, false, true);
     GUARD_C_CHECK_EQ_INT(1, tc_scene_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
     GUARD_C_CHECK_EQ_INT(1, tc_scene_late_update_list_count(scene));
@@ -486,8 +463,7 @@ GUARD_C_TEST(test_runtime_time_scale_controls_simulation_progress) {
     scheduler_probe_init(&probe);
     probe.component.active_in_editor = true;
     tc_scene_register_component(scene, &probe.component);
-    tc_component_set_lifecycle_capabilities(
-        &probe.component, true, true, true);
+    tc_component_set_lifecycle_capabilities(&probe.component, true, true, true);
 
     GUARD_C_CHECK(fabs(tc_scene_time_scale(scene) - 1.0) < 1e-12);
     tc_scene_set_time_scale(scene, 0.5);
@@ -549,26 +525,17 @@ GUARD_C_TEST(test_lifecycle_priorities_are_per_component_and_per_stage) {
     tc_component_set_lifecycle_capabilities(&second.component, true, true, true);
     tc_component_set_lifecycle_capabilities(&third.component, true, true, true);
 
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &first.component, TC_COMPONENT_LIFECYCLE_UPDATE, 20));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &second.component, TC_COMPONENT_LIFECYCLE_UPDATE, 10));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &third.component, TC_COMPONENT_LIFECYCLE_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&first.component, TC_COMPONENT_LIFECYCLE_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&second.component, TC_COMPONENT_LIFECYCLE_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&third.component, TC_COMPONENT_LIFECYCLE_UPDATE, 0));
 
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 20));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 10));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
 
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &second.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 20));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &first.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 10));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &third.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&second.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 20));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&first.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 10));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&third.component, TC_COMPONENT_LIFECYCLE_LATE_UPDATE, 0));
 
     component_order update_log = {0};
     component_order fixed_log = {0};
@@ -593,8 +560,7 @@ GUARD_C_TEST(test_lifecycle_priorities_are_per_component_and_per_stage) {
     GUARD_C_CHECK_PTR_EQ(&third.component, late_log.items[2]);
 
     // A live change reindexes only the selected stage.
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 30));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 30));
     fixed_log = (component_order){0};
     update_log = (component_order){0};
     tc_scene_update(scene, 1.0);
@@ -605,12 +571,9 @@ GUARD_C_TEST(test_lifecycle_priorities_are_per_component_and_per_stage) {
 
     // Returning to an equal-priority group restores registration order rather
     // than the order in which setters happened to run.
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
-    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(
-        &second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&third.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&first.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
+    GUARD_C_REQUIRE(tc_component_set_lifecycle_priority(&second.component, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, 0));
     fixed_log = (component_order){0};
     tc_scene_update(scene, 1.0);
     GUARD_C_CHECK_PTR_EQ(&first.component, fixed_log.items[0]);
@@ -677,11 +640,7 @@ GUARD_C_TEST(test_pending_start_snapshot_handles_registration_during_start) {
     scheduler_probe_component added_probe;
     scheduler_probe_init(&added_probe);
     registering_start_component registering_probe;
-    registering_start_init(
-        &registering_probe,
-        scene,
-        &added_probe.component
-    );
+    registering_start_init(&registering_probe, scene, &added_probe.component);
     tc_scene_register_component(scene, &registering_probe.component);
 
     tc_scene_update(scene, 0.0);
@@ -716,10 +675,8 @@ GUARD_C_TEST(test_scene_update_profiles_lifecycle_phase_and_component_instance) 
     scheduler_probe_component beta_probe;
     scheduler_probe_init(&alpha_probe);
     scheduler_probe_init(&beta_probe);
-    tc_component_set_lifecycle_capabilities(
-        &alpha_probe.component, true, true, false);
-    tc_component_set_lifecycle_capabilities(
-        &beta_probe.component, true, true, false);
+    tc_component_set_lifecycle_capabilities(&alpha_probe.component, true, true, false);
+    tc_component_set_lifecycle_capabilities(&beta_probe.component, true, true, false);
     tc_component_set_source_id(&alpha_probe.component, "source-a");
     tc_component_set_source_id(&beta_probe.component, "source-b");
     alpha_probe.component.active_in_editor = true;
@@ -778,14 +735,10 @@ GUARD_C_TEST(test_scene_update_profiles_lifecycle_phase_and_component_instance) 
     update = find_profile_section(frame, -1, "Update");
     GUARD_C_REQUIRE(fixed != NULL);
     GUARD_C_REQUIRE(update != NULL);
-    alpha_fixed = find_profile_section(
-        frame, profile_section_index(frame, fixed), alpha_name);
-    beta_fixed = find_profile_section(
-        frame, profile_section_index(frame, fixed), beta_name);
-    alpha_update = find_profile_section(
-        frame, profile_section_index(frame, update), alpha_name);
-    beta_update = find_profile_section(
-        frame, profile_section_index(frame, update), beta_name);
+    alpha_fixed = find_profile_section(frame, profile_section_index(frame, fixed), alpha_name);
+    beta_fixed = find_profile_section(frame, profile_section_index(frame, fixed), beta_name);
+    alpha_update = find_profile_section(frame, profile_section_index(frame, update), alpha_name);
+    beta_update = find_profile_section(frame, profile_section_index(frame, update), beta_name);
     GUARD_C_REQUIRE(alpha_fixed != NULL);
     GUARD_C_REQUIRE(beta_fixed != NULL);
     GUARD_C_REQUIRE(alpha_update != NULL);
@@ -819,28 +772,20 @@ GUARD_C_TEST(test_component_reorder_preserves_attachment_and_lifecycle) {
     tc_entity_pool_add_component(pool, entity, &second.component);
     tc_entity_pool_add_component(pool, entity, &third.component);
 
-    GUARD_C_CHECK_EQ_UINT(0, tc_entity_pool_component_index(
-        pool, entity, &first.component));
-    GUARD_C_REQUIRE(tc_entity_pool_set_component_index(
-        pool, entity, &third.component, 0));
-    GUARD_C_CHECK_PTR_EQ(&third.component,
-                         tc_entity_pool_component_at(pool, entity, 0));
-    GUARD_C_CHECK_PTR_EQ(&first.component,
-                         tc_entity_pool_component_at(pool, entity, 1));
-    GUARD_C_CHECK_PTR_EQ(&second.component,
-                         tc_entity_pool_component_at(pool, entity, 2));
+    GUARD_C_CHECK_EQ_UINT(0, tc_entity_pool_component_index(pool, entity, &first.component));
+    GUARD_C_REQUIRE(tc_entity_pool_set_component_index(pool, entity, &third.component, 0));
+    GUARD_C_CHECK_PTR_EQ(&third.component, tc_entity_pool_component_at(pool, entity, 0));
+    GUARD_C_CHECK_PTR_EQ(&first.component, tc_entity_pool_component_at(pool, entity, 1));
+    GUARD_C_CHECK_PTR_EQ(&second.component, tc_entity_pool_component_at(pool, entity, 2));
     GUARD_C_CHECK_EQ_INT(0, first.removed_count);
     GUARD_C_CHECK_EQ_INT(0, second.removed_count);
     GUARD_C_CHECK_EQ_INT(0, third.removed_count);
-    GUARD_C_CHECK(tc_entity_handle_eq(first.component.owner,
-                                      tc_entity_handle_make(
-                                          tc_entity_pool_registry_find(pool), entity)));
+    GUARD_C_CHECK(
+        tc_entity_handle_eq(first.component.owner, tc_entity_handle_make(tc_entity_pool_registry_find(pool), entity)));
 
     tc_entity_pool_remove_component(pool, entity, &first.component);
-    GUARD_C_CHECK_PTR_EQ(&third.component,
-                         tc_entity_pool_component_at(pool, entity, 0));
-    GUARD_C_CHECK_PTR_EQ(&second.component,
-                         tc_entity_pool_component_at(pool, entity, 1));
+    GUARD_C_CHECK_PTR_EQ(&third.component, tc_entity_pool_component_at(pool, entity, 0));
+    GUARD_C_CHECK_PTR_EQ(&second.component, tc_entity_pool_component_at(pool, entity, 1));
 
     tc_scene_free(scene);
     return 0;

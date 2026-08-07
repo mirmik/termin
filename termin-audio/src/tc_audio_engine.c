@@ -1,5 +1,5 @@
-#include <termin/audio/tc_audio_engine.h>
 #include <termin/audio/tc_audio_clip_registry.h>
+#include <termin/audio/tc_audio_engine.h>
 
 #include "tc_audio_internal.h"
 
@@ -28,22 +28,26 @@ static bool g_audio_voice_pool_initialized = false;
 
 static ma_format audio_format_to_miniaudio(tc_audio_sample_format format) {
     switch (format) {
-        case TC_AUDIO_SAMPLE_FORMAT_U8: return ma_format_u8;
-        case TC_AUDIO_SAMPLE_FORMAT_S16: return ma_format_s16;
-        case TC_AUDIO_SAMPLE_FORMAT_S24: return ma_format_s24;
-        case TC_AUDIO_SAMPLE_FORMAT_S32: return ma_format_s32;
-        case TC_AUDIO_SAMPLE_FORMAT_F32: return ma_format_f32;
-        default: return ma_format_unknown;
+    case TC_AUDIO_SAMPLE_FORMAT_U8:
+        return ma_format_u8;
+    case TC_AUDIO_SAMPLE_FORMAT_S16:
+        return ma_format_s16;
+    case TC_AUDIO_SAMPLE_FORMAT_S24:
+        return ma_format_s24;
+    case TC_AUDIO_SAMPLE_FORMAT_S32:
+        return ma_format_s32;
+    case TC_AUDIO_SAMPLE_FORMAT_F32:
+        return ma_format_f32;
+    default:
+        return ma_format_unknown;
     }
 }
 
 static bool audio_voice_pool_init(void) {
-    if (g_audio_voice_pool_initialized) return true;
+    if (g_audio_voice_pool_initialized)
+        return true;
     if (!tc_pool_init_rebootstrap(
-            &g_audio_voice_pool,
-            sizeof(tc_audio_voice_slot),
-            32,
-            &g_audio_voice_generation_epoch)) {
+            &g_audio_voice_pool, sizeof(tc_audio_voice_slot), 32, &g_audio_voice_generation_epoch)) {
         tc_log_error("audio_voice_pool_init: failed to initialize voice pool");
         return false;
     }
@@ -52,14 +56,17 @@ static bool audio_voice_pool_init(void) {
 }
 
 static tc_audio_voice_slot* audio_voice_get(tc_audio_voice_handle voice) {
-    if (!g_audio_voice_pool_initialized) return NULL;
+    if (!g_audio_voice_pool_initialized)
+        return NULL;
     return (tc_audio_voice_slot*)tc_pool_get(&g_audio_voice_pool, voice);
 }
 
 static void audio_voice_pool_shutdown(void) {
-    if (!g_audio_voice_pool_initialized) return;
+    if (!g_audio_voice_pool_initialized)
+        return;
     for (uint32_t i = 0; i < g_audio_voice_pool.capacity; ++i) {
-        if (g_audio_voice_pool.states[i] != TC_SLOT_OCCUPIED) continue;
+        if (g_audio_voice_pool.states[i] != TC_SLOT_OCCUPIED)
+            continue;
         tc_audio_voice_handle voice = {i, g_audio_voice_pool.generations[i]};
         tc_audio_voice_destroy(voice);
     }
@@ -68,11 +75,14 @@ static void audio_voice_pool_shutdown(void) {
 }
 
 bool tc_audio_voice_pool_uses_clip(tc_audio_clip_handle clip) {
-    if (!g_audio_voice_pool_initialized || tc_audio_clip_handle_is_invalid(clip)) return false;
+    if (!g_audio_voice_pool_initialized || tc_audio_clip_handle_is_invalid(clip))
+        return false;
     for (uint32_t i = 0; i < g_audio_voice_pool.capacity; ++i) {
-        if (g_audio_voice_pool.states[i] != TC_SLOT_OCCUPIED) continue;
+        if (g_audio_voice_pool.states[i] != TC_SLOT_OCCUPIED)
+            continue;
         tc_audio_voice_slot* voice = (tc_audio_voice_slot*)tc_pool_get_unchecked(&g_audio_voice_pool, i);
-        if (tc_audio_clip_handle_eq(voice->clip, clip)) return true;
+        if (tc_audio_clip_handle_eq(voice->clip, clip))
+            return true;
     }
     return false;
 }
@@ -86,13 +96,15 @@ tc_audio_engine_config tc_audio_engine_config_default(void) {
 }
 
 bool tc_audio_engine_init(const tc_audio_engine_config* config) {
-    if (g_audio_engine_initialized) return true;
+    if (g_audio_engine_initialized)
+        return true;
     tc_audio_engine_config selected = config ? *config : tc_audio_engine_config_default();
     if (selected.sample_rate == 0 || selected.channels == 0) {
         tc_log_error("tc_audio_engine_init: sample rate and channel count must be non-zero");
         return false;
     }
-    if (!audio_voice_pool_init()) return false;
+    if (!audio_voice_pool_init())
+        return false;
 
     ma_engine_config engine_config = ma_engine_config_init();
     engine_config.sampleRate = selected.sample_rate;
@@ -107,12 +119,10 @@ bool tc_audio_engine_init(const tc_audio_engine_config* config) {
 
     g_audio_engine_initialized = true;
     g_audio_engine_has_device = !selected.no_device;
-    tc_log_info(
-        "tc_audio_engine_init: initialized %u Hz, %u channels, device=%s",
-        ma_engine_get_sample_rate(&g_audio_engine),
-        ma_engine_get_channels(&g_audio_engine),
-        g_audio_engine_has_device ? "yes" : "no"
-    );
+    tc_log_info("tc_audio_engine_init: initialized %u Hz, %u channels, device=%s",
+                ma_engine_get_sample_rate(&g_audio_engine),
+                ma_engine_get_channels(&g_audio_engine),
+                g_audio_engine_has_device ? "yes" : "no");
     return true;
 }
 
@@ -156,19 +166,18 @@ bool tc_audio_engine_render(float* output, uint64_t frame_count) {
     ma_uint64 frames_read = 0;
     ma_result result = ma_engine_read_pcm_frames(&g_audio_engine, output, frame_count, &frames_read);
     if (result != MA_SUCCESS || frames_read != frame_count) {
-        tc_log_error(
-            "tc_audio_engine_render: requested %llu frames, got %llu: %s",
-            (unsigned long long)frame_count,
-            (unsigned long long)frames_read,
-            ma_result_description(result)
-        );
+        tc_log_error("tc_audio_engine_render: requested %llu frames, got %llu: %s",
+                     (unsigned long long)frame_count,
+                     (unsigned long long)frames_read,
+                     ma_result_description(result));
         return false;
     }
     return true;
 }
 
 void tc_audio_engine_set_master_volume(float volume) {
-    if (!g_audio_engine_initialized) return;
+    if (!g_audio_engine_initialized)
+        return;
     ma_engine_set_volume(&g_audio_engine, volume < 0.0f ? 0.0f : volume);
 }
 
@@ -177,7 +186,8 @@ float tc_audio_engine_get_master_volume(void) {
 }
 
 void tc_audio_engine_set_listener_position(float x, float y, float z) {
-    if (g_audio_engine_initialized) ma_engine_listener_set_position(&g_audio_engine, 0, x, y, z);
+    if (g_audio_engine_initialized)
+        ma_engine_listener_set_position(&g_audio_engine, 0, x, y, z);
 }
 
 void tc_audio_engine_get_listener_position(float* x, float* y, float* z) {
@@ -185,17 +195,22 @@ void tc_audio_engine_get_listener_position(float* x, float* y, float* z) {
     if (g_audio_engine_initialized) {
         position = ma_engine_listener_get_position(&g_audio_engine, 0);
     }
-    if (x) *x = position.x;
-    if (y) *y = position.y;
-    if (z) *z = position.z;
+    if (x)
+        *x = position.x;
+    if (y)
+        *y = position.y;
+    if (z)
+        *z = position.z;
 }
 
 void tc_audio_engine_set_listener_direction(float x, float y, float z) {
-    if (g_audio_engine_initialized) ma_engine_listener_set_direction(&g_audio_engine, 0, x, y, z);
+    if (g_audio_engine_initialized)
+        ma_engine_listener_set_direction(&g_audio_engine, 0, x, y, z);
 }
 
 void tc_audio_engine_set_listener_velocity(float x, float y, float z) {
-    if (g_audio_engine_initialized) ma_engine_listener_set_velocity(&g_audio_engine, 0, x, y, z);
+    if (g_audio_engine_initialized)
+        ma_engine_listener_set_velocity(&g_audio_engine, 0, x, y, z);
 }
 
 tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
@@ -208,7 +223,8 @@ tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
         tc_log_error("tc_audio_voice_create: stale clip handle");
         return tc_audio_voice_handle_invalid();
     }
-    if (!tc_audio_clip_ensure_loaded(clip_handle)) return tc_audio_voice_handle_invalid();
+    if (!tc_audio_clip_ensure_loaded(clip_handle))
+        return tc_audio_voice_handle_invalid();
     const ma_format format = audio_format_to_miniaudio((tc_audio_sample_format)clip->sample_format);
     if (format == ma_format_unknown) {
         tc_log_error("tc_audio_voice_create: unsupported sample format for '%s'", clip->header.uuid);
@@ -223,13 +239,8 @@ tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
     tc_audio_voice_slot* voice = audio_voice_get(voice_handle);
     voice->clip = clip_handle;
 
-    ma_result result = ma_audio_buffer_ref_init(
-        format,
-        clip->channels,
-        clip->pcm_frames,
-        clip->frame_count,
-        &voice->buffer
-    );
+    ma_result result =
+        ma_audio_buffer_ref_init(format, clip->channels, clip->pcm_frames, clip->frame_count, &voice->buffer);
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_create: buffer init failed: %s", ma_result_description(result));
         tc_pool_free_slot(&g_audio_voice_pool, voice_handle);
@@ -238,13 +249,7 @@ tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
     voice->buffer.sampleRate = clip->sample_rate;
     voice->buffer_initialized = true;
 
-    result = ma_sound_init_from_data_source(
-        &g_audio_engine,
-        (ma_data_source*)&voice->buffer,
-        0,
-        NULL,
-        &voice->sound
-    );
+    result = ma_sound_init_from_data_source(&g_audio_engine, (ma_data_source*)&voice->buffer, 0, NULL, &voice->sound);
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_create: sound init failed: %s", ma_result_description(result));
         ma_audio_buffer_ref_uninit(&voice->buffer);
@@ -258,10 +263,13 @@ tc_audio_voice_handle tc_audio_voice_create(tc_audio_clip_handle clip_handle) {
 
 bool tc_audio_voice_destroy(tc_audio_voice_handle voice_handle) {
     tc_audio_voice_slot* voice = audio_voice_get(voice_handle);
-    if (!voice) return false;
+    if (!voice)
+        return false;
     tc_audio_clip_handle clip_handle = voice->clip;
-    if (voice->sound_initialized) ma_sound_uninit(&voice->sound);
-    if (voice->buffer_initialized) ma_audio_buffer_ref_uninit(&voice->buffer);
+    if (voice->sound_initialized)
+        ma_sound_uninit(&voice->sound);
+    if (voice->buffer_initialized)
+        ma_audio_buffer_ref_uninit(&voice->buffer);
     voice->sound_initialized = false;
     voice->buffer_initialized = false;
     voice->clip = tc_audio_clip_handle_invalid();
@@ -270,7 +278,8 @@ bool tc_audio_voice_destroy(tc_audio_voice_handle voice_handle) {
         return false;
     }
     tc_audio_clip* clip = tc_audio_clip_get(clip_handle);
-    if (clip) tc_audio_clip_release(clip);
+    if (clip)
+        tc_audio_clip_release(clip);
     return true;
 }
 
@@ -285,8 +294,10 @@ tc_audio_clip_handle tc_audio_voice_clip(tc_audio_voice_handle voice) {
 
 bool tc_audio_voice_start(tc_audio_voice_handle voice) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (!slot) return false;
-    if (ma_sound_at_end(&slot->sound)) ma_sound_seek_to_pcm_frame(&slot->sound, 0);
+    if (!slot)
+        return false;
+    if (ma_sound_at_end(&slot->sound))
+        ma_sound_seek_to_pcm_frame(&slot->sound, 0);
     const ma_result result = ma_sound_start(&slot->sound);
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_start: %s", ma_result_description(result));
@@ -298,13 +309,15 @@ bool tc_audio_voice_start(tc_audio_voice_handle voice) {
 
 bool tc_audio_voice_stop(tc_audio_voice_handle voice, uint32_t fade_out_ms) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (!slot) return false;
+    if (!slot)
+        return false;
     ma_result result;
     if (fade_out_ms > 0) {
         result = ma_sound_stop_with_fade_in_milliseconds(&slot->sound, fade_out_ms);
     } else {
         result = ma_sound_stop(&slot->sound);
-        if (result == MA_SUCCESS) result = ma_sound_seek_to_pcm_frame(&slot->sound, 0);
+        if (result == MA_SUCCESS)
+            result = ma_sound_seek_to_pcm_frame(&slot->sound, 0);
     }
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_stop: %s", ma_result_description(result));
@@ -316,7 +329,8 @@ bool tc_audio_voice_stop(tc_audio_voice_handle voice, uint32_t fade_out_ms) {
 
 bool tc_audio_voice_pause(tc_audio_voice_handle voice) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (!slot) return false;
+    if (!slot)
+        return false;
     const ma_result result = ma_sound_stop(&slot->sound);
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_pause: %s", ma_result_description(result));
@@ -328,7 +342,8 @@ bool tc_audio_voice_pause(tc_audio_voice_handle voice) {
 
 bool tc_audio_voice_resume(tc_audio_voice_handle voice) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (!slot || !slot->paused) return false;
+    if (!slot || !slot->paused)
+        return false;
     const ma_result result = ma_sound_start(&slot->sound);
     if (result != MA_SUCCESS) {
         tc_log_error("tc_audio_voice_resume: %s", ma_result_description(result));
@@ -350,7 +365,8 @@ bool tc_audio_voice_is_paused(tc_audio_voice_handle voice) {
 
 void tc_audio_voice_set_looping(tc_audio_voice_handle voice, bool looping) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_looping(&slot->sound, looping ? MA_TRUE : MA_FALSE);
+    if (slot)
+        ma_sound_set_looping(&slot->sound, looping ? MA_TRUE : MA_FALSE);
 }
 
 bool tc_audio_voice_is_looping(tc_audio_voice_handle voice) {
@@ -360,7 +376,8 @@ bool tc_audio_voice_is_looping(tc_audio_voice_handle voice) {
 
 void tc_audio_voice_set_volume(tc_audio_voice_handle voice, float volume) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_volume(&slot->sound, volume < 0.0f ? 0.0f : volume);
+    if (slot)
+        ma_sound_set_volume(&slot->sound, volume < 0.0f ? 0.0f : volume);
 }
 
 float tc_audio_voice_get_volume(tc_audio_voice_handle voice) {
@@ -370,7 +387,8 @@ float tc_audio_voice_get_volume(tc_audio_voice_handle voice) {
 
 void tc_audio_voice_set_pitch(tc_audio_voice_handle voice, float pitch) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_pitch(&slot->sound, pitch > 0.0f ? pitch : 0.001f);
+    if (slot)
+        ma_sound_set_pitch(&slot->sound, pitch > 0.0f ? pitch : 0.001f);
 }
 
 float tc_audio_voice_get_pitch(tc_audio_voice_handle voice) {
@@ -380,36 +398,41 @@ float tc_audio_voice_get_pitch(tc_audio_voice_handle voice) {
 
 void tc_audio_voice_set_spatialization(tc_audio_voice_handle voice, bool enabled) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_spatialization_enabled(&slot->sound, enabled ? MA_TRUE : MA_FALSE);
+    if (slot)
+        ma_sound_set_spatialization_enabled(&slot->sound, enabled ? MA_TRUE : MA_FALSE);
 }
 
 void tc_audio_voice_set_position(tc_audio_voice_handle voice, float x, float y, float z) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_position(&slot->sound, x, y, z);
+    if (slot)
+        ma_sound_set_position(&slot->sound, x, y, z);
 }
 
 void tc_audio_voice_get_position(tc_audio_voice_handle voice, float* x, float* y, float* z) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
     const ma_vec3f position = slot ? ma_sound_get_position(&slot->sound) : (ma_vec3f){0, 0, 0};
-    if (x) *x = position.x;
-    if (y) *y = position.y;
-    if (z) *z = position.z;
+    if (x)
+        *x = position.x;
+    if (y)
+        *y = position.y;
+    if (z)
+        *z = position.z;
 }
 
 void tc_audio_voice_set_velocity(tc_audio_voice_handle voice, float x, float y, float z) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (slot) ma_sound_set_velocity(&slot->sound, x, y, z);
+    if (slot)
+        ma_sound_set_velocity(&slot->sound, x, y, z);
 }
 
-void tc_audio_voice_set_distance_range(
-    tc_audio_voice_handle voice,
-    float min_distance,
-    float max_distance
-) {
+void tc_audio_voice_set_distance_range(tc_audio_voice_handle voice, float min_distance, float max_distance) {
     tc_audio_voice_slot* slot = audio_voice_get(voice);
-    if (!slot) return;
-    if (min_distance < 0.0f) min_distance = 0.0f;
-    if (max_distance < min_distance) max_distance = min_distance;
+    if (!slot)
+        return;
+    if (min_distance < 0.0f)
+        min_distance = 0.0f;
+    if (max_distance < min_distance)
+        max_distance = min_distance;
     ma_sound_set_min_distance(&slot->sound, min_distance);
     ma_sound_set_max_distance(&slot->sound, max_distance);
 }
@@ -427,9 +450,6 @@ tc_audio_voice_handle tc_audio_voice_at(size_t pool_index) {
         g_audio_voice_pool.states[pool_index] != TC_SLOT_OCCUPIED) {
         return tc_audio_voice_handle_invalid();
     }
-    tc_audio_voice_handle voice = {
-        (uint32_t)pool_index,
-        g_audio_voice_pool.generations[pool_index]
-    };
+    tc_audio_voice_handle voice = {(uint32_t)pool_index, g_audio_voice_pool.generations[pool_index]};
     return voice;
 }

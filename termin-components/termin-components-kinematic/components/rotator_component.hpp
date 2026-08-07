@@ -2,8 +2,7 @@
 
 #include <components/kinematic_unit_component.hpp>
 
-namespace termin
-{
+namespace termin {
 
     // RotatorComponent - rotates entity around a specified axis.
     //
@@ -14,8 +13,7 @@ namespace termin
     //   rotator.set_axis(0, 0, 1);
     //   rotator.set_coordinate_scale(M_PI / 180.0);
     //   rotator.set_coordinate(90);
-    class ENTITY_API RotatorComponent : public KinematicUnitComponent
-    {
+    class ENTITY_API RotatorComponent : public KinematicUnitComponent {
     public:
         RotatorComponent();
         ~RotatorComponent() override = default;

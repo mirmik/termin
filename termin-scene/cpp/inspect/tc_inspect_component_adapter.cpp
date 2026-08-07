@@ -11,42 +11,45 @@
 
 namespace {
 
-void* get_inspect_object(tc_component* c) {
-    if (!c) return nullptr;
-    if (c->kind == TC_CXX_COMPONENT) {
-        return termin::CxxComponent::from_tc(c);
+    void* get_inspect_object(tc_component* c) {
+        if (!c)
+            return nullptr;
+        if (c->kind == TC_CXX_COMPONENT) {
+            return termin::CxxComponent::from_tc(c);
+        }
+        return c->body;
     }
-    return c->body;
-}
 
-std::string read_component_field_string(tc_component* c, const char* path) {
-    tc_value v = tc_component_inspect_get(c, path);
-    std::string result;
-    if (v.type == TC_VALUE_STRING && v.data.s) {
-        result = v.data.s;
+    std::string read_component_field_string(tc_component* c, const char* path) {
+        tc_value v = tc_component_inspect_get(c, path);
+        std::string result;
+        if (v.type == TC_VALUE_STRING && v.data.s) {
+            result = v.data.s;
+        }
+        tc_value_free(&v);
+        return result;
     }
-    tc_value_free(&v);
-    return result;
-}
 
-std::mutex g_legacy_field_string_mutex;
-std::string g_legacy_field_string_result;
+    std::mutex g_legacy_field_string_mutex;
+    std::string g_legacy_field_string_result;
 
 } // namespace
 
 extern "C" {
 
-void tc_inspect_component_adapter_init(void) {
-}
+void tc_inspect_component_adapter_init(void) {}
 
 tc_value tc_component_inspect_get(tc_component* c, const char* path) {
-    if (!c || !path) return tc_value_nil();
+    if (!c || !path)
+        return tc_value_nil();
 
     const char* type_name = tc_component_type_name(c);
-    if (!type_name) return tc_value_nil();
+    if (!type_name)
+        return tc_value_nil();
 
     void* obj = get_inspect_object(c);
-    if (!obj) return tc_value_nil();
+    if (!obj)
+        return tc_value_nil();
 
     return tc_inspect_get(obj, type_name, path);
 }
@@ -56,30 +59,32 @@ void tc_component_inspect_set(tc_component* c, const char* path, tc_value value,
 }
 
 bool tc_component_inspect_set_checked(tc_component* c, const char* path, tc_value value, void* context) {
-    if (!c || !path) return false;
+    if (!c || !path)
+        return false;
 
     const char* type_name = tc_component_type_name(c);
-    if (!type_name) return false;
+    if (!type_name)
+        return false;
 
     void* obj = get_inspect_object(c);
-    if (!obj) return false;
+    if (!obj)
+        return false;
 
     return tc_inspect_set_checked(obj, type_name, path, value, context);
 }
 
-tc_inspect_apply_result tc_component_inspect_deserialize_checked(
-    tc_component* c, const tc_value* data, void* context
-) {
-    tc_inspect_apply_result invalid = {
-        TC_INSPECT_APPLY_INVALID_ARGUMENT, 0, nullptr
-    };
-    if (!c || !data) return invalid;
+tc_inspect_apply_result tc_component_inspect_deserialize_checked(tc_component* c, const tc_value* data, void* context) {
+    tc_inspect_apply_result invalid = {TC_INSPECT_APPLY_INVALID_ARGUMENT, 0, nullptr};
+    if (!c || !data)
+        return invalid;
 
     const char* type_name = tc_component_type_name(c);
-    if (!type_name) return invalid;
+    if (!type_name)
+        return invalid;
 
     void* obj = get_inspect_object(c);
-    if (!obj) return invalid;
+    if (!obj)
+        return invalid;
 
     return tc_inspect_deserialize_checked(obj, type_name, data, context);
 }
@@ -94,16 +99,21 @@ void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 valu
 }
 
 void tc_component_get_field_vec3(tc_component* c, const char* path, tc_vec3* out_value) {
-    if (!out_value) return;
+    if (!out_value)
+        return;
 
     tc_value v = tc_component_inspect_get(c, path);
     tc_vec3 result = {0.0, 0.0, 0.0};
     if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {
         auto get_d = [](tc_value* item) -> double {
-            if (!item) return 0.0;
-            if (item->type == TC_VALUE_DOUBLE) return item->data.d;
-            if (item->type == TC_VALUE_FLOAT) return (double)item->data.f;
-            if (item->type == TC_VALUE_INT) return (double)item->data.i;
+            if (!item)
+                return 0.0;
+            if (item->type == TC_VALUE_DOUBLE)
+                return item->data.d;
+            if (item->type == TC_VALUE_FLOAT)
+                return (double)item->data.f;
+            if (item->type == TC_VALUE_INT)
+                return (double)item->data.i;
             return 0.0;
         };
         result.x = get_d(tc_value_list_get(&v, 0));
@@ -125,16 +135,21 @@ void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat valu
 }
 
 void tc_component_get_field_quat(tc_component* c, const char* path, tc_quat* out_value) {
-    if (!out_value) return;
+    if (!out_value)
+        return;
 
     tc_value v = tc_component_inspect_get(c, path);
     tc_quat result = {0, 0, 0, 1};
     if (v.type == TC_VALUE_LIST && v.data.list.count >= 4) {
         auto get_d = [](tc_value* item) -> double {
-            if (!item) return 0.0;
-            if (item->type == TC_VALUE_DOUBLE) return item->data.d;
-            if (item->type == TC_VALUE_FLOAT) return (double)item->data.f;
-            if (item->type == TC_VALUE_INT) return (double)item->data.i;
+            if (!item)
+                return 0.0;
+            if (item->type == TC_VALUE_DOUBLE)
+                return item->data.d;
+            if (item->type == TC_VALUE_FLOAT)
+                return (double)item->data.f;
+            if (item->type == TC_VALUE_INT)
+                return (double)item->data.i;
             return 0.0;
         };
         result.x = get_d(tc_value_list_get(&v, 0));
@@ -179,9 +194,12 @@ void tc_component_set_field_string(tc_component* c, const char* path, const char
 int64_t tc_component_get_field_int(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     int64_t result = 0;
-    if (v.type == TC_VALUE_INT) result = v.data.i;
-    else if (v.type == TC_VALUE_FLOAT) result = (int64_t)v.data.f;
-    else if (v.type == TC_VALUE_DOUBLE) result = (int64_t)v.data.d;
+    if (v.type == TC_VALUE_INT)
+        result = v.data.i;
+    else if (v.type == TC_VALUE_FLOAT)
+        result = (int64_t)v.data.f;
+    else if (v.type == TC_VALUE_DOUBLE)
+        result = (int64_t)v.data.d;
     tc_value_free(&v);
     return result;
 }
@@ -189,9 +207,12 @@ int64_t tc_component_get_field_int(tc_component* c, const char* path) {
 float tc_component_get_field_float(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     float result = 0.0f;
-    if (v.type == TC_VALUE_FLOAT) result = v.data.f;
-    else if (v.type == TC_VALUE_DOUBLE) result = (float)v.data.d;
-    else if (v.type == TC_VALUE_INT) result = (float)v.data.i;
+    if (v.type == TC_VALUE_FLOAT)
+        result = v.data.f;
+    else if (v.type == TC_VALUE_DOUBLE)
+        result = (float)v.data.d;
+    else if (v.type == TC_VALUE_INT)
+        result = (float)v.data.i;
     tc_value_free(&v);
     return result;
 }
@@ -199,9 +220,12 @@ float tc_component_get_field_float(tc_component* c, const char* path) {
 double tc_component_get_field_double(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     double result = 0.0;
-    if (v.type == TC_VALUE_DOUBLE) result = v.data.d;
-    else if (v.type == TC_VALUE_FLOAT) result = (double)v.data.f;
-    else if (v.type == TC_VALUE_INT) result = (double)v.data.i;
+    if (v.type == TC_VALUE_DOUBLE)
+        result = v.data.d;
+    else if (v.type == TC_VALUE_FLOAT)
+        result = (double)v.data.f;
+    else if (v.type == TC_VALUE_INT)
+        result = (double)v.data.i;
     tc_value_free(&v);
     return result;
 }
@@ -209,14 +233,15 @@ double tc_component_get_field_double(tc_component* c, const char* path) {
 bool tc_component_get_field_bool(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     bool result = false;
-    if (v.type == TC_VALUE_BOOL) result = v.data.b;
-    else if (v.type == TC_VALUE_INT) result = v.data.i != 0;
+    if (v.type == TC_VALUE_BOOL)
+        result = v.data.b;
+    else if (v.type == TC_VALUE_INT)
+        result = v.data.i != 0;
     tc_value_free(&v);
     return result;
 }
 
-size_t tc_component_get_field_string_buffer(
-    tc_component* c, const char* path, char* buffer, size_t buffer_size) {
+size_t tc_component_get_field_string_buffer(tc_component* c, const char* path, char* buffer, size_t buffer_size) {
     std::string result = read_component_field_string(c, path);
     if (buffer && buffer_size > 0) {
         const size_t copy_size = std::min(result.size(), buffer_size - 1);

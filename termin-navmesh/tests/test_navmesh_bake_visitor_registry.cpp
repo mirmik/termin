@@ -5,10 +5,10 @@
 
 namespace {
 
-int fail(const std::string& message) {
-    std::cerr << "FAIL: " << message << "\n";
-    return 1;
-}
+    int fail(const std::string& message) {
+        std::cerr << "FAIL: " << message << "\n";
+        return 1;
+    }
 
 } // namespace
 
@@ -31,44 +31,41 @@ int main() {
 
     bool linear_visitor_called = false;
     termin::NavMeshBakeVisitor visitor =
-        [](termin::Entity,
-           termin::CxxComponent*,
-           const termin::NavMeshBakeContext&,
-           termin::NavMeshBakeInput&) {};
-    termin::NavMeshBakeVisitor linear_visitor =
-        [&linear_visitor_called](termin::Entity entity,
-                                 termin::CxxComponent*,
-                                 const termin::NavMeshBakeContext&,
-                                 termin::NavMeshBakeInput& input) {
-            linear_visitor_called = true;
-
-            termin::NavMeshLinearPathSegmentRecord first;
-            first.end.x = 1.0f;
-            first.user_id = termin::stable_navmesh_source_user_id(entity, "linear:first");
-            first.debug_name = "first";
-            const int first_index = input.add_linear_segment(first);
-
-            termin::NavMeshLinearPathSegmentRecord second;
-            second.start.x = 1.0f;
-            second.end.x = 2.0f;
-            second.user_id = termin::stable_navmesh_source_user_id(entity, "linear:second");
-            second.debug_name = "second";
-            const int second_index = input.add_linear_segment(second);
-
-            termin::NavMeshLinearPathLinkRecord link;
-            link.from_segment = first_index;
-            link.to_segment = second_index;
-            link.from_t = 65535;
-            link.to_t = 0;
-            link.debug_name = "first-to-second";
-            input.add_linear_link(link);
-
-            termin::NavMeshLinearPathLinkRecord invalid_link;
-            invalid_link.from_segment = second_index;
-            invalid_link.to_segment = second_index + 10;
-            invalid_link.debug_name = "invalid";
-            input.add_linear_link(invalid_link);
+        [](termin::Entity, termin::CxxComponent*, const termin::NavMeshBakeContext&, termin::NavMeshBakeInput&) {
         };
+    termin::NavMeshBakeVisitor linear_visitor = [&linear_visitor_called](termin::Entity entity,
+                                                                         termin::CxxComponent*,
+                                                                         const termin::NavMeshBakeContext&,
+                                                                         termin::NavMeshBakeInput& input) {
+        linear_visitor_called = true;
+
+        termin::NavMeshLinearPathSegmentRecord first;
+        first.end.x = 1.0f;
+        first.user_id = termin::stable_navmesh_source_user_id(entity, "linear:first");
+        first.debug_name = "first";
+        const int first_index = input.add_linear_segment(first);
+
+        termin::NavMeshLinearPathSegmentRecord second;
+        second.start.x = 1.0f;
+        second.end.x = 2.0f;
+        second.user_id = termin::stable_navmesh_source_user_id(entity, "linear:second");
+        second.debug_name = "second";
+        const int second_index = input.add_linear_segment(second);
+
+        termin::NavMeshLinearPathLinkRecord link;
+        link.from_segment = first_index;
+        link.to_segment = second_index;
+        link.from_t = 65535;
+        link.to_t = 0;
+        link.debug_name = "first-to-second";
+        input.add_linear_link(link);
+
+        termin::NavMeshLinearPathLinkRecord invalid_link;
+        invalid_link.from_segment = second_index;
+        invalid_link.to_segment = second_index + 10;
+        invalid_link.debug_name = "invalid";
+        input.add_linear_link(invalid_link);
+    };
 
     registry.set_registration_owner(owner);
     if (!registry.register_geometry_visitor(owned_type, visitor)) {
@@ -108,7 +105,8 @@ int main() {
 
     termin::CxxComponent component(owned_type.c_str());
     termin::NavMeshBakeInput input;
-    if (registry.visit_component(termin::Entity(), &component, owned_type.c_str(), termin::NavMeshBakeContext(), input) != 2) {
+    if (registry.visit_component(
+            termin::Entity(), &component, owned_type.c_str(), termin::NavMeshBakeContext(), input) != 2) {
         return fail("visit_component did not dispatch geometry and linear visitors");
     }
     if (!linear_visitor_called) {

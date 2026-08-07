@@ -1,29 +1,29 @@
 #pragma once
 
-#include <vector>
-#include <string>
 #include <span>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
-#include "termin/render/frame_pass.hpp"
-#include "termin/render/execute_context.hpp"
-#include "termin/render/resource_spec.hpp"
-#include "termin/render_passes/export.h"
-#include "termin/lighting/shadow.hpp"
-#include "termin/render/drawable.hpp"
-#include "termin/render/render_context.hpp"
-#include "termin/render/render_scene_item_collector.hpp"
-#include "termin/render/scene_shader_usage_provider.hpp"
-#include "tgfx/render_state.hpp"
-#include "tgfx2/handles.hpp"
-#include "tgfx2/i_render_device.hpp"
-#include <termin/lighting/light.hpp>
-#include "termin/render/shadow_camera.hpp"
-#include <termin/geom/mat44.hpp>
-#include <termin/entity/entity.hpp>
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
+#include "termin/lighting/shadow.hpp"
+#include "termin/render/drawable.hpp"
+#include "termin/render/execute_context.hpp"
+#include "termin/render/frame_pass.hpp"
+#include "termin/render/render_context.hpp"
+#include "termin/render/render_scene_item_collector.hpp"
+#include "termin/render/resource_spec.hpp"
+#include "termin/render/scene_shader_usage_provider.hpp"
+#include "termin/render/shadow_camera.hpp"
+#include "termin/render_passes/export.h"
+#include "tgfx/render_state.hpp"
+#include "tgfx2/handles.hpp"
+#include "tgfx2/i_render_device.hpp"
+#include <termin/entity/entity.hpp>
+#include <termin/geom/mat44.hpp>
+#include <termin/lighting/light.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -31,186 +31,177 @@ extern "C" {
 
 namespace termin {
 
-// Draw call for shadow pass (defined before ShadowPass class)
-struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
-    Entity entity;
-    tc_component* component = nullptr;
-    tc_material_phase* phase = nullptr;
-    size_t item_index = SIZE_MAX;
-    tc_material_handle material = tc_material_handle_invalid();
-    size_t phase_index = SIZE_MAX;
+    // Draw call for shadow pass (defined before ShadowPass class)
+    struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
+        Entity entity;
+        tc_component* component = nullptr;
+        tc_material_phase* phase = nullptr;
+        size_t item_index = SIZE_MAX;
+        tc_material_handle material = tc_material_handle_invalid();
+        size_t phase_index = SIZE_MAX;
 
-    tc_material_phase* resolve_phase() const {
-        if (!tc_material_handle_is_invalid(material) && phase_index != SIZE_MAX) {
-            tc_material* mat = tc_material_get(material);
-            if (mat && phase_index < mat->phase_count) {
-                return &mat->phases[phase_index];
+        tc_material_phase* resolve_phase() const {
+            if (!tc_material_handle_is_invalid(material) && phase_index != SIZE_MAX) {
+                tc_material* mat = tc_material_get(material);
+                if (mat && phase_index < mat->phase_count) {
+                    return &mat->phases[phase_index];
+                }
             }
+            return phase;
         }
-        return phase;
-    }
-};
-
-// Result of shadow map rendering for one light (or cascade)
-struct TERMIN_RENDER_PASSES_API ShadowMapResult {
-    tgfx::TextureHandle depth_tex2;
-    int width = 0;
-    int height = 0;
-    Mat44f light_space_matrix;
-    int light_index = 0;
-
-    // Cascade parameters
-    int cascade_index = 0;
-    float cascade_split_near = 0.0f;
-    float cascade_split_far = 0.0f;
-
-    ShadowMapResult() = default;
-
-    ShadowMapResult(tgfx::TextureHandle d, int w, int h,
-                    const Mat44f& m, int light_idx,
-                    int cascade_idx, float split_near, float split_far)
-        : depth_tex2(d), width(w), height(h),
-          light_space_matrix(m), light_index(light_idx),
-          cascade_index(cascade_idx), cascade_split_near(split_near),
-          cascade_split_far(split_far) {}
-};
-
-struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
-    tc_scene_handle scene = {};
-    std::span<const Light> lights;
-    Mat44f camera_view;
-    Mat44f camera_projection;
-    float camera_near = 0.1f;
-    float camera_far = 100.0f;
-    uint64_t layer_mask = 0;
-    uint64_t render_category_mask = UINT64_MAX;
-};
-
-/**
- * Shadow pass - renders shadow maps for directional lights.
- *
- * For each light with shadows enabled:
- * 1. Creates/gets shadow FBO from pool
- * 2. Computes light-space matrix (frustum fitting)
- * 3. Renders shadow casters to depth buffer
- *
- * Returns list of ShadowMapResult for use by ColorPass.
- */
-class TERMIN_RENDER_PASSES_API ShadowPass
-    : public CxxFramePass,
-      public SceneShaderUsageProvider {
-public:
-    // Pass configuration
-    std::string output_res = "shadow_maps";
-    float caster_offset = 50.0f;
-
-    // Entity names cache (for get_internal_symbols)
-    std::vector<std::string> entity_names;
-private:
-    // Lazy tgfx2 state owned by the pass.
-    // Shader handles live on the global registry; the pass only caches them.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    mutable tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
-
-    struct ShadowDepthSlot {
-        tgfx::TextureHandle tex;
-        int resolution = 0;
     };
-    // Native shadow-map pool: index -> depth texture.
-    std::unordered_map<int, ShadowDepthSlot> depth_pool_;
-    tgfx::IRenderDevice* depth_pool_device_ = nullptr;
-    // Cached draw calls (reused between frames).
-    std::vector<ShadowDrawCall> cached_draw_calls_;
 
-public:
-    static void register_type();
+    // Result of shadow map rendering for one light (or cascade)
+    struct TERMIN_RENDER_PASSES_API ShadowMapResult {
+        tgfx::TextureHandle depth_tex2;
+        int width = 0;
+        int height = 0;
+        Mat44f light_space_matrix;
+        int light_index = 0;
 
-    // INSPECT_FIELD registrations
-    INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
-    INSPECT_FIELD(ShadowPass, caster_offset, "Caster Offset", "float", 0.0, 200.0, 5.0)
-    INSPECT_TYPE_METADATA(ShadowPass, graph, make_pass_graph_metadata(
-        {},
-        {{"output_res", "shadow"}},
-        {}
-    ))
+        // Cascade parameters
+        int cascade_index = 0;
+        float cascade_split_near = 0.0f;
+        float cascade_split_far = 0.0f;
 
-    ShadowPass(
-        const std::string& output_res = "shadow_maps",
-        const std::string& pass_name = "Shadow",
-        float caster_offset = 50.0f
-    );
+        ShadowMapResult() = default;
 
-    virtual ~ShadowPass() = default;
+        ShadowMapResult(tgfx::TextureHandle d,
+                        int w,
+                        int h,
+                        const Mat44f& m,
+                        int light_idx,
+                        int cascade_idx,
+                        float split_near,
+                        float split_far)
+            : depth_tex2(d),
+              width(w),
+              height(h),
+              light_space_matrix(m),
+              light_index(light_idx),
+              cascade_index(cascade_idx),
+              cascade_split_near(split_near),
+              cascade_split_far(split_far) {}
+    };
 
-    // Dynamic resource computation
-    std::set<const char*> compute_reads() const override {
-        return {};
-    }
+    struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
+        tc_scene_handle scene = {};
+        std::span<const Light> lights;
+        Mat44f camera_view;
+        Mat44f camera_projection;
+        float camera_near = 0.1f;
+        float camera_far = 100.0f;
+        uint64_t layer_mask = 0;
+        uint64_t render_category_mask = UINT64_MAX;
+    };
 
-    std::set<const char*> compute_writes() const override {
-        return {output_res.c_str()};
-    }
+    /**
+     * Shadow pass - renders shadow maps for directional lights.
+     *
+     * For each light with shadows enabled:
+     * 1. Creates/gets shadow FBO from pool
+     * 2. Computes light-space matrix (frustum fitting)
+     * 3. Renders shadow casters to depth buffer
+     *
+     * Returns list of ShadowMapResult for use by ColorPass.
+     */
+    class TERMIN_RENDER_PASSES_API ShadowPass : public CxxFramePass, public SceneShaderUsageProvider {
+    public:
+        // Pass configuration
+        std::string output_res = "shadow_maps";
+        float caster_offset = 50.0f;
 
-    // Non-copyable (owns tgfx2 texture handles in depth_pool_)
-    ShadowPass(const ShadowPass&) = delete;
-    ShadowPass& operator=(const ShadowPass&) = delete;
-    ShadowPass(ShadowPass&&) = delete;
-    ShadowPass& operator=(ShadowPass&&) = delete;
+        // Entity names cache (for get_internal_symbols)
+        std::vector<std::string> entity_names;
 
-    // Clean up FBO pool
-    void destroy() override;
+    private:
+        // Lazy tgfx2 state owned by the pass.
+        // Shader handles live on the global registry; the pass only caches them.
+        tgfx::IRenderDevice* device2_ = nullptr;
+        mutable tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
 
-    // Override from CxxFramePass
-    void execute(ExecuteContext& ctx) override;
-    void collect_scene_shader_usages(
-        tc_scene_handle scene,
-        const std::function<void(TcShader)>& emit
-    ) const override;
+        struct ShadowDepthSlot {
+            tgfx::TextureHandle tex;
+            int resolution = 0;
+        };
+        // Native shadow-map pool: index -> depth texture.
+        std::unordered_map<int, ShadowDepthSlot> depth_pool_;
+        tgfx::IRenderDevice* depth_pool_device_ = nullptr;
+        // Cached draw calls (reused between frames).
+        std::vector<ShadowDrawCall> cached_draw_calls_;
 
-    // Execute shadow pass, rendering shadow maps for all lights
-    // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
-    std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(
-        ExecuteContext& ctx,
-        const ShadowPassExecuteData& data
-    );
+    public:
+        static void register_type();
 
-    std::vector<ResourceSpec> get_resource_specs() const override;
+        // INSPECT_FIELD registrations
+        INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
+        INSPECT_FIELD(ShadowPass, caster_offset, "Caster Offset", "float", 0.0, 200.0, 5.0)
+        INSPECT_TYPE_METADATA(ShadowPass, graph, make_pass_graph_metadata({}, {{"output_res", "shadow"}}, {}))
 
-    std::vector<std::string> get_internal_symbols() const override {
-        return entity_names;
-    }
+        ShadowPass(const std::string& output_res = "shadow_maps",
+                   const std::string& pass_name = "Shadow",
+                   float caster_offset = 50.0f);
 
-private:
-    // Lazy tgfx2 state owned by the pass.
-    //
-    // PerFrame data is written into the device ring UBO per cascade now;
-    // the dynamic descriptor offset bakes a fresh offset into each draw,
-    // which is what the old per_frame_ubo_pool_ achieved with one VkBuffer
-    // per cascade slot (Vulkan cmd-buffer deferred read + shared UBO =
-    // stale data bug, vulkan_ubo_reuse_pitfall). Shader handles are NOT
-    // owned — they live on the tc_shader global registry so repeated pass
-    // construction/destruction doesn't re-run shaderc.
-    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
-    void release_tgfx2_resources();
+        virtual ~ShadowPass() = default;
 
-    // Get or create native depth texture for shadow map at (index, resolution).
-    tgfx::TextureHandle get_or_create_depth_tex2(
-        tgfx::IRenderDevice& device, int resolution, int index);
+        // Dynamic resource computation
+        std::set<const char*> compute_reads() const override {
+            return {};
+        }
 
-    // Collect shadow caster draw calls
-    void collect_shadow_casters(
-        tc_scene_handle scene,
-        uint64_t layer_mask,
-        uint64_t render_category_mask,
-        const RenderItemSnapshot& snapshot
-    );
+        std::set<const char*> compute_writes() const override {
+            return {output_res.c_str()};
+        }
 
-    // Build shadow camera params for a light
-    ShadowCameraParams build_shadow_params(
-        const Light& light,
-        const Mat44f& camera_view,
-        const Mat44f& camera_projection
-    );
-};
+        // Non-copyable (owns tgfx2 texture handles in depth_pool_)
+        ShadowPass(const ShadowPass&) = delete;
+        ShadowPass& operator=(const ShadowPass&) = delete;
+        ShadowPass(ShadowPass&&) = delete;
+        ShadowPass& operator=(ShadowPass&&) = delete;
+
+        // Clean up FBO pool
+        void destroy() override;
+
+        // Override from CxxFramePass
+        void execute(ExecuteContext& ctx) override;
+        void collect_scene_shader_usages(tc_scene_handle scene,
+                                         const std::function<void(TcShader)>& emit) const override;
+
+        // Execute shadow pass, rendering shadow maps for all lights
+        // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
+        std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(ExecuteContext& ctx, const ShadowPassExecuteData& data);
+
+        std::vector<ResourceSpec> get_resource_specs() const override;
+
+        std::vector<std::string> get_internal_symbols() const override {
+            return entity_names;
+        }
+
+    private:
+        // Lazy tgfx2 state owned by the pass.
+        //
+        // PerFrame data is written into the device ring UBO per cascade now;
+        // the dynamic descriptor offset bakes a fresh offset into each draw,
+        // which is what the old per_frame_ubo_pool_ achieved with one VkBuffer
+        // per cascade slot (Vulkan cmd-buffer deferred read + shared UBO =
+        // stale data bug, vulkan_ubo_reuse_pitfall). Shader handles are NOT
+        // owned — they live on the tc_shader global registry so repeated pass
+        // construction/destruction doesn't re-run shaderc.
+        void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+        void release_tgfx2_resources();
+
+        // Get or create native depth texture for shadow map at (index, resolution).
+        tgfx::TextureHandle get_or_create_depth_tex2(tgfx::IRenderDevice& device, int resolution, int index);
+
+        // Collect shadow caster draw calls
+        void collect_shadow_casters(tc_scene_handle scene,
+                                    uint64_t layer_mask,
+                                    uint64_t render_category_mask,
+                                    const RenderItemSnapshot& snapshot);
+
+        // Build shadow camera params for a light
+        ShadowCameraParams
+        build_shadow_params(const Light& light, const Mat44f& camera_view, const Mat44f& camera_projection);
+    };
 
 } // namespace termin

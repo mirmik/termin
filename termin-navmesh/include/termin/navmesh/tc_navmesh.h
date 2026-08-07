@@ -1,20 +1,20 @@
 // tc_navmesh.h - Detour-backed navigation mesh runtime resource
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <tcbase/tc_binding_types.h>
 #include <tcbase/tc_uuid.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
 
 #if defined(_WIN32)
-  #if defined(TERMIN_NAVMESH_EXPORTS)
-    #define TERMIN_NAVMESH_API __declspec(dllexport)
-  #else
-    #define TERMIN_NAVMESH_API __declspec(dllimport)
-  #endif
+#if defined(TERMIN_NAVMESH_EXPORTS)
+#define TERMIN_NAVMESH_API __declspec(dllexport)
 #else
-  #define TERMIN_NAVMESH_API __attribute__((visibility("default")))
+#define TERMIN_NAVMESH_API __declspec(dllimport)
+#endif
+#else
+#define TERMIN_NAVMESH_API __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus

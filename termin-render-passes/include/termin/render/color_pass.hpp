@@ -1,279 +1,266 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <set>
 #include <algorithm>
+#include <set>
 #include <span>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
-#include "termin/render/frame_pass.hpp"
-#include "termin/render/execute_context.hpp"
-#include "termin/render/resource_spec.hpp"
-#include "termin/render_passes/export.h"
 #include "termin/render/drawable.hpp"
+#include "termin/render/execute_context.hpp"
+#include "termin/render/frame_pass.hpp"
+#include "termin/render/material_pipeline_shader_assembler.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
-#include "termin/render/material_pipeline_shader_assembler.hpp"
+#include "termin/render/resource_spec.hpp"
 #include "termin/render/scene_shader_usage_provider.hpp"
+#include "termin/render_passes/export.h"
 
 namespace tgfx {
-class IRenderDevice;
-class RenderContext2;
-}
-#include "tgfx/render_state.hpp"
-#include <termin/lighting/light.hpp>
-#include "termin/lighting/shadow.hpp"
-#include "termin/lighting/lighting_upload.hpp"
-#include "termin/lighting/lighting_ubo.hpp"
-#include <termin/geom/mat44.hpp>
-#include <termin/entity/entity.hpp>
-#include <termin/entity/component.hpp>
-#include "tc_inspect_cpp.hpp"
+    class IRenderDevice;
+    class RenderContext2;
+} // namespace tgfx
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
+#include "tc_inspect_cpp.hpp"
+#include "termin/lighting/lighting_ubo.hpp"
+#include "termin/lighting/lighting_upload.hpp"
+#include "termin/lighting/shadow.hpp"
+#include "tgfx/render_state.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/geom/mat44.hpp>
+#include <termin/lighting/light.hpp>
 
 namespace termin {
 
-TERMIN_RENDER_PASSES_API
-MaterialPipelinePassContract color_material_pass_contract();
-TERMIN_RENDER_PASSES_API
-MaterialPipelinePassContract multiview_color_material_pass_contract();
+    TERMIN_RENDER_PASSES_API
+    MaterialPipelinePassContract color_material_pass_contract();
+    TERMIN_RENDER_PASSES_API
+    MaterialPipelinePassContract multiview_color_material_pass_contract();
 
-struct ColorPassConfig {
-    std::string input_res = "empty";
-    std::string output_res = "color";
-    std::string shadow_res = "shadow_maps";
-    std::string phase_mark = "opaque";
-    std::string pass_name = "Color";
-    std::string sort_mode = "none";
-    std::string camera_name;
-    bool clear_depth = false;
-    bool attachment_barrier_between_draws = false;
-};
+    struct ColorPassConfig {
+        std::string input_res = "empty";
+        std::string output_res = "color";
+        std::string shadow_res = "shadow_maps";
+        std::string phase_mark = "opaque";
+        std::string pass_name = "Color";
+        std::string sort_mode = "none";
+        std::string camera_name;
+        bool clear_depth = false;
+        bool attachment_barrier_between_draws = false;
+    };
 
-struct ColorPassExecuteData {
-    Rect2i rect;
-    tc_scene_handle scene = {};
-    Mat44f view;
-    Mat44f projection;
-    Vec3 camera_position;
-    std::span<const Light> lights;
-    Vec3 ambient_color{1.0, 1.0, 1.0};
-    float ambient_intensity = 0.1f;
-    std::span<const ShadowMapArrayEntry> shadow_maps;
-    ShadowSettings shadow_settings;
-    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
-};
-
-/**
- * Color pass - main rendering pass for opaque/transparent objects.
- *
- * Collects all Drawable components from entities, filters by phase_mark,
- * sorts by priority, and renders with materials and lighting.
- */
-class TERMIN_RENDER_PASSES_API ColorPass
-    : public CxxFramePass,
-      public SceneShaderUsageProvider {
-public:
-    // Pass configuration
-    std::string input_res = "empty";
-    std::string output_res = "color";
-    std::string shadow_res = "shadow_maps";  // Shadow map resource name (empty = no shadows)
-    // Drawable/material representation requested by this pass. This filters
-    // drawables and material phases; shader layout comes from the explicit
-    // color/material pipeline contract built by the pass.
-    std::string phase_mark = "opaque";
-    std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
-    std::string camera_name;  // Override camera by entity name (empty = use context camera)
-    bool clear_depth = false;
-    // Explicit compatibility ordering for tiled renderers. Keeps one render
-    // pass open but inserts a framebuffer-local attachment barrier between
-    // adjacent render items.
-    bool attachment_barrier_between_draws = false;
-    bool wireframe = false;  // Render as wireframe (override polygon mode)
-    bool use_ubo = false;    // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
-
-    // Extra texture resources: uniform_name -> resource_name
-    // These are bound before rendering and passed to shaders
-    std::unordered_map<std::string, std::string> extra_textures;
-
-    // Entity names cache (for get_internal_symbols)
-    std::vector<std::string> entity_names;
-
-    // Timing for selected internal symbol (debug mode)
-    InternalSymbolTiming selected_symbol_timing;
-
-private:
-    // Last GPU time in ms (from detailed profiling mode)
-    double last_gpu_time_ms_ = 0.0;
-
-protected:
-    bool multiview_mode_ = false;
-
-private:
-
-    // Lighting UBO for efficient uniform uploads
-    LightingUBO lighting_ubo_;
-
-    // Depth-compare sampler used for `sampler2DShadow u_shadow_map[]` in
-    // shaders. Backends attach the compare state through their native
-    // sampler object; the default sampler has compare disabled.
-    tgfx::SamplerHandle shadow_sampler_{};
-
-    // Cached draw calls vector (reused between frames to avoid allocations)
-    std::vector<PhaseDrawCall> cached_draw_calls_;
-
-    // Sort keys for distance sorting (parallel array to cached_draw_calls_)
-    std::vector<uint64_t> sort_keys_;
-
-    // Indices for sorting (reused between frames)
-    std::vector<size_t> sort_indices_;
-
-    // Temp buffer for sorted draw calls
-    std::vector<PhaseDrawCall> sorted_draw_calls_;
-
-public:
-
-    static void register_type();
-
-    tc_value serialize_extra_textures() const;
-    void deserialize_extra_textures(const tc_value* value);
-
-    // Last GPU time in milliseconds (from detailed profiling)
-    double last_gpu_time_ms() const { return last_gpu_time_ms_; }
-
-    // INSPECT_FIELD registrations
-    INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
-    INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
-    INSPECT_FIELD(ColorPass, shadow_res, "Shadow Resource", "string")
-    INSPECT_FIELD(ColorPass, phase_mark, "Phase Mark", "string")
-    INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
-        {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
-    INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
-    INSPECT_FIELD(ColorPass, attachment_barrier_between_draws,
-                  "Attachment Barrier Between Draws", "bool")
-    INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
-    INSPECT_TYPE_METADATA(ColorPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}, {"shadow_res", "shadow"}},
-        {{"output_res", "fbo"}},
-        {{"input_res", "output_res"}}
-    ))
-
-    explicit ColorPass(const ColorPassConfig& config = {});
-
-    virtual ~ColorPass() = default;
+    struct ColorPassExecuteData {
+        Rect2i rect;
+        tc_scene_handle scene = {};
+        Mat44f view;
+        Mat44f projection;
+        Vec3 camera_position;
+        std::span<const Light> lights;
+        Vec3 ambient_color{1.0, 1.0, 1.0};
+        float ambient_intensity = 0.1f;
+        std::span<const ShadowMapArrayEntry> shadow_maps;
+        ShadowSettings shadow_settings;
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+        uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
+    };
 
     /**
-     * Execute the color pass.
+     * Color pass - main rendering pass for opaque/transparent objects.
      *
-     * @param graphics Graphics backend
-     * @param reads_fbos Input FBOs
-     * @param writes_fbos Output FBOs
-     * @param data Pass-specific draw data for this frame.
+     * Collects all Drawable components from entities, filters by phase_mark,
+     * sorts by priority, and renders with materials and lighting.
      */
-    // Draw the opaque/transparent geometry through a tgfx2 render
-    // context. Requires ctx.ctx2 to be non-null — ColorPass is a
-    // tgfx2-only pass now. Uses ctx2->bind_shader via the
-    // tc_shader_ensure_tgfx2 bridge, apply_material_phase_ubo
-    // dispatcher for material UBO + textures, wrap_mesh_as_tgfx2 for
-    // per-draw vertex/index buffers, PerFrame UBOs and push constants
-    // for engine-supplied state.
-    //
-    // Mesh-backed and typed non-mesh drawables are submitted through
-    // RenderItems. Pass ordering is derived from material phase priority on
-    // the collected items.
-    void execute_with_data(
-        ExecuteContext& ctx,
-        const ColorPassExecuteData& data
-    );
+    class TERMIN_RENDER_PASSES_API ColorPass : public CxxFramePass, public SceneShaderUsageProvider {
+    public:
+        // Pass configuration
+        std::string input_res = "empty";
+        std::string output_res = "color";
+        std::string shadow_res = "shadow_maps"; // Shadow map resource name (empty = no shadows)
+        // Drawable/material representation requested by this pass. This filters
+        // drawables and material phases; shader layout comes from the explicit
+        // color/material pipeline contract built by the pass.
+        std::string phase_mark = "opaque";
+        std::string sort_mode = "none"; // "none", "near_to_far", "far_to_near"
+        std::string camera_name;        // Override camera by entity name (empty = use context camera)
+        bool clear_depth = false;
+        // Explicit compatibility ordering for tiled renderers. Keeps one render
+        // pass open but inserts a framebuffer-local attachment barrier between
+        // adjacent render items.
+        bool attachment_barrier_between_draws = false;
+        bool wireframe = false; // Render as wireframe (override polygon mode)
+        bool use_ubo = false;   // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
 
-    // Override from CxxFramePass
-    void execute(ExecuteContext& ctx) override;
-    void collect_scene_shader_usages(
-        tc_scene_handle scene,
-        const std::function<void(TcShader)>& emit
-    ) const override;
+        // Extra texture resources: uniform_name -> resource_name
+        // These are bound before rendering and passed to shaders
+        std::unordered_map<std::string, std::string> extra_textures;
 
-    std::vector<ResourceSpec> get_resource_specs() const override;
+        // Entity names cache (for get_internal_symbols)
+        std::vector<std::string> entity_names;
 
-    // Compute read resources dynamically.
-    std::set<const char*> compute_reads() const override;
+        // Timing for selected internal symbol (debug mode)
+        InternalSymbolTiming selected_symbol_timing;
 
-    // Compute write resources dynamically.
-    std::set<const char*> compute_writes() const override;
+    private:
+        // Last GPU time in ms (from detailed profiling mode)
+        double last_gpu_time_ms_ = 0.0;
 
-    bool set_graph_resource_input(
-        const std::string& socket_name,
-        const std::string& resource_name
-    ) override;
+    protected:
+        bool multiview_mode_ = false;
 
-    /**
-     * Get inplace aliases (input->output pairs that share the same FBO).
-     */
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
+    private:
+        // Lighting UBO for efficient uniform uploads
+        LightingUBO lighting_ubo_;
 
-    /**
-     * Add extra texture resource.
-     * @param uniform_name Shader uniform name (will add u_ prefix if missing)
-     * @param resource_name Framegraph resource name
-     */
-    void add_extra_texture(const std::string& uniform_name, const std::string& resource_name);
+        // Depth-compare sampler used for `sampler2DShadow u_shadow_map[]` in
+        // shaders. Backends attach the compare state through their native
+        // sampler object; the default sampler has compare disabled.
+        tgfx::SamplerHandle shadow_sampler_{};
 
-    /**
-     * Get internal symbols for debugging.
-     */
-    std::vector<std::string> get_internal_symbols() const override {
-        return entity_names;
-    }
+        // Cached draw calls vector (reused between frames to avoid allocations)
+        std::vector<PhaseDrawCall> cached_draw_calls_;
 
-    /**
-     * Get internal symbols with timing information.
-     * Returns timing only for the currently selected debug symbol.
-     */
-    std::vector<InternalSymbolTiming> get_internal_symbols_with_timing() const override {
-        if (selected_symbol_timing.name.empty()) {
-            return {};
+        // Sort keys for distance sorting (parallel array to cached_draw_calls_)
+        std::vector<uint64_t> sort_keys_;
+
+        // Indices for sorting (reused between frames)
+        std::vector<size_t> sort_indices_;
+
+        // Temp buffer for sorted draw calls
+        std::vector<PhaseDrawCall> sorted_draw_calls_;
+
+    public:
+        static void register_type();
+
+        tc_value serialize_extra_textures() const;
+        void deserialize_extra_textures(const tc_value* value);
+
+        // Last GPU time in milliseconds (from detailed profiling)
+        double last_gpu_time_ms() const {
+            return last_gpu_time_ms_;
         }
-        return {selected_symbol_timing};
-    }
 
-private:
-    // Collect draw calls from scene entities into cached_draw_calls_.
-    void collect_draw_calls(
-        tc_scene_handle scene,
-        const std::string& phase_mark,
-        const RenderContext& render_context,
-        uint64_t layer_mask,
-        const RenderItemSnapshot& snapshot
-    );
+        // INSPECT_FIELD registrations
+        INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
+        INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
+        INSPECT_FIELD(ColorPass, shadow_res, "Shadow Resource", "string")
+        INSPECT_FIELD(ColorPass, phase_mark, "Phase Mark", "string")
+        INSPECT_FIELD_CHOICES(ColorPass,
+                              sort_mode,
+                              "Sort Mode",
+                              "string",
+                              {"none", "None"},
+                              {"near_to_far", "Near to Far"},
+                              {"far_to_near", "Far to Near"})
+        INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
+        INSPECT_FIELD(ColorPass, attachment_barrier_between_draws, "Attachment Barrier Between Draws", "bool")
+        INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
+        INSPECT_TYPE_METADATA(ColorPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "fbo"}, {"shadow_res", "shadow"}},
+                                                       {{"output_res", "fbo"}},
+                                                       {{"input_res", "output_res"}}))
 
-    // Compute sort keys for all draw calls (priority + distance)
-    void compute_sort_keys(const Vec3& camera_position);
+        explicit ColorPass(const ColorPassConfig& config = {});
 
-    // Sort draw calls by sort_keys_
-    void sort_draw_calls();
+        virtual ~ColorPass() = default;
 
-};
+        /**
+         * Execute the color pass.
+         *
+         * @param graphics Graphics backend
+         * @param reads_fbos Input FBOs
+         * @param writes_fbos Output FBOs
+         * @param data Pass-specific draw data for this frame.
+         */
+        // Draw the opaque/transparent geometry through a tgfx2 render
+        // context. Requires ctx.ctx2 to be non-null — ColorPass is a
+        // tgfx2-only pass now. Uses ctx2->bind_shader via the
+        // tc_shader_ensure_tgfx2 bridge, apply_material_phase_ubo
+        // dispatcher for material UBO + textures, wrap_mesh_as_tgfx2 for
+        // per-draw vertex/index buffers, PerFrame UBOs and push constants
+        // for engine-supplied state.
+        //
+        // Mesh-backed and typed non-mesh drawables are submitted through
+        // RenderItems. Pass ordering is derived from material phase priority on
+        // the collected items.
+        void execute_with_data(ExecuteContext& ctx, const ColorPassExecuteData& data);
 
-SERIALIZABLE_FIELD(
-    ColorPass,
-    extra_textures,
-    serialize_extra_textures(),
-    deserialize_extra_textures(val))
+        // Override from CxxFramePass
+        void execute(ExecuteContext& ctx) override;
+        void collect_scene_shader_usages(tc_scene_handle scene,
+                                         const std::function<void(TcShader)>& emit) const override;
 
-class TERMIN_RENDER_PASSES_API MultiviewColorPass final : public ColorPass {
-public:
-    static void register_type();
+        std::vector<ResourceSpec> get_resource_specs() const override;
 
-    INSPECT_TYPE_METADATA(MultiviewColorPass, graph, make_pass_graph_metadata(
-        {{"input_res", "multiview_fbo"}},
-        {{"output_res", "multiview_fbo"}},
-        {{"input_res", "output_res"}}
-    ))
+        // Compute read resources dynamically.
+        std::set<const char*> compute_reads() const override;
 
-    explicit MultiviewColorPass(const ColorPassConfig& config = {});
-};
+        // Compute write resources dynamically.
+        std::set<const char*> compute_writes() const override;
+
+        bool set_graph_resource_input(const std::string& socket_name, const std::string& resource_name) override;
+
+        /**
+         * Get inplace aliases (input->output pairs that share the same FBO).
+         */
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
+
+        /**
+         * Add extra texture resource.
+         * @param uniform_name Shader uniform name (will add u_ prefix if missing)
+         * @param resource_name Framegraph resource name
+         */
+        void add_extra_texture(const std::string& uniform_name, const std::string& resource_name);
+
+        /**
+         * Get internal symbols for debugging.
+         */
+        std::vector<std::string> get_internal_symbols() const override {
+            return entity_names;
+        }
+
+        /**
+         * Get internal symbols with timing information.
+         * Returns timing only for the currently selected debug symbol.
+         */
+        std::vector<InternalSymbolTiming> get_internal_symbols_with_timing() const override {
+            if (selected_symbol_timing.name.empty()) {
+                return {};
+            }
+            return {selected_symbol_timing};
+        }
+
+    private:
+        // Collect draw calls from scene entities into cached_draw_calls_.
+        void collect_draw_calls(tc_scene_handle scene,
+                                const std::string& phase_mark,
+                                const RenderContext& render_context,
+                                uint64_t layer_mask,
+                                const RenderItemSnapshot& snapshot);
+
+        // Compute sort keys for all draw calls (priority + distance)
+        void compute_sort_keys(const Vec3& camera_position);
+
+        // Sort draw calls by sort_keys_
+        void sort_draw_calls();
+    };
+
+    SERIALIZABLE_FIELD(ColorPass, extra_textures, serialize_extra_textures(), deserialize_extra_textures(val))
+
+    class TERMIN_RENDER_PASSES_API MultiviewColorPass final : public ColorPass {
+    public:
+        static void register_type();
+
+        INSPECT_TYPE_METADATA(MultiviewColorPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "multiview_fbo"}},
+                                                       {{"output_res", "multiview_fbo"}},
+                                                       {{"input_res", "output_res"}}))
+
+        explicit MultiviewColorPass(const ColorPassConfig& config = {});
+    };
 
 } // namespace termin

@@ -4,6 +4,6 @@
 
 namespace termin::animation {
 
-TERMIN_COMPONENTS_ANIMATION_API void register_builtin_animation_component_types();
+    TERMIN_COMPONENTS_ANIMATION_API void register_builtin_animation_component_types();
 
 } // namespace termin::animation

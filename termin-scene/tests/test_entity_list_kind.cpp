@@ -8,12 +8,12 @@
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/tc_scene.hpp>
 
-#define TEST_ASSERT(cond, msg) \
-    do { \
-        if (!(cond)) { \
-            std::cerr << "FAIL: " << msg << " (line " << __LINE__ << ")\n"; \
-            return 1; \
-        } \
+#define TEST_ASSERT(cond, msg)                                                                                         \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            std::cerr << "FAIL: " << msg << " (line " << __LINE__ << ")\n";                                            \
+            return 1;                                                                                                  \
+        }                                                                                                              \
     } while (0)
 
 int main() {
@@ -36,11 +36,7 @@ int main() {
     tc_value_list_push(&serialized, bone_b_ref);
 
     tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene.handle());
-    std::any deserialized = tc::KindRegistryCpp::instance().deserialize(
-        "list[entity]",
-        &serialized,
-        &inspect_ctx
-    );
+    std::any deserialized = tc::KindRegistryCpp::instance().deserialize("list[entity]", &serialized, &inspect_ctx);
     tc_value_free(&serialized);
 
     TEST_ASSERT(deserialized.has_value(), "list[entity] should deserialize to a value");

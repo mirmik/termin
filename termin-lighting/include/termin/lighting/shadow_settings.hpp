@@ -2,24 +2,24 @@
 
 namespace termin {
 
-struct ShadowSettings {
-public:
-    static constexpr int METHOD_HARD = 0;
-    static constexpr int METHOD_PCF = 1;
-    static constexpr int METHOD_POISSON = 2;
+    struct ShadowSettings {
+    public:
+        static constexpr int METHOD_HARD = 0;
+        static constexpr int METHOD_PCF = 1;
+        static constexpr int METHOD_POISSON = 2;
 
-    int method = METHOD_PCF;
-    double softness = 1.0;
-    // World-space offset along the light depth axis, converted to
-    // normalized shadow-map depth per cascade by shader shadow helpers.
-    double bias = 0.0;
+        int method = METHOD_PCF;
+        double softness = 1.0;
+        // World-space offset along the light depth axis, converted to
+        // normalized shadow-map depth per cascade by shader shadow helpers.
+        double bias = 0.0;
 
-public:
-    ShadowSettings() = default;
-    ShadowSettings(int method_, double softness_, double bias_)
-        : method(method_),
-          softness(softness_),
-          bias(bias_) {}
-};
+    public:
+        ShadowSettings() = default;
+        ShadowSettings(int method_, double softness_, double bias_)
+            : method(method_),
+              softness(softness_),
+              bias(bias_) {}
+    };
 
 } // namespace termin

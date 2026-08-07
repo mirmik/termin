@@ -2,11 +2,11 @@
 #ifndef TC_SCENE_H
 #define TC_SCENE_H
 
-#include "tc_types.h"
-#include "core/tc_scene_pool.h"
-#include "core/tc_entity_pool.h"
 #include "core/tc_component.h"
 #include "core/tc_component_capability.h"
+#include "core/tc_entity_pool.h"
+#include "core/tc_scene_pool.h"
+#include "tc_types.h"
 #include "tc_value.h"
 #include <tcbase/tc_event.h>
 
@@ -19,9 +19,9 @@ extern "C" {
 // ============================================================================
 
 typedef enum tc_scene_mode {
-    TC_SCENE_MODE_INACTIVE = 0,  // Loaded but not updated
-    TC_SCENE_MODE_STOP = 1,      // Editor update (gizmos, selection)
-    TC_SCENE_MODE_PLAY = 2       // Full simulation
+    TC_SCENE_MODE_INACTIVE = 0, // Loaded but not updated
+    TC_SCENE_MODE_STOP = 1,     // Editor update (gizmos, selection)
+    TC_SCENE_MODE_PLAY = 2      // Full simulation
 } tc_scene_mode;
 
 // ============================================================================
@@ -169,12 +169,10 @@ TC_API size_t tc_scene_count_components_of_type(tc_scene_handle h, const char* t
 typedef bool (*tc_component_iter_fn)(tc_component* c, void* user_data);
 
 // Iterate all components of a type with callback (no allocations)
-TC_API void tc_scene_foreach_component_of_type(
-    tc_scene_handle h,
-    const char* type_name,
-    tc_component_iter_fn callback,
-    void* user_data
-);
+TC_API void tc_scene_foreach_component_of_type(tc_scene_handle h,
+                                               const char* type_name,
+                                               tc_component_iter_fn callback,
+                                               void* user_data);
 
 // ============================================================================
 // Drawable Component Iteration
@@ -191,12 +189,7 @@ typedef enum tc_scene_component_filter_flags {
 // Iterate all components with a registered capability.
 // filter_flags: combination of tc_scene_component_filter_flags.
 TC_API void tc_scene_foreach_with_capability(
-    tc_scene_handle h,
-    tc_component_cap_id cap_id,
-    tc_component_iter_fn callback,
-    void* user_data,
-    int filter_flags
-);
+    tc_scene_handle h, tc_component_cap_id cap_id, tc_component_iter_fn callback, void* user_data, int filter_flags);
 
 // Get number of components currently indexed for a capability in the scene.
 TC_API size_t tc_scene_capability_count(tc_scene_handle h, tc_component_cap_id cap_id);
@@ -207,20 +200,12 @@ TC_API void tc_scene_reindex_component_capabilities(tc_scene_handle h, tc_compon
 
 // Rebuild membership link for one component capability already registered in the scene.
 // Does not affect lifecycle/update/type lists or other capabilities.
-TC_API void tc_scene_reindex_component_capability(
-    tc_scene_handle h,
-    tc_component* c,
-    tc_component_cap_id cap_id
-);
+TC_API void tc_scene_reindex_component_capability(tc_scene_handle h, tc_component* c, tc_component_cap_id cap_id);
 
 // Remove one component capability from the scene index without changing the
 // component's capability payload or mask. Capability mutation uses this to
 // preserve intrusive links until the scene has repaired its index.
-TC_API void tc_scene_unindex_component_capability(
-    tc_scene_handle h,
-    tc_component* c,
-    tc_component_cap_id cap_id
-);
+TC_API void tc_scene_unindex_component_capability(tc_scene_handle h, tc_component* c, tc_component_cap_id cap_id);
 
 // ============================================================================
 // Component Type Enumeration
@@ -228,17 +213,14 @@ TC_API void tc_scene_unindex_component_capability(
 
 // Info for one component type in a scene
 typedef struct tc_scene_component_type {
-    const char* type_name;  // Interned string, valid while scene exists
-    size_t count;           // Number of components of this type
+    const char* type_name; // Interned string, valid while scene exists
+    size_t count;          // Number of components of this type
 } tc_scene_component_type;
 
 // Get all component types present in scene with their counts
 // Returns array of tc_scene_component_type (caller must free)
 // Sets *out_count to number of types
-TC_API tc_scene_component_type* tc_scene_get_all_component_types(
-    tc_scene_handle h,
-    size_t* out_count
-);
+TC_API tc_scene_component_type* tc_scene_get_all_component_types(tc_scene_handle h, size_t* out_count);
 
 // ============================================================================
 // Scene Mode

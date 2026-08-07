@@ -6,8 +6,8 @@
  * Provides functions for collision detection using the CollisionWorld.
  */
 
-#include "tc_types.h"
 #include "core/tc_scene.h"
+#include "tc_types.h"
 #include "termin_collision/termin_collision.h"
 
 #ifdef __cplusplus
@@ -71,18 +71,18 @@ TERMIN_COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene);
  * Contact point data structure.
  */
 typedef struct tc_contact_point {
-    double position[3];      // Contact position in world space
-    double penetration;      // Penetration depth (negative = penetrating)
+    double position[3]; // Contact position in world space
+    double penetration; // Penetration depth (negative = penetrating)
 } tc_contact_point;
 
 /**
  * Contact manifold data - information about a collision pair.
  */
 typedef struct tc_contact_manifold {
-    tc_entity_id entity_a;   // First entity involved
-    tc_entity_id entity_b;   // Second entity involved
-    double normal[3];        // Contact normal (from A to B)
-    int point_count;         // Number of contact points
+    tc_entity_id entity_a;      // First entity involved
+    tc_entity_id entity_b;      // Second entity involved
+    double normal[3];           // Contact normal (from A to B)
+    int point_count;            // Number of contact points
     tc_contact_point points[4]; // Contact points (max 4)
 } tc_contact_manifold;
 

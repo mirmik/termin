@@ -1,19 +1,18 @@
 // tc_display_input_router.c - Display-level input event router
-#include "tc_display_input_router_internal.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "tc_display_input_router_internal.h"
 #include "tc_input_event.h"
-#include <tcbase/tc_log.h>
 #include <stdlib.h>
+#include <tcbase/tc_log.h>
 
 // ============================================================================
 // Forward declarations for vtable
 // ============================================================================
 
-static void router_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phase,
-                              double x, double y, float pressure);
-static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
-                                   uint32_t click_count);
+static void router_on_pointer(
+    tc_input_manager* self, uint64_t pointer_id, int device, int phase, double x, double y, float pressure);
+static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods, uint32_t click_count);
 static void router_on_mouse_move(tc_input_manager* self, double x, double y);
 static void router_on_scroll(tc_input_manager* self, double x, double y, int mods);
 static void router_on_key(tc_input_manager* self, int key, int scancode, int action, int mods);
@@ -57,7 +56,8 @@ typedef struct tc_display_input_router {
 } tc_display_input_router;
 
 tc_input_manager* tc_display_input_router_create(tc_display_handle display) {
-    if (!tc_display_handle_valid(display)) return NULL;
+    if (!tc_display_handle_valid(display))
+        return NULL;
 
     tc_display_input_router* r = (tc_display_input_router*)calloc(1, sizeof(tc_display_input_router));
     if (!r) {
@@ -79,7 +79,8 @@ tc_input_manager* tc_display_input_router_create(tc_display_handle display) {
 }
 
 void tc_display_input_router_destroy(tc_input_manager* endpoint) {
-    if (!endpoint) return;
+    if (!endpoint)
+        return;
     tc_display_input_router* r = (tc_display_input_router*)endpoint->userdata;
     if (!r || &r->base != endpoint) {
         tc_log(TC_LOG_ERROR, "[tc_display_input_router_destroy] invalid endpoint");
@@ -104,33 +105,24 @@ static inline tc_display_input_router* router_from(tc_input_manager* self) {
 }
 
 static tc_viewport_handle router_viewport_at_cursor(tc_display_input_router* r) {
-    if (!tc_display_alive(r->display)) return TC_VIEWPORT_HANDLE_INVALID;
+    if (!tc_display_alive(r->display))
+        return TC_VIEWPORT_HANDLE_INVALID;
     return tc_display_viewport_at_screen(r->display, (float)r->last_cursor_x, (float)r->last_cursor_y);
 }
 
-static tc_input_manager* router_viewport_manager(
-    tc_display_input_router* r,
-    tc_viewport_handle viewport
-) {
+static tc_input_manager* router_viewport_manager(tc_display_input_router* r, tc_viewport_handle viewport) {
     if (!r || !tc_viewport_handle_valid(viewport) || !tc_viewport_alive(viewport)) {
         return NULL;
     }
     tc_input_manager* manager = tc_viewport_get_input_manager(viewport);
     if (manager) {
-        tc_input_manager_set_platform_services(
-            manager,
-            &r->base.platform_services);
+        tc_input_manager_set_platform_services(manager, &r->base.platform_services);
     }
     return manager;
 }
 
 static void router_to_viewport_local(
-    tc_viewport_handle viewport,
-    double display_x,
-    double display_y,
-    double* local_x,
-    double* local_y
-) {
+    tc_viewport_handle viewport, double display_x, double display_y, double* local_x, double* local_y) {
     int pixel_x = 0;
     int pixel_y = 0;
     tc_viewport_get_pixel_rect(viewport, &pixel_x, &pixel_y, NULL, NULL);
@@ -149,32 +141,26 @@ static tc_viewport_handle router_keyboard_viewport(tc_display_input_router* r) {
     return viewport;
 }
 
-static tc_pointer_capture* router_find_capture(
-    tc_display_input_router* r,
-    uint64_t pointer_id,
-    int device,
-    tc_pointer_capture** previous
-) {
+static tc_pointer_capture*
+router_find_capture(tc_display_input_router* r, uint64_t pointer_id, int device, tc_pointer_capture** previous) {
     tc_pointer_capture* prev = NULL;
     tc_pointer_capture* current = r ? r->pointer_captures : NULL;
     while (current) {
         if (current->pointer_id == pointer_id && current->device == device) {
-            if (previous) *previous = prev;
+            if (previous)
+                *previous = prev;
             return current;
         }
         prev = current;
         current = current->next;
     }
-    if (previous) *previous = NULL;
+    if (previous)
+        *previous = NULL;
     return NULL;
 }
 
-static bool router_capture_pointer(
-    tc_display_input_router* r,
-    uint64_t pointer_id,
-    int device,
-    tc_viewport_handle viewport
-) {
+static bool
+router_capture_pointer(tc_display_input_router* r, uint64_t pointer_id, int device, tc_viewport_handle viewport) {
     tc_pointer_capture* existing = router_find_capture(r, pointer_id, device, NULL);
     if (existing) {
         existing->viewport = viewport;
@@ -193,14 +179,11 @@ static bool router_capture_pointer(
     return true;
 }
 
-static void router_release_pointer(
-    tc_display_input_router* r,
-    uint64_t pointer_id,
-    int device
-) {
+static void router_release_pointer(tc_display_input_router* r, uint64_t pointer_id, int device) {
     tc_pointer_capture* previous = NULL;
     tc_pointer_capture* capture = router_find_capture(r, pointer_id, device, &previous);
-    if (!capture) return;
+    if (!capture)
+        return;
     if (previous) {
         previous->next = capture->next;
     } else {
@@ -213,19 +196,21 @@ static void router_release_pointer(
 // Event handlers
 // ============================================================================
 
-static void router_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phase,
-                              double x, double y, float pressure) {
+static void router_on_pointer(
+    tc_input_manager* self, uint64_t pointer_id, int device, int phase, double x, double y, float pressure) {
     tc_display_input_router* r = router_from(self);
-    if (!r || !tc_display_alive(r->display)) return;
+    if (!r || !tc_display_alive(r->display))
+        return;
 
     tc_pointer_capture* capture = router_find_capture(r, pointer_id, device, NULL);
-    tc_viewport_handle viewport = capture
-        ? capture->viewport
-        : tc_display_viewport_at_screen(r->display, (float)x, (float)y);
+    tc_viewport_handle viewport =
+        capture ? capture->viewport : tc_display_viewport_at_screen(r->display, (float)x, (float)y);
 
     if (phase == TC_POINTER_DOWN) {
-        if (!tc_viewport_handle_valid(viewport)) return;
-        if (!router_capture_pointer(r, pointer_id, device, viewport)) return;
+        if (!tc_viewport_handle_valid(viewport))
+            return;
+        if (!router_capture_pointer(r, pointer_id, device, viewport))
+            return;
         r->focused_viewport = viewport;
     }
 
@@ -235,8 +220,7 @@ static void router_on_pointer(tc_input_manager* self, uint64_t pointer_id, int d
             double local_x = 0.0;
             double local_y = 0.0;
             router_to_viewport_local(viewport, x, y, &local_x, &local_y);
-            tc_input_manager_on_pointer(
-                vm, pointer_id, device, phase, local_x, local_y, pressure);
+            tc_input_manager_on_pointer(vm, pointer_id, device, phase, local_x, local_y, pressure);
         }
     }
 
@@ -245,10 +229,10 @@ static void router_on_pointer(tc_input_manager* self, uint64_t pointer_id, int d
     }
 }
 
-static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
-                                   uint32_t click_count) {
+static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods, uint32_t click_count) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     tc_viewport_handle viewport = router_viewport_at_cursor(r);
 
@@ -275,7 +259,8 @@ static void router_on_mouse_button(tc_input_manager* self, int button, int actio
 
 static void router_on_mouse_move(tc_input_manager* self, double x, double y) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     r->last_cursor_x = x;
     r->last_cursor_y = y;
@@ -301,7 +286,8 @@ static void router_on_mouse_move(tc_input_manager* self, double x, double y) {
 
 static void router_on_scroll(tc_input_manager* self, double x, double y, int mods) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     tc_viewport_handle viewport = router_viewport_at_cursor(r);
     if (!tc_viewport_handle_valid(viewport)) {
@@ -319,7 +305,8 @@ static void router_on_scroll(tc_input_manager* self, double x, double y, int mod
 
 static void router_on_key(tc_input_manager* self, int key, int scancode, int action, int mods) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     tc_viewport_handle viewport = router_keyboard_viewport(r);
 
@@ -334,7 +321,8 @@ static void router_on_key(tc_input_manager* self, int key, int scancode, int act
 
 static void router_on_char(tc_input_manager* self, uint32_t codepoint) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     tc_viewport_handle viewport = router_keyboard_viewport(r);
 
@@ -348,7 +336,8 @@ static void router_on_char(tc_input_manager* self, uint32_t codepoint) {
 
 static void router_on_text(tc_input_manager* self, const char* text_utf8) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
     tc_viewport_handle viewport = router_keyboard_viewport(r);
     tc_input_manager* vm = router_viewport_manager(r, viewport);
     if (vm) {
@@ -358,7 +347,8 @@ static void router_on_text(tc_input_manager* self, const char* text_utf8) {
 
 static void router_on_focus_lost(tc_input_manager* self) {
     tc_display_input_router* r = router_from(self);
-    if (!r) return;
+    if (!r)
+        return;
 
     tc_pointer_capture* capture = r->pointer_captures;
     while (capture) {
@@ -371,7 +361,8 @@ static void router_on_focus_lost(tc_input_manager* self) {
     r->focused_viewport = TC_VIEWPORT_HANDLE_INVALID;
     r->has_cursor = false;
 
-    if (!tc_display_alive(r->display)) return;
+    if (!tc_display_alive(r->display))
+        return;
     tc_viewport_handle viewport = tc_display_get_first_viewport(r->display);
     while (tc_viewport_handle_valid(viewport)) {
         tc_viewport_handle next = tc_viewport_get_display_next(viewport);

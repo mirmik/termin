@@ -8,8 +8,8 @@ GUARD_TEST_MAIN();
 #include <limits>
 #include <numbers>
 
-#include <components/collider_component.hpp>
 #include <components/articulation_component.hpp>
+#include <components/collider_component.hpp>
 #include <components/rotator_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
@@ -24,18 +24,14 @@ GUARD_TEST_MAIN();
 #include <termin_collision/termin_collision.h>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
 
-extern "C"
-{
+extern "C" {
 #include <core/tc_debug_geometry.h>
 #include <core/tc_scene_render_mount.h>
 }
 
-namespace
-{
-    void register_test_component_types()
-    {
-        static const bool registered = []()
-        {
+namespace {
+    void register_test_component_types() {
+        static const bool registered = []() {
             tc_inspect_kind_core_init();
             tc_inspect_component_adapter_init();
             tc_scene_ext_registry_init();
@@ -59,16 +55,12 @@ namespace
         (void)registered;
     }
 
-    void prepare_render_lifecycle(const termin::TcSceneRef& scene)
-    {
+    void prepare_render_lifecycle(const termin::TcSceneRef& scene) {
         const termin::RenderPrepareContext context(scene.handle());
-        tc_scene_render_mount_prepare(
-            scene.handle(),
-            reinterpret_cast<const tc_render_prepare_context*>(&context));
+        tc_scene_render_mount_prepare(scene.handle(), reinterpret_cast<const tc_render_prepare_context*>(&context));
     }
 
-    struct DoublePendulumScene
-    {
+    struct DoublePendulumScene {
         termin::TcSceneRef scene;
         termin::FEMPhysicsWorldComponent* world = nullptr;
         termin::FEMArticulationComponent* articulation = nullptr;
@@ -79,8 +71,7 @@ namespace
         termin::Entity root;
     };
 
-    DoublePendulumScene make_double_pendulum_scene()
-    {
+    DoublePendulumScene make_double_pendulum_scene() {
         using namespace termin;
 
         DoublePendulumScene result;
@@ -133,8 +124,7 @@ namespace
         return result;
     }
 
-    struct FloatingTreeScene
-    {
+    struct FloatingTreeScene {
         termin::TcSceneRef scene;
         termin::Entity root;
         termin::FEMPhysicsWorldComponent* world = nullptr;
@@ -146,8 +136,7 @@ namespace
         termin::RotatorComponent* joint_b = nullptr;
     };
 
-    FloatingTreeScene make_floating_tree_scene()
-    {
+    FloatingTreeScene make_floating_tree_scene() {
         using namespace termin;
 
         FloatingTreeScene result;
@@ -155,8 +144,7 @@ namespace
         result.root = result.scene.create_entity("Floating Base");
         result.root.transform().set_local_position({1.0, 0.0, 2.0});
         result.articulation = new FEMArticulationComponent();
-        result.articulation->base_mode =
-            static_cast<int>(FEMArticulationBaseMode::Floating);
+        result.articulation->base_mode = static_cast<int>(FEMArticulationBaseMode::Floating);
         result.root.add_component(result.articulation);
         result.base = new FEMRigidBodyComponent();
         result.base->mass = 4.0;
@@ -167,8 +155,7 @@ namespace
                                           const char* body_name,
                                           double x,
                                           RotatorComponent*& joint,
-                                          FEMRigidBodyComponent*& body)
-        {
+                                          FEMRigidBodyComponent*& body) {
             Entity joint_entity = result.root.create_child(joint_name);
             joint = new RotatorComponent();
             joint_entity.add_component(joint);
@@ -183,10 +170,8 @@ namespace
             body->inertia_diagonal = {0.1, 0.1, 0.1};
             body_entity.add_component(body);
         };
-        add_branch(
-            "Left Joint", "Left Link", -0.75, result.joint_a, result.link_a);
-        add_branch(
-            "Right Joint", "Right Link", 0.75, result.joint_b, result.link_b);
+        add_branch("Left Joint", "Left Link", -0.75, result.joint_a, result.link_a);
+        add_branch("Right Joint", "Right Link", 0.75, result.joint_b, result.link_b);
 
         Entity world_entity = result.scene.create_entity("Physics World");
         result.world = new FEMPhysicsWorldComponent();
@@ -196,8 +181,7 @@ namespace
         return result;
     }
 
-    struct StandingRobotScene
-    {
+    struct StandingRobotScene {
         termin::TcSceneRef scene;
         termin::Entity root;
         termin::FEMPhysicsWorldComponent* world = nullptr;
@@ -209,10 +193,8 @@ namespace
         std::array<termin::FEMJointServoComponent*, 8> servos{};
     };
 
-    StandingRobotScene make_standing_robot_scene(
-        termin::Vec3 root_position = {0.0, 0.0, 1.67},
-        termin::Quat root_rotation = termin::Quat::identity())
-    {
+    StandingRobotScene make_standing_robot_scene(termin::Vec3 root_position = {0.0, 0.0, 1.67},
+                                                 termin::Quat root_rotation = termin::Quat::identity()) {
         using namespace termin;
 
         StandingRobotScene result;
@@ -228,8 +210,7 @@ namespace
         result.root.transform().set_local_position(root_position);
         result.root.transform().set_local_rotation(root_rotation);
         result.articulation = new FEMArticulationComponent();
-        result.articulation->base_mode =
-            static_cast<int>(FEMArticulationBaseMode::Floating);
+        result.articulation->base_mode = static_cast<int>(FEMArticulationBaseMode::Floating);
         result.root.add_component(result.articulation);
         result.base = new FEMRigidBodyComponent();
         result.base->mass = 8.0;
@@ -272,14 +253,11 @@ namespace
             "Rear Left Foot Effector",
             "Rear Right Foot Effector",
         };
-        const auto add_servo =
-            [&result](Entity joint_entity, std::size_t index, double target)
-        {
+        const auto add_servo = [&result](Entity joint_entity, std::size_t index, double target) {
             result.joints[index] = new RotatorComponent();
             joint_entity.add_component(result.joints[index]);
             result.joints[index]->set_axis(0.0, 1.0, 0.0);
-            result.joints[index]->set_coordinate_scale(
-                std::numbers::pi_v<double> / 180.0);
+            result.joints[index]->set_coordinate_scale(std::numbers::pi_v<double> / 180.0);
             result.joints[index]->coordinate = target;
 
             result.motors[index] = new FEMArticulationMotorComponent();
@@ -294,8 +272,7 @@ namespace
             joint_entity.add_component(result.servos[index]);
         };
 
-        for (std::size_t branch = 0; branch < hip_x.size(); ++branch)
-        {
+        for (std::size_t branch = 0; branch < hip_x.size(); ++branch) {
             const std::size_t hip_index = branch * 2U;
             const std::size_t knee_index = hip_index + 1U;
             const double hip_target = -15.0 * side_sign[branch];
@@ -303,8 +280,7 @@ namespace
 
             Entity hip_entity = result.root.create_child(hip_names[branch]);
             add_servo(hip_entity, hip_index, hip_target);
-            result.joints[hip_index]->origin_position = {
-                hip_x[branch], hip_y[branch], -0.1};
+            result.joints[hip_index]->origin_position = {hip_x[branch], hip_y[branch], -0.1};
             result.joints[hip_index]->apply();
 
             Entity upper_leg = hip_entity.create_child(upper_leg_names[branch]);
@@ -319,8 +295,7 @@ namespace
             result.joints[knee_index]->origin_position = {0.0, 0.0, -0.35};
             result.joints[knee_index]->apply();
 
-            Entity lower_leg =
-                knee_entity.create_child(lower_leg_names[branch]);
+            Entity lower_leg = knee_entity.create_child(lower_leg_names[branch]);
             lower_leg.transform().set_local_position({0.0, 0.0, -0.35});
             result.legs[knee_index] = new FEMRigidBodyComponent();
             result.legs[knee_index]->mass = 0.4;
@@ -344,8 +319,7 @@ namespace
         return result;
     }
 
-    struct ServoLoadScene
-    {
+    struct ServoLoadScene {
         termin::TcSceneRef scene;
         termin::FEMPhysicsWorldComponent* world = nullptr;
         termin::FEMArticulationComponent* articulation = nullptr;
@@ -354,8 +328,7 @@ namespace
         termin::FEMJointServoComponent* servo = nullptr;
     };
 
-    ServoLoadScene make_servo_load_scene()
-    {
+    ServoLoadScene make_servo_load_scene() {
         using namespace termin;
 
         ServoLoadScene result;
@@ -400,8 +373,7 @@ namespace
         return result;
     }
 
-    struct MaximalContactScene
-    {
+    struct MaximalContactScene {
         termin::TcSceneRef scene;
         termin::FEMPhysicsWorldComponent* world = nullptr;
         termin::FEMRigidBodyComponent* body = nullptr;
@@ -409,11 +381,9 @@ namespace
         termin::ColliderComponent* terrain_collider = nullptr;
     };
 
-    MaximalContactScene
-    make_maximal_contact_scene(double initial_height = 0.45,
-                               termin::Vec3 gravity = termin::Vec3::zero(),
-                               double time_step = 0.01)
-    {
+    MaximalContactScene make_maximal_contact_scene(double initial_height = 0.45,
+                                                   termin::Vec3 gravity = termin::Vec3::zero(),
+                                                   double time_step = 0.01) {
         using namespace termin;
 
         MaximalContactScene result;
@@ -443,8 +413,7 @@ namespace
         return result;
     }
 
-    struct SharedUnitScene
-    {
+    struct SharedUnitScene {
         termin::Entity root;
         termin::Entity unit_entity;
         termin::ArticulationComponent* owner = nullptr;
@@ -452,10 +421,7 @@ namespace
         termin::RotatorComponent* unit = nullptr;
     };
 
-    SharedUnitScene add_shared_unit_scene(termin::TcSceneRef scene,
-                                          const char* root_name,
-                                          termin::Vec3 root_position)
-    {
+    SharedUnitScene add_shared_unit_scene(termin::TcSceneRef scene, const char* root_name, termin::Vec3 root_position) {
         using namespace termin;
 
         SharedUnitScene result;
@@ -475,10 +441,8 @@ namespace
         return result;
     }
 
-    termin::ColliderComponent* add_sphere_collider(termin::Entity parent,
-                                                   const char* name,
-                                                   termin::Vec3 local_position)
-    {
+    termin::ColliderComponent*
+    add_sphere_collider(termin::Entity parent, const char* name, termin::Vec3 local_position) {
         using namespace termin;
 
         Entity collider_entity = parent.create_child(name);
@@ -492,8 +456,7 @@ namespace
 
 } // namespace
 
-TEST_CASE("native FEM component doubles round-trip through inspect")
-{
+TEST_CASE("native FEM component doubles round-trip through inspect") {
     using namespace termin;
 
     register_test_component_types();
@@ -523,13 +486,11 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     tc_value_free(&world_data);
 
     FEMArticulationComponent articulation;
-    articulation.base_mode =
-        static_cast<int>(FEMArticulationBaseMode::Floating);
+    articulation.base_mode = static_cast<int>(FEMArticulationBaseMode::Floating);
     tc_value articulation_data = articulation.serialize_data();
     FEMArticulationComponent restored_articulation;
     restored_articulation.deserialize_data(&articulation_data);
-    CHECK(restored_articulation.base_mode ==
-          static_cast<int>(FEMArticulationBaseMode::Floating));
+    CHECK(restored_articulation.base_mode == static_cast<int>(FEMArticulationBaseMode::Floating));
     tc_value_free(&articulation_data);
 
     FEMJointLimitComponent limits;
@@ -547,8 +508,7 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     tc_value_free(&limit_data);
 }
 
-TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts")
-{
+TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts") {
     using namespace termin;
     using namespace termin::robotics;
 
@@ -600,21 +560,17 @@ TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts")
     REQUIRE(limits[1] == 5.0);
 
     std::vector<InverseDynamicsActuator3D> actuators;
-    for (std::size_t index = 0; index < dofs.size(); ++index)
-    {
+    for (std::size_t index = 0; index < dofs.size(); ++index) {
         actuators.push_back({
             .dof_index = dofs[index],
             .minimum_effort = -limits[index],
             .maximum_effort = limits[index],
         });
     }
-    InverseDynamicsHqpController3D controller(
-        *owner->articulation(), std::move(actuators), Vec3::zero());
-    JointPostureTask3D posture(
-        {}, {0.3, -0.2}, {0.0, 0.0}, 20.0, 8.0);
+    InverseDynamicsHqpController3D controller(*owner->articulation(), std::move(actuators), Vec3::zero());
+    JointPostureTask3D posture({}, {0.3, -0.2}, {0.0, 0.0}, 20.0, 8.0);
     const std::array<const ArticulationTask3D*, 1> tasks{&posture};
-    const InverseDynamicsControlResult3D control =
-        controller.solve(tasks, {.time_step = 0.002});
+    const InverseDynamicsControlResult3D control = controller.solve(tasks, {.time_step = 0.002});
     REQUIRE(control.ok());
     REQUIRE(fem->apply_inverse_dynamics_control(control));
 
@@ -633,8 +589,7 @@ TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts")
     scene.destroy();
 }
 
-TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
-{
+TEST_CASE("rotator attachment distinguishes fresh and deserialized state") {
     using namespace termin;
 
     register_test_component_types();
@@ -642,16 +597,13 @@ TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
 
     Entity fresh_entity = scene.create_entity("Fresh Joint");
     fresh_entity.transform().set_local_position({1.0, 2.0, 3.0});
-    fresh_entity.transform().set_local_rotation(
-        Quat::from_axis_angle({0.0, 1.0, 0.0}, 0.4));
+    fresh_entity.transform().set_local_rotation(Quat::from_axis_angle({0.0, 1.0, 0.0}, 0.4));
     fresh_entity.transform().set_local_scale({2.0, 3.0, 4.0});
     auto* fresh = new RotatorComponent();
     fresh_entity.add_component(fresh);
     CHECK((fresh->origin_position - Vec3{1.0, 2.0, 3.0}).norm() < 1.0e-12);
     CHECK(std::abs(fresh->origin_rotation.y - std::sin(0.2)) < 1.0e-12);
-    CHECK(
-        (fresh_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0}).norm() <
-        1.0e-12);
+    CHECK((fresh_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0}).norm() < 1.0e-12);
 
     RotatorComponent authored;
     authored.set_axis(0.0, 1.0, 0.0);
@@ -668,12 +620,9 @@ TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
     restored_entity.add_component(restored);
     tc_value_free(&data);
 
-    CHECK((restored_entity.transform().local_position() - Vec3{4.0, 5.0, 6.0})
-              .norm() < 1.0e-12);
-    CHECK(std::abs(restored_entity.transform().local_rotation().y -
-                   std::sin(0.4)) < 1.0e-12);
-    CHECK((restored_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0})
-              .norm() < 1.0e-12);
+    CHECK((restored_entity.transform().local_position() - Vec3{4.0, 5.0, 6.0}).norm() < 1.0e-12);
+    CHECK(std::abs(restored_entity.transform().local_rotation().y - std::sin(0.4)) < 1.0e-12);
+    CHECK((restored_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0}).norm() < 1.0e-12);
     tc_value restored_data = restored->serialize_data();
     CHECK(!tc_value_dict_has(&restored_data, "base_scale"));
     CHECK(!tc_value_dict_has(&restored_data, "base_position"));
@@ -688,9 +637,7 @@ TEST_CASE("rotator attachment distinguishes fresh and deserialized state")
     scene.destroy();
 }
 
-TEST_CASE(
-    "kinematic axes are unit directions with an explicit coordinate scale")
-{
+TEST_CASE("kinematic axes are unit directions with an explicit coordinate scale") {
     using namespace termin;
 
     RotatorComponent rotator;
@@ -700,90 +647,71 @@ TEST_CASE(
 
     CHECK((rotator.get_axis() - Vec3::unit_y()).norm() < 1.0e-12);
     CHECK(std::abs(rotator.get_axis().norm() - 1.0) < 1.0e-12);
-    CHECK(std::abs(rotator.physical_coordinate() -
-                   std::numbers::pi_v<double> / 2.0) < 1.0e-12);
+    CHECK(std::abs(rotator.physical_coordinate() - std::numbers::pi_v<double> / 2.0) < 1.0e-12);
 }
 
-TEST_CASE("scene articulation compiler collapses authored frames into units")
-{
+TEST_CASE("scene articulation compiler collapses authored frames into units") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
-    const FEMArticulationSceneCompilation compiled =
-        compile_fem_articulation_scene(pendulum.root);
+    const FEMArticulationSceneCompilation compiled = compile_fem_articulation_scene(pendulum.root);
 
     REQUIRE(compiled.ok());
     REQUIRE_EQ(compiled.units.size(), 2U);
     REQUIRE_EQ(compiled.bindings.size(), 2U);
     CHECK(compiled.units[0].parent_unit == robotics::articulation_root_frame);
     CHECK(compiled.units[1].parent_unit == 0U);
-    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.z - 3.0) <
-          1.0e-12);
-    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.y - 1.0) <
-          1.0e-12);
-    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.norm() - 1.0) <
-          1.0e-12);
-    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.z + 2.0) <
-          1.0e-12);
+    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.z - 3.0) < 1.0e-12);
+    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.y - 1.0) < 1.0e-12);
+    CHECK(std::abs(compiled.units[0].motion_twist_at_unit.ang.norm() - 1.0) < 1.0e-12);
+    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.z + 2.0) < 1.0e-12);
     CHECK(std::abs(compiled.state.coordinates[0] - 0.7) < 1.0e-12);
     CHECK(std::abs(compiled.state.coordinates[1] + 0.4) < 1.0e-12);
 
     pendulum.scene.destroy();
 }
 
-TEST_CASE("scene articulation compiler maps a floating base and branches")
-{
+TEST_CASE("scene articulation compiler maps a floating base and branches") {
     using namespace termin;
 
     FloatingTreeScene fixture = make_floating_tree_scene();
-    const FEMArticulationSceneCompilation compiled =
-        compile_fem_articulation_scene(fixture.root);
+    const FEMArticulationSceneCompilation compiled = compile_fem_articulation_scene(fixture.root);
 
     REQUIRE(compiled.ok());
     REQUIRE(compiled.floating_base.has_value());
     CHECK(compiled.base_body == fixture.base);
     CHECK(compiled.base_entity == fixture.root);
-    CHECK(
-        (compiled.floating_base->pose_world.lin - Vec3{1.0, 0.0, 2.0}).norm() <
-        1.0e-12);
+    CHECK((compiled.floating_base->pose_world.lin - Vec3{1.0, 0.0, 2.0}).norm() < 1.0e-12);
     REQUIRE_EQ(compiled.units.size(), 2U);
     CHECK(compiled.units[0].parent_unit == robotics::articulation_root_frame);
     CHECK(compiled.units[1].parent_unit == robotics::articulation_root_frame);
-    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.x + 0.75) <
-          1.0e-12);
-    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.x - 0.75) <
-          1.0e-12);
+    CHECK(std::abs(compiled.units[0].parent_to_unit_zero.lin.x + 0.75) < 1.0e-12);
+    CHECK(std::abs(compiled.units[1].parent_to_unit_zero.lin.x - 0.75) < 1.0e-12);
 
     fixture.scene.destroy();
 }
 
-TEST_CASE("scene articulation compiler rejects contradictory base layouts")
-{
+TEST_CASE("scene articulation compiler rejects contradictory base layouts") {
     using namespace termin;
 
     DoublePendulumScene fixed = make_double_pendulum_scene();
     auto* unexpected_body = new FEMRigidBodyComponent();
     fixed.root.add_component(unexpected_body);
-    CHECK(compile_fem_articulation_scene(fixed.root).diagnostic ==
-          FEMArticulationSceneDiagnostic::UnexpectedRootBody);
+    CHECK(compile_fem_articulation_scene(fixed.root).diagnostic == FEMArticulationSceneDiagnostic::UnexpectedRootBody);
     fixed.scene.destroy();
 
     DoublePendulumScene floating = make_double_pendulum_scene();
-    floating.articulation->base_mode =
-        static_cast<int>(FEMArticulationBaseMode::Floating);
-    CHECK(compile_fem_articulation_scene(floating.root).diagnostic ==
-          FEMArticulationSceneDiagnostic::MissingRootBody);
+    floating.articulation->base_mode = static_cast<int>(FEMArticulationBaseMode::Floating);
+    CHECK(compile_fem_articulation_scene(floating.root).diagnostic == FEMArticulationSceneDiagnostic::MissingRootBody);
     floating.scene.destroy();
 
     FloatingTreeScene multiple = make_floating_tree_scene();
     multiple.root.add_component(new FEMRigidBodyComponent());
-    CHECK(compile_fem_articulation_scene(multiple.root).diagnostic ==
-          FEMArticulationSceneDiagnostic::MultipleBodies);
+    CHECK(compile_fem_articulation_scene(multiple.root).diagnostic == FEMArticulationSceneDiagnostic::MultipleBodies);
     multiple.scene.destroy();
 }
 
-TEST_CASE("scene articulation compiler converts authored joint limits")
-{
+TEST_CASE("scene articulation compiler converts authored joint limits") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -795,8 +723,7 @@ TEST_CASE("scene articulation compiler converts authored joint limits")
     limits->maximum_coordinate = 3.0;
     pendulum.joint_a->entity().add_component(limits);
 
-    const FEMArticulationSceneCompilation compiled =
-        compile_fem_articulation_scene(pendulum.root);
+    const FEMArticulationSceneCompilation compiled = compile_fem_articulation_scene(pendulum.root);
     REQUIRE(compiled.ok());
     REQUIRE(compiled.units[0].limits.minimum.has_value());
     REQUIRE(compiled.units[0].limits.maximum.has_value());
@@ -807,8 +734,7 @@ TEST_CASE("scene articulation compiler converts authored joint limits")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("scene articulation compiler rejects invalid joint limits")
-{
+TEST_CASE("scene articulation compiler rejects invalid joint limits") {
     using namespace termin;
 
     DoublePendulumScene reversed = make_double_pendulum_scene();
@@ -818,28 +744,22 @@ TEST_CASE("scene articulation compiler rejects invalid joint limits")
     reversed_limits->minimum_coordinate = 2.0;
     reversed_limits->maximum_coordinate = -1.0;
     reversed.joint_a->entity().add_component(reversed_limits);
-    const FEMArticulationSceneCompilation reversed_compilation =
-        compile_fem_articulation_scene(reversed.root);
-    CHECK(reversed_compilation.diagnostic ==
-          FEMArticulationSceneDiagnostic::InvalidJointLimits);
+    const FEMArticulationSceneCompilation reversed_compilation = compile_fem_articulation_scene(reversed.root);
+    CHECK(reversed_compilation.diagnostic == FEMArticulationSceneDiagnostic::InvalidJointLimits);
     CHECK(reversed_compilation.diagnostic_entity == "Hip Joint");
     reversed.scene.destroy();
 
     DoublePendulumScene non_finite = make_double_pendulum_scene();
     auto* non_finite_limits = new FEMJointLimitComponent();
     non_finite_limits->minimum_enabled = true;
-    non_finite_limits->minimum_coordinate =
-        std::numeric_limits<double>::quiet_NaN();
+    non_finite_limits->minimum_coordinate = std::numeric_limits<double>::quiet_NaN();
     non_finite.joint_a->entity().add_component(non_finite_limits);
-    const FEMArticulationSceneCompilation non_finite_compilation =
-        compile_fem_articulation_scene(non_finite.root);
-    CHECK(non_finite_compilation.diagnostic ==
-          FEMArticulationSceneDiagnostic::InvalidJointLimits);
+    const FEMArticulationSceneCompilation non_finite_compilation = compile_fem_articulation_scene(non_finite.root);
+    CHECK(non_finite_compilation.diagnostic == FEMArticulationSceneDiagnostic::InvalidJointLimits);
     non_finite.scene.destroy();
 }
 
-TEST_CASE("FEM world advances a compiled reduced double pendulum")
-{
+TEST_CASE("FEM world advances a compiled reduced double pendulum") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -856,8 +776,7 @@ TEST_CASE("FEM world advances a compiled reduced double pendulum")
     CHECK(initial.joint_count == 0U);
     CHECK(std::isfinite(initial.total_energy));
 
-    for (int step = 0; step < 20; ++step)
-    {
+    for (int step = 0; step < 20; ++step) {
         pendulum.world->fixed_update(0.001F);
     }
     const FEMPhysicsTelemetry advanced = pendulum.world->telemetry();
@@ -869,8 +788,7 @@ TEST_CASE("FEM world advances a compiled reduced double pendulum")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("FEM world advances and synchronizes a floating articulation root")
-{
+TEST_CASE("FEM world advances and synchronizes a floating articulation root") {
     using namespace termin;
 
     FloatingTreeScene fixture = make_floating_tree_scene();
@@ -890,8 +808,7 @@ TEST_CASE("FEM world advances and synchronizes a floating articulation root")
     CHECK(initial.articulation_count == 1U);
     CHECK(initial.reduced_dof_count == 8U);
 
-    REQUIRE(
-        fixture.base->set_velocity_local(Screw3{Vec3::zero(), Vec3::unit_x()}));
+    REQUIRE(fixture.base->set_velocity_local(Screw3{Vec3::zero(), Vec3::unit_x()}));
     const double x_before = fixture.root.transform().global_position().x;
     fixture.world->fixed_update(0.001F);
     CHECK(fixture.world->telemetry().successful_steps == 1U);
@@ -904,8 +821,7 @@ TEST_CASE("FEM world advances and synchronizes a floating articulation root")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM routes contacts to a floating articulation base")
-{
+TEST_CASE("FEM routes contacts to a floating articulation base") {
     using namespace termin;
 
     register_test_component_types();
@@ -934,8 +850,7 @@ TEST_CASE("FEM routes contacts to a floating articulation base")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
-{
+TEST_CASE("FEM floating robot stands on servo-controlled frictional legs") {
     using namespace termin;
 
     register_test_component_types();
@@ -956,14 +871,12 @@ TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
     double reaction_sum = 0.0;
     constexpr int standing_steps = 2500;
     constexpr int reaction_window = 500;
-    for (int step = 0; step < standing_steps; ++step)
-    {
+    for (int step = 0; step < standing_steps; ++step) {
         fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
         contact_seen = contact_seen || telemetry.active_contact_count > 0U;
         accumulated_friction_work += telemetry.friction_work;
-        if (step >= standing_steps - reaction_window)
-        {
+        if (step >= standing_steps - reaction_window) {
             reaction_sum += telemetry.normal_reaction_sum;
         }
     }
@@ -983,49 +896,41 @@ TEST_CASE("FEM floating robot stands on servo-controlled frictional legs")
     CHECK(std::abs(reaction_sum / reaction_window - 11.2 * 9.81) < 0.5);
     CHECK(standing.motor_effort_linf > 0.0);
 
-    for (FEMJointServoComponent* servo : fixture.servos)
-    {
+    for (FEMJointServoComponent* servo : fixture.servos) {
         servo->set_enabled(false);
     }
     constexpr int maximum_collapse_steps = 1500;
     const double collapse_height = standing_position.z - 0.25;
     int collapse_steps = 0;
-    while (collapse_steps < maximum_collapse_steps &&
-           fixture.root.transform().global_position().z >= collapse_height)
-    {
+    while (collapse_steps < maximum_collapse_steps && fixture.root.transform().global_position().z >= collapse_height) {
         fixture.world->fixed_update(0.002F);
         ++collapse_steps;
     }
     const Vec3 fallen_position = fixture.root.transform().global_position();
-    CHECK(fixture.world->telemetry().successful_steps ==
-          standing_steps + collapse_steps);
+    CHECK(fixture.world->telemetry().successful_steps == standing_steps + collapse_steps);
     CHECK(fallen_position.z < collapse_height);
 
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM floating robot survives an asymmetric high tilted landing")
-{
+TEST_CASE("FEM floating robot survives an asymmetric high tilted landing") {
     using namespace termin;
 
     register_test_component_types();
-    StandingRobotScene fixture =
-        make_standing_robot_scene({0.0, 0.0, 3.3596982955932617},
-                                  Quat{
-                                      -0.03302609427971528,
-                                      -0.0715192083359704,
-                                      -0.002369370458237609,
-                                      0.9968894953901635,
-                                  });
+    StandingRobotScene fixture = make_standing_robot_scene({0.0, 0.0, 3.3596982955932617},
+                                                           Quat{
+                                                               -0.03302609427971528,
+                                                               -0.0715192083359704,
+                                                               -0.002369370458237609,
+                                                               0.9968894953901635,
+                                                           });
     fixture.world->start();
 
     bool contact_seen = false;
     constexpr int landing_steps = 25000;
-    for (int step = 0; step < landing_steps; ++step)
-    {
+    for (int step = 0; step < landing_steps; ++step) {
         fixture.world->fixed_update(0.002F);
-        contact_seen = contact_seen ||
-                       fixture.world->telemetry().active_contact_count > 0U;
+        contact_seen = contact_seen || fixture.world->telemetry().active_contact_count > 0U;
     }
 
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
@@ -1041,8 +946,7 @@ TEST_CASE("FEM floating robot survives an asymmetric high tilted landing")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM motor accepts a direct reduced-coordinate effort command")
-{
+TEST_CASE("FEM motor accepts a direct reduced-coordinate effort command") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -1064,8 +968,7 @@ TEST_CASE("FEM motor accepts a direct reduced-coordinate effort command")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("FEM servo drives a separate articulation motor in physical units")
-{
+TEST_CASE("FEM servo drives a separate articulation motor in physical units") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -1083,8 +986,7 @@ TEST_CASE("FEM servo drives a separate articulation motor in physical units")
     REQUIRE(servo->initialized());
     CHECK(pendulum.world->telemetry().motor_count == 1U);
 
-    for (int index = 0; index < 40; ++index)
-    {
+    for (int index = 0; index < 40; ++index) {
         pendulum.world->fixed_update(0.001f);
     }
 
@@ -1099,8 +1001,7 @@ TEST_CASE("FEM servo drives a separate articulation motor in physical units")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("FEM servo can disable its position control loop")
-{
+TEST_CASE("FEM servo can disable its position control loop") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -1131,8 +1032,7 @@ TEST_CASE("FEM servo can disable its position control loop")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("FEM servo without a physical motor is rejected")
-{
+TEST_CASE("FEM servo without a physical motor is rejected") {
     using namespace termin;
 
     DoublePendulumScene pendulum = make_double_pendulum_scene();
@@ -1149,8 +1049,7 @@ TEST_CASE("FEM servo without a physical motor is rejected")
     pendulum.scene.destroy();
 }
 
-TEST_CASE("FEM servo load reaches and holds its authored target")
-{
+TEST_CASE("FEM servo load reaches and holds its authored target") {
     using namespace termin;
 
     ServoLoadScene fixture = make_servo_load_scene();
@@ -1163,8 +1062,7 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     CHECK(fixture.motor->saturated());
     CHECK(std::abs(fixture.servo->integral_effort()) < 1.0e-12);
 
-    for (int index = 0; index < 1000; ++index)
-    {
+    for (int index = 0; index < 1000; ++index) {
         fixture.world->fixed_update(0.005f);
     }
 
@@ -1177,10 +1075,8 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     CHECK(std::isfinite(fixture.servo->integral_effort()));
     CHECK(std::abs(fixture.servo->integral_effort()) > 1.0);
     CHECK(std::abs(fixture.servo->commanded_effort() -
-                   (fixture.servo->position_effort() +
-                    fixture.servo->integral_effort() +
-                    fixture.servo->velocity_effort() +
-                    fixture.servo->feed_forward_effort)) < 1.0e-10);
+                   (fixture.servo->position_effort() + fixture.servo->integral_effort() +
+                    fixture.servo->velocity_effort() + fixture.servo->feed_forward_effort)) < 1.0e-10);
     CHECK(!fixture.motor->saturated());
     CHECK(std::isfinite(telemetry.motor_power));
     CHECK(std::isfinite(telemetry.motor_work));
@@ -1192,21 +1088,17 @@ TEST_CASE("FEM servo load reaches and holds its authored target")
     fixture.scene.destroy();
 }
 
-TEST_CASE(
-    "FEM routes a CollisionWorld patch from static terrain to a maximal body")
-{
+TEST_CASE("FEM routes a CollisionWorld patch from static terrain to a maximal body") {
     using namespace termin;
 
     register_test_component_types();
     MaximalContactScene fixture = make_maximal_contact_scene();
-    collision::CollisionWorld* collision_world =
-        collision::CollisionWorld::from_scene(fixture.scene.handle());
+    collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(fixture.scene.handle());
     REQUIRE(collision_world != nullptr);
     collision_world->update_all();
     REQUIRE(!collision_world->detect_contacts().empty());
 
-    const double height_before =
-        fixture.body->entity().transform().global_position().z;
+    const double height_before = fixture.body->entity().transform().global_position().z;
     fixture.world->start();
     fixture.world->fixed_update(0.011F);
 
@@ -1216,74 +1108,55 @@ TEST_CASE(
     CHECK(telemetry.contact_count >= 1U);
     CHECK(telemetry.active_contact_count >= 1U);
     CHECK(telemetry.minimum_contact_gap >= -1.0e-8);
-    CHECK(fixture.body->entity().transform().global_position().z >
-          height_before);
+    CHECK(fixture.body->entity().transform().global_position().z > height_before);
 
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM frictionless contact arrests a falling maximal body")
-{
+TEST_CASE("FEM frictionless contact arrests a falling maximal body") {
     using namespace termin;
 
     register_test_component_types();
-    MaximalContactScene fixture =
-        make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
+    MaximalContactScene fixture = make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
     fixture.world->start();
     REQUIRE(fixture.body->initialized());
-    REQUIRE(fixture.body->set_velocity_local(
-        Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
+    REQUIRE(fixture.body->set_velocity_local(Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
 
-    const double initial_x =
-        fixture.body->entity().transform().global_position().x;
+    const double initial_x = fixture.body->entity().transform().global_position().x;
     double minimum_height = 2.0;
     double maximum_height_after_contact = 0.0;
     double reaction_sum = 0.0;
     double minimum_reaction_in_window = std::numeric_limits<double>::infinity();
-    std::size_t minimum_contacts_in_window =
-        std::numeric_limits<std::size_t>::max();
-    std::size_t minimum_cached_contacts_in_window =
-        std::numeric_limits<std::size_t>::max();
-    std::size_t minimum_warm_contacts_in_window =
-        std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_contacts_in_window = std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_cached_contacts_in_window = std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_warm_contacts_in_window = std::numeric_limits<std::size_t>::max();
     bool contact_seen = false;
     constexpr int step_count = 1500;
     constexpr int reaction_window = 500;
-    for (int step = 0; step < step_count; ++step)
-    {
+    for (int step = 0; step < step_count; ++step) {
         fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
-        const double height =
-            fixture.body->entity().transform().global_position().z;
+        const double height = fixture.body->entity().transform().global_position().z;
         minimum_height = std::min(minimum_height, height);
-        if (telemetry.contact_count > 0)
-        {
+        if (telemetry.contact_count > 0) {
             contact_seen = true;
         }
-        if (contact_seen)
-        {
-            maximum_height_after_contact =
-                std::max(maximum_height_after_contact, height);
+        if (contact_seen) {
+            maximum_height_after_contact = std::max(maximum_height_after_contact, height);
         }
-        if (step >= step_count - reaction_window)
-        {
+        if (step >= step_count - reaction_window) {
             reaction_sum += telemetry.normal_reaction_sum;
-            minimum_reaction_in_window = std::min(
-                minimum_reaction_in_window, telemetry.normal_reaction_sum);
-            minimum_contacts_in_window =
-                std::min(minimum_contacts_in_window, telemetry.contact_count);
+            minimum_reaction_in_window = std::min(minimum_reaction_in_window, telemetry.normal_reaction_sum);
+            minimum_contacts_in_window = std::min(minimum_contacts_in_window, telemetry.contact_count);
             minimum_cached_contacts_in_window =
-                std::min(minimum_cached_contacts_in_window,
-                         telemetry.cached_contact_count);
+                std::min(minimum_cached_contacts_in_window, telemetry.cached_contact_count);
             minimum_warm_contacts_in_window =
-                std::min(minimum_warm_contacts_in_window,
-                         telemetry.warm_started_contact_count);
+                std::min(minimum_warm_contacts_in_window, telemetry.warm_started_contact_count);
         }
     }
 
     const FEMPhysicsTelemetry telemetry = fixture.world->telemetry();
-    const Vec3 final_position =
-        fixture.body->entity().transform().global_position();
+    const Vec3 final_position = fixture.body->entity().transform().global_position();
     CHECK(telemetry.initialized);
     CHECK(contact_seen);
     // At dt=2 ms the first impact may advance about 5.5 mm into the plane;
@@ -1302,27 +1175,22 @@ TEST_CASE("FEM frictionless contact arrests a falling maximal body")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM multi-point box contact dissipates tangential slip")
-{
+TEST_CASE("FEM multi-point box contact dissipates tangential slip") {
     using namespace termin;
 
     register_test_component_types();
-    MaximalContactScene fixture =
-        make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
+    MaximalContactScene fixture = make_maximal_contact_scene(2.0, Vec3{0.0, 0.0, -9.81}, 0.002);
     fixture.world->contact_friction_coefficient = 0.5;
     fixture.world->start();
     REQUIRE(fixture.body->initialized());
-    REQUIRE(fixture.body->set_velocity_local(
-        Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
+    REQUIRE(fixture.body->set_velocity_local(Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
 
     double maximum_tangent_impulse = 0.0;
     double accumulated_friction_work = 0.0;
-    for (int step = 0; step < 1500; ++step)
-    {
+    for (int step = 0; step < 1500; ++step) {
         fixture.world->fixed_update(0.002F);
         const FEMPhysicsTelemetry step_telemetry = fixture.world->telemetry();
-        maximum_tangent_impulse = std::max(maximum_tangent_impulse,
-                                           step_telemetry.tangent_impulse_sum);
+        maximum_tangent_impulse = std::max(maximum_tangent_impulse, step_telemetry.tangent_impulse_sum);
         accumulated_friction_work += step_telemetry.friction_work;
     }
 
@@ -1344,8 +1212,7 @@ TEST_CASE("FEM multi-point box contact dissipates tangential slip")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM articulation contact supplies the expected generalized support")
-{
+TEST_CASE("FEM articulation contact supplies the expected generalized support") {
     using namespace termin;
 
     register_test_component_types();
@@ -1388,24 +1255,18 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support")
     REQUIRE(articulation->initialized());
 
     double reaction_sum = 0.0;
-    std::size_t minimum_contacts_in_window =
-        std::numeric_limits<std::size_t>::max();
-    std::size_t minimum_warm_contacts_in_window =
-        std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_contacts_in_window = std::numeric_limits<std::size_t>::max();
+    std::size_t minimum_warm_contacts_in_window = std::numeric_limits<std::size_t>::max();
     constexpr int step_count = 1000;
     constexpr int reaction_window = 500;
-    for (int step = 0; step < step_count; ++step)
-    {
+    for (int step = 0; step < step_count; ++step) {
         world->fixed_update(0.002F);
-        if (step >= step_count - reaction_window)
-        {
+        if (step >= step_count - reaction_window) {
             const FEMPhysicsTelemetry step_telemetry = world->telemetry();
             reaction_sum += step_telemetry.normal_reaction_sum;
-            minimum_contacts_in_window = std::min(minimum_contacts_in_window,
-                                                  step_telemetry.contact_count);
+            minimum_contacts_in_window = std::min(minimum_contacts_in_window, step_telemetry.contact_count);
             minimum_warm_contacts_in_window =
-                std::min(minimum_warm_contacts_in_window,
-                         step_telemetry.warm_started_contact_count);
+                std::min(minimum_warm_contacts_in_window, step_telemetry.warm_started_contact_count);
         }
     }
 
@@ -1416,15 +1277,13 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support")
     // The contact point is one metre from the revolute axis, so its normal
     // reaction supplies the 9.81 N*m generalized gravity effort directly.
     constexpr double support_lever = 1.0;
-    CHECK(std::abs(reaction_sum / reaction_window * support_lever - 9.81) <
-          2.0e-3);
+    CHECK(std::abs(reaction_sum / reaction_window * support_lever - 9.81) < 2.0e-3);
     CHECK(minimum_contacts_in_window > 0);
     CHECK(minimum_warm_contacts_in_window > 0);
     scene.destroy();
 }
 
-TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit")
-{
+TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit") {
     using namespace termin;
 
     register_test_component_types();
@@ -1470,8 +1329,7 @@ TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit")
     scene.destroy();
 }
 
-TEST_CASE("FEM maps direct shared articulation unit contact against static")
-{
+TEST_CASE("FEM maps direct shared articulation unit contact against static") {
     using namespace termin;
 
     register_test_component_types();
@@ -1483,10 +1341,8 @@ TEST_CASE("FEM maps direct shared articulation unit contact against static")
     terrain_collider->box_size = {10.0, 10.0, 1.0};
     terrain.add_component(terrain_collider);
 
-    SharedUnitScene articulation =
-        add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
-    Entity collider_entity =
-        articulation.unit_entity.create_child("Unit Collider");
+    SharedUnitScene articulation = add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
+    Entity collider_entity = articulation.unit_entity.create_child("Unit Collider");
     collider_entity.transform().set_local_position({1.0, 0.0, 0.0});
     auto* unit_collider = new ColliderComponent();
     unit_collider->box_size = {1.0, 1.0, 1.0};
@@ -1505,8 +1361,7 @@ TEST_CASE("FEM maps direct shared articulation unit contact against static")
     scene.destroy();
 }
 
-TEST_CASE("FEM keeps a shared articulation body entity as one unit anchor")
-{
+TEST_CASE("FEM keeps a shared articulation body entity as one unit anchor") {
     using namespace termin;
 
     register_test_component_types();
@@ -1518,8 +1373,7 @@ TEST_CASE("FEM keeps a shared articulation body entity as one unit anchor")
     terrain_collider->box_size = {10.0, 10.0, 1.0};
     terrain.add_component(terrain_collider);
 
-    SharedUnitScene articulation =
-        add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
+    SharedUnitScene articulation = add_shared_unit_scene(scene, "Shared Root", {0.0, 0.0, 0.45});
     Entity body_entity = articulation.unit_entity.create_child("Body Anchor");
     body_entity.transform().set_local_position({1.0, 0.0, 0.0});
     auto* body = new FEMRigidBodyComponent();
@@ -1544,21 +1398,17 @@ TEST_CASE("FEM keeps a shared articulation body entity as one unit anchor")
     scene.destroy();
 }
 
-TEST_CASE("FEM maps contact between two direct shared articulations")
-{
+TEST_CASE("FEM maps contact between two direct shared articulations") {
     using namespace termin;
 
     register_test_component_types();
     TcSceneRef scene = TcSceneRef::create("shared articulation pair contact");
-    SharedUnitScene left =
-        add_shared_unit_scene(scene, "Left Root", {-0.45, 0.0, 0.0});
-    SharedUnitScene right =
-        add_shared_unit_scene(scene, "Right Root", {0.45, 0.0, 0.0});
+    SharedUnitScene left = add_shared_unit_scene(scene, "Left Root", {-0.45, 0.0, 0.0});
+    SharedUnitScene right = add_shared_unit_scene(scene, "Right Root", {0.45, 0.0, 0.0});
     add_sphere_collider(left.unit_entity, "Left Collider", {0.0, 0.0, 0.5});
     add_sphere_collider(right.unit_entity, "Right Collider", {0.0, 0.0, 0.5});
 
-    collision::CollisionWorld* collision_world =
-        collision::CollisionWorld::from_scene(scene.handle());
+    collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(scene.handle());
     REQUIRE(collision_world != nullptr);
     collision_world->update_all();
     REQUIRE(!collision_world->detect_contacts().empty());
@@ -1577,21 +1427,16 @@ TEST_CASE("FEM maps contact between two direct shared articulations")
     scene.destroy();
 }
 
-TEST_CASE("FEM filters contact between colliders on one shared unit")
-{
+TEST_CASE("FEM filters contact between colliders on one shared unit") {
     using namespace termin;
 
     register_test_component_types();
     TcSceneRef scene = TcSceneRef::create("shared same unit contact");
-    SharedUnitScene articulation =
-        add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
-    add_sphere_collider(
-        articulation.unit_entity, "Left Collider", {-0.45, 0.0, 0.5});
-    add_sphere_collider(
-        articulation.unit_entity, "Right Collider", {0.45, 0.0, 0.5});
+    SharedUnitScene articulation = add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
+    add_sphere_collider(articulation.unit_entity, "Left Collider", {-0.45, 0.0, 0.5});
+    add_sphere_collider(articulation.unit_entity, "Right Collider", {0.45, 0.0, 0.5});
 
-    collision::CollisionWorld* collision_world =
-        collision::CollisionWorld::from_scene(scene.handle());
+    collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(scene.handle());
     REQUIRE(collision_world != nullptr);
     collision_world->update_all();
     REQUIRE(!collision_world->detect_contacts().empty());
@@ -1609,16 +1454,13 @@ TEST_CASE("FEM filters contact between colliders on one shared unit")
     scene.destroy();
 }
 
-TEST_CASE("FEM filters adjacent direct shared units unless enabled")
-{
+TEST_CASE("FEM filters adjacent direct shared units unless enabled") {
     using namespace termin;
 
     register_test_component_types();
     TcSceneRef scene = TcSceneRef::create("shared adjacent unit contact");
-    SharedUnitScene articulation =
-        add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
-    add_sphere_collider(
-        articulation.unit_entity, "Parent Collider", {-0.45, 0.0, 0.5});
+    SharedUnitScene articulation = add_shared_unit_scene(scene, "Shared Root", Vec3::zero());
+    add_sphere_collider(articulation.unit_entity, "Parent Collider", {-0.45, 0.0, 0.5});
 
     Entity child_entity = articulation.unit_entity.create_child("Child Unit");
     auto* child = new RotatorComponent();
@@ -1628,8 +1470,7 @@ TEST_CASE("FEM filters adjacent direct shared units unless enabled")
     child->set_axis(0.0, 1.0, 0.0);
     add_sphere_collider(child_entity, "Child Collider", {0.45, 0.0, 0.5});
 
-    collision::CollisionWorld* collision_world =
-        collision::CollisionWorld::from_scene(scene.handle());
+    collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(scene.handle());
     REQUIRE(collision_world != nullptr);
     collision_world->update_all();
     REQUIRE(!collision_world->detect_contacts().empty());
@@ -1652,8 +1493,7 @@ TEST_CASE("FEM filters adjacent direct shared units unless enabled")
     scene.destroy();
 }
 
-TEST_CASE("FEM contact policy excludes adjacent articulation units")
-{
+TEST_CASE("FEM contact policy excludes adjacent articulation units") {
     using namespace termin;
 
     register_test_component_types();
@@ -1665,8 +1505,7 @@ TEST_CASE("FEM contact policy excludes adjacent articulation units")
     collider_b->box_size = {3.0, 3.0, 3.0};
     fixture.body_b->entity().add_component(collider_b);
 
-    collision::CollisionWorld* collision_world =
-        collision::CollisionWorld::from_scene(fixture.scene.handle());
+    collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(fixture.scene.handle());
     REQUIRE(collision_world != nullptr);
     collision_world->update_all();
     REQUIRE(!collision_world->detect_contacts().empty());
@@ -1679,8 +1518,7 @@ TEST_CASE("FEM contact policy excludes adjacent articulation units")
     fixture.scene.destroy();
 }
 
-TEST_CASE("FEM contact mapping follows collider disable and removal lifecycle")
-{
+TEST_CASE("FEM contact mapping follows collider disable and removal lifecycle") {
     using namespace termin;
 
     register_test_component_types();
@@ -1703,8 +1541,7 @@ TEST_CASE("FEM contact mapping follows collider disable and removal lifecycle")
     fixture.scene.destroy();
 }
 
-TEST_CASE("scene articulation compiler rejects an implicit missing body")
-{
+TEST_CASE("scene articulation compiler rejects an implicit missing body") {
     using namespace termin;
 
     TcSceneRef scene = TcSceneRef::create("invalid articulation");
@@ -1713,20 +1550,17 @@ TEST_CASE("scene articulation compiler rejects an implicit missing body")
     Entity empty_joint = root.create_child("Joint without body");
     empty_joint.add_component(new RotatorComponent());
 
-    const FEMArticulationSceneCompilation compiled =
-        compile_fem_articulation_scene(root);
+    const FEMArticulationSceneCompilation compiled = compile_fem_articulation_scene(root);
     CHECK(compiled.diagnostic == FEMArticulationSceneDiagnostic::MissingBody);
     CHECK(compiled.diagnostic_entity == "Joint without body");
     scene.destroy();
 }
 
-TEST_CASE("FEM joints publish registry-controlled debug geometry")
-{
+TEST_CASE("FEM joints publish registry-controlled debug geometry") {
     using namespace termin;
 
     register_test_component_types();
-    const tc_debug_geometry_type_id debug_type =
-        tc_debug_geometry_type_find("physics.fem.joints");
+    const tc_debug_geometry_type_id debug_type = tc_debug_geometry_type_find("physics.fem.joints");
     REQUIRE(debug_type != TC_DEBUG_GEOMETRY_TYPE_INVALID);
 
     TcSceneRef scene = TcSceneRef::create("FEM joint debug geometry");
@@ -1757,9 +1591,7 @@ TEST_CASE("FEM joints publish registry-controlled debug geometry")
 
     REQUIRE(tc_scene_render_mount_ensure(scene.handle()));
     int attachment_storage = 0;
-    const auto* attachment =
-        reinterpret_cast<const tc_render_attachment_context*>(
-            &attachment_storage);
+    const auto* attachment = reinterpret_cast<const tc_render_attachment_context*>(&attachment_storage);
     tc_scene_render_mount_notify_attach(scene.handle(), attachment);
 
     // STOP/editor state uses authored body transforms before the solver starts.
@@ -1773,28 +1605,21 @@ TEST_CASE("FEM joints publish registry-controlled debug geometry")
     CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 5U);
     std::size_t line_count = 0;
     std::size_t sphere_count = 0;
-    for (std::size_t index = 0;
-         index < tc_scene_debug_geometry_primitive_count(scene.handle());
-         ++index)
-    {
-        const tc_debug_geometry_primitive* primitive =
-            tc_scene_debug_geometry_primitive_at(scene.handle(), index);
+    for (std::size_t index = 0; index < tc_scene_debug_geometry_primitive_count(scene.handle()); ++index) {
+        const tc_debug_geometry_primitive* primitive = tc_scene_debug_geometry_primitive_at(scene.handle(), index);
         REQUIRE(primitive != nullptr);
         CHECK(primitive->type_id == debug_type);
         line_count += primitive->kind == TC_DEBUG_GEOMETRY_LINE ? 1U : 0U;
-        sphere_count +=
-            primitive->kind == TC_DEBUG_GEOMETRY_WIRE_SPHERE ? 1U : 0U;
+        sphere_count += primitive->kind == TC_DEBUG_GEOMETRY_WIRE_SPHERE ? 1U : 0U;
     }
     CHECK(line_count == 3U);
     CHECK(sphere_count == 2U);
 
-    REQUIRE(tc_scene_debug_geometry_set_enabled(
-        scene.handle(), debug_type, false));
+    REQUIRE(tc_scene_debug_geometry_set_enabled(scene.handle(), debug_type, false));
     prepare_render_lifecycle(scene);
     CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 0U);
 
-    REQUIRE(tc_scene_debug_geometry_set_enabled(
-        scene.handle(), debug_type, true));
+    REQUIRE(tc_scene_debug_geometry_set_enabled(scene.handle(), debug_type, true));
     revolute->set_enabled(false);
     prepare_render_lifecycle(scene);
     CHECK(tc_scene_debug_geometry_primitive_count(scene.handle()) == 2U);

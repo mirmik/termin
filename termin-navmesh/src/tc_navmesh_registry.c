@@ -1,13 +1,13 @@
 // tc_navmesh_registry.c - Navmesh registry with pool + hash table
 #include "termin/navmesh/tc_navmesh_registry.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
 #include <tcbase/tc_resource.h>
 #include <tcbase/tc_resource_map.h>
-#include <tcbase/tc_log.h>
 #include <tcbase/tc_string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
 static tc_pool g_navmesh_pool;
 static tc_pool_generation_epoch g_navmesh_generation_epoch;
@@ -28,7 +28,8 @@ static uint32_t navmesh_unpack_index(void* ptr) {
 }
 
 static void navmesh_free_data(tc_navmesh* navmesh) {
-    if (!navmesh) return;
+    if (!navmesh)
+        return;
     if (navmesh->tiles) {
         for (size_t i = 0; i < navmesh->tile_count; ++i) {
             free(navmesh->tiles[i].data);
@@ -42,7 +43,8 @@ static void navmesh_free_data(tc_navmesh* navmesh) {
 }
 
 static void navmesh_bump_version(tc_navmesh* navmesh) {
-    if (navmesh) navmesh->version++;
+    if (navmesh)
+        navmesh->version++;
 }
 
 static void navmesh_init_slot(tc_navmesh* navmesh, tc_handle h, const char* uuid, bool loaded) {
@@ -54,12 +56,9 @@ static void navmesh_init_slot(tc_navmesh* navmesh, tc_handle h, const char* uuid
 }
 
 void tc_navmesh_init(void) {
-    if (g_initialized) return;
-    if (!tc_pool_init_rebootstrap(
-            &g_navmesh_pool,
-            sizeof(tc_navmesh),
-            32,
-            &g_navmesh_generation_epoch)) {
+    if (g_initialized)
+        return;
+    if (!tc_pool_init_rebootstrap(&g_navmesh_pool, sizeof(tc_navmesh), 32, &g_navmesh_generation_epoch)) {
         tc_log(TC_LOG_ERROR, "tc_navmesh_init: failed to init pool");
         return;
     }
@@ -74,7 +73,8 @@ void tc_navmesh_init(void) {
 }
 
 void tc_navmesh_shutdown(void) {
-    if (!g_initialized) return;
+    if (!g_initialized)
+        return;
     for (uint32_t i = 0; i < g_navmesh_pool.capacity; ++i) {
         if (g_navmesh_pool.states[i] == TC_SLOT_OCCUPIED) {
             tc_navmesh* navmesh = (tc_navmesh*)tc_pool_get_unchecked(&g_navmesh_pool, i);
@@ -89,7 +89,8 @@ void tc_navmesh_shutdown(void) {
 }
 
 tc_navmesh_handle tc_navmesh_create(const char* uuid) {
-    if (!g_initialized) tc_navmesh_init();
+    if (!g_initialized)
+        tc_navmesh_init();
 
     char uuid_buf[TC_UUID_SIZE];
     const char* final_uuid = uuid;
@@ -119,9 +120,11 @@ tc_navmesh_handle tc_navmesh_create(const char* uuid) {
 }
 
 tc_navmesh_handle tc_navmesh_find(const char* uuid) {
-    if (!g_initialized || !uuid) return tc_navmesh_handle_invalid();
+    if (!g_initialized || !uuid)
+        return tc_navmesh_handle_invalid();
     void* ptr = tc_resource_map_get(g_uuid_to_index, uuid);
-    if (!navmesh_has_index(ptr)) return tc_navmesh_handle_invalid();
+    if (!navmesh_has_index(ptr))
+        return tc_navmesh_handle_invalid();
     uint32_t index = navmesh_unpack_index(ptr);
     if (index >= g_navmesh_pool.capacity || g_navmesh_pool.states[index] != TC_SLOT_OCCUPIED) {
         return tc_navmesh_handle_invalid();
@@ -133,9 +136,11 @@ tc_navmesh_handle tc_navmesh_find(const char* uuid) {
 }
 
 tc_navmesh_handle tc_navmesh_find_by_name(const char* name) {
-    if (!g_initialized || !name) return tc_navmesh_handle_invalid();
+    if (!g_initialized || !name)
+        return tc_navmesh_handle_invalid();
     for (uint32_t i = 0; i < g_navmesh_pool.capacity; ++i) {
-        if (g_navmesh_pool.states[i] != TC_SLOT_OCCUPIED) continue;
+        if (g_navmesh_pool.states[i] != TC_SLOT_OCCUPIED)
+            continue;
         tc_navmesh* navmesh = (tc_navmesh*)tc_pool_get_unchecked(&g_navmesh_pool, i);
         if (navmesh->name && strcmp(navmesh->name, name) == 0) {
             tc_navmesh_handle h;
@@ -148,16 +153,20 @@ tc_navmesh_handle tc_navmesh_find_by_name(const char* name) {
 }
 
 tc_navmesh_handle tc_navmesh_get_or_create(const char* uuid) {
-    if (!uuid || uuid[0] == '\0') return tc_navmesh_handle_invalid();
+    if (!uuid || uuid[0] == '\0')
+        return tc_navmesh_handle_invalid();
     tc_navmesh_handle h = tc_navmesh_find(uuid);
     return tc_navmesh_handle_is_invalid(h) ? tc_navmesh_create(uuid) : h;
 }
 
 tc_navmesh_handle tc_navmesh_declare(const char* uuid, const char* name) {
-    if (!g_initialized) tc_navmesh_init();
-    if (!uuid || uuid[0] == '\0') return tc_navmesh_handle_invalid();
+    if (!g_initialized)
+        tc_navmesh_init();
+    if (!uuid || uuid[0] == '\0')
+        return tc_navmesh_handle_invalid();
     tc_navmesh_handle existing = tc_navmesh_find(uuid);
-    if (!tc_navmesh_handle_is_invalid(existing)) return existing;
+    if (!tc_navmesh_handle_is_invalid(existing))
+        return existing;
 
     tc_handle h = tc_pool_alloc(&g_navmesh_pool);
     if (tc_handle_is_invalid(h)) {
@@ -180,7 +189,8 @@ tc_navmesh_handle tc_navmesh_declare(const char* uuid, const char* name) {
 }
 
 tc_navmesh* tc_navmesh_get(tc_navmesh_handle h) {
-    if (!g_initialized) return NULL;
+    if (!g_initialized)
+        return NULL;
     return (tc_navmesh*)tc_pool_get_checked(&g_navmesh_pool, h, "tc_navmesh");
 }
 
@@ -189,9 +199,11 @@ bool tc_navmesh_is_valid(tc_navmesh_handle h) {
 }
 
 bool tc_navmesh_destroy(tc_navmesh_handle h) {
-    if (!g_initialized) return false;
+    if (!g_initialized)
+        return false;
     tc_navmesh* navmesh = tc_navmesh_get(h);
-    if (!navmesh) return false;
+    if (!navmesh)
+        return false;
     tc_resource_map_remove(g_uuid_to_index, navmesh->uuid);
     navmesh_free_data(navmesh);
     return tc_pool_free_slot(&g_navmesh_pool, h);
@@ -212,41 +224,49 @@ bool tc_navmesh_is_loaded(tc_navmesh_handle h) {
 
 bool tc_navmesh_ensure_loaded(tc_navmesh_handle h) {
     tc_navmesh* navmesh = tc_navmesh_get(h);
-    if (!navmesh) return false;
-    if (navmesh->is_loaded) return true;
+    if (!navmesh)
+        return false;
+    if (navmesh->is_loaded)
+        return true;
     bool success = tc_resource_request_load(navmesh->uuid);
     if (success) {
         navmesh->is_loaded = 1;
     } else {
-        tc_log_error(
-            "tc_navmesh_ensure_loaded: resource loader failed for '%s'",
-            navmesh->uuid
-        );
+        tc_log_error("tc_navmesh_ensure_loaded: resource loader failed for '%s'", navmesh->uuid);
     }
     return success;
 }
 
-bool tc_navmesh_set_metadata(tc_navmesh* navmesh, const char* name, const char* agent_type, const char* coordinate_system) {
-    if (!navmesh) return false;
-    if (name && name[0] != '\0') navmesh->name = tc_intern_string(name);
+bool tc_navmesh_set_metadata(tc_navmesh* navmesh,
+                             const char* name,
+                             const char* agent_type,
+                             const char* coordinate_system) {
+    if (!navmesh)
+        return false;
+    if (name && name[0] != '\0')
+        navmesh->name = tc_intern_string(name);
     navmesh->agent_type = (agent_type && agent_type[0] != '\0') ? tc_intern_string(agent_type) : NULL;
-    navmesh->coordinate_system = (coordinate_system && coordinate_system[0] != '\0') ? tc_intern_string(coordinate_system) : NULL;
+    navmesh->coordinate_system =
+        (coordinate_system && coordinate_system[0] != '\0') ? tc_intern_string(coordinate_system) : NULL;
     navmesh_bump_version(navmesh);
     return true;
 }
 
 void tc_navmesh_clear_tiles(tc_navmesh* navmesh) {
-    if (!navmesh) return;
+    if (!navmesh)
+        return;
     navmesh_free_data(navmesh);
     navmesh_bump_version(navmesh);
 }
 
 bool tc_navmesh_set_tiles(tc_navmesh* navmesh, const tc_navmesh_tile* tiles, size_t tile_count) {
-    if (!navmesh) return false;
+    if (!navmesh)
+        return false;
     tc_navmesh_tile* new_tiles = NULL;
     if (tile_count > 0) {
         new_tiles = (tc_navmesh_tile*)calloc(tile_count, sizeof(tc_navmesh_tile));
-        if (!new_tiles) return false;
+        if (!new_tiles)
+            return false;
         for (size_t i = 0; i < tile_count; ++i) {
             new_tiles[i].x = tiles[i].x;
             new_tiles[i].y = tiles[i].y;
@@ -255,7 +275,8 @@ bool tc_navmesh_set_tiles(tc_navmesh* navmesh, const tc_navmesh_tile* tiles, siz
             if (tiles[i].data_size > 0) {
                 new_tiles[i].data = (unsigned char*)malloc(tiles[i].data_size);
                 if (!new_tiles[i].data) {
-                    for (size_t j = 0; j < i; ++j) free(new_tiles[j].data);
+                    for (size_t j = 0; j < i; ++j)
+                        free(new_tiles[j].data);
                     free(new_tiles);
                     return false;
                 }
@@ -273,11 +294,13 @@ bool tc_navmesh_set_tiles(tc_navmesh* navmesh, const tc_navmesh_tile* tiles, siz
 }
 
 void tc_navmesh_add_ref(tc_navmesh* navmesh) {
-    if (navmesh) navmesh->ref_count++;
+    if (navmesh)
+        navmesh->ref_count++;
 }
 
 bool tc_navmesh_release(tc_navmesh* navmesh) {
-    if (!navmesh || navmesh->ref_count == 0) return false;
+    if (!navmesh || navmesh->ref_count == 0)
+        return false;
     navmesh->ref_count--;
     return navmesh->ref_count == 0;
 }
@@ -296,8 +319,9 @@ static bool navmesh_iter_adapter(uint32_t index, void* item, void* ctx_ptr) {
 }
 
 void tc_navmesh_foreach(tc_navmesh_iter_fn callback, void* user_data) {
-    if (!g_initialized || !callback) return;
-    navmesh_iter_ctx ctx = { callback, user_data };
+    if (!g_initialized || !callback)
+        return;
+    navmesh_iter_ctx ctx = {callback, user_data};
     tc_pool_foreach(&g_navmesh_pool, navmesh_iter_adapter, &ctx);
 }
 
@@ -326,14 +350,18 @@ static bool collect_navmesh_info(tc_navmesh_handle h, tc_navmesh* navmesh, void*
 }
 
 tc_navmesh_info* tc_navmesh_get_all_info(size_t* count) {
-    if (!count) return NULL;
+    if (!count)
+        return NULL;
     *count = 0;
-    if (!g_initialized) return NULL;
+    if (!g_initialized)
+        return NULL;
     size_t navmesh_count = tc_pool_count(&g_navmesh_pool);
-    if (navmesh_count == 0) return NULL;
+    if (navmesh_count == 0)
+        return NULL;
     tc_navmesh_info* infos = (tc_navmesh_info*)calloc(navmesh_count, sizeof(tc_navmesh_info));
-    if (!infos) return NULL;
-    navmesh_info_ctx ctx = { infos, 0 };
+    if (!infos)
+        return NULL;
+    navmesh_info_ctx ctx = {infos, 0};
     tc_navmesh_foreach(collect_navmesh_info, &ctx);
     *count = ctx.count;
     return infos;

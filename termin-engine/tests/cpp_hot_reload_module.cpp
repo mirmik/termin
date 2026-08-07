@@ -7,76 +7,71 @@
 
 namespace {
 
-class HotReloadNativeProbeComponent : public termin::CxxComponent {
-public:
-    int value = 0;
+    class HotReloadNativeProbeComponent : public termin::CxxComponent {
+    public:
+        int value = 0;
 
-    HotReloadNativeProbeComponent()
-        : termin::CxxComponent("HotReloadNativeProbeComponent") {}
-};
+        HotReloadNativeProbeComponent()
+            : termin::CxxComponent("HotReloadNativeProbeComponent") {}
+    };
 
-class HotReloadNativeProbePass : public termin::CxxFramePass {
-public:
-    int exposure = 0;
+    class HotReloadNativeProbePass : public termin::CxxFramePass {
+    public:
+        int exposure = 0;
 
-    static void register_type(const char* owner);
+        static void register_type(const char* owner);
 
-    HotReloadNativeProbePass() {
-        link_to_type_registry("HotReloadNativeProbePass");
+        HotReloadNativeProbePass() {
+            link_to_type_registry("HotReloadNativeProbePass");
+        }
+
+        std::set<const char*> compute_reads() const override {
+            return {"source"};
+        }
+        std::set<const char*> compute_writes() const override {
+            return {"output"};
+        }
+        std::vector<termin::ResourceSpec> get_resource_specs() const override {
+            return {termin::ResourceSpec("output", "color_texture")};
+        }
+    };
+
+    void HotReloadNativeProbePass::register_type(const char* owner) {
+        auto descriptor = termin::FramePassTypeDescriptorBuilder::native<HotReloadNativeProbePass>(
+            "HotReloadNativeProbePass", owner, "CxxFramePass");
+        (void)descriptor.inspect().add<HotReloadNativeProbePass, int>(
+            &HotReloadNativeProbePass::exposure,
+            tc::InspectFieldSpec{"HotReloadNativeProbePass", "exposure", "Exposure", "int"});
+        (void)descriptor.commit();
     }
-
-    std::set<const char*> compute_reads() const override { return {"source"}; }
-    std::set<const char*> compute_writes() const override { return {"output"}; }
-    std::vector<termin::ResourceSpec> get_resource_specs() const override {
-        return {termin::ResourceSpec("output", "color_texture")};
-    }
-};
-
-void HotReloadNativeProbePass::register_type(const char* owner) {
-    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<HotReloadNativeProbePass>(
-        "HotReloadNativeProbePass", owner, "CxxFramePass");
-    (void)descriptor.inspect().add<HotReloadNativeProbePass, int>(
-        &HotReloadNativeProbePass::exposure,
-        tc::InspectFieldSpec{
-            "HotReloadNativeProbePass", "exposure", "Exposure", "int"});
-    (void)descriptor.commit();
-}
 
 } // namespace
 
-int32_t native_probe_init(
-    const termin_native_module_host_v1* host,
-    termin_native_module_error*
-) {
-    if (!host || !host->module_id || !host->module_id[0]) return -1;
+int32_t native_probe_init(const termin_native_module_host_v1* host, termin_native_module_error*) {
+    if (!host || !host->module_id || !host->module_id[0])
+        return -1;
     const char* owner = host->module_id;
     HotReloadNativeProbePass::register_type(owner);
     auto component = termin::ComponentTypeDescriptorBuilder::native<HotReloadNativeProbeComponent>(
         "HotReloadNativeProbeComponent", owner, "CxxComponent");
     (void)component.inspect().add<HotReloadNativeProbeComponent, int>(
         &HotReloadNativeProbeComponent::value,
-        tc::InspectFieldSpec{
-            "HotReloadNativeProbeComponent", "value", "Value", "int"});
-    if (!component.commit()) return -1;
+        tc::InspectFieldSpec{"HotReloadNativeProbeComponent", "value", "Value", "int"});
+    if (!component.commit())
+        return -1;
     return 0;
 }
 
-int32_t native_probe_shutdown(
-    const termin_native_module_host_v1*,
-    termin_native_module_error*
-) {
+int32_t native_probe_shutdown(const termin_native_module_host_v1*, termin_native_module_error*) {
     // Intentionally do not unregister anything here. The integration test
     // verifies module-owner cleanup before dlclose/FreeLibrary.
     return 0;
 }
 
-TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(
-    "native_probe",
-    "1.0.0",
-    "termin-engine-native-probe",
-    TERMIN_NATIVE_MODULE_CAP_COMPONENTS |
-        TERMIN_NATIVE_MODULE_CAP_FRAME_PASSES |
-        TERMIN_NATIVE_MODULE_CAP_INSPECT_TYPES,
-    native_probe_init,
-    native_probe_shutdown
-);
+TERMIN_NATIVE_MODULE_DESCRIPTOR_V1("native_probe",
+                                   "1.0.0",
+                                   "termin-engine-native-probe",
+                                   TERMIN_NATIVE_MODULE_CAP_COMPONENTS | TERMIN_NATIVE_MODULE_CAP_FRAME_PASSES |
+                                       TERMIN_NATIVE_MODULE_CAP_INSPECT_TYPES,
+                                   native_probe_init,
+                                   native_probe_shutdown);

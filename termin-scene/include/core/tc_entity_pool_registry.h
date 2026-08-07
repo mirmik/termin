@@ -1,10 +1,10 @@
 // tc_entity_pool_registry.h - Registry for entity pools with generational handles
 #pragma once
 
-#include <stdint.h>
+#include "tc_types.h"
 #include <stdbool.h>
 #include <stddef.h>
-#include "tc_types.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,9 +23,9 @@ typedef struct {
 #endif
 
 #ifdef __cplusplus
-    #define TC_ENTITY_POOL_HANDLE_INVALID (tc_entity_pool_handle{0xFFFFFFFF, 0})
+#define TC_ENTITY_POOL_HANDLE_INVALID (tc_entity_pool_handle{0xFFFFFFFF, 0})
 #else
-    #define TC_ENTITY_POOL_HANDLE_INVALID ((tc_entity_pool_handle){0xFFFFFFFF, 0})
+#define TC_ENTITY_POOL_HANDLE_INVALID ((tc_entity_pool_handle){0xFFFFFFFF, 0})
 #endif
 
 static inline bool tc_entity_pool_handle_valid(tc_entity_pool_handle h) {

@@ -12,56 +12,50 @@ using namespace termin;
 
 namespace {
 
-bool save_handle(TcFoliageData& handle) {
-    FoliageData* data = handle.get();
-    if (!data) {
-        return false;
+    bool save_handle(TcFoliageData& handle) {
+        FoliageData* data = handle.get();
+        if (!data) {
+            return false;
+        }
+        if (data->source_path.empty()) {
+            return false;
+        }
+        return data->save_to_file(data->source_path);
     }
-    if (data->source_path.empty()) {
-        return false;
-    }
-    return data->save_to_file(data->source_path);
-}
 
-std::vector<FoliageInstance> handle_instances(TcFoliageData& handle) {
-    if (!handle.ensure_loaded()) {
-        return {};
+    std::vector<FoliageInstance> handle_instances(TcFoliageData& handle) {
+        if (!handle.ensure_loaded()) {
+            return {};
+        }
+        FoliageData* data = handle.get();
+        if (!data) {
+            return {};
+        }
+        return data->instances;
     }
-    FoliageData* data = handle.get();
-    if (!data) {
-        return {};
-    }
-    return data->instances;
-}
 
-bool add_instance(TcFoliageData& handle, const FoliageInstance& instance) {
-    if (!handle.ensure_loaded()) {
-        return false;
+    bool add_instance(TcFoliageData& handle, const FoliageInstance& instance) {
+        if (!handle.ensure_loaded()) {
+            return false;
+        }
+        FoliageData* data = handle.get();
+        if (!data) {
+            return false;
+        }
+        data->add_instance(instance);
+        return true;
     }
-    FoliageData* data = handle.get();
-    if (!data) {
-        return false;
-    }
-    data->add_instance(instance);
-    return true;
-}
 
-size_t remove_instances_in_radius(
-    TcFoliageData& handle,
-    float x,
-    float y,
-    float z,
-    float radius
-) {
-    if (!handle.ensure_loaded()) {
-        return 0;
+    size_t remove_instances_in_radius(TcFoliageData& handle, float x, float y, float z, float radius) {
+        if (!handle.ensure_loaded()) {
+            return 0;
+        }
+        FoliageData* data = handle.get();
+        if (!data) {
+            return 0;
+        }
+        return data->remove_instances_in_radius(Vec3f{x, y, z}, radius);
     }
-    FoliageData* data = handle.get();
-    if (!data) {
-        return 0;
-    }
-    return data->remove_instances_in_radius(Vec3f{x, y, z}, radius);
-}
 
 } // namespace
 
@@ -87,21 +81,14 @@ NB_MODULE(_foliage_native, m) {
 
     nb::class_<TcFoliageData>(m, "TcFoliageData")
         .def(nb::init<>())
-        .def_static("declare", &TcFoliageData::declare,
-            nb::arg("uuid"), nb::arg("name"), nb::arg("source_path") = "")
+        .def_static("declare", &TcFoliageData::declare, nb::arg("uuid"), nb::arg("name"), nb::arg("source_path") = "")
         .def_static("from_uuid", &TcFoliageData::from_uuid, nb::arg("uuid"))
         .def_static("clear_registry_for_tests", &TcFoliageData::clear_registry_for_tests)
         .def_prop_ro("is_valid", &TcFoliageData::is_valid)
         .def_prop_ro("is_loaded", &TcFoliageData::is_loaded)
-        .def_prop_ro("uuid", [](const TcFoliageData& handle) {
-            return std::string(handle.uuid());
-        })
-        .def_prop_ro("name", [](const TcFoliageData& handle) {
-            return std::string(handle.name());
-        })
-        .def_prop_ro("source_path", [](const TcFoliageData& handle) {
-            return std::string(handle.source_path());
-        })
+        .def_prop_ro("uuid", [](const TcFoliageData& handle) { return std::string(handle.uuid()); })
+        .def_prop_ro("name", [](const TcFoliageData& handle) { return std::string(handle.name()); })
+        .def_prop_ro("source_path", [](const TcFoliageData& handle) { return std::string(handle.source_path()); })
         .def_prop_ro("version", &TcFoliageData::version)
         .def_prop_ro("instance_count", &TcFoliageData::instance_count)
         .def_prop_ro("instances", &handle_instances)
@@ -109,13 +96,15 @@ NB_MODULE(_foliage_native, m) {
         .def("reload", &TcFoliageData::reload)
         .def("save", &save_handle)
         .def("add_instance", &add_instance, nb::arg("instance"))
-        .def("remove_instances_in_radius", &remove_instances_in_radius,
-            nb::arg("x"), nb::arg("y"), nb::arg("z"), nb::arg("radius"));
+        .def("remove_instances_in_radius",
+             &remove_instances_in_radius,
+             nb::arg("x"),
+             nb::arg("y"),
+             nb::arg("z"),
+             nb::arg("radius"));
 
     nb::class_<FoliageLayerComponent, CxxComponent>(m, "FoliageLayerComponent")
-        .def("__init__", [](nb::handle self) {
-            cxx_component_init<FoliageLayerComponent>(self);
-        })
+        .def("__init__", [](nb::handle self) { cxx_component_init<FoliageLayerComponent>(self); })
         .def_rw("enabled", &FoliageLayerComponent::enabled)
         .def_rw("foliage_uuid", &FoliageLayerComponent::foliage_uuid)
         .def_rw("prototype_mesh", &FoliageLayerComponent::prototype_mesh)

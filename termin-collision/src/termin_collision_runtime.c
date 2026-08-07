@@ -1,5 +1,5 @@
-#include "termin_collision/termin_collision.h"
 #include "physics/tc_collision_world.h"
+#include "termin_collision/termin_collision.h"
 
 static int g_termin_collision_runtime_refcount = 0;
 
@@ -9,6 +9,7 @@ void termin_collision_runtime_init(void) {
 }
 
 void termin_collision_runtime_shutdown(void) {
-    if (g_termin_collision_runtime_refcount <= 0) return;
+    if (g_termin_collision_runtime_refcount <= 0)
+        return;
     g_termin_collision_runtime_refcount--;
 }

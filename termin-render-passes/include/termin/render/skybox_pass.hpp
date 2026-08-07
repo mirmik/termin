@@ -10,67 +10,67 @@
 // a safe fullscreen primitive because its edges cross the camera plane.
 #pragma once
 
+#include "tc_inspect_cpp.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
-#include "termin/materials/shader_parser.hpp"
 #include "tgfx2/handles.hpp"
-#include "tc_inspect_cpp.hpp"
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
 #include <string>
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+    class IRenderDevice;
+}
 
 namespace termin {
 
-class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
-public:
-    std::string input_res = "empty";
-    std::string output_res = "color";
+    class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
+    public:
+        std::string input_res = "empty";
+        std::string output_res = "color";
 
-private:
-    // tgfx2 resources, all created lazily on first execute when the device
-    // becomes reachable through ExecuteContext::ctx2. Destroyed in destroy().
-    // Shader handle lives on the tc_shader registry (hash-based dedup across
-    // pass re-creations) so Play/Stop doesn't re-run shaderc.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
-    // Parsed from the canonical built-in .shader program at ensure_resources
-    // time. The layout drives std140_pack and the UBO block_size.
-    MaterialUboLayout skybox_layout_;
+    private:
+        // tgfx2 resources, all created lazily on first execute when the device
+        // becomes reachable through ExecuteContext::ctx2. Destroyed in destroy().
+        // Shader handle lives on the tc_shader registry (hash-based dedup across
+        // pass re-creations) so Play/Stop doesn't re-run shaderc.
+        tgfx::IRenderDevice* device2_ = nullptr;
+        tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
+        // Parsed from the canonical built-in .shader program at ensure_resources
+        // time. The layout drives std140_pack and the UBO block_size.
+        MaterialUboLayout skybox_layout_;
 
-public:
-    static void register_type();
-    INSPECT_FIELD(SkyBoxPass, input_res, "Input", "string")
-    INSPECT_FIELD(SkyBoxPass, output_res, "Output", "string")
-    INSPECT_TYPE_METADATA(SkyBoxPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}},
-        {{"input_res", "output_res"}}
-    ))
+    public:
+        static void register_type();
+        INSPECT_FIELD(SkyBoxPass, input_res, "Input", "string")
+        INSPECT_FIELD(SkyBoxPass, output_res, "Output", "string")
+        INSPECT_TYPE_METADATA(SkyBoxPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "fbo"}},
+                                                       {{"output_res", "fbo"}},
+                                                       {{"input_res", "output_res"}}))
 
-    SkyBoxPass(
-        const std::string& input = "empty",
-        const std::string& output = "color",
-        const std::string& pass_name = "Skybox"
-    );
+        SkyBoxPass(const std::string& input = "empty",
+                   const std::string& output = "color",
+                   const std::string& pass_name = "Skybox");
 
-    std::set<const char*> compute_reads() const override;
-    std::set<const char*> compute_writes() const override;
+        std::set<const char*> compute_reads() const override;
+        std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {{input_res, output_res}};
-    }
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+            return {{input_res, output_res}};
+        }
 
-    std::vector<ResourceSpec> get_resource_specs() const override;
+        std::vector<ResourceSpec> get_resource_specs() const override;
 
-    void execute(ExecuteContext& ctx) override;
-    void destroy() override;
+        void execute(ExecuteContext& ctx) override;
+        void destroy() override;
 
-private:
-    void ensure_resources(ExecuteContext& ctx);
-};
+    private:
+        void ensure_resources(ExecuteContext& ctx);
+    };
 
 } // namespace termin

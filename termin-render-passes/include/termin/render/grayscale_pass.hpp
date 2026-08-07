@@ -1,65 +1,61 @@
 // grayscale_pass.hpp - Simple grayscale post-processing pass
 #pragma once
 
+#include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
 #include "tgfx2/handles.hpp"
-#include "tc_inspect_cpp.hpp"
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+    class IRenderDevice;
+}
 
 namespace termin {
 
-// GrayscalePass - converts image to grayscale with adjustable strength.
-//
-// Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
-// UBO for parameters via bind_uniform_buffer, input texture via
-// reflected texture binding. Legacy tgfx1 dual-path removed in Stage 8.1.
-class TERMIN_RENDER_PASSES_API GrayscalePass : public CxxFramePass {
-public:
-    std::string input_res = "color";
-    std::string output_res = "color";
-    float strength = 1.0f;
+    // GrayscalePass - converts image to grayscale with adjustable strength.
+    //
+    // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
+    // UBO for parameters via bind_uniform_buffer, input texture via
+    // reflected texture binding. Legacy tgfx1 dual-path removed in Stage 8.1.
+    class TERMIN_RENDER_PASSES_API GrayscalePass : public CxxFramePass {
+    public:
+        std::string input_res = "color";
+        std::string output_res = "color";
+        float strength = 1.0f;
 
-private:
-    tgfx::IRenderDevice* device2_ = nullptr;
-    // FS lives on the tc_shader registry (FS-only: vertex_source is NULL,
-    // the VS is ctx2's built-in FSQ); hash-based dedup so Play/Stop
-    // doesn't re-run shaderc — see ShadowPass for the matching pattern
-    // on full VS+FS passes.
-    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
-    tgfx::BufferHandle params_ubo_;
-    float uploaded_strength_ = -1.0f;
+    private:
+        tgfx::IRenderDevice* device2_ = nullptr;
+        // FS lives on the tc_shader registry (FS-only: vertex_source is NULL,
+        // the VS is ctx2's built-in FSQ); hash-based dedup so Play/Stop
+        // doesn't re-run shaderc — see ShadowPass for the matching pattern
+        // on full VS+FS passes.
+        tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
+        tgfx::BufferHandle params_ubo_;
+        float uploaded_strength_ = -1.0f;
 
-public:
-    static void register_type();
-    INSPECT_FIELD(GrayscalePass, input_res, "Input", "string")
-    INSPECT_FIELD(GrayscalePass, output_res, "Output", "string")
-    INSPECT_FIELD_RANGE(GrayscalePass, strength, "Strength", "float", 0.0f, 1.0f)
-    INSPECT_TYPE_METADATA(GrayscalePass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}},
-        {}
-    ))
+    public:
+        static void register_type();
+        INSPECT_FIELD(GrayscalePass, input_res, "Input", "string")
+        INSPECT_FIELD(GrayscalePass, output_res, "Output", "string")
+        INSPECT_FIELD_RANGE(GrayscalePass, strength, "Strength", "float", 0.0f, 1.0f)
+        INSPECT_TYPE_METADATA(GrayscalePass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "fbo"}}, {{"output_res", "fbo"}}, {}))
 
-    GrayscalePass(
-        const std::string& input = "color",
-        const std::string& output = "color",
-        float strength = 1.0f
-    );
+        GrayscalePass(const std::string& input = "color", const std::string& output = "color", float strength = 1.0f);
 
-    std::set<const char*> compute_reads() const override;
-    std::set<const char*> compute_writes() const override;
+        std::set<const char*> compute_reads() const override;
+        std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {};
-    }
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+            return {};
+        }
 
-    void execute(ExecuteContext& ctx) override;
-    void destroy() override;
-};
+        void execute(ExecuteContext& ctx) override;
+        void destroy() override;
+    };
 
 } // namespace termin

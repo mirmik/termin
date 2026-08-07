@@ -4,8 +4,8 @@
 
 namespace termin {
 
-void register_builtin_skeleton_component_types() {
-    SkeletonController::register_type();
-}
+    void register_builtin_skeleton_component_types() {
+        SkeletonController::register_type();
+    }
 
 } // namespace termin

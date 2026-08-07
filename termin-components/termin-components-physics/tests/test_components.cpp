@@ -14,55 +14,55 @@ GUARD_TEST_MAIN();
 
 namespace {
 
-void initialize_runtime() {
-    static const bool initialized = [] {
-        tc_inspect_kind_core_init();
-        tc_inspect_component_adapter_init();
-        tc_scene_ext_registry_init();
-        termin_collision_runtime_init();
-        termin::register_builtin_scene_component_types();
-        termin::ColliderComponent::register_type();
-        termin::PhysicsWorldComponent::register_type();
-        termin::RigidBodyComponent::register_type();
-        return true;
-    }();
-    (void)initialized;
-}
+    void initialize_runtime() {
+        static const bool initialized = [] {
+            tc_inspect_kind_core_init();
+            tc_inspect_component_adapter_init();
+            tc_scene_ext_registry_init();
+            termin_collision_runtime_init();
+            termin::register_builtin_scene_component_types();
+            termin::ColliderComponent::register_type();
+            termin::PhysicsWorldComponent::register_type();
+            termin::RigidBodyComponent::register_type();
+            return true;
+        }();
+        (void)initialized;
+    }
 
-struct FallingBoxScene {
-    termin::TcSceneRef scene;
-    termin::Entity box_entity;
-    termin::ColliderComponent* box_collider = nullptr;
-    termin::RigidBodyComponent* body = nullptr;
-    termin::PhysicsWorldComponent* world = nullptr;
-};
+    struct FallingBoxScene {
+        termin::TcSceneRef scene;
+        termin::Entity box_entity;
+        termin::ColliderComponent* box_collider = nullptr;
+        termin::RigidBodyComponent* body = nullptr;
+        termin::PhysicsWorldComponent* world = nullptr;
+    };
 
-FallingBoxScene make_falling_box_scene() {
-    using namespace termin;
+    FallingBoxScene make_falling_box_scene() {
+        using namespace termin;
 
-    FallingBoxScene result;
-    result.scene = TcSceneRef::create("native game physics");
+        FallingBoxScene result;
+        result.scene = TcSceneRef::create("native game physics");
 
-    Entity floor = result.scene.create_entity("Floor");
-    floor.transform().set_local_position({0.0, 0.0, -0.5});
-    floor.transform().set_local_scale({10.0, 10.0, 1.0});
-    floor.add_component(new ColliderComponent());
+        Entity floor = result.scene.create_entity("Floor");
+        floor.transform().set_local_position({0.0, 0.0, -0.5});
+        floor.transform().set_local_scale({10.0, 10.0, 1.0});
+        floor.add_component(new ColliderComponent());
 
-    result.box_entity = result.scene.create_entity("Box");
-    result.box_entity.transform().set_local_position({0.0, 0.0, 2.0});
-    result.box_entity.transform().set_local_scale({1.0, 1.0, 1.0});
-    result.box_collider = new ColliderComponent();
-    result.box_entity.add_component(result.box_collider);
-    result.body = new RigidBodyComponent();
-    result.body->mass = 2.0;
-    result.box_entity.add_component(result.body);
+        result.box_entity = result.scene.create_entity("Box");
+        result.box_entity.transform().set_local_position({0.0, 0.0, 2.0});
+        result.box_entity.transform().set_local_scale({1.0, 1.0, 1.0});
+        result.box_collider = new ColliderComponent();
+        result.box_entity.add_component(result.box_collider);
+        result.body = new RigidBodyComponent();
+        result.body->mass = 2.0;
+        result.box_entity.add_component(result.body);
 
-    Entity world_entity = result.scene.create_entity("Physics World");
-    result.world = new PhysicsWorldComponent();
-    world_entity.add_component(result.world);
-    result.world->start();
-    return result;
-}
+        Entity world_entity = result.scene.create_entity("Physics World");
+        result.world = new PhysicsWorldComponent();
+        world_entity.add_component(result.world);
+        result.world->start();
+        return result;
+    }
 
 } // namespace
 
@@ -114,16 +114,14 @@ TEST_CASE("external entity transform teleports native rigid body") {
         fixture.world->fixed_update(1.0F / 120.0F);
     }
 
-    fixture.box_entity.transform().set_global_pose(
-        Pose3{Quat::identity(), Vec3{1.5, -0.25, 3.0}});
+    fixture.box_entity.transform().set_global_pose(Pose3{Quat::identity(), Vec3{1.5, -0.25, 3.0}});
     fixture.world->fixed_update(1.0F / 120.0F);
 
     const Pose3 body_pose = fixture.body->rigid_body()->shape_pose();
     CHECK(body_pose.lin.x == guard::Approx(1.5));
     CHECK(body_pose.lin.y == guard::Approx(-0.25));
     CHECK(std::abs(body_pose.lin.z - 3.0) <= 0.002);
-    CHECK(fixture.box_entity.transform().global_position().z ==
-          guard::Approx(body_pose.lin.z));
+    CHECK(fixture.box_entity.transform().global_position().z == guard::Approx(body_pose.lin.z));
 
     fixture.scene.destroy();
 }

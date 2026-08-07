@@ -12,60 +12,61 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// Convert Python object to tc_value
-// Caller owns the returned tc_value and must call tc_value_free on it
-inline tc_value py_to_tc_value(nb::object obj) {
-    if (obj.is_none()) {
+    // Convert Python object to tc_value
+    // Caller owns the returned tc_value and must call tc_value_free on it
+    inline tc_value py_to_tc_value(nb::object obj) {
+        if (obj.is_none()) {
+            return tc_value_nil();
+        }
+        if (nb::isinstance<nb::bool_>(obj)) {
+            return tc_value_bool(nb::cast<bool>(obj));
+        }
+        if (nb::isinstance<nb::int_>(obj)) {
+            return tc_value_int(nb::cast<int64_t>(obj));
+        }
+        if (nb::isinstance<nb::float_>(obj)) {
+            return tc_value_double(nb::cast<double>(obj));
+        }
+        if (nb::isinstance<nb::str>(obj)) {
+            return tc_value_string(nb::cast<std::string>(obj).c_str());
+        }
+        if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
+            tc_value result = tc_value_list_new();
+            for (auto item : obj) {
+                tc_value child = py_to_tc_value(nb::borrow<nb::object>(item));
+                tc_value_list_push(&result, child);
+                // Note: list_push takes ownership, don't free child
+            }
+            return result;
+        }
+        if (nb::isinstance<nb::dict>(obj)) {
+            tc_value result = tc_value_dict_new();
+            for (auto item : nb::cast<nb::dict>(obj)) {
+                std::string key = nb::cast<std::string>(item.first);
+                tc_value child = py_to_tc_value(nb::borrow<nb::object>(item.second));
+                tc_value_dict_set(&result, key.c_str(), child);
+                // Note: dict_set takes ownership, don't free child
+            }
+            return result;
+        }
+
+        // numpy arrays / numpy scalars and similar sequence-like objects
+        try {
+            return py_to_tc_value(obj.attr("tolist")());
+        } catch (const std::exception& e) {
+            tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed: %s", e.what());
+        } catch (...) {
+            tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed with unknown exception");
+        }
         return tc_value_nil();
     }
-    if (nb::isinstance<nb::bool_>(obj)) {
-        return tc_value_bool(nb::cast<bool>(obj));
-    }
-    if (nb::isinstance<nb::int_>(obj)) {
-        return tc_value_int(nb::cast<int64_t>(obj));
-    }
-    if (nb::isinstance<nb::float_>(obj)) {
-        return tc_value_double(nb::cast<double>(obj));
-    }
-    if (nb::isinstance<nb::str>(obj)) {
-        return tc_value_string(nb::cast<std::string>(obj).c_str());
-    }
-    if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
-        tc_value result = tc_value_list_new();
-        for (auto item : obj) {
-            tc_value child = py_to_tc_value(nb::borrow<nb::object>(item));
-            tc_value_list_push(&result, child);
-            // Note: list_push takes ownership, don't free child
-        }
-        return result;
-    }
-    if (nb::isinstance<nb::dict>(obj)) {
-        tc_value result = tc_value_dict_new();
-        for (auto item : nb::cast<nb::dict>(obj)) {
-            std::string key = nb::cast<std::string>(item.first);
-            tc_value child = py_to_tc_value(nb::borrow<nb::object>(item.second));
-            tc_value_dict_set(&result, key.c_str(), child);
-            // Note: dict_set takes ownership, don't free child
-        }
-        return result;
-    }
 
-    // numpy arrays / numpy scalars and similar sequence-like objects
-    try {
-        return py_to_tc_value(obj.attr("tolist")());
-    } catch (const std::exception& e) {
-        tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed: %s", e.what());
-    } catch (...) {
-        tc_log(TC_LOG_DEBUG, "[py_to_tc_value] tolist() conversion failed with unknown exception");
-    }
-    return tc_value_nil();
-}
+    // Convert tc_value to Python object
+    inline nb::object tc_value_to_py(const tc_value* v) {
+        if (!v)
+            return nb::none();
 
-// Convert tc_value to Python object
-inline nb::object tc_value_to_py(const tc_value* v) {
-    if (!v) return nb::none();
-
-    switch (v->type) {
+        switch (v->type) {
         case TC_VALUE_NIL:
             return nb::none();
         case TC_VALUE_BOOL:
@@ -99,8 +100,8 @@ inline nb::object tc_value_to_py(const tc_value* v) {
             }
             return result;
         }
+        }
+        return nb::none();
     }
-    return nb::none();
-}
 
 } // namespace termin

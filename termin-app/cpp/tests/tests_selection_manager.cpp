@@ -4,14 +4,13 @@
 
 namespace {
 
-termin::Entity make_entity(const char* name) {
-    return termin::Entity::create(termin::Entity::standalone_pool_handle(), name);
-}
+    termin::Entity make_entity(const char* name) {
+        return termin::Entity::create(termin::Entity::standalone_pool_handle(), name);
+    }
 
 } // namespace
 
-TEST_CASE("SelectionManager normalizes selection and hover state")
-{
+TEST_CASE("SelectionManager normalizes selection and hover state") {
     termin::SelectionManager selection;
     termin::Entity selected = make_entity("selected");
     termin::Entity unselectable = make_entity("unselectable");
@@ -19,8 +18,12 @@ TEST_CASE("SelectionManager normalizes selection and hover state")
 
     int selection_changes = 0;
     int hover_changes = 0;
-    selection.on_selection_changed = [&](termin::Entity) { ++selection_changes; };
-    selection.on_hover_changed = [&](termin::Entity) { ++hover_changes; };
+    selection.on_selection_changed = [&](termin::Entity) {
+        ++selection_changes;
+    };
+    selection.on_hover_changed = [&](termin::Entity) {
+        ++hover_changes;
+    };
 
     selection.select(selected);
     selection.hover(selected);
@@ -44,14 +47,17 @@ TEST_CASE("SelectionManager normalizes selection and hover state")
     CHECK_EQ(hover_changes, 2);
 }
 
-TEST_CASE("SelectionManager deselect and clear notify only changed state")
-{
+TEST_CASE("SelectionManager deselect and clear notify only changed state") {
     termin::SelectionManager selection;
     termin::Entity entity = make_entity("entity");
     int selection_changes = 0;
     int hover_changes = 0;
-    selection.on_selection_changed = [&](termin::Entity) { ++selection_changes; };
-    selection.on_hover_changed = [&](termin::Entity) { ++hover_changes; };
+    selection.on_selection_changed = [&](termin::Entity) {
+        ++selection_changes;
+    };
+    selection.on_hover_changed = [&](termin::Entity) {
+        ++hover_changes;
+    };
 
     selection.select(entity);
     selection.hover(entity);

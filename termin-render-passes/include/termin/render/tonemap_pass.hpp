@@ -1,96 +1,95 @@
 // tonemap_pass.hpp - HDR to LDR tonemapping post-processing pass
 #pragma once
 
+#include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
 #include "tgfx2/handles.hpp"
-#include "tc_inspect_cpp.hpp"
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+    class IRenderDevice;
+}
 
 namespace termin {
 
-// Tonemapping methods
-enum class TonemapMethod : int {
-    ACES = 0,
-    REINHARD = 1,
-    NONE = 2
-};
+    // Tonemapping methods
+    enum class TonemapMethod : int {
+        ACES = 0,
+        REINHARD = 1,
+        NONE = 2
+    };
 
-// TonemapPass - converts HDR to displayable LDR range.
-//
-// Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
-// UBO for parameters via bind_uniform_buffer, input texture via
-// reflected texture binding. No raw GL calls. Legacy tgfx1 dual-path
-// removed in Stage 8.1.
-class TERMIN_RENDER_PASSES_API TonemapPass : public CxxFramePass {
-public:
-    std::string input_res = "color";
-    std::string output_res = "color";
-    std::string output_res_target;
-    float exposure = 1.0f;
-    int method = 0;  // TonemapMethod::ACES
+    // TonemapPass - converts HDR to displayable LDR range.
+    //
+    // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
+    // UBO for parameters via bind_uniform_buffer, input texture via
+    // reflected texture binding. No raw GL calls. Legacy tgfx1 dual-path
+    // removed in Stage 8.1.
+    class TERMIN_RENDER_PASSES_API TonemapPass : public CxxFramePass {
+    public:
+        std::string input_res = "color";
+        std::string output_res = "color";
+        std::string output_res_target;
+        float exposure = 1.0f;
+        int method = 0; // TonemapMethod::ACES
 
-protected:
-    bool multiview_mode_ = false;
+    protected:
+        bool multiview_mode_ = false;
 
-private:
-    // tgfx2 resources. Created lazily on first execute. Shader lives on
-    // the tc_shader registry (FS-only, NULL VS — see grayscale_pass for
-    // the matching pattern).
-    tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
-    tgfx::BufferHandle params_ubo_;
-    float uploaded_exposure_ = -1.0f;
-    int uploaded_method_ = -1;
+    private:
+        // tgfx2 resources. Created lazily on first execute. Shader lives on
+        // the tc_shader registry (FS-only, NULL VS — see grayscale_pass for
+        // the matching pattern).
+        tgfx::IRenderDevice* device2_ = nullptr;
+        tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
+        tgfx::BufferHandle params_ubo_;
+        float uploaded_exposure_ = -1.0f;
+        int uploaded_method_ = -1;
 
-public:
-    static void register_type();
-    INSPECT_FIELD(TonemapPass, input_res, "Input", "string")
-    INSPECT_FIELD(TonemapPass, output_res, "Output", "string")
-    INSPECT_FIELD(TonemapPass, output_res_target, "Output Target", "string")
-    INSPECT_FIELD_RANGE(TonemapPass, exposure, "Exposure", "float", 0.1f, 10.0f)
-    INSPECT_FIELD_RANGE(TonemapPass, method, "Method", "int", 0, 2)
-    INSPECT_TYPE_METADATA(TonemapPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
-        {{"output_res", "fbo"}},
-        {{"output_res_target", "output_res"}}
-    ))
+    public:
+        static void register_type();
+        INSPECT_FIELD(TonemapPass, input_res, "Input", "string")
+        INSPECT_FIELD(TonemapPass, output_res, "Output", "string")
+        INSPECT_FIELD(TonemapPass, output_res_target, "Output Target", "string")
+        INSPECT_FIELD_RANGE(TonemapPass, exposure, "Exposure", "float", 0.1f, 10.0f)
+        INSPECT_FIELD_RANGE(TonemapPass, method, "Method", "int", 0, 2)
+        INSPECT_TYPE_METADATA(TonemapPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "fbo"}, {"output_res_target", "fbo"}},
+                                                       {{"output_res", "fbo"}},
+                                                       {{"output_res_target", "output_res"}}))
 
-    TonemapPass(
-        const std::string& input = "color",
-        const std::string& output = "color",
-        float exposure = 1.0f,
-        int method = 0
-    );
+        TonemapPass(const std::string& input = "color",
+                    const std::string& output = "color",
+                    float exposure = 1.0f,
+                    int method = 0);
 
-    std::set<const char*> compute_reads() const override;
-    std::set<const char*> compute_writes() const override;
+        std::set<const char*> compute_reads() const override;
+        std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
-    void execute(ExecuteContext& ctx) override;
-    void destroy() override;
-};
+        void execute(ExecuteContext& ctx) override;
+        void destroy() override;
+    };
 
-class TERMIN_RENDER_PASSES_API MultiviewTonemapPass final : public TonemapPass {
-public:
-    static void register_type();
-    INSPECT_TYPE_METADATA(MultiviewTonemapPass, graph, make_pass_graph_metadata(
-        {{"input_res", "multiview_fbo"},
-         {"output_res_target", "external_xr_multiview_fbo"}},
-        {{"output_res", "external_xr_multiview_fbo"}},
-        {{"output_res_target", "output_res"}}
-    ))
+    class TERMIN_RENDER_PASSES_API MultiviewTonemapPass final : public TonemapPass {
+    public:
+        static void register_type();
+        INSPECT_TYPE_METADATA(MultiviewTonemapPass,
+                              graph,
+                              make_pass_graph_metadata({{"input_res", "multiview_fbo"},
+                                                        {"output_res_target", "external_xr_multiview_fbo"}},
+                                                       {{"output_res", "external_xr_multiview_fbo"}},
+                                                       {{"output_res_target", "output_res"}}))
 
-    MultiviewTonemapPass(
-        const std::string& input = "color",
-        const std::string& output = "XR_MULTIVIEW_TARGET",
-        float exposure = 1.0f,
-        int method = 0);
-};
+        MultiviewTonemapPass(const std::string& input = "color",
+                             const std::string& output = "XR_MULTIVIEW_TARGET",
+                             float exposure = 1.0f,
+                             int method = 0);
+    };
 
 } // namespace termin

@@ -11,11 +11,11 @@
 #include "termin/profiler_remote/desktop_target.hpp"
 #include "termin/python_host/python_host.hpp"
 
-#include <exception>
-#include <iostream>
-#include <cstring>
-#include <filesystem>
 #include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -24,35 +24,35 @@
 #endif
 
 #ifdef __linux__
-#include <unistd.h>
 #include <linux/limits.h>
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
 
 namespace {
 
-const char* native_build_type() {
+    const char* native_build_type() {
 #ifdef NDEBUG
-    return "Release";
+        return "Release";
 #else
-    return "Debug";
+        return "Debug";
 #endif
-}
-
-class RuntimeBootstrapGuard {
-public:
-    RuntimeBootstrapGuard() {
-        termin::bootstrap::bootstrap_runtime();
     }
 
-    ~RuntimeBootstrapGuard() {
-        termin::bootstrap::shutdown_runtime();
-    }
+    class RuntimeBootstrapGuard {
+    public:
+        RuntimeBootstrapGuard() {
+            termin::bootstrap::bootstrap_runtime();
+        }
 
-    RuntimeBootstrapGuard(const RuntimeBootstrapGuard&) = delete;
-    RuntimeBootstrapGuard& operator=(const RuntimeBootstrapGuard&) = delete;
-};
+        ~RuntimeBootstrapGuard() {
+            termin::bootstrap::shutdown_runtime();
+        }
+
+        RuntimeBootstrapGuard(const RuntimeBootstrapGuard&) = delete;
+        RuntimeBootstrapGuard& operator=(const RuntimeBootstrapGuard&) = delete;
+    };
 
 } // namespace
 
@@ -82,9 +82,7 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
     }
     return {};
 #else
-    std::string directory_name =
-        "python" + std::to_string(PY_MAJOR_VERSION) + "." +
-        std::to_string(PY_MINOR_VERSION);
+    std::string directory_name = "python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION);
 #ifdef Py_GIL_DISABLED
     directory_name += "t";
 #endif
@@ -129,10 +127,7 @@ static PyObject* initialize_python_editor(termin::EngineCore& engine) {
         return nullptr;
     }
 
-    PyObject* capsule = PyCapsule_New(
-        &engine,
-        "termin.EngineCore.borrowed",
-        nullptr);
+    PyObject* capsule = PyCapsule_New(&engine, "termin.EngineCore.borrowed", nullptr);
     if (capsule == nullptr) {
         Py_DECREF(init_editor);
         PyErr_Print();
@@ -155,8 +150,7 @@ static PyObject* initialize_python_editor(termin::EngineCore& engine) {
             Py_XDECREF(method);
             Py_DECREF(result);
             PyErr_Print();
-            std::cerr << "Editor initializer returned no callable "
-                      << method_name << "()" << std::endl;
+            std::cerr << "Editor initializer returned no callable " << method_name << "()" << std::endl;
             return nullptr;
         }
         Py_DECREF(method);
@@ -164,10 +158,7 @@ static PyObject* initialize_python_editor(termin::EngineCore& engine) {
     return result;
 }
 
-static bool call_python_editor_method(
-    PyObject* editor_session,
-    const char* method_name
-) {
+static bool call_python_editor_method(PyObject* editor_session, const char* method_name) {
     PyObject* result = PyObject_CallMethod(editor_session, method_name, nullptr);
     if (result == nullptr) {
         PyErr_Print();
@@ -257,8 +248,7 @@ int main(int argc, char* argv[]) {
         python_config.home = install_root;
 #endif
     }
-    const termin::python_host::InitResult initialized =
-        termin::python_host::initialize(python_config);
+    const termin::python_host::InitResult initialized = termin::python_host::initialize(python_config);
     if (!initialized.ok) {
         std::cerr << initialized.error << std::endl;
         return 1;
@@ -268,21 +258,21 @@ int main(int argc, char* argv[]) {
     std::string path_code;
     if (bundled_python) {
         fs::path site_packages = python_stdlib / "site-packages";
-        path_code =
-            "import sys\n"
-            "sys.path.insert(0, r'" + site_packages.string() + "')\n";
+        path_code = "import sys\n"
+                    "sys.path.insert(0, r'" +
+                    site_packages.string() + "')\n";
     } else if (installed_site_packages) {
-        path_code =
-            "import sys\n"
-            "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
-            "for p in reversed(host_paths):\n"
-            "    if p and p not in sys.path:\n"
-            "        sys.path.insert(0, p)\n"
-            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n";
+        path_code = "import sys\n"
+                    "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
+                    "for p in reversed(host_paths):\n"
+                    "    if p and p not in sys.path:\n"
+                    "        sys.path.insert(0, p)\n"
+                    "sys.path.insert(0, r'" +
+                    termin_path.parent_path().string() + "')\n";
     } else {
-        path_code =
-            "import sys\n"
-            "sys.path.insert(0, r'" + termin_path.string() + "')\n";
+        path_code = "import sys\n"
+                    "sys.path.insert(0, r'" +
+                    termin_path.string() + "')\n";
     }
 
     if (PyRun_SimpleString(path_code.c_str()) != 0) {
@@ -307,8 +297,7 @@ print(json.dumps({
             PyErr_Print();
         }
         if (termin::python_host::finalize() != 0) {
-            std::cerr << "termin_editor: Python finalization failed after layout smoke"
-                      << std::endl;
+            std::cerr << "termin_editor: Python finalization failed after layout smoke" << std::endl;
             return 1;
         }
         return result == 0 ? 0 : 1;
@@ -322,19 +311,14 @@ print(json.dumps({
     }
 
     int exit_code = 0;
-    std::shared_ptr<termin::profiler_remote::RemoteProfilerTarget>
-        remote_profiler;
+    std::shared_ptr<termin::profiler_remote::RemoteProfilerTarget> remote_profiler;
     termin::EngineFrameCompletionConnection remote_profiler_connection;
     try {
         remote_profiler =
-            termin::profiler_remote::start_desktop_target_from_environment(
-                "termin_editor", native_build_type());
+            termin::profiler_remote::start_desktop_target_from_environment("termin_editor", native_build_type());
         if (remote_profiler) {
             remote_profiler_connection =
-                engine.attach_frame_completion_callback(
-                    [target = remote_profiler]() {
-                        target->pump_frame_thread();
-                    });
+                engine.attach_frame_completion_callback([target = remote_profiler]() { target->pump_frame_thread(); });
         }
         engine.run();
     } catch (const std::exception& error) {

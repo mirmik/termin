@@ -9,8 +9,8 @@ using namespace termin_modules;
 
 namespace {
 
-const char* event_kind_to_string(ModuleEventKind kind) {
-    switch (kind) {
+    const char* event_kind_to_string(ModuleEventKind kind) {
+        switch (kind) {
         case ModuleEventKind::Discovered:
             return "discovered";
         case ModuleEventKind::Loading:
@@ -27,22 +27,22 @@ const char* event_kind_to_string(ModuleEventKind kind) {
             return "cleanup-failed";
         case ModuleEventKind::Failed:
             return "failed";
+        }
+        return "unknown";
     }
-    return "unknown";
-}
 
-const char* kind_to_string(ModuleKind kind) {
-    switch (kind) {
+    const char* kind_to_string(ModuleKind kind) {
+        switch (kind) {
         case ModuleKind::Cpp:
             return "cpp";
         case ModuleKind::Python:
             return "python";
+        }
+        return "unknown";
     }
-    return "unknown";
-}
 
-const char* state_to_string(ModuleState state) {
-    switch (state) {
+    const char* state_to_string(ModuleState state) {
+        switch (state) {
         case ModuleState::Discovered:
             return "discovered";
         case ModuleState::Loading:
@@ -59,9 +59,9 @@ const char* state_to_string(ModuleState state) {
             return "unloaded";
         case ModuleState::Ignored:
             return "ignored";
+        }
+        return "unknown";
     }
-    return "unknown";
-}
 
 } // namespace
 
@@ -79,34 +79,24 @@ int main(int argc, char** argv) {
         .python_executable = "python3",
     });
     runtime.set_cpp_callbacks(CppModuleCallbacks{
-        .after_load = [](const ModuleRecord& record) {
-            std::cout << "[cpp] loaded " << record.spec.id << "\n";
-        },
-        .after_unload = [](const ModuleRecord& record) {
-            std::cout << "[cpp] unloaded " << record.spec.id << "\n";
-        },
-        .after_reload = [](const ModuleRecord& record) {
-            std::cout << "[cpp] reloaded " << record.spec.id << "\n";
-        },
-        .after_failed_load = [](const ModuleRecord& record, const std::string& error, std::string&) {
-            std::cout << "[cpp] failed " << record.spec.id << ": " << error << "\n";
-            return true;
-        },
+        .after_load = [](const ModuleRecord& record) { std::cout << "[cpp] loaded " << record.spec.id << "\n"; },
+        .after_unload = [](const ModuleRecord& record) { std::cout << "[cpp] unloaded " << record.spec.id << "\n"; },
+        .after_reload = [](const ModuleRecord& record) { std::cout << "[cpp] reloaded " << record.spec.id << "\n"; },
+        .after_failed_load =
+            [](const ModuleRecord& record, const std::string& error, std::string&) {
+                std::cout << "[cpp] failed " << record.spec.id << ": " << error << "\n";
+                return true;
+            },
     });
     runtime.set_python_callbacks(PythonModuleCallbacks{
-        .after_load = [](const ModuleRecord& record) {
-            std::cout << "[python] loaded " << record.spec.id << "\n";
-        },
-        .after_unload = [](const ModuleRecord& record) {
-            std::cout << "[python] unloaded " << record.spec.id << "\n";
-        },
-        .after_reload = [](const ModuleRecord& record) {
-            std::cout << "[python] reloaded " << record.spec.id << "\n";
-        },
-        .after_failed_load = [](const ModuleRecord& record, const std::string& error, std::string&) {
-            std::cout << "[python] failed " << record.spec.id << ": " << error << "\n";
-            return true;
-        },
+        .after_load = [](const ModuleRecord& record) { std::cout << "[python] loaded " << record.spec.id << "\n"; },
+        .after_unload = [](const ModuleRecord& record) { std::cout << "[python] unloaded " << record.spec.id << "\n"; },
+        .after_reload = [](const ModuleRecord& record) { std::cout << "[python] reloaded " << record.spec.id << "\n"; },
+        .after_failed_load =
+            [](const ModuleRecord& record, const std::string& error, std::string&) {
+                std::cout << "[python] failed " << record.spec.id << ": " << error << "\n";
+                return true;
+            },
     });
     runtime.register_backend(std::make_shared<CppModuleBackend>());
     runtime.register_backend(std::make_shared<PythonModuleBackend>());
@@ -124,8 +114,7 @@ int main(int argc, char** argv) {
     }
 
     for (const ModuleRecord* record : runtime.list()) {
-        std::cout << record->spec.id
-                  << " kind=" << kind_to_string(record->spec.kind)
+        std::cout << record->spec.id << " kind=" << kind_to_string(record->spec.kind)
                   << " state=" << state_to_string(record->state);
         if (!record->diagnostics.empty()) {
             std::cout << "\n--- diagnostics ---\n" << record->diagnostics << "--- end diagnostics ---";

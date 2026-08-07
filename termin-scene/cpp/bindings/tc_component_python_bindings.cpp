@@ -17,394 +17,417 @@ namespace nb = nanobind;
 
 namespace termin {
 
-// ============================================================================
-// Core Python callback implementations
-// Called from C code, dispatch to Python methods.
-// GIL is NOT held when called (from C update loop).
-// ============================================================================
+    // ============================================================================
+    // Core Python callback implementations
+    // Called from C code, dispatch to Python methods.
+    // GIL is NOT held when called (from C update loop).
+    // ============================================================================
 
-static void py_cb_start(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "start")) {
-            self.attr("start")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::start");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_update(void* py_self, float dt) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "update")) {
-            self.attr("update")(dt);
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::update");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_fixed_update(void* py_self, float dt) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "fixed_update")) {
-            self.attr("fixed_update")(dt);
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::fixed_update");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_late_update(void* py_self, float dt) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        self.attr("late_update")(dt);
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::late_update");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_destroy(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_destroy")) {
-            self.attr("on_destroy")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_destroy");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_added_to_entity(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_added_to_entity")) {
-            self.attr("on_added_to_entity")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_added_to_entity");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_removed_from_entity(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_removed_from_entity")) {
-            self.attr("on_removed_from_entity")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_removed_from_entity");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_added(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_added")) {
-            self.attr("on_added")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_added");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_removed(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_removed")) {
-            self.attr("on_removed")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_removed");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_scene_inactive(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_scene_inactive")) {
-            self.attr("on_scene_inactive")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_scene_inactive");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_scene_active(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_scene_active")) {
-            self.attr("on_scene_active")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_scene_active");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-static void py_cb_on_editor_start(void* py_self) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "on_editor_start")) {
-            self.attr("on_editor_start")();
-        }
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "PythonComponent::on_editor_start");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-}
-
-// ============================================================================
-// Reference counting callbacks
-// ============================================================================
-
-static void py_cb_incref(void* py_obj) {
-    if (py_obj) {
+    static void py_cb_start(void* py_self) {
         PyGILState_STATE gstate = PyGILState_Ensure();
-        Py_INCREF((PyObject*)py_obj);
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "start")) {
+                self.attr("start")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::start");
+            PyErr_Print();
+        }
         PyGILState_Release(gstate);
     }
-}
 
-static void py_cb_decref(void* py_obj) {
-    if (py_obj) {
+    static void py_cb_update(void* py_self, float dt) {
         PyGILState_STATE gstate = PyGILState_Ensure();
-        Py_DECREF((PyObject*)py_obj);
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "update")) {
+                self.attr("update")(dt);
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::update");
+            PyErr_Print();
+        }
         PyGILState_Release(gstate);
     }
-}
 
-// ============================================================================
-// Initialization - called once to set up core Python callbacks
-// ============================================================================
-
-static bool g_core_callbacks_initialized = false;
-
-static void ensure_core_callbacks_initialized() {
-    if (g_core_callbacks_initialized) return;
-
-    tc_python_callbacks callbacks = {
-        .start = py_cb_start,
-        .update = py_cb_update,
-        .fixed_update = py_cb_fixed_update,
-        .late_update = py_cb_late_update,
-        .on_destroy = py_cb_on_destroy,
-        .on_added_to_entity = py_cb_on_added_to_entity,
-        .on_removed_from_entity = py_cb_on_removed_from_entity,
-        .on_added = py_cb_on_added,
-        .on_removed = py_cb_on_removed,
-        .on_scene_inactive = py_cb_on_scene_inactive,
-        .on_scene_active = py_cb_on_scene_active,
-        .on_editor_start = py_cb_on_editor_start,
-        .incref = py_cb_incref,
-        .decref = py_cb_decref,
-    };
-    tc_component_set_python_callbacks(&callbacks);
-
-    g_core_callbacks_initialized = true;
-}
-
-// ============================================================================
-// TcComponent wrapper for pure Python components
-// ============================================================================
-
-class TcComponent {
-public:
-    tc_component* _c = nullptr;
-
-    // Create a new TcComponent wrapping a Python object.
-    // NO retain here - Entity will do retain when component is added.
-    TcComponent(nb::object py_self, const std::string& type_name) {
-        ensure_core_callbacks_initialized();
-        _c = tc_component_new_python(py_self.ptr(), type_name.c_str());
+    static void py_cb_fixed_update(void* py_self, float dt) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "fixed_update")) {
+                self.attr("fixed_update")(dt);
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::fixed_update");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
     }
 
-    ~TcComponent() {
-        if (_c) {
-            tc_component_free_python(_c);
-            _c = nullptr;
+    static void py_cb_late_update(void* py_self, float dt) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            self.attr("late_update")(dt);
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::late_update");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_destroy(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_destroy")) {
+                self.attr("on_destroy")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_destroy");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_added_to_entity(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_added_to_entity")) {
+                self.attr("on_added_to_entity")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_added_to_entity");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_removed_from_entity(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_removed_from_entity")) {
+                self.attr("on_removed_from_entity")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_removed_from_entity");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_added(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_added")) {
+                self.attr("on_added")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_added");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_removed(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_removed")) {
+                self.attr("on_removed")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_removed");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_scene_inactive(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_scene_inactive")) {
+                self.attr("on_scene_inactive")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_scene_inactive");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_scene_active(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_scene_active")) {
+                self.attr("on_scene_active")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_scene_active");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    static void py_cb_on_editor_start(void* py_self) {
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        try {
+            nb::handle self((PyObject*)py_self);
+            if (nb::hasattr(self, "on_editor_start")) {
+                self.attr("on_editor_start")();
+            }
+        } catch (const std::exception& e) {
+            tc::Log::error(e, "PythonComponent::on_editor_start");
+            PyErr_Print();
+        }
+        PyGILState_Release(gstate);
+    }
+
+    // ============================================================================
+    // Reference counting callbacks
+    // ============================================================================
+
+    static void py_cb_incref(void* py_obj) {
+        if (py_obj) {
+            PyGILState_STATE gstate = PyGILState_Ensure();
+            Py_INCREF((PyObject*)py_obj);
+            PyGILState_Release(gstate);
         }
     }
 
-    // Disable copy
-    TcComponent(const TcComponent&) = delete;
-    TcComponent& operator=(const TcComponent&) = delete;
-
-    // Properties
-    bool get_enabled() const { return _c ? tc_component_get_enabled(_c) : true; }
-    void set_enabled(bool v) { tc_component_set_enabled(_c, v); }
-
-    bool get_active_in_editor() const {
-        return tc_component_get_active_in_editor(_c);
-    }
-    void set_active_in_editor(bool v) {
-        tc_component_set_active_in_editor(_c, v);
-    }
-
-    std::string get_display_name() const { return _c ? tc_component_get_display_name(_c) : ""; }
-    void set_display_name(const std::string& v) {
-        if (_c) tc_component_set_display_name(_c, v.c_str());
-    }
-
-    std::string get_source_id() const { return _c ? tc_component_get_source_id(_c) : ""; }
-    void set_source_id(const std::string& v) {
-        if (_c) tc_component_set_source_id(_c, v.c_str());
-    }
-
-    bool is_cxx_component() const { return _c ? _c->kind == TC_CXX_COMPONENT : false; }
-    bool is_python_component() const { return _c ? _c->kind == TC_PYTHON_COMPONENT : true; }
-
-    bool get_started() const { return _c ? _c->_started : false; }
-    void set_started(bool v) { if (_c) _c->_started = v; }
-
-    bool get_has_update() const { return _c ? _c->has_update : false; }
-    void set_has_update(bool v) {
-        if (_c) {
-            tc_component_set_lifecycle_capabilities(
-                _c, v, _c->has_fixed_update, _c->has_late_update
-            );
+    static void py_cb_decref(void* py_obj) {
+        if (py_obj) {
+            PyGILState_STATE gstate = PyGILState_Ensure();
+            Py_DECREF((PyObject*)py_obj);
+            PyGILState_Release(gstate);
         }
     }
 
-    bool get_has_fixed_update() const { return _c ? _c->has_fixed_update : false; }
-    void set_has_fixed_update(bool v) {
-        if (_c) {
-            tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, v, _c->has_late_update
-            );
+    // ============================================================================
+    // Initialization - called once to set up core Python callbacks
+    // ============================================================================
+
+    static bool g_core_callbacks_initialized = false;
+
+    static void ensure_core_callbacks_initialized() {
+        if (g_core_callbacks_initialized)
+            return;
+
+        tc_python_callbacks callbacks = {
+            .start = py_cb_start,
+            .update = py_cb_update,
+            .fixed_update = py_cb_fixed_update,
+            .late_update = py_cb_late_update,
+            .on_destroy = py_cb_on_destroy,
+            .on_added_to_entity = py_cb_on_added_to_entity,
+            .on_removed_from_entity = py_cb_on_removed_from_entity,
+            .on_added = py_cb_on_added,
+            .on_removed = py_cb_on_removed,
+            .on_scene_inactive = py_cb_on_scene_inactive,
+            .on_scene_active = py_cb_on_scene_active,
+            .on_editor_start = py_cb_on_editor_start,
+            .incref = py_cb_incref,
+            .decref = py_cb_decref,
+        };
+        tc_component_set_python_callbacks(&callbacks);
+
+        g_core_callbacks_initialized = true;
+    }
+
+    // ============================================================================
+    // TcComponent wrapper for pure Python components
+    // ============================================================================
+
+    class TcComponent {
+    public:
+        tc_component* _c = nullptr;
+
+        // Create a new TcComponent wrapping a Python object.
+        // NO retain here - Entity will do retain when component is added.
+        TcComponent(nb::object py_self, const std::string& type_name) {
+            ensure_core_callbacks_initialized();
+            _c = tc_component_new_python(py_self.ptr(), type_name.c_str());
         }
-    }
 
-    bool get_has_late_update() const { return _c ? _c->has_late_update : false; }
-    void set_has_late_update(bool v) {
-        if (_c) {
-            tc_component_set_lifecycle_capabilities(
-                _c, _c->has_update, _c->has_fixed_update, v
-            );
+        ~TcComponent() {
+            if (_c) {
+                tc_component_free_python(_c);
+                _c = nullptr;
+            }
         }
-    }
 
-    int get_lifecycle_priority(tc_component_lifecycle_stage stage) const {
-        return tc_component_get_lifecycle_priority(_c, stage);
-    }
-    void set_lifecycle_priority(tc_component_lifecycle_stage stage, int value) {
-        if (_c && !tc_component_set_lifecycle_priority(_c, stage, value)) {
-            throw nb::value_error("invalid lifecycle stage");
+        // Disable copy
+        TcComponent(const TcComponent&) = delete;
+        TcComponent& operator=(const TcComponent&) = delete;
+
+        // Properties
+        bool get_enabled() const {
+            return _c ? tc_component_get_enabled(_c) : true;
         }
-    }
-
-    int get_update_priority() const {
-        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE);
-    }
-    void set_update_priority(int value) {
-        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE, value);
-    }
-    int get_fixed_update_priority() const {
-        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE);
-    }
-    void set_fixed_update_priority(int value) {
-        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, value);
-    }
-    int get_late_update_priority() const {
-        return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE);
-    }
-    void set_late_update_priority(int value) {
-        set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE, value);
-    }
-    void set_lifecycle_capabilities(
-        bool update,
-        bool fixed_update,
-        bool late_update
-    ) {
-        if (_c) {
-            tc_component_set_lifecycle_capabilities(
-                _c, update, fixed_update, late_update
-            );
+        void set_enabled(bool v) {
+            tc_component_set_enabled(_c, v);
         }
-    }
 
-    const char* type_name() const {
-        return _c ? tc_component_type_name(_c) : "Component";
-    }
-
-    tc_component* c_ptr() { return _c; }
-    uintptr_t c_ptr_int() const { return reinterpret_cast<uintptr_t>(_c); }
-
-    // install_drawable_vtable / is_drawable moved to termin-render bindings
-    // install_input_vtable / is_input_handler moved to termin-input bindings
-
-    // Get owner entity
-    Entity entity() const {
-        if (_c && tc_entity_handle_valid(_c->owner)) {
-            return Entity(_c->owner);
+        bool get_active_in_editor() const {
+            return tc_component_get_active_in_editor(_c);
         }
-        return Entity();
-    }
-};
+        void set_active_in_editor(bool v) {
+            tc_component_set_active_in_editor(_c, v);
+        }
 
-// ============================================================================
-// Module bindings
-// ============================================================================
+        std::string get_display_name() const {
+            return _c ? tc_component_get_display_name(_c) : "";
+        }
+        void set_display_name(const std::string& v) {
+            if (_c)
+                tc_component_set_display_name(_c, v.c_str());
+        }
 
-void bind_tc_component_python(nb::module_& m) {
-    nb::class_<TcComponent>(m, "TcComponent")
-        .def(nb::init<nb::object, const std::string&>(),
-             nb::arg("py_self"), nb::arg("type_name"))
-        .def("type_name", &TcComponent::type_name)
-        .def_prop_rw("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
-        .def_prop_rw("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
-        .def_prop_rw("display_name", &TcComponent::get_display_name, &TcComponent::set_display_name)
-        .def_prop_rw("source_id", &TcComponent::get_source_id, &TcComponent::set_source_id)
-        .def_prop_ro("is_cxx_component", &TcComponent::is_cxx_component)
-        .def_prop_ro("is_python_component", &TcComponent::is_python_component)
-        .def_prop_rw("_started", &TcComponent::get_started, &TcComponent::set_started)
-        .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
-        .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
-        .def_prop_rw("has_late_update", &TcComponent::get_has_late_update, &TcComponent::set_has_late_update)
-        .def_prop_rw("update_priority", &TcComponent::get_update_priority, &TcComponent::set_update_priority)
-        .def_prop_rw("fixed_update_priority", &TcComponent::get_fixed_update_priority, &TcComponent::set_fixed_update_priority)
-        .def_prop_rw("late_update_priority", &TcComponent::get_late_update_priority, &TcComponent::set_late_update_priority)
-        .def("set_lifecycle_capabilities", &TcComponent::set_lifecycle_capabilities,
-             nb::arg("update"), nb::arg("fixed_update"), nb::arg("late_update"))
-        .def("c_ptr_int", &TcComponent::c_ptr_int)
+        std::string get_source_id() const {
+            return _c ? tc_component_get_source_id(_c) : "";
+        }
+        void set_source_id(const std::string& v) {
+            if (_c)
+                tc_component_set_source_id(_c, v.c_str());
+        }
+
+        bool is_cxx_component() const {
+            return _c ? _c->kind == TC_CXX_COMPONENT : false;
+        }
+        bool is_python_component() const {
+            return _c ? _c->kind == TC_PYTHON_COMPONENT : true;
+        }
+
+        bool get_started() const {
+            return _c ? _c->_started : false;
+        }
+        void set_started(bool v) {
+            if (_c)
+                _c->_started = v;
+        }
+
+        bool get_has_update() const {
+            return _c ? _c->has_update : false;
+        }
+        void set_has_update(bool v) {
+            if (_c) {
+                tc_component_set_lifecycle_capabilities(_c, v, _c->has_fixed_update, _c->has_late_update);
+            }
+        }
+
+        bool get_has_fixed_update() const {
+            return _c ? _c->has_fixed_update : false;
+        }
+        void set_has_fixed_update(bool v) {
+            if (_c) {
+                tc_component_set_lifecycle_capabilities(_c, _c->has_update, v, _c->has_late_update);
+            }
+        }
+
+        bool get_has_late_update() const {
+            return _c ? _c->has_late_update : false;
+        }
+        void set_has_late_update(bool v) {
+            if (_c) {
+                tc_component_set_lifecycle_capabilities(_c, _c->has_update, _c->has_fixed_update, v);
+            }
+        }
+
+        int get_lifecycle_priority(tc_component_lifecycle_stage stage) const {
+            return tc_component_get_lifecycle_priority(_c, stage);
+        }
+        void set_lifecycle_priority(tc_component_lifecycle_stage stage, int value) {
+            if (_c && !tc_component_set_lifecycle_priority(_c, stage, value)) {
+                throw nb::value_error("invalid lifecycle stage");
+            }
+        }
+
+        int get_update_priority() const {
+            return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE);
+        }
+        void set_update_priority(int value) {
+            set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_UPDATE, value);
+        }
+        int get_fixed_update_priority() const {
+            return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE);
+        }
+        void set_fixed_update_priority(int value) {
+            set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_FIXED_UPDATE, value);
+        }
+        int get_late_update_priority() const {
+            return get_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE);
+        }
+        void set_late_update_priority(int value) {
+            set_lifecycle_priority(TC_COMPONENT_LIFECYCLE_LATE_UPDATE, value);
+        }
+        void set_lifecycle_capabilities(bool update, bool fixed_update, bool late_update) {
+            if (_c) {
+                tc_component_set_lifecycle_capabilities(_c, update, fixed_update, late_update);
+            }
+        }
+
+        const char* type_name() const {
+            return _c ? tc_component_type_name(_c) : "Component";
+        }
+
+        tc_component* c_ptr() {
+            return _c;
+        }
+        uintptr_t c_ptr_int() const {
+            return reinterpret_cast<uintptr_t>(_c);
+        }
+
         // install_drawable_vtable / is_drawable moved to termin-render bindings
         // install_input_vtable / is_input_handler moved to termin-input bindings
-        .def_prop_ro("entity", &TcComponent::entity);
-}
+
+        // Get owner entity
+        Entity entity() const {
+            if (_c && tc_entity_handle_valid(_c->owner)) {
+                return Entity(_c->owner);
+            }
+            return Entity();
+        }
+    };
+
+    // ============================================================================
+    // Module bindings
+    // ============================================================================
+
+    void bind_tc_component_python(nb::module_& m) {
+        nb::class_<TcComponent>(m, "TcComponent")
+            .def(nb::init<nb::object, const std::string&>(), nb::arg("py_self"), nb::arg("type_name"))
+            .def("type_name", &TcComponent::type_name)
+            .def_prop_rw("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
+            .def_prop_rw("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
+            .def_prop_rw("display_name", &TcComponent::get_display_name, &TcComponent::set_display_name)
+            .def_prop_rw("source_id", &TcComponent::get_source_id, &TcComponent::set_source_id)
+            .def_prop_ro("is_cxx_component", &TcComponent::is_cxx_component)
+            .def_prop_ro("is_python_component", &TcComponent::is_python_component)
+            .def_prop_rw("_started", &TcComponent::get_started, &TcComponent::set_started)
+            .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
+            .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
+            .def_prop_rw("has_late_update", &TcComponent::get_has_late_update, &TcComponent::set_has_late_update)
+            .def_prop_rw("update_priority", &TcComponent::get_update_priority, &TcComponent::set_update_priority)
+            .def_prop_rw("fixed_update_priority",
+                         &TcComponent::get_fixed_update_priority,
+                         &TcComponent::set_fixed_update_priority)
+            .def_prop_rw(
+                "late_update_priority", &TcComponent::get_late_update_priority, &TcComponent::set_late_update_priority)
+            .def("set_lifecycle_capabilities",
+                 &TcComponent::set_lifecycle_capabilities,
+                 nb::arg("update"),
+                 nb::arg("fixed_update"),
+                 nb::arg("late_update"))
+            .def("c_ptr_int", &TcComponent::c_ptr_int)
+            // install_drawable_vtable / is_drawable moved to termin-render bindings
+            // install_input_vtable / is_input_handler moved to termin-input bindings
+            .def_prop_ro("entity", &TcComponent::entity);
+    }
 
 } // namespace termin

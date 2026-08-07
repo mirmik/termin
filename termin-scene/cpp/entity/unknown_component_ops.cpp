@@ -12,993 +12,895 @@
 #include <termin/tc_scene.hpp>
 
 namespace termin {
-namespace {
+    namespace {
 
-bool is_unknown_component(tc_component* component) {
-    const char* type_name = component ? tc_component_type_name(component) : nullptr;
-    return type_name != nullptr && std::string(type_name) == "UnknownComponent";
-}
-
-bool data_has_field(const tc_value* data, const char* field_name) {
-    return data != nullptr
-        && data->type == TC_VALUE_DICT
-        && tc_value_dict_has(const_cast<tc_value*>(data), field_name);
-}
-
-void apply_component_core_fields(tc_component* component, const tc_value* data) {
-    if (component == nullptr || data == nullptr || data->type != TC_VALUE_DICT) {
-        return;
-    }
-
-    tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
-    if (display_name != nullptr && display_name->type == TC_VALUE_STRING) {
-        tc_component_set_display_name(component, display_name->data.s ? display_name->data.s : "");
-    }
-
-    tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
-    if (enabled != nullptr && enabled->type == TC_VALUE_BOOL) {
-        component->enabled = enabled->data.b;
-    }
-
-    tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
-    if (active_in_editor != nullptr && active_in_editor->type == TC_VALUE_BOOL) {
-        component->active_in_editor = active_in_editor->data.b;
-    }
-}
-
-bool is_component_core_field(const char* path) {
-    return path != nullptr && (
-        std::string(path) == "display_name" ||
-        std::string(path) == "enabled" ||
-        std::string(path) == "active_in_editor");
-}
-
-bool validate_component_core_field(const char* path, const tc_value* value) {
-    if (std::string(path) == "display_name") {
-        return value != nullptr && value->type == TC_VALUE_STRING;
-    }
-    return value != nullptr && value->type == TC_VALUE_BOOL;
-}
-
-void discard_unattached_component(tc_component* component) {
-    if (component == nullptr) {
-        return;
-    }
-    if (component->factory_retained) {
-        component->factory_retained = false;
-        tc_component_release(component);
-    } else {
-        tc_component_drop(component);
-    }
-}
-
-const char* apply_status_name(tc_inspect_apply_status status) {
-    switch (status) {
-        case TC_INSPECT_APPLY_OK: return "ok";
-        case TC_INSPECT_APPLY_INVALID_ARGUMENT: return "invalid argument";
-        case TC_INSPECT_APPLY_TYPE_NOT_FOUND: return "type not found";
-        case TC_INSPECT_APPLY_NO_FIELDS: return "no fields registered";
-        case TC_INSPECT_APPLY_UNKNOWN_FIELD: return "unknown or non-serializable field";
-        case TC_INSPECT_APPLY_KIND_CONVERSION_FAILED: return "kind conversion failed";
-        case TC_INSPECT_APPLY_SETTER_FAILED: return "setter failed";
-    }
-    return "unknown apply error";
-}
-
-void* component_object_ptr(tc_component* component) {
-    if (component == nullptr) {
-        return nullptr;
-    }
-
-    if (component->kind == TC_CXX_COMPONENT) {
-        return CxxComponent::from_tc(component);
-    }
-
-    return component->body;
-}
-
-std::unordered_set<std::string> make_type_filter(const std::vector<std::string>& type_names) {
-    return std::unordered_set<std::string>(type_names.begin(), type_names.end());
-}
-
-struct RegisteredComponentSnapshot {
-    std::vector<tc_component*> components;
-    std::unordered_set<tc_component*> seen;
-    bool allocation_failed = false;
-};
-
-bool collect_registered_component(void* instance, void* user_data) {
-    auto* snapshot = static_cast<RegisteredComponentSnapshot*>(user_data);
-    auto* component = static_cast<tc_component*>(instance);
-    if (snapshot == nullptr || component == nullptr) {
-        return false;
-    }
-
-    try {
-        if (snapshot->seen.insert(component).second) {
-            snapshot->components.push_back(component);
+        bool is_unknown_component(tc_component* component) {
+            const char* type_name = component ? tc_component_type_name(component) : nullptr;
+            return type_name != nullptr && std::string(type_name) == "UnknownComponent";
         }
-    } catch (...) {
-        snapshot->allocation_failed = true;
-        return false;
-    }
-    return true;
-}
 
-bool prepare_component_replacement(
-    const Entity& entity,
-    tc_component* component,
-    const UnknownComponentPreparationHooks& hooks,
-    tc_component** replacement,
-    std::string* error
-) {
-    if (replacement) {
-        *replacement = nullptr;
-    }
-    if (error) {
-        error->clear();
-    }
-    if (!entity.valid()) {
-        if (error) *error = "Entity is invalid";
-        return false;
-    }
-    if (component == nullptr) {
-        if (error) *error = "Component pointer is null";
-        return false;
-    }
-    if (is_unknown_component(component)) {
-        if (error) *error = "Component is already UnknownComponent";
-        return false;
-    }
-
-    const char* raw_type_name = tc_component_type_name(component);
-    if (raw_type_name == nullptr || raw_type_name[0] == '\0') {
-        if (error) *error = "Component type name is empty";
-        return false;
-    }
-    const std::string original_type_name(raw_type_name);
-
-    void* obj_ptr = component_object_ptr(component);
-    if (obj_ptr == nullptr) {
-        if (error) *error = "Component object pointer is null";
-        return false;
-    }
-
-    tc_value original_data = hooks.serialize
-        ? hooks.serialize(obj_ptr, original_type_name.c_str())
-        : tc_inspect_serialize(obj_ptr, original_type_name.c_str());
-    if (original_data.type != TC_VALUE_DICT) {
-        tc_value_free(&original_data);
-        if (error) {
-            *error = "Component serialization did not produce a dictionary for: " +
-                original_type_name;
+        bool data_has_field(const tc_value* data, const char* field_name) {
+            return data != nullptr && data->type == TC_VALUE_DICT &&
+                   tc_value_dict_has(const_cast<tc_value*>(data), field_name);
         }
-        return false;
-    }
 
-    if (!tc_value_dict_has(&original_data, "enabled")) {
-        tc_value_dict_set(&original_data, "enabled", tc_value_bool(component->enabled));
-    }
-    if (!tc_value_dict_has(&original_data, "active_in_editor")) {
-        tc_value_dict_set(
-            &original_data,
-            "active_in_editor",
-            tc_value_bool(component->active_in_editor)
-        );
-    }
-    const char* display_name = tc_component_get_display_name(component);
-    if (display_name != nullptr && display_name[0] != '\0' &&
-        !tc_value_dict_has(&original_data, "display_name")) {
-        tc_value_dict_set(&original_data, "display_name", tc_value_string(display_name));
-    }
+        void apply_component_core_fields(tc_component* component, const tc_value* data) {
+            if (component == nullptr || data == nullptr || data->type != TC_VALUE_DICT) {
+                return;
+            }
 
-    tc_component* unknown_tc = hooks.create_replacement
-        ? hooks.create_replacement()
-        : tc_component_registry_create("UnknownComponent");
-    if (unknown_tc == nullptr) {
-        tc_value_free(&original_data);
-        if (error) *error = "Failed to create UnknownComponent";
-        return false;
-    }
+            tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
+            if (display_name != nullptr && display_name->type == TC_VALUE_STRING) {
+                tc_component_set_display_name(component, display_name->data.s ? display_name->data.s : "");
+            }
 
-    auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(unknown_tc));
-    if (unknown_obj == nullptr) {
-        discard_unattached_component(unknown_tc);
-        tc_value_free(&original_data);
-        if (error) *error = "UnknownComponent instance is not a CxxComponent";
-        return false;
-    }
+            tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
+            if (enabled != nullptr && enabled->type == TC_VALUE_BOOL) {
+                component->enabled = enabled->data.b;
+            }
 
-    unknown_obj->original_type = original_type_name;
-    unknown_obj->preserve_runtime_state_on_upgrade = true;
-    tc_value_free(&unknown_obj->original_data);
-    unknown_obj->original_data = tc_value_copy(&original_data);
-    tc_value_free(&original_data);
-
-    unknown_tc->enabled = component->enabled;
-    unknown_tc->active_in_editor = component->active_in_editor;
-    tc_component_set_display_name(unknown_tc, display_name);
-    tc_component_set_source_id(unknown_tc, tc_component_get_source_id(component));
-
-    if (replacement) {
-        *replacement = unknown_tc;
-    } else {
-        discard_unattached_component(unknown_tc);
-    }
-    return replacement != nullptr;
-}
-
-bool upgrade_unknown_component_ref_impl(const Entity& entity,
-                                        tc_component* component,
-                                        const std::string& target_type,
-                                        const tc_value* target_data,
-                                        std::string* error) {
-    if (error) {
-        error->clear();
-    }
-
-    if (!entity.valid()) {
-        if (error) {
-            *error = "Entity is invalid";
+            tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
+            if (active_in_editor != nullptr && active_in_editor->type == TC_VALUE_BOOL) {
+                component->active_in_editor = active_in_editor->data.b;
+            }
         }
-        return false;
-    }
 
-    if (component == nullptr) {
-        if (error) {
-            *error = "Component pointer is null";
+        bool is_component_core_field(const char* path) {
+            return path != nullptr && (std::string(path) == "display_name" || std::string(path) == "enabled" ||
+                                       std::string(path) == "active_in_editor");
         }
-        return false;
-    }
 
-    if (!is_unknown_component(component)) {
-        if (error) {
-            *error = "Component is not UnknownComponent";
+        bool validate_component_core_field(const char* path, const tc_value* value) {
+            if (std::string(path) == "display_name") {
+                return value != nullptr && value->type == TC_VALUE_STRING;
+            }
+            return value != nullptr && value->type == TC_VALUE_BOOL;
         }
-        return false;
-    }
 
-    auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
-    const bool preserve_runtime_state =
-        unknown_obj != nullptr && unknown_obj->preserve_runtime_state_on_upgrade;
-
-    if (target_type.empty()) {
-        if (error) {
-            *error = "Target type is empty";
+        void discard_unattached_component(tc_component* component) {
+            if (component == nullptr) {
+                return;
+            }
+            if (component->factory_retained) {
+                component->factory_retained = false;
+                tc_component_release(component);
+            } else {
+                tc_component_drop(component);
+            }
         }
-        return false;
-    }
 
-    if (!ComponentRegistry::instance().has(target_type)) {
-        if (error) {
-            *error = "Target type is not registered: " + target_type;
+        const char* apply_status_name(tc_inspect_apply_status status) {
+            switch (status) {
+            case TC_INSPECT_APPLY_OK:
+                return "ok";
+            case TC_INSPECT_APPLY_INVALID_ARGUMENT:
+                return "invalid argument";
+            case TC_INSPECT_APPLY_TYPE_NOT_FOUND:
+                return "type not found";
+            case TC_INSPECT_APPLY_NO_FIELDS:
+                return "no fields registered";
+            case TC_INSPECT_APPLY_UNKNOWN_FIELD:
+                return "unknown or non-serializable field";
+            case TC_INSPECT_APPLY_KIND_CONVERSION_FAILED:
+                return "kind conversion failed";
+            case TC_INSPECT_APPLY_SETTER_FAILED:
+                return "setter failed";
+            }
+            return "unknown apply error";
         }
-        return false;
-    }
 
-    tc_component* upgraded_tc = tc_component_registry_create(target_type.c_str());
-    if (upgraded_tc == nullptr) {
-        if (error) {
-            *error = "Failed to create component: " + target_type;
+        void* component_object_ptr(tc_component* component) {
+            if (component == nullptr) {
+                return nullptr;
+            }
+
+            if (component->kind == TC_CXX_COMPONENT) {
+                return CxxComponent::from_tc(component);
+            }
+
+            return component->body;
         }
-        return false;
-    }
 
-    void* upgraded_obj = component_object_ptr(upgraded_tc);
-    if (upgraded_obj == nullptr) {
-        discard_unattached_component(upgraded_tc);
-        if (error) {
-            *error = "Created component object pointer is null";
+        std::unordered_set<std::string> make_type_filter(const std::vector<std::string>& type_names) {
+            return std::unordered_set<std::string>(type_names.begin(), type_names.end());
         }
-        return false;
-    }
 
-    tc_scene_handle scene_handle = entity.scene().handle();
-    tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
-    tc_value empty_data = tc_value_dict_new();
-    const tc_value* data_to_apply = target_data != nullptr ? target_data : &empty_data;
-    if (data_to_apply->type != TC_VALUE_DICT) {
-        discard_unattached_component(upgraded_tc);
-        tc_value_free(&empty_data);
-        if (error) {
-            *error = "Component restore payload is not a dictionary";
+        struct RegisteredComponentSnapshot {
+            std::vector<tc_component*> components;
+            std::unordered_set<tc_component*> seen;
+            bool allocation_failed = false;
+        };
+
+        bool collect_registered_component(void* instance, void* user_data) {
+            auto* snapshot = static_cast<RegisteredComponentSnapshot*>(user_data);
+            auto* component = static_cast<tc_component*>(instance);
+            if (snapshot == nullptr || component == nullptr) {
+                return false;
+            }
+
+            try {
+                if (snapshot->seen.insert(component).second) {
+                    snapshot->components.push_back(component);
+                }
+            } catch (...) {
+                snapshot->allocation_failed = true;
+                return false;
+            }
+            return true;
         }
-        return false;
-    }
 
-    tc_value inspect_data = tc_value_dict_new();
-    for (size_t i = 0; i < tc_value_dict_size(data_to_apply); ++i) {
-        const char* key = nullptr;
-        tc_value* value = tc_value_dict_get_at(const_cast<tc_value*>(data_to_apply), i, &key);
-        if (is_component_core_field(key)) {
-            if (!validate_component_core_field(key, value)) {
-                discard_unattached_component(upgraded_tc);
-                tc_value_free(&inspect_data);
-                tc_value_free(&empty_data);
+        bool prepare_component_replacement(const Entity& entity,
+                                           tc_component* component,
+                                           const UnknownComponentPreparationHooks& hooks,
+                                           tc_component** replacement,
+                                           std::string* error) {
+            if (replacement) {
+                *replacement = nullptr;
+            }
+            if (error) {
+                error->clear();
+            }
+            if (!entity.valid()) {
+                if (error)
+                    *error = "Entity is invalid";
+                return false;
+            }
+            if (component == nullptr) {
+                if (error)
+                    *error = "Component pointer is null";
+                return false;
+            }
+            if (is_unknown_component(component)) {
+                if (error)
+                    *error = "Component is already UnknownComponent";
+                return false;
+            }
+
+            const char* raw_type_name = tc_component_type_name(component);
+            if (raw_type_name == nullptr || raw_type_name[0] == '\0') {
+                if (error)
+                    *error = "Component type name is empty";
+                return false;
+            }
+            const std::string original_type_name(raw_type_name);
+
+            void* obj_ptr = component_object_ptr(component);
+            if (obj_ptr == nullptr) {
+                if (error)
+                    *error = "Component object pointer is null";
+                return false;
+            }
+
+            tc_value original_data = hooks.serialize ? hooks.serialize(obj_ptr, original_type_name.c_str())
+                                                     : tc_inspect_serialize(obj_ptr, original_type_name.c_str());
+            if (original_data.type != TC_VALUE_DICT) {
+                tc_value_free(&original_data);
                 if (error) {
-                    *error = "Invalid component core field: " + std::string(key);
+                    *error = "Component serialization did not produce a dictionary for: " + original_type_name;
                 }
                 return false;
             }
-            continue;
-        }
-        tc_value_dict_set(&inspect_data, key, tc_value_copy(value));
-    }
 
-    const tc_inspect_apply_result apply_result = tc_inspect_deserialize_checked(
-        upgraded_obj,
-        target_type.c_str(),
-        &inspect_data,
-        &inspect_ctx
-    );
-    if (apply_result.status != TC_INSPECT_APPLY_OK) {
-        const std::string failed_field = apply_result.field_path
-            ? " at field '" + std::string(apply_result.field_path) + "'"
-            : std::string();
-        tc_value_free(&inspect_data);
-        discard_unattached_component(upgraded_tc);
-        tc_value_free(&empty_data);
-        if (error) {
-            *error = "Failed to restore " + target_type + failed_field + ": " +
-                apply_status_name(apply_result.status);
-        }
-        return false;
-    }
-    tc_value_free(&inspect_data);
-
-    if (preserve_runtime_state && !data_has_field(data_to_apply, "enabled")) {
-        upgraded_tc->enabled = component->enabled;
-    }
-    if (preserve_runtime_state && !data_has_field(data_to_apply, "active_in_editor")) {
-        upgraded_tc->active_in_editor = component->active_in_editor;
-    }
-    if (preserve_runtime_state && !data_has_field(data_to_apply, "display_name")) {
-        tc_component_set_display_name(upgraded_tc, tc_component_get_display_name(component));
-    }
-
-    apply_component_core_fields(upgraded_tc, data_to_apply);
-    tc_component_set_source_id(
-        upgraded_tc,
-        tc_component_get_source_id(component)
-    );
-
-    tc_value_free(&empty_data);
-
-    const size_t index = entity.component_index(component);
-    Entity mutable_entity = entity;
-    if (index == SIZE_MAX || !mutable_entity.replace_component_at_checked(
-            index, component, upgraded_tc)) {
-        discard_unattached_component(upgraded_tc);
-        if (error) {
-            *error = "UnknownComponent source identity changed before replacement";
-        }
-        return false;
-    }
-    return true;
-}
-
-UnknownComponentStats upgrade_unknown_component_snapshot(
-    const std::vector<tc_component*>& components,
-    const UnknownUpgradeStrategy& strategy,
-    const std::vector<std::string>& type_names
-) {
-    UnknownComponentStats stats;
-    const auto type_filter = make_type_filter(type_names);
-
-    for (tc_component* component : components) {
-        if (!is_unknown_component(component)) {
-            ++stats.failed;
-            tc::Log::error(
-                "[UnknownComponent] Runtime snapshot contains a non-UnknownComponent instance"
-            );
-            continue;
-        }
-
-        const Entity entity(component->owner);
-        if (!entity.valid()) {
-            ++stats.failed;
-            tc::Log::error(
-                "[UnknownComponent] Runtime snapshot contains an unattached UnknownComponent"
-            );
-            continue;
-        }
-
-        auto* unknown_obj =
-            dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
-        if (unknown_obj == nullptr) {
-            ++stats.failed;
-            tc::Log::error(
-                "[UnknownComponent] Runtime snapshot instance is not an UnknownComponent object"
-            );
-            continue;
-        }
-
-        if (!type_filter.empty() && type_filter.count(unknown_obj->original_type) == 0) {
-            ++stats.skipped;
-            continue;
-        }
-
-        if (!strategy &&
-            !ComponentRegistry::instance().has(unknown_obj->original_type)) {
-            ++stats.skipped;
-            continue;
-        }
-
-        std::string error;
-        if (!strategy) {
-            if (upgrade_unknown_component_ref(entity, component, &error)) {
-                ++stats.upgraded;
-            } else {
-                ++stats.failed;
-                tc::Log::error(
-                    "[UnknownComponent] Failed to upgrade component: %s",
-                    error.c_str()
-                );
+            if (!tc_value_dict_has(&original_data, "enabled")) {
+                tc_value_dict_set(&original_data, "enabled", tc_value_bool(component->enabled));
             }
-            continue;
-        }
-
-        const TcSceneRef scene = entity.scene();
-        UnknownUpgradeDecision decision = strategy(*unknown_obj, entity, scene);
-        switch (decision.mode) {
-        case UnknownUpgradeMode::Skip:
-            ++stats.skipped;
-            break;
-        case UnknownUpgradeMode::DefaultUpgrade:
-            if (upgrade_unknown_component_ref(entity, component, &error)) {
-                ++stats.upgraded;
-            } else {
-                ++stats.failed;
-                tc::Log::error(
-                    "[UnknownComponent] Failed to upgrade component: %s",
-                    error.c_str()
-                );
+            if (!tc_value_dict_has(&original_data, "active_in_editor")) {
+                tc_value_dict_set(&original_data, "active_in_editor", tc_value_bool(component->active_in_editor));
             }
-            break;
-        case UnknownUpgradeMode::CustomUpgrade:
-            if (upgrade_unknown_component_ref_impl(
-                    entity,
-                    component,
-                    decision.target_type,
-                    &decision.target_data,
-                    &error)) {
-                ++stats.upgraded;
-            } else {
-                ++stats.failed;
-                tc::Log::error(
-                    "[UnknownComponent] Failed custom upgrade component: %s",
-                    error.c_str()
-                );
+            const char* display_name = tc_component_get_display_name(component);
+            if (display_name != nullptr && display_name[0] != '\0' &&
+                !tc_value_dict_has(&original_data, "display_name")) {
+                tc_value_dict_set(&original_data, "display_name", tc_value_string(display_name));
             }
-            break;
-        }
-    }
 
-    return stats;
-}
-
-} // namespace
-
-struct UnknownComponentDegradationPlan::Impl {
-    struct Entry {
-        Entity entity;
-        size_t index = SIZE_MAX;
-        tc_component* source = nullptr;
-        tc_component* replacement = nullptr;
-    };
-
-    std::vector<Entry> entries;
-    bool is_committed = false;
-
-    ~Impl() {
-        for (Entry& entry : entries) {
-            discard_unattached_component(entry.replacement);
-            entry.replacement = nullptr;
-        }
-    }
-};
-
-UnknownComponentDegradationPlan::UnknownComponentDegradationPlan() :
-    _impl(std::make_unique<Impl>()) {}
-
-UnknownComponentDegradationPlan::UnknownComponentDegradationPlan(
-    UnknownComponentDegradationPlan&&) noexcept = default;
-
-UnknownComponentDegradationPlan& UnknownComponentDegradationPlan::operator=(
-    UnknownComponentDegradationPlan&&) noexcept = default;
-
-UnknownComponentDegradationPlan::~UnknownComponentDegradationPlan() = default;
-
-size_t UnknownComponentDegradationPlan::size() const {
-    return _impl ? _impl->entries.size() : 0;
-}
-
-bool UnknownComponentDegradationPlan::empty() const {
-    return size() == 0;
-}
-
-bool UnknownComponentDegradationPlan::committed() const {
-    return _impl && _impl->is_committed;
-}
-
-bool UnknownComponentDegradationPlan::validate(std::string* error) const {
-    if (error) error->clear();
-    if (!_impl) {
-        if (error) *error = "Component degradation plan has no state";
-        return false;
-    }
-    if (_impl->is_committed) {
-        if (error) *error = "Component degradation plan is already committed";
-        return false;
-    }
-
-    for (const Impl::Entry& entry : _impl->entries) {
-        if (!entry.entity.valid()) {
-            if (error) *error = "Prepared component entity is no longer valid";
-            return false;
-        }
-        if (entry.replacement == nullptr ||
-            tc_entity_handle_valid(entry.replacement->owner)) {
-            if (error) *error = "Prepared UnknownComponent is no longer unattached";
-            return false;
-        }
-        if (entry.index >= entry.entity.component_count() ||
-            entry.entity.component_at(entry.index) != entry.source ||
-            !tc_entity_handle_eq(entry.source->owner, entry.entity.handle())) {
-            if (error) {
-                *error = "Prepared component source identity changed before commit";
-            }
-            return false;
-        }
-    }
-    return true;
-}
-
-bool UnknownComponentDegradationPlan::commit(std::string* error) {
-    if (!validate(error)) {
-        return false;
-    }
-
-    for (Impl::Entry& entry : _impl->entries) {
-        if (!entry.entity.replace_component_at_checked(
-                entry.index, entry.source, entry.replacement)) {
-            if (error) {
-                *error = "Prepared component commit failed after validation";
-            }
-            tc::Log::error(
-                "[UnknownComponent] Prepared commit failed for entity '%s' at index %zu",
-                entry.entity.valid() ? entry.entity.name() : "<invalid>",
-                entry.index
-            );
-            return false;
-        }
-        entry.replacement = nullptr;
-    }
-    _impl->is_committed = true;
-    return true;
-}
-
-bool prepare_components_to_unknown(
-    const std::vector<TcSceneRef>& scenes,
-    const std::vector<std::string>& type_names,
-    UnknownComponentDegradationPlan& plan,
-    std::string* error,
-    const UnknownComponentPreparationHooks& hooks
-) {
-    if (error) error->clear();
-    UnknownComponentDegradationPlan prepared;
-    const auto type_filter = make_type_filter(type_names);
-    std::vector<tc_scene_handle> visited_scenes;
-
-    try {
-        for (const TcSceneRef& scene : scenes) {
-            if (!scene.valid()) {
-                if (error) *error = "Cannot prepare components from an invalid scene";
+            tc_component* unknown_tc = hooks.create_replacement ? hooks.create_replacement()
+                                                                : tc_component_registry_create("UnknownComponent");
+            if (unknown_tc == nullptr) {
+                tc_value_free(&original_data);
+                if (error)
+                    *error = "Failed to create UnknownComponent";
                 return false;
             }
-            const tc_scene_handle scene_handle = scene.handle();
-            bool duplicate = false;
-            for (const tc_scene_handle visited : visited_scenes) {
-                if (tc_scene_handle_eq(visited, scene_handle)) {
-                    duplicate = true;
+
+            auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(unknown_tc));
+            if (unknown_obj == nullptr) {
+                discard_unattached_component(unknown_tc);
+                tc_value_free(&original_data);
+                if (error)
+                    *error = "UnknownComponent instance is not a CxxComponent";
+                return false;
+            }
+
+            unknown_obj->original_type = original_type_name;
+            unknown_obj->preserve_runtime_state_on_upgrade = true;
+            tc_value_free(&unknown_obj->original_data);
+            unknown_obj->original_data = tc_value_copy(&original_data);
+            tc_value_free(&original_data);
+
+            unknown_tc->enabled = component->enabled;
+            unknown_tc->active_in_editor = component->active_in_editor;
+            tc_component_set_display_name(unknown_tc, display_name);
+            tc_component_set_source_id(unknown_tc, tc_component_get_source_id(component));
+
+            if (replacement) {
+                *replacement = unknown_tc;
+            } else {
+                discard_unattached_component(unknown_tc);
+            }
+            return replacement != nullptr;
+        }
+
+        bool upgrade_unknown_component_ref_impl(const Entity& entity,
+                                                tc_component* component,
+                                                const std::string& target_type,
+                                                const tc_value* target_data,
+                                                std::string* error) {
+            if (error) {
+                error->clear();
+            }
+
+            if (!entity.valid()) {
+                if (error) {
+                    *error = "Entity is invalid";
+                }
+                return false;
+            }
+
+            if (component == nullptr) {
+                if (error) {
+                    *error = "Component pointer is null";
+                }
+                return false;
+            }
+
+            if (!is_unknown_component(component)) {
+                if (error) {
+                    *error = "Component is not UnknownComponent";
+                }
+                return false;
+            }
+
+            auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
+            const bool preserve_runtime_state =
+                unknown_obj != nullptr && unknown_obj->preserve_runtime_state_on_upgrade;
+
+            if (target_type.empty()) {
+                if (error) {
+                    *error = "Target type is empty";
+                }
+                return false;
+            }
+
+            if (!ComponentRegistry::instance().has(target_type)) {
+                if (error) {
+                    *error = "Target type is not registered: " + target_type;
+                }
+                return false;
+            }
+
+            tc_component* upgraded_tc = tc_component_registry_create(target_type.c_str());
+            if (upgraded_tc == nullptr) {
+                if (error) {
+                    *error = "Failed to create component: " + target_type;
+                }
+                return false;
+            }
+
+            void* upgraded_obj = component_object_ptr(upgraded_tc);
+            if (upgraded_obj == nullptr) {
+                discard_unattached_component(upgraded_tc);
+                if (error) {
+                    *error = "Created component object pointer is null";
+                }
+                return false;
+            }
+
+            tc_scene_handle scene_handle = entity.scene().handle();
+            tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
+            tc_value empty_data = tc_value_dict_new();
+            const tc_value* data_to_apply = target_data != nullptr ? target_data : &empty_data;
+            if (data_to_apply->type != TC_VALUE_DICT) {
+                discard_unattached_component(upgraded_tc);
+                tc_value_free(&empty_data);
+                if (error) {
+                    *error = "Component restore payload is not a dictionary";
+                }
+                return false;
+            }
+
+            tc_value inspect_data = tc_value_dict_new();
+            for (size_t i = 0; i < tc_value_dict_size(data_to_apply); ++i) {
+                const char* key = nullptr;
+                tc_value* value = tc_value_dict_get_at(const_cast<tc_value*>(data_to_apply), i, &key);
+                if (is_component_core_field(key)) {
+                    if (!validate_component_core_field(key, value)) {
+                        discard_unattached_component(upgraded_tc);
+                        tc_value_free(&inspect_data);
+                        tc_value_free(&empty_data);
+                        if (error) {
+                            *error = "Invalid component core field: " + std::string(key);
+                        }
+                        return false;
+                    }
+                    continue;
+                }
+                tc_value_dict_set(&inspect_data, key, tc_value_copy(value));
+            }
+
+            const tc_inspect_apply_result apply_result =
+                tc_inspect_deserialize_checked(upgraded_obj, target_type.c_str(), &inspect_data, &inspect_ctx);
+            if (apply_result.status != TC_INSPECT_APPLY_OK) {
+                const std::string failed_field = apply_result.field_path
+                                                     ? " at field '" + std::string(apply_result.field_path) + "'"
+                                                     : std::string();
+                tc_value_free(&inspect_data);
+                discard_unattached_component(upgraded_tc);
+                tc_value_free(&empty_data);
+                if (error) {
+                    *error = "Failed to restore " + target_type + failed_field + ": " +
+                             apply_status_name(apply_result.status);
+                }
+                return false;
+            }
+            tc_value_free(&inspect_data);
+
+            if (preserve_runtime_state && !data_has_field(data_to_apply, "enabled")) {
+                upgraded_tc->enabled = component->enabled;
+            }
+            if (preserve_runtime_state && !data_has_field(data_to_apply, "active_in_editor")) {
+                upgraded_tc->active_in_editor = component->active_in_editor;
+            }
+            if (preserve_runtime_state && !data_has_field(data_to_apply, "display_name")) {
+                tc_component_set_display_name(upgraded_tc, tc_component_get_display_name(component));
+            }
+
+            apply_component_core_fields(upgraded_tc, data_to_apply);
+            tc_component_set_source_id(upgraded_tc, tc_component_get_source_id(component));
+
+            tc_value_free(&empty_data);
+
+            const size_t index = entity.component_index(component);
+            Entity mutable_entity = entity;
+            if (index == SIZE_MAX || !mutable_entity.replace_component_at_checked(index, component, upgraded_tc)) {
+                discard_unattached_component(upgraded_tc);
+                if (error) {
+                    *error = "UnknownComponent source identity changed before replacement";
+                }
+                return false;
+            }
+            return true;
+        }
+
+        UnknownComponentStats upgrade_unknown_component_snapshot(const std::vector<tc_component*>& components,
+                                                                 const UnknownUpgradeStrategy& strategy,
+                                                                 const std::vector<std::string>& type_names) {
+            UnknownComponentStats stats;
+            const auto type_filter = make_type_filter(type_names);
+
+            for (tc_component* component : components) {
+                if (!is_unknown_component(component)) {
+                    ++stats.failed;
+                    tc::Log::error("[UnknownComponent] Runtime snapshot contains a non-UnknownComponent instance");
+                    continue;
+                }
+
+                const Entity entity(component->owner);
+                if (!entity.valid()) {
+                    ++stats.failed;
+                    tc::Log::error("[UnknownComponent] Runtime snapshot contains an unattached UnknownComponent");
+                    continue;
+                }
+
+                auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
+                if (unknown_obj == nullptr) {
+                    ++stats.failed;
+                    tc::Log::error("[UnknownComponent] Runtime snapshot instance is not an UnknownComponent object");
+                    continue;
+                }
+
+                if (!type_filter.empty() && type_filter.count(unknown_obj->original_type) == 0) {
+                    ++stats.skipped;
+                    continue;
+                }
+
+                if (!strategy && !ComponentRegistry::instance().has(unknown_obj->original_type)) {
+                    ++stats.skipped;
+                    continue;
+                }
+
+                std::string error;
+                if (!strategy) {
+                    if (upgrade_unknown_component_ref(entity, component, &error)) {
+                        ++stats.upgraded;
+                    } else {
+                        ++stats.failed;
+                        tc::Log::error("[UnknownComponent] Failed to upgrade component: %s", error.c_str());
+                    }
+                    continue;
+                }
+
+                const TcSceneRef scene = entity.scene();
+                UnknownUpgradeDecision decision = strategy(*unknown_obj, entity, scene);
+                switch (decision.mode) {
+                case UnknownUpgradeMode::Skip:
+                    ++stats.skipped;
+                    break;
+                case UnknownUpgradeMode::DefaultUpgrade:
+                    if (upgrade_unknown_component_ref(entity, component, &error)) {
+                        ++stats.upgraded;
+                    } else {
+                        ++stats.failed;
+                        tc::Log::error("[UnknownComponent] Failed to upgrade component: %s", error.c_str());
+                    }
+                    break;
+                case UnknownUpgradeMode::CustomUpgrade:
+                    if (upgrade_unknown_component_ref_impl(
+                            entity, component, decision.target_type, &decision.target_data, &error)) {
+                        ++stats.upgraded;
+                    } else {
+                        ++stats.failed;
+                        tc::Log::error("[UnknownComponent] Failed custom upgrade component: %s", error.c_str());
+                    }
                     break;
                 }
             }
-            if (duplicate) continue;
-            visited_scenes.push_back(scene_handle);
 
-            for (const Entity& entity : scene.get_all_entities()) {
-                const size_t component_count = entity.component_count();
-                for (size_t index = 0; index < component_count; ++index) {
-                    tc_component* component = entity.component_at(index);
-                    if (component == nullptr || is_unknown_component(component)) continue;
-
-                    const char* type_name = tc_component_type_name(component);
-                    if (type_name == nullptr ||
-                        (!type_filter.empty() && type_filter.count(type_name) == 0)) {
-                        continue;
-                    }
-
-                    tc_component* replacement = nullptr;
-                    std::string entry_error;
-                    if (!prepare_component_replacement(
-                            entity,
-                            component,
-                            hooks,
-                            &replacement,
-                            &entry_error)) {
-                        if (error) {
-                            *error = "Failed to prepare component '" +
-                                std::string(type_name ? type_name : "<unknown>") +
-                                "' in scene '" + scene.name() + "': " + entry_error;
-                        }
-                        tc::Log::error(
-                            "[UnknownComponent] %s",
-                            error ? error->c_str() : entry_error.c_str()
-                        );
-                        return false;
-                    }
-                    prepared._impl->entries.push_back({
-                        entity, index, component, replacement
-                    });
-                }
-            }
+            return stats;
         }
-    } catch (const std::exception& exception) {
-        if (error) {
-            *error = "Exception while preparing component degradation: " +
-                std::string(exception.what());
-        }
-        tc::Log::error(
-            "[UnknownComponent] Exception while preparing degradation: %s",
-            exception.what()
-        );
-        return false;
-    } catch (...) {
-        if (error) *error = "Unknown exception while preparing component degradation";
-        tc::Log::error("[UnknownComponent] Unknown exception while preparing degradation");
-        return false;
-    }
 
-    if (!prepared.validate(error)) {
-        tc::Log::error(
-            "[UnknownComponent] Prepared plan is stale before publication: %s",
-            error ? error->c_str() : "unknown validation error"
-        );
-        return false;
-    }
-    plan = std::move(prepared);
-    return true;
-}
+    } // namespace
 
-bool prepare_registered_components_to_unknown(
-    const std::vector<std::string>& type_names,
-    UnknownComponentDegradationPlan& plan,
-    std::string* error,
-    const UnknownComponentPreparationHooks& hooks
-) {
-    if (error) error->clear();
-
-    RegisteredComponentSnapshot snapshot;
-    std::unordered_set<std::string> visited_types;
-    try {
-        for (const std::string& type_name : type_names) {
-            if (type_name.empty() || !visited_types.insert(type_name).second) {
-                continue;
-            }
-            tc_runtime_type_registry_foreach_instance(
-                type_name.c_str(),
-                collect_registered_component,
-                &snapshot
-            );
-            if (snapshot.allocation_failed) {
-                if (error) {
-                    *error = "Failed to allocate registered component snapshot";
-                }
-                return false;
-            }
-        }
-    } catch (const std::exception& exception) {
-        if (error) {
-            *error = "Exception while collecting registered components: " +
-                std::string(exception.what());
-        }
-        tc::Log::error(
-            "[UnknownComponent] Exception while collecting registered components: %s",
-            exception.what()
-        );
-        return false;
-    } catch (...) {
-        if (error) {
-            *error = "Unknown exception while collecting registered components";
-        }
-        tc::Log::error(
-            "[UnknownComponent] Unknown exception while collecting registered components"
-        );
-        return false;
-    }
-
-    UnknownComponentDegradationPlan prepared;
-    try {
-        for (tc_component* component : snapshot.components) {
-            if (component == nullptr || is_unknown_component(component)) {
-                continue;
-            }
-
-            const char* type_name = tc_component_type_name(component);
-            const Entity entity(component->owner);
+    struct UnknownComponentDegradationPlan::Impl {
+        struct Entry {
+            Entity entity;
+            size_t index = SIZE_MAX;
+            tc_component* source = nullptr;
             tc_component* replacement = nullptr;
-            std::string entry_error;
-            if (!prepare_component_replacement(
-                    entity,
-                    component,
-                    hooks,
-                    &replacement,
-                    &entry_error)) {
-                if (error) {
-                    *error = "Failed to prepare registered component '" +
-                        std::string(type_name ? type_name : "<unknown>") +
-                        "': " + entry_error;
-                }
-                tc::Log::error(
-                    "[UnknownComponent] %s",
-                    error ? error->c_str() : entry_error.c_str()
-                );
+        };
+
+        std::vector<Entry> entries;
+        bool is_committed = false;
+
+        ~Impl() {
+            for (Entry& entry : entries) {
+                discard_unattached_component(entry.replacement);
+                entry.replacement = nullptr;
+            }
+        }
+    };
+
+    UnknownComponentDegradationPlan::UnknownComponentDegradationPlan()
+        : _impl(std::make_unique<Impl>()) {}
+
+    UnknownComponentDegradationPlan::UnknownComponentDegradationPlan(UnknownComponentDegradationPlan&&) noexcept =
+        default;
+
+    UnknownComponentDegradationPlan&
+    UnknownComponentDegradationPlan::operator=(UnknownComponentDegradationPlan&&) noexcept = default;
+
+    UnknownComponentDegradationPlan::~UnknownComponentDegradationPlan() = default;
+
+    size_t UnknownComponentDegradationPlan::size() const {
+        return _impl ? _impl->entries.size() : 0;
+    }
+
+    bool UnknownComponentDegradationPlan::empty() const {
+        return size() == 0;
+    }
+
+    bool UnknownComponentDegradationPlan::committed() const {
+        return _impl && _impl->is_committed;
+    }
+
+    bool UnknownComponentDegradationPlan::validate(std::string* error) const {
+        if (error)
+            error->clear();
+        if (!_impl) {
+            if (error)
+                *error = "Component degradation plan has no state";
+            return false;
+        }
+        if (_impl->is_committed) {
+            if (error)
+                *error = "Component degradation plan is already committed";
+            return false;
+        }
+
+        for (const Impl::Entry& entry : _impl->entries) {
+            if (!entry.entity.valid()) {
+                if (error)
+                    *error = "Prepared component entity is no longer valid";
                 return false;
             }
-            prepared._impl->entries.push_back({
-                entity,
-                entity.component_index(component),
-                component,
-                replacement
-            });
-        }
-    } catch (const std::exception& exception) {
-        if (error) {
-            *error = "Exception while preparing registered component degradation: " +
-                std::string(exception.what());
-        }
-        tc::Log::error(
-            "[UnknownComponent] Exception while preparing registered degradation: %s",
-            exception.what()
-        );
-        return false;
-    } catch (...) {
-        if (error) {
-            *error = "Unknown exception while preparing registered component degradation";
-        }
-        tc::Log::error(
-            "[UnknownComponent] Unknown exception while preparing registered degradation"
-        );
-        return false;
-    }
-
-    if (!prepared.validate(error)) {
-        tc::Log::error(
-            "[UnknownComponent] Registered degradation plan is stale before publication: %s",
-            error ? error->c_str() : "unknown validation error"
-        );
-        return false;
-    }
-    plan = std::move(prepared);
-    return true;
-}
-
-UnknownUpgradeDecision::UnknownUpgradeDecision(const UnknownUpgradeDecision& other) :
-    mode(other.mode),
-    target_type(other.target_type),
-    target_data(tc_value_copy(&other.target_data)) {}
-
-UnknownUpgradeDecision&
-UnknownUpgradeDecision::operator=(const UnknownUpgradeDecision& other) {
-    if (this == &other) {
-        return *this;
-    }
-
-    mode = other.mode;
-    target_type = other.target_type;
-    tc_value_free(&target_data);
-    target_data = tc_value_copy(&other.target_data);
-    return *this;
-}
-
-UnknownUpgradeDecision::UnknownUpgradeDecision(UnknownUpgradeDecision&& other) noexcept :
-    mode(other.mode),
-    target_type(std::move(other.target_type)),
-    target_data(other.target_data) {
-    other.mode = UnknownUpgradeMode::DefaultUpgrade;
-    other.target_data = tc_value_nil();
-}
-
-UnknownUpgradeDecision&
-UnknownUpgradeDecision::operator=(UnknownUpgradeDecision&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    mode = other.mode;
-    target_type = std::move(other.target_type);
-    tc_value_free(&target_data);
-    target_data = other.target_data;
-    other.mode = UnknownUpgradeMode::DefaultUpgrade;
-    other.target_data = tc_value_nil();
-    return *this;
-}
-
-UnknownUpgradeDecision::~UnknownUpgradeDecision() {
-    tc_value_free(&target_data);
-}
-
-UnknownUpgradeDecision UnknownUpgradeDecision::skip() {
-    UnknownUpgradeDecision decision;
-    decision.mode = UnknownUpgradeMode::Skip;
-    return decision;
-}
-
-UnknownUpgradeDecision UnknownUpgradeDecision::default_upgrade() {
-    return UnknownUpgradeDecision();
-}
-
-UnknownUpgradeDecision UnknownUpgradeDecision::custom(
-    std::string target_type,
-    const tc_value* target_data) {
-    UnknownUpgradeDecision decision;
-    decision.mode = UnknownUpgradeMode::CustomUpgrade;
-    decision.target_type = std::move(target_type);
-    if (target_data != nullptr) {
-        decision.target_data = tc_value_copy(target_data);
-    }
-    return decision;
-}
-
-bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* component, std::string* error) {
-    tc_component* replacement = nullptr;
-    if (!prepare_component_replacement(
-            entity, component, {}, &replacement, error)) {
-        return false;
-    }
-
-    const size_t index = entity.component_index(component);
-    Entity mutable_entity = entity;
-    if (index == SIZE_MAX || !mutable_entity.replace_component_at_checked(
-            index, component, replacement)) {
-        discard_unattached_component(replacement);
-        if (error) *error = "Component source identity changed before replacement";
-        return false;
-    }
-    return true;
-}
-
-bool upgrade_unknown_component_ref(const Entity& entity, tc_component* component, std::string* error) {
-    if (error) {
-        error->clear();
-    }
-
-    if (!entity.valid()) {
-        if (error) {
-            *error = "Entity is invalid";
-        }
-        return false;
-    }
-
-    if (component == nullptr) {
-        if (error) {
-            *error = "Component pointer is null";
-        }
-        return false;
-    }
-
-    if (!is_unknown_component(component)) {
-        if (error) {
-            *error = "Component is not UnknownComponent";
-        }
-        return false;
-    }
-
-    auto* unknown_obj = static_cast<UnknownComponent*>(CxxComponent::from_tc(component));
-    if (unknown_obj == nullptr) {
-        if (error) {
-            *error = "UnknownComponent object pointer is null";
-        }
-        return false;
-    }
-
-    if (unknown_obj->original_type.empty()) {
-        if (error) {
-            *error = "UnknownComponent has empty original_type";
-        }
-        return false;
-    }
-
-    return upgrade_unknown_component_ref_impl(
-        entity,
-        component,
-        unknown_obj->original_type,
-        &unknown_obj->original_data,
-        error);
-}
-
-UnknownComponentStats degrade_components_to_unknown(const TcSceneRef& scene, const std::vector<std::string>& type_names) {
-    UnknownComponentStats stats;
-    if (!scene.valid()) {
-        return stats;
-    }
-
-    UnknownComponentDegradationPlan plan;
-    std::string error;
-    if (!prepare_components_to_unknown({scene}, type_names, plan, &error)) {
-        stats.failed = 1;
-        tc::Log::error(
-            "[UnknownComponent] Failed to prepare component degradation: %s",
-            error.c_str()
-        );
-        return stats;
-    }
-    stats.degraded = plan.size();
-    if (!plan.commit(&error)) {
-        stats.failed = plan.size() == 0 ? 1 : plan.size();
-        stats.degraded = 0;
-        tc::Log::error(
-            "[UnknownComponent] Failed to commit component degradation: %s",
-            error.c_str()
-        );
-    }
-
-    return stats;
-}
-
-UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene, const std::vector<std::string>& type_names) {
-    return upgrade_unknown_components(scene, UnknownUpgradeStrategy(), type_names);
-}
-
-UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene,
-                                                 const UnknownUpgradeStrategy& strategy,
-                                                 const std::vector<std::string>& type_names) {
-    if (!scene.valid()) {
-        return {};
-    }
-
-    std::vector<tc_component*> pending;
-    for (const Entity& entity : scene.get_all_entities()) {
-        const size_t component_count = entity.component_count();
-        pending.reserve(pending.size() + component_count);
-
-        for (size_t i = 0; i < component_count; ++i) {
-            tc_component* component = entity.component_at(i);
-            if (is_unknown_component(component)) {
-                pending.push_back(component);
+            if (entry.replacement == nullptr || tc_entity_handle_valid(entry.replacement->owner)) {
+                if (error)
+                    *error = "Prepared UnknownComponent is no longer unattached";
+                return false;
+            }
+            if (entry.index >= entry.entity.component_count() ||
+                entry.entity.component_at(entry.index) != entry.source ||
+                !tc_entity_handle_eq(entry.source->owner, entry.entity.handle())) {
+                if (error) {
+                    *error = "Prepared component source identity changed before commit";
+                }
+                return false;
             }
         }
+        return true;
     }
 
-    return upgrade_unknown_component_snapshot(pending, strategy, type_names);
-}
+    bool UnknownComponentDegradationPlan::commit(std::string* error) {
+        if (!validate(error)) {
+            return false;
+        }
 
-UnknownComponentStats upgrade_registered_unknown_components(
-    const std::vector<std::string>& type_names
-) {
-    return upgrade_registered_unknown_components(UnknownUpgradeStrategy(), type_names);
-}
+        for (Impl::Entry& entry : _impl->entries) {
+            if (!entry.entity.replace_component_at_checked(entry.index, entry.source, entry.replacement)) {
+                if (error) {
+                    *error = "Prepared component commit failed after validation";
+                }
+                tc::Log::error("[UnknownComponent] Prepared commit failed for entity '%s' at index %zu",
+                               entry.entity.valid() ? entry.entity.name() : "<invalid>",
+                               entry.index);
+                return false;
+            }
+            entry.replacement = nullptr;
+        }
+        _impl->is_committed = true;
+        return true;
+    }
 
-UnknownComponentStats upgrade_registered_unknown_components(
-    const UnknownUpgradeStrategy& strategy,
-    const std::vector<std::string>& type_names
-) {
-    RegisteredComponentSnapshot snapshot;
-    tc_runtime_type_registry_foreach_instance(
-        "UnknownComponent",
-        collect_registered_component,
-        &snapshot
-    );
-    if (snapshot.allocation_failed) {
-        tc::Log::error(
-            "[UnknownComponent] Failed to allocate registered UnknownComponent snapshot"
-        );
+    bool prepare_components_to_unknown(const std::vector<TcSceneRef>& scenes,
+                                       const std::vector<std::string>& type_names,
+                                       UnknownComponentDegradationPlan& plan,
+                                       std::string* error,
+                                       const UnknownComponentPreparationHooks& hooks) {
+        if (error)
+            error->clear();
+        UnknownComponentDegradationPlan prepared;
+        const auto type_filter = make_type_filter(type_names);
+        std::vector<tc_scene_handle> visited_scenes;
+
+        try {
+            for (const TcSceneRef& scene : scenes) {
+                if (!scene.valid()) {
+                    if (error)
+                        *error = "Cannot prepare components from an invalid scene";
+                    return false;
+                }
+                const tc_scene_handle scene_handle = scene.handle();
+                bool duplicate = false;
+                for (const tc_scene_handle visited : visited_scenes) {
+                    if (tc_scene_handle_eq(visited, scene_handle)) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (duplicate)
+                    continue;
+                visited_scenes.push_back(scene_handle);
+
+                for (const Entity& entity : scene.get_all_entities()) {
+                    const size_t component_count = entity.component_count();
+                    for (size_t index = 0; index < component_count; ++index) {
+                        tc_component* component = entity.component_at(index);
+                        if (component == nullptr || is_unknown_component(component))
+                            continue;
+
+                        const char* type_name = tc_component_type_name(component);
+                        if (type_name == nullptr || (!type_filter.empty() && type_filter.count(type_name) == 0)) {
+                            continue;
+                        }
+
+                        tc_component* replacement = nullptr;
+                        std::string entry_error;
+                        if (!prepare_component_replacement(entity, component, hooks, &replacement, &entry_error)) {
+                            if (error) {
+                                *error = "Failed to prepare component '" +
+                                         std::string(type_name ? type_name : "<unknown>") + "' in scene '" +
+                                         scene.name() + "': " + entry_error;
+                            }
+                            tc::Log::error("[UnknownComponent] %s", error ? error->c_str() : entry_error.c_str());
+                            return false;
+                        }
+                        prepared._impl->entries.push_back({entity, index, component, replacement});
+                    }
+                }
+            }
+        } catch (const std::exception& exception) {
+            if (error) {
+                *error = "Exception while preparing component degradation: " + std::string(exception.what());
+            }
+            tc::Log::error("[UnknownComponent] Exception while preparing degradation: %s", exception.what());
+            return false;
+        } catch (...) {
+            if (error)
+                *error = "Unknown exception while preparing component degradation";
+            tc::Log::error("[UnknownComponent] Unknown exception while preparing degradation");
+            return false;
+        }
+
+        if (!prepared.validate(error)) {
+            tc::Log::error("[UnknownComponent] Prepared plan is stale before publication: %s",
+                           error ? error->c_str() : "unknown validation error");
+            return false;
+        }
+        plan = std::move(prepared);
+        return true;
+    }
+
+    bool prepare_registered_components_to_unknown(const std::vector<std::string>& type_names,
+                                                  UnknownComponentDegradationPlan& plan,
+                                                  std::string* error,
+                                                  const UnknownComponentPreparationHooks& hooks) {
+        if (error)
+            error->clear();
+
+        RegisteredComponentSnapshot snapshot;
+        std::unordered_set<std::string> visited_types;
+        try {
+            for (const std::string& type_name : type_names) {
+                if (type_name.empty() || !visited_types.insert(type_name).second) {
+                    continue;
+                }
+                tc_runtime_type_registry_foreach_instance(type_name.c_str(), collect_registered_component, &snapshot);
+                if (snapshot.allocation_failed) {
+                    if (error) {
+                        *error = "Failed to allocate registered component snapshot";
+                    }
+                    return false;
+                }
+            }
+        } catch (const std::exception& exception) {
+            if (error) {
+                *error = "Exception while collecting registered components: " + std::string(exception.what());
+            }
+            tc::Log::error("[UnknownComponent] Exception while collecting registered components: %s", exception.what());
+            return false;
+        } catch (...) {
+            if (error) {
+                *error = "Unknown exception while collecting registered components";
+            }
+            tc::Log::error("[UnknownComponent] Unknown exception while collecting registered components");
+            return false;
+        }
+
+        UnknownComponentDegradationPlan prepared;
+        try {
+            for (tc_component* component : snapshot.components) {
+                if (component == nullptr || is_unknown_component(component)) {
+                    continue;
+                }
+
+                const char* type_name = tc_component_type_name(component);
+                const Entity entity(component->owner);
+                tc_component* replacement = nullptr;
+                std::string entry_error;
+                if (!prepare_component_replacement(entity, component, hooks, &replacement, &entry_error)) {
+                    if (error) {
+                        *error = "Failed to prepare registered component '" +
+                                 std::string(type_name ? type_name : "<unknown>") + "': " + entry_error;
+                    }
+                    tc::Log::error("[UnknownComponent] %s", error ? error->c_str() : entry_error.c_str());
+                    return false;
+                }
+                prepared._impl->entries.push_back({entity, entity.component_index(component), component, replacement});
+            }
+        } catch (const std::exception& exception) {
+            if (error) {
+                *error = "Exception while preparing registered component degradation: " + std::string(exception.what());
+            }
+            tc::Log::error("[UnknownComponent] Exception while preparing registered degradation: %s", exception.what());
+            return false;
+        } catch (...) {
+            if (error) {
+                *error = "Unknown exception while preparing registered component degradation";
+            }
+            tc::Log::error("[UnknownComponent] Unknown exception while preparing registered degradation");
+            return false;
+        }
+
+        if (!prepared.validate(error)) {
+            tc::Log::error("[UnknownComponent] Registered degradation plan is stale before publication: %s",
+                           error ? error->c_str() : "unknown validation error");
+            return false;
+        }
+        plan = std::move(prepared);
+        return true;
+    }
+
+    UnknownUpgradeDecision::UnknownUpgradeDecision(const UnknownUpgradeDecision& other)
+        : mode(other.mode),
+          target_type(other.target_type),
+          target_data(tc_value_copy(&other.target_data)) {}
+
+    UnknownUpgradeDecision& UnknownUpgradeDecision::operator=(const UnknownUpgradeDecision& other) {
+        if (this == &other) {
+            return *this;
+        }
+
+        mode = other.mode;
+        target_type = other.target_type;
+        tc_value_free(&target_data);
+        target_data = tc_value_copy(&other.target_data);
+        return *this;
+    }
+
+    UnknownUpgradeDecision::UnknownUpgradeDecision(UnknownUpgradeDecision&& other) noexcept
+        : mode(other.mode),
+          target_type(std::move(other.target_type)),
+          target_data(other.target_data) {
+        other.mode = UnknownUpgradeMode::DefaultUpgrade;
+        other.target_data = tc_value_nil();
+    }
+
+    UnknownUpgradeDecision& UnknownUpgradeDecision::operator=(UnknownUpgradeDecision&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        mode = other.mode;
+        target_type = std::move(other.target_type);
+        tc_value_free(&target_data);
+        target_data = other.target_data;
+        other.mode = UnknownUpgradeMode::DefaultUpgrade;
+        other.target_data = tc_value_nil();
+        return *this;
+    }
+
+    UnknownUpgradeDecision::~UnknownUpgradeDecision() {
+        tc_value_free(&target_data);
+    }
+
+    UnknownUpgradeDecision UnknownUpgradeDecision::skip() {
+        UnknownUpgradeDecision decision;
+        decision.mode = UnknownUpgradeMode::Skip;
+        return decision;
+    }
+
+    UnknownUpgradeDecision UnknownUpgradeDecision::default_upgrade() {
+        return UnknownUpgradeDecision();
+    }
+
+    UnknownUpgradeDecision UnknownUpgradeDecision::custom(std::string target_type, const tc_value* target_data) {
+        UnknownUpgradeDecision decision;
+        decision.mode = UnknownUpgradeMode::CustomUpgrade;
+        decision.target_type = std::move(target_type);
+        if (target_data != nullptr) {
+            decision.target_data = tc_value_copy(target_data);
+        }
+        return decision;
+    }
+
+    bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* component, std::string* error) {
+        tc_component* replacement = nullptr;
+        if (!prepare_component_replacement(entity, component, {}, &replacement, error)) {
+            return false;
+        }
+
+        const size_t index = entity.component_index(component);
+        Entity mutable_entity = entity;
+        if (index == SIZE_MAX || !mutable_entity.replace_component_at_checked(index, component, replacement)) {
+            discard_unattached_component(replacement);
+            if (error)
+                *error = "Component source identity changed before replacement";
+            return false;
+        }
+        return true;
+    }
+
+    bool upgrade_unknown_component_ref(const Entity& entity, tc_component* component, std::string* error) {
+        if (error) {
+            error->clear();
+        }
+
+        if (!entity.valid()) {
+            if (error) {
+                *error = "Entity is invalid";
+            }
+            return false;
+        }
+
+        if (component == nullptr) {
+            if (error) {
+                *error = "Component pointer is null";
+            }
+            return false;
+        }
+
+        if (!is_unknown_component(component)) {
+            if (error) {
+                *error = "Component is not UnknownComponent";
+            }
+            return false;
+        }
+
+        auto* unknown_obj = static_cast<UnknownComponent*>(CxxComponent::from_tc(component));
+        if (unknown_obj == nullptr) {
+            if (error) {
+                *error = "UnknownComponent object pointer is null";
+            }
+            return false;
+        }
+
+        if (unknown_obj->original_type.empty()) {
+            if (error) {
+                *error = "UnknownComponent has empty original_type";
+            }
+            return false;
+        }
+
+        return upgrade_unknown_component_ref_impl(
+            entity, component, unknown_obj->original_type, &unknown_obj->original_data, error);
+    }
+
+    UnknownComponentStats degrade_components_to_unknown(const TcSceneRef& scene,
+                                                        const std::vector<std::string>& type_names) {
         UnknownComponentStats stats;
-        stats.failed = 1;
+        if (!scene.valid()) {
+            return stats;
+        }
+
+        UnknownComponentDegradationPlan plan;
+        std::string error;
+        if (!prepare_components_to_unknown({scene}, type_names, plan, &error)) {
+            stats.failed = 1;
+            tc::Log::error("[UnknownComponent] Failed to prepare component degradation: %s", error.c_str());
+            return stats;
+        }
+        stats.degraded = plan.size();
+        if (!plan.commit(&error)) {
+            stats.failed = plan.size() == 0 ? 1 : plan.size();
+            stats.degraded = 0;
+            tc::Log::error("[UnknownComponent] Failed to commit component degradation: %s", error.c_str());
+        }
+
         return stats;
     }
-    return upgrade_unknown_component_snapshot(snapshot.components, strategy, type_names);
-}
+
+    UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene,
+                                                     const std::vector<std::string>& type_names) {
+        return upgrade_unknown_components(scene, UnknownUpgradeStrategy(), type_names);
+    }
+
+    UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene,
+                                                     const UnknownUpgradeStrategy& strategy,
+                                                     const std::vector<std::string>& type_names) {
+        if (!scene.valid()) {
+            return {};
+        }
+
+        std::vector<tc_component*> pending;
+        for (const Entity& entity : scene.get_all_entities()) {
+            const size_t component_count = entity.component_count();
+            pending.reserve(pending.size() + component_count);
+
+            for (size_t i = 0; i < component_count; ++i) {
+                tc_component* component = entity.component_at(i);
+                if (is_unknown_component(component)) {
+                    pending.push_back(component);
+                }
+            }
+        }
+
+        return upgrade_unknown_component_snapshot(pending, strategy, type_names);
+    }
+
+    UnknownComponentStats upgrade_registered_unknown_components(const std::vector<std::string>& type_names) {
+        return upgrade_registered_unknown_components(UnknownUpgradeStrategy(), type_names);
+    }
+
+    UnknownComponentStats upgrade_registered_unknown_components(const UnknownUpgradeStrategy& strategy,
+                                                                const std::vector<std::string>& type_names) {
+        RegisteredComponentSnapshot snapshot;
+        tc_runtime_type_registry_foreach_instance("UnknownComponent", collect_registered_component, &snapshot);
+        if (snapshot.allocation_failed) {
+            tc::Log::error("[UnknownComponent] Failed to allocate registered UnknownComponent snapshot");
+            UnknownComponentStats stats;
+            stats.failed = 1;
+            return stats;
+        }
+        return upgrade_unknown_component_snapshot(snapshot.components, strategy, type_names);
+    }
 
 } // namespace termin

@@ -1,6 +1,6 @@
+#include <tcbase/tc_log.hpp>
 #include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/entity/component_registry.hpp>
-#include <tcbase/tc_log.hpp>
 
 extern "C" {
 #include "render/tc_render_target.h"
@@ -11,483 +11,488 @@ extern "C" {
 
 namespace termin {
 
-// Helper to create a unique key from viewport handle
-static inline uint64_t viewport_key(tc_viewport_handle h) {
-    return (static_cast<uint64_t>(h.index) << 32) | h.generation;
-}
-
-OrbitCameraController::OrbitCameraController(
-    double radius,
-    double min_radius,
-    double max_radius,
-    bool prevent_moving
-)
-    : CxxComponent("OrbitCameraController")
-    , radius(radius)
-    , min_radius(min_radius)
-    , max_radius(max_radius)
-    , _prevent_moving(prevent_moving)
-{
-    set_has_update(true);
-    set_active_in_editor(true);
-
-    // Install input vtable for receiving input events
-    install_input_vtable(&_c);
-}
-
-void OrbitCameraController::register_type() {
-    auto descriptor = ComponentTypeDescriptorBuilder::native<OrbitCameraController>(
-        "OrbitCameraController", "termin-components-render", "CxxComponent");
-    descriptor.category("Input");
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::radius,
-        "OrbitCameraController",
-        "radius",
-        "Radius",
-        "double",
-        0.1,
-        100.0,
-        0.1
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::min_radius,
-        "OrbitCameraController",
-        "min_radius",
-        "Min Radius",
-        "double",
-        0.1,
-        100.0,
-        0.1
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::max_radius,
-        "OrbitCameraController",
-        "max_radius",
-        "Max Radius",
-        "double",
-        1.0,
-        1000.0,
-        1.0
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::orbit_mouse_button,
-        "OrbitCameraController", "orbit_mouse_button", "Orbit Mouse Button", "int",
-        0.0, 2.0, 1.0
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::pan_mouse_button,
-        "OrbitCameraController", "pan_mouse_button", "Pan Mouse Button", "int",
-        0.0, 2.0, 1.0
-    );
-    tc::stage_inspect_field(descriptor.inspect(),
-        &OrbitCameraController::horizon_lock,
-        "OrbitCameraController", "horizon_lock", "Horizon Lock", "bool"
-    );
-    (void)descriptor.commit();
-}
-
-void OrbitCameraController::_ensure_camera() {
-    // Re-resolve camera if entity handle became stale
-    // (happens when entity moves between pools, e.g. standalone → scene)
-    if (!_camera.valid() && entity().valid()) {
-        _camera.reset(entity().get_component<CameraComponent>());
-    }
-}
-
-bool OrbitCameraController::_event_targets_this_camera(tc_viewport_handle viewport) {
-    _ensure_camera();
-    CameraComponent* camera = _camera.get();
-    if (!camera || !tc_viewport_alive(viewport)) {
-        return false;
+    // Helper to create a unique key from viewport handle
+    static inline uint64_t viewport_key(tc_viewport_handle h) {
+        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
     }
 
-    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-    if (!tc_render_target_handle_valid(rt)) {
-        return false;
+    OrbitCameraController::OrbitCameraController(double radius,
+                                                 double min_radius,
+                                                 double max_radius,
+                                                 bool prevent_moving)
+        : CxxComponent("OrbitCameraController"),
+          radius(radius),
+          min_radius(min_radius),
+          max_radius(max_radius),
+          _prevent_moving(prevent_moving) {
+        set_has_update(true);
+        set_active_in_editor(true);
+
+        // Install input vtable for receiving input events
+        install_input_vtable(&_c);
     }
 
-    return tc_render_target_get_camera(rt) == camera->tc_component_ptr();
-}
-
-void OrbitCameraController::on_added() {
-    CxxComponent::on_added();
-
-    // Find CameraComponent on same entity
-    _camera.reset(entity().get_component<CameraComponent>());
-    if (!_camera.valid()) {
-        tc_log(TC_LOG_ERROR, "[OrbitCameraController] No CameraComponent found on entity '%s'",
-               entity().name());
+    void OrbitCameraController::register_type() {
+        auto descriptor = ComponentTypeDescriptorBuilder::native<OrbitCameraController>(
+            "OrbitCameraController", "termin-components-render", "CxxComponent");
+        descriptor.category("Input");
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::radius,
+                                "OrbitCameraController",
+                                "radius",
+                                "Radius",
+                                "double",
+                                0.1,
+                                100.0,
+                                0.1);
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::min_radius,
+                                "OrbitCameraController",
+                                "min_radius",
+                                "Min Radius",
+                                "double",
+                                0.1,
+                                100.0,
+                                0.1);
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::max_radius,
+                                "OrbitCameraController",
+                                "max_radius",
+                                "Max Radius",
+                                "double",
+                                1.0,
+                                1000.0,
+                                1.0);
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::orbit_mouse_button,
+                                "OrbitCameraController",
+                                "orbit_mouse_button",
+                                "Orbit Mouse Button",
+                                "int",
+                                0.0,
+                                2.0,
+                                1.0);
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::pan_mouse_button,
+                                "OrbitCameraController",
+                                "pan_mouse_button",
+                                "Pan Mouse Button",
+                                "int",
+                                0.0,
+                                2.0,
+                                1.0);
+        tc::stage_inspect_field(descriptor.inspect(),
+                                &OrbitCameraController::horizon_lock,
+                                "OrbitCameraController",
+                                "horizon_lock",
+                                "Horizon Lock",
+                                "bool");
+        (void)descriptor.commit();
     }
 
-    _sync_from_transform();
-}
-
-void OrbitCameraController::update(float dt) {
-    (void)dt;
-
-    if (!entity().valid()) return;
-
-    // Check for external transform changes
-    Vec3 pos = entity().transform().global_position();
-    Quat rot = entity().transform().global_rotation();
-
-    if (_has_last_transform) {
-        // Check if position changed
-        bool pos_changed = (
-            std::abs(pos.x - _last_position.x) > 1e-6 ||
-            std::abs(pos.y - _last_position.y) > 1e-6 ||
-            std::abs(pos.z - _last_position.z) > 1e-6
-        );
-
-        // Check if rotation changed
-        bool rot_changed = (
-            std::abs(rot.x - _last_rotation.x) > 1e-6 ||
-            std::abs(rot.y - _last_rotation.y) > 1e-6 ||
-            std::abs(rot.z - _last_rotation.z) > 1e-6 ||
-            std::abs(rot.w - _last_rotation.w) > 1e-6
-        );
-
-        if (pos_changed || rot_changed) {
-            _sync_from_transform();
+    void OrbitCameraController::_ensure_camera() {
+        // Re-resolve camera if entity handle became stale
+        // (happens when entity moves between pools, e.g. standalone → scene)
+        if (!_camera.valid() && entity().valid()) {
+            _camera.reset(entity().get_component<CameraComponent>());
         }
     }
 
-    _last_position = pos;
-    _last_rotation = rot;
-    _has_last_transform = true;
-}
+    bool OrbitCameraController::_event_targets_this_camera(tc_viewport_handle viewport) {
+        _ensure_camera();
+        CameraComponent* camera = _camera.get();
+        if (!camera || !tc_viewport_alive(viewport)) {
+            return false;
+        }
 
-void OrbitCameraController::_sync_from_transform() {
-    /**
-     * Compute internal state (azimuth, elevation, target) from current transform.
-     *
-     * Forward direction uses Y-forward convention (local Y is forward).
-     * Target is position + forward * radius.
-     */
-    if (!entity().valid()) return;
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        if (!tc_render_target_handle_valid(rt)) {
+            return false;
+        }
 
-    Vec3 pos = entity().transform().global_position();
-    Quat rot = entity().transform().global_rotation();
+        return tc_render_target_get_camera(rt) == camera->tc_component_ptr();
+    }
 
-    // Get rotation matrix
-    double rm[9];
-    rot.to_matrix(rm);
+    void OrbitCameraController::on_added() {
+        CxxComponent::on_added();
 
-    // Forward direction (Y column of rotation matrix)
-    // rm is row-major: rm[0,1,2] = row0, rm[3,4,5] = row1, rm[6,7,8] = row2
-    // Column 1 (Y): rm[1], rm[4], rm[7]
-    Vec3 forward{rm[1], rm[4], rm[7]};
+        // Find CameraComponent on same entity
+        _camera.reset(entity().get_component<CameraComponent>());
+        if (!_camera.valid()) {
+            tc_log(TC_LOG_ERROR, "[OrbitCameraController] No CameraComponent found on entity '%s'", entity().name());
+        }
 
-    // Target is position + forward * radius
-    _target = pos + forward * radius;
+        _sync_from_transform();
+    }
 
-    // Compute direction from target to camera
-    Vec3 to_camera = pos - _target;
-    double dist = to_camera.norm();
-    if (dist < 1e-6) {
+    void OrbitCameraController::update(float dt) {
+        (void)dt;
+
+        if (!entity().valid())
+            return;
+
+        // Check for external transform changes
+        Vec3 pos = entity().transform().global_position();
+        Quat rot = entity().transform().global_rotation();
+
+        if (_has_last_transform) {
+            // Check if position changed
+            bool pos_changed = (std::abs(pos.x - _last_position.x) > 1e-6 ||
+                                std::abs(pos.y - _last_position.y) > 1e-6 || std::abs(pos.z - _last_position.z) > 1e-6);
+
+            // Check if rotation changed
+            bool rot_changed =
+                (std::abs(rot.x - _last_rotation.x) > 1e-6 || std::abs(rot.y - _last_rotation.y) > 1e-6 ||
+                 std::abs(rot.z - _last_rotation.z) > 1e-6 || std::abs(rot.w - _last_rotation.w) > 1e-6);
+
+            if (pos_changed || rot_changed) {
+                _sync_from_transform();
+            }
+        }
+
         _last_position = pos;
         _last_rotation = rot;
         _has_last_transform = true;
-        return;
     }
 
-    // Normalize
-    Vec3 to_camera_norm = to_camera / dist;
+    void OrbitCameraController::_sync_from_transform() {
+        /**
+         * Compute internal state (azimuth, elevation, target) from current transform.
+         *
+         * Forward direction uses Y-forward convention (local Y is forward).
+         * Target is position + forward * radius.
+         */
+        if (!entity().valid())
+            return;
 
-    // Elevation: angle from XY plane (asin of Z component)
-    double z_clamped = _clamp(to_camera_norm.z, -1.0, 1.0);
-    _elevation = std::asin(z_clamped);
+        Vec3 pos = entity().transform().global_position();
+        Quat rot = entity().transform().global_rotation();
 
-    // Azimuth: angle in XY plane
-    // At azimuth=0, camera is behind target (-Y direction)
-    // atan2(x, -y) gives us the angle from -Y axis
-    _azimuth = std::atan2(to_camera_norm.x, -to_camera_norm.y);
+        // Get rotation matrix
+        double rm[9];
+        rot.to_matrix(rm);
 
-    // Update last known position/rotation
-    _last_position = pos;
-    _last_rotation = rot;
-    _has_last_transform = true;
-}
+        // Forward direction (Y column of rotation matrix)
+        // rm is row-major: rm[0,1,2] = row0, rm[3,4,5] = row1, rm[6,7,8] = row2
+        // Column 1 (Y): rm[1], rm[4], rm[7]
+        Vec3 forward{rm[1], rm[4], rm[7]};
 
-void OrbitCameraController::_update_pose() {
-    /**
-     * Update camera pose from internal state.
-     *
-     * At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y.
-     * Azimuth rotates around Z axis (up).
-     * Elevation raises/lowers the camera.
-     */
-    if (!entity().valid()) return;
+        // Target is position + forward * radius
+        _target = pos + forward * radius;
 
-    double r = _clamp(radius, min_radius, max_radius);
-    double cos_elev = std::cos(_elevation);
+        // Compute direction from target to camera
+        Vec3 to_camera = pos - _target;
+        double dist = to_camera.norm();
+        if (dist < 1e-6) {
+            _last_position = pos;
+            _last_rotation = rot;
+            _has_last_transform = true;
+            return;
+        }
 
-    // Compute eye position
-    Vec3 eye{
-        _target.x + r * std::sin(_azimuth) * cos_elev,   // X - side
-        _target.y - r * std::cos(_azimuth) * cos_elev,   // Y - behind target
-        _target.z + r * std::sin(_elevation)              // Z - height
-    };
+        // Normalize
+        Vec3 to_camera_norm = to_camera / dist;
 
-    // Create pose looking at target (always zero-roll, resets fly roll)
-    Pose3 pose = Pose3::looking_at(eye, _target);
-    entity().transform().relocate(pose);
+        // Elevation: angle from XY plane (asin of Z component)
+        double z_clamped = _clamp(to_camera_norm.z, -1.0, 1.0);
+        _elevation = std::asin(z_clamped);
 
-    // Update last known position to avoid re-sync
-    _last_position = entity().transform().global_position();
-    _last_rotation = entity().transform().global_rotation();
-}
+        // Azimuth: angle in XY plane
+        // At azimuth=0, camera is behind target (-Y direction)
+        // atan2(x, -y) gives us the angle from -Y axis
+        _azimuth = std::atan2(to_camera_norm.x, -to_camera_norm.y);
 
-void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) {
-    _azimuth += delta_azimuth * M_PI / 180.0;  // Convert degrees to radians
+        // Update last known position/rotation
+        _last_position = pos;
+        _last_rotation = rot;
+        _has_last_transform = true;
+    }
 
-    // Clamp elevation to avoid gimbal lock at poles
-    double new_elevation = _elevation + delta_elevation * M_PI / 180.0;
-    _elevation = _clamp(new_elevation, -89.0 * M_PI / 180.0, 89.0 * M_PI / 180.0);
+    void OrbitCameraController::_update_pose() {
+        /**
+         * Update camera pose from internal state.
+         *
+         * At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y.
+         * Azimuth rotates around Z axis (up).
+         * Elevation raises/lowers the camera.
+         */
+        if (!entity().valid())
+            return;
 
-    _update_pose();
-}
+        double r = _clamp(radius, min_radius, max_radius);
+        double cos_elev = std::cos(_elevation);
 
-void OrbitCameraController::zoom(double delta) {
-    // Check for orthographic camera
-    CameraComponent* cam = _camera.get();
-    if (cam && cam->get_projection_type_str() == "orthographic") {
-        double scale_factor = 1.0 + delta * 0.1;
-        cam->ortho_size = std::max(0.1, cam->ortho_size * scale_factor);
-    } else {
-        // Perspective: change radius
-        radius = _clamp(radius + delta, min_radius, max_radius);
+        // Compute eye position
+        Vec3 eye{
+            _target.x + r * std::sin(_azimuth) * cos_elev, // X - side
+            _target.y - r * std::cos(_azimuth) * cos_elev, // Y - behind target
+            _target.z + r * std::sin(_elevation)           // Z - height
+        };
+
+        // Create pose looking at target (always zero-roll, resets fly roll)
+        Pose3 pose = Pose3::looking_at(eye, _target);
+        entity().transform().relocate(pose);
+
+        // Update last known position to avoid re-sync
+        _last_position = entity().transform().global_position();
+        _last_rotation = entity().transform().global_rotation();
+    }
+
+    void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) {
+        _azimuth += delta_azimuth * M_PI / 180.0; // Convert degrees to radians
+
+        // Clamp elevation to avoid gimbal lock at poles
+        double new_elevation = _elevation + delta_elevation * M_PI / 180.0;
+        _elevation = _clamp(new_elevation, -89.0 * M_PI / 180.0, 89.0 * M_PI / 180.0);
+
         _update_pose();
     }
-}
 
-void OrbitCameraController::pan(double dx, double dy) {
-    if (!entity().valid()) return;
-
-    // Get rotation matrix for local axes
-    Quat rot = entity().transform().global_rotation();
-    double rm[9];
-    rot.to_matrix(rm);
-
-    // Right direction (X column): rm[0], rm[3], rm[6]
-    Vec3 right{rm[0], rm[3], rm[6]};
-
-    // Up direction (Z column in Y-forward convention): rm[2], rm[5], rm[8]
-    Vec3 up{rm[2], rm[5], rm[8]};
-
-    // Move target
-    _target = _target + right * dx + up * dy;
-    _update_pose();
-}
-
-void OrbitCameraController::center_on(const Vec3& position) {
-    _target = position;
-    _update_pose();
-}
-
-void OrbitCameraController::fly_move(double right, double forward, double up) {
-    // Translate camera along its local axes. Does not change rotation.
-    if (!entity().valid()) return;
-
-    Quat rot = entity().transform().global_rotation();
-    double rm[9];
-    rot.to_matrix(rm);
-
-    // Local axes from rotation matrix columns
-    Vec3 axis_right{rm[0], rm[3], rm[6]};
-    Vec3 axis_forward{rm[1], rm[4], rm[7]};
-    Vec3 axis_up{rm[2], rm[5], rm[8]};
-
-    Vec3 pos = entity().transform().global_position();
-    pos = pos + axis_right * right + axis_forward * forward + axis_up * up;
-
-    entity().transform().relocate(Pose3{rot, pos});
-    _sync_from_transform();
-}
-
-void OrbitCameraController::fly_forward(double delta) {
-    // Move along forward direction. If horizon_lock, project onto XY plane.
-    if (!entity().valid()) return;
-
-    Quat rot = entity().transform().global_rotation();
-    double rm[9];
-    rot.to_matrix(rm);
-    Vec3 forward{rm[1], rm[4], rm[7]};
-
-    if (horizon_lock) {
-        forward.z = 0.0;
-        double len = forward.norm();
-        if (len < 1e-6) return;
-        forward = forward / len;
+    void OrbitCameraController::zoom(double delta) {
+        // Check for orthographic camera
+        CameraComponent* cam = _camera.get();
+        if (cam && cam->get_projection_type_str() == "orthographic") {
+            double scale_factor = 1.0 + delta * 0.1;
+            cam->ortho_size = std::max(0.1, cam->ortho_size * scale_factor);
+        } else {
+            // Perspective: change radius
+            radius = _clamp(radius + delta, min_radius, max_radius);
+            _update_pose();
+        }
     }
 
-    Vec3 pos = entity().transform().global_position();
-    pos = pos + forward * delta;
+    void OrbitCameraController::pan(double dx, double dy) {
+        if (!entity().valid())
+            return;
 
-    entity().transform().relocate(Pose3{rot, pos});
-    _sync_from_transform();
-}
+        // Get rotation matrix for local axes
+        Quat rot = entity().transform().global_rotation();
+        double rm[9];
+        rot.to_matrix(rm);
 
-void OrbitCameraController::fly_rotate(double yaw, double pitch, double roll) {
-    // Rotate camera in place. Yaw around world Z, pitch around local X, roll around local Y.
-    if (!entity().valid()) return;
+        // Right direction (X column): rm[0], rm[3], rm[6]
+        Vec3 right{rm[0], rm[3], rm[6]};
 
-    Vec3 eye = entity().transform().global_position();
-    Quat rot = entity().transform().global_rotation();
-    double rm[9];
-    rot.to_matrix(rm);
+        // Up direction (Z column in Y-forward convention): rm[2], rm[5], rm[8]
+        Vec3 up{rm[2], rm[5], rm[8]};
 
-    Vec3 axis_right{rm[0], rm[3], rm[6]};
-    Vec3 axis_forward{rm[1], rm[4], rm[7]};
-
-    // Build incremental rotation quaternions
-    Quat yaw_q = Quat::from_axis_angle(Vec3{0, 0, 1}, yaw * M_PI / 180.0);
-    Quat pitch_q = Quat::from_axis_angle(axis_right, pitch * M_PI / 180.0);
-    Quat roll_q = Quat::from_axis_angle(axis_forward, roll * M_PI / 180.0);
-
-    // Compose: roll * pitch * yaw * current
-    Quat new_rot = roll_q * pitch_q * yaw_q * rot;
-
-    // If horizon_lock, reconstruct rotation from forward direction via looking_at
-    // This removes any accumulated roll, keeping the horizon level
-    if (horizon_lock) {
-        double nm[9];
-        new_rot.to_matrix(nm);
-        Vec3 new_forward{nm[1], nm[4], nm[7]};
-        Pose3 level_pose = Pose3::looking_at(eye, eye + new_forward);
-        new_rot = level_pose.ang;
+        // Move target
+        _target = _target + right * dx + up * dy;
+        _update_pose();
     }
 
-    entity().transform().relocate(Pose3{new_rot, eye});
-    _sync_from_transform();
-}
-
-OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state(uint64_t viewport_id) {
-    return _viewport_states[viewport_id];
-}
-
-// === Input handlers ===
-// Events are C struct pointers (tc_mouse_button_event*, etc.)
-
-void OrbitCameraController::on_pointer(tc_pointer_event* e) {
-    if (_prevent_moving || !e || !_event_targets_this_camera(e->viewport)) {
-        return;
-    }
-    if (e->device != TC_POINTER_DEVICE_TOUCH &&
-        e->device != TC_POINTER_DEVICE_PEN) {
-        return;
+    void OrbitCameraController::center_on(const Vec3& position) {
+        _target = position;
+        _update_pose();
     }
 
-    ViewportState& state = _get_viewport_state(viewport_key(e->viewport));
-    if (e->phase == TC_POINTER_DOWN) {
-        state.touch_points[e->pointer_id] = {e->x, e->y};
-        return;
-    }
-    if (e->phase == TC_POINTER_CANCEL) {
-        state.touch_points.erase(e->pointer_id);
-        return;
+    void OrbitCameraController::fly_move(double right, double forward, double up) {
+        // Translate camera along its local axes. Does not change rotation.
+        if (!entity().valid())
+            return;
+
+        Quat rot = entity().transform().global_rotation();
+        double rm[9];
+        rot.to_matrix(rm);
+
+        // Local axes from rotation matrix columns
+        Vec3 axis_right{rm[0], rm[3], rm[6]};
+        Vec3 axis_forward{rm[1], rm[4], rm[7]};
+        Vec3 axis_up{rm[2], rm[5], rm[8]};
+
+        Vec3 pos = entity().transform().global_position();
+        pos = pos + axis_right * right + axis_forward * forward + axis_up * up;
+
+        entity().transform().relocate(Pose3{rot, pos});
+        _sync_from_transform();
     }
 
-    auto point = state.touch_points.find(e->pointer_id);
-    if (point == state.touch_points.end()) {
-        return;
+    void OrbitCameraController::fly_forward(double delta) {
+        // Move along forward direction. If horizon_lock, project onto XY plane.
+        if (!entity().valid())
+            return;
+
+        Quat rot = entity().transform().global_rotation();
+        double rm[9];
+        rot.to_matrix(rm);
+        Vec3 forward{rm[1], rm[4], rm[7]};
+
+        if (horizon_lock) {
+            forward.z = 0.0;
+            double len = forward.norm();
+            if (len < 1e-6)
+                return;
+            forward = forward / len;
+        }
+
+        Vec3 pos = entity().transform().global_position();
+        pos = pos + forward * delta;
+
+        entity().transform().relocate(Pose3{rot, pos});
+        _sync_from_transform();
     }
 
-    if (e->phase == TC_POINTER_MOVE) {
-        if (state.touch_points.size() == 1) {
-            point->second = {e->x, e->y};
-            orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
+    void OrbitCameraController::fly_rotate(double yaw, double pitch, double roll) {
+        // Rotate camera in place. Yaw around world Z, pitch around local X, roll around local Y.
+        if (!entity().valid())
+            return;
+
+        Vec3 eye = entity().transform().global_position();
+        Quat rot = entity().transform().global_rotation();
+        double rm[9];
+        rot.to_matrix(rm);
+
+        Vec3 axis_right{rm[0], rm[3], rm[6]};
+        Vec3 axis_forward{rm[1], rm[4], rm[7]};
+
+        // Build incremental rotation quaternions
+        Quat yaw_q = Quat::from_axis_angle(Vec3{0, 0, 1}, yaw * M_PI / 180.0);
+        Quat pitch_q = Quat::from_axis_angle(axis_right, pitch * M_PI / 180.0);
+        Quat roll_q = Quat::from_axis_angle(axis_forward, roll * M_PI / 180.0);
+
+        // Compose: roll * pitch * yaw * current
+        Quat new_rot = roll_q * pitch_q * yaw_q * rot;
+
+        // If horizon_lock, reconstruct rotation from forward direction via looking_at
+        // This removes any accumulated roll, keeping the horizon level
+        if (horizon_lock) {
+            double nm[9];
+            new_rot.to_matrix(nm);
+            Vec3 new_forward{nm[1], nm[4], nm[7]};
+            Pose3 level_pose = Pose3::looking_at(eye, eye + new_forward);
+            new_rot = level_pose.ang;
+        }
+
+        entity().transform().relocate(Pose3{new_rot, eye});
+        _sync_from_transform();
+    }
+
+    OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state(uint64_t viewport_id) {
+        return _viewport_states[viewport_id];
+    }
+
+    // === Input handlers ===
+    // Events are C struct pointers (tc_mouse_button_event*, etc.)
+
+    void OrbitCameraController::on_pointer(tc_pointer_event* e) {
+        if (_prevent_moving || !e || !_event_targets_this_camera(e->viewport)) {
+            return;
+        }
+        if (e->device != TC_POINTER_DEVICE_TOUCH && e->device != TC_POINTER_DEVICE_PEN) {
             return;
         }
 
-        if (state.touch_points.size() == 2) {
-            auto first = state.touch_points.begin();
-            auto second = std::next(first);
-            const double old_center_x = (first->second.x + second->second.x) * 0.5;
-            const double old_center_y = (first->second.y + second->second.y) * 0.5;
-            const double old_dx = first->second.x - second->second.x;
-            const double old_dy = first->second.y - second->second.y;
-            const double old_span = std::hypot(old_dx, old_dy);
-
-            point->second = {e->x, e->y};
-
-            first = state.touch_points.begin();
-            second = std::next(first);
-            const double new_center_x = (first->second.x + second->second.x) * 0.5;
-            const double new_center_y = (first->second.y + second->second.y) * 0.5;
-            const double new_dx = first->second.x - second->second.x;
-            const double new_dy = first->second.y - second->second.y;
-            const double new_span = std::hypot(new_dx, new_dy);
-
-            pan(
-                -(new_center_x - old_center_x) * _pan_speed,
-                (new_center_y - old_center_y) * _pan_speed);
-            zoom((old_span - new_span) * _touch_zoom_speed);
+        ViewportState& state = _get_viewport_state(viewport_key(e->viewport));
+        if (e->phase == TC_POINTER_DOWN) {
+            state.touch_points[e->pointer_id] = {e->x, e->y};
+            return;
+        }
+        if (e->phase == TC_POINTER_CANCEL) {
+            state.touch_points.erase(e->pointer_id);
             return;
         }
 
-        point->second = {e->x, e->y};
-        return;
+        auto point = state.touch_points.find(e->pointer_id);
+        if (point == state.touch_points.end()) {
+            return;
+        }
+
+        if (e->phase == TC_POINTER_MOVE) {
+            if (state.touch_points.size() == 1) {
+                point->second = {e->x, e->y};
+                orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
+                return;
+            }
+
+            if (state.touch_points.size() == 2) {
+                auto first = state.touch_points.begin();
+                auto second = std::next(first);
+                const double old_center_x = (first->second.x + second->second.x) * 0.5;
+                const double old_center_y = (first->second.y + second->second.y) * 0.5;
+                const double old_dx = first->second.x - second->second.x;
+                const double old_dy = first->second.y - second->second.y;
+                const double old_span = std::hypot(old_dx, old_dy);
+
+                point->second = {e->x, e->y};
+
+                first = state.touch_points.begin();
+                second = std::next(first);
+                const double new_center_x = (first->second.x + second->second.x) * 0.5;
+                const double new_center_y = (first->second.y + second->second.y) * 0.5;
+                const double new_dx = first->second.x - second->second.x;
+                const double new_dy = first->second.y - second->second.y;
+                const double new_span = std::hypot(new_dx, new_dy);
+
+                pan(-(new_center_x - old_center_x) * _pan_speed, (new_center_y - old_center_y) * _pan_speed);
+                zoom((old_span - new_span) * _touch_zoom_speed);
+                return;
+            }
+
+            point->second = {e->x, e->y};
+            return;
+        }
+
+        if (e->phase == TC_POINTER_UP) {
+            state.touch_points.erase(point);
+        }
     }
 
-    if (e->phase == TC_POINTER_UP) {
-        state.touch_points.erase(point);
+    void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
+        if (!e || !_event_targets_this_camera(e->viewport)) {
+            return;
+        }
+
+        // Get viewport pointer as key for per-viewport state
+        uint64_t vp_key = viewport_key(e->viewport);
+        ViewportState& state = _get_viewport_state(vp_key);
+
+        if (e->button == orbit_mouse_button) {
+            state.orbit_active = (e->action == static_cast<int>(Action::PRESS));
+        } else if (e->button == pan_mouse_button) {
+            state.pan_active = (e->action == static_cast<int>(Action::PRESS));
+        }
+
+        // Reset last position on release
+        if (e->action == static_cast<int>(Action::RELEASE)) {
+            state.has_last = false;
+        }
     }
-}
 
-void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
-    if (!e || !_event_targets_this_camera(e->viewport)) {
-        return;
-    }
+    void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
+        if (_prevent_moving)
+            return;
+        if (!e || !_event_targets_this_camera(e->viewport))
+            return;
 
-    // Get viewport pointer as key for per-viewport state
-    uint64_t vp_key = viewport_key(e->viewport);
-    ViewportState& state = _get_viewport_state(vp_key);
+        uint64_t vp_key = viewport_key(e->viewport);
+        ViewportState& state = _get_viewport_state(vp_key);
 
-    if (e->button == orbit_mouse_button) {
-        state.orbit_active = (e->action == static_cast<int>(Action::PRESS));
-    }
-    else if (e->button == pan_mouse_button) {
-        state.pan_active = (e->action == static_cast<int>(Action::PRESS));
-    }
+        if (!state.has_last) {
+            state.last_x = e->x;
+            state.last_y = e->y;
+            state.has_last = true;
+            return;
+        }
 
-    // Reset last position on release
-    if (e->action == static_cast<int>(Action::RELEASE)) {
-        state.has_last = false;
-    }
-}
-
-void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
-    if (_prevent_moving) return;
-    if (!e || !_event_targets_this_camera(e->viewport)) return;
-
-    uint64_t vp_key = viewport_key(e->viewport);
-    ViewportState& state = _get_viewport_state(vp_key);
-
-    if (!state.has_last) {
         state.last_x = e->x;
         state.last_y = e->y;
-        state.has_last = true;
-        return;
+
+        if (state.orbit_active) {
+            // Orbit: negative dx because moving mouse right should rotate left
+            orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
+        } else if (state.pan_active) {
+            pan(-e->dx * _pan_speed, e->dy * _pan_speed);
+        }
     }
 
-    state.last_x = e->x;
-    state.last_y = e->y;
+    void OrbitCameraController::on_scroll(tc_scroll_event* e) {
+        if (_prevent_moving)
+            return;
+        if (!e || !_event_targets_this_camera(e->viewport))
+            return;
 
-    if (state.orbit_active) {
-        // Orbit: negative dx because moving mouse right should rotate left
-        orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
-    } else if (state.pan_active) {
-        pan(-e->dx * _pan_speed, e->dy * _pan_speed);
+        // Scroll up (positive yoffset) = zoom in (negative delta)
+        zoom(-e->yoffset * _zoom_speed);
     }
-}
-
-void OrbitCameraController::on_scroll(tc_scroll_event* e) {
-    if (_prevent_moving) return;
-    if (!e || !_event_targets_this_camera(e->viewport)) return;
-
-    // Scroll up (positive yoffset) = zoom in (negative delta)
-    zoom(-e->yoffset * _zoom_speed);
-}
 
 } // namespace termin

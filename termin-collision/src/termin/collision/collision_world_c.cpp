@@ -12,125 +12,99 @@ using termin::collision::CollisionWorld;
 static std::vector<tc_contact_manifold> s_manifold_storage;
 
 // Local allocator functions registered with the scene component registry.
-static tc_collision_world* collision_world_alloc()
-{
+static tc_collision_world* collision_world_alloc() {
     return new CollisionWorld();
 }
 
-static void collision_world_free(tc_collision_world* cw)
-{
+static void collision_world_free(tc_collision_world* cw) {
     delete static_cast<CollisionWorld*>(cw);
 }
 
 // Static registration: registers allocator when termin_collision loads.
-namespace
-{
-    struct CollisionWorldAllocatorRegistrar
-    {
-        CollisionWorldAllocatorRegistrar()
-        {
-            tc_collision_world_set_allocator(collision_world_alloc,
-                                             collision_world_free);
+namespace {
+    struct CollisionWorldAllocatorRegistrar {
+        CollisionWorldAllocatorRegistrar() {
+            tc_collision_world_set_allocator(collision_world_alloc, collision_world_free);
         }
     };
     static CollisionWorldAllocatorRegistrar s_registrar;
+} // namespace
+
+extern "C" {
+
+TERMIN_COLLISION_API void* tc_collision_world_create(void) {
+    return collision_world_alloc();
 }
 
-extern "C"
-{
+TERMIN_COLLISION_API void tc_collision_world_destroy(void* cw) {
+    collision_world_free(static_cast<tc_collision_world*>(cw));
+}
 
-    TERMIN_COLLISION_API void* tc_collision_world_create(void)
-    {
-        return collision_world_alloc();
-    }
+TERMIN_COLLISION_API void tc_collision_world_bind_scene(tc_collision_world* cw, tc_scene_handle scene) {
+    if (!cw)
+        return;
+    static_cast<CollisionWorld*>(cw)->set_scene(scene);
+}
 
-    TERMIN_COLLISION_API void tc_collision_world_destroy(void* cw)
-    {
-        collision_world_free(static_cast<tc_collision_world*>(cw));
-    }
+TERMIN_COLLISION_API int tc_collision_world_size(void* cw) {
+    if (!cw)
+        return 0;
+    return static_cast<int>(static_cast<CollisionWorld*>(cw)->size());
+}
 
-    TERMIN_COLLISION_API void
-    tc_collision_world_bind_scene(tc_collision_world* cw, tc_scene_handle scene)
-    {
-        if (!cw)
-            return;
-        static_cast<CollisionWorld*>(cw)->set_scene(scene);
-    }
+TERMIN_COLLISION_API void tc_collision_world_update_all(void* cw) {
+    if (!cw)
+        return;
+    static_cast<CollisionWorld*>(cw)->update_all();
+}
 
-    TERMIN_COLLISION_API int tc_collision_world_size(void* cw)
-    {
-        if (!cw)
-            return 0;
-        return static_cast<int>(static_cast<CollisionWorld*>(cw)->size());
-    }
+TERMIN_COLLISION_API size_t tc_collision_world_detect_contacts(void* cw, tc_contact_manifold** out_manifolds) {
+    if (out_manifolds)
+        *out_manifolds = nullptr;
+    if (!cw)
+        return 0;
 
-    TERMIN_COLLISION_API void tc_collision_world_update_all(void* cw)
-    {
-        if (!cw)
-            return;
-        static_cast<CollisionWorld*>(cw)->update_all();
-    }
+    auto* world = static_cast<CollisionWorld*>(cw);
+    auto cpp_manifolds = world->detect_contacts();
 
-    TERMIN_COLLISION_API size_t tc_collision_world_detect_contacts(
-        void* cw, tc_contact_manifold** out_manifolds)
-    {
-        if (out_manifolds)
-            *out_manifolds = nullptr;
-        if (!cw)
-            return 0;
+    // Clear and populate C manifold storage
+    s_manifold_storage.clear();
+    s_manifold_storage.reserve(cpp_manifolds.size());
 
-        auto* world = static_cast<CollisionWorld*>(cw);
-        auto cpp_manifolds = world->detect_contacts();
+    for (const auto& cpp_m : cpp_manifolds) {
+        tc_contact_manifold c_manifold = {};
 
-        // Clear and populate C manifold storage
-        s_manifold_storage.clear();
-        s_manifold_storage.reserve(cpp_manifolds.size());
-
-        for (const auto& cpp_m : cpp_manifolds)
-        {
-            tc_contact_manifold c_manifold = {};
-
-            // Get entity IDs from attached colliders
-            if (auto* attached_a =
-                    dynamic_cast<termin::colliders::AttachedCollider*>(
-                        cpp_m.collider_a))
-            {
-                c_manifold.entity_a = attached_a->owner_entity_id();
-            }
-            if (auto* attached_b =
-                    dynamic_cast<termin::colliders::AttachedCollider*>(
-                        cpp_m.collider_b))
-            {
-                c_manifold.entity_b = attached_b->owner_entity_id();
-            }
-
-            // Copy normal
-            c_manifold.normal[0] = cpp_m.normal_world.x;
-            c_manifold.normal[1] = cpp_m.normal_world.y;
-            c_manifold.normal[2] = cpp_m.normal_world.z;
-
-            // Copy contact points
-            c_manifold.point_count =
-                static_cast<int>(std::min<std::size_t>(cpp_m.points.size(), 4));
-            for (int i = 0; i < c_manifold.point_count; ++i)
-            {
-                const auto& cpp_pt = cpp_m.points[i];
-                const termin::Vec3 position =
-                    cpp_pt.representative_point_world();
-                c_manifold.points[i].position[0] = position.x;
-                c_manifold.points[i].position[1] = position.y;
-                c_manifold.points[i].position[2] = position.z;
-                c_manifold.points[i].penetration = cpp_pt.signed_gap;
-            }
-
-            s_manifold_storage.push_back(c_manifold);
+        // Get entity IDs from attached colliders
+        if (auto* attached_a = dynamic_cast<termin::colliders::AttachedCollider*>(cpp_m.collider_a)) {
+            c_manifold.entity_a = attached_a->owner_entity_id();
+        }
+        if (auto* attached_b = dynamic_cast<termin::colliders::AttachedCollider*>(cpp_m.collider_b)) {
+            c_manifold.entity_b = attached_b->owner_entity_id();
         }
 
-        if (out_manifolds && !s_manifold_storage.empty())
-        {
-            *out_manifolds = s_manifold_storage.data();
+        // Copy normal
+        c_manifold.normal[0] = cpp_m.normal_world.x;
+        c_manifold.normal[1] = cpp_m.normal_world.y;
+        c_manifold.normal[2] = cpp_m.normal_world.z;
+
+        // Copy contact points
+        c_manifold.point_count = static_cast<int>(std::min<std::size_t>(cpp_m.points.size(), 4));
+        for (int i = 0; i < c_manifold.point_count; ++i) {
+            const auto& cpp_pt = cpp_m.points[i];
+            const termin::Vec3 position = cpp_pt.representative_point_world();
+            c_manifold.points[i].position[0] = position.x;
+            c_manifold.points[i].position[1] = position.y;
+            c_manifold.points[i].position[2] = position.z;
+            c_manifold.points[i].penetration = cpp_pt.signed_gap;
         }
 
-        return s_manifold_storage.size();
+        s_manifold_storage.push_back(c_manifold);
     }
+
+    if (out_manifolds && !s_manifold_storage.empty()) {
+        *out_manifolds = s_manifold_storage.data();
+    }
+
+    return s_manifold_storage.size();
+}
 }

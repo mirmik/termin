@@ -27,14 +27,8 @@ typedef enum tc_input_cursor {
 // writes a terminated prefix when buffer/capacity are provided.
 typedef struct tc_input_platform_services {
     void* userdata;
-    size_t (*clipboard_text)(
-        void* userdata,
-        char* buffer,
-        size_t capacity);
-    bool (*set_clipboard_text)(
-        void* userdata,
-        const char* text_utf8,
-        size_t byte_length);
+    size_t (*clipboard_text)(void* userdata, char* buffer, size_t capacity);
+    bool (*set_clipboard_text)(void* userdata, const char* text_utf8, size_t byte_length);
     void (*set_cursor)(void* userdata, tc_input_cursor cursor);
     void (*set_text_input_enabled)(void* userdata, bool enabled);
 } tc_input_platform_services;

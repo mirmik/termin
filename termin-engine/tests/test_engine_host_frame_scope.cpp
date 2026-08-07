@@ -12,34 +12,34 @@ extern "C" {
 
 namespace {
 
-class CaptureFixture {
-public:
-    explicit CaptureFixture(bool profile_sections)
-        : capture(tc_profiler_capture_create(8)) {
-        if (!capture) {
-            throw std::runtime_error("failed to create profiler capture fixture");
+    class CaptureFixture {
+    public:
+        explicit CaptureFixture(bool profile_sections)
+            : capture(tc_profiler_capture_create(8)) {
+            if (!capture) {
+                throw std::runtime_error("failed to create profiler capture fixture");
+            }
+            tc_profiler_capture_set_profiling(capture, profile_sections);
+            tc_profiler_capture_set_active(capture, true);
         }
-        tc_profiler_capture_set_profiling(capture, profile_sections);
-        tc_profiler_capture_set_active(capture, true);
-    }
 
-    ~CaptureFixture() {
-        tc_profiler_capture_destroy(capture);
-        tc_profiler_clear_history();
-    }
+        ~CaptureFixture() {
+            tc_profiler_capture_destroy(capture);
+            tc_profiler_clear_history();
+        }
 
-    tc_profiler_capture* capture = nullptr;
-};
-
-termin::EngineHostFrameCadence cadence(double start_ms, double interval_ms) {
-    return termin::EngineHostFrameCadence{
-        start_ms,
-        interval_ms,
-        16.0,
-        1.5,
-        0,
+        tc_profiler_capture* capture = nullptr;
     };
-}
+
+    termin::EngineHostFrameCadence cadence(double start_ms, double interval_ms) {
+        return termin::EngineHostFrameCadence{
+            start_ms,
+            interval_ms,
+            16.0,
+            1.5,
+            0,
+        };
+    }
 
 } // namespace
 

@@ -23,10 +23,8 @@
 #include <unordered_map>
 #include <vector>
 
-namespace termin
-{
-    namespace physics
-    {
+namespace termin {
+    namespace physics {
 
         using colliders::BoxCollider;
         using colliders::Collider;
@@ -34,8 +32,7 @@ namespace termin
         using collision::CollisionWorld;
         using collision::ContactPatch;
 
-        class TERMIN_PHYSICS_API PhysicsWorld
-        {
+        class TERMIN_PHYSICS_API PhysicsWorld {
         public:
             Vec3 gravity{0, 0, -9.81};
             int solver_iterations = 10;
@@ -65,45 +62,31 @@ namespace termin
 
             void unregister_collider(size_t body_idx);
 
-            RigidBody& get_body(size_t idx)
-            {
+            RigidBody& get_body(size_t idx) {
                 return bodies_[idx];
             }
-            const RigidBody& get_body(size_t idx) const
-            {
+            const RigidBody& get_body(size_t idx) const {
                 return bodies_[idx];
             }
-            size_t body_count() const
-            {
+            size_t body_count() const {
                 return bodies_.size();
             }
 
             void clear();
 
-            size_t add_box(double sx,
-                           double sy,
-                           double sz,
-                           double mass,
-                           const Pose3& pose,
-                           bool is_static = false);
+            size_t add_box(double sx, double sy, double sz, double mass, const Pose3& pose, bool is_static = false);
 
-            size_t add_sphere(double radius,
-                              double mass,
-                              const Pose3& pose,
-                              bool is_static = false);
+            size_t add_sphere(double radius, double mass, const Pose3& pose, bool is_static = false);
 
             void step(double dt);
 
-            const std::vector<Contact>& contacts() const
-            {
+            const std::vector<Contact>& contacts() const {
                 return contacts_;
             }
-            std::vector<RigidBody>& bodies()
-            {
+            std::vector<RigidBody>& bodies() {
                 return bodies_;
             }
-            const std::vector<RigidBody>& bodies() const
-            {
+            const std::vector<RigidBody>& bodies() const {
                 return bodies_;
             }
 

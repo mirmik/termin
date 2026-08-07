@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 
-#include "termin/android/termin_android_api.h"
 #include "tc_input_event.h"
+#include "termin/android/termin_android_api.h"
 
 #ifdef __ANDROID__
 #include <android/native_window.h>
@@ -55,15 +55,10 @@ TERMIN_ANDROID_API void termin_android_on_surface_changed(int32_t width, int32_t
 TERMIN_ANDROID_API void termin_android_on_surface_destroyed(void);
 TERMIN_ANDROID_API void termin_android_on_pause(void);
 TERMIN_ANDROID_API void termin_android_on_resume(void);
-TERMIN_ANDROID_API void termin_android_on_presentation_metrics_changed(
-    const termin_android_presentation_metrics* metrics);
-TERMIN_ANDROID_API void termin_android_on_pointer(
-    uint64_t pointer_id,
-    int32_t device,
-    int32_t phase,
-    float x,
-    float y,
-    float pressure);
+TERMIN_ANDROID_API void
+termin_android_on_presentation_metrics_changed(const termin_android_presentation_metrics* metrics);
+TERMIN_ANDROID_API void
+termin_android_on_pointer(uint64_t pointer_id, int32_t device, int32_t phase, float x, float y, float pressure);
 TERMIN_ANDROID_API int termin_android_render_frame(int64_t frame_time_nanos);
 TERMIN_ANDROID_API int termin_android_smoke_render(int64_t frame_time_nanos);
 

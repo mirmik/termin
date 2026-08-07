@@ -3,43 +3,53 @@
 #include <cstdlib>
 #include <vector>
 
-#define CHECK(condition) do { if (!(condition)) std::abort(); } while (0)
+#define CHECK(condition)                                                                                               \
+    do {                                                                                                               \
+        if (!(condition))                                                                                              \
+            std::abort();                                                                                              \
+    } while (0)
 
 namespace {
 
-struct FixedSurface {
-    tc_render_surface surface{};
-    int width = 320;
-    int height = 200;
-};
+    struct FixedSurface {
+        tc_render_surface surface{};
+        int width = 320;
+        int height = 200;
+    };
 
-void get_size(tc_render_surface* surface, int* width, int* height) {
-    auto* fixed = static_cast<FixedSurface*>(surface->body);
-    if (width) *width = fixed->width;
-    if (height) *height = fixed->height;
-}
+    void get_size(tc_render_surface* surface, int* width, int* height) {
+        auto* fixed = static_cast<FixedSurface*>(surface->body);
+        if (width)
+            *width = fixed->width;
+        if (height)
+            *height = fixed->height;
+    }
 
-uint32_t get_texture(tc_render_surface*) { return 1u; }
-uintptr_t get_domain(tc_render_surface*) { return 1u; }
-void destroy_surface(tc_render_surface*) {}
-bool resize_surface(tc_render_surface* surface, int width, int height) {
-    auto* fixed = static_cast<FixedSurface*>(surface->body);
-    fixed->width = width;
-    fixed->height = height;
-    tc_render_surface_notify_resize(surface, width, height);
-    return true;
-}
-void delete_surface(tc_render_surface* surface) {
-    delete static_cast<FixedSurface*>(surface->body);
-}
+    uint32_t get_texture(tc_render_surface*) {
+        return 1u;
+    }
+    uintptr_t get_domain(tc_render_surface*) {
+        return 1u;
+    }
+    void destroy_surface(tc_render_surface*) {}
+    bool resize_surface(tc_render_surface* surface, int width, int height) {
+        auto* fixed = static_cast<FixedSurface*>(surface->body);
+        fixed->width = width;
+        fixed->height = height;
+        tc_render_surface_notify_resize(surface, width, height);
+        return true;
+    }
+    void delete_surface(tc_render_surface* surface) {
+        delete static_cast<FixedSurface*>(surface->body);
+    }
 
-const tc_render_surface_vtable surface_vtable = {
-    .get_size = get_size,
-    .resize = resize_surface,
-    .get_color_texture_id = get_texture,
-    .get_graphics_domain_key = get_domain,
-    .destroy = destroy_surface,
-};
+    const tc_render_surface_vtable surface_vtable = {
+        .get_size = get_size,
+        .resize = resize_surface,
+        .get_color_texture_id = get_texture,
+        .get_graphics_domain_key = get_domain,
+        .destroy = destroy_surface,
+    };
 
 } // namespace
 
@@ -93,12 +103,12 @@ int main() {
 
     CHECK(tc_display_free(resized));
     CHECK(!tc_viewport_alive(viewport));
-    tc_viewport_handle reused_viewport =
-        tc_viewport_new("reused-viewport", TC_SCENE_HANDLE_INVALID);
+    tc_viewport_handle reused_viewport = tc_viewport_new("reused-viewport", TC_SCENE_HANDLE_INVALID);
     CHECK(reused_viewport.index == viewport.index);
     CHECK(reused_viewport.generation != viewport.generation);
     tc_viewport_free(reused_viewport);
-    for (tc_display_handle handle : growth) CHECK(tc_display_free(handle));
+    for (tc_display_handle handle : growth)
+        CHECK(tc_display_free(handle));
     CHECK(tc_display_free(reused));
     CHECK(tc_display_pool_count() == 0u);
     tc_display_pool_shutdown();

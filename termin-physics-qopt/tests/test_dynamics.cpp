@@ -10,16 +10,13 @@
 
 using namespace termin::physics_qopt;
 
-namespace
-{
+namespace {
 
-    class AnchoredScalarContribution final : public DynamicsContribution
-    {
+    class AnchoredScalarContribution final : public DynamicsContribution {
     public:
         explicit AnchoredScalarContribution(std::string name)
-            : dof_name_(name + "_scalar"), constraint_name_(name + "_anchor")
-        {
-        }
+            : dof_name_(name + "_scalar"),
+              constraint_name_(name + "_anchor") {}
 
         double position = 1.0;
         double velocity = 0.0;
@@ -27,18 +24,13 @@ namespace
         double reaction = 0.0;
         bool topology_bound = false;
 
-        AssemblyDiagnostic
-        register_topology(DynamicsTopology& topology) noexcept override
-        {
+        AssemblyDiagnostic register_topology(DynamicsTopology& topology) noexcept override {
             const auto dofs = topology.register_dofs(1, dof_name_);
-            const auto constraint =
-                topology.register_constraint(1, constraint_name_);
-            if (!dofs.ok())
-            {
+            const auto constraint = topology.register_constraint(1, constraint_name_);
+            if (!dofs.ok()) {
                 return dofs.diagnostic;
             }
-            if (!constraint.ok())
-            {
+            if (!constraint.ok()) {
                 return constraint.diagnostic;
             }
             dofs_ = dofs.handle;
@@ -46,146 +38,103 @@ namespace
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic
-        bind_topology(const DynamicsTopology& topology) noexcept override
-        {
-            if (!topology.finalized() || !dofs_.valid() || !constraint_.valid())
-            {
+        AssemblyDiagnostic bind_topology(const DynamicsTopology& topology) noexcept override {
+            if (!topology.finalized() || !dofs_.valid() || !constraint_.valid()) {
                 return AssemblyDiagnostic::InvalidBlock;
             }
             topology_bound = true;
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic
-        assemble(DynamicsAssembly& assembly,
-                 DynamicsAssemblyPhase phase) noexcept override
-        {
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly, DynamicsAssemblyPhase phase) noexcept override {
             const std::array<double, 1> mass{2.0};
             const std::array<double, 1> jacobian{1.0};
             const std::array<double, 1> load{
-                phase == DynamicsAssemblyPhase::VelocityProjection
-                    ? 2.0 * velocity
-                    : 0.0,
+                phase == DynamicsAssemblyPhase::VelocityProjection ? 2.0 * velocity : 0.0,
             };
             const std::array<double, 1> rhs{
-                phase == DynamicsAssemblyPhase::PositionProjection ? -position
-                                                                   : 0.0,
+                phase == DynamicsAssemblyPhase::PositionProjection ? -position : 0.0,
             };
-            AssemblyDiagnostic diagnostic = assembly.add_mass(
-                dofs_,
-                dofs_,
-                ConstDenseMatrixView::row_major(mass.data(), 1, 1));
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+            AssemblyDiagnostic diagnostic =
+                assembly.add_mass(dofs_, dofs_, ConstDenseMatrixView::row_major(mass.data(), 1, 1));
+            if (diagnostic != AssemblyDiagnostic::None) {
                 return diagnostic;
             }
-            diagnostic =
-                assembly.add_load(dofs_, {load.data(), load.size(), 1});
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+            diagnostic = assembly.add_load(dofs_, {load.data(), load.size(), 1});
+            if (diagnostic != AssemblyDiagnostic::None) {
                 return diagnostic;
             }
             diagnostic = assembly.add_constraint_jacobian(
-                constraint_,
-                dofs_,
-                ConstDenseMatrixView::row_major(jacobian.data(), 1, 1));
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+                constraint_, dofs_, ConstDenseMatrixView::row_major(jacobian.data(), 1, 1));
+            if (diagnostic != AssemblyDiagnostic::None) {
                 return diagnostic;
             }
-            return assembly.add_constraint_rhs(constraint_,
-                                               {rhs.data(), rhs.size(), 1});
+            return assembly.add_constraint_rhs(constraint_, {rhs.data(), rhs.size(), 1});
         }
 
-        AssemblyDiagnostic begin_step() noexcept override
-        {
+        AssemblyDiagnostic begin_step() noexcept override {
             snapshot_ = {position, velocity, acceleration, reaction};
             return AssemblyDiagnostic::None;
         }
 
-        void rollback_step() noexcept override
-        {
+        void rollback_step() noexcept override {
             position = snapshot_[0];
             velocity = snapshot_[1];
             acceleration = snapshot_[2];
             reaction = snapshot_[3];
         }
 
-        void apply_solution(
-            DynamicsAssemblyPhase phase,
-            const DynamicsTopology& topology,
-            ConstDenseVectorView dof_values,
-            ConstDenseVectorView constraint_reactions) noexcept override
-        {
-            const DenseBlockInfo dof_info =
-                topology.dof_topology().block_info(dofs_.block);
-            const DenseBlockInfo constraint_info =
-                topology.constraint_topology().block_info(constraint_.block);
-            if (phase == DynamicsAssemblyPhase::Acceleration)
-            {
+        void apply_solution(DynamicsAssemblyPhase phase,
+                            const DynamicsTopology& topology,
+                            ConstDenseVectorView dof_values,
+                            ConstDenseVectorView constraint_reactions) noexcept override {
+            const DenseBlockInfo dof_info = topology.dof_topology().block_info(dofs_.block);
+            const DenseBlockInfo constraint_info = topology.constraint_topology().block_info(constraint_.block);
+            if (phase == DynamicsAssemblyPhase::Acceleration) {
                 acceleration = dof_values[dof_info.offset];
                 reaction = constraint_reactions[constraint_info.offset];
-            }
-            else if (phase == DynamicsAssemblyPhase::VelocityProjection)
-            {
+            } else if (phase == DynamicsAssemblyPhase::VelocityProjection) {
                 velocity = dof_values[dof_info.offset];
             }
         }
 
-        AssemblyDiagnostic
-        write_velocity(const DynamicsTopology& topology,
-                       DenseVectorView destination) const noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
+        AssemblyDiagnostic write_velocity(const DynamicsTopology& topology,
+                                          DenseVectorView destination) const noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
             destination[info.offset] = velocity;
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic
-        set_velocity(const DynamicsTopology& topology,
-                     ConstDenseVectorView source) noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
+        AssemblyDiagnostic set_velocity(const DynamicsTopology& topology,
+                                        ConstDenseVectorView source) noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
             velocity = source[info.offset];
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic
-        set_trial_configuration(const DynamicsTopology& topology,
-                                ConstDenseVectorView midpoint_velocity,
-                                double time_step) noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
-            position =
-                snapshot_[0] + midpoint_velocity[info.offset] * time_step;
+        AssemblyDiagnostic set_trial_configuration(const DynamicsTopology& topology,
+                                                   ConstDenseVectorView midpoint_velocity,
+                                                   double time_step) noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            position = snapshot_[0] + midpoint_velocity[info.offset] * time_step;
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic write_corrected_midpoint_velocity(
-            const DynamicsTopology& topology,
-            ConstDenseVectorView midpoint_velocity,
-            ConstDenseVectorView correction,
-            double time_step,
-            DenseVectorView destination) const noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
-            destination[info.offset] = midpoint_velocity[info.offset] +
-                                       correction[info.offset] / time_step;
+        AssemblyDiagnostic write_corrected_midpoint_velocity(const DynamicsTopology& topology,
+                                                             ConstDenseVectorView midpoint_velocity,
+                                                             ConstDenseVectorView correction,
+                                                             double time_step,
+                                                             DenseVectorView destination) const noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            destination[info.offset] = midpoint_velocity[info.offset] + correction[info.offset] / time_step;
             return AssemblyDiagnostic::None;
         }
 
-        double position_error_linf() const noexcept override
-        {
+        double position_error_linf() const noexcept override {
             return std::abs(position);
         }
 
-        double velocity_error_linf() const noexcept override
-        {
+        double velocity_error_linf() const noexcept override {
             return std::abs(velocity);
         }
 
@@ -197,8 +146,7 @@ namespace
         std::array<double, 4> snapshot_{};
     };
 
-    class TransientRowsContribution final : public DynamicsContribution
-    {
+    class TransientRowsContribution final : public DynamicsContribution {
     public:
         std::size_t requested_rows = 0;
         std::size_t registration_count = 0;
@@ -210,90 +158,64 @@ namespace
         std::array<double, 3> reactions{};
         std::array<double, 3> tight_mask{};
 
-        AssemblyDiagnostic
-        register_topology(DynamicsTopology& topology) noexcept override
-        {
+        AssemblyDiagnostic register_topology(DynamicsTopology& topology) noexcept override {
             const auto result = topology.register_dofs(1, "transient_owner");
-            if (result.ok())
-            {
+            if (result.ok()) {
                 dofs_ = result.handle;
             }
             return result.diagnostic;
         }
 
-        AssemblyDiagnostic
-        register_unilateral_constraints(DynamicsUnilateralTopology& topology,
-                                        double) noexcept override
-        {
+        AssemblyDiagnostic register_unilateral_constraints(DynamicsUnilateralTopology& topology,
+                                                           double) noexcept override {
             ++registration_count;
             unilateral_ = {};
-            if (requested_rows == 0)
-            {
+            if (requested_rows == 0) {
                 return AssemblyDiagnostic::None;
             }
-            const auto result = topology.register_constraint(
-                requested_rows, "transient_test_rows");
-            if (result.ok())
-            {
+            const auto result = topology.register_constraint(requested_rows, "transient_test_rows");
+            if (result.ok()) {
                 unilateral_ = result.handle;
             }
             return result.diagnostic;
         }
 
-        AssemblyDiagnostic
-        assemble(DynamicsAssembly& assembly,
-                 DynamicsAssemblyPhase phase) noexcept override
-        {
+        AssemblyDiagnostic assemble(DynamicsAssembly& assembly, DynamicsAssemblyPhase phase) noexcept override {
             const std::array<double, 1> mass{1.0};
             const std::array<double, 1> load{
-                phase == DynamicsAssemblyPhase::VelocityProjection ? velocity
-                                                                   : 0.0,
+                phase == DynamicsAssemblyPhase::VelocityProjection ? velocity : 0.0,
             };
-            AssemblyDiagnostic diagnostic = assembly.add_mass(
-                dofs_,
-                dofs_,
-                ConstDenseMatrixView::row_major(mass.data(), 1, 1));
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+            AssemblyDiagnostic diagnostic =
+                assembly.add_mass(dofs_, dofs_, ConstDenseMatrixView::row_major(mass.data(), 1, 1));
+            if (diagnostic != AssemblyDiagnostic::None) {
                 return diagnostic;
             }
-            diagnostic =
-                assembly.add_load(dofs_, {load.data(), load.size(), 1});
-            if (diagnostic != AssemblyDiagnostic::None || requested_rows == 0)
-            {
+            diagnostic = assembly.add_load(dofs_, {load.data(), load.size(), 1});
+            if (diagnostic != AssemblyDiagnostic::None || requested_rows == 0) {
                 return diagnostic;
             }
             const std::array<double, 3> jacobian{-1.0, 1.0, -3.0};
             const std::array<double, 3> regular_limit{0.0, 10.0, 2.0};
             const std::array<double, 3> infeasible_limit{-1.0, -1.0, 2.0};
-            const auto& limit =
-                make_infeasible ? infeasible_limit : regular_limit;
+            const auto& limit = make_infeasible ? infeasible_limit : regular_limit;
             diagnostic = assembly.add_unilateral_jacobian(
-                unilateral_,
-                dofs_,
-                ConstDenseMatrixView::row_major(
-                    jacobian.data(), requested_rows, 1));
-            if (diagnostic != AssemblyDiagnostic::None)
-            {
+                unilateral_, dofs_, ConstDenseMatrixView::row_major(jacobian.data(), requested_rows, 1));
+            if (diagnostic != AssemblyDiagnostic::None) {
                 return diagnostic;
             }
-            return assembly.add_unilateral_limit(
-                unilateral_, {limit.data(), requested_rows, 1});
+            return assembly.add_unilateral_limit(unilateral_, {limit.data(), requested_rows, 1});
         }
 
-        AssemblyDiagnostic begin_step() noexcept override
-        {
+        AssemblyDiagnostic begin_step() noexcept override {
             velocity_snapshot_ = velocity;
             return AssemblyDiagnostic::None;
         }
 
-        void commit_step() noexcept override
-        {
+        void commit_step() noexcept override {
             ++commit_count;
         }
 
-        void rollback_step() noexcept override
-        {
+        void rollback_step() noexcept override {
             velocity = velocity_snapshot_;
             ++rollback_count;
         }
@@ -301,66 +223,48 @@ namespace
         void apply_solution(DynamicsAssemblyPhase phase,
                             const DynamicsTopology& topology,
                             ConstDenseVectorView dof_values,
-                            ConstDenseVectorView) noexcept override
-        {
-            if (phase != DynamicsAssemblyPhase::VelocityProjection)
-            {
+                            ConstDenseVectorView) noexcept override {
+            if (phase != DynamicsAssemblyPhase::VelocityProjection) {
                 return;
             }
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
             velocity = dof_values[info.offset];
         }
 
-        void apply_unilateral_solution(
-            const DynamicsTopology&,
-            const DynamicsUnilateralTopology& unilateral_topology,
-            ConstDenseVectorView solution_reactions,
-            ConstDenseVectorView solution_tight_mask) noexcept override
-        {
+        void apply_unilateral_solution(const DynamicsTopology&,
+                                       const DynamicsUnilateralTopology& unilateral_topology,
+                                       ConstDenseVectorView solution_reactions,
+                                       ConstDenseVectorView solution_tight_mask) noexcept override {
             ++unilateral_solution_count;
-            const DenseBlockInfo info =
-                unilateral_topology.constraint_topology().block_info(
-                    unilateral_.block);
-            for (std::size_t index = 0; index < info.size; ++index)
-            {
+            const DenseBlockInfo info = unilateral_topology.constraint_topology().block_info(unilateral_.block);
+            for (std::size_t index = 0; index < info.size; ++index) {
                 reactions[index] = solution_reactions[info.offset + index];
                 tight_mask[index] = solution_tight_mask[info.offset + index];
             }
         }
 
-        AssemblyDiagnostic
-        write_velocity(const DynamicsTopology& topology,
-                       DenseVectorView destination) const noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
-            if (!info.ok())
-            {
+        AssemblyDiagnostic write_velocity(const DynamicsTopology& topology,
+                                          DenseVectorView destination) const noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            if (!info.ok()) {
                 return info.diagnostic;
             }
             destination[info.offset] = velocity;
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic
-        set_velocity(const DynamicsTopology& topology,
-                     ConstDenseVectorView source) noexcept override
-        {
-            const DenseBlockInfo info =
-                topology.dof_topology().block_info(dofs_.block);
-            if (!info.ok())
-            {
+        AssemblyDiagnostic set_velocity(const DynamicsTopology& topology,
+                                        ConstDenseVectorView source) noexcept override {
+            const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
+            if (!info.ok()) {
                 return info.diagnostic;
             }
             velocity = source[info.offset];
             return AssemblyDiagnostic::None;
         }
 
-        AssemblyDiagnostic set_trial_configuration(const DynamicsTopology&,
-                                                   ConstDenseVectorView,
-                                                   double) noexcept override
-        {
+        AssemblyDiagnostic
+        set_trial_configuration(const DynamicsTopology&, ConstDenseVectorView, double) noexcept override {
             return AssemblyDiagnostic::None;
         }
 
@@ -372,22 +276,15 @@ namespace
 
 } // namespace
 
-int main()
-{
+int main() {
     TERMIN_QOPT_CHECK(DynamicsSystemStepOptions{}.friction_cone_facets == 6);
     DynamicsSystem invalid_options_system;
-    TERMIN_QOPT_CHECK(invalid_options_system.finalize() ==
-                      DynamicsSystemDiagnostic::None);
-    for (const std::size_t invalid_facets : {3U, 5U})
-    {
+    TERMIN_QOPT_CHECK(invalid_options_system.finalize() == DynamicsSystemDiagnostic::None);
+    for (const std::size_t invalid_facets : {3U, 5U}) {
         const DynamicsSystemStepResult invalid_facets_result =
-            invalid_options_system.step({.friction_cone_facets =
-                                             invalid_facets});
-        TERMIN_QOPT_CHECK(invalid_facets_result.status ==
-                          QpStatus::InvalidInput);
-        TERMIN_QOPT_CHECK(
-            invalid_facets_result.diagnostic ==
-            DynamicsSystemDiagnostic::InvalidProjectionOptions);
+            invalid_options_system.step({.friction_cone_facets = invalid_facets});
+        TERMIN_QOPT_CHECK(invalid_facets_result.status == QpStatus::InvalidInput);
+        TERMIN_QOPT_CHECK(invalid_facets_result.diagnostic == DynamicsSystemDiagnostic::InvalidProjectionOptions);
     }
 
     DynamicsTopology topology;
@@ -402,18 +299,14 @@ int main()
     TERMIN_QOPT_CHECK(topology.constraint_count() == 1);
 
     DynamicsUnilateralTopology unilateral_topology;
-    const auto contact_rows =
-        unilateral_topology.register_constraint(2, "contact_rows");
+    const auto contact_rows = unilateral_topology.register_constraint(2, "contact_rows");
     TERMIN_QOPT_CHECK(contact_rows.ok());
-    TERMIN_QOPT_CHECK(
-        unilateral_topology.register_constraint(1, "contact_rows").diagnostic ==
-        AssemblyDiagnostic::DuplicateBlockName);
-    TERMIN_QOPT_CHECK(unilateral_topology.finalize() ==
-                      AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(unilateral_topology.register_constraint(1, "contact_rows").diagnostic ==
+                      AssemblyDiagnostic::DuplicateBlockName);
+    TERMIN_QOPT_CHECK(unilateral_topology.finalize() == AssemblyDiagnostic::None);
     TERMIN_QOPT_CHECK(unilateral_topology.constraint_count() == 2);
-    TERMIN_QOPT_CHECK(
-        unilateral_topology.register_constraint(1, "late").diagnostic ==
-        AssemblyDiagnostic::TopologyFinalized);
+    TERMIN_QOPT_CHECK(unilateral_topology.register_constraint(1, "late").diagnostic ==
+                      AssemblyDiagnostic::TopologyFinalized);
 
     std::array<double, 4> mass{};
     std::array<double, 2> load{};
@@ -421,21 +314,20 @@ int main()
     std::array<double, 1> rhs{};
     std::array<double, 4> unilateral_jacobian{};
     std::array<double, 2> unilateral_limit{};
-    DynamicsAssembly assembly(
-        topology,
-        unilateral_topology,
-        {
-            DenseMatrixView::row_major(mass.data(), 2, 2),
-            {load.data(), load.size(), 1},
-            DenseMatrixView::row_major(jacobian.data(), 1, 2),
-            {rhs.data(), rhs.size(), 1},
-            DenseMatrixView::row_major(unilateral_jacobian.data(), 2, 2),
-            {
-                unilateral_limit.data(),
-                unilateral_limit.size(),
-                1,
-            },
-        });
+    DynamicsAssembly assembly(topology,
+                              unilateral_topology,
+                              {
+                                  DenseMatrixView::row_major(mass.data(), 2, 2),
+                                  {load.data(), load.size(), 1},
+                                  DenseMatrixView::row_major(jacobian.data(), 1, 2),
+                                  {rhs.data(), rhs.size(), 1},
+                                  DenseMatrixView::row_major(unilateral_jacobian.data(), 2, 2),
+                                  {
+                                      unilateral_limit.data(),
+                                      unilateral_limit.size(),
+                                      1,
+                                  },
+                              });
     TERMIN_QOPT_CHECK(assembly.valid());
     TERMIN_QOPT_CHECK(assembly.clear() == AssemblyDiagnostic::None);
 
@@ -445,57 +337,39 @@ int main()
     const std::array<double, 1> zero{0.0};
     const std::array<double, 1> positive{1.0};
     const std::array<double, 1> negative{-1.0};
-    TERMIN_QOPT_CHECK(assembly.add_mass(first.handle,
-                                        first.handle,
-                                        ConstDenseMatrixView::row_major(
-                                            mass_first.data(), 1, 1)) ==
+    TERMIN_QOPT_CHECK(
+        assembly.add_mass(first.handle, first.handle, ConstDenseMatrixView::row_major(mass_first.data(), 1, 1)) ==
+        AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(
+        assembly.add_mass(second.handle, second.handle, ConstDenseMatrixView::row_major(mass_second.data(), 1, 1)) ==
+        AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_load(first.handle, {load_first.data(), load_first.size(), 1}) ==
                       AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(assembly.add_mass(second.handle,
-                                        second.handle,
-                                        ConstDenseMatrixView::row_major(
-                                            mass_second.data(), 1, 1)) ==
+    TERMIN_QOPT_CHECK(assembly.add_constraint_jacobian(
+                          coupling.handle, first.handle, ConstDenseMatrixView::row_major(positive.data(), 1, 1)) ==
                       AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(
-        assembly.add_load(first.handle,
-                          {load_first.data(), load_first.size(), 1}) ==
-        AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(
-        assembly.add_constraint_jacobian(
-            coupling.handle,
-            first.handle,
-            ConstDenseMatrixView::row_major(positive.data(), 1, 1)) ==
-        AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(
-        assembly.add_constraint_jacobian(
-            coupling.handle,
-            second.handle,
-            ConstDenseMatrixView::row_major(negative.data(), 1, 1)) ==
-        AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(assembly.add_constraint_rhs(
-                          coupling.handle, {zero.data(), zero.size(), 1}) ==
+    TERMIN_QOPT_CHECK(assembly.add_constraint_jacobian(
+                          coupling.handle, second.handle, ConstDenseMatrixView::row_major(negative.data(), 1, 1)) ==
+                      AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_constraint_rhs(coupling.handle, {zero.data(), zero.size(), 1}) ==
                       AssemblyDiagnostic::None);
     const std::array<double, 2> unilateral_first{1.0, 2.0};
     const std::array<double, 2> unilateral_second{-1.0, -2.0};
     const std::array<double, 2> unilateral_limits{3.0, 4.0};
-    TERMIN_QOPT_CHECK(
-        assembly.add_unilateral_jacobian(
-            contact_rows.handle,
-            first.handle,
-            ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) ==
-        AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(
-        assembly.add_unilateral_jacobian(
-            contact_rows.handle,
-            second.handle,
-            ConstDenseMatrixView::row_major(unilateral_second.data(), 2, 1)) ==
-        AssemblyDiagnostic::None);
-    TERMIN_QOPT_CHECK(
-        assembly.add_unilateral_limit(contact_rows.handle,
-                                      {
-                                          unilateral_limits.data(),
-                                          unilateral_limits.size(),
-                                          1,
-                                      }) == AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_unilateral_jacobian(
+                          contact_rows.handle,
+                          first.handle,
+                          ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) == AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_unilateral_jacobian(
+                          contact_rows.handle,
+                          second.handle,
+                          ConstDenseMatrixView::row_major(unilateral_second.data(), 2, 1)) == AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(assembly.add_unilateral_limit(contact_rows.handle,
+                                                    {
+                                                        unilateral_limits.data(),
+                                                        unilateral_limits.size(),
+                                                        1,
+                                                    }) == AssemblyDiagnostic::None);
     TERMIN_QOPT_CHECK(unilateral_jacobian[0] == 1.0);
     TERMIN_QOPT_CHECK(unilateral_jacobian[1] == -1.0);
     TERMIN_QOPT_CHECK(unilateral_jacobian[2] == 2.0);
@@ -503,51 +377,42 @@ int main()
     TERMIN_QOPT_CHECK(unilateral_limit == unilateral_limits);
 
     DynamicsUnilateralTopology next_unilateral_topology;
-    const auto next_contact =
-        next_unilateral_topology.register_constraint(1, "next_contact");
+    const auto next_contact = next_unilateral_topology.register_constraint(1, "next_contact");
     TERMIN_QOPT_CHECK(next_contact.ok());
-    TERMIN_QOPT_CHECK(next_unilateral_topology.finalize() ==
-                      AssemblyDiagnostic::None);
+    TERMIN_QOPT_CHECK(next_unilateral_topology.finalize() == AssemblyDiagnostic::None);
     std::array<double, 2> next_jacobian{};
     std::array<double, 1> next_limit{};
-    DynamicsAssembly next_assembly(
-        topology,
-        next_unilateral_topology,
-        {
-            DenseMatrixView::row_major(mass.data(), 2, 2),
-            {load.data(), load.size(), 1},
-            DenseMatrixView::row_major(jacobian.data(), 1, 2),
-            {rhs.data(), rhs.size(), 1},
-            DenseMatrixView::row_major(next_jacobian.data(), 1, 2),
-            {next_limit.data(), next_limit.size(), 1},
-        });
+    DynamicsAssembly next_assembly(topology,
+                                   next_unilateral_topology,
+                                   {
+                                       DenseMatrixView::row_major(mass.data(), 2, 2),
+                                       {load.data(), load.size(), 1},
+                                       DenseMatrixView::row_major(jacobian.data(), 1, 2),
+                                       {rhs.data(), rhs.size(), 1},
+                                       DenseMatrixView::row_major(next_jacobian.data(), 1, 2),
+                                       {next_limit.data(), next_limit.size(), 1},
+                                   });
     TERMIN_QOPT_CHECK(next_assembly.valid());
-    TERMIN_QOPT_CHECK(next_assembly.add_unilateral_limit(
-                          contact_rows.handle, {next_limit.data(), 1, 1}) ==
+    TERMIN_QOPT_CHECK(next_assembly.add_unilateral_limit(contact_rows.handle, {next_limit.data(), 1, 1}) ==
                       AssemblyDiagnostic::InvalidBlock);
     TERMIN_QOPT_CHECK(
         next_assembly.add_unilateral_jacobian(
-            next_contact.handle,
-            first.handle,
-            ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) ==
+            next_contact.handle, first.handle, ConstDenseMatrixView::row_major(unilateral_first.data(), 2, 1)) ==
         AssemblyDiagnostic::DimensionMismatch);
     const std::array<double, 1> non_finite_limit{
         std::numeric_limits<double>::quiet_NaN(),
     };
-    TERMIN_QOPT_CHECK(
-        next_assembly.add_unilateral_limit(
-            next_contact.handle,
-            {non_finite_limit.data(), non_finite_limit.size(), 1}) ==
-        AssemblyDiagnostic::NonFiniteContribution);
+    TERMIN_QOPT_CHECK(next_assembly.add_unilateral_limit(next_contact.handle,
+                                                         {non_finite_limit.data(), non_finite_limit.size(), 1}) ==
+                      AssemblyDiagnostic::NonFiniteContribution);
 
     std::array<double, 2> acceleration{-100.0, -100.0};
     std::array<double, 1> reaction{-100.0};
-    const QpSolveResult solved = solve_constrained_dynamics(
-        assembly.system(),
-        {
-            {acceleration.data(), acceleration.size(), 1},
-            {reaction.data(), reaction.size(), 1},
-        });
+    const QpSolveResult solved = solve_constrained_dynamics(assembly.system(),
+                                                            {
+                                                                {acceleration.data(), acceleration.size(), 1},
+                                                                {reaction.data(), reaction.size(), 1},
+                                                            });
     TERMIN_QOPT_CHECK(solved.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(acceleration[0] - 0.8) < 1e-10);
     TERMIN_QOPT_CHECK(std::abs(acceleration[1] - 0.8) < 1e-10);
@@ -572,45 +437,41 @@ int main()
         ConstDenseMatrixView::row_major(normal_row.data(), 1, 1),
         {normal_limit.data(), normal_limit.size(), 1},
     };
-    const QpSolveResult impact = solve_unilateral_velocity(
-        scalar_velocity_system,
-        scalar_unilateral,
-        {
-            {impact_velocity.data(), impact_velocity.size(), 1},
-            {},
-            {impact_reaction.data(), impact_reaction.size(), 1},
-            {impact_mask.data(), impact_mask.size(), 1},
-        });
+    const QpSolveResult impact = solve_unilateral_velocity(scalar_velocity_system,
+                                                           scalar_unilateral,
+                                                           {
+                                                               {impact_velocity.data(), impact_velocity.size(), 1},
+                                                               {},
+                                                               {impact_reaction.data(), impact_reaction.size(), 1},
+                                                               {impact_mask.data(), impact_mask.size(), 1},
+                                                           });
     TERMIN_QOPT_CHECK(impact.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(impact_velocity[0]) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(impact_reaction[0] - 6.0) < 1e-12);
     TERMIN_QOPT_CHECK(impact_reaction[0] >= 0.0);
     TERMIN_QOPT_CHECK(impact_mask[0] == 1.0);
     TERMIN_QOPT_CHECK(impact.complementarity_linf < 1e-12);
-    TERMIN_QOPT_CHECK(impact_mass[0] * impact_velocity[0] *
-                          impact_velocity[0] <=
-                      impact_mass[0] * 9.0);
+    TERMIN_QOPT_CHECK(impact_mass[0] * impact_velocity[0] * impact_velocity[0] <= impact_mass[0] * 9.0);
 
     // A feasible warm primal and the returned tight mask form a complete,
     // contact-agnostic warm start for the next solve.
     std::array<double, 1> warm_velocity{-200.0};
     std::array<double, 1> warm_reaction{-200.0};
     std::array<double, 1> warm_mask{-200.0};
-    const QpSolveResult warm_impact = solve_unilateral_velocity(
-        scalar_velocity_system,
-        scalar_unilateral,
-        {
-            {warm_velocity.data(), warm_velocity.size(), 1},
-            {},
-            {warm_reaction.data(), warm_reaction.size(), 1},
-            {warm_mask.data(), warm_mask.size(), 1},
-        },
-        {
-            {impact_velocity.data(), impact_velocity.size(), 1},
-            {impact_mask.data(), impact_mask.size(), 1},
-            {},
-            {},
-        });
+    const QpSolveResult warm_impact = solve_unilateral_velocity(scalar_velocity_system,
+                                                                scalar_unilateral,
+                                                                {
+                                                                    {warm_velocity.data(), warm_velocity.size(), 1},
+                                                                    {},
+                                                                    {warm_reaction.data(), warm_reaction.size(), 1},
+                                                                    {warm_mask.data(), warm_mask.size(), 1},
+                                                                },
+                                                                {
+                                                                    {impact_velocity.data(), impact_velocity.size(), 1},
+                                                                    {impact_mask.data(), impact_mask.size(), 1},
+                                                                    {},
+                                                                    {},
+                                                                });
     TERMIN_QOPT_CHECK(warm_impact.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(warm_velocity[0]) < 1e-12);
     TERMIN_QOPT_CHECK(warm_mask[0] == 1.0);
@@ -620,10 +481,7 @@ int main()
     const QpSolveResult resting =
         solve_unilateral_velocity(scalar_velocity_system,
                                   scalar_unilateral,
-                                  {{impact_velocity.data(), 1, 1},
-                                   {},
-                                   {impact_reaction.data(), 1, 1},
-                                   {}});
+                                  {{impact_velocity.data(), 1, 1}, {}, {impact_reaction.data(), 1, 1}, {}});
     TERMIN_QOPT_CHECK(resting.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(impact_velocity[0]) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(impact_reaction[0]) < 1e-12);
@@ -631,10 +489,7 @@ int main()
     const QpSolveResult separating =
         solve_unilateral_velocity(scalar_velocity_system,
                                   scalar_unilateral,
-                                  {{impact_velocity.data(), 1, 1},
-                                   {},
-                                   {impact_reaction.data(), 1, 1},
-                                   {}});
+                                  {{impact_velocity.data(), 1, 1}, {}, {impact_reaction.data(), 1, 1}, {}});
     TERMIN_QOPT_CHECK(separating.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(impact_velocity[0] - 3.0) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(impact_reaction[0]) < 1e-12);
@@ -667,8 +522,7 @@ int main()
             {},
         });
     TERMIN_QOPT_CHECK(coupled.status == QpStatus::Optimal);
-    TERMIN_QOPT_CHECK(std::abs(coupled_velocity[0] - coupled_velocity[1]) <
-                      1e-12);
+    TERMIN_QOPT_CHECK(std::abs(coupled_velocity[0] - coupled_velocity[1]) < 1e-12);
     TERMIN_QOPT_CHECK(coupled_velocity[0] >= -1e-12);
 
     // With no unilateral rows the generalized velocity solver preserves the
@@ -676,52 +530,47 @@ int main()
     rhs[0] = 0.0;
     std::array<double, 2> equality_only_velocity{-300.0, -300.0};
     std::array<double, 1> equality_only_reaction{-300.0};
-    const QpSolveResult equality_only = solve_unilateral_velocity(
-        assembly.system(),
-        {
-            ConstDenseMatrixView::row_major(nullptr, 0, 2),
-            {},
-        },
-        {
-            {
-                equality_only_velocity.data(),
-                equality_only_velocity.size(),
-                1,
-            },
-            {equality_only_reaction.data(), equality_only_reaction.size(), 1},
-            {},
-            {},
-        });
+    const QpSolveResult equality_only =
+        solve_unilateral_velocity(assembly.system(),
+                                  {
+                                      ConstDenseMatrixView::row_major(nullptr, 0, 2),
+                                      {},
+                                  },
+                                  {
+                                      {
+                                          equality_only_velocity.data(),
+                                          equality_only_velocity.size(),
+                                          1,
+                                      },
+                                      {equality_only_reaction.data(), equality_only_reaction.size(), 1},
+                                      {},
+                                      {},
+                                  });
     TERMIN_QOPT_CHECK(equality_only.status == QpStatus::Optimal);
-    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[0] - acceleration[0]) <
-                      1e-12);
-    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[1] - acceleration[1]) <
-                      1e-12);
-    TERMIN_QOPT_CHECK(std::abs(equality_only_reaction[0] - reaction[0]) <
-                      1e-12);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[0] - acceleration[0]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_velocity[1] - acceleration[1]) < 1e-12);
+    TERMIN_QOPT_CHECK(std::abs(equality_only_reaction[0] - reaction[0]) < 1e-12);
 
     // A shifted coupling remains a regular feasible affine constraint.
     const std::array<double, 1> inconsistent_rhs{1.0};
     rhs[0] = inconsistent_rhs[0];
     acceleration = {-7.0, -8.0};
     reaction = {-9.0};
-    const QpSolveResult shifted = solve_constrained_dynamics(
-        assembly.system(),
-        {
-            {acceleration.data(), acceleration.size(), 1},
-            {reaction.data(), reaction.size(), 1},
-        });
+    const QpSolveResult shifted = solve_constrained_dynamics(assembly.system(),
+                                                             {
+                                                                 {acceleration.data(), acceleration.size(), 1},
+                                                                 {reaction.data(), reaction.size(), 1},
+                                                             });
     TERMIN_QOPT_CHECK(shifted.status == QpStatus::Optimal);
-    TERMIN_QOPT_CHECK(std::abs(acceleration[0] - acceleration[1] - 1.0) <
-                      1e-10);
+    TERMIN_QOPT_CHECK(std::abs(acceleration[0] - acceleration[1] - 1.0) < 1e-10);
 
     std::array<double, 1> wrong_acceleration{-123.0};
-    const QpSolveResult invalid = solve_constrained_dynamics(
-        assembly.system(),
-        {
-            {wrong_acceleration.data(), wrong_acceleration.size(), 1},
-            {reaction.data(), reaction.size(), 1},
-        });
+    const QpSolveResult invalid =
+        solve_constrained_dynamics(assembly.system(),
+                                   {
+                                       {wrong_acceleration.data(), wrong_acceleration.size(), 1},
+                                       {reaction.data(), reaction.size(), 1},
+                                   });
     TERMIN_QOPT_CHECK(invalid.status == QpStatus::InvalidInput);
     TERMIN_QOPT_CHECK(wrong_acceleration[0] == -123.0);
 
@@ -733,12 +582,11 @@ int main()
     };
     acceleration = {-31.0, -32.0};
     reaction = {-33.0};
-    const QpSolveResult null_load = solve_constrained_dynamics(
-        null_load_system,
-        {
-            {acceleration.data(), acceleration.size(), 1},
-            {reaction.data(), reaction.size(), 1},
-        });
+    const QpSolveResult null_load = solve_constrained_dynamics(null_load_system,
+                                                               {
+                                                                   {acceleration.data(), acceleration.size(), 1},
+                                                                   {reaction.data(), reaction.size(), 1},
+                                                               });
     TERMIN_QOPT_CHECK(null_load.status == QpStatus::InvalidInput);
     TERMIN_QOPT_CHECK(null_load.diagnostic == QpDiagnostic::NullData);
     TERMIN_QOPT_CHECK(acceleration[0] == -31.0);
@@ -762,19 +610,16 @@ int main()
         {scalar_acceleration.data(), scalar_acceleration.size(), 1},
         {duplicate_reaction.data(), duplicate_reaction.size(), 1},
     };
-    const QpSolveResult redundant =
-        solve_constrained_dynamics(duplicate_system, duplicate_solution);
+    const QpSolveResult redundant = solve_constrained_dynamics(duplicate_system, duplicate_solution);
     TERMIN_QOPT_CHECK(redundant.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(redundant.constraint_rank == 1);
 
     duplicate_rhs[1] = 1.0;
     scalar_acceleration[0] = -21.0;
     duplicate_reaction = {-22.0, -23.0};
-    const QpSolveResult inconsistent =
-        solve_constrained_dynamics(duplicate_system, duplicate_solution);
+    const QpSolveResult inconsistent = solve_constrained_dynamics(duplicate_system, duplicate_solution);
     TERMIN_QOPT_CHECK(inconsistent.status == QpStatus::Infeasible);
-    TERMIN_QOPT_CHECK(inconsistent.diagnostic ==
-                      QpDiagnostic::InconsistentEqualities);
+    TERMIN_QOPT_CHECK(inconsistent.diagnostic == QpDiagnostic::InconsistentEqualities);
     TERMIN_QOPT_CHECK(scalar_acceleration[0] == -21.0);
     TERMIN_QOPT_CHECK(duplicate_reaction[0] == -22.0);
     TERMIN_QOPT_CHECK(duplicate_reaction[1] == -23.0);
@@ -785,10 +630,8 @@ int main()
     auto second_scalar = std::make_unique<AnchoredScalarContribution>("second");
     second_scalar->position = -2.0;
     AnchoredScalarContribution* second_scalar_state = second_scalar.get();
-    TERMIN_QOPT_CHECK(system.add_contribution(std::move(scalar)) ==
-                      DynamicsSystemDiagnostic::None);
-    TERMIN_QOPT_CHECK(system.add_contribution(std::move(second_scalar)) ==
-                      DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(system.add_contribution(std::move(scalar)) == DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(system.add_contribution(std::move(second_scalar)) == DynamicsSystemDiagnostic::None);
     TERMIN_QOPT_CHECK(system.contribution_count() == 2);
     TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
     TERMIN_QOPT_CHECK(scalar_state->topology_bound);
@@ -811,17 +654,14 @@ int main()
     DynamicsSystem transient_system;
     auto transient = std::make_unique<TransientRowsContribution>();
     TransientRowsContribution* transient_state = transient.get();
-    TERMIN_QOPT_CHECK(transient_system.add_contribution(std::move(transient)) ==
-                      DynamicsSystemDiagnostic::None);
-    TERMIN_QOPT_CHECK(transient_system.finalize() ==
-                      DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(transient_system.add_contribution(std::move(transient)) == DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(transient_system.finalize() == DynamicsSystemDiagnostic::None);
     transient_state->velocity = -3.0;
     transient_state->requested_rows = 2;
     const DynamicsSystemStepResult projected = transient_system.step();
     TERMIN_QOPT_CHECK(projected.ok());
     TERMIN_QOPT_CHECK(projected.unilateral_constraint_count == 2);
-    TERMIN_QOPT_CHECK(projected.velocity_projection.status ==
-                      QpStatus::Optimal);
+    TERMIN_QOPT_CHECK(projected.velocity_projection.status == QpStatus::Optimal);
     TERMIN_QOPT_CHECK(std::abs(transient_state->velocity) < 1e-12);
     TERMIN_QOPT_CHECK(std::abs(transient_state->reactions[0] - 3.0) < 1e-12);
     TERMIN_QOPT_CHECK(transient_state->reactions[1] >= 0.0);
@@ -834,11 +674,9 @@ int main()
     transient_state->make_infeasible = true;
     const DynamicsSystemStepResult failed_contact = transient_system.step();
     TERMIN_QOPT_CHECK(failed_contact.status == QpStatus::Infeasible);
-    TERMIN_QOPT_CHECK(failed_contact.diagnostic ==
-                      DynamicsSystemDiagnostic::VelocityProjectionFailure);
+    TERMIN_QOPT_CHECK(failed_contact.diagnostic == DynamicsSystemDiagnostic::VelocityProjectionFailure);
     TERMIN_QOPT_CHECK(failed_contact.unilateral_constraint_count == 2);
-    TERMIN_QOPT_CHECK(failed_contact.velocity_projection.status ==
-                      QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(failed_contact.velocity_projection.status == QpStatus::Infeasible);
     TERMIN_QOPT_CHECK(transient_state->velocity == 4.0);
     TERMIN_QOPT_CHECK(transient_state->rollback_count == 1);
     TERMIN_QOPT_CHECK(transient_state->commit_count == 1);

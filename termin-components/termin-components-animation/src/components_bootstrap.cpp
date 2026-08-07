@@ -4,8 +4,8 @@
 
 namespace termin::animation {
 
-void register_builtin_animation_component_types() {
-    AnimationPlayer::register_type();
-}
+    void register_builtin_animation_component_types() {
+        AnimationPlayer::register_type();
+    }
 
 } // namespace termin::animation

@@ -102,7 +102,7 @@ static void py_ext_ref_release(tc_component* c) {
 static const tc_component_ref_vtable g_py_ext_component_ref_vtable = {
     py_ext_ref_retain,
     py_ext_ref_release,
-    NULL,  // drop: Python GC owns the object
+    NULL, // drop: Python GC owns the object
 };
 
 // ============================================================================
@@ -139,7 +139,8 @@ void tc_component_set_python_callbacks(const tc_python_callbacks* callbacks) {
 
 tc_component* tc_component_new_python(void* py_self, const char* type_name) {
     tc_component* c = (tc_component*)calloc(1, sizeof(tc_component));
-    if (!c) return NULL;
+    if (!c)
+        return NULL;
 
     // Initialize with Python vtable
     tc_component_init(c, &g_python_vtable);

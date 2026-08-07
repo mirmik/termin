@@ -20,40 +20,31 @@ extern "C" {
 
 namespace {
 
-termin::TcMesh make_test_mesh()
-{
-    const float vertices[] = {
-        0.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f,
-    };
-    const uint32_t indices[] = {0, 1, 2};
-    tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv();
+    termin::TcMesh make_test_mesh() {
+        const float vertices[] = {
+            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+        };
+        const uint32_t indices[] = {0, 1, 2};
+        tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv();
 
-    termin::TcMeshCreateInfo create_info;
-    create_info.data = termin::TcMeshInterleavedDataView{
-        vertices,
-        3,
-        indices,
-        3,
-        &layout};
-    create_info.name = "foliage-render-item-test-mesh";
-    create_info.uuid_hint = "foliage-render-item-test-mesh";
-    return termin::TcMesh::from_interleaved(create_info);
-}
+        termin::TcMeshCreateInfo create_info;
+        create_info.data = termin::TcMeshInterleavedDataView{vertices, 3, indices, 3, &layout};
+        create_info.name = "foliage-render-item-test-mesh";
+        create_info.uuid_hint = "foliage-render-item-test-mesh";
+        return termin::TcMesh::from_interleaved(create_info);
+    }
 
 } // namespace
 
-TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned asset id")
-{
+TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned asset id") {
     tc_material_init();
     tc_mesh_init();
     termin::TcFoliageData::clear_registry_for_tests();
     termin::FoliageLayerComponent::register_type();
 
-    termin::TcFoliageData foliage = termin::TcFoliageData::declare(
-        "foliage-render-item-test-asset",
-        "foliage-render-item-test-asset");
+    termin::TcFoliageData foliage =
+        termin::TcFoliageData::declare("foliage-render-item-test-asset", "foliage-render-item-test-asset");
     REQUIRE(foliage.is_valid());
     REQUIRE(foliage.get() != nullptr);
     foliage.get()->loaded = true;
@@ -75,17 +66,12 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     termin::TcMesh mesh = make_test_mesh();
     REQUIRE(mesh.is_valid());
 
-    tc_material_handle material_handle = tc_material_create(
-        "foliage-render-item-test-material",
-        "foliage-render-item-test-material");
+    tc_material_handle material_handle =
+        tc_material_create("foliage-render-item-test-material", "foliage-render-item-test-material");
     REQUIRE(tc_material_is_valid(material_handle));
     tc_material* material = tc_material_get(material_handle);
     REQUIRE(material != nullptr);
-    tc_material_phase* phase = tc_material_add_phase(
-        material,
-        tc_shader_handle_invalid(),
-        "opaque",
-        3);
+    tc_material_phase* phase = tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 3);
     REQUIRE(phase != nullptr);
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("foliage-render-item-test-scene");
@@ -102,8 +88,7 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_NORMAL));
 
     termin::RenderItemEncoderCapabilities capabilities{};
-    REQUIRE(termin::get_render_item_encoder_capabilities(
-        TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, capabilities));
+    REQUIRE(termin::get_render_item_encoder_capabilities(TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, capabilities));
     CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_ID));
     CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_DEPTH));
     CHECK(tc_phase_mask_contains(capabilities.phase_mask, TC_PHASE_NORMAL));
@@ -113,10 +98,7 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     collect_context.debug_pass_name = "ColorPass";
 
     termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        layer->tc_component_ptr(),
-        collect_context,
-        collection));
+    REQUIRE(termin::collect_drawable_render_items(layer->tc_component_ptr(), collect_context, collection));
 
     REQUIRE(collection.items.size() == 1u);
     const tc_render_item& item = collection.items[0];
@@ -126,13 +108,9 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     CHECK(item.material_phase == phase);
     CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
     CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
-    CHECK(tc_mesh_handle_eq(
-        item.payload.foliage_batch.prototype_mesh_handle,
-        mesh.handle));
+    CHECK(tc_mesh_handle_eq(item.payload.foliage_batch.prototype_mesh_handle, mesh.handle));
     REQUIRE(item.payload.foliage_batch.foliage_uuid != nullptr);
-    CHECK(std::strcmp(
-        item.payload.foliage_batch.foliage_uuid,
-        "foliage-render-item-test-asset") == 0);
+    CHECK(std::strcmp(item.payload.foliage_batch.foliage_uuid, "foliage-render-item-test-asset") == 0);
 
     for (size_t i = 0; i < 64; ++i) {
         REQUIRE(!tc_mesh_handle_is_invalid(tc_mesh_create(nullptr)));
@@ -140,17 +118,14 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     REQUIRE(tc_mesh_get(item.payload.foliage_batch.prototype_mesh_handle) != nullptr);
 
     termin::MaterialPipelinePassContract shader_contract{};
-    shader_contract.foliage_vertex_transform =
-        termin::material_pipeline_make_foliage_vertex_transform_provider(
-            "foliage_handle_relocation_test",
-            termin::MeshVertexTransformProfile::Position);
+    shader_contract.foliage_vertex_transform = termin::material_pipeline_make_foliage_vertex_transform_provider(
+        "foliage_handle_relocation_test", termin::MeshVertexTransformProfile::Position);
     shader_contract.foliage_vertex_transform->vertex_inputs.mesh_attributes.push_back(
         {"relocation_probe", termin::MaterialPipelineValueType::Float});
     termin::RenderItemTaskPlanningContract planning_contract{};
     planning_contract.phase = TC_PHASE_OPAQUE;
     planning_contract.provided_input_mask =
-        termin::render_item_task_input_bit(
-            termin::RenderItemTaskInput::DrawContext);
+        termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext);
     planning_contract.shader_contract = &shader_contract;
     planning_contract.debug_pass_name = "FoliageHandleRelocationPass";
 
@@ -161,17 +136,13 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     termin::RenderTaskList relocated_tasks;
     const termin::RenderItemTaskPlanningResult relocated_result =
         termin::plan_render_item_task(planning_request, relocated_tasks);
-    CHECK(relocated_result.rejection ==
-          termin::RenderItemTaskRejection::ShaderPlanningRejected);
+    CHECK(relocated_result.rejection == termin::RenderItemTaskRejection::ShaderPlanningRejected);
     REQUIRE(relocated_result.detail != nullptr);
-    CHECK(std::strcmp(
-        relocated_result.detail,
-        "prototype mesh does not satisfy the foliage vertex input ABI") == 0);
+    CHECK(std::strcmp(relocated_result.detail, "prototype mesh does not satisfy the foliage vertex input ABI") == 0);
     CHECK(relocated_tasks.empty());
 
     tc_render_item stale_item = item;
-    const tc_mesh_handle stale_handle = tc_mesh_create(
-        "foliage-render-item-stale-handle-test");
+    const tc_mesh_handle stale_handle = tc_mesh_create("foliage-render-item-stale-handle-test");
     REQUIRE(!tc_mesh_handle_is_invalid(stale_handle));
     stale_item.payload.foliage_batch.prototype_mesh_handle = stale_handle;
     REQUIRE(tc_mesh_destroy(stale_handle));
@@ -180,12 +151,9 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     termin::RenderTaskList stale_tasks;
     const termin::RenderItemTaskPlanningResult stale_result =
         termin::plan_render_item_task(planning_request, stale_tasks);
-    CHECK(stale_result.rejection ==
-          termin::RenderItemTaskRejection::ShaderPlanningRejected);
+    CHECK(stale_result.rejection == termin::RenderItemTaskRejection::ShaderPlanningRejected);
     REQUIRE(stale_result.detail != nullptr);
-    CHECK(std::strcmp(
-        stale_result.detail,
-        "foliage prototype mesh handle is stale or invalid") == 0);
+    CHECK(std::strcmp(stale_result.detail, "foliage prototype mesh handle is stale or invalid") == 0);
     CHECK(stale_tasks.empty());
 
     tc_render_item_collect_context id_context{};
@@ -193,19 +161,15 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     id_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
     id_context.debug_pass_name = "IdPass";
     termin::RenderItemCollection id_collection;
-    REQUIRE(termin::collect_drawable_render_items(
-        layer->tc_component_ptr(), id_context, id_collection));
+    REQUIRE(termin::collect_drawable_render_items(layer->tc_component_ptr(), id_context, id_collection));
     REQUIRE(id_collection.items.size() == 1u);
     CHECK(id_collection.items[0].material_phase == nullptr);
-    CHECK((id_collection.items[0].flags &
-           TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+    CHECK((id_collection.items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
 
     const char* collected_uuid = item.payload.foliage_batch.foliage_uuid;
     layer->foliage_uuid = "changed";
     REQUIRE(item.payload.foliage_batch.foliage_uuid == collected_uuid);
-    CHECK(std::strcmp(
-        item.payload.foliage_batch.foliage_uuid,
-        "foliage-render-item-test-asset") == 0);
+    CHECK(std::strcmp(item.payload.foliage_batch.foliage_uuid, "foliage-render-item-test-asset") == 0);
 
     termin::TcFoliageData::clear_registry_for_tests();
     tc_mesh_shutdown();

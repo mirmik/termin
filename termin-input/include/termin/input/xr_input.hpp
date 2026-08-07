@@ -10,62 +10,62 @@
 
 namespace termin::xr {
 
-enum class XrHand {
-    Left,
-    Right,
-};
+    enum class XrHand {
+        Left,
+        Right,
+    };
 
-struct XrAxis2State {
-    Vec2 value{0.0, 0.0};
-    bool active = false;
-    bool changed_since_last_sync = false;
-};
+    struct XrAxis2State {
+        Vec2 value{0.0, 0.0};
+        bool active = false;
+        bool changed_since_last_sync = false;
+    };
 
-struct XrScalarState {
-    double value = 0.0;
-    bool active = false;
-    bool changed_since_last_sync = false;
+    struct XrScalarState {
+        double value = 0.0;
+        bool active = false;
+        bool changed_since_last_sync = false;
 
-    bool pressed(double threshold = 0.55) const {
-        return active && value >= threshold;
-    }
-};
+        bool pressed(double threshold = 0.55) const {
+            return active && value >= threshold;
+        }
+    };
 
-struct XrPoseState {
-    Pose3 pose{};
-    bool active = false;
-};
+    struct XrPoseState {
+        Pose3 pose{};
+        bool active = false;
+    };
 
-struct XrHandInputState {
-    XrAxis2State thumbstick;
-    XrScalarState select;
-    XrPoseState aim_pose;
-    XrPoseState grip_pose;
-};
+    struct XrHandInputState {
+        XrAxis2State thumbstick;
+        XrScalarState select;
+        XrPoseState aim_pose;
+        XrPoseState grip_pose;
+    };
 
-struct TERMIN_INPUT_API XrRigInputState {
-    std::string id = "xr";
-    uint64_t frame_index = 0;
-    XrHandInputState left;
-    XrHandInputState right;
-    XrPoseState head_pose;
-    Vec3 head_forward_in_origin{0.0, 1.0, 0.0};
-    Vec3 head_right_in_origin{1.0, 0.0, 0.0};
-    bool head_axes_active = false;
+    struct TERMIN_INPUT_API XrRigInputState {
+        std::string id = "xr";
+        uint64_t frame_index = 0;
+        XrHandInputState left;
+        XrHandInputState right;
+        XrPoseState head_pose;
+        Vec3 head_forward_in_origin{0.0, 1.0, 0.0};
+        Vec3 head_right_in_origin{1.0, 0.0, 0.0};
+        bool head_axes_active = false;
 
-    const XrHandInputState& hand(XrHand hand) const;
-    XrHandInputState& hand(XrHand hand);
-};
+        const XrHandInputState& hand(XrHand hand) const;
+        XrHandInputState& hand(XrHand hand);
+    };
 
-class TERMIN_INPUT_API XrInput {
-public:
-    static void register_state(const std::string& id, XrRigInputState* state);
-    static void unregister_state(const std::string& id);
-    static XrRigInputState* get_state(const std::string& id);
-    static XrRigInputState* current();
-};
+    class TERMIN_INPUT_API XrInput {
+    public:
+        static void register_state(const std::string& id, XrRigInputState* state);
+        static void unregister_state(const std::string& id);
+        static XrRigInputState* get_state(const std::string& id);
+        static XrRigInputState* current();
+    };
 
-TERMIN_INPUT_API const char* xr_hand_to_string(XrHand hand);
-TERMIN_INPUT_API XrHand xr_hand_from_string(const std::string& value);
+    TERMIN_INPUT_API const char* xr_hand_to_string(XrHand hand);
+    TERMIN_INPUT_API XrHand xr_hand_from_string(const std::string& value);
 
 } // namespace termin::xr

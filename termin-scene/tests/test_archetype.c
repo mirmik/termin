@@ -1,17 +1,17 @@
 // test_archetype.c - Tests for SoA archetype storage
+#include "core/tc_archetype.h"
+#include "core/tc_entity_pool.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "core/tc_archetype.h"
-#include "core/tc_entity_pool.h"
 
-#define TEST_ASSERT(cond, msg) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL: %s (line %d)\n", msg, __LINE__); \
-            return 1; \
-        } \
-    } while(0)
+#define TEST_ASSERT(cond, msg)                                                                                         \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            printf("FAIL: %s (line %d)\n", msg, __LINE__);                                                             \
+            return 1;                                                                                                  \
+        }                                                                                                              \
+    } while (0)
 
 // ============================================================================
 // Test data types
@@ -81,16 +81,20 @@ static int test_type_registry(void) {
     tc_soa_type_registry reg;
     memset(&reg, 0, sizeof(reg));
 
-    tc_soa_type_id vel_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-    });
+    tc_soa_type_id vel_id = tc_soa_register_type(&reg,
+                                                 &(tc_soa_type_desc){
+                                                     .name = "Velocity",
+                                                     .element_size = sizeof(Velocity),
+                                                 });
     TEST_ASSERT(vel_id == 0, "first type gets id 0");
     TEST_ASSERT(reg.count == 1, "count is 1");
 
-    tc_soa_type_id hp_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init,
-    });
+    tc_soa_type_id hp_id = tc_soa_register_type(&reg,
+                                                &(tc_soa_type_desc){
+                                                    .name = "Health",
+                                                    .element_size = sizeof(Health),
+                                                    .init = health_init,
+                                                });
     TEST_ASSERT(hp_id == 1, "second type gets id 1");
 
     const tc_soa_type_desc* desc = tc_soa_get_type(&reg, vel_id);
@@ -105,9 +109,11 @@ static int test_type_registry(void) {
     TEST_ASSERT(tc_soa_get_type(&reg, 99) == NULL, "invalid id returns NULL");
 
     // Zero-size rejected
-    tc_soa_type_id bad = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Bad", .element_size = 0,
-    });
+    tc_soa_type_id bad = tc_soa_register_type(&reg,
+                                              &(tc_soa_type_desc){
+                                                  .name = "Bad",
+                                                  .element_size = 0,
+                                              });
     TEST_ASSERT(bad == TC_SOA_TYPE_INVALID, "zero-size rejected");
 
     // Free names
@@ -130,16 +136,21 @@ static int test_archetype_basic(void) {
     tc_soa_type_registry reg;
     memset(&reg, 0, sizeof(reg));
 
-    tc_soa_type_id vel_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-        .destroy = velocity_destroy,
-    });
-    tc_soa_type_id hp_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init, .destroy = health_destroy,
-    });
+    tc_soa_type_id vel_id = tc_soa_register_type(&reg,
+                                                 &(tc_soa_type_desc){
+                                                     .name = "Velocity",
+                                                     .element_size = sizeof(Velocity),
+                                                     .destroy = velocity_destroy,
+                                                 });
+    tc_soa_type_id hp_id = tc_soa_register_type(&reg,
+                                                &(tc_soa_type_desc){
+                                                    .name = "Health",
+                                                    .element_size = sizeof(Health),
+                                                    .init = health_init,
+                                                    .destroy = health_destroy,
+                                                });
 
-    tc_soa_type_id types[] = { vel_id, hp_id };
+    tc_soa_type_id types[] = {vel_id, hp_id};
     uint64_t mask = (1ULL << vel_id) | (1ULL << hp_id);
     tc_archetype* arch = tc_archetype_create(mask, types, 2, &reg);
     TEST_ASSERT(arch != NULL, "archetype created");
@@ -216,14 +227,19 @@ static int test_pool_soa_basic(void) {
     tc_entity_pool* pool = tc_entity_pool_create(16);
     TEST_ASSERT(pool != NULL, "pool created");
 
-    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-        .destroy = velocity_destroy,
-    });
-    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init, .destroy = health_destroy,
-    });
+    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Velocity",
+                                                                 .element_size = sizeof(Velocity),
+                                                                 .destroy = velocity_destroy,
+                                                             });
+    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "Health",
+                                                                .element_size = sizeof(Health),
+                                                                .init = health_init,
+                                                                .destroy = health_destroy,
+                                                            });
     TEST_ASSERT(vel_id == 0, "vel_id is 0");
     TEST_ASSERT(hp_id == 1, "hp_id is 1");
 
@@ -263,8 +279,7 @@ static int test_pool_soa_basic(void) {
 
     // Duplicate add is no-op
     tc_entity_pool_add_soa(pool, e, vel_id);
-    TEST_ASSERT(tc_entity_pool_soa_mask(pool, e) == ((1ULL << vel_id) | (1ULL << hp_id)),
-                "duplicate add is no-op");
+    TEST_ASSERT(tc_entity_pool_soa_mask(pool, e) == ((1ULL << vel_id) | (1ULL << hp_id)), "duplicate add is no-op");
 
     tc_entity_pool_destroy(pool);
 
@@ -283,14 +298,19 @@ static int test_pool_soa_multiple_entities(void) {
 
     tc_entity_pool* pool = tc_entity_pool_create(16);
 
-    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-        .destroy = velocity_destroy,
-    });
-    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init, .destroy = health_destroy,
-    });
+    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Velocity",
+                                                                 .element_size = sizeof(Velocity),
+                                                                 .destroy = velocity_destroy,
+                                                             });
+    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "Health",
+                                                                .element_size = sizeof(Health),
+                                                                .init = health_init,
+                                                                .destroy = health_destroy,
+                                                            });
 
     // Create 5 entities all with [Velocity, Health]
     tc_entity_id entities[5];
@@ -324,7 +344,8 @@ static int test_pool_soa_multiple_entities(void) {
 
     // Others should still be accessible with correct data
     for (int i = 0; i < 5; i++) {
-        if (i == 2) continue;
+        if (i == 2)
+            continue;
         TEST_ASSERT(tc_entity_pool_alive(pool, entities[i]), "entity alive");
         Velocity* v = (Velocity*)tc_entity_pool_get_soa(pool, entities[i], vel_id);
         TEST_ASSERT(v != NULL, "velocity after delete");
@@ -348,14 +369,19 @@ static int test_pool_soa_remove(void) {
 
     tc_entity_pool* pool = tc_entity_pool_create(16);
 
-    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-        .destroy = velocity_destroy,
-    });
-    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init, .destroy = health_destroy,
-    });
+    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Velocity",
+                                                                 .element_size = sizeof(Velocity),
+                                                                 .destroy = velocity_destroy,
+                                                             });
+    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "Health",
+                                                                .element_size = sizeof(Health),
+                                                                .init = health_init,
+                                                                .destroy = health_destroy,
+                                                            });
 
     tc_entity_id e = tc_entity_pool_alloc(pool, "test");
     tc_entity_pool_add_soa(pool, e, vel_id);
@@ -400,16 +426,22 @@ static int test_query(void) {
 
     tc_entity_pool* pool = tc_entity_pool_create(32);
 
-    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-    });
-    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init,
-    });
-    tc_soa_type_id ai_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "AI", .element_size = sizeof(AIState),
-    });
+    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Velocity",
+                                                                 .element_size = sizeof(Velocity),
+                                                             });
+    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "Health",
+                                                                .element_size = sizeof(Health),
+                                                                .init = health_init,
+                                                            });
+    tc_soa_type_id ai_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "AI",
+                                                                .element_size = sizeof(AIState),
+                                                            });
 
     // Create entities with different component sets:
     // Group A: [Velocity, Health] — 3 entities
@@ -488,21 +520,27 @@ static int test_query_api(void) {
     tc_soa_type_registry reg;
     memset(&reg, 0, sizeof(reg));
 
-    tc_soa_type_id vel_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-    });
-    tc_soa_type_id hp_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .init = health_init,
-    });
-    tc_soa_type_id ai_id = tc_soa_register_type(&reg, &(tc_soa_type_desc){
-        .name = "AI", .element_size = sizeof(AIState),
-    });
+    tc_soa_type_id vel_id = tc_soa_register_type(&reg,
+                                                 &(tc_soa_type_desc){
+                                                     .name = "Velocity",
+                                                     .element_size = sizeof(Velocity),
+                                                 });
+    tc_soa_type_id hp_id = tc_soa_register_type(&reg,
+                                                &(tc_soa_type_desc){
+                                                    .name = "Health",
+                                                    .element_size = sizeof(Health),
+                                                    .init = health_init,
+                                                });
+    tc_soa_type_id ai_id = tc_soa_register_type(&reg,
+                                                &(tc_soa_type_desc){
+                                                    .name = "AI",
+                                                    .element_size = sizeof(AIState),
+                                                });
 
     // Create 3 archetypes
-    tc_soa_type_id types_vh[] = { vel_id, hp_id };
-    tc_soa_type_id types_vha[] = { vel_id, hp_id, ai_id };
-    tc_soa_type_id types_h[] = { hp_id };
+    tc_soa_type_id types_vh[] = {vel_id, hp_id};
+    tc_soa_type_id types_vha[] = {vel_id, hp_id, ai_id};
+    tc_soa_type_id types_h[] = {hp_id};
 
     uint64_t mask_vh = (1ULL << vel_id) | (1ULL << hp_id);
     uint64_t mask_vha = mask_vh | (1ULL << ai_id);
@@ -531,10 +569,10 @@ static int test_query_api(void) {
     Velocity* v_vha = (Velocity*)tc_archetype_get_array(arch_vha, vel_id);
     v_vha[0].linear.x = 3.0f;
 
-    tc_archetype* all_archetypes[] = { arch_vh, arch_vha, arch_h };
+    tc_archetype* all_archetypes[] = {arch_vh, arch_vha, arch_h};
 
     // Query: entities with Velocity (should match arch_vh and arch_vha)
-    tc_soa_type_id req_vel[] = { vel_id };
+    tc_soa_type_id req_vel[] = {vel_id};
     tc_soa_query q = tc_soa_query_init(all_archetypes, 3, req_vel, 1, NULL, 0);
 
     void* data_ptrs[3];
@@ -556,7 +594,7 @@ static int test_query_api(void) {
     TEST_ASSERT(total_x == 6.0f, "velocity sum is 6.0");
 
     // Query: entities with Health (should match all 3 archetypes)
-    tc_soa_type_id req_hp[] = { hp_id };
+    tc_soa_type_id req_hp[] = {hp_id};
     q = tc_soa_query_init(all_archetypes, 3, req_hp, 1, NULL, 0);
     total_entities = 0;
 
@@ -566,7 +604,7 @@ static int test_query_api(void) {
     TEST_ASSERT(total_entities == 5, "query found 5 entities with health");
 
     // Query: entities with Velocity + AI (should match only arch_vha)
-    tc_soa_type_id req_vel_ai[] = { vel_id, ai_id };
+    tc_soa_type_id req_vel_ai[] = {vel_id, ai_id};
     q = tc_soa_query_init(all_archetypes, 3, req_vel_ai, 2, NULL, 0);
     total_entities = 0;
 
@@ -576,7 +614,7 @@ static int test_query_api(void) {
     TEST_ASSERT(total_entities == 1, "query found 1 entity with vel+ai");
 
     // Query with exclusion: Health but NOT Velocity
-    tc_soa_type_id excl_vel[] = { vel_id };
+    tc_soa_type_id excl_vel[] = {vel_id};
     q = tc_soa_query_init(all_archetypes, 3, req_hp, 1, excl_vel, 1);
     total_entities = 0;
 
@@ -608,14 +646,18 @@ static int test_destroy_tracking(void) {
 
     tc_entity_pool* pool = tc_entity_pool_create(16);
 
-    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Velocity", .element_size = sizeof(Velocity),
-        .destroy = velocity_destroy,
-    });
-    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Health", .element_size = sizeof(Health),
-        .destroy = health_destroy,
-    });
+    tc_soa_type_id vel_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Velocity",
+                                                                 .element_size = sizeof(Velocity),
+                                                                 .destroy = velocity_destroy,
+                                                             });
+    tc_soa_type_id hp_id = tc_entity_pool_register_soa_type(pool,
+                                                            &(tc_soa_type_desc){
+                                                                .name = "Health",
+                                                                .element_size = sizeof(Health),
+                                                                .destroy = health_destroy,
+                                                            });
 
     // Create 3 entities with [vel, hp]
     tc_entity_id entities[3];
@@ -653,18 +695,26 @@ static int test_heavy_migration(void) {
     tc_entity_pool* pool = tc_entity_pool_create(16);
 
     tc_soa_type_id types[4];
-    types[0] = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "A", .element_size = sizeof(float),
-    });
-    types[1] = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "B", .element_size = sizeof(float),
-    });
-    types[2] = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "C", .element_size = sizeof(float),
-    });
-    types[3] = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "D", .element_size = sizeof(float),
-    });
+    types[0] = tc_entity_pool_register_soa_type(pool,
+                                                &(tc_soa_type_desc){
+                                                    .name = "A",
+                                                    .element_size = sizeof(float),
+                                                });
+    types[1] = tc_entity_pool_register_soa_type(pool,
+                                                &(tc_soa_type_desc){
+                                                    .name = "B",
+                                                    .element_size = sizeof(float),
+                                                });
+    types[2] = tc_entity_pool_register_soa_type(pool,
+                                                &(tc_soa_type_desc){
+                                                    .name = "C",
+                                                    .element_size = sizeof(float),
+                                                });
+    types[3] = tc_entity_pool_register_soa_type(pool,
+                                                &(tc_soa_type_desc){
+                                                    .name = "D",
+                                                    .element_size = sizeof(float),
+                                                });
 
     tc_entity_id e = tc_entity_pool_alloc(pool, "migrator");
 
@@ -719,9 +769,11 @@ static int test_swap_remove_correctness(void) {
 
     tc_entity_pool* pool = tc_entity_pool_create(32);
 
-    tc_soa_type_id val_id = tc_entity_pool_register_soa_type(pool, &(tc_soa_type_desc){
-        .name = "Value", .element_size = sizeof(float),
-    });
+    tc_soa_type_id val_id = tc_entity_pool_register_soa_type(pool,
+                                                             &(tc_soa_type_desc){
+                                                                 .name = "Value",
+                                                                 .element_size = sizeof(float),
+                                                             });
 
     // Create 10 entities, all with same archetype
     tc_entity_id entities[10];

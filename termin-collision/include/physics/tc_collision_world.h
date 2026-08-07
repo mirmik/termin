@@ -3,9 +3,9 @@
 #ifndef TC_COLLISION_WORLD_H
 #define TC_COLLISION_WORLD_H
 
-#include "tc_types.h"
-#include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
+#include "core/tc_scene_pool.h"
+#include "tc_types.h"
 #include "termin_collision/termin_collision.h"
 
 #ifdef __cplusplus
@@ -21,10 +21,8 @@ typedef void (*tc_collision_world_free_fn)(tc_collision_world* cw);
 
 // Register collision world allocator/deallocator functions
 // Called by termin_collision during initialization.
-TERMIN_COLLISION_API void tc_collision_world_set_allocator(
-    tc_collision_world_alloc_fn alloc_fn,
-    tc_collision_world_free_fn free_fn
-);
+TERMIN_COLLISION_API void tc_collision_world_set_allocator(tc_collision_world_alloc_fn alloc_fn,
+                                                           tc_collision_world_free_fn free_fn);
 
 // Internal functions used by tc_scene.c (use registered allocators)
 TERMIN_COLLISION_API tc_collision_world* tc_collision_world_new(void);

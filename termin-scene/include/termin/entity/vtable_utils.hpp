@@ -4,76 +4,76 @@
 
 namespace termin {
 
-// Utility for detecting virtual method overrides via vtable inspection.
+    // Utility for detecting virtual method overrides via vtable inspection.
 
-// Helper class that can instantiate CxxComponent (protected constructor).
-class ENTITY_API ComponentVTableProbe : public CxxComponent {
-public:
-    ComponentVTableProbe()
-        : CxxComponent("ComponentVTableProbe") {}
-};
+    // Helper class that can instantiate CxxComponent (protected constructor).
+    class ENTITY_API ComponentVTableProbe : public CxxComponent {
+    public:
+        ComponentVTableProbe()
+            : CxxComponent("ComponentVTableProbe") {}
+    };
 
-// Probe class that overrides ONLY update() - used to find its vtable slot.
-class ENTITY_API UpdateProbe : public CxxComponent {
-private:
-    volatile float _probe_marker = 0;
+    // Probe class that overrides ONLY update() - used to find its vtable slot.
+    class ENTITY_API UpdateProbe : public CxxComponent {
+    private:
+        volatile float _probe_marker = 0;
 
-public:
-    UpdateProbe()
-        : CxxComponent("UpdateProbe") {}
-    void update(float dt) override;
-};
+    public:
+        UpdateProbe()
+            : CxxComponent("UpdateProbe") {}
+        void update(float dt) override;
+    };
 
-// Probe class that overrides ONLY fixed_update() - used to find its vtable slot.
-class ENTITY_API FixedUpdateProbe : public CxxComponent {
-private:
-    volatile float _probe_marker = 0;
+    // Probe class that overrides ONLY fixed_update() - used to find its vtable slot.
+    class ENTITY_API FixedUpdateProbe : public CxxComponent {
+    private:
+        volatile float _probe_marker = 0;
 
-public:
-    FixedUpdateProbe()
-        : CxxComponent("FixedUpdateProbe") {}
-    void fixed_update(float dt) override;
-};
+    public:
+        FixedUpdateProbe()
+            : CxxComponent("FixedUpdateProbe") {}
+        void fixed_update(float dt) override;
+    };
 
-// Cached vtable slot indices, computed once at startup.
-struct ENTITY_API VTableSlots {
-    int update_slot = -1;
-    int fixed_update_slot = -1;
+    // Cached vtable slot indices, computed once at startup.
+    struct ENTITY_API VTableSlots {
+        int update_slot = -1;
+        int fixed_update_slot = -1;
 
-    static VTableSlots& instance();
+        static VTableSlots& instance();
 
-private:
-    static VTableSlots compute();
-};
+    private:
+        static VTableSlots compute();
+    };
 
-// Check if type T overrides CxxComponent::update().
-template<typename T>
-bool component_overrides_update() {
-    int slot = VTableSlots::instance().update_slot;
-    if (slot < 0) return false;
+    // Check if type T overrides CxxComponent::update().
+    template <typename T> bool component_overrides_update() {
+        int slot = VTableSlots::instance().update_slot;
+        if (slot < 0)
+            return false;
 
-    ComponentVTableProbe base;
-    T derived;
+        ComponentVTableProbe base;
+        T derived;
 
-    void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
-    void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
+        void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
+        void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
 
-    return base_vtable[slot] != derived_vtable[slot];
-}
+        return base_vtable[slot] != derived_vtable[slot];
+    }
 
-// Check if type T overrides CxxComponent::fixed_update().
-template<typename T>
-bool component_overrides_fixed_update() {
-    int slot = VTableSlots::instance().fixed_update_slot;
-    if (slot < 0) return false;
+    // Check if type T overrides CxxComponent::fixed_update().
+    template <typename T> bool component_overrides_fixed_update() {
+        int slot = VTableSlots::instance().fixed_update_slot;
+        if (slot < 0)
+            return false;
 
-    ComponentVTableProbe base;
-    T derived;
+        ComponentVTableProbe base;
+        T derived;
 
-    void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
-    void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
+        void** base_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&base));
+        void** derived_vtable = *reinterpret_cast<void***>(static_cast<CxxComponent*>(&derived));
 
-    return base_vtable[slot] != derived_vtable[slot];
-}
+        return base_vtable[slot] != derived_vtable[slot];
+    }
 
 } // namespace termin

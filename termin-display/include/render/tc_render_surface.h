@@ -2,9 +2,9 @@
 #ifndef TC_RENDER_SURFACE_H
 #define TC_RENDER_SURFACE_H
 
-#include "tc_types.h"
-#include "render/termin_display_api.h"
 #include "render/tc_display_pool.h"
+#include "render/termin_display_api.h"
+#include "tc_types.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -19,12 +19,7 @@ typedef void (*tc_render_surface_deleter)(tc_render_surface* surface);
 
 #define TC_RENDER_SURFACE_ABI_VERSION 2u
 
-typedef void (*tc_render_surface_resize_fn)(
-    tc_render_surface* surface,
-    int width,
-    int height,
-    void* userdata
-);
+typedef void (*tc_render_surface_resize_fn)(tc_render_surface* surface, int width, int height, void* userdata);
 
 // Every callback is mandatory. A surface is a pixel-sized texture output; it
 // deliberately has no window, input, presentation, raw-FBO or context API.
@@ -52,11 +47,9 @@ struct tc_render_surface {
     tc_display_handle attached_display;
 };
 
-static inline void tc_render_surface_init(
-    tc_render_surface* surface,
-    const tc_render_surface_vtable* vtable,
-    tc_render_surface_deleter deleter
-) {
+static inline void tc_render_surface_init(tc_render_surface* surface,
+                                          const tc_render_surface_vtable* vtable,
+                                          tc_render_surface_deleter deleter) {
     surface->vtable = vtable;
     surface->body = NULL;
     surface->deleter = deleter;
@@ -65,59 +58,42 @@ static inline void tc_render_surface_init(
     surface->attached_display = TC_DISPLAY_HANDLE_INVALID;
 }
 
-static inline bool tc_render_surface_resize(
-    tc_render_surface* surface,
-    int width,
-    int height
-) {
-    return surface && surface->vtable && surface->vtable->resize
-        ? surface->vtable->resize(surface, width, height)
-        : false;
+static inline bool tc_render_surface_resize(tc_render_surface* surface, int width, int height) {
+    return surface && surface->vtable && surface->vtable->resize ? surface->vtable->resize(surface, width, height)
+                                                                 : false;
 }
 
-static inline void tc_render_surface_get_size(
-    tc_render_surface* surface,
-    int* width,
-    int* height
-) {
+static inline void tc_render_surface_get_size(tc_render_surface* surface, int* width, int* height) {
     if (surface && surface->vtable && surface->vtable->get_size) {
         surface->vtable->get_size(surface, width, height);
         return;
     }
-    if (width) *width = 0;
-    if (height) *height = 0;
+    if (width)
+        *width = 0;
+    if (height)
+        *height = 0;
 }
 
-static inline uint32_t tc_render_surface_get_color_texture_id(
-    tc_render_surface* surface
-) {
+static inline uint32_t tc_render_surface_get_color_texture_id(tc_render_surface* surface) {
     return surface && surface->vtable && surface->vtable->get_color_texture_id
-        ? surface->vtable->get_color_texture_id(surface)
-        : 0;
+               ? surface->vtable->get_color_texture_id(surface)
+               : 0;
 }
 
-static inline uintptr_t tc_render_surface_get_graphics_domain_key(
-    tc_render_surface* surface
-) {
+static inline uintptr_t tc_render_surface_get_graphics_domain_key(tc_render_surface* surface) {
     return surface && surface->vtable && surface->vtable->get_graphics_domain_key
-        ? surface->vtable->get_graphics_domain_key(surface)
-        : 0;
+               ? surface->vtable->get_graphics_domain_key(surface)
+               : 0;
 }
 
 // Resolve and validate the mandatory output before any GPU operation. The
 // caller supplies its opaque graphics-domain key (normally the IRenderDevice
 // address). On success, color_texture_id receives a non-zero handle id.
-TERMIN_DISPLAY_API bool tc_render_surface_validate_output(
-    tc_render_surface* surface,
-    uintptr_t expected_graphics_domain_key,
-    uint32_t* color_texture_id
-);
+TERMIN_DISPLAY_API bool tc_render_surface_validate_output(tc_render_surface* surface,
+                                                          uintptr_t expected_graphics_domain_key,
+                                                          uint32_t* color_texture_id);
 
-static inline void tc_render_surface_notify_resize(
-    tc_render_surface* surface,
-    int width,
-    int height
-) {
+static inline void tc_render_surface_notify_resize(tc_render_surface* surface, int width, int height) {
     if (surface && surface->on_resize) {
         surface->on_resize(surface, width, height, surface->on_resize_userdata);
     }
@@ -125,23 +101,15 @@ static inline void tc_render_surface_notify_resize(
 
 // Attachment functions diagnose invalid ownership transitions. Detach succeeds
 // only for the display that currently owns the attachment.
-TERMIN_DISPLAY_API bool tc_render_surface_attach(
-    tc_render_surface* surface,
-    tc_display_handle display
-);
-TERMIN_DISPLAY_API bool tc_render_surface_detach(
-    tc_render_surface* surface,
-    tc_display_handle display
-);
+TERMIN_DISPLAY_API bool tc_render_surface_attach(tc_render_surface* surface, tc_display_handle display);
+TERMIN_DISPLAY_API bool tc_render_surface_detach(tc_render_surface* surface, tc_display_handle display);
 
 // External adapters pass size and version explicitly, so stale managed/native
 // layouts fail before the vtable is copied or invoked.
-TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(
-    void* body,
-    const tc_render_surface_vtable* vtable,
-    size_t vtable_size,
-    uint32_t abi_version
-);
+TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(void* body,
+                                                                     const tc_render_surface_vtable* vtable,
+                                                                     size_t vtable_size,
+                                                                     uint32_t abi_version);
 
 // Destroy and free a surface that has not been transferred to a display.
 // Display-owned surfaces are rejected. The deleter is consumed before either

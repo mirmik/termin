@@ -11,28 +11,25 @@ extern "C" {
 
 namespace termin {
 
-class EditorInteractionSystem;
+    class EditorInteractionSystem;
 
-struct CameraFrustumCorners {
-    std::array<Vec3, 8> points;
-};
+    struct CameraFrustumCorners {
+        std::array<Vec3, 8> points;
+    };
 
-bool compute_camera_frustum_corners(
-    const tc_camera_data& camera,
-    CameraFrustumCorners& out,
-    std::string* error = nullptr
-);
+    bool compute_camera_frustum_corners(const tc_camera_data& camera,
+                                        CameraFrustumCorners& out,
+                                        std::string* error = nullptr);
 
-class CameraFrustumDebugGizmo final : public Gizmo {
-private:
-    EditorInteractionSystem* _system = nullptr;
+    class CameraFrustumDebugGizmo final : public Gizmo {
+    private:
+        EditorInteractionSystem* _system = nullptr;
 
-public:
-    explicit CameraFrustumDebugGizmo(EditorInteractionSystem* system);
+    public:
+        explicit CameraFrustumDebugGizmo(EditorInteractionSystem* system);
 
-    void draw(ImmediateRenderer* renderer) override;
-    std::vector<GizmoCollider> get_colliders() override;
-
-};
+        void draw(ImmediateRenderer* renderer) override;
+        std::vector<GizmoCollider> get_colliders() override;
+    };
 
 } // namespace termin

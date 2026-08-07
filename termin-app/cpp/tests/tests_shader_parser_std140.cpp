@@ -8,17 +8,17 @@
 #include <string>
 #include <vector>
 
+using termin::compute_std140_layout;
+using termin::get_skinned_shader;
 using termin::MaterialProperty;
 using termin::MaterialUboLayout;
-using termin::ShaderMultyPhaseProgramm;
-using termin::compute_std140_layout;
 using termin::parse_shader_text;
+using termin::ShaderMultyPhaseProgramm;
 using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
 using termin::synthesize_material_ubo_slang;
 using termin::TcShader;
-using termin::get_skinned_shader;
 
 static MaterialProperty mk(const char* name, const char* type) {
     return MaterialProperty(name, type, std::monostate{});
@@ -36,8 +36,7 @@ static MaterialProperty mk_bool(const char* name, bool v) {
     return MaterialProperty(name, "Bool", v);
 }
 
-static MaterialProperty mk_vec(const char* name, const char* type,
-                                std::vector<double> values) {
+static MaterialProperty mk_vec(const char* name, const char* type, std::vector<double> values) {
     return MaterialProperty(name, type, std::move(values));
 }
 
@@ -63,8 +62,7 @@ static void expect_parse_error(const std::string& shader_text, const char* messa
     }
 }
 
-TEST_CASE("std140: scalar and vector sizes/alignments")
-{
+TEST_CASE("std140: scalar and vector sizes/alignments") {
     CHECK_EQ(std140_size_align("Float").first, 4u);
     CHECK_EQ(std140_size_align("Float").second, 4u);
 
@@ -92,8 +90,7 @@ TEST_CASE("std140: scalar and vector sizes/alignments")
     CHECK_EQ(std140_size_align("Texture").second, 0u);
 }
 
-TEST_CASE("std140: single float layout is 16-byte block")
-{
+TEST_CASE("std140: single float layout is 16-byte block") {
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
     };
@@ -105,13 +102,12 @@ TEST_CASE("std140: single float layout is 16-byte block")
     CHECK_EQ(layout.block_size, 16u);
 }
 
-TEST_CASE("std140: vec3 followed by float packs into the same vec4 slot")
-{
+TEST_CASE("std140: vec3 followed by float packs into the same vec4 slot") {
     // vec3 at offset 0 (size 12, align 16), followed by float at offset 12
     // (align 4 fits into the trailing scalar slot of the vec3). Block size
     // rounds up to 16.
     std::vector<MaterialProperty> props = {
-        mk("u_color",    "Vec3"),
+        mk("u_color", "Vec3"),
         mk("u_strength", "Float"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
@@ -123,13 +119,12 @@ TEST_CASE("std140: vec3 followed by float packs into the same vec4 slot")
     CHECK_EQ(layout.block_size, 16u);
 }
 
-TEST_CASE("std140: float vec3 forces vec3 to next 16-byte boundary")
-{
+TEST_CASE("std140: float vec3 forces vec3 to next 16-byte boundary") {
     // float at 0 (size 4), then vec3 needs align 16 so it jumps to 16.
     // vec3 occupies 16..28. Block size rounds up to 32.
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
-        mk("u_color",    "Vec3"),
+        mk("u_color", "Vec3"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
     CHECK_EQ(layout.entries[0].offset, 0u);
@@ -137,49 +132,46 @@ TEST_CASE("std140: float vec3 forces vec3 to next 16-byte boundary")
     CHECK_EQ(layout.block_size, 32u);
 }
 
-TEST_CASE("std140: mixed types in realistic material")
-{
+TEST_CASE("std140: mixed types in realistic material") {
     std::vector<MaterialProperty> props = {
-        mk("u_albedo",    "Color"),  // vec4 at 0
-        mk("u_metallic",  "Float"),  // float at 16
-        mk("u_roughness", "Float"),  // float at 20
-        mk("u_ao",        "Float"),  // float at 24
-        mk("u_emissive",  "Vec3"),   // vec3 needs 16 align → 32..44
-        mk("u_opacity",   "Float"),  // float at 44
+        mk("u_albedo", "Color"),    // vec4 at 0
+        mk("u_metallic", "Float"),  // float at 16
+        mk("u_roughness", "Float"), // float at 20
+        mk("u_ao", "Float"),        // float at 24
+        mk("u_emissive", "Vec3"),   // vec3 needs 16 align → 32..44
+        mk("u_opacity", "Float"),   // float at 44
     };
     MaterialUboLayout layout = compute_std140_layout(props);
     CHECK_EQ(layout.entries.size(), 6u);
-    CHECK_EQ(layout.entries[0].offset, 0u);   // u_albedo
-    CHECK_EQ(layout.entries[1].offset, 16u);  // u_metallic
-    CHECK_EQ(layout.entries[2].offset, 20u);  // u_roughness
-    CHECK_EQ(layout.entries[3].offset, 24u);  // u_ao
-    CHECK_EQ(layout.entries[4].offset, 32u);  // u_emissive (jumps from 28 to 32)
-    CHECK_EQ(layout.entries[5].offset, 44u);  // u_opacity (fits trailing slot)
-    CHECK_EQ(layout.block_size, 48u);         // round up from 48
+    CHECK_EQ(layout.entries[0].offset, 0u);  // u_albedo
+    CHECK_EQ(layout.entries[1].offset, 16u); // u_metallic
+    CHECK_EQ(layout.entries[2].offset, 20u); // u_roughness
+    CHECK_EQ(layout.entries[3].offset, 24u); // u_ao
+    CHECK_EQ(layout.entries[4].offset, 32u); // u_emissive (jumps from 28 to 32)
+    CHECK_EQ(layout.entries[5].offset, 44u); // u_opacity (fits trailing slot)
+    CHECK_EQ(layout.block_size, 48u);        // round up from 48
 }
 
-TEST_CASE("std140: Texture properties are skipped")
-{
+TEST_CASE("std140: Texture properties are skipped") {
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
-        mk("u_albedo",   "Texture"),
-        mk("u_tint",     "Color"),
+        mk("u_albedo", "Texture"),
+        mk("u_tint", "Color"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
     // Only Float + Color end up in the block.
     CHECK_EQ(layout.entries.size(), 2u);
     CHECK_EQ(layout.entries[0].name, "u_strength");
     CHECK_EQ(layout.entries[1].name, "u_tint");
-    CHECK_EQ(layout.entries[1].offset, 16u);  // Color aligned to 16
+    CHECK_EQ(layout.entries[1].offset, 16u); // Color aligned to 16
     CHECK_EQ(layout.block_size, 32u);
 }
 
-TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and order")
-{
+TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and order") {
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
-        mk("u_tint",     "Color"),
-        mk("u_enabled",  "Bool"),
+        mk("u_tint", "Color"),
+        mk("u_enabled", "Bool"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
     std::string slang = synthesize_material_ubo_slang(layout);
@@ -195,29 +187,24 @@ TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and o
     CHECK(slang.find("u_tint") < slang.find("u_enabled"));
 }
 
-TEST_CASE("synthesize: empty layout yields empty string")
-{
+TEST_CASE("synthesize: empty layout yields empty string") {
     MaterialUboLayout layout;
     CHECK_EQ(synthesize_material_ubo_slang(layout), std::string{});
 }
 
-TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource binding")
-{
+TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource binding") {
     const tc_shader_create_desc shader_desc = {
-        {
-            "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
-            "#version 450 core\nlayout(location=0) out vec4 FragColor; void main() { FragColor = vec4(1.0); }\n",
-            nullptr,
-            "resource-layout-test",
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr
-        },
+        {"#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
+         "#version 450 core\nlayout(location=0) out vec4 FragColor; void main() { FragColor = vec4(1.0); }\n",
+         nullptr,
+         "resource-layout-test",
+         nullptr,
+         nullptr,
+         nullptr,
+         nullptr},
         "00000000-0000-0000-0001-000000000099",
         TC_SHADER_LANGUAGE_GLSL,
-        TC_SHADER_ARTIFACT_OPTIONAL
-    };
+        TC_SHADER_ARTIFACT_OPTIONAL};
     tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     CHECK(!tc_shader_handle_is_invalid(handle));
 
@@ -243,14 +230,12 @@ TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource 
     tc_shader_destroy(handle);
 }
 
-TEST_CASE("strip_uniform_decls: removes named uniforms but keeps others")
-{
-    std::string src =
-        "#version 330 core\n"
-        "uniform float u_strength;\n"
-        "uniform sampler2D u_input;\n"
-        "uniform vec4 u_tint;\n"
-        "void main() { }\n";
+TEST_CASE("strip_uniform_decls: removes named uniforms but keeps others") {
+    std::string src = "#version 330 core\n"
+                      "uniform float u_strength;\n"
+                      "uniform sampler2D u_input;\n"
+                      "uniform vec4 u_tint;\n"
+                      "void main() { }\n";
 
     std::string out = strip_uniform_decls(src, {"u_strength", "u_tint"});
     CHECK(out.find("u_strength") == std::string::npos);
@@ -259,53 +244,38 @@ TEST_CASE("strip_uniform_decls: removes named uniforms but keeps others")
     CHECK(out.find("void main()") != std::string::npos);
 }
 
-TEST_CASE("strip_uniform_decls: partial prefix match is not removed")
-{
-    std::string src =
-        "uniform float u_strength;\n"
-        "uniform float u_strength2;\n";
+TEST_CASE("strip_uniform_decls: partial prefix match is not removed") {
+    std::string src = "uniform float u_strength;\n"
+                      "uniform float u_strength2;\n";
     std::string out = strip_uniform_decls(src, {"u_strength"});
     // u_strength2 must survive, only the exact u_strength line is dropped.
     CHECK(out.find("u_strength2") != std::string::npos);
     CHECK(out.find("u_strength;") == std::string::npos);
 }
 
-TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
-{
-    std::string vertex =
-        "#version 330 core\n"
-        "layout(location = 0) in vec3 a_position;\n"
-        "layout(location = 1) in vec3 a_normal;\n"
-        "layout(location = 2) in vec2 a_uv;\n"
-        "uniform mat4 u_model;\n"
-        "uniform mat4 u_view;\n"
-        "uniform mat4 u_projection;\n"
-        "out vec3 v_normal;\n"
-        "void main() {\n"
-        "    vec4 world = u_model * vec4(a_position, 1.0);\n"
-        "    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n"
-        "    gl_Position = u_projection * u_view * world;\n"
-        "}\n";
-    std::string fragment =
-        "#version 330 core\n"
-        "out vec4 FragColor;\n"
-        "void main() { FragColor = vec4(1.0); }\n";
+TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection") {
+    std::string vertex = "#version 330 core\n"
+                         "layout(location = 0) in vec3 a_position;\n"
+                         "layout(location = 1) in vec3 a_normal;\n"
+                         "layout(location = 2) in vec2 a_uv;\n"
+                         "uniform mat4 u_model;\n"
+                         "uniform mat4 u_view;\n"
+                         "uniform mat4 u_projection;\n"
+                         "out vec3 v_normal;\n"
+                         "void main() {\n"
+                         "    vec4 world = u_model * vec4(a_position, 1.0);\n"
+                         "    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n"
+                         "    gl_Position = u_projection * u_view * world;\n"
+                         "}\n";
+    std::string fragment = "#version 330 core\n"
+                           "out vec4 FragColor;\n"
+                           "void main() { FragColor = vec4(1.0); }\n";
 
     const tc_shader_create_desc original_desc = {
-        {
-            vertex.c_str(),
-            fragment.c_str(),
-            nullptr,
-            "CookTorrancePBR/opaque",
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr
-        },
+        {vertex.c_str(), fragment.c_str(), nullptr, "CookTorrancePBR/opaque", nullptr, nullptr, nullptr, nullptr},
         "skinning-rewrite-original",
         TC_SHADER_LANGUAGE_GLSL,
-        TC_SHADER_ARTIFACT_OPTIONAL
-    };
+        TC_SHADER_ARTIFACT_OPTIONAL};
     tc_shader_handle original_handle = tc_shader_from_sources_desc(&original_desc);
     CHECK(!tc_shader_handle_is_invalid(original_handle));
 
@@ -323,41 +293,28 @@ TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("skinned shader variants create shader-contract assembler output")
-{
-    std::string vertex =
-        "struct VIn { float3 position : POSITION; };\n"
-        "struct VOut { float4 position : SV_Position; };\n"
-        "[shader(\"vertex\")]\n"
-        "VOut main(VIn input) {\n"
-        "    VOut output;\n"
-        "    output.position = float4(input.position, 1.0);\n"
-        "    return output;\n"
-        "}\n";
-    std::string fragment =
-        "struct FOut { float4 color : SV_Target0; };\n"
-        "[shader(\"fragment\")]\n"
-        "FOut main() {\n"
-        "    FOut output;\n"
-        "    output.color = float4(1.0);\n"
-        "    return output;\n"
-        "}\n";
+TEST_CASE("skinned shader variants create shader-contract assembler output") {
+    std::string vertex = "struct VIn { float3 position : POSITION; };\n"
+                         "struct VOut { float4 position : SV_Position; };\n"
+                         "[shader(\"vertex\")]\n"
+                         "VOut main(VIn input) {\n"
+                         "    VOut output;\n"
+                         "    output.position = float4(input.position, 1.0);\n"
+                         "    return output;\n"
+                         "}\n";
+    std::string fragment = "struct FOut { float4 color : SV_Target0; };\n"
+                           "[shader(\"fragment\")]\n"
+                           "FOut main() {\n"
+                           "    FOut output;\n"
+                           "    output.color = float4(1.0);\n"
+                           "    return output;\n"
+                           "}\n";
 
     const tc_shader_create_desc original_desc = {
-        {
-            vertex.c_str(),
-            fragment.c_str(),
-            nullptr,
-            "SlangPBR/opaque",
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr
-        },
+        {vertex.c_str(), fragment.c_str(), nullptr, "SlangPBR/opaque", nullptr, nullptr, nullptr, nullptr},
         "skinning-rewrite-slang-original",
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED
-    };
+        TC_SHADER_ARTIFACT_REQUIRED};
     tc_shader_handle original_handle = tc_shader_from_sources_desc(&original_desc);
     CHECK(!tc_shader_handle_is_invalid(original_handle));
     tc_shader* original_raw = tc_shader_get(original_handle);
@@ -394,9 +351,7 @@ TEST_CASE("skinned shader variants create shader-contract assembler output")
 
         const tc_shader_resource_requirement* bone = nullptr;
         for (uint32_t i = 0; i < contract.resource_count; ++i) {
-            if (std::strcmp(
-                    contract.resources[i].name,
-                    TC_SHADER_RESOURCE_BONE_BLOCK) == 0) {
+            if (std::strcmp(contract.resources[i].name, TC_SHADER_RESOURCE_BONE_BLOCK) == 0) {
                 bone = &contract.resources[i];
                 break;
             }
@@ -404,113 +359,96 @@ TEST_CASE("skinned shader variants create shader-contract assembler output")
         REQUIRE(bone != nullptr);
         CHECK_EQ(bone->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_DRAW));
         CHECK(!tc_shader_has_resource_layout(skinned.get()));
-        CHECK(tc_shader_find_resource_binding(
-                  skinned.get(),
-                  TC_SHADER_RESOURCE_BONE_BLOCK) == nullptr);
+        CHECK(tc_shader_find_resource_binding(skinned.get(), TC_SHADER_RESOURCE_BONE_BLOCK) == nullptr);
     }
 
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("parse_shader_text: rejects implicit GLSL material UBO shader")
-{
-    const std::string shader_text =
-        "@program TestShader\n"
-        "@features material_ubo\n"
-        "@phase opaque\n"
-        "@property Float u_strength = 1.0\n"
-        "@property Color u_tint = Color(1.0, 1.0, 1.0, 1.0)\n"
-        "@property Texture2D u_albedo = \"white\" encoding(srgb)\n"
-        "@stage vertex\n"
-        "#version 330 core\n"
-        "void main() { gl_Position = vec4(0); }\n"
-        "@endstage\n"
-        "@stage fragment\n"
-        "#version 330 core\n"
-        "uniform float u_strength;\n"
-        "uniform vec4 u_tint;\n"
-        "uniform sampler2D u_albedo;\n"
-        "out vec4 FragColor;\n"
-        "void main() { FragColor = texture(u_albedo, vec2(0)) * u_tint * u_strength; }\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: rejects implicit GLSL material UBO shader") {
+    const std::string shader_text = "@program TestShader\n"
+                                    "@features material_ubo\n"
+                                    "@phase opaque\n"
+                                    "@property Float u_strength = 1.0\n"
+                                    "@property Color u_tint = Color(1.0, 1.0, 1.0, 1.0)\n"
+                                    "@property Texture2D u_albedo = \"white\" encoding(srgb)\n"
+                                    "@stage vertex\n"
+                                    "#version 330 core\n"
+                                    "void main() { gl_Position = vec4(0); }\n"
+                                    "@endstage\n"
+                                    "@stage fragment\n"
+                                    "#version 330 core\n"
+                                    "uniform float u_strength;\n"
+                                    "uniform vec4 u_tint;\n"
+                                    "uniform sampler2D u_albedo;\n"
+                                    "out vec4 FragColor;\n"
+                                    "void main() { FragColor = texture(u_albedo, vec2(0)) * u_tint * u_strength; }\n"
+                                    "@endstage\n"
+                                    "@endphase\n";
 
-    expect_parse_error(
-        shader_text,
-        ".shader files must declare @language slang; implicit GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(shader_text,
+                       ".shader files must declare @language slang; implicit GLSL .shader "
+                       "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: shader DSL requires explicit Slang language")
-{
-    const std::string implicit_glsl =
-        "@program Legacy\n"
-        "@phase opaque\n"
-        "@stage fragment\n"
-        "void main() { }\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: shader DSL requires explicit Slang language") {
+    const std::string implicit_glsl = "@program Legacy\n"
+                                      "@phase opaque\n"
+                                      "@stage fragment\n"
+                                      "void main() { }\n"
+                                      "@endstage\n"
+                                      "@endphase\n";
 
-    expect_parse_error(
-        implicit_glsl,
-        ".shader files must declare @language slang; implicit GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(implicit_glsl,
+                       ".shader files must declare @language slang; implicit GLSL .shader "
+                       "programs are no longer supported");
 
-    const std::string explicit_glsl =
-        "@program Legacy\n"
-        "@language glsl\n"
-        "@phase opaque\n"
-        "@stage fragment\n"
-        "void main() { }\n"
-        "@endstage\n"
-        "@endphase\n";
+    const std::string explicit_glsl = "@program Legacy\n"
+                                      "@language glsl\n"
+                                      "@phase opaque\n"
+                                      "@stage fragment\n"
+                                      "void main() { }\n"
+                                      "@endstage\n"
+                                      "@endphase\n";
 
-    expect_parse_error(
-        explicit_glsl,
-        ".shader files must declare @language slang; GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(explicit_glsl,
+                       ".shader files must declare @language slang; GLSL .shader "
+                       "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: rejects implicit GLSL scalar property shader")
-{
-    const std::string shader_text =
-        "@program LegacyShader\n"
-        "@phase opaque\n"
-        "@property Float u_strength = 1.0\n"
-        "@stage fragment\n"
-        "#version 330 core\n"
-        "uniform float u_strength;\n"
-        "void main() { }\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: rejects implicit GLSL scalar property shader") {
+    const std::string shader_text = "@program LegacyShader\n"
+                                    "@phase opaque\n"
+                                    "@property Float u_strength = 1.0\n"
+                                    "@stage fragment\n"
+                                    "#version 330 core\n"
+                                    "uniform float u_strength;\n"
+                                    "void main() { }\n"
+                                    "@endstage\n"
+                                    "@endphase\n";
 
-    expect_parse_error(
-        shader_text,
-        ".shader files must declare @language slang; implicit GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(shader_text,
+                       ".shader files must declare @language slang; implicit GLSL .shader "
+                       "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: rejects implicit GLSL texture-only shader")
-{
-    const std::string shader_text =
-        "@program TextureOnlyShader\n"
-        "@phase opaque\n"
-        "@property Texture2D u_albedo = \"white\" encoding(srgb)\n"
-        "@stage fragment\n"
-        "#version 330 core\n"
-        "uniform sampler2D u_albedo;\n"
-        "void main() { }\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: rejects implicit GLSL texture-only shader") {
+    const std::string shader_text = "@program TextureOnlyShader\n"
+                                    "@phase opaque\n"
+                                    "@property Texture2D u_albedo = \"white\" encoding(srgb)\n"
+                                    "@stage fragment\n"
+                                    "#version 330 core\n"
+                                    "uniform sampler2D u_albedo;\n"
+                                    "void main() { }\n"
+                                    "@endstage\n"
+                                    "@endphase\n";
 
-    expect_parse_error(
-        shader_text,
-        ".shader files must declare @language slang; implicit GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(shader_text,
+                       ".shader files must declare @language slang; implicit GLSL .shader "
+                       "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: rejects implicit GLSL texture binding order shader")
-{
+TEST_CASE("parse_shader_text: rejects implicit GLSL texture binding order shader") {
     const std::string shader_text =
         "@program TextureSlotsShader\n"
         "@phase opaque\n"
@@ -527,43 +465,41 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL texture binding order shader
         "uniform sampler2D u_roughness;\n"
         "uniform sampler2D u_emissive;\n"
         "out vec4 FragColor;\n"
-        "void main() { FragColor = texture(u_input, vec2(0)) + texture(u_depth, vec2(0)) + texture(u_normal, vec2(0)) + texture(u_roughness, vec2(0)) + texture(u_emissive, vec2(0)); }\n"
+        "void main() { FragColor = texture(u_input, vec2(0)) + texture(u_depth, vec2(0)) + texture(u_normal, vec2(0)) "
+        "+ texture(u_roughness, vec2(0)) + texture(u_emissive, vec2(0)); }\n"
         "@endstage\n"
         "@endphase\n";
 
-    expect_parse_error(
-        shader_text,
-        ".shader files must declare @language slang; implicit GLSL .shader "
-        "programs are no longer supported");
+    expect_parse_error(shader_text,
+                       ".shader files must declare @language slang; implicit GLSL .shader "
+                       "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: Slang scalar properties synthesize material constant buffer")
-{
-    const std::string shader_text =
-        "@program SlangTint\n"
-        "@language slang\n"
-        "@phase opaque\n"
-        "@property Color tint = Color(1.0, 0.5, 0.25, 1.0)\n"
-        "@stage vertex\n"
-        "struct VertexInput { float3 position : POSITION; };\n"
-        "struct VertexOutput { float4 position : SV_Position; };\n"
-        "[shader(\"vertex\")]\n"
-        "VertexOutput main(VertexInput input) {\n"
-        "    VertexOutput output;\n"
-        "    output.position = float4(input.position, 1.0);\n"
-        "    return output;\n"
-        "}\n"
-        "@endstage\n"
-        "@stage fragment\n"
-        "struct FragmentOutput { float4 color : SV_Target0; };\n"
-        "[shader(\"fragment\")]\n"
-        "FragmentOutput main() {\n"
-        "    FragmentOutput output;\n"
-        "    output.color = material.tint;\n"
-        "    return output;\n"
-        "}\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: Slang scalar properties synthesize material constant buffer") {
+    const std::string shader_text = "@program SlangTint\n"
+                                    "@language slang\n"
+                                    "@phase opaque\n"
+                                    "@property Color tint = Color(1.0, 0.5, 0.25, 1.0)\n"
+                                    "@stage vertex\n"
+                                    "struct VertexInput { float3 position : POSITION; };\n"
+                                    "struct VertexOutput { float4 position : SV_Position; };\n"
+                                    "[shader(\"vertex\")]\n"
+                                    "VertexOutput main(VertexInput input) {\n"
+                                    "    VertexOutput output;\n"
+                                    "    output.position = float4(input.position, 1.0);\n"
+                                    "    return output;\n"
+                                    "}\n"
+                                    "@endstage\n"
+                                    "@stage fragment\n"
+                                    "struct FragmentOutput { float4 color : SV_Target0; };\n"
+                                    "[shader(\"fragment\")]\n"
+                                    "FragmentOutput main() {\n"
+                                    "    FragmentOutput output;\n"
+                                    "    output.color = material.tint;\n"
+                                    "    return output;\n"
+                                    "}\n"
+                                    "@endstage\n"
+                                    "@endphase\n";
 
     ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
     CHECK_EQ(prog.language, "slang");
@@ -586,18 +522,16 @@ TEST_CASE("parse_shader_text: Slang scalar properties synthesize material consta
     CHECK(vertex.find("struct MaterialParams") == std::string::npos);
 }
 
-TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D declarations")
-{
-    const std::string shader_text =
-        "@program SlangTexture\n"
-        "@language slang\n"
-        "@phase opaque\n"
-        "@property Texture2D albedo = \"white\" encoding(srgb)\n"
-        "@stage fragment\n"
-        "[shader(\"fragment\")]\n"
-        "float4 main() : SV_Target0 { return albedo.Sample(float2(0.0)); }\n"
-        "@endstage\n"
-        "@endphase\n";
+TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D declarations") {
+    const std::string shader_text = "@program SlangTexture\n"
+                                    "@language slang\n"
+                                    "@phase opaque\n"
+                                    "@property Texture2D albedo = \"white\" encoding(srgb)\n"
+                                    "@stage fragment\n"
+                                    "[shader(\"fragment\")]\n"
+                                    "float4 main() : SV_Target0 { return albedo.Sample(float2(0.0)); }\n"
+                                    "@endstage\n"
+                                    "@endphase\n";
 
     ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
     REQUIRE_EQ(prog.phases.size(), 1u);
@@ -622,10 +556,9 @@ TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D decl
 // std140_pack: value serialization into packed byte buffer
 // ============================================================================
 
-TEST_CASE("std140_pack: single float writes 4 bytes at offset 0")
-{
-    std::vector<MaterialProperty> schema = { mk("u_strength", "Float") };
-    std::vector<MaterialProperty> values = { mk_float("u_strength", 0.75) };
+TEST_CASE("std140_pack: single float writes 4 bytes at offset 0") {
+    std::vector<MaterialProperty> schema = {mk("u_strength", "Float")};
+    std::vector<MaterialProperty> values = {mk_float("u_strength", 0.75)};
     MaterialUboLayout layout = compute_std140_layout(schema);
 
     std::vector<uint8_t> buf(layout.block_size, 0);
@@ -639,10 +572,9 @@ TEST_CASE("std140_pack: single float writes 4 bytes at offset 0")
     }
 }
 
-TEST_CASE("std140_pack: vec3 + float packs into same 16-byte slot")
-{
+TEST_CASE("std140_pack: vec3 + float packs into same 16-byte slot") {
     std::vector<MaterialProperty> schema = {
-        mk("u_color",    "Vec3"),
+        mk("u_color", "Vec3"),
         mk("u_strength", "Float"),
     };
     std::vector<MaterialProperty> values = {
@@ -655,17 +587,16 @@ TEST_CASE("std140_pack: vec3 + float packs into same 16-byte slot")
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0),  0.2f);
-    CHECK_EQ(read_float_at(buf, 4),  0.4f);
-    CHECK_EQ(read_float_at(buf, 8),  0.6f);
-    CHECK_EQ(read_float_at(buf, 12), 0.9f);  // float in the trailing slot
+    CHECK_EQ(read_float_at(buf, 0), 0.2f);
+    CHECK_EQ(read_float_at(buf, 4), 0.4f);
+    CHECK_EQ(read_float_at(buf, 8), 0.6f);
+    CHECK_EQ(read_float_at(buf, 12), 0.9f); // float in the trailing slot
 }
 
-TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16")
-{
+TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16") {
     std::vector<MaterialProperty> schema = {
         mk("u_strength", "Float"),
-        mk("u_color",    "Vec3"),
+        mk("u_color", "Vec3"),
     };
     std::vector<MaterialProperty> values = {
         mk_float("u_strength", 1.5),
@@ -677,20 +608,20 @@ TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16")
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0),  1.5f);
+    CHECK_EQ(read_float_at(buf, 0), 1.5f);
     // Bytes [4..16) are padding — must remain zero.
-    for (uint32_t i = 4; i < 16; ++i) CHECK_EQ(buf[i], 0u);
+    for (uint32_t i = 4; i < 16; ++i)
+        CHECK_EQ(buf[i], 0u);
     CHECK_EQ(read_float_at(buf, 16), 0.1f);
     CHECK_EQ(read_float_at(buf, 20), 0.2f);
     CHECK_EQ(read_float_at(buf, 24), 0.3f);
-    CHECK_EQ(read_float_at(buf, 28), 0.0f);  // padding slot
+    CHECK_EQ(read_float_at(buf, 28), 0.0f); // padding slot
 }
 
-TEST_CASE("std140_pack: Color packs 4 floats at aligned offset")
-{
+TEST_CASE("std140_pack: Color packs 4 floats at aligned offset") {
     std::vector<MaterialProperty> schema = {
         mk("u_strength", "Float"),
-        mk("u_tint",     "Color"),
+        mk("u_tint", "Color"),
     };
     std::vector<MaterialProperty> values = {
         mk_float("u_strength", 2.0),
@@ -702,7 +633,7 @@ TEST_CASE("std140_pack: Color packs 4 floats at aligned offset")
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0),  2.0f);
+    CHECK_EQ(read_float_at(buf, 0), 2.0f);
     // [4..16) padding.
     CHECK_EQ(read_float_at(buf, 16), 0.9f);
     CHECK_EQ(read_float_at(buf, 20), 0.8f);
@@ -710,10 +641,9 @@ TEST_CASE("std140_pack: Color packs 4 floats at aligned offset")
     CHECK_EQ(read_float_at(buf, 28), 0.6f);
 }
 
-TEST_CASE("std140_pack: Int and Bool")
-{
+TEST_CASE("std140_pack: Int and Bool") {
     std::vector<MaterialProperty> schema = {
-        mk("u_count",  "Int"),
+        mk("u_count", "Int"),
         mk("u_enable", "Bool"),
     };
     std::vector<MaterialProperty> values = {
@@ -727,11 +657,10 @@ TEST_CASE("std140_pack: Int and Bool")
     std140_pack(layout, values, buf.data());
 
     CHECK_EQ(read_int_at(buf, 0), 42);
-    CHECK_EQ(read_int_at(buf, 4), 1);  // Bool(true) → int 1
+    CHECK_EQ(read_int_at(buf, 4), 1); // Bool(true) → int 1
 }
 
-TEST_CASE("std140_pack: Bool accepts Int values as 0 or 1")
-{
+TEST_CASE("std140_pack: Bool accepts Int values as 0 or 1") {
     std::vector<MaterialProperty> schema = {
         mk("u_disabled", "Bool"),
         mk("u_enabled", "Bool"),
@@ -750,23 +679,22 @@ TEST_CASE("std140_pack: Bool accepts Int values as 0 or 1")
     CHECK_EQ(read_int_at(buf, 4), 1);
 }
 
-TEST_CASE("std140_pack: realistic PBR material")
-{
+TEST_CASE("std140_pack: realistic PBR material") {
     std::vector<MaterialProperty> schema = {
-        mk("u_albedo",    "Color"),
-        mk("u_metallic",  "Float"),
+        mk("u_albedo", "Color"),
+        mk("u_metallic", "Float"),
         mk("u_roughness", "Float"),
-        mk("u_ao",        "Float"),
-        mk("u_emissive",  "Vec3"),
-        mk("u_opacity",   "Float"),
+        mk("u_ao", "Float"),
+        mk("u_emissive", "Vec3"),
+        mk("u_opacity", "Float"),
     };
     std::vector<MaterialProperty> values = {
         mk_vec("u_albedo", "Color", {0.1, 0.2, 0.3, 1.0}),
-        mk_float("u_metallic",  0.5),
+        mk_float("u_metallic", 0.5),
         mk_float("u_roughness", 0.25),
-        mk_float("u_ao",        1.0),
+        mk_float("u_ao", 1.0),
         mk_vec("u_emissive", "Vec3", {10.0, 20.0, 30.0}),
-        mk_float("u_opacity",   0.8),
+        mk_float("u_opacity", 0.8),
     };
     MaterialUboLayout layout = compute_std140_layout(schema);
     CHECK_EQ(layout.block_size, 48u);
@@ -774,29 +702,28 @@ TEST_CASE("std140_pack: realistic PBR material")
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0),  0.1f);
-    CHECK_EQ(read_float_at(buf, 4),  0.2f);
-    CHECK_EQ(read_float_at(buf, 8),  0.3f);
+    CHECK_EQ(read_float_at(buf, 0), 0.1f);
+    CHECK_EQ(read_float_at(buf, 4), 0.2f);
+    CHECK_EQ(read_float_at(buf, 8), 0.3f);
     CHECK_EQ(read_float_at(buf, 12), 1.0f);
-    CHECK_EQ(read_float_at(buf, 16), 0.5f);   // u_metallic
-    CHECK_EQ(read_float_at(buf, 20), 0.25f);  // u_roughness
-    CHECK_EQ(read_float_at(buf, 24), 1.0f);   // u_ao
+    CHECK_EQ(read_float_at(buf, 16), 0.5f);  // u_metallic
+    CHECK_EQ(read_float_at(buf, 20), 0.25f); // u_roughness
+    CHECK_EQ(read_float_at(buf, 24), 1.0f);  // u_ao
     // Offset 28 is padding to align u_emissive vec3 at 32.
     CHECK_EQ(read_float_at(buf, 28), 0.0f);
-    CHECK_EQ(read_float_at(buf, 32), 10.0f);  // u_emissive
+    CHECK_EQ(read_float_at(buf, 32), 10.0f); // u_emissive
     CHECK_EQ(read_float_at(buf, 36), 20.0f);
     CHECK_EQ(read_float_at(buf, 40), 30.0f);
-    CHECK_EQ(read_float_at(buf, 44), 0.8f);   // u_opacity trailing slot
+    CHECK_EQ(read_float_at(buf, 44), 0.8f); // u_opacity trailing slot
 }
 
-TEST_CASE("std140_pack: missing value leaves the slot alone")
-{
+TEST_CASE("std140_pack: missing value leaves the slot alone") {
     std::vector<MaterialProperty> schema = {
         mk("u_a", "Float"),
         mk("u_b", "Float"),
     };
     // Only provide u_b — u_a should remain whatever was in the buffer.
-    std::vector<MaterialProperty> values = { mk_float("u_b", 7.0) };
+    std::vector<MaterialProperty> values = {mk_float("u_b", 7.0)};
     MaterialUboLayout layout = compute_std140_layout(schema);
 
     std::vector<uint8_t> buf(layout.block_size, 0);
@@ -806,26 +733,25 @@ TEST_CASE("std140_pack: missing value leaves the slot alone")
 
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0), sentinel);  // untouched
+    CHECK_EQ(read_float_at(buf, 0), sentinel); // untouched
     CHECK_EQ(read_float_at(buf, 4), 7.0f);
 }
 
-TEST_CASE("std140_pack: type mismatch is skipped")
-{
-    std::vector<MaterialProperty> schema = { mk("u_strength", "Float") };
+TEST_CASE("std140_pack: type mismatch is skipped") {
+    std::vector<MaterialProperty> schema = {mk("u_strength", "Float")};
     // Wrong type provided — should not be written.
-    std::vector<MaterialProperty> values = { mk_vec("u_strength", "Vec3", {1, 2, 3}) };
+    std::vector<MaterialProperty> values = {mk_vec("u_strength", "Vec3", {1, 2, 3})};
     MaterialUboLayout layout = compute_std140_layout(schema);
 
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
     // Buffer remains zero — mismatched type is ignored.
-    for (uint32_t i = 0; i < buf.size(); ++i) CHECK_EQ(buf[i], 0u);
+    for (uint32_t i = 0; i < buf.size(); ++i)
+        CHECK_EQ(buf[i], 0u);
 }
 
-TEST_CASE("std140_pack: Texture properties in values list are ignored")
-{
+TEST_CASE("std140_pack: Texture properties in values list are ignored") {
     std::vector<MaterialProperty> schema = {
         mk("u_strength", "Float"),
     };
@@ -842,24 +768,34 @@ TEST_CASE("std140_pack: Texture properties in values list are ignored")
     CHECK_EQ(read_float_at(buf, 0), 0.5f);
 }
 
-TEST_CASE("std140: Mat4 size/align")
-{
+TEST_CASE("std140: Mat4 size/align") {
     CHECK_EQ(std140_size_align("Mat4").first, 64u);
     CHECK_EQ(std140_size_align("Mat4").second, 16u);
 }
 
-TEST_CASE("std140_pack: Mat4 writes 16 floats in column-major order")
-{
-    std::vector<MaterialProperty> schema = { mk("u_view", "Mat4") };
+TEST_CASE("std140_pack: Mat4 writes 16 floats in column-major order") {
+    std::vector<MaterialProperty> schema = {mk("u_view", "Mat4")};
     std::vector<double> cm_data = {
         // column 0
-        1.0, 2.0, 3.0, 4.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
         // column 1
-        5.0, 6.0, 7.0, 8.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
         // column 2
-        9.0, 10.0, 11.0, 12.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
         // column 3
-        13.0, 14.0, 15.0, 16.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
     };
     std::vector<MaterialProperty> values = {
         mk_vec("u_view", "Mat4", cm_data),
@@ -871,15 +807,13 @@ TEST_CASE("std140_pack: Mat4 writes 16 floats in column-major order")
     std140_pack(layout, values, buf.data());
 
     for (size_t i = 0; i < 16; ++i) {
-        CHECK_EQ(read_float_at(buf, static_cast<uint32_t>(i * 4)),
-                 static_cast<float>(cm_data[i]));
+        CHECK_EQ(read_float_at(buf, static_cast<uint32_t>(i * 4)), static_cast<float>(cm_data[i]));
     }
 }
 
-TEST_CASE("std140_pack: Mat4 followed by Vec4 aligns vec4 right after mat4")
-{
+TEST_CASE("std140_pack: Mat4 followed by Vec4 aligns vec4 right after mat4") {
     std::vector<MaterialProperty> schema = {
-        mk("u_view",  "Mat4"),
+        mk("u_view", "Mat4"),
         mk("u_color", "Vec4"),
     };
     MaterialUboLayout layout = compute_std140_layout(schema);
@@ -890,9 +824,8 @@ TEST_CASE("std140_pack: Mat4 followed by Vec4 aligns vec4 right after mat4")
     CHECK_EQ(layout.block_size, 80u);
 }
 
-TEST_CASE("synthesize: Mat4 emits Slang column-major matrix type")
-{
-    std::vector<MaterialProperty> props = { mk("u_view", "Mat4") };
+TEST_CASE("synthesize: Mat4 emits Slang column-major matrix type") {
+    std::vector<MaterialProperty> props = {mk("u_view", "Mat4")};
     MaterialUboLayout layout = compute_std140_layout(props);
     std::string slang = synthesize_material_ubo_slang(layout);
     CHECK(slang.find("column_major float4x4 u_view;") != std::string::npos);

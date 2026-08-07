@@ -1,75 +1,78 @@
 #pragma once
 
-#include <termin/render/geometry_pass_base.hpp>
-#include <termin/render_passes/export.h>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
+#include <termin/render/geometry_pass_base.hpp>
+#include <termin/render_passes/export.h>
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
 namespace termin {
 
-class TERMIN_RENDER_PASSES_API IdPass : public GeometryPassBase {
-private:
-    // Lazy tgfx2 resources used by execute_with_data_tgfx2.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
+    class TERMIN_RENDER_PASSES_API IdPass : public GeometryPassBase {
+    private:
+        // Lazy tgfx2 resources used by execute_with_data_tgfx2.
+        tgfx::IRenderDevice* device2_ = nullptr;
+        mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
 
-public:
-    static void register_type();
-    IdPass(
-        const std::string& input_res = "empty",
-        const std::string& output_res = "id",
-        const std::string& pass_name = "IdPass"
-    ) : GeometryPassBase(pass_name, input_res, output_res) {}
+    public:
+        static void register_type();
+        IdPass(const std::string& input_res = "empty",
+               const std::string& output_res = "id",
+               const std::string& pass_name = "IdPass")
+            : GeometryPassBase(pass_name, input_res, output_res) {}
 
-    ~IdPass() override { release_tgfx2_resources(); }
+        ~IdPass() override {
+            release_tgfx2_resources();
+        }
 
-    void destroy() override {
-        GeometryPassBase::destroy();
-        release_tgfx2_resources();
-    }
+        void destroy() override {
+            GeometryPassBase::destroy();
+            release_tgfx2_resources();
+        }
 
-    // tgfx2-native IdPass entry — requires ctx.ctx2 to be non-null.
-    void execute_with_data_tgfx2(
-        ExecuteContext& ctx,
-        const Rect2i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        const Vec3& camera_position,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
-        uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL
-    );
+        // tgfx2-native IdPass entry — requires ctx.ctx2 to be non-null.
+        void execute_with_data_tgfx2(ExecuteContext& ctx,
+                                     const Rect2i& rect,
+                                     tc_scene_handle scene,
+                                     const Mat44f& view,
+                                     const Mat44f& projection,
+                                     const Vec3& camera_position,
+                                     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
+                                     uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL);
 
-    void execute(ExecuteContext& ctx) override;
+        void execute(ExecuteContext& ctx) override;
 
-    std::vector<ResourceSpec> get_resource_specs() const override {
-        return make_resource_specs();
-    }
+        std::vector<ResourceSpec> get_resource_specs() const override {
+            return make_resource_specs();
+        }
 
-protected:
-    std::array<float, 4> clear_color() const override { return {0.0f, 0.0f, 0.0f, 0.0f}; }
-    // Public picking representation label. Object-id shader resources and
-    // vertex layout are declared by shader_pass_contract(), not by this string.
-    const char* phase_mark() const override { return "id"; }
-    MaterialPipelinePassContract shader_pass_contract() const override;
-    tc_shader_handle shader_usage_base_shader() const override;
+    protected:
+        std::array<float, 4> clear_color() const override {
+            return {0.0f, 0.0f, 0.0f, 0.0f};
+        }
+        // Public picking representation label. Object-id shader resources and
+        // vertex layout are declared by shader_pass_contract(), not by this string.
+        const char* phase_mark() const override {
+            return "id";
+        }
+        MaterialPipelinePassContract shader_pass_contract() const override;
+        tc_shader_handle shader_usage_base_shader() const override;
 
-    bool entity_filter(const Entity& ent) const override {
-        return ent.pickable();
-    }
+        bool entity_filter(const Entity& ent) const override {
+            return ent.pickable();
+        }
 
-    int get_pick_id(const Entity& ent) const override {
-        return static_cast<int>(ent.pick_id());
-    }
+        int get_pick_id(const Entity& ent) const override {
+            return static_cast<int>(ent.pick_id());
+        }
 
-private:
-    static void id_to_rgb(int id, float& r, float& g, float& b);
+    private:
+        static void id_to_rgb(int id, float& r, float& g, float& b);
 
-    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
-    void release_tgfx2_resources();
-};
+        void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+        void release_tgfx2_resources();
+    };
 
 } // namespace termin

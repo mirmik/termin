@@ -13,26 +13,21 @@
 #elif defined(_WIN32)
 #define TERMIN_FRAMEGRAPH_REMOTE_CLIENT_API __declspec(dllimport)
 #else
-#define TERMIN_FRAMEGRAPH_REMOTE_CLIENT_API                                    \
-    __attribute__((visibility("default")))
+#define TERMIN_FRAMEGRAPH_REMOTE_CLIENT_API __attribute__((visibility("default")))
 #endif
 
-namespace termin::framegraph_remote_client
-{
+namespace termin::framegraph_remote_client {
 
-    struct ClientConfig
-    {
+    struct ClientConfig {
         std::string address = "127.0.0.1";
         std::uint16_t port = 0;
         std::string authentication_token;
         std::size_t command_queue_capacity = 64;
-        std::uint64_t max_blob_bytes =
-            framegraph_remote::WireLimits::max_blob_bytes;
+        std::uint64_t max_blob_bytes = framegraph_remote::WireLimits::max_blob_bytes;
         bool reconnect = true;
     };
 
-    struct ClientStatus
-    {
+    struct ClientStatus {
         bool running = false;
         bool connected = false;
         std::uint64_t connection_attempts = 0;
@@ -44,11 +39,9 @@ namespace termin::framegraph_remote_client
     // contract and is intended to be called from the editor thread. Callbacks
     // run on the network thread and must not access editor or rendering state
     // directly.
-    class TERMIN_FRAMEGRAPH_REMOTE_CLIENT_API RemoteFrameGraphClient
-    {
+    class TERMIN_FRAMEGRAPH_REMOTE_CLIENT_API RemoteFrameGraphClient {
     public:
-        using MessageHandler =
-            std::function<void(const framegraph_remote::DecodedMessage&)>;
+        using MessageHandler = std::function<void(const framegraph_remote::DecodedMessage&)>;
         using DisconnectHandler = std::function<void(std::string detail)>;
 
         RemoteFrameGraphClient(ClientConfig config,
@@ -57,8 +50,7 @@ namespace termin::framegraph_remote_client
         ~RemoteFrameGraphClient();
 
         RemoteFrameGraphClient(const RemoteFrameGraphClient&) = delete;
-        RemoteFrameGraphClient&
-        operator=(const RemoteFrameGraphClient&) = delete;
+        RemoteFrameGraphClient& operator=(const RemoteFrameGraphClient&) = delete;
 
         bool start();
         void stop();

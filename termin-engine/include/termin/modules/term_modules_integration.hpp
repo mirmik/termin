@@ -6,14 +6,14 @@
 
 namespace termin {
 
-class TERMIN_ENGINE_API TermModulesIntegration {
-private:
-    termin_modules::ModuleEnvironment _environment;
+    class TERMIN_ENGINE_API TermModulesIntegration {
+    private:
+        termin_modules::ModuleEnvironment _environment;
 
-public:
-    void set_environment(termin_modules::ModuleEnvironment environment);
-    const termin_modules::ModuleEnvironment& environment() const;
-    void configure_runtime(termin_modules::ModuleRuntime& runtime) const;
-};
+    public:
+        void set_environment(termin_modules::ModuleEnvironment environment);
+        const termin_modules::ModuleEnvironment& environment() const;
+        void configure_runtime(termin_modules::ModuleRuntime& runtime) const;
+    };
 
 } // namespace termin

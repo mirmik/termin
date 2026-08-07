@@ -36,14 +36,12 @@ typedef struct tc_audio_clip {
 TERMIN_AUDIO_API void tc_audio_clip_add_ref(tc_audio_clip* clip);
 TERMIN_AUDIO_API bool tc_audio_clip_release(tc_audio_clip* clip);
 
-TERMIN_AUDIO_API bool tc_audio_clip_set_pcm(
-    tc_audio_clip_handle handle,
-    const void* frames,
-    uint64_t frame_count,
-    uint32_t sample_rate,
-    uint16_t channels,
-    tc_audio_sample_format format
-);
+TERMIN_AUDIO_API bool tc_audio_clip_set_pcm(tc_audio_clip_handle handle,
+                                            const void* frames,
+                                            uint64_t frame_count,
+                                            uint32_t sample_rate,
+                                            uint16_t channels,
+                                            tc_audio_sample_format format);
 TERMIN_AUDIO_API bool tc_audio_clip_load_file(tc_audio_clip_handle handle, const char* path);
 TERMIN_AUDIO_API bool tc_audio_clip_ensure_loaded(tc_audio_clip_handle handle);
 TERMIN_AUDIO_API bool tc_audio_clip_unload(tc_audio_clip_handle handle);

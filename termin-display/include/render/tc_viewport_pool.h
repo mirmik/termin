@@ -1,11 +1,11 @@
 #ifndef TC_VIEWPORT_POOL_H
 #define TC_VIEWPORT_POOL_H
 
-#include <tc_types.h>
 #include "render/termin_display_api.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <tc_types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,9 +17,9 @@ typedef struct {
 } tc_viewport_handle;
 
 #ifdef __cplusplus
-    #define TC_VIEWPORT_HANDLE_INVALID (tc_viewport_handle{0xFFFFFFFF, 0})
+#define TC_VIEWPORT_HANDLE_INVALID (tc_viewport_handle{0xFFFFFFFF, 0})
 #else
-    #define TC_VIEWPORT_HANDLE_INVALID ((tc_viewport_handle){0xFFFFFFFF, 0})
+#define TC_VIEWPORT_HANDLE_INVALID ((tc_viewport_handle){0xFFFFFFFF, 0})
 #endif
 
 static inline bool tc_viewport_handle_valid(tc_viewport_handle h) {

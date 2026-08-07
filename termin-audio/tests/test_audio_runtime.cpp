@@ -39,11 +39,7 @@ TEST_CASE("audio voices reference canonical PCM clips and render without a devic
     config.no_device = true;
     REQUIRE(tc_audio_engine_init(&config));
 
-    const tc_audio_clip_handle handle = tc_audio_clip_declare(
-        "audio-offline",
-        "offline",
-        nullptr
-    );
+    const tc_audio_clip_handle handle = tc_audio_clip_declare("audio-offline", "offline", nullptr);
     REQUIRE(tc_audio_clip_is_valid(handle));
     tc_audio_clip* clip = tc_audio_clip_get(handle);
     REQUIRE(clip != nullptr);
@@ -51,14 +47,8 @@ TEST_CASE("audio voices reference canonical PCM clips and render without a devic
 
     std::array<float, 256> mono_frames{};
     mono_frames.fill(0.25f);
-    REQUIRE(tc_audio_clip_set_pcm(
-        handle,
-        mono_frames.data(),
-        mono_frames.size(),
-        48000,
-        1,
-        TC_AUDIO_SAMPLE_FORMAT_F32
-    ));
+    REQUIRE(
+        tc_audio_clip_set_pcm(handle, mono_frames.data(), mono_frames.size(), 48000, 1, TC_AUDIO_SAMPLE_FORMAT_F32));
     CHECK(tc_audio_clip_duration_ms(handle) == 5);
 
     const tc_audio_voice_handle voice = tc_audio_voice_create(handle);
@@ -92,11 +82,8 @@ TEST_CASE("Ogg Vorbis clips decode into canonical PCM and render offline") {
     config.no_device = true;
     REQUIRE(tc_audio_engine_init(&config));
 
-    const tc_audio_clip_handle clip_handle = tc_audio_clip_declare(
-        "audio-ogg-fixture",
-        "Ogg fixture",
-        TERMIN_AUDIO_TEST_OGG_PATH
-    );
+    const tc_audio_clip_handle clip_handle =
+        tc_audio_clip_declare("audio-ogg-fixture", "Ogg fixture", TERMIN_AUDIO_TEST_OGG_PATH);
     REQUIRE(tc_audio_clip_is_valid(clip_handle));
     REQUIRE(tc_audio_clip_ensure_loaded(clip_handle));
 
@@ -132,11 +119,8 @@ TEST_CASE("Ogg Vorbis clips decode into canonical PCM and render offline") {
 
 TEST_CASE("malformed Ogg fails without publishing loaded PCM") {
     tc_audio_runtime_init();
-    const tc_audio_clip_handle clip_handle = tc_audio_clip_declare(
-        "audio-malformed-ogg",
-        "Malformed Ogg",
-        TERMIN_AUDIO_TEST_MALFORMED_OGG_PATH
-    );
+    const tc_audio_clip_handle clip_handle =
+        tc_audio_clip_declare("audio-malformed-ogg", "Malformed Ogg", TERMIN_AUDIO_TEST_MALFORMED_OGG_PATH);
     REQUIRE(tc_audio_clip_is_valid(clip_handle));
     CHECK_FALSE(tc_audio_clip_ensure_loaded(clip_handle));
 

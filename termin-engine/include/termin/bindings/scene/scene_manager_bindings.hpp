@@ -6,7 +6,7 @@
 
 namespace termin {
 
-void bind_scene_manager(nanobind::module_& m);
+    void bind_scene_manager(nanobind::module_& m);
 
 } // namespace termin
 

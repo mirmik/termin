@@ -21,9 +21,7 @@ typedef struct tc_scene_ui_document_snapshot {
 } tc_scene_ui_document_snapshot;
 
 typedef struct tc_scene_ui_document_vtable {
-    bool (*get_snapshot)(
-        tc_component* component,
-        tc_scene_ui_document_snapshot* out_snapshot);
+    bool (*get_snapshot)(tc_component* component, tc_scene_ui_document_snapshot* out_snapshot);
 } tc_scene_ui_document_vtable;
 
 typedef struct tc_scene_ui_document_capability {
@@ -33,17 +31,13 @@ typedef struct tc_scene_ui_document_capability {
 
 TC_API tc_component_cap_id tc_scene_ui_document_capability_id(void);
 
-TC_API bool tc_scene_ui_document_capability_attach(
-    tc_component* component,
-    const tc_scene_ui_document_vtable* vtable,
-    void* userdata);
+TC_API bool tc_scene_ui_document_capability_attach(tc_component* component,
+                                                   const tc_scene_ui_document_vtable* vtable,
+                                                   void* userdata);
 
-TC_API const tc_scene_ui_document_capability*
-tc_scene_ui_document_capability_get(const tc_component* component);
+TC_API const tc_scene_ui_document_capability* tc_scene_ui_document_capability_get(const tc_component* component);
 
-TC_API bool tc_scene_ui_document_snapshot_get(
-    tc_component* component,
-    tc_scene_ui_document_snapshot* out_snapshot);
+TC_API bool tc_scene_ui_document_snapshot_get(tc_component* component, tc_scene_ui_document_snapshot* out_snapshot);
 
 #ifdef __cplusplus
 }

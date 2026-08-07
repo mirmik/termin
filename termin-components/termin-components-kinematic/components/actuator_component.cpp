@@ -5,56 +5,40 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/geom/quat.hpp>
 
-namespace termin
-{
+namespace termin {
 
-    namespace
-    {
+    namespace {
 
-        void register_actuator_coordinate_unit_field(
-            tc::InspectFacetBuilder& builder);
+        void register_actuator_coordinate_unit_field(tc::InspectFacetBuilder& builder);
 
     } // namespace
 
-    void ActuatorComponent::register_type()
-    {
-        auto descriptor =
-            ComponentTypeDescriptorBuilder::native<ActuatorComponent>(
-                "ActuatorComponent",
-                "termin-components-kinematic",
-                "KinematicUnitComponent");
+    void ActuatorComponent::register_type() {
+        auto descriptor = ComponentTypeDescriptorBuilder::native<ActuatorComponent>(
+            "ActuatorComponent", "termin-components-kinematic", "KinematicUnitComponent");
         descriptor.category("Kinematic");
         register_actuator_coordinate_unit_field(descriptor.inspect());
         (void)descriptor.commit();
     }
 
     ActuatorComponent::ActuatorComponent()
-        : KinematicUnitComponent("ActuatorComponent", Vec3{1.0, 0.0, 0.0}, 1.0)
-    {
-    }
+        : KinematicUnitComponent("ActuatorComponent", Vec3{1.0, 0.0, 0.0}, 1.0) {}
 
-    void ActuatorComponent::apply()
-    {
+    void ActuatorComponent::apply() {
         Entity ent = entity();
-        if (!ent.valid())
-        {
+        if (!ent.valid()) {
             tc::Log::warn("ActuatorComponent::apply() - entity not valid");
             return;
         }
 
         // local = origin * Translation(axis * coordinate)
         const Vec3 axis = get_axis();
-        Vec3 origin_position_value{
-            origin_position.x, origin_position.y, origin_position.z};
-        Quat origin_rotation_value{origin_rotation.x,
-                                   origin_rotation.y,
-                                   origin_rotation.z,
-                                   origin_rotation.w};
+        Vec3 origin_position_value{origin_position.x, origin_position.y, origin_position.z};
+        Quat origin_rotation_value{origin_rotation.x, origin_rotation.y, origin_rotation.z, origin_rotation.w};
 
         // offset.position = axis * coordinate
         Vec3 offset_pos = axis * physical_coordinate();
-        Vec3 new_position =
-            origin_position_value + origin_rotation_value.rotate(offset_pos);
+        Vec3 new_position = origin_position_value + origin_rotation_value.rotate(offset_pos);
 
         // Set position
         double xyz[3] = {new_position.x, new_position.y, new_position.z};
@@ -62,15 +46,12 @@ namespace termin
 
         // Rotation comes from the zero-coordinate frame. Scale remains
         // untouched.
-        double rot[4] = {origin_rotation_value.x,
-                         origin_rotation_value.y,
-                         origin_rotation_value.z,
-                         origin_rotation_value.w};
+        double rot[4] = {
+            origin_rotation_value.x, origin_rotation_value.y, origin_rotation_value.z, origin_rotation_value.w};
         ent.set_local_rotation(rot);
     }
 
-    void ActuatorComponent::recalculate_origin()
-    {
+    void ActuatorComponent::recalculate_origin() {
         double pos[3], rot[4];
         if (!read_entity_transform(pos, rot))
             return;
@@ -83,16 +64,12 @@ namespace termin
         Vec3 offset_pos = get_axis() * physical_coordinate();
         Vec3 rotated = origin_rotation_value.rotate(offset_pos);
 
-        origin_position = {
-            pos[0] - rotated.x, pos[1] - rotated.y, pos[2] - rotated.z};
+        origin_position = {pos[0] - rotated.x, pos[1] - rotated.y, pos[2] - rotated.z};
     }
 
-    namespace
-    {
+    namespace {
 
-        void register_actuator_coordinate_unit_field(
-            tc::InspectFacetBuilder& builder)
-        {
+        void register_actuator_coordinate_unit_field(tc::InspectFacetBuilder& builder) {
             tc::InspectFieldInfo info;
             info.type_name = "ActuatorComponent";
             info.path = "coordinate_scale";
@@ -105,8 +82,7 @@ namespace termin
                 {"0.001", "mm (0.001)"},
             };
 
-            info.getter = [](void* obj) -> tc_value
-            {
+            info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 const double scale = c->get_coordinate_scale();
                 // Return closest preset as string
@@ -119,8 +95,7 @@ namespace termin
                 return tc_value_string(std::to_string(scale).c_str());
             };
 
-            info.setter = [](void* obj, tc_value value, void*) -> bool
-            {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 if (value.type != TC_VALUE_STRING || !value.data.s)
                     return false;
                 double new_scale = std::atof(value.data.s);

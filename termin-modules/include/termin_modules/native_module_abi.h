@@ -8,21 +8,21 @@
 #include <tcbase/tc_version.h>
 
 #if defined(__cplusplus) && defined(__has_include)
-#  if __has_include(<bits/c++config.h>)
-#    include <bits/c++config.h>
-#  endif
+#if __has_include(<bits/c++config.h>)
+#include <bits/c++config.h>
+#endif
 #endif
 
 #if defined(_WIN32)
-#  define TERMIN_NATIVE_MODULE_EXPORT __declspec(dllexport)
+#define TERMIN_NATIVE_MODULE_EXPORT __declspec(dllexport)
 #else
-#  define TERMIN_NATIVE_MODULE_EXPORT __attribute__((visibility("default")))
+#define TERMIN_NATIVE_MODULE_EXPORT __attribute__((visibility("default")))
 #endif
 
 #if defined(__cplusplus)
-#  define TERMIN_NATIVE_MODULE_EXTERN_C extern "C"
+#define TERMIN_NATIVE_MODULE_EXTERN_C extern "C"
 #else
-#  define TERMIN_NATIVE_MODULE_EXTERN_C extern
+#define TERMIN_NATIVE_MODULE_EXTERN_C extern
 #endif
 
 #define TERMIN_NATIVE_MODULE_ABI_VERSION 1u
@@ -33,27 +33,26 @@
 #define TERMIN_MODULE_STRINGIFY(value) TERMIN_MODULE_STRINGIFY_IMPL(value)
 
 #if defined(_MSC_VER)
-#  define TERMIN_MODULE_COMPILER_FAMILY 3u
-#  define TERMIN_MODULE_COMPILER_VERSION ((uint32_t)(_MSC_VER))
+#define TERMIN_MODULE_COMPILER_FAMILY 3u
+#define TERMIN_MODULE_COMPILER_VERSION ((uint32_t)(_MSC_VER))
 #elif defined(__clang__)
-#  define TERMIN_MODULE_COMPILER_FAMILY 2u
-#  define TERMIN_MODULE_COMPILER_VERSION \
+#define TERMIN_MODULE_COMPILER_FAMILY 2u
+#define TERMIN_MODULE_COMPILER_VERSION                                                                                 \
     ((uint32_t)(__clang_major__ * 10000u + __clang_minor__ * 100u + __clang_patchlevel__))
 #elif defined(__GNUC__)
-#  define TERMIN_MODULE_COMPILER_FAMILY 1u
-#  define TERMIN_MODULE_COMPILER_VERSION \
-    ((uint32_t)(__GNUC__ * 10000u + __GNUC_MINOR__ * 100u + __GNUC_PATCHLEVEL__))
+#define TERMIN_MODULE_COMPILER_FAMILY 1u
+#define TERMIN_MODULE_COMPILER_VERSION ((uint32_t)(__GNUC__ * 10000u + __GNUC_MINOR__ * 100u + __GNUC_PATCHLEVEL__))
 #else
-#  define TERMIN_MODULE_COMPILER_FAMILY 0u
-#  define TERMIN_MODULE_COMPILER_VERSION 0u
+#define TERMIN_MODULE_COMPILER_FAMILY 0u
+#define TERMIN_MODULE_COMPILER_VERSION 0u
 #endif
 
 #if defined(_GLIBCXX_USE_CXX11_ABI)
-#  define TERMIN_MODULE_CXX_ABI_FLAGS ((uint32_t)(_GLIBCXX_USE_CXX11_ABI & 1u))
+#define TERMIN_MODULE_CXX_ABI_FLAGS ((uint32_t)(_GLIBCXX_USE_CXX11_ABI & 1u))
 #elif defined(_ITERATOR_DEBUG_LEVEL)
-#  define TERMIN_MODULE_CXX_ABI_FLAGS ((uint32_t)(_ITERATOR_DEBUG_LEVEL))
+#define TERMIN_MODULE_CXX_ABI_FLAGS ((uint32_t)(_ITERATOR_DEBUG_LEVEL))
 #else
-#  define TERMIN_MODULE_CXX_ABI_FLAGS 0u
+#define TERMIN_MODULE_CXX_ABI_FLAGS 0u
 #endif
 
 enum termin_native_module_capability {
@@ -76,24 +75,19 @@ typedef struct termin_native_module_error {
     size_t message_capacity;
 } termin_native_module_error;
 
-static inline void termin_native_module_set_error(
-    termin_native_module_error* error,
-    const char* message
-) {
-    if (!error || error->struct_size < sizeof(termin_native_module_error) ||
-        !error->message || error->message_capacity == 0) return;
+static inline void termin_native_module_set_error(termin_native_module_error* error, const char* message) {
+    if (!error || error->struct_size < sizeof(termin_native_module_error) || !error->message ||
+        error->message_capacity == 0)
+        return;
     const char* source = message ? message : "";
     size_t length = strlen(source);
-    if (length >= error->message_capacity) length = error->message_capacity - 1;
+    if (length >= error->message_capacity)
+        length = error->message_capacity - 1;
     memcpy(error->message, source, length);
     error->message[length] = '\0';
 }
 
-typedef void (*termin_native_module_log_fn)(
-    void* host_context,
-    int level,
-    const char* message
-);
+typedef void (*termin_native_module_log_fn)(void* host_context, int level, const char* message);
 
 typedef struct termin_native_module_host_v1 {
     uint32_t struct_size;
@@ -109,15 +103,11 @@ typedef struct termin_native_module_host_v1 {
     termin_native_module_log_fn log;
 } termin_native_module_host_v1;
 
-typedef int32_t (*termin_native_module_init_v1_fn)(
-    const termin_native_module_host_v1* host,
-    termin_native_module_error* error
-);
+typedef int32_t (*termin_native_module_init_v1_fn)(const termin_native_module_host_v1* host,
+                                                   termin_native_module_error* error);
 
-typedef int32_t (*termin_native_module_shutdown_v1_fn)(
-    const termin_native_module_host_v1* host,
-    termin_native_module_error* error
-);
+typedef int32_t (*termin_native_module_shutdown_v1_fn)(const termin_native_module_host_v1* host,
+                                                       termin_native_module_error* error);
 
 typedef struct termin_native_module_descriptor_v1_data {
     uint32_t struct_size;
@@ -137,26 +127,23 @@ typedef struct termin_native_module_descriptor_v1_data {
     termin_native_module_shutdown_v1_fn shutdown;
 } termin_native_module_descriptor_v1_data;
 
-#define TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(                                 \
-    module_id_value, module_version_value, build_id_value, capabilities_value, \
-    init_value, shutdown_value)                                              \
-    TERMIN_NATIVE_MODULE_EXTERN_C TERMIN_NATIVE_MODULE_EXPORT const          \
-        termin_native_module_descriptor_v1_data termin_module_descriptor_v1 = { \
-            sizeof(termin_native_module_descriptor_v1_data),                 \
-            TERMIN_NATIVE_MODULE_ABI_VERSION,                                \
-            TERMIN_NATIVE_HOST_ABI_VERSION,                                  \
-            TERMIN_NATIVE_MODULE_ABI_VERSION,                                \
-            TC_VERSION,                                                      \
-            TERMIN_MODULE_COMPILER_FAMILY,                                   \
-            TERMIN_MODULE_COMPILER_VERSION,                                  \
-            TERMIN_MODULE_CXX_ABI_FLAGS,                                     \
-            (uint32_t)sizeof(void*),                                          \
-            module_id_value,                                                 \
-            module_version_value,                                            \
-            build_id_value,                                                  \
-            (uint64_t)(capabilities_value),                                  \
-            init_value,                                                      \
-            shutdown_value                                                   \
-        }
+#define TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(                                                                            \
+    module_id_value, module_version_value, build_id_value, capabilities_value, init_value, shutdown_value)             \
+    TERMIN_NATIVE_MODULE_EXTERN_C TERMIN_NATIVE_MODULE_EXPORT const termin_native_module_descriptor_v1_data            \
+        termin_module_descriptor_v1 = {sizeof(termin_native_module_descriptor_v1_data),                                \
+                                       TERMIN_NATIVE_MODULE_ABI_VERSION,                                               \
+                                       TERMIN_NATIVE_HOST_ABI_VERSION,                                                 \
+                                       TERMIN_NATIVE_MODULE_ABI_VERSION,                                               \
+                                       TC_VERSION,                                                                     \
+                                       TERMIN_MODULE_COMPILER_FAMILY,                                                  \
+                                       TERMIN_MODULE_COMPILER_VERSION,                                                 \
+                                       TERMIN_MODULE_CXX_ABI_FLAGS,                                                    \
+                                       (uint32_t)sizeof(void*),                                                        \
+                                       module_id_value,                                                                \
+                                       module_version_value,                                                           \
+                                       build_id_value,                                                                 \
+                                       (uint64_t)(capabilities_value),                                                 \
+                                       init_value,                                                                     \
+                                       shutdown_value}
 
 #endif

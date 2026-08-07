@@ -2,13 +2,13 @@
 
 #ifndef TERMIN_SCENE_API
 #ifdef _WIN32
-    #if defined(TERMIN_SCENE_EXPORTS)
-        #define TERMIN_SCENE_API __declspec(dllexport)
-    #else
-        #define TERMIN_SCENE_API __declspec(dllimport)
-    #endif
+#if defined(TERMIN_SCENE_EXPORTS)
+#define TERMIN_SCENE_API __declspec(dllexport)
 #else
-    #define TERMIN_SCENE_API __attribute__((visibility("default")))
+#define TERMIN_SCENE_API __declspec(dllimport)
+#endif
+#else
+#define TERMIN_SCENE_API __attribute__((visibility("default")))
 #endif
 #endif
 

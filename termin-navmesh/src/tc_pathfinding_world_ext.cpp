@@ -10,24 +10,24 @@
 
 namespace {
 
-void* pathfinding_world_ext_create(tc_scene_handle scene, void* type_userdata) {
-    (void)type_userdata;
+    void* pathfinding_world_ext_create(tc_scene_handle scene, void* type_userdata) {
+        (void)type_userdata;
 
-    auto* world = new (std::nothrow) termin::PathfindingWorld();
-    if (!world) {
-        tc_log_error("[tc_pathfinding_world] failed to allocate PathfindingWorld");
-        return nullptr;
+        auto* world = new (std::nothrow) termin::PathfindingWorld();
+        if (!world) {
+            tc_log_error("[tc_pathfinding_world] failed to allocate PathfindingWorld");
+            return nullptr;
+        }
+
+        world->set_scene(scene);
+        world->rebuild_from_scene();
+        return world;
     }
 
-    world->set_scene(scene);
-    world->rebuild_from_scene();
-    return world;
-}
-
-void pathfinding_world_ext_destroy(void* ext, void* type_userdata) {
-    (void)type_userdata;
-    delete reinterpret_cast<termin::PathfindingWorld*>(ext);
-}
+    void pathfinding_world_ext_destroy(void* ext, void* type_userdata) {
+        (void)type_userdata;
+        delete reinterpret_cast<termin::PathfindingWorld*>(ext);
+    }
 
 } // namespace
 
@@ -41,18 +41,13 @@ extern "C" void tc_pathfinding_world_extension_init(void) {
     vtable.destroy = pathfinding_world_ext_destroy;
 
     if (!tc_scene_ext_register(
-            TC_SCENE_EXT_TYPE_PATHFINDING_WORLD,
-            "pathfinding_world",
-            "pathfinding_world",
-            &vtable,
-            nullptr)) {
+            TC_SCENE_EXT_TYPE_PATHFINDING_WORLD, "pathfinding_world", "pathfinding_world", &vtable, nullptr)) {
         tc_log_error("[tc_pathfinding_world] failed to register pathfinding_world extension type");
     }
 }
 
 extern "C" tc_pathfinding_world* tc_pathfinding_world_get_scene(tc_scene_handle scene) {
-    return reinterpret_cast<tc_pathfinding_world*>(
-        tc_scene_ext_get(scene, TC_SCENE_EXT_TYPE_PATHFINDING_WORLD));
+    return reinterpret_cast<tc_pathfinding_world*>(tc_scene_ext_get(scene, TC_SCENE_EXT_TYPE_PATHFINDING_WORLD));
 }
 
 extern "C" tc_pathfinding_world* tc_pathfinding_world_ensure_scene(tc_scene_handle scene) {

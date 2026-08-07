@@ -55,7 +55,8 @@ TERMIN_AUDIO_API void tc_audio_voice_set_spatialization(tc_audio_voice_handle vo
 TERMIN_AUDIO_API void tc_audio_voice_set_position(tc_audio_voice_handle voice, float x, float y, float z);
 TERMIN_AUDIO_API void tc_audio_voice_get_position(tc_audio_voice_handle voice, float* x, float* y, float* z);
 TERMIN_AUDIO_API void tc_audio_voice_set_velocity(tc_audio_voice_handle voice, float x, float y, float z);
-TERMIN_AUDIO_API void tc_audio_voice_set_distance_range(tc_audio_voice_handle voice, float min_distance, float max_distance);
+TERMIN_AUDIO_API void
+tc_audio_voice_set_distance_range(tc_audio_voice_handle voice, float min_distance, float max_distance);
 TERMIN_AUDIO_API size_t tc_audio_voice_count(void);
 TERMIN_AUDIO_API size_t tc_audio_voice_capacity(void);
 TERMIN_AUDIO_API tc_audio_voice_handle tc_audio_voice_at(size_t pool_index);

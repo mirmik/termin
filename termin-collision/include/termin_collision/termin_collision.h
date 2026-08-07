@@ -1,13 +1,13 @@
 #pragma once
 
 #ifdef _WIN32
-    #ifdef TERMIN_COLLISION_EXPORTS
-        #define TERMIN_COLLISION_API __declspec(dllexport)
-    #else
-        #define TERMIN_COLLISION_API __declspec(dllimport)
-    #endif
+#ifdef TERMIN_COLLISION_EXPORTS
+#define TERMIN_COLLISION_API __declspec(dllexport)
 #else
-    #define TERMIN_COLLISION_API __attribute__((visibility("default")))
+#define TERMIN_COLLISION_API __declspec(dllimport)
+#endif
+#else
+#define TERMIN_COLLISION_API __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus

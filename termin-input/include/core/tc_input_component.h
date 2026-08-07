@@ -23,9 +23,7 @@ typedef struct tc_input_vtable {
     void (*on_scroll)(tc_component* self, tc_scroll_event* event);
     void (*on_key)(tc_component* self, tc_key_event* event);
     void (*on_text)(tc_component* self, tc_text_event* event);
-    void (*on_focus_lost)(
-        tc_component* self,
-        tc_input_focus_event* event);
+    void (*on_focus_lost)(tc_component* self, tc_input_focus_event* event);
 } tc_input_vtable;
 
 static inline bool tc_component_is_input_handler(const tc_component* c) {
@@ -33,7 +31,8 @@ static inline bool tc_component_is_input_handler(const tc_component* c) {
 }
 
 static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
-    if (!c) return NULL;
+    if (!c)
+        return NULL;
     return tc_input_capability_get(c);
 }
 
@@ -72,20 +71,14 @@ static inline void tc_component_on_key(tc_component* c, tc_key_event* event) {
     }
 }
 
-static inline void tc_component_on_text(
-    tc_component* c,
-    tc_text_event* event
-) {
+static inline void tc_component_on_text(tc_component* c, tc_text_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
     if (c && c->enabled && event && vt && vt->on_text) {
         vt->on_text(c, event);
     }
 }
 
-static inline void tc_component_on_focus_lost(
-    tc_component* c,
-    tc_input_focus_event* event
-) {
+static inline void tc_component_on_focus_lost(tc_component* c, tc_input_focus_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
     if (c && c->enabled && event && vt && vt->on_focus_lost) {
         vt->on_focus_lost(c, event);

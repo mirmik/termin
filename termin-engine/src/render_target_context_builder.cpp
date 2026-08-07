@@ -12,50 +12,65 @@
 #include <tgfx2/i_render_device.hpp>
 
 extern "C" {
-#include <tcbase/tc_log.h>
 #include "core/tc_scene.h"
 #include "render/tc_render_target.h"
 #include "tgfx/resources/tc_texture_registry.h"
+#include <tcbase/tc_log.h>
 }
 
 namespace termin::rendering_manager_detail {
 
-static uint64_t render_target_key(tc_render_target_handle h) {
-    return (static_cast<uint64_t>(h.index) << 32) | h.generation;
-}
-
-static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_handle rt) {
-    uint64_t target_mask = tc_render_target_handle_valid(rt)
-        ? tc_render_target_get_layer_mask(rt)
-        : 0xFFFFFFFFFFFFFFFFULL;
-    return camera_mask & target_mask;
-}
-
-static void fill_render_target_clear_settings(RenderTargetContext& ctx, tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt)) return;
-    ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
-    tc_render_target_get_clear_color_value(rt, ctx.clear_color);
-    ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
-    ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
-}
-
-static tgfx::TextureHandle resolve_pipeline_texture_ref(
-    tgfx::IRenderDevice& device,
-    tc_scene_handle preferred_scene,
-    const std::vector<tc_render_target_handle>& render_targets,
-    const char* ref
-) {
-    if (!ref || ref[0] == '\0') {
-        return {};
+    static uint64_t render_target_key(tc_render_target_handle h) {
+        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
     }
 
-    PipelineTextureRef classified = classify_pipeline_texture_ref(
-        ref, preferred_scene, render_targets.data(), render_targets.size());
-    if (classified.kind == PipelineTextureRefKind::FileTexture) {
+    static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_handle rt) {
+        uint64_t target_mask =
+            tc_render_target_handle_valid(rt) ? tc_render_target_get_layer_mask(rt) : 0xFFFFFFFFFFFFFFFFULL;
+        return camera_mask & target_mask;
+    }
+
+    static void fill_render_target_clear_settings(RenderTargetContext& ctx, tc_render_target_handle rt) {
+        if (!tc_render_target_handle_valid(rt))
+            return;
+        ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
+        tc_render_target_get_clear_color_value(rt, ctx.clear_color);
+        ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
+        ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
+    }
+
+    static tgfx::TextureHandle resolve_pipeline_texture_ref(tgfx::IRenderDevice& device,
+                                                            tc_scene_handle preferred_scene,
+                                                            const std::vector<tc_render_target_handle>& render_targets,
+                                                            const char* ref) {
+        if (!ref || ref[0] == '\0') {
+            return {};
+        }
+
+        PipelineTextureRef classified =
+            classify_pipeline_texture_ref(ref, preferred_scene, render_targets.data(), render_targets.size());
+        if (classified.kind == PipelineTextureRefKind::FileTexture) {
+            const char* texture_name = classified.texture_name;
+            tc_texture_handle tex = tc_texture_find(texture_name);
+            if (tc_texture_handle_is_invalid(tex)) {
+                tex = tc_texture_find_by_name(texture_name);
+            }
+            if (tc_texture_handle_is_invalid(tex)) {
+                tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
+                return {};
+            }
+            return wrap_tc_texture_as_tgfx2(device, tex);
+        }
+
+        if (classified.kind == PipelineTextureRefKind::RenderTarget) {
+            tc_render_target_ensure_textures(classified.render_target);
+            return wrap_tc_texture_as_tgfx2(device, tc_render_target_get_color_texture(classified.render_target));
+        }
+
         const char* texture_name = classified.texture_name;
-        tc_texture_handle tex = tc_texture_find(texture_name);
+        tc_texture_handle tex = tc_texture_find_by_name(texture_name);
         if (tc_texture_handle_is_invalid(tex)) {
-            tex = tc_texture_find_by_name(texture_name);
+            tex = tc_texture_find(texture_name);
         }
         if (tc_texture_handle_is_invalid(tex)) {
             tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
@@ -64,205 +79,158 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         return wrap_tc_texture_as_tgfx2(device, tex);
     }
 
-    if (classified.kind == PipelineTextureRefKind::RenderTarget) {
-        tc_render_target_ensure_textures(classified.render_target);
-        return wrap_tc_texture_as_tgfx2(
-            device, tc_render_target_get_color_texture(classified.render_target));
-    }
-
-    const char* texture_name = classified.texture_name;
-    tc_texture_handle tex = tc_texture_find_by_name(texture_name);
-    if (tc_texture_handle_is_invalid(tex)) {
-        tex = tc_texture_find(texture_name);
-    }
-    if (tc_texture_handle_is_invalid(tex)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
-        return {};
-    }
-    return wrap_tc_texture_as_tgfx2(device, tex);
-}
-
-static void fill_external_textures_from_render_target(
-    RenderTargetContext& ctx,
-    tc_render_target_handle rt,
-    tgfx::IRenderDevice& device,
-    const std::vector<tc_render_target_handle>& render_targets
-) {
-    const tc_value* params = tc_render_target_get_pipeline_params(rt);
-    if (!params || params->type != TC_VALUE_DICT) {
-        return;
-    }
-
-    for (size_t i = 0; i < params->data.dict.count; i++) {
-        const char* slot = params->data.dict.entries[i].key;
-        tc_value* value = params->data.dict.entries[i].value;
-        if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING) {
-            continue;
+    static void fill_external_textures_from_render_target(RenderTargetContext& ctx,
+                                                          tc_render_target_handle rt,
+                                                          tgfx::IRenderDevice& device,
+                                                          const std::vector<tc_render_target_handle>& render_targets) {
+        const tc_value* params = tc_render_target_get_pipeline_params(rt);
+        if (!params || params->type != TC_VALUE_DICT) {
+            return;
         }
 
-        tc_scene_handle scene = tc_render_target_get_scene(rt);
-        tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
-        if (tex) {
-            ctx.external_textures[slot] = tex;
-        }
-    }
-}
-
-bool build_render_target_contexts(const RenderTargetContextBuildRequest& request) {
-    tc_render_target_handle rt = request.rt;
-    if (!tc_render_target_handle_valid(rt)) {
-        return false;
-    }
-    if (!tc_render_target_get_enabled(rt)) {
-        return false;
-    }
-
-    const tc_render_target_kind kind = tc_render_target_get_kind(rt);
-    if (kind != TC_RENDER_TARGET_TEXTURE_2D) {
-        auto it = request.providers.find((int)kind);
-        if (it == request.providers.end() || !it->second) {
-            const char* rt_name = tc_render_target_get_name(rt);
-            const uint64_t warning_key = render_target_key(rt);
-            if (request.missing_provider_warnings.insert(warning_key).second) {
-                tc_log(
-                    TC_LOG_WARN,
-                    "[RenderingManager] render target '%s' kind '%s' has no context provider",
-                    rt_name ? rt_name : "(unnamed)",
-                    tc_render_target_kind_to_string(kind)
-                );
+        for (size_t i = 0; i < params->data.dict.count; i++) {
+            const char* slot = params->data.dict.entries[i].key;
+            tc_value* value = params->data.dict.entries[i].value;
+            if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING) {
+                continue;
             }
+
+            tc_scene_handle scene = tc_render_target_get_scene(rt);
+            tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
+            if (tex) {
+                ctx.external_textures[slot] = tex;
+            }
+        }
+    }
+
+    bool build_render_target_contexts(const RenderTargetContextBuildRequest& request) {
+        tc_render_target_handle rt = request.rt;
+        if (!tc_render_target_handle_valid(rt)) {
             return false;
         }
-        std::unordered_set<std::string> existing_contexts;
-        existing_contexts.reserve(request.contexts.size());
-        for (const auto& [name, context] : request.contexts) {
-            (void)context;
-            existing_contexts.insert(name);
+        if (!tc_render_target_get_enabled(rt)) {
+            return false;
         }
 
-        const bool ok = it->second(
-            request.manager,
-            rt,
-            request.base_context_name,
-            request.internal_entities,
-            request.contexts,
-            request.default_context_name
-        );
-        if (ok) {
-            for (const auto& [name, context] : request.contexts) {
-                (void)context;
-                if (!existing_contexts.contains(name)) {
-                    request.internal_entities_by_context[name] =
-                        request.internal_entities;
+        const tc_render_target_kind kind = tc_render_target_get_kind(rt);
+        if (kind != TC_RENDER_TARGET_TEXTURE_2D) {
+            auto it = request.providers.find((int)kind);
+            if (it == request.providers.end() || !it->second) {
+                const char* rt_name = tc_render_target_get_name(rt);
+                const uint64_t warning_key = render_target_key(rt);
+                if (request.missing_provider_warnings.insert(warning_key).second) {
+                    tc_log(TC_LOG_WARN,
+                           "[RenderingManager] render target '%s' kind '%s' has no context provider",
+                           rt_name ? rt_name : "(unnamed)",
+                           tc_render_target_kind_to_string(kind));
                 }
-            }
-        }
-        if (ok && request.engine) {
-            request.engine->ensure_tgfx2();
-            tgfx::IRenderDevice* device = request.engine->tgfx2_device();
-            if (!device) {
-                tc_log(
-                    TC_LOG_ERROR,
-                    "[RenderingManager] special render target '%s' provider "
-                    "returned contexts without a tgfx2 device",
-                    tc_render_target_get_name(rt));
                 return false;
             }
-            for (auto& [name, context] : request.contexts) {
-                if (existing_contexts.contains(name)) {
-                    continue;
-                }
-                fill_external_textures_from_render_target(
-                    context,
-                    rt,
-                    *device,
-                    request.managed_render_targets);
+            std::unordered_set<std::string> existing_contexts;
+            existing_contexts.reserve(request.contexts.size());
+            for (const auto& [name, context] : request.contexts) {
+                (void)context;
+                existing_contexts.insert(name);
             }
+
+            const bool ok = it->second(request.manager,
+                                       rt,
+                                       request.base_context_name,
+                                       request.internal_entities,
+                                       request.contexts,
+                                       request.default_context_name);
+            if (ok) {
+                for (const auto& [name, context] : request.contexts) {
+                    (void)context;
+                    if (!existing_contexts.contains(name)) {
+                        request.internal_entities_by_context[name] = request.internal_entities;
+                    }
+                }
+            }
+            if (ok && request.engine) {
+                request.engine->ensure_tgfx2();
+                tgfx::IRenderDevice* device = request.engine->tgfx2_device();
+                if (!device) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RenderingManager] special render target '%s' provider "
+                           "returned contexts without a tgfx2 device",
+                           tc_render_target_get_name(rt));
+                    return false;
+                }
+                for (auto& [name, context] : request.contexts) {
+                    if (existing_contexts.contains(name)) {
+                        continue;
+                    }
+                    fill_external_textures_from_render_target(context, rt, *device, request.managed_render_targets);
+                }
+            }
+            if (ok && request.default_context_name.empty() && !request.contexts.empty()) {
+                request.default_context_name = request.contexts.begin()->first;
+            }
+            return ok;
         }
-        if (ok && request.default_context_name.empty() && !request.contexts.empty()) {
-            request.default_context_name = request.contexts.begin()->first;
+
+        const char* rt_name = tc_render_target_get_name(rt);
+        tc_component* camera_comp = tc_render_target_get_camera(rt);
+        if (!camera_comp) {
+            return false;
         }
-        return ok;
+
+        if (request.render_width <= 0 || request.render_height <= 0) {
+            tc_log(TC_LOG_WARN,
+                   "[RenderingManager] RT '%s': invalid size %dx%d",
+                   rt_name ? rt_name : "?",
+                   request.render_width,
+                   request.render_height);
+            return false;
+        }
+
+        double aspect = static_cast<double>(request.render_width) / std::max(1, request.render_height);
+        RenderCameraSnapshot camera_snapshot;
+        if (!resolve_render_camera(camera_comp, aspect, camera_snapshot)) {
+            tc_log(TC_LOG_WARN,
+                   "[RenderingManager] render target '%s': no camera capability",
+                   rt_name ? rt_name : "(null)");
+            return false;
+        }
+        RenderCamera& render_camera = camera_snapshot.camera;
+        const uint64_t camera_layer_mask = camera_snapshot.layer_mask;
+        const uint64_t camera_render_category_mask = camera_snapshot.render_category_mask;
+
+        if (request.engine)
+            request.engine->ensure_tgfx2();
+        tgfx::IRenderDevice* device = request.engine ? request.engine->tgfx2_device() : nullptr;
+        if (!device) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable", rt_name ? rt_name : "?");
+            return false;
+        }
+
+        tc_render_target_ensure_textures(rt);
+        tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_color_texture(rt));
+        tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_depth_texture(rt));
+
+        const std::string context_name =
+            request.base_context_name.empty() ? (rt_name ? rt_name : "") : request.base_context_name;
+
+        RenderTargetContext ctx;
+        ctx.name = context_name;
+        ctx.view.primary = render_camera;
+        ctx.render_rect = {0, 0, request.render_width, request.render_height};
+        ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
+        ctx.render_category_mask = camera_render_category_mask;
+        ctx.output_color_tex = out_color;
+        ctx.output_depth_tex = out_depth;
+        ctx.output_color_format = render_target_format_to_tgfx2(tc_render_target_get_color_format(rt));
+        ctx.output_depth_format = render_target_format_to_tgfx2(tc_render_target_get_depth_format(rt));
+        fill_render_target_clear_settings(ctx, rt);
+        fill_external_textures_from_render_target(ctx, rt, *device, request.managed_render_targets);
+        request.contexts[context_name] = std::move(ctx);
+        request.internal_entities_by_context[context_name] = request.internal_entities;
+
+        if (request.default_context_name.empty()) {
+            request.default_context_name = context_name;
+        }
+        return true;
     }
-
-    const char* rt_name = tc_render_target_get_name(rt);
-    tc_component* camera_comp = tc_render_target_get_camera(rt);
-    if (!camera_comp) {
-        return false;
-    }
-
-    if (request.render_width <= 0 || request.render_height <= 0) {
-        tc_log(
-            TC_LOG_WARN,
-            "[RenderingManager] RT '%s': invalid size %dx%d",
-            rt_name ? rt_name : "?",
-            request.render_width,
-            request.render_height
-        );
-        return false;
-    }
-
-    double aspect =
-        static_cast<double>(request.render_width) / std::max(1, request.render_height);
-    RenderCameraSnapshot camera_snapshot;
-    if (!resolve_render_camera(camera_comp, aspect, camera_snapshot)) {
-        tc_log(
-            TC_LOG_WARN,
-            "[RenderingManager] render target '%s': no camera capability",
-            rt_name ? rt_name : "(null)"
-        );
-        return false;
-    }
-    RenderCamera& render_camera = camera_snapshot.camera;
-    const uint64_t camera_layer_mask = camera_snapshot.layer_mask;
-    const uint64_t camera_render_category_mask =
-        camera_snapshot.render_category_mask;
-
-    if (request.engine) request.engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device =
-        request.engine ? request.engine->tgfx2_device() : nullptr;
-    if (!device) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
-               rt_name ? rt_name : "?");
-        return false;
-    }
-
-    tc_render_target_ensure_textures(rt);
-    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_color_texture(rt));
-    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_depth_texture(rt));
-
-    const std::string context_name = request.base_context_name.empty()
-        ? (rt_name ? rt_name : "")
-        : request.base_context_name;
-
-    RenderTargetContext ctx;
-    ctx.name = context_name;
-    ctx.view.primary = render_camera;
-    ctx.render_rect = {0, 0, request.render_width, request.render_height};
-    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
-    ctx.render_category_mask = camera_render_category_mask;
-    ctx.output_color_tex = out_color;
-    ctx.output_depth_tex = out_depth;
-    ctx.output_color_format = render_target_format_to_tgfx2(
-        tc_render_target_get_color_format(rt));
-    ctx.output_depth_format = render_target_format_to_tgfx2(
-        tc_render_target_get_depth_format(rt));
-    fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(
-        ctx,
-        rt,
-        *device,
-        request.managed_render_targets);
-    request.contexts[context_name] = std::move(ctx);
-    request.internal_entities_by_context[context_name] =
-        request.internal_entities;
-
-    if (request.default_context_name.empty()) {
-        request.default_context_name = context_name;
-    }
-    return true;
-}
 
 } // namespace termin::rendering_manager_detail

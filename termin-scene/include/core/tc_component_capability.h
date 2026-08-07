@@ -1,8 +1,8 @@
 #ifndef TC_COMPONENT_CAPABILITY_H
 #define TC_COMPONENT_CAPABILITY_H
 
-#include "tc_types.h"
 #include "core/tc_scene_pool.h"
+#include "tc_types.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -21,10 +21,8 @@ struct tc_component;
 typedef struct tc_component tc_component;
 
 TC_API tc_component_cap_id tc_component_capability_register(const char* debug_name);
-TC_API tc_component_cap_id tc_component_capability_register_with_destructor(
-    const char* debug_name,
-    tc_component_capability_destroy_fn destroy_fn
-);
+TC_API tc_component_cap_id
+tc_component_capability_register_with_destructor(const char* debug_name, tc_component_capability_destroy_fn destroy_fn);
 TC_API const char* tc_component_capability_name(tc_component_cap_id id);
 TC_API bool tc_component_capability_valid(tc_component_cap_id id);
 TC_API size_t tc_component_capability_count(void);

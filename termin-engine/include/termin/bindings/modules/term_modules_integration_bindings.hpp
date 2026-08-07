@@ -4,6 +4,6 @@
 
 namespace termin {
 
-void bind_term_modules_integration(nanobind::module_& m);
+    void bind_term_modules_integration(nanobind::module_& m);
 
 } // namespace termin

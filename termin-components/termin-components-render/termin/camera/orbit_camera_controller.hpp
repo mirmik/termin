@@ -1,18 +1,18 @@
 #pragma once
 
-#include <termin/export.hpp>
-#include <termin/entity/component.hpp>
-#include <termin/entity/cmp_ref.hpp>
-#include <termin/entity/input_handler.hpp>
-#include <termin/input/input_events.hpp>
-#include <termin/geom/vec3.hpp>
-#include <termin/geom/quat.hpp>
-#include <termin/geom/pose3.hpp>
 #include <termin/camera/camera_component.hpp>
+#include <termin/entity/cmp_ref.hpp>
+#include <termin/entity/component.hpp>
+#include <termin/entity/input_handler.hpp>
+#include <termin/export.hpp>
+#include <termin/geom/pose3.hpp>
+#include <termin/geom/quat.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/input/input_events.hpp>
 
 #include <cmath>
-#include <unordered_map>
 #include <cstdint>
+#include <unordered_map>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -20,163 +20,170 @@
 
 namespace termin {
 
-/**
- * OrbitCameraController - orbit camera controller similar to DCC tools.
- *
- * Transform is the single source of truth. Internal state (azimuth, elevation, target)
- * is derived from transform and updated when external changes are detected.
- *
- * Coordinate convention: Y-forward, Z-up
- *   - At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y
- *   - Azimuth rotates around Z axis (up)
- *   - Elevation raises/lowers the camera
- *
- * Controls:
- *   - Configured orbit mouse button + drag: Orbit (middle by default)
- *   - Configured pan mouse button + drag: Pan (right by default)
- *   - Scroll wheel: Zoom (change radius or ortho size)
- */
-class ENTITY_API OrbitCameraController : public CxxComponent, public InputHandler {
-public:
-    // === Public parameters (registered for inspect serialization in register_type()) ===
+    /**
+     * OrbitCameraController - orbit camera controller similar to DCC tools.
+     *
+     * Transform is the single source of truth. Internal state (azimuth, elevation, target)
+     * is derived from transform and updated when external changes are detected.
+     *
+     * Coordinate convention: Y-forward, Z-up
+     *   - At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y
+     *   - Azimuth rotates around Z axis (up)
+     *   - Elevation raises/lowers the camera
+     *
+     * Controls:
+     *   - Configured orbit mouse button + drag: Orbit (middle by default)
+     *   - Configured pan mouse button + drag: Pan (right by default)
+     *   - Scroll wheel: Zoom (change radius or ortho size)
+     */
+    class ENTITY_API OrbitCameraController : public CxxComponent, public InputHandler {
+    public:
+        // === Public parameters (registered for inspect serialization in register_type()) ===
 
-    double radius = 5.0;
-    double min_radius = 1.0;
-    double max_radius = 100.0;
-    bool horizon_lock = true;  // Z always up, clamp roll
-    int orbit_mouse_button = static_cast<int>(MouseButton::MIDDLE);
-    int pan_mouse_button = static_cast<int>(MouseButton::RIGHT);
+        double radius = 5.0;
+        double min_radius = 1.0;
+        double max_radius = 100.0;
+        bool horizon_lock = true; // Z always up, clamp roll
+        int orbit_mouse_button = static_cast<int>(MouseButton::MIDDLE);
+        int pan_mouse_button = static_cast<int>(MouseButton::RIGHT);
 
-private:
-    // === Internal state (derived from transform) ===
-    double _azimuth = 0.0;      // Horizontal angle (radians)
-    double _elevation = 0.0;   // Vertical angle (radians)
-    Vec3 _target{0.0, 0.0, 0.0};  // Point camera orbits around
-    // For detecting external transform changes
-    Vec3 _last_position{0.0, 0.0, 0.0};
-    Quat _last_rotation = Quat::identity();
-    bool _has_last_transform = false;
-    // === Control parameters ===
-    double _orbit_speed = 0.2;
-    double _pan_speed = 0.005;
-    double _zoom_speed = 0.5;
-    double _touch_zoom_speed = 0.02;
-    bool _prevent_moving = false;
-    // === Per-viewport state for drag operations ===
-    struct ViewportState {
-        bool orbit_active = false;
-        bool pan_active = false;
-        double last_x = 0.0;
-        double last_y = 0.0;
-        bool has_last = false;
-        struct TouchPoint {
-            double x = 0.0;
-            double y = 0.0;
+    private:
+        // === Internal state (derived from transform) ===
+        double _azimuth = 0.0;       // Horizontal angle (radians)
+        double _elevation = 0.0;     // Vertical angle (radians)
+        Vec3 _target{0.0, 0.0, 0.0}; // Point camera orbits around
+        // For detecting external transform changes
+        Vec3 _last_position{0.0, 0.0, 0.0};
+        Quat _last_rotation = Quat::identity();
+        bool _has_last_transform = false;
+        // === Control parameters ===
+        double _orbit_speed = 0.2;
+        double _pan_speed = 0.005;
+        double _zoom_speed = 0.5;
+        double _touch_zoom_speed = 0.02;
+        bool _prevent_moving = false;
+        // === Per-viewport state for drag operations ===
+        struct ViewportState {
+            bool orbit_active = false;
+            bool pan_active = false;
+            double last_x = 0.0;
+            double last_y = 0.0;
+            bool has_last = false;
+            struct TouchPoint {
+                double x = 0.0;
+                double y = 0.0;
+            };
+            std::unordered_map<uint64_t, TouchPoint> touch_points;
         };
-        std::unordered_map<uint64_t, TouchPoint> touch_points;
+        std::unordered_map<uint64_t, ViewportState> _viewport_states;
+        // === Camera component reference (CmpRef validates entity liveness) ===
+        CmpRef<CameraComponent> _camera;
+
+    public:
+        // === Constructor ===
+
+        OrbitCameraController(double radius = 5.0,
+                              double min_radius = 1.0,
+                              double max_radius = 100.0,
+                              bool prevent_moving = false);
+
+        static void register_type();
+
+        // === Camera operations ===
+
+        /**
+         * Orbit camera around target.
+         * @param delta_azimuth Horizontal rotation in degrees
+         * @param delta_elevation Vertical rotation in degrees
+         */
+        void orbit(double delta_azimuth, double delta_elevation);
+
+        /**
+         * Pan camera (move target in screen space).
+         * @param dx Horizontal offset (positive = right)
+         * @param dy Vertical offset (positive = up)
+         */
+        void pan(double dx, double dy);
+
+        /**
+         * Zoom camera.
+         * For perspective: changes radius.
+         * For orthographic: changes ortho_size.
+         * @param delta Zoom amount (positive = zoom out)
+         */
+        void zoom(double delta);
+
+        /**
+         * Center camera on position.
+         * @param position New target position
+         */
+        void center_on(const Vec3& position);
+
+        // === Fly mode (direct transform manipulation) ===
+        // These methods modify the camera transform directly.
+        // After each call, _sync_from_transform() updates azimuth/elevation.
+        // Roll is preserved between fly calls but resets on orbit/_update_pose.
+
+        // Translate camera along its local axes (right, forward, up).
+        void fly_move(double right, double forward, double up);
+
+        // Move forward/backward. If horizon_lock, projected onto XY plane.
+        void fly_forward(double delta);
+
+        // Rotate camera in place: yaw (world Z), pitch (local X), roll (local Y).
+        // All angles in degrees.
+        void fly_rotate(double yaw, double pitch, double roll = 0.0);
+
+        /**
+         * Set whether camera movement is prevented.
+         */
+        void set_prevent_moving(bool prevent) {
+            _prevent_moving = prevent;
+        }
+        bool prevent_moving() const {
+            return _prevent_moving;
+        }
+
+        // === Getters for internal state ===
+
+        Vec3 target() const {
+            return _target;
+        }
+        double azimuth() const {
+            return _azimuth;
+        }
+        double elevation() const {
+            return _elevation;
+        }
+
+        // === CxxComponent lifecycle ===
+
+        void on_added() override;
+        void update(float dt) override;
+
+        // === InputHandler interface ===
+
+        void on_pointer(tc_pointer_event* event) override;
+        void on_mouse_button(tc_mouse_button_event* event) override;
+        void on_mouse_move(tc_mouse_move_event* event) override;
+        void on_scroll(tc_scroll_event* event) override;
+
+        // === Internal methods (public for Python compatibility) ===
+
+        void _sync_from_transform();
+        void _update_pose();
+
+    private:
+        // === Internal methods ===
+
+        void _ensure_camera();
+        bool _event_targets_this_camera(tc_viewport_handle viewport);
+        ViewportState& _get_viewport_state(uint64_t viewport_id);
+
+        // Clamp value to range
+        static double _clamp(double v, double lo, double hi) {
+            return v < lo ? lo : (v > hi ? hi : v);
+        }
     };
-    std::unordered_map<uint64_t, ViewportState> _viewport_states;
-    // === Camera component reference (CmpRef validates entity liveness) ===
-    CmpRef<CameraComponent> _camera;
-
-public:
-
-    // === Constructor ===
-
-    OrbitCameraController(
-        double radius = 5.0,
-        double min_radius = 1.0,
-        double max_radius = 100.0,
-        bool prevent_moving = false
-    );
-
-    static void register_type();
-
-    // === Camera operations ===
-
-    /**
-     * Orbit camera around target.
-     * @param delta_azimuth Horizontal rotation in degrees
-     * @param delta_elevation Vertical rotation in degrees
-     */
-    void orbit(double delta_azimuth, double delta_elevation);
-
-    /**
-     * Pan camera (move target in screen space).
-     * @param dx Horizontal offset (positive = right)
-     * @param dy Vertical offset (positive = up)
-     */
-    void pan(double dx, double dy);
-
-    /**
-     * Zoom camera.
-     * For perspective: changes radius.
-     * For orthographic: changes ortho_size.
-     * @param delta Zoom amount (positive = zoom out)
-     */
-    void zoom(double delta);
-
-    /**
-     * Center camera on position.
-     * @param position New target position
-     */
-    void center_on(const Vec3& position);
-
-    // === Fly mode (direct transform manipulation) ===
-    // These methods modify the camera transform directly.
-    // After each call, _sync_from_transform() updates azimuth/elevation.
-    // Roll is preserved between fly calls but resets on orbit/_update_pose.
-
-    // Translate camera along its local axes (right, forward, up).
-    void fly_move(double right, double forward, double up);
-
-    // Move forward/backward. If horizon_lock, projected onto XY plane.
-    void fly_forward(double delta);
-
-    // Rotate camera in place: yaw (world Z), pitch (local X), roll (local Y).
-    // All angles in degrees.
-    void fly_rotate(double yaw, double pitch, double roll = 0.0);
-
-    /**
-     * Set whether camera movement is prevented.
-     */
-    void set_prevent_moving(bool prevent) { _prevent_moving = prevent; }
-    bool prevent_moving() const { return _prevent_moving; }
-
-    // === Getters for internal state ===
-
-    Vec3 target() const { return _target; }
-    double azimuth() const { return _azimuth; }
-    double elevation() const { return _elevation; }
-
-    // === CxxComponent lifecycle ===
-
-    void on_added() override;
-    void update(float dt) override;
-
-    // === InputHandler interface ===
-
-    void on_pointer(tc_pointer_event* event) override;
-    void on_mouse_button(tc_mouse_button_event* event) override;
-    void on_mouse_move(tc_mouse_move_event* event) override;
-    void on_scroll(tc_scroll_event* event) override;
-
-    // === Internal methods (public for Python compatibility) ===
-
-    void _sync_from_transform();
-    void _update_pose();
-
-private:
-    // === Internal methods ===
-
-    void _ensure_camera();
-    bool _event_targets_this_camera(tc_viewport_handle viewport);
-    ViewportState& _get_viewport_state(uint64_t viewport_id);
-
-    // Clamp value to range
-    static double _clamp(double v, double lo, double hi) {
-        return v < lo ? lo : (v > hi ? hi : v);
-    }
-};
 
 } // namespace termin

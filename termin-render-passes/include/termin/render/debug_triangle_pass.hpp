@@ -1,49 +1,45 @@
 // debug_triangle_pass.hpp - Built-in pass that draws a diagnostic triangle.
 #pragma once
 
+#include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
-#include "tc_inspect_cpp.hpp"
 
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+    class IRenderDevice;
+}
 
 namespace termin {
 
-class TERMIN_RENDER_PASSES_API DebugTrianglePass : public CxxFramePass {
-public:
-    std::string output_res = "OUTPUT";
+    class TERMIN_RENDER_PASSES_API DebugTrianglePass : public CxxFramePass {
+    public:
+        std::string output_res = "OUTPUT";
 
-private:
-    tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
+    private:
+        tgfx::IRenderDevice* device2_ = nullptr;
+        tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
 
-public:
-    static void register_type();
-    INSPECT_FIELD(DebugTrianglePass, output_res, "Output Resource", "string")
-    INSPECT_TYPE_METADATA(DebugTrianglePass, graph, make_pass_graph_metadata(
-        {},
-        {{"output_res", "fbo"}},
-        {}
-    ))
+    public:
+        static void register_type();
+        INSPECT_FIELD(DebugTrianglePass, output_res, "Output Resource", "string")
+        INSPECT_TYPE_METADATA(DebugTrianglePass, graph, make_pass_graph_metadata({}, {{"output_res", "fbo"}}, {}))
 
-    explicit DebugTrianglePass(
-        const std::string& output = "OUTPUT",
-        const std::string& pass_name = "DebugTriangle"
-    );
+        explicit DebugTrianglePass(const std::string& output = "OUTPUT",
+                                   const std::string& pass_name = "DebugTriangle");
 
-    std::set<const char*> compute_reads() const override;
-    std::set<const char*> compute_writes() const override;
+        std::set<const char*> compute_reads() const override;
+        std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {};
-    }
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+            return {};
+        }
 
-    void execute(ExecuteContext& ctx) override;
-    void destroy() override;
-};
+        void execute(ExecuteContext& ctx) override;
+        void destroy() override;
+    };
 
 } // namespace termin
