@@ -51,6 +51,10 @@ namespace termin
         void set_channel_mode(int mode) override;
         void set_paused(bool paused) override;
         void set_highlight_hdr(bool enabled) override;
+        bool start_live_preview(std::uint32_t max_millifps,
+                                std::uint32_t max_long_edge) override;
+        bool stop_live_preview() override;
+        bool capture_burst(std::uint16_t frames) override;
         std::string analyze_hdr() override;
 
         bool render_image(tgfx::RenderContext2& context,

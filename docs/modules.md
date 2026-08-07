@@ -61,7 +61,7 @@ security policy принадлежат конкретному host. `termin-runt
 
 ### termin-framegraph-remote
 
-Source of truth: [termin-framegraph-remote docs](../termin-framegraph-remote/docs/index.md)
+Source of truth: [termin-framegraph-remote docs](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote/docs/index.md)
 
 Опциональный нативный versioned contract сетевого Framegraph Debugger. Модуль
 описывает topology revisions, session-scoped target/pass identity, команды
@@ -71,17 +71,19 @@ target/client services подключаются отдельными слоям�
 
 ### termin-framegraph-remote-target
 
-Source of truth: [remote Framegraph target service](../termin-framegraph-remote-target/docs/index.md)
+Source of truth: [remote Framegraph target service](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote-target/docs/index.md)
 
 Опциональный native target-side слой над `termin-framegraph-remote` и
 `termin-engine`. Сетевой поток владеет loopback TCP transport и handshake, а
 render-thread pump — единственный код сервиса, который обращается к
 `FrameGraphDebugger`. Между ними находятся bounded очереди команд и immutable
-topology/status сообщений.
+topology/status сообщений. Process-scoped host может держать loopback listener
+при пересоздании render runtime и явно attach/detach новый debugger; detached
+состояние публикуется как новая пустая topology без удержания GPU objects.
 
 ### termin-framegraph-remote-client
 
-Source of truth: [remote Framegraph client](../termin-framegraph-remote-client/docs/index.md)
+Source of truth: [remote Framegraph client](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote-client/docs/index.md)
 
 Опциональный desktop transport над `termin-framegraph-remote`, не зависящий от
 editor, Python, engine или GPU. Network thread обслуживает loopback TCP,

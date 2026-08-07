@@ -9,8 +9,8 @@
 - [C# Retained Chart Composition](../architecture/2026-07-30-csharp-retained-chart-composition.md);
 - [Retained Visual Scene 2D](../architecture/2026-07-27-retained-visual-scene-2d.md);
 - [Native SceneView Bridge](../architecture/2026-07-10-native-scene-view-bridge.md);
-- [tcplot documentation](../../tcplot/docs/index.md);
-- [C# tcplot customization](../../termin-csharp/docs/tcplot-customization.md).
+- [tcplot documentation](https://github.com/mirmik/termin/blob/master/tcplot/docs/index.md);
+- [C# tcplot customization](https://github.com/mirmik/termin/blob/master/termin-csharp/docs/tcplot-customization.md).
 
 Этот план уточняет решение от 2026-07-30. Retained chart primitives и
 типизированная C#-проекция остаются правильной основой, но стандартная

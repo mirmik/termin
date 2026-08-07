@@ -183,6 +183,14 @@ public:
         rebuild_snapshot();
     }
 
+    bool start_live_preview(std::uint32_t, std::uint32_t) override {
+        return false;
+    }
+
+    bool stop_live_preview() override { return false; }
+
+    bool capture_burst(std::uint16_t) override { return false; }
+
     std::string analyze_hdr() override {
         if (!debugger_) return "Source closed";
         const std::string result = debugger_->analyze_hdr();

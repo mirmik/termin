@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+build_dir="${BUILD_DIR:-build/Release-tests}"
+port="${1:-0}"
+target="$build_dir/bin/termin_framegraph_remote_smoke_target"
+client="$build_dir/bin/termin_framegraph_remote_smoke_client"
+
+if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 0 || port > 65535 )); then
+    echo "PORT must be an integer in 0..65535: $port" >&2
+    exit 2
+fi
+if [[ ! -x "$target" || ! -x "$client" ]]; then
+    echo "Remote framegraph smoke binaries are missing under $build_dir/bin" >&2
+    echo "Run ./run-tests.sh once to configure and build the test SDK consumers." >&2
+    exit 1
+fi
+
+smoke_tmp="$(mktemp -d)"
+target_pid=""
+cleanup() {
+    if [[ -n "$target_pid" ]] && kill -0 "$target_pid" 2>/dev/null; then
+        kill "$target_pid" 2>/dev/null || true
+        wait "$target_pid" 2>/dev/null || true
+    fi
+    rm -rf "$smoke_tmp"
+}
+trap cleanup EXIT
+
+token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+"$target" "$port" "$token" >"$smoke_tmp/target.log" 2>&1 &
+target_pid=$!
+
+ready=0
+ready_port=""
+for _ in $(seq 1 200); do
+    if ready_line="$(rg -m1 '^READY port=[0-9]+$' "$smoke_tmp/target.log")"; then
+        ready=1
+        ready_port="${ready_line#READY port=}"
+        break
+    fi
+    if ! kill -0 "$target_pid" 2>/dev/null; then
+        break
+    fi
+    sleep 0.05
+done
+if (( ! ready )); then
+    echo "Remote framegraph smoke target did not become ready" >&2
+    sed -n '1,160p' "$smoke_tmp/target.log" >&2
+    exit 1
+fi
+
+"$client" "$ready_port" "$token"
+if ! wait "$target_pid"; then
+    target_pid=""
+    echo "Remote framegraph smoke target failed" >&2
+    sed -n '1,200p' "$smoke_tmp/target.log" >&2
+    exit 1
+fi
+target_pid=""
+sed -n '1,200p' "$smoke_tmp/target.log"
