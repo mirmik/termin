@@ -181,7 +181,6 @@ bool py_drawable_cb_collect_render_items(
         for (auto py_item : py_items) {
             PythonRenderItem& render_item = nb::cast<PythonRenderItem&>(py_item);
             tc_render_item item = render_item.item;
-            item.component = component;
             if ((item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) == 0u) {
                 item.flags |= TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
                 std::copy(model.data, model.data + 16, item.model_matrix);

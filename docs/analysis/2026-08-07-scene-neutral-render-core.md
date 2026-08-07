@@ -1,7 +1,8 @@
 # Scene-neutral render core для retained 3D composition
 
 Дата: 2026-08-07  
-Статус: analysis
+Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
+#1359–#1366 и surface encoder slice #1368
 
 ## Контекст
 
@@ -17,8 +18,7 @@ generation handles и typed C# wrappers для surface, scatter и grid.
 после чего использовать один renderer как для engine scene, так и для
 retained chart scene.
 
-Эта записка оценивает именно такой вариант. Она не является принятым
-архитектурным решением и не заменяет
+Эта записка фиксирует принятое направление миграции, но не заменяет
 [`Retained Chart3D migration`](../plans/2026-08-06-retained-chart3d-migration-plan.md).
 
 ## Краткий вывод
@@ -70,7 +70,8 @@ Runtime `tc_frame_graph` является почти чистым C scheduler. �
 
 - `tc_render_item` представляет mesh, line batch, text batch, foliage batch и
   world quad;
-- `RenderItemCollection` владеет borrowed payload после snapshot collection;
+- `RenderItemCollection` может владеть immutable adapter payload до
+  invalidation snapshot;
 - `RenderItemTask` отделяет planning от submission;
 - draw encoders регистрируются по item kind;
 - material/shader resource binding выполняется до backend draw commands.
@@ -92,17 +93,18 @@ Surface chart может быть generic mesh item с chart material либо �
 
 Конкретные coupling points:
 
-- `RenderEngine::render_scene_pipeline_offscreen()` обязательно принимает
-  `tc_scene_handle`;
-- `ExecuteContext` непосредственно хранит `TcSceneRef`, `RenderCamera`,
-  stereo views, lights и `tc_entity_handle`;
-- `RenderSceneItemCollector` умеет получать items только обходом
-  `tc_scene_foreach_drawable()`;
+- scene adapter и generic executor пока физически находятся в одном
+  `termin-render` target, хотя их публичные контракты уже разделены;
+- `TcSceneRenderItemSource` реализует общий source contract через
+  `tc_scene_foreach_drawable()`, но пока физически собирается в том же target;
 - `RenderTask` содержит `Entity`, `tc_component*` и entity name;
 - `tc_render_item` содержит source `tc_component*`;
-- `CxxFramePass::collect_shader_usages()` принимает `tc_scene_handle`;
-- `PipelineRenderCache` содержит shadow resources, хотя они нужны не каждому
-  pipeline;
+- scene shader discovery всё ещё обходит passes и scene перед исполнением,
+  но вынесен из generic `CxxFramePass` в отдельную capability
+  `SceneShaderUsageProvider`;
+- generic resource allocation больше не знает о shadow types: non-texture
+  resources создаются через `FrameGraphResourceTypeDescriptor`, а конкретный
+  `shadow_map_array` и его sampled preview принадлежат `termin-render-passes`;
 - `termin-render` публично зависит одновременно от `termin-graphics`,
   `termin-scene`, `termin-materials`, `termin-lighting` и `termin-inspect`.
 
@@ -133,10 +135,10 @@ TcScene adapter                  PlotScene3D adapter
 camera/lights/components         chart camera/items/picking
 ```
 
-`termin-render-core` здесь является рабочим названием. Не обязательно сразу
-создавать несколько мелких библиотек. Важнее сначала получить одну строгую
-scene-neutral boundary, а уже затем при реальном повторном использовании
-решать, нужен ли отдельный `termin-framegraph` target.
+`termin_render_core` реализован в #1364 как один физический target и отдельный
+CMake package. Дальнейшее дробление на `termin-framegraph` и другие мелкие
+библиотеки не требуется до появления отдельной доказанной границы повторного
+использования.
 
 ## Generic execution contract
 
@@ -169,7 +171,6 @@ Core `ExecuteContext` должен содержать только:
 ```text
 SceneRenderServices
 ├── TcSceneRef
-├── RenderCamera
 ├── lights and shadows
 ├── layer/category filtering
 └── internal entities
@@ -206,17 +207,43 @@ PlotScene3DRenderItemSource
     traverses retained chart items
 ```
 
-Нынешний `RenderSceneItemCollector` становится одной реализацией, а не
-обязательной частью engine. `PlotScene3D` перечисляет stable retained items и
-создаёт snapshot без entities или components. Оба источника после collection
-используют одинаковые task planning, phase routing, shader/material binding и
-submission.
+Нынешний `RenderSceneItemCollector` скрыт за `TcSceneRenderItemSource` и больше
+не является обязательной частью execution contract. `PlotScene3D` сможет
+перечислять stable retained items и создавать snapshot без entities или
+components. Оба источника после collection используют одинаковые task
+planning, phase routing, shader/material binding и submission.
 
 Source identity в generic `tc_render_item` не должна быть выражена только как
 `tc_component*`. Нужен нейтральный source handle/debug identity либо optional
 adapter-owned metadata. Game adapter по-прежнему сможет связать item с
 component/entity для инспекции, но chart не будет создавать фиктивные
 components.
+
+Первый vertical slice реализует эту границу как
+`tc_render_item_source { domain_id, namespace_id, object_id, generation,
+subobject_id, adapter_data }`. Первые пять полей составляют стабильную
+adapter-owned identity. `adapter_data` живёт только в пределах immutable
+frame/view snapshot и не интерпретируется generic render code. Для `tc_scene`
+адаптер кладёт туда `tc_component*`; scene-specific passes получают его через
+явный `render_scene_item_component()`. Retained chart сможет назначить свой
+domain и не создавать component/entity.
+
+В #1366 `RenderItemCollection` получил type-erased ownership для adapter
+payload. Это отличает payload pointer от обычного borrowed metadata: source
+удерживает `shared_ptr<const Payload>` в storage, а `adapter_data` ссылается на
+него до invalidation snapshot. `PlotScene3D` использует эту границу для
+immutable geometry/style/chart-state values; retained slot и временный
+`PlotEngine3D` body в snapshot не попадают.
+
+`RenderItemCollection`, `RenderItemSnapshot` и `RenderItemSource` теперь
+являются нейтральными контрактами. `RenderItemSource::publish()` владеет единым
+атомарным lifecycle: очищает storage, вызывает source implementation, публикует
+полный snapshot либо инвалидирует частичный результат с логом. Mutable
+`begin_collection()`/`finish_collection()` закрыты от внешнего кода, поэтому
+contract нельзя обойти. Обход `tc_scene`
+остался внутри `TcSceneRenderItemSource`/`RenderSceneItemCollector`. Phase
+buckets и ownership borrowed payloads нейтральны, а storage lifetime явно
+остаётся у caller на всё время execution.
 
 ## Роль `PlotScene3D`
 
@@ -240,9 +267,10 @@ retained composition/model layer над общим renderer. Универсал�
 
 ## Что происходит с текущим `RetainedChart3D`
 
-Первый retained slice сейчас хранит отдельный `PlotEngine3D` как renderer-side
-body каждого item. Это позволило быстро подтвердить stable handles,
-per-item revisions и C# API, но не должно становиться конечной архитектурой:
+Первый retained slice хранил отдельный `PlotEngine3D` как renderer-side body
+каждого item. В #1368 surface body удалён, но scatter/grid пока сохраняют этот
+временный путь. Он позволил быстро подтвердить stable handles, per-item
+revisions и C# API, однако не должен становиться конечной архитектурой:
 
 - каждый item получает тяжёлый engine body;
 - дублируются camera, shader и text state;
@@ -265,25 +293,87 @@ RenderItems либо специализированные renderer bodies/encode
 - Ввести нейтральную source identity и immutable RenderItem snapshot boundary.
 - Сохранить нынешний scene path через адаптер без параллельного renderer.
 
+Текущее состояние этапа: neutral source identity и immutable snapshot boundary
+реализованы в #1359. Удалён неиспользуемый legacy C `tc_execute_context`,
+который протаскивал scene/entity types в низкоуровневый pass header.
+
+В #1360 C++ `ExecuteContext` разделён на нейтральный execution context и
+явную capability `SceneRenderServices`. Камера и stereo views представлены
+нейтральным `RenderViewState`; scene, internal entities, lights и маски
+доступны только scene passes через проверяемый service contract. Отсутствующая
+capability диагностируется в логе. Scene shader discovery вынесен из
+`CxxFramePass` в отдельный `SceneShaderUsageProvider`, поэтому generic pass
+interface больше не принимает `tc_scene_handle`.
+
+В #1361 добавлен единый `RenderEngine::execute_pipeline(RenderExecution)`.
+Его request содержит только pipeline, targets, заранее опубликованные immutable
+snapshots и type-safe `RenderExecutionCapabilities`. Concrete services хранятся
+через polymorphic marker contract; неструктурированного `void*` context нет.
+
+`render_scene_pipeline_offscreen()` теперь является отдельным `tc_scene`
+adapter: он до входа в executor собирает по одному snapshot и
+`SceneRenderServices` на target, удерживает их lifetime до конца execution и
+затем вызывает общий executor. Ленивый scene traversal из geometry passes
+удалён; pass может только потребовать уже опубликованный snapshot. Generic
+executor header не содержит scene, entity или light APIs и покрыт исполнением
+probe pipeline без создания сцены.
+
+В #1362 введён явный scene-neutral `RenderItemSource` contract с нейтральными
+view/layer/category inputs. `TcSceneRenderItemSource` стал первой production
+implementation, а in-memory non-scene source в тесте публикует пустой и
+заполненный snapshots для того же `RenderExecution`. Partial publication
+инвалидируется и диагностируется. Свободный compatibility helper удалён.
+
+В #1363 `ExecuteContext`, `PipelineRenderCache` и `RenderEngine` переведены с
+отдельного `ShadowArrayMap` на общую таблицу `FrameGraphResource`. Cold-path
+registry создаёт non-texture resource по явному type descriptor, отклоняет
+неизвестные/дублирующиеся kinds и опционально публикует sampled texture для
+обычных pass/debugger consumers. `ShadowMapArrayResource`, его factory и
+preview callback теперь принадлежат `termin-render-passes`; только
+`ShadowPass`/`ColorPass` выполняют typed access.
+
+В #1364 runtime framegraph, pipeline execution, resource tables,
+`RenderItemSource`/snapshot/submission и generic task planning получили одного
+канонического владельца `termin_render_core`. Его link closure содержит base,
+graphics, inspect и materials, но не scene/lighting. `termin_render` теперь
+зависит от core и владеет scene traversal, component capabilities, scene
+services/execution и graph authoring policy. Заодно из `RenderContext` и
+`RenderTask` удалены неиспользуемые `TcSceneRef`/camera/entity/component поля,
+которые физически протаскивали scene headers через generic API.
+
 ### Этап 2. Выделить `termin-render-core`
 
-- Перенести runtime framegraph, pipeline execution и generic resource tables.
-- Перенести generic RenderItem/RenderTask planning и encoder registry.
-- Оставить scene traversal, component capabilities, lighting/shadows и
-  engine passes в `termin-render`.
-- Не переносить authoring/editor inspection policy в нижний core без явной
-  необходимости.
+- Выполнено в #1364: runtime framegraph, executor, resource tables,
+  RenderItem/RenderTask planning и encoder registry находятся в
+  `termin_render_core`.
+- Scene traversal, component capabilities и scene services остаются в
+  `termin_render`; lighting/shadows и concrete engine passes — выше, в
+  `termin-render-passes` и component modules.
+- Runtime pass inspection adapter остаётся в core как часть pipeline
+  deserialization; graph authoring/compiler policy остаётся в `termin_render`.
 
 ### Этап 3. Подключить два item source
 
-- Реализовать `TcSceneRenderItemSource` поверх текущего collector.
-- Реализовать `PlotScene3DRenderItemSource` без `tc_scene` и components.
-- Проверить, что один generic pipeline может исполняться для обоих sources.
-- Добавить lifecycle, empty source, stale handle и multi-view tests.
+- `TcSceneRenderItemSource` поверх текущего collector реализован в #1362.
+- В #1365 `RetainedChart3D` получил принадлежащий ему
+  `PlotScene3DRenderItemSource` без `tc_scene`, entities и components. Source
+  публикует tcplot-owned item kinds и value identity из scene id, slot index и
+  generation; mutable slot pointers в snapshot не попадают.
+- Generic probe pipeline исполняется тем же `RenderEngine::execute_pipeline()`
+  над chart snapshot. GPU encoders остаются отдельным этапом 4.
+- Lifecycle coverage включает empty source, populated source, slot
+  destroy/reuse и два независимо живущих view snapshots.
 
 ### Этап 4. Перенести Chart3D rendering
 
-- Ввести surface, scatter, line, grid and world-text item encoders.
+- В #1366 подготовлены snapshot-owned immutable geometry/style/chart-state
+  payloads. Тесты подтверждают, что старые snapshots переживают mutation,
+  slot reuse и уничтожение source chart без dangling pointers.
+- В #1368 surface получил tcplot-owned task shader planner и draw encoder.
+  Retained offscreen path планирует surface через `plan_render_item_task()` и
+  отправляет через `submit_render_item_draw()`; immutable CPU stream загружается
+  общим transient vertex ring, а per-slot surface `PlotEngine3D` удалён.
+- Ввести scatter, line, grid and world-text item encoders.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
 - Добавить chart-specific passes только там, где generic material pass

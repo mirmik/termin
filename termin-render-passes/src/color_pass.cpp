@@ -5,6 +5,7 @@
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
+#include "termin/render/scene_render_services.hpp"
 #include "termin/render/shader_abi.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -569,7 +570,7 @@ void ColorPass::collect_draw_calls(
     const std::string& phase_mark,
     const RenderContext& render_context,
     uint64_t layer_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) {
     (void)render_context;
     (void)layer_mask;
@@ -587,7 +588,7 @@ void ColorPass::collect_draw_calls(
     cached_draw_calls_.reserve(routed_items.size());
     for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
-        tc_component* tc = item.component;
+        tc_component* tc = render_scene_item_component(item);
         if (!tc) {
             tc::Log::error(
                 "[ColorPass] collect_draw_calls: collected item %zu has null component",
@@ -622,7 +623,7 @@ void ColorPass::collect_draw_calls(
     }
 }
 
-void ColorPass::collect_shader_usages(
+void ColorPass::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -770,8 +771,8 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    RenderSceneItemSnapshot* scene_items =
-        ensure_render_item_snapshot(ctx, "ColorPass");
+    const RenderItemSnapshot* scene_items =
+        require_render_item_snapshot(ctx, "ColorPass");
     if (!scene_items) {
         return;
     }
@@ -782,16 +783,18 @@ void ColorPass::execute_with_data(
         data.camera_position,
         static_cast<float>(data.rect.width),
         static_cast<float>(data.rect.height),
-        ctx.camera ? static_cast<float>(ctx.camera->near_clip) : 0.1f,
-        ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
+        ctx.view.primary
+            ? static_cast<float>(ctx.view.primary->near_clip) : 0.1f,
+        ctx.view.primary
+            ? static_cast<float>(ctx.view.primary->far_clip) : 100.0f);
     StereoPerFrameStd140 stereo_pf{};
     if (multiview_mode_) {
-        if (!ctx.stereo_views) {
+        if (!ctx.view.stereo) {
             tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
             return;
         }
         stereo_pf = make_stereo_per_frame_uniforms(
-            *ctx.stereo_views,
+            *ctx.view.stereo,
             static_cast<float>(data.rect.width),
             static_cast<float>(data.rect.height));
     }
@@ -889,8 +892,6 @@ void ColorPass::execute_with_data(
     collect_context.camera_position = data.camera_position;
     collect_context.viewport_width = data.rect.width;
     collect_context.viewport_height = data.rect.height;
-    collect_context.scene = TcSceneRef(data.scene);
-    collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
     collect_draw_calls(
         data.scene,
@@ -955,10 +956,8 @@ void ColorPass::execute_with_data(
             render_tasks.emplace_extension<ColorTaskExtension>();
         RenderTask& task = render_tasks.at(planning_result.task_index);
         task.extension = &extension;
-        task.entity = dc.entity;
-        task.component = dc.component;
         const char* entity_name = dc.entity.name();
-        task.entity_name = entity_name ? entity_name : "";
+        task.debug_name = entity_name ? entity_name : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
                 extension.draw_data.u_model,
@@ -986,7 +985,6 @@ void ColorPass::execute_with_data(
         task.draw_context.camera_position = data.camera_position;
         task.draw_context.viewport_width = data.rect.width;
         task.draw_context.viewport_height = data.rect.height;
-        task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
         dc.final_shader = TcShader(task.final_shader);
         tasks_by_item_index[dc.item_index] = &task;
@@ -1103,7 +1101,7 @@ void ColorPass::execute_with_data(
     }
 
     for (const RenderTask* task : sorted_render_tasks) {
-        entity_names.push_back(task->entity_name);
+        entity_names.push_back(task->debug_name);
     }
 
     if (!render_tasks.empty() && !shadow_sampler_) {
@@ -1168,7 +1166,7 @@ void ColorPass::execute_with_data(
         encode_request.material_phase = task.material_phase;
         encode_request.phase = tc_phase_find(phase_mark.c_str());
         encode_request.debug_pass_name = debug_pass_name_c;
-        encode_request.debug_entity_name = task.entity_name.c_str();
+        encode_request.debug_entity_name = task.debug_name.c_str();
         encode_request.resources = &task.resources;
         if (!submit_render_item_draw(
             *ctx2,
@@ -1176,7 +1174,7 @@ void ColorPass::execute_with_data(
             encode_request)) {
             continue;
         }
-        capture_debug_symbol(task.entity_name.c_str());
+        capture_debug_symbol(task.debug_name.c_str());
         if (attachment_barrier_between_draws &&
             sorted_task_index + 1 < sorted_render_tasks.size()) {
             ctx2->framebuffer_local_barrier();
@@ -1190,11 +1188,18 @@ void ColorPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section(("ColorPass:" + get_pass_name()).c_str());
 
-    // Use camera from context, or find by name if camera_name is set
-    const RenderCamera* camera = ctx.camera;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "ColorPass");
+    if (!services) {
+        if (profile) tc_profiler_end_section();
+        return;
+    }
+
+    // Use the scene-neutral primary view, or find a scene camera by name.
+    const RenderCamera* camera = ctx.view.primary_view();
     RenderCamera stereo_sort_camera;
     if (multiview_mode_) {
-        if (!ctx.stereo_views) {
+        if (!ctx.view.stereo) {
             tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
             if (profile) tc_profiler_end_section();
             return;
@@ -1205,20 +1210,15 @@ void ColorPass::execute(ExecuteContext& ctx) {
             if (profile) tc_profiler_end_section();
             return;
         }
-        stereo_sort_camera = ctx.stereo_views->left;
+        stereo_sort_camera = ctx.view.stereo->left;
         stereo_sort_camera.position =
-            (ctx.stereo_views->left.position + ctx.stereo_views->right.position) * 0.5;
+            (ctx.view.stereo->left.position + ctx.view.stereo->right.position) * 0.5;
         camera = &stereo_sort_camera;
     }
-    tc_scene_handle scene = ctx.scene.handle();
-    if (!tc_scene_handle_valid(scene)) {
-        tc::Log::error("[ColorPass] scene is invalid");
-        if (profile) tc_profiler_end_section();
-        return;
-    }
+    tc_scene_handle scene = services->scene.handle();
     RenderCameraSnapshot named_camera_snapshot;
-    uint64_t camera_layer_mask = ctx.layer_mask;
-    uint64_t camera_render_category_mask = ctx.render_category_mask;
+    uint64_t camera_layer_mask = services->layer_mask;
+    uint64_t camera_render_category_mask = services->render_category_mask;
     if (!camera_name.empty()) {
         if (!resolve_named_render_camera_for_pass(
                 scene,
@@ -1302,9 +1302,10 @@ void ColorPass::execute(ExecuteContext& ctx) {
 
     std::vector<ShadowMapArrayEntry> shadow_maps;
     if (!shadow_res.empty()) {
-        auto shadow_it = ctx.shadow_arrays.find(shadow_res);
-        if (shadow_it != ctx.shadow_arrays.end() && shadow_it->second != nullptr) {
-            shadow_maps = shadow_it->second->entries;
+        ShadowMapArrayResource* shadow_array =
+            ctx.get_frame_graph_resource_as<ShadowMapArrayResource>(shadow_res);
+        if (shadow_array) {
+            shadow_maps = shadow_array->entries;
         }
     }
 
@@ -1319,7 +1320,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     data.view = view;
     data.projection = projection;
     data.camera_position = camera_position;
-    data.lights = ctx.lights;
+    data.lights = services->lights;
     data.ambient_color = ambient_color;
     data.ambient_intensity = ambient_intensity;
     data.shadow_maps = shadow_maps;

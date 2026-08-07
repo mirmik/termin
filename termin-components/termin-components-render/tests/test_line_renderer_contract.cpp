@@ -10,6 +10,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/render_task.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
@@ -479,7 +480,7 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 2u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
-    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(termin::render_scene_item_component(items[0]) == renderer->tc_component_ptr());
     CHECK(items[0].geometry_id == 0);
     CHECK(items[0].material_phase == phase);
     CHECK(tc_mesh_handle_eq(items[0].payload.mesh.mesh_handle, mesh.handle));
@@ -578,7 +579,7 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_LINE_BATCH);
-    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(termin::render_scene_item_component(items[0]) == renderer->tc_component_ptr());
     CHECK(items[0].geometry_id == 0);
     CHECK(items[0].payload.line_batch.points != nullptr);
     CHECK(items[0].payload.line_batch.point_count == 2u);
@@ -698,7 +699,7 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
-    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(termin::render_scene_item_component(items[0]) == renderer->tc_component_ptr());
     CHECK(!tc_mesh_handle_is_invalid(items[0].payload.mesh.mesh_handle));
 
     tc_mesh_shutdown();
@@ -736,7 +737,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     REQUIRE(collection.items.size() == 1u);
     const tc_render_item& item = collection.items[0];
     CHECK(item.kind == TC_RENDER_ITEM_KIND_TEXT_BATCH);
-    CHECK(item.component == text->tc_component_ptr());
+    CHECK(termin::render_scene_item_component(item) == text->tc_component_ptr());
     CHECK(item.geometry_id == 0);
     CHECK(item.material_phase != nullptr);
     REQUIRE(item.payload.text_batch.text != nullptr);

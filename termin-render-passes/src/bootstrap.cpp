@@ -13,10 +13,12 @@
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/render/world2d_pass.hpp>
+#include <termin/lighting/shadow.hpp>
 
 namespace termin {
 
 void register_builtin_render_passes() {
+    (void)register_shadow_map_array_resource_type();
     BloomPass::register_type();
     ColorPass::register_type();
     MultiviewColorPass::register_type();

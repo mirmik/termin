@@ -10,6 +10,7 @@
 #include "scene_light_collector.hpp"
 #include <termin/entity/entity.hpp>
 #include <termin/render/render_lifecycle.hpp>
+#include <termin/render/scene_render_execution.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
@@ -1090,6 +1091,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
     // Collect render target contexts.
     std::unordered_map<std::string, RenderTargetContext> contexts;
+    SceneInternalEntityMap internal_entities_by_context;
     std::string first_viewport_name;
     RenderExecutionInfo execution{
         .scene = scene,
@@ -1150,6 +1152,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
                 rw,
                 rh,
                 contexts,
+                internal_entities_by_context,
                 default_context)) {
             if (first_viewport_name.empty()) {
                 first_viewport_name = default_context.empty()
@@ -1170,10 +1173,12 @@ void RenderingManager::render_scene_pipeline_offscreen(
     RenderPipeline pipeline_wrapper(pipeline);
     const std::vector<FrameGraphCaptureRequest*> capture_requests =
         prepare_render_execution(execution);
-    engine->render_scene_pipeline_offscreen(
+    termin::render_scene_pipeline_offscreen(
+        *engine,
         pipeline_wrapper,
         scene,
         contexts,
+        internal_entities_by_context,
         lights,
         first_viewport_name,
         capture_requests
@@ -1188,6 +1193,7 @@ bool RenderingManager::build_render_target_contexts(
     int render_width,
     int render_height,
     std::unordered_map<std::string, RenderTargetContext>& contexts,
+    std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context,
     std::string& default_context_name
 ) {
     rendering_manager_detail::RenderTargetContextBuildRequest request{
@@ -1202,6 +1208,7 @@ bool RenderingManager::build_render_target_contexts(
         render_target_context_providers_,
         missing_render_target_provider_warnings_,
         contexts,
+        internal_entities_by_context,
         default_context_name
     };
     return rendering_manager_detail::build_render_target_contexts(request);
@@ -1256,6 +1263,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     // Build one or more render target contexts and run scene pipeline.
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
     std::unordered_map<std::string, RenderTargetContext> contexts;
+    SceneInternalEntityMap internal_entities_by_context;
     std::string default_context;
     if (!build_render_target_contexts(
             rt,
@@ -1264,6 +1272,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
             rw,
             rh,
             contexts,
+            internal_entities_by_context,
             default_context)) {
         return;
     }
@@ -1280,8 +1289,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     };
     const std::vector<FrameGraphCaptureRequest*> capture_requests =
         prepare_render_execution(execution);
-    engine->render_scene_pipeline_offscreen(
-        render_pipeline, scene, contexts, lights, default_context, capture_requests
+    termin::render_scene_pipeline_offscreen(
+        *engine, render_pipeline, scene, contexts, internal_entities_by_context,
+        lights, default_context, capture_requests
     );
     finish_render_execution(execution, capture_requests);
 }
@@ -1322,6 +1332,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 
     std::string name = rt_name ? rt_name : "";
     std::unordered_map<std::string, RenderTargetContext> contexts;
+    SceneInternalEntityMap internal_entities_by_context;
     std::string default_context;
     if (!build_render_target_contexts(
             rt,
@@ -1330,6 +1341,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
             w,
             h,
             contexts,
+            internal_entities_by_context,
             default_context)) {
         return;
     }
@@ -1346,8 +1358,9 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     };
     const std::vector<FrameGraphCaptureRequest*> capture_requests =
         prepare_render_execution(execution);
-    engine->render_scene_pipeline_offscreen(
-        render_pipeline, scene, contexts, lights, default_context, capture_requests
+    termin::render_scene_pipeline_offscreen(
+        *engine, render_pipeline, scene, contexts, internal_entities_by_context,
+        lights, default_context, capture_requests
     );
     finish_render_execution(execution, capture_requests);
 }

@@ -1,9 +1,11 @@
 #include <termin/render/debug_geometry_pass.hpp>
 
 #include "termin/camera/camera_component.hpp"
+#include <tcbase/tc_log.hpp>
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 
 extern "C" {
 #include "core/tc_debug_geometry.h"
@@ -34,11 +36,22 @@ DebugGeometryPass::get_inplace_aliases() const {
 }
 
 void DebugGeometryPass::execute(ExecuteContext& ctx) {
-    if (!ctx.scene.valid() || !ctx.ctx2 || !ctx.camera) return;
-    if ((ctx.render_category_mask & TC_RENDER_CATEGORY_DEBUG_GEOMETRY) == 0) return;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "DebugGeometryPass");
+    if (!services) return;
+    if (!ctx.ctx2) {
+        tc::Log::error("[DebugGeometryPass] ctx2 is null");
+        return;
+    }
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[DebugGeometryPass] primary render view is missing");
+        return;
+    }
+    if ((services->render_category_mask & TC_RENDER_CATEGORY_DEBUG_GEOMETRY) == 0) return;
 
     const size_t primitive_count =
-        tc_scene_debug_geometry_primitive_count(ctx.scene.handle());
+        tc_scene_debug_geometry_primitive_count(services->scene.handle());
     if (primitive_count == 0) return;
 
     auto color_it = ctx.tex2_writes.find(output_res);
@@ -51,7 +64,7 @@ void DebugGeometryPass::execute(ExecuteContext& ctx) {
     renderer_.begin();
     for (size_t index = 0; index < primitive_count; ++index) {
         const tc_debug_geometry_primitive* primitive =
-            tc_scene_debug_geometry_primitive_at(ctx.scene.handle(), index);
+            tc_scene_debug_geometry_primitive_at(services->scene.handle(), index);
         if (!primitive) continue;
         const Color4 primitive_color = {
             primitive->color[0], primitive->color[1],
@@ -130,8 +143,8 @@ void DebugGeometryPass::execute(ExecuteContext& ctx) {
         0, 0,
         static_cast<int>(target_desc.width),
         static_cast<int>(target_desc.height));
-    const Mat44 view = ctx.camera->get_view_matrix();
-    const Mat44 projection = ctx.camera->get_projection_matrix();
+    const Mat44 view = primary_view->get_view_matrix();
+    const Mat44 projection = primary_view->get_projection_matrix();
     renderer_.flush_depth(ctx.ctx2, view, projection, true);
     renderer_.flush(ctx.ctx2, view, projection, false, true);
     ctx.ctx2->end_pass();

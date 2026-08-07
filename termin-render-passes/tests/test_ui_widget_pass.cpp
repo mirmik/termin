@@ -9,6 +9,7 @@ GUARD_TEST_MAIN();
 #include <termin/entity/entity.hpp>
 #include <termin/gui_native/ui_document_asset.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/ui/ui_component.hpp>
@@ -86,8 +87,11 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     make_component(disabled_entity, asset, 2, "ui-disabled-entity");
 
     ExecuteContext ctx;
-    ctx.scene = scene;
-    ctx.layer_mask = UINT64_C(1) << 0u;
+    SceneRenderServices scene_services(scene);
+    scene_services.layer_mask = UINT64_C(1) << 0u;
+    RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     auto submissions =
         collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 1u);
@@ -98,7 +102,7 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
         submissions[0].presentation_metrics.physical_safe_insets.top,
         24.0f);
 
-    ctx.layer_mask = UINT64_MAX;
+    scene_services.layer_mask = UINT64_MAX;
     submissions = collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 2u);
     CHECK_EQ(submissions[0].priority, 5);
@@ -147,8 +151,11 @@ TEST_CASE("UIWidgetPass includes internal hierarchy without duplicates") {
         make_component(internal_child, asset, 3, "internal-ui");
 
     ExecuteContext ctx;
-    ctx.scene = scene;
-    ctx.internal_entities = internal_root.handle();
+    SceneRenderServices scene_services(scene);
+    scene_services.internal_entities = internal_root.handle();
+    RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     auto submissions =
         collect_ui_document_submissions(ctx, false);
     REQUIRE_EQ(submissions.size(), 1u);
@@ -164,7 +171,7 @@ TEST_CASE("UIWidgetPass includes internal hierarchy without duplicates") {
     REQUIRE_EQ(submissions.size(), 1u);
 
     internal_root.set_enabled(true);
-    ctx.internal_entities = scene_entity.handle();
+    scene_services.internal_entities = scene_entity.handle();
     submissions = collect_ui_document_submissions(ctx, true);
     CHECK_EQ(submissions.size(), 1u);
 

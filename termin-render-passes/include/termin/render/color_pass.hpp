@@ -15,6 +15,7 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
 #include "termin/render/material_pipeline_shader_assembler.hpp"
+#include "termin/render/scene_shader_usage_provider.hpp"
 
 namespace tgfx {
 class IRenderDevice;
@@ -72,7 +73,9 @@ struct ColorPassExecuteData {
  * Collects all Drawable components from entities, filters by phase_mark,
  * sorts by priority, and renders with materials and lighting.
  */
-class TERMIN_RENDER_PASSES_API ColorPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API ColorPass
+    : public CxxFramePass,
+      public SceneShaderUsageProvider {
 public:
     // Pass configuration
     std::string input_res = "empty";
@@ -188,7 +191,7 @@ public:
 
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override;
-    void collect_shader_usages(
+    void collect_scene_shader_usages(
         tc_scene_handle scene,
         const std::function<void(TcShader)>& emit
     ) const override;
@@ -243,7 +246,7 @@ private:
         const std::string& phase_mark,
         const RenderContext& render_context,
         uint64_t layer_mask,
-        const RenderSceneItemSnapshot& snapshot
+        const RenderItemSnapshot& snapshot
     );
 
     // Compute sort keys for all draw calls (priority + distance)

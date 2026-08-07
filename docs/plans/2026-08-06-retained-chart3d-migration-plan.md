@@ -103,16 +103,37 @@ Consumers must not receive raw native pointers or index-based identities.
 - [x] Добавить WPF example: surface + scatter, replaceable grid,
   wireframe/shading/reset-camera portal buttons with C# callbacks.
 
-Первый slice использует отдельный `PlotEngine3D` как временный renderer-side
-body каждого retained item. Это обеспечивает независимые GPU caches уже сейчас
-и позволяет переиспользовать проверенные shader/mesh builders. При дальнейшей
-миграции body будет сужен до специализированного renderer item без изменения
-public handles или C# API.
+Первый slice первоначально использовал отдельный `PlotEngine3D` как временный
+renderer-side body каждого retained item. Surface body уже удалён: immutable
+payload кэширует CPU draw stream по revisions, а общий RenderItem encoder
+загружает его через transient vertex ring. Scatter и grid пока сохраняют
+временные bodies до следующих encoder slices; public handles и C# API при этом
+не меняются.
+
+### Интеграция с scene-neutral render core
+
+- [x] `RetainedChart3D` владеет production `PlotScene3DRenderItemSource`.
+- [x] Surface/scatter/grid публикуются как tcplot-owned render-item kinds со
+  стабильной identity без fake entities/components.
+- [x] Empty, multi-view и destroy/reuse snapshots проходят через общий
+  `RenderItemSource::publish()` lifecycle.
+- [x] Chart snapshot исполняется generic probe pipeline через общий
+  `RenderEngine`.
+- [x] Snapshot владеет immutable surface/scatter/grid CPU payload; geometry и
+  style data разделяются между неизменившимися публикациями и заменяются по
+  revision, а chart state копируется по значению. Payload не заимствует slot
+  или renderer body и остаётся валиден после destroy/reuse/chart destruction.
+- [x] Surface planner/encoder выбирает tcplot3d shader через общий task plan,
+  рисует snapshot-owned stream через transient vertex ring, а retained
+  offscreen path использует `submit_render_item_draw()` без surface
+  `PlotEngine3D` body.
+- [ ] Добавить scatter/grid encoders и framegraph output поверх этих kinds,
+  после чего удалить оставшиеся временные per-item `PlotEngine3D` bodies.
 
 ### Hardening первого slice
 
-- [x] Style mutation обновляет существующий renderer body без повторного
-  копирования CPU geometry и без замены item identity.
+- [x] Style mutation заменяет только item-local immutable render data и
+  encoder-ready stream, не меняя stable item identity и unrelated items.
 - [x] Повторная установка идентичного style является no-op по revisions.
 - [x] Style mutation инвалидирует только GPU revision изменённого item.
 - [x] `release_gpu()` инвалидирует item GPU revisions, а следующий render

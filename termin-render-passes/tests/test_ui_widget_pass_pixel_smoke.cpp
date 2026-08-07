@@ -1,6 +1,7 @@
 #include <termin/gui_native/native_widget.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/ui_widget_pass.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/tc_scene.hpp>
 
 #include <tgfx2/descriptors.hpp>
@@ -191,7 +192,10 @@ bool render_and_check(
 
     termin::ExecuteContext ctx;
     ctx.ctx2 = &render_context;
-    ctx.scene = scene;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    ctx.capabilities = &capabilities;
     ctx.render_rect = {
         0,
         0,

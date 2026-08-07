@@ -149,7 +149,10 @@ Source of truth: [termin-graphics docs](https://github.com/mirmik/termin-monorep
 
 Отвечает за backend-neutral GPU API, tgfx2 context/device/runtime, render targets, texture pools, canvas renderer facade и низкоуровневые GPU utilities. Это канонический GPU substrate для render framework; использование `tgfx`/`tgfx2` типов в render-facing API само по себе не является нарушением границы.
 
-Ключевая граница сейчас важна из-за миграции renderer facades: generic GPU utilities без знания frame graph относятся сюда, а frame graph/debugger logic остается в [termin-render](#termin-render).
+Ключевая граница важна из-за миграции renderer facades: generic GPU utilities
+без знания frame graph относятся сюда. Scene-neutral frame graph execution
+остаётся render-policy слоем над `termin-graphics` и с #1364 физически живёт в
+`termin_render_core`, а не в GPU substrate.
 
 ### termin-visual-scene
 
@@ -165,7 +168,14 @@ topology, transforms, hit preparation и pointer interaction. Модуль за�
 
 Source of truth: [termin-render docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md)
 
-Отвечает за render framework поверх canonical resources и `termin-graphics`: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers.
+Render framework разделён на два физических target. `termin_render_core`
+владеет render engine, runtime frame graph/pipeline, generic resources,
+immutable snapshots, `RenderItemSource`, task planning и draw encoder registry;
+его transitive interface не содержит `termin_scene` или `termin_lighting`.
+`termin_render` зависит от core и владеет `tc_scene` adapter, component
+capabilities, scene render mount/state helpers и graph authoring policy. Scene
+path через `TcSceneRenderItemSource` заранее публикует snapshots/services и
+вызывает тот же core executor.
 
 `termin-render` не обязан инкапсулировать `termin-graphics` как implementation detail. Публичная зависимость от `tgfx`/`tgfx2` допустима для API, которые непосредственно описывают GPU execution, frame graph, render contexts, texture handles или bridge к graphics device. Граница проходит не по факту include-а `tgfx`, а по смыслу контракта: scene/asset/build/editor policy не должны случайно зависеть от backend-specific деталей, если они не являются render-facing API.
 
@@ -188,7 +198,8 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 `DebugGeometryPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
 `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
 `SkyBoxPass`, `IdPass` и единый native `UIWidgetPass` для desktop, Android и
-OpenXR. Модуль также владеет picking RGB/id cache helper, shadow camera
+OpenXR. Модуль также владеет `ShadowMapArrayResource` и регистрацией его
+framegraph factory/sampled preview, picking RGB/id cache helper, shadow camera
 helpers, shader skinning injection, material UBO apply helper и Python API
 `termin.render_passes`.
 
@@ -249,7 +260,12 @@ UI нет. Headless composition использует document/rendering primitiv
 
 Source of truth: [tcplot docs](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md)
 
-Plotting library поверх tgfx/tcgui. Должен переиспользовать renderer/runtime abstractions из [termin-graphics](#termin-graphics) и host/window infrastructure из [termin-display](#termin-display), не заводя собственный низкоуровневый GPU слой.
+Plotting library поверх tgfx/tcgui. Переиспользует GPU abstractions из
+[termin-graphics](#termin-graphics), scene-neutral framegraph/execution из
+`termin_render_core` и host/window infrastructure из
+[termin-display](#termin-display), не заводя собственный низкоуровневый GPU
+слой. `PlotScene3DRenderItemSource` публикует retained 3D identities в общий
+render core без зависимости на `termin_scene` или `termin_lighting`.
 
 Маркеры, подписи, callouts, legends и интерактивные handles графиков должны жить как retained plot annotation model внутри `tcplot`, а не как виджеты `termin-gui`; см. [UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
 

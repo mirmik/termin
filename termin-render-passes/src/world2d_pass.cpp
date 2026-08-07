@@ -195,8 +195,13 @@ void World2DPass::release_resources() {
 }
 
 void World2DPass::execute(ExecuteContext& ctx) {
-    if (!ctx.ctx2 || !ctx.camera) {
-        tc::Log::error("[World2DPass] render context or camera is missing");
+    if (!ctx.ctx2) {
+        tc::Log::error("[World2DPass] render context is missing");
+        return;
+    }
+    const RenderCamera* primary_view = ctx.view.primary_view();
+    if (!primary_view) {
+        tc::Log::error("[World2DPass] primary render view is missing");
         return;
     }
     auto color_it = ctx.tex2_writes.find(output_res);
@@ -207,7 +212,7 @@ void World2DPass::execute(ExecuteContext& ctx) {
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
     const tgfx::TextureHandle depth =
         depth_it == ctx.tex2_depth_writes.end() ? tgfx::TextureHandle{} : depth_it->second;
-    auto* snapshot = ensure_render_item_snapshot(ctx, "World2DPass");
+    const auto* snapshot = require_render_item_snapshot(ctx, "World2DPass");
     if (!snapshot) {
         return;
     }
@@ -226,8 +231,8 @@ void World2DPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    const Mat44f view = ctx.camera->view.to_float();
-    const Mat44f projection = ctx.camera->projection.to_float();
+    const Mat44f view = primary_view->view.to_float();
+    const Mat44f projection = primary_view->projection.to_float();
     const Mat44f view_projection = projection * view;
     std::vector<const tc_render_item*> submissions;
     std::vector<World2DOrderEntry> order;

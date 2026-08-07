@@ -1,6 +1,12 @@
 #pragma once
 
-#include "termin/render/render_engine.hpp"
+#include <vector>
+
+#include <termin/lighting/light.hpp>
+
+extern "C" {
+#include <core/tc_scene_pool.h>
+}
 
 namespace termin::rendering_manager_detail {
 

@@ -5,6 +5,7 @@
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_task.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -271,7 +272,7 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as the base shader key for RenderItem
     // shader overrides. The old source-based GeometryPassBase shader path has
     // been removed.
-    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "DepthPass");
+    const RenderItemSnapshot* snapshot = require_render_item_snapshot(ctx, "DepthPass");
     if (!snapshot) {
         return;
     }
@@ -424,12 +425,17 @@ void DepthPass::execute_with_data_tgfx2(
 }
 
 void DepthPass::execute(ExecuteContext& ctx) {
-    tc_scene_handle scene = ctx.scene.handle();
-    const RenderCamera* camera = ctx.camera;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "DepthPass");
+    if (!services) {
+        return;
+    }
+    tc_scene_handle scene = services->scene.handle();
+    const RenderCamera* camera = ctx.view.primary_view();
     Rect2i rect = ctx.render_rect;
     RenderCameraSnapshot named_camera_snapshot;
-    uint64_t camera_layer_mask = ctx.layer_mask;
-    uint64_t camera_render_category_mask = ctx.render_category_mask;
+    uint64_t camera_layer_mask = services->layer_mask;
+    uint64_t camera_render_category_mask = services->render_category_mask;
 
     if (!camera_name.empty()) {
         if (!resolve_named_render_camera_for_pass(
@@ -442,6 +448,7 @@ void DepthPass::execute(ExecuteContext& ctx) {
     }
 
     if (!camera) {
+        tc::Log::error("[DepthPass] primary render view is missing");
         return;
     }
 
@@ -512,7 +519,7 @@ void DepthOnlyPass::collect_draw_calls(
     tc_scene_handle scene,
     uint64_t layer_mask,
     uint64_t render_category_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) const {
     (void)layer_mask;
     (void)render_category_mask;
@@ -543,13 +550,14 @@ void DepthOnlyPass::collect_draw_calls(
         const tc_render_item& representative = items[group_begin];
         size_t group_end = group_begin + 1;
         while (group_end < items.size() &&
-               items[group_end].component == representative.component &&
+               items[group_end].source.adapter_data ==
+                   representative.source.adapter_data &&
                items[group_end].kind == representative.kind &&
                items[group_end].geometry_id == representative.geometry_id) {
             ++group_end;
         }
 
-        tc_component* component = representative.component;
+        tc_component* component = render_scene_item_component(representative);
         Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
         if (!component || !ent.valid() ||
             !tc_phase_mask_contains(tc_component_phase_mask(component), requested_phase) ||
@@ -601,7 +609,7 @@ void DepthOnlyPass::collect_draw_calls(
     }
 }
 
-void DepthOnlyPass::collect_shader_usages(
+void DepthOnlyPass::collect_scene_shader_usages(
     tc_scene_handle scene,
     const std::function<void(TcShader)>& emit
 ) const {
@@ -715,12 +723,17 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    tc_scene_handle scene = ctx.scene.handle();
-    const RenderCamera* camera = ctx.camera;
+    const SceneRenderServices* services =
+        require_scene_render_services(ctx, "DepthOnlyPass");
+    if (!services) {
+        return;
+    }
+    tc_scene_handle scene = services->scene.handle();
+    const RenderCamera* camera = ctx.view.primary_view();
     Rect2i rect = ctx.render_rect;
     RenderCameraSnapshot named_camera_snapshot;
-    uint64_t camera_layer_mask = ctx.layer_mask;
-    uint64_t camera_render_category_mask = ctx.render_category_mask;
+    uint64_t camera_layer_mask = services->layer_mask;
+    uint64_t camera_render_category_mask = services->render_category_mask;
 
     if (!camera_name.empty()) {
         if (!resolve_named_render_camera_for_pass(
@@ -733,6 +746,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     }
 
     if (!camera) {
+        tc::Log::error("[DepthOnlyPass] primary render view is missing");
         return;
     }
 
@@ -783,8 +797,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
-    RenderSceneItemSnapshot* snapshot =
-        ensure_render_item_snapshot(ctx, "DepthOnlyPass");
+    const RenderItemSnapshot* snapshot =
+        require_render_item_snapshot(ctx, "DepthOnlyPass");
     if (!snapshot) {
         return;
     }

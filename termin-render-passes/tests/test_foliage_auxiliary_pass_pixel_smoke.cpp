@@ -5,6 +5,8 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/id_pass.hpp>
 #include <termin/render/normal_pass.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
+#include <termin/render/scene_render_services.hpp>
 #include <termin/tc_scene.hpp>
 
 #include <tgfx/resources/tc_material_registry.h>
@@ -190,17 +192,17 @@ bool matches_pick_color(uint32_t pick_id, const float pixel[4])
 
 termin::ExecuteContext make_context(
     tgfx::RenderContext2& render_context,
-    const termin::TcSceneRef& scene,
-    termin::RenderSceneItemSnapshot& snapshot)
+    const termin::SceneRenderServices& scene_services,
+    termin::RenderExecutionCapabilities& capabilities,
+    termin::RenderItemSnapshot& snapshot)
 {
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
-    context.scene = scene;
+    capabilities.add(scene_services);
+    context.capabilities = &capabilities;
     context.render_item_snapshot = &snapshot;
     context.render_rect = {
         0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
-    context.layer_mask = UINT64_MAX;
-    context.render_category_mask = UINT64_MAX;
     return context;
 }
 
@@ -224,8 +226,15 @@ bool run_id_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
-    termin::ExecuteContext context = make_context(render_context, scene, snapshot);
+    termin::RenderItemSnapshot snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
+        return false;
+    }
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    termin::ExecuteContext context =
+        make_context(render_context, scene_services, capabilities, snapshot);
     context.tex2_writes.emplace("id", color);
     context.tex2_depth_writes.emplace("id", depth);
     termin::IdPass pass("empty", "id", "FoliageIdPixelSmoke");
@@ -267,8 +276,15 @@ bool run_depth_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
-    termin::ExecuteContext context = make_context(render_context, scene, snapshot);
+    termin::RenderItemSnapshot snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
+        return false;
+    }
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    termin::ExecuteContext context =
+        make_context(render_context, scene_services, capabilities, snapshot);
     context.tex2_writes.emplace("depth", color);
     context.tex2_depth_writes.emplace("depth", depth);
     termin::DepthPass pass("empty_depth", "depth", "FoliageDepthPixelSmoke");
@@ -308,10 +324,17 @@ bool run_depth_only_pass(
 {
     const tgfx::TextureHandle depth = create_depth(device);
     if (!depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
-    termin::ExecuteContext context = make_context(render_context, scene, snapshot);
+    termin::RenderItemSnapshot snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
+        return false;
+    }
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    termin::ExecuteContext context =
+        make_context(render_context, scene_services, capabilities, snapshot);
     termin::RenderCamera camera;
-    context.camera = &camera;
+    context.view.primary = camera;
     context.tex2_depth_writes.emplace("depth_only", depth);
     termin::DepthOnlyPass pass("depth_only", "FoliageDepthOnlyPixelSmoke");
 
@@ -342,8 +365,15 @@ bool run_normal_pass(
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
-    termin::RenderSceneItemSnapshot snapshot;
-    termin::ExecuteContext context = make_context(render_context, scene, snapshot);
+    termin::RenderItemSnapshot snapshot;
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
+        return false;
+    }
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    termin::ExecuteContext context =
+        make_context(render_context, scene_services, capabilities, snapshot);
     context.tex2_writes.emplace("normal", color);
     context.tex2_depth_writes.emplace("normal", depth);
     termin::NormalPass pass("empty_normal", "normal", "FoliageNormalPixelSmoke");
