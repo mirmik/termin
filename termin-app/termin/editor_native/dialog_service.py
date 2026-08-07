@@ -79,13 +79,14 @@ class NativeDialogService(DialogService):
             if not self._document.destroy_widget_recursive(dialog.handle):
                 _logger.error("Failed to destroy native dialog: %d", key)
 
-    def show_error(
+    def _show_message(
         self,
         title: str,
         message: str,
+        kind: MessageBoxKind,
         on_close: Callable[[], None] | None = None,
     ) -> None:
-        dialog = self._document.create_message_box(title, message, MessageBoxKind.Error)
+        dialog = self._document.create_message_box(title, message, kind)
         key = self._retain(dialog, lambda _result: on_close() if on_close is not None else None)
         weak_service = weakref.ref(self)
 
@@ -97,8 +98,24 @@ class NativeDialogService(DialogService):
         dialog.connect_finished(finished)
         if not dialog.show(self._viewport()):
             self._discard(key)
-            raise RuntimeError("failed to show native error dialog")
+            raise RuntimeError("failed to show native message dialog")
         self._request_render()
+
+    def show_error(
+        self,
+        title: str,
+        message: str,
+        on_close: Callable[[], None] | None = None,
+    ) -> None:
+        self._show_message(title, message, MessageBoxKind.Error, on_close)
+
+    def show_warning(
+        self,
+        title: str,
+        message: str,
+        on_close: Callable[[], None] | None = None,
+    ) -> None:
+        self._show_message(title, message, MessageBoxKind.Warning, on_close)
 
     def show_input(
         self,

@@ -512,10 +512,14 @@ TEST_CASE("native FEM component doubles round-trip through inspect")
     tc_value_free(&body_data);
 
     FEMPhysicsWorldComponent world;
+    world.contact_friction_coefficient = 0.7;
+    world.contact_friction_cone_facets = 8;
     tc_value world_data = world.serialize_data();
 
     FEMPhysicsWorldComponent restored_world;
     restored_world.deserialize_data(&world_data);
+    CHECK(std::abs(restored_world.contact_friction_coefficient - 0.7) < 1.0e-12);
+    CHECK(restored_world.contact_friction_cone_facets == 8);
     tc_value_free(&world_data);
 
     FEMArticulationComponent articulation;

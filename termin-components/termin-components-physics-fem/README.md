@@ -212,6 +212,13 @@ mixing rule are deliberately future scene-policy work; the physics-qopt contact
 model
 already accepts a coefficient per contact.
 
+`contact_friction_cone_facets` selects the even-sided polygon used to
+approximate the Coulomb friction disk. It must be even and at least 4. The
+default is 6, which keeps the realtime contact QP compact; 8 or more facets can
+be selected when finer directional accuracy justifies the additional
+inequality rows. The value is a geometric accuracy/performance setting, not a
+power-of-two allocation size.
+
 `collision_layer_mask` selects entity layers accepted by the FEM world.
 Same-body contacts are always discarded. Contacts between directly connected
 maximal bodies and adjacent links of one articulation are discarded by

@@ -1,10 +1,20 @@
 {
   "uuid": "termin-android-scene-color",
   "name": "AndroidSceneColor",
-  "language": "glsl",
-  "vertex_source_path": "shaders/vulkan/termin-android-scene-color.vert.glsl",
-  "fragment_source_path": "shaders/vulkan/termin-android-scene-color.frag.glsl",
+  "language": "slang",
+  "vertex_source_path": "shaders/vulkan/termin-android-scene-color.slang",
+  "fragment_source_path": "shaders/vulkan/termin-android-scene-color.slang",
+  "vertex_entry": "vs_main",
+  "fragment_entry": "fs_main",
   "source_path": "runtime-package/shaders/termin-android-scene-color",
+  "shader_contract": {
+    "schema_version": 1,
+    "debug_name": "AndroidSceneColor",
+    "vertex_inputs": [
+      {"semantic": "position", "type": 3, "required": true},
+      {"semantic": "color", "type": 3, "required": true}
+    ]
+  },
   "artifacts": {
     "vulkan": {
       "vertex": "shaders/vulkan/termin-android-scene-color.vert.spv",

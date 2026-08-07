@@ -374,6 +374,22 @@ namespace
 
 int main()
 {
+    TERMIN_QOPT_CHECK(DynamicsSystemStepOptions{}.friction_cone_facets == 6);
+    DynamicsSystem invalid_options_system;
+    TERMIN_QOPT_CHECK(invalid_options_system.finalize() ==
+                      DynamicsSystemDiagnostic::None);
+    for (const std::size_t invalid_facets : {3U, 5U})
+    {
+        const DynamicsSystemStepResult invalid_facets_result =
+            invalid_options_system.step({.friction_cone_facets =
+                                             invalid_facets});
+        TERMIN_QOPT_CHECK(invalid_facets_result.status ==
+                          QpStatus::InvalidInput);
+        TERMIN_QOPT_CHECK(
+            invalid_facets_result.diagnostic ==
+            DynamicsSystemDiagnostic::InvalidProjectionOptions);
+    }
+
     DynamicsTopology topology;
     const auto first = topology.register_dofs(1, "first");
     const auto second = topology.register_dofs(1, "second");
