@@ -52,13 +52,18 @@ namespace termin::rendering_manager_detail {
                 {{"input_res", "empty"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
             adopt_default_pass(ph, p);
         }
-        if (tc_pass* p = create_and_configure_pass("PresentToScreenPass", "Present", {{"input_res", "color"}})) {
+        if (tc_pass* p = create_and_configure_pass(
+                "TonemapPass", "Tonemap", {{"input_res", "color"}, {"output_res", "color_tonemapped"}})) {
             adopt_default_pass(ph, p);
         }
-        for (const char* resource : {"empty", "color"}) {
+        if (tc_pass* p = create_and_configure_pass(
+                "OutputTransformPass", "OutputTransform", {{"input_res", "color_tonemapped"}})) {
+            adopt_default_pass(ph, p);
+        }
+        for (const char* resource : {"empty", "color", "color_tonemapped"}) {
             ResourceSpec spec;
             spec.resource = resource;
-            spec.format = "render_target";
+            spec.format = "rgba16f";
             pipeline.add_spec(spec);
         }
         return ph;
@@ -115,13 +120,22 @@ namespace termin::rendering_manager_detail {
             adopt_default_pass(ph, p);
         }
 
-        if (tc_pass* p = create_and_configure_pass(
-                "UIWidgetPass", "UIWidgets", {{"input_res", "color_bloom"}, {"output_res", "color+widgets"}})) {
+        if (tc_pass* p = create_and_configure_pass("TonemapPass",
+                                                   "Tonemap",
+                                                   {
+                                                       {"input_res", "color_bloom"},
+                                                       {"output_res", "color_tonemapped"},
+                                                   })) {
             adopt_default_pass(ph, p);
         }
 
-        if (tc_pass* p =
-                create_and_configure_pass("PresentToScreenPass", "Present", {{"input_res", "color+widgets"}})) {
+        if (tc_pass* p = create_and_configure_pass(
+                "UIWidgetPass", "UIWidgets", {{"input_res", "color_tonemapped"}, {"output_res", "color+widgets"}})) {
+            adopt_default_pass(ph, p);
+        }
+
+        if (tc_pass* p = create_and_configure_pass(
+                "OutputTransformPass", "OutputTransform", {{"input_res", "color+widgets"}})) {
             adopt_default_pass(ph, p);
         }
 
@@ -133,12 +147,13 @@ namespace termin::rendering_manager_detail {
             "color_world2d",
             "color_resolved",
             "color_bloom",
+            "color_tonemapped",
             "color+widgets",
         };
         for (const char* resource : color_resources) {
             ResourceSpec spec;
             spec.resource = resource;
-            spec.format = "render_target";
+            spec.format = "rgba16f";
             if (std::string(resource) == "empty" || std::string(resource) == "skybox" ||
                 std::string(resource) == "color_opaque" || std::string(resource) == "color" ||
                 std::string(resource) == "color_world2d") {

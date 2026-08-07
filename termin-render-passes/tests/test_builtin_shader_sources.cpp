@@ -597,7 +597,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 44> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 45> kExpectedShaders{{
         {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-present-blit", "PresentBlitVSFS", true, true},
         {"termin-engine-canvas2d-solid", "Canvas2DSolidVSFS", true, true},
@@ -642,6 +642,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         {"termin-engine-bloom-upsample", "BloomUpsampleFS", false, true},
         {"termin-engine-bloom-composite", "BloomCompositeFS", false, true},
         {"termin-engine-tonemap", "TonemapEngineFS", false, true},
+        {"termin-engine-output-transform", "OutputTransformEngineFS", false, true},
     }};
 
     for (const ExpectedShader& expected : kExpectedShaders) {

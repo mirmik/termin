@@ -1816,7 +1816,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts") {
     tc_scene_free(editor_scene);
 }
 
-TEST_CASE("Default pipeline color FBOs inherit output render target format") {
+TEST_CASE("Default pipeline keeps internal color FBOs in linear HDR") {
     RenderTopology topology;
     RenderingManager manager(topology);
     tc_pipeline_handle pipeline_handle = manager.make_default_pipeline();
@@ -1832,7 +1832,7 @@ TEST_CASE("Default pipeline color FBOs inherit output render target format") {
         if (spec->resource == "color") {
             found_color = true;
             REQUIRE(spec->format.has_value());
-            CHECK(*spec->format == "render_target");
+            CHECK(*spec->format == "rgba16f");
         }
     }
 
