@@ -327,12 +327,12 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 2. Semantic series and fit
 
-- [ ] Ввести stable `ChartSeriesHandle2D`.
-- [ ] Добавить name, visibility, legend policy, item handle и data bounds.
+- [x] Ввести stable `ChartSeriesHandle2D`.
+- [x] Добавить name, visibility, legend policy, item handle и data bounds.
 - [x] Реализовать `fit`, `fit_x`, `fit_y` по native bounds видимых series.
-- [ ] Сохранить `set_data`, `append`, style mutation и nearest query без
+- [x] Сохранить `set_data`, `append`, style mutation и nearest query без
   пересоздания item/GPU body.
-- [ ] Добавить retained legend composition с заменяемыми public parts.
+- [x] Добавить retained legend composition в public `LegendRoot`.
 - [x] Не хранить отдельную копию large series data в composer или C#.
 
 ### Этап 3. Interaction and annotations

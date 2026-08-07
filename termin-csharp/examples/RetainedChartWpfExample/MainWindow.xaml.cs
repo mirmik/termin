@@ -95,13 +95,15 @@ public partial class MainWindow : Window
         chart.TitleText = "C# retained chart + WPF portal";
         chart.XAxisText = "phase";
         chart.YAxisText = "signal";
-        chart.AddLine(
+        chart.AddLineSeries(
+            "sin(x)",
             x,
             x.Select(value => Math.Sin(value)).ToArray(),
             style: new PlotLineSeriesStyle2D(
                 new PlotColor2D(0.20f, 0.72f, 1.0f),
                 thicknessPx: 2.2f));
-        chart.AddLine(
+        chart.AddLineSeries(
+            "0.45 cos(2.3x)",
             x,
             x.Select(value => 0.45 * Math.Cos(2.3 * value)).ToArray(),
             style: new PlotLineSeriesStyle2D(
@@ -123,7 +125,7 @@ public partial class MainWindow : Window
         _buttonAnchor.Set(
             new VisualRect2f(
                 e.Width - width - margin,
-                margin,
+                e.Height - height - margin,
                 width,
                 height),
             new VisualFillPaint2D(

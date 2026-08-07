@@ -57,6 +57,13 @@ applications can mutate the current native item, replace it with another item
 from the same scene, or remove it. Line and scatter items keep their native
 handles and data across `Resize`, `PanBy`, `ZoomAt`, range and theme updates.
 
+`AddLineSeries` and `AddScatterSeries` return generation-checked semantic
+series objects. They keep name, visibility, legend participation, native data
+bounds and the public scene item coherent without copying point arrays into
+C#. Their style setters also refresh the chart-owned retained legend. The
+lower-level `AddLine` / `AddScatter` item APIs remain available when an
+application intentionally wants only raw scene-item composition.
+
 Text measurement, tick generation, pooling, clipping and projection updates
 remain native. `Chart2D` borrows its `GpuHost`, exposes its chart-owned scene
 and projection through non-owning wrappers, and must be disposed before the
