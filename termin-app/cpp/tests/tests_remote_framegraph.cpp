@@ -4,6 +4,7 @@
 #include "termin/editor/remote_frame_graph_debugger_source.hpp"
 
 #include <chrono>
+#include <cstring>
 #include <optional>
 #include <set>
 #include <string>
@@ -196,6 +197,105 @@ TEST_CASE("RemoteFrameGraphDebuggerSource reconciles revisions and retains stale
     REQUIRE(source.ingest(reconnect));
     CHECK_EQ(source.snapshot()->session_id, 8u);
     CHECK(source.snapshot()->targets.empty());
+}
+
+TEST_CASE("RemoteFrameGraphDebuggerSource assembles exact color HDR and depth blobs") {
+    using namespace termin::framegraph_remote;
+    std::vector<Command> commands;
+    termin::RemoteFrameGraphDebuggerSource source(
+        8, [&commands](const Command& command) {
+            commands.push_back(command);
+            return true;
+        });
+
+    std::uint64_t sequence = 1;
+    DecodedMessage hello;
+    hello.envelope.session_id = 19;
+    hello.envelope.sequence = sequence++;
+    TargetHello target_hello;
+    target_hello.capabilities =
+        static_cast<std::uint64_t>(Capability::topology) |
+        static_cast<std::uint64_t>(Capability::exact_snapshot);
+    hello.message = target_hello;
+    REQUIRE(source.ingest(hello));
+
+    DecodedMessage topology_message;
+    topology_message.envelope.session_id = 19;
+    topology_message.envelope.sequence = sequence++;
+    TopologySnapshot topology;
+    topology.graph_revision = 4;
+    topology.selected_target_id = 2;
+    topology.targets.push_back({2, "fixture", true});
+    topology.resources.push_back("fixture_resource");
+    topology_message.message = topology;
+    REQUIRE(source.ingest(topology_message));
+    source.set_mode(termin::FrameGraphDebuggerMode::BetweenPasses);
+    source.set_selected_resource("fixture_resource");
+
+    const auto assemble = [&](PixelFormat format,
+                              bool depth,
+                              std::uint32_t width,
+                              std::uint32_t height,
+                              std::vector<std::uint8_t> bytes) {
+        REQUIRE(source.request_exact_capture());
+        const std::uint64_t request_id = commands.back().request_id;
+        CaptureMetadata metadata;
+        metadata.request_id = request_id;
+        metadata.graph_revision = 4;
+        metadata.blob_id = request_id + 100;
+        metadata.frame_number = static_cast<std::int64_t>(request_id);
+        metadata.pixel_format = format;
+        metadata.width = width;
+        metadata.height = height;
+        metadata.is_depth = depth;
+        metadata.byte_count = bytes.size();
+        metadata.chunk_count = 2;
+        DecodedMessage metadata_message;
+        metadata_message.envelope.session_id = 19;
+        metadata_message.envelope.sequence = sequence++;
+        metadata_message.message = metadata;
+        REQUIRE(source.ingest(metadata_message));
+
+        const std::size_t first_size = bytes.size() / 2;
+        for (std::uint32_t index = 0; index < 2; ++index) {
+            const std::size_t offset = index == 0 ? 0 : first_size;
+            const std::size_t end = index == 0 ? first_size : bytes.size();
+            BlobChunk chunk;
+            chunk.blob_id = metadata.blob_id;
+            chunk.chunk_index = index;
+            chunk.chunk_count = 2;
+            chunk.offset = offset;
+            chunk.total_bytes = bytes.size();
+            chunk.bytes.assign(bytes.begin() + offset, bytes.begin() + end);
+            DecodedMessage chunk_message{
+                {}, Message{std::in_place_type<BlobChunk>, std::move(chunk)}};
+            chunk_message.envelope.session_id = 19;
+            chunk_message.envelope.sequence = sequence++;
+            REQUIRE(source.ingest(chunk_message));
+        }
+        const auto capture = source.snapshot()->cpu_capture;
+        REQUIRE(capture.has_value());
+        CHECK_EQ(capture->width, width);
+        CHECK_EQ(capture->height, height);
+        CHECK_EQ(capture->is_depth, depth);
+        REQUIRE(capture->bytes);
+        CHECK(*capture->bytes == bytes);
+    };
+
+    assemble(PixelFormat::rgba8_unorm,
+             false,
+             2,
+             1,
+             {255, 0, 0, 255, 0, 255, 0, 255});
+    std::vector<float> hdr_values = {2.0F, 0.5F, -1.0F, 1.0F};
+    std::vector<std::uint8_t> hdr_bytes(sizeof(float) * hdr_values.size());
+    std::memcpy(hdr_bytes.data(), hdr_values.data(), hdr_bytes.size());
+    assemble(PixelFormat::rgba32_float, false, 1, 1, hdr_bytes);
+    std::vector<float> depth_values = {0.25F, 0.75F};
+    std::vector<std::uint8_t> depth_bytes(
+        sizeof(float) * depth_values.size());
+    std::memcpy(depth_bytes.data(), depth_values.data(), depth_bytes.size());
+    assemble(PixelFormat::depth32_float, true, 2, 1, depth_bytes);
 }
 
 TEST_CASE("FrameGraphDebuggerView switches local remote stale and local in one tree") {

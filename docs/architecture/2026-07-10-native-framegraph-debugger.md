@@ -60,6 +60,16 @@ debugger UI or Python data plane is created. Topology refresh is rate-limited,
 stale-revision responses schedule reconciliation, and remote errors/drop counts
 are surfaced in the existing status bar.
 
+Exact remote snapshots reuse the same frame-local capture instrumentation as
+the local debugger. The target render thread performs capture and bounded
+readback, then hands an immutable CPU blob to the network thread for chunking
+and transmission; graphics handles never cross that boundary. The remote
+source assembles chunks in order under a memory budget and publishes a shared
+immutable CPU capture. Incomplete, duplicate or out-of-order transfers are
+rejected visibly rather than exposed as partial images. Uploading that CPU
+capture into the debugger window's local graphics domain is a separate
+frontend step.
+
 ## Capture lifecycle
 
 `RenderingManager` is the authoritative source of renderable targets and the

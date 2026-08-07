@@ -355,6 +355,7 @@ public:
     const CaptureMetadata& metadata() const { return metadata_; }
     const std::vector<std::uint8_t>& bytes() const { return bytes_; }
     bool complete() const { return complete_; }
+    std::vector<std::uint8_t> take_bytes();
 
 private:
     CaptureMetadata metadata_;

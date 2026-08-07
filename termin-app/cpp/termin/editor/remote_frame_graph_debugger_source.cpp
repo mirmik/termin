@@ -29,6 +29,7 @@ namespace termin
             result.authentication_token =
                 std::move(config.authentication_token);
             result.command_queue_capacity = config.command_queue_capacity;
+            result.max_blob_bytes = config.capture_memory_budget_bytes;
             result.reconnect = config.reconnect;
             return result;
         }
@@ -49,6 +50,26 @@ namespace termin
                 return FrameGraphDebuggerState::Bound;
             }
             return FrameGraphDebuggerState::Error;
+        }
+
+        FrameGraphDebuggerPixelFormat project_pixel_format(PixelFormat format)
+        {
+            switch (format)
+            {
+            case PixelFormat::rgba8_unorm:
+                return FrameGraphDebuggerPixelFormat::Rgba8Unorm;
+            case PixelFormat::rgba16_float:
+                return FrameGraphDebuggerPixelFormat::Rgba16Float;
+            case PixelFormat::rgba32_float:
+                return FrameGraphDebuggerPixelFormat::Rgba32Float;
+            case PixelFormat::depth16_unorm:
+                return FrameGraphDebuggerPixelFormat::Depth16Unorm;
+            case PixelFormat::depth32_float:
+                return FrameGraphDebuggerPixelFormat::Depth32Float;
+            case PixelFormat::unknown:
+                return FrameGraphDebuggerPixelFormat::Unknown;
+            }
+            return FrameGraphDebuggerPixelFormat::Unknown;
         }
 
         std::string topology_summary(const TopologySnapshot& topology)
@@ -221,6 +242,47 @@ namespace termin
             return true;
         }
 
+        bool request_exact_capture()
+        {
+            Command command;
+            {
+                std::lock_guard lock(mutex);
+                if (!state->connected || !state->selected_target_id ||
+                    state->graph_revision == 0 || !exact_capture_supported ||
+                    assembler ||
+                    std::any_of(pending_commands.begin(),
+                                pending_commands.end(),
+                                [](const auto& pending)
+                                {
+                                    return pending.second ==
+                                        CommandKind::capture_snapshot;
+                                }))
+                    return false;
+                command.kind = CommandKind::capture_snapshot;
+                command.target_id = *state->selected_target_id;
+                command.graph_revision = state->graph_revision;
+                command.encoding = CaptureEncoding::native_pixels;
+                if (state->mode == FrameGraphDebuggerMode::BetweenPasses)
+                {
+                    if (state->selected_resource.empty())
+                        return false;
+                    command.selector_kind = CaptureSelectorKind::resource;
+                    command.resource = state->selected_resource;
+                }
+                else
+                {
+                    if (!state->selected_pass_id ||
+                        state->selected_symbol.empty())
+                        return false;
+                    command.selector_kind =
+                        CaptureSelectorKind::internal_symbol;
+                    command.pass_id = *state->selected_pass_id;
+                    command.symbol = state->selected_symbol;
+                }
+            }
+            return send(std::move(command));
+        }
+
         template <typename Mutation> void mutate(Mutation mutation)
         {
             std::lock_guard lock(mutex);
@@ -267,6 +329,8 @@ namespace termin
             {
                 std::lock_guard lock(mutex);
                 configured_client = config;
+                capture_memory_budget_bytes =
+                    config.capture_memory_budget_bytes;
                 closed = false;
             }
             auto next_client = std::make_unique<
@@ -332,6 +396,14 @@ namespace termin
             next->status_detail = std::move(detail);
             if (was_connected)
             {
+                if (assembler)
+                {
+                    append_gap(*next,
+                               FrameGraphDebuggerGapKind::TransportDrop,
+                               1,
+                               "incomplete remote capture discarded on disconnect");
+                    ++next->dropped_messages;
+                }
                 append_gap(
                     *next,
                     FrameGraphDebuggerGapKind::Disconnect,
@@ -339,6 +411,8 @@ namespace termin
                     "transport disconnected; retained topology is stale");
             }
             pending_commands.clear();
+            assembler.reset();
+            exact_capture_supported = false;
             pending_target_id.reset();
             refresh_pending = false;
             needs_refresh = true;
@@ -370,6 +444,10 @@ namespace termin
                    const TargetHello& hello)
         {
             pending_commands.clear();
+            assembler.reset();
+            exact_capture_supported =
+                (hello.capabilities & static_cast<std::uint64_t>(
+                    Capability::exact_snapshot)) != 0;
             pending_target_id.reset();
             refresh_pending = false;
             needs_refresh = true;
@@ -478,6 +556,16 @@ namespace termin
                    const DecodedMessage&,
                    const Status& status)
         {
+            if (status.graph_revision < next.graph_revision)
+            {
+                tc_log_error("remote framegraph source: status revision "
+                             "regressed from %llu to %llu",
+                             static_cast<unsigned long long>(
+                                 next.graph_revision),
+                             static_cast<unsigned long long>(
+                                 status.graph_revision));
+                return false;
+            }
             next.graph_revision = status.graph_revision;
             next.state = project_state(status.state);
             next.status_detail = status.detail;
@@ -486,8 +574,26 @@ namespace termin
                 " ns; remote queue: " + std::to_string(status.queue_depth);
             next.dropped_messages =
                 std::max(next.dropped_messages, status.dropped_captures);
+            if (assembler &&
+                assembler->metadata().request_id == status.request_id &&
+                status.code != StatusCode::accepted)
+            {
+                append_gap(next,
+                           FrameGraphDebuggerGapKind::TransportDrop,
+                           1,
+                           "capture ended before all chunks arrived");
+                ++next.dropped_messages;
+                assembler.reset();
+                next.state = FrameGraphDebuggerState::Error;
+                next.status_detail =
+                    "capture ended before all chunks arrived";
+                tc_log_error("remote framegraph source: capture request %llu "
+                             "ended before blob completion",
+                             static_cast<unsigned long long>(status.request_id));
+            }
             const auto pending = pending_commands.find(status.request_id);
-            if (pending != pending_commands.end())
+            if (pending != pending_commands.end() &&
+                status.code != StatusCode::accepted)
             {
                 if (pending->second == CommandKind::select_target)
                     pending_target_id.reset();
@@ -504,6 +610,87 @@ namespace termin
                 next.status_detail =
                     "remote topology revision is stale; refreshing";
             }
+            return true;
+        }
+
+        bool apply(FrameGraphDebuggerSnapshot& next,
+                   const DecodedMessage&,
+                   const CaptureMetadata& metadata)
+        {
+            const auto pending = pending_commands.find(metadata.request_id);
+            if (pending == pending_commands.end() ||
+                pending->second != CommandKind::capture_snapshot ||
+                metadata.kind != CaptureKind::snapshot ||
+                metadata.graph_revision != next.graph_revision ||
+                metadata.byte_count > capture_memory_budget_bytes ||
+                assembler)
+            {
+                tc_log_error("remote framegraph source: rejected capture "
+                             "metadata for request %llu",
+                             static_cast<unsigned long long>(
+                                 metadata.request_id));
+                return false;
+            }
+            assembler.emplace(metadata);
+            next.state = FrameGraphDebuggerState::WaitingFrame;
+            next.capture_info = "Receiving exact remote capture: 0 / " +
+                std::to_string(metadata.byte_count) + " bytes";
+            return true;
+        }
+
+        bool apply(FrameGraphDebuggerSnapshot& next,
+                   const DecodedMessage&,
+                   const BlobChunk& chunk)
+        {
+            if (!assembler)
+            {
+                tc_log_error("remote framegraph source: blob chunk arrived "
+                             "without capture metadata");
+                return false;
+            }
+            const CaptureMetadata metadata = assembler->metadata();
+            const BlobAssemblyResult result = assembler->append(chunk);
+            if (!result)
+            {
+                tc_log_error("remote framegraph source: capture assembly "
+                             "failed: %s", result.detail.c_str());
+                append_gap(next,
+                           FrameGraphDebuggerGapKind::TransportDrop,
+                           1,
+                           "capture assembly failed: " + result.detail);
+                next.state = FrameGraphDebuggerState::Error;
+                next.status_detail = result.detail;
+                pending_commands.erase(metadata.request_id);
+                assembler.reset();
+                return true;
+            }
+            next.capture_info = "Receiving exact remote capture: " +
+                std::to_string(chunk.offset + chunk.bytes.size()) + " / " +
+                std::to_string(metadata.byte_count) + " bytes";
+            if (!result.complete)
+                return true;
+
+            auto bytes = std::make_shared<const std::vector<std::uint8_t>>(
+                assembler->take_bytes());
+            assembler.reset();
+            pending_commands.erase(metadata.request_id);
+            next.cpu_capture = FrameGraphDebuggerCpuCaptureSnapshot{
+                metadata.request_id,
+                metadata.graph_revision,
+                metadata.frame_number,
+                project_pixel_format(metadata.pixel_format),
+                metadata.width,
+                metadata.height,
+                metadata.is_depth,
+                metadata.exact,
+                std::move(bytes),
+            };
+            next.state = FrameGraphDebuggerState::Captured;
+            next.capture_info = "Exact remote capture: " +
+                std::to_string(metadata.width) + "x" +
+                std::to_string(metadata.height) + ", " +
+                std::to_string(metadata.byte_count) + " bytes";
+            next.status_detail = "exact remote capture received";
             return true;
         }
 
@@ -544,6 +731,9 @@ namespace termin
                 }
                 pending_commands.erase(pending);
             }
+            if (assembler && assembler->metadata().request_id ==
+                                 error.related_request_id)
+                assembler.reset();
             return true;
         }
 
@@ -584,9 +774,12 @@ namespace termin
         std::uint64_t last_sequence = 0;
         bool refresh_pending = false;
         bool needs_refresh = true;
+        bool exact_capture_supported = false;
         bool closed = false;
         Clock::time_point last_refresh_request{};
         std::optional<RemoteFrameGraphConnectionConfig> configured_client;
+        std::uint64_t capture_memory_budget_bytes = WireLimits::max_blob_bytes;
+        std::optional<BlobAssembler> assembler;
         std::unique_ptr<framegraph_remote_client::RemoteFrameGraphClient>
             client;
     };
@@ -710,6 +903,11 @@ namespace termin
         RemoteFrameGraphConnectionConfig config)
     {
         return impl_->connect_live(std::move(config));
+    }
+
+    bool RemoteFrameGraphDebuggerSource::request_exact_capture()
+    {
+        return impl_->request_exact_capture();
     }
 
     void

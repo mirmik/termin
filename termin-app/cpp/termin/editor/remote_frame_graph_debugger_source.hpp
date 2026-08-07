@@ -16,6 +16,8 @@ namespace termin
         std::uint16_t port = 0;
         std::string authentication_token;
         std::size_t command_queue_capacity = 64;
+        std::uint64_t capture_memory_budget_bytes =
+            framegraph_remote::WireLimits::max_blob_bytes;
         bool reconnect = true;
     };
 
@@ -63,6 +65,7 @@ namespace termin
 
         bool ingest(const framegraph_remote::DecodedMessage& message);
         bool connect(RemoteFrameGraphConnectionConfig config);
+        bool request_exact_capture();
         void transport_disconnected(std::string detail);
 
     private:

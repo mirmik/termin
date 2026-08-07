@@ -936,4 +936,10 @@ BlobAssemblyResult BlobAssembler::append(const BlobChunk& chunk) {
             .complete = complete_};
 }
 
+std::vector<std::uint8_t> BlobAssembler::take_bytes() {
+    if (!complete_) return {};
+    complete_ = false;
+    return std::move(bytes_);
+}
+
 } // namespace termin::framegraph_remote

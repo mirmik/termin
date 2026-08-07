@@ -10,3 +10,8 @@ The client validates monotonic sequence and session identity before publishing
 messages. Authentication, malformed streams, callback failures, queue overflow
 and abnormal disconnects are logged and also delivered through the disconnect
 callback where possible.
+
+The client advertises exact color/HDR/depth snapshot reception. Blob assembly
+belongs to the editor source rather than this transport: metadata and chunks
+remain ordinary validated protocol messages here, preserving the client's
+engine/GPU independence.
