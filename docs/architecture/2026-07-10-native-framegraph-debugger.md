@@ -45,7 +45,7 @@ decoded bytes into a local texture while the view follows exactly the same
 path as an in-process capture. Transport, reconnect, and packet handling do not
 belong in the view or in Python.
 
-`RemoteFrameGraphDebuggerSource` implements that boundary for topology-only
+`RemoteFrameGraphDebuggerSource` implements that boundary for network
 sessions. `termin-framegraph-remote-client` owns loopback TCP, authentication,
 framing and reconnect on a network thread; callbacks publish copied immutable
 snapshots under a mutex and never touch widgets or rendering objects. Commands
@@ -82,6 +82,13 @@ one frame may be in network transfer and only one newer frame can wait. Burst
 captures 2--16 exact frames with one graph revision and explicit ordered
 indices. Revision changes, cancellation and disconnect terminate either mode;
 drops become protocol gaps instead of latent queued video.
+
+The standalone reciprocal smoke is the transport/capture regression gate. A
+real Vulkan `RenderingManager` target and production remote client exercise
+topology, stale revision, exact snapshot, preview, burst, cancellation,
+backpressure drops and reconnect without constructing the editor. The target
+uses a shader-independent clear pass, so the pair is reproducible from the
+installed SDK test build and can also be split across SSH or ADB forwarding.
 
 On lifecycle-driven hosts the target service may outlive the native debugger.
 Android starts the authenticated loopback listener at process initialization,

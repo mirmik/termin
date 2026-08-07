@@ -521,6 +521,8 @@ namespace termin::framegraph_remote_target
                 io_thread.join();
             client_connected.store(false, std::memory_order_release);
             active_session.store(0, std::memory_order_release);
+            active_max_payload_bytes.store(
+                WireLimits::max_payload_bytes, std::memory_order_release);
             listening_port.store(0, std::memory_order_release);
             cleanup_socket_runtime();
             QueuedCommand command;
@@ -560,7 +562,7 @@ namespace termin::framegraph_remote_target
                 return false;
             }
             debugger_attached.store(true, std::memory_order_release);
-            emit_lifecycle_status("render runtime attached");
+            emit_lifecycle_update("render runtime attached");
             tc_log_info("remote framegraph target: render debugger attached");
             return true;
         }
@@ -593,7 +595,7 @@ namespace termin::framegraph_remote_target
             if (!refresh_topology())
                 tc_log_error("remote framegraph target: failed to publish "
                              "detached runtime topology");
-            emit_lifecycle_status("render runtime detached");
+            emit_lifecycle_update("render runtime detached");
             tc_log_info("remote framegraph target: render debugger detached");
         }
 
@@ -1013,17 +1015,40 @@ namespace termin::framegraph_remote_target
             enqueue(std::move(packet));
         }
 
-        void emit_lifecycle_status(std::string detail)
+        void emit_lifecycle_update(std::string detail)
         {
             const std::uint64_t session =
                 active_session.load(std::memory_order_acquire);
             if (session == 0)
+            {
+                tc_log_info("remote framegraph target: lifecycle update has "
+                            "no active client; revision=%llu",
+                            static_cast<unsigned long long>(graph_revision));
                 return;
+            }
             OutboundPacket packet;
             packet.session_id = session;
+            const std::uint32_t payload_limit =
+                active_max_payload_bytes.load(std::memory_order_acquire);
+            const auto encoded = encode_message(topology, 1, session);
+            if (encoded &&
+                encoded.value->size() - envelope_size <= payload_limit)
+            {
+                packet.topology = topology;
+            }
+            else
+            {
+                detail += "; topology omitted because it exceeds the peer "
+                          "payload limit";
+            }
             packet.status =
                 make_status(0, StatusCode::completed, std::move(detail));
             enqueue(std::move(packet));
+            tc_log_info("remote framegraph target: queued lifecycle update "
+                        "session=%llu revision=%llu attached=%d",
+                        static_cast<unsigned long long>(session),
+                        static_cast<unsigned long long>(graph_revision),
+                        debugger ? 1 : 0);
         }
 
         bool configure_capture_selector(const QueuedCommand& queued,
@@ -2008,6 +2033,8 @@ namespace termin::framegraph_remote_target
                     release_client(client);
                     continue;
                 }
+                active_max_payload_bytes.store(max_payload_bytes,
+                                               std::memory_order_release);
                 active_session.store(session_id, std::memory_order_release);
                 client_connected.store(true, std::memory_order_release);
                 tc_log_info(
@@ -2021,6 +2048,8 @@ namespace termin::framegraph_remote_target
                              max_chunk_bytes);
                 client_connected.store(false, std::memory_order_release);
                 active_session.store(0, std::memory_order_release);
+                active_max_payload_bytes.store(
+                    WireLimits::max_payload_bytes, std::memory_order_release);
                 release_client(client);
                 tc_log_info("remote framegraph target: client disconnected "
                             "(session=%llu)",
@@ -2195,6 +2224,8 @@ namespace termin::framegraph_remote_target
         std::atomic<std::uint16_t> listening_port{0};
         std::atomic<std::uint64_t> next_session_id{1};
         std::atomic<std::uint64_t> active_session{0};
+        std::atomic<std::uint32_t> active_max_payload_bytes{
+            WireLimits::max_payload_bytes};
         std::atomic<std::uint64_t> published_graph_revision{0};
         std::atomic<std::uint64_t> rejected_clients{0};
         std::atomic<std::uint64_t> rejected_commands{0};
