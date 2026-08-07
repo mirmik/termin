@@ -80,6 +80,18 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         if (remoteRequested && !enableRemoteProfiler) {
             Log.e(TAG, "remote profiler requires a debuggable APK, port 1..65535, and token");
         }
+        boolean remoteFramegraphRequested =
+                getIntent().getBooleanExtra("termin.framegraph.remote", false);
+        int remoteFramegraphPort =
+                getIntent().getIntExtra("termin.framegraph.port", 46052);
+        String remoteFramegraphToken =
+                getIntent().getStringExtra("termin.framegraph.token");
+        boolean enableRemoteFramegraph = debuggable && remoteFramegraphRequested
+                && remoteFramegraphPort > 0 && remoteFramegraphPort <= 65535
+                && remoteFramegraphToken != null && !remoteFramegraphToken.isEmpty();
+        if (remoteFramegraphRequested && !enableRemoteFramegraph) {
+            Log.e(TAG, "remote framegraph requires a debuggable APK, port 1..65535, and token");
+        }
         nativeInitialized = nativeInitialize(
                 getFilesDir().getAbsolutePath(),
                 getFilesDir().getAbsolutePath(),
@@ -87,7 +99,10 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
                 enableProfiler,
                 enableRemoteProfiler,
                 remoteProfilerPort,
-                remoteProfilerToken == null ? "" : remoteProfilerToken
+                remoteProfilerToken == null ? "" : remoteProfilerToken,
+                enableRemoteFramegraph,
+                remoteFramegraphPort,
+                remoteFramegraphToken == null ? "" : remoteFramegraphToken
         );
         if (!nativeInitialized) {
             Log.e(TAG, "native runtime initialization failed");
@@ -135,6 +150,28 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     }
 
     @Override
+    protected void onPause() {
+        Log.i(TAG, "onPause");
+        stopRenderLoop();
+        if (nativeInitialized) {
+            nativePause();
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "onResume");
+        if (nativeInitialized) {
+            nativeResume();
+            if (surfaceAlive) {
+                startRenderLoop();
+            }
+        }
+    }
+
+    @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.i(TAG, "surfaceCreated");
         surfaceAlive = true;
@@ -170,8 +207,13 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
             boolean enableProfiler,
             boolean enableRemoteProfiler,
             int remoteProfilerPort,
-            String remoteProfilerToken);
+            String remoteProfilerToken,
+            boolean enableRemoteFramegraph,
+            int remoteFramegraphPort,
+            String remoteFramegraphToken);
     private static native void nativeShutdown();
+    private static native void nativePause();
+    private static native void nativeResume();
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativePresentationMetricsChanged(

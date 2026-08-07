@@ -34,13 +34,18 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     jboolean enable_profiler,
     jboolean enable_remote_profiler,
     jint remote_profiler_port,
-    jstring remote_profiler_token
+    jstring remote_profiler_token,
+    jboolean enable_remote_framegraph,
+    jint remote_framegraph_port,
+    jstring remote_framegraph_token
 ) {
     const char* app_data_dir_chars = jstring_chars(env, app_data_dir);
     const char* asset_root_chars = jstring_chars(env, asset_root);
     const char* native_lib_dir_chars = jstring_chars(env, native_lib_dir);
     const char* remote_profiler_token_chars =
         jstring_chars(env, remote_profiler_token);
+    const char* remote_framegraph_token_chars =
+        jstring_chars(env, remote_framegraph_token);
 
     __android_log_print(
         ANDROID_LOG_INFO,
@@ -60,12 +65,19 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     config.remote_profiler_port =
         static_cast<uint16_t>(remote_profiler_port);
     config.remote_profiler_token = remote_profiler_token_chars;
+    config.enable_remote_framegraph =
+        enable_remote_framegraph == JNI_TRUE ? 1 : 0;
+    config.remote_framegraph_port =
+        static_cast<uint16_t>(remote_framegraph_port);
+    config.remote_framegraph_token = remote_framegraph_token_chars;
 
     const bool initialized = termin_android_initialize(&config) != 0;
     if (!initialized) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "termin_android_initialize failed");
     }
 
+    release_jstring_chars(
+        env, remote_framegraph_token, remote_framegraph_token_chars);
     release_jstring_chars(env, native_lib_dir, native_lib_dir_chars);
     release_jstring_chars(env, asset_root, asset_root_chars);
     release_jstring_chars(env, app_data_dir, app_data_dir_chars);
@@ -78,6 +90,18 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_termin_android_TerminActivity_nativeShutdown(JNIEnv*, jclass) {
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeShutdown");
     termin_android_shutdown();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_termin_android_TerminActivity_nativePause(JNIEnv*, jclass) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativePause");
+    termin_android_on_pause();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_termin_android_TerminActivity_nativeResume(JNIEnv*, jclass) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeResume");
+    termin_android_on_resume();
 }
 
 extern "C" JNIEXPORT void JNICALL

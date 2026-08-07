@@ -310,6 +310,74 @@ TEST_CASE(
     target.stop();
 }
 
+TEST_CASE("Remote framegraph target survives render debugger recreation")
+{
+    TargetServiceConfig config;
+    config.authentication_token = "lifecycle-token";
+    config.platform = "test";
+    RemoteFrameGraphTarget target(std::move(config));
+    REQUIRE(target.start());
+    CHECK_FALSE(target.status().debugger_attached);
+    REQUIRE(target.status().graph_revision != 0);
+
+    ClientSession client = handshake(target, "lifecycle-token");
+    REQUIRE(client.socket != invalid_test_socket);
+
+    const auto refresh = [&](std::uint64_t request_id) {
+        Command command;
+        command.request_id = request_id;
+        command.kind = CommandKind::refresh_topology;
+        REQUIRE(send_wire(client.socket, command, 2, client.id));
+        allow_io_and_pump(target);
+        const auto message = receive_wire(client.socket);
+        REQUIRE(message.has_value());
+        REQUIRE(std::holds_alternative<TopologySnapshot>(message->message));
+        const TopologySnapshot topology =
+            std::get<TopologySnapshot>(message->message);
+        const auto status_message = receive_wire(client.socket);
+        REQUIRE(status_message.has_value());
+        REQUIRE(std::holds_alternative<Status>(status_message->message));
+        return topology;
+    };
+    const auto lifecycle_status = [&] {
+        const auto message = receive_wire(client.socket);
+        REQUIRE(message.has_value());
+        REQUIRE(std::holds_alternative<Status>(message->message));
+        return std::get<Status>(message->message);
+    };
+
+    const TopologySnapshot detached = refresh(1);
+    CHECK(detached.targets.empty());
+    const std::uint64_t detached_revision = detached.graph_revision;
+
+    RenderFixture fixture;
+    REQUIRE(target.attach_debugger(*fixture.debugger));
+    CHECK(target.status().debugger_attached);
+    CHECK(lifecycle_status().state == SessionState::idle);
+    const TopologySnapshot attached = refresh(2);
+    REQUIRE_EQ(attached.targets.size(), 1u);
+    CHECK(attached.graph_revision > detached_revision);
+    const std::uint64_t attached_revision = attached.graph_revision;
+    target.detach_debugger();
+    CHECK(lifecycle_status().state == SessionState::suspended);
+    CHECK_FALSE(target.status().debugger_attached);
+    const TopologySnapshot suspended = refresh(3);
+    CHECK(suspended.targets.empty());
+    CHECK(suspended.graph_revision > attached_revision);
+
+    fixture.debugger.reset();
+    fixture.debugger.emplace(fixture.manager);
+    REQUIRE(target.attach_debugger(*fixture.debugger));
+    CHECK(lifecycle_status().state == SessionState::idle);
+    const TopologySnapshot reattached = refresh(4);
+    REQUIRE_EQ(reattached.targets.size(), 1u);
+    CHECK(reattached.graph_revision > suspended.graph_revision);
+    target.detach_debugger();
+    CHECK(lifecycle_status().state == SessionState::suspended);
+    close_test_socket(client.socket);
+    target.stop();
+}
+
 TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
           "selection and reconnect")
 {
