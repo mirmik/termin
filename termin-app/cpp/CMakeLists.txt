@@ -386,6 +386,27 @@ if(BUILD_TESTS)
         DEPENDS termin_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running C++ tests")
+
+    if(NOT ANDROID)
+        add_executable(termin_framegraph_remote_smoke_target
+            tests/remote_framegraph_smoke_target.cpp
+        )
+        target_link_libraries(termin_framegraph_remote_smoke_target PRIVATE
+            termin_framegraph_remote_target::termin_framegraph_remote_target
+            termin_bootstrap::termin_bootstrap
+            termin_engine::termin_engine
+            tgfx::termin_graphics2
+        )
+        termin_set_rpath_test(termin_framegraph_remote_smoke_target)
+
+        add_executable(termin_framegraph_remote_smoke_client
+            tests/remote_framegraph_smoke_client.cpp
+        )
+        target_link_libraries(termin_framegraph_remote_smoke_client PRIVATE
+            termin_framegraph_remote_client::termin_framegraph_remote_client
+        )
+        termin_set_rpath_test(termin_framegraph_remote_smoke_client)
+    endif()
 endif()
 
 if(WIN32 AND SDL2_DLL)

@@ -257,38 +257,152 @@ namespace termin
                 std::lock_guard lock(mutex);
                 if (!state->connected || !state->selected_target_id ||
                     state->graph_revision == 0 || !exact_capture_supported ||
-                    state->paused || assembler ||
+                    state->paused || state->live_preview_active || assembler ||
                     std::any_of(pending_commands.begin(),
                                 pending_commands.end(),
                                 [](const auto& pending)
                                 {
                                     return pending.second ==
-                                        CommandKind::capture_snapshot;
+                                               CommandKind::capture_snapshot ||
+                                           pending.second ==
+                                               CommandKind::capture_burst ||
+                                           pending.second ==
+                                               CommandKind::start_stream ||
+                                           pending.second ==
+                                               CommandKind::update_stream;
                                 }))
                     return false;
                 command.kind = CommandKind::capture_snapshot;
                 command.target_id = *state->selected_target_id;
                 command.graph_revision = state->graph_revision;
                 command.encoding = CaptureEncoding::native_pixels;
-                if (state->mode == FrameGraphDebuggerMode::BetweenPasses)
-                {
-                    if (state->selected_resource.empty())
-                        return false;
-                    command.selector_kind = CaptureSelectorKind::resource;
-                    command.resource = state->selected_resource;
-                }
-                else
-                {
-                    if (!state->selected_pass_id ||
-                        state->selected_symbol.empty())
-                        return false;
-                    command.selector_kind =
-                        CaptureSelectorKind::internal_symbol;
-                    command.pass_id = *state->selected_pass_id;
-                    command.symbol = state->selected_symbol;
-                }
+                if (!populate_selector_locked(command))
+                    return false;
             }
             return send(std::move(command));
+        }
+
+        bool populate_selector_locked(Command& command) const
+        {
+            if (state->mode == FrameGraphDebuggerMode::BetweenPasses)
+            {
+                if (state->selected_resource.empty())
+                    return false;
+                command.selector_kind = CaptureSelectorKind::resource;
+                command.resource = state->selected_resource;
+                return true;
+            }
+            if (!state->selected_pass_id || state->selected_symbol.empty())
+                return false;
+            command.selector_kind = CaptureSelectorKind::internal_symbol;
+            command.pass_id = *state->selected_pass_id;
+            command.symbol = state->selected_symbol;
+            return true;
+        }
+
+        bool start_live_preview(std::uint32_t max_millifps,
+                                std::uint32_t max_long_edge)
+        {
+            Command command;
+            bool replace_exact = false;
+            {
+                std::lock_guard lock(mutex);
+                if (!state->connected || !state->selected_target_id ||
+                    !live_preview_supported || state->paused ||
+                    max_millifps == 0 ||
+                    max_millifps > WireLimits::max_preview_millifps ||
+                    max_long_edge == 0 ||
+                    max_long_edge > WireLimits::max_preview_long_edge)
+                    return false;
+                replace_exact = std::any_of(
+                    pending_commands.begin(), pending_commands.end(),
+                    [](const auto& item) {
+                        return item.second == CommandKind::capture_snapshot;
+                    });
+                if (std::any_of(
+                        pending_commands.begin(), pending_commands.end(),
+                        [](const auto& item) {
+                            return item.second == CommandKind::capture_burst;
+                        }))
+                    return false;
+                command.kind = state->live_preview_active
+                    ? CommandKind::update_stream
+                    : CommandKind::start_stream;
+                command.target_id = *state->selected_target_id;
+                command.graph_revision = state->graph_revision;
+                command.encoding = CaptureEncoding::rgba8;
+                command.max_preview_millifps = max_millifps;
+                command.max_preview_long_edge = max_long_edge;
+                if (!populate_selector_locked(command))
+                    return false;
+            }
+            if (replace_exact)
+                cancel_capture();
+            if (!send(std::move(command)))
+                return false;
+            std::lock_guard lock(mutex);
+            preview_millifps = max_millifps;
+            preview_long_edge = max_long_edge;
+            return true;
+        }
+
+        bool stop_live_preview()
+        {
+            Command command;
+            {
+                std::lock_guard lock(mutex);
+                if (!state->connected || !state->selected_target_id ||
+                    state->graph_revision == 0)
+                    return false;
+                command.kind = CommandKind::stop_stream;
+                command.target_id = *state->selected_target_id;
+                command.graph_revision = state->graph_revision;
+            }
+            return send(std::move(command));
+        }
+
+        bool capture_burst(std::uint16_t frames)
+        {
+            Command command;
+            bool replace_exact = false;
+            {
+                std::lock_guard lock(mutex);
+                if (!state->connected || !state->selected_target_id ||
+                    !burst_capture_supported || state->paused ||
+                    state->live_preview_active || frames < 2 ||
+                    frames > WireLimits::max_burst_frames)
+                    return false;
+                replace_exact = std::any_of(
+                    pending_commands.begin(), pending_commands.end(),
+                    [](const auto& item) {
+                        return item.second == CommandKind::capture_snapshot;
+                    });
+                command.kind = CommandKind::capture_burst;
+                command.target_id = *state->selected_target_id;
+                command.graph_revision = state->graph_revision;
+                command.encoding = CaptureEncoding::native_pixels;
+                command.burst_frames = frames;
+                if (!populate_selector_locked(command))
+                    return false;
+            }
+            if (replace_exact)
+                cancel_capture();
+            return send(std::move(command));
+        }
+
+        bool request_selected_capture()
+        {
+            std::uint32_t millifps = 0;
+            std::uint32_t long_edge = 0;
+            bool live = false;
+            {
+                std::lock_guard lock(mutex);
+                live = state->live_preview_active;
+                millifps = preview_millifps;
+                long_edge = preview_long_edge;
+            }
+            return live ? start_live_preview(millifps, long_edge)
+                        : request_exact_capture();
         }
 
         bool cancel_capture()
@@ -301,7 +415,13 @@ namespace termin
                                 [](const auto& item)
                                 {
                                     return item.second ==
-                                        CommandKind::capture_snapshot;
+                                               CommandKind::capture_snapshot ||
+                                           item.second ==
+                                               CommandKind::capture_burst ||
+                                           item.second ==
+                                               CommandKind::start_stream ||
+                                           item.second ==
+                                               CommandKind::update_stream;
                                 });
                 if (!pending)
                     return false;
@@ -425,6 +545,9 @@ namespace termin
             next->cpu_capture.reset();
             next->main_image = {};
             next->depth_image = {};
+            next->live_preview_supported = false;
+            next->burst_capture_supported = false;
+            next->live_preview_active = false;
             gpu_release_requested.store(true, std::memory_order_release);
             if (was_connected)
             {
@@ -445,6 +568,9 @@ namespace termin
             pending_commands.clear();
             assembler.reset();
             exact_capture_supported = false;
+            live_preview_supported = false;
+            burst_capture_supported = false;
+            next_burst_index = 0;
             pending_target_id.reset();
             refresh_pending = false;
             needs_refresh = true;
@@ -480,6 +606,12 @@ namespace termin
             exact_capture_supported =
                 (hello.capabilities & static_cast<std::uint64_t>(
                     Capability::exact_snapshot)) != 0;
+            live_preview_supported =
+                (hello.capabilities & static_cast<std::uint64_t>(
+                    Capability::live_preview)) != 0;
+            burst_capture_supported =
+                (hello.capabilities & static_cast<std::uint64_t>(
+                    Capability::burst_capture)) != 0;
             pending_target_id.reset();
             refresh_pending = false;
             needs_refresh = true;
@@ -489,6 +621,8 @@ namespace termin
                 "Remote / " + hello.platform + " / " + hello.abi;
             next.session_id = decoded.envelope.session_id;
             next.connected = true;
+            next.live_preview_supported = live_preview_supported;
+            next.burst_capture_supported = burst_capture_supported;
             next.stale = true;
             next.state = FrameGraphDebuggerState::Bound;
             if ((hello.capabilities &
@@ -506,7 +640,7 @@ namespace termin
                     "remote target connected; waiting for topology";
             }
             next.capture_info =
-                "Remote topology connected; image capture is not enabled";
+                "Remote topology connected; select a resource or symbol";
             return true;
         }
 
@@ -632,6 +766,33 @@ namespace termin
                 }
             }
             const auto pending = pending_commands.find(status.request_id);
+            if (pending != pending_commands.end())
+            {
+                if ((pending->second == CommandKind::start_stream ||
+                     pending->second == CommandKind::update_stream) &&
+                    status.code == StatusCode::accepted)
+                {
+                    next.live_preview_active = true;
+                    next.capture_info = "Live remote preview running";
+                }
+                if ((pending->second == CommandKind::start_stream ||
+                     pending->second == CommandKind::update_stream) &&
+                    status.code != StatusCode::accepted)
+                {
+                    next.live_preview_active = false;
+                }
+                if (pending->second == CommandKind::stop_stream &&
+                    status.code != StatusCode::accepted)
+                {
+                    next.live_preview_active = false;
+                }
+                if (pending->second == CommandKind::capture_burst &&
+                    status.code == StatusCode::accepted)
+                {
+                    next_burst_index = 0;
+                    next.capture_info = "Remote burst accepted";
+                }
+            }
             if (pending != pending_commands.end() &&
                 status.code != StatusCode::accepted)
             {
@@ -658,9 +819,17 @@ namespace termin
                    const CaptureMetadata& metadata)
         {
             const auto pending = pending_commands.find(metadata.request_id);
-            if (pending == pending_commands.end() ||
-                pending->second != CommandKind::capture_snapshot ||
-                metadata.kind != CaptureKind::snapshot ||
+            const bool snapshot = pending != pending_commands.end() &&
+                pending->second == CommandKind::capture_snapshot &&
+                metadata.kind == CaptureKind::snapshot;
+            const bool preview = pending != pending_commands.end() &&
+                (pending->second == CommandKind::start_stream ||
+                 pending->second == CommandKind::update_stream) &&
+                metadata.kind == CaptureKind::preview;
+            const bool burst_capture = pending != pending_commands.end() &&
+                pending->second == CommandKind::capture_burst &&
+                metadata.kind == CaptureKind::burst;
+            if ((!snapshot && !preview && !burst_capture) ||
                 metadata.graph_revision != next.graph_revision ||
                 metadata.byte_count > capture_memory_budget_bytes ||
                 assembler)
@@ -671,9 +840,34 @@ namespace termin
                                  metadata.request_id));
                 return false;
             }
+            if (burst_capture)
+            {
+                if (metadata.burst_index < next_burst_index)
+                {
+                    tc_log_error("remote framegraph source: burst index "
+                                 "regressed from %u to %u",
+                                 static_cast<unsigned>(next_burst_index),
+                                 static_cast<unsigned>(metadata.burst_index));
+                    return false;
+                }
+                if (metadata.burst_index > next_burst_index)
+                {
+                    const std::uint64_t gap =
+                        metadata.burst_index - next_burst_index;
+                    append_gap(next,
+                               FrameGraphDebuggerGapKind::TransportDrop,
+                               gap,
+                               "remote burst frame gap before index " +
+                                   std::to_string(metadata.burst_index));
+                    next.dropped_messages += gap;
+                }
+            }
             assembler.emplace(metadata);
             next.state = FrameGraphDebuggerState::WaitingFrame;
-            next.capture_info = "Receiving exact remote capture: 0 / " +
+            next.capture_info = "Receiving remote " +
+                std::string(preview ? "preview" : burst_capture ? "burst"
+                                                           : "snapshot") +
+                ": 0 / " +
                 std::to_string(metadata.byte_count) + " bytes";
             return true;
         }
@@ -704,7 +898,7 @@ namespace termin
                 assembler.reset();
                 return true;
             }
-            next.capture_info = "Receiving exact remote capture: " +
+            next.capture_info = "Receiving remote capture: " +
                 std::to_string(chunk.offset + chunk.bytes.size()) + " / " +
                 std::to_string(metadata.byte_count) + " bytes";
             if (!result.complete)
@@ -713,9 +907,13 @@ namespace termin
             auto bytes = std::make_shared<const std::vector<std::uint8_t>>(
                 assembler->take_bytes());
             assembler.reset();
-            pending_commands.erase(metadata.request_id);
+            if (metadata.kind == CaptureKind::snapshot)
+                pending_commands.erase(metadata.request_id);
+            if (metadata.kind == CaptureKind::burst)
+                next_burst_index = metadata.burst_index + 1;
             next.cpu_capture = FrameGraphDebuggerCpuCaptureSnapshot{
                 metadata.request_id,
+                metadata.blob_id,
                 metadata.graph_revision,
                 metadata.frame_number,
                 project_pixel_format(metadata.pixel_format),
@@ -723,6 +921,8 @@ namespace termin
                 metadata.height,
                 metadata.is_depth,
                 metadata.exact,
+                metadata.burst_index,
+                metadata.burst_count,
                 std::move(bytes),
             };
             next.main_image = {
@@ -731,16 +931,23 @@ namespace termin
                 metadata.height,
                 upload_format(project_pixel_format(metadata.pixel_format)),
                 metadata.is_depth,
-                metadata.request_id,
+                metadata.blob_id,
             };
             next.depth_image = metadata.is_depth ? next.main_image
                                                  : FrameGraphDebuggerImageSnapshot{};
             next.state = FrameGraphDebuggerState::Captured;
-            next.capture_info = "Exact remote capture: " +
+            const std::string kind = metadata.kind == CaptureKind::preview
+                ? "Live preview"
+                : metadata.kind == CaptureKind::burst
+                    ? "Burst " + std::to_string(metadata.burst_index + 1) +
+                        "/" + std::to_string(metadata.burst_count)
+                    : "Exact remote capture";
+            next.capture_info = kind + ": " +
                 std::to_string(metadata.width) + "x" +
                 std::to_string(metadata.height) + ", " +
                 std::to_string(metadata.byte_count) + " bytes";
-            next.status_detail = "exact remote capture received";
+            next.status_detail = kind + " received; frame=" +
+                std::to_string(metadata.frame_number);
             return true;
         }
 
@@ -825,6 +1032,11 @@ namespace termin
         bool refresh_pending = false;
         bool needs_refresh = true;
         bool exact_capture_supported = false;
+        bool live_preview_supported = false;
+        bool burst_capture_supported = false;
+        std::uint32_t preview_millifps = 10'000;
+        std::uint32_t preview_long_edge = 960;
+        std::uint16_t next_burst_index = 0;
         bool closed = false;
         Clock::time_point last_refresh_request{};
         std::optional<RemoteFrameGraphConnectionConfig> configured_client;
@@ -832,7 +1044,7 @@ namespace termin
         std::optional<BlobAssembler> assembler;
         tgfx::IRenderDevice* upload_device = nullptr;
         tgfx::TextureHandle upload_texture;
-        std::uint64_t uploaded_request_id = 0;
+        std::uint64_t uploaded_generation = 0;
         FrameGraphPresenter presenter;
         std::atomic<bool> gpu_release_requested{false};
         std::unique_ptr<framegraph_remote_client::RemoteFrameGraphClient>
@@ -880,7 +1092,7 @@ namespace termin
             }
             upload_device = nullptr;
             upload_texture = {};
-            uploaded_request_id = 0;
+            uploaded_generation = 0;
             gpu_release_requested.store(false, std::memory_order_release);
         }
 
@@ -898,7 +1110,7 @@ namespace termin
             if (!capture.bytes || capture.bytes->empty())
                 return false;
             if (upload_device == &device && upload_texture &&
-                uploaded_request_id == capture.request_id)
+                uploaded_generation == capture.generation)
                 return true;
             release_gpu();
             const tgfx::PixelFormat format = upload_format(capture.pixel_format);
@@ -926,7 +1138,7 @@ namespace termin
                 }
                 device.upload_texture(upload_texture, *capture.bytes);
                 upload_device = &device;
-                uploaded_request_id = capture.request_id;
+                uploaded_generation = capture.generation;
                 return true;
             }
             catch (const std::exception& error)
@@ -943,7 +1155,7 @@ namespace termin
                 device.destroy(upload_texture);
             upload_texture = {};
             upload_device = nullptr;
-            uploaded_request_id = 0;
+            uploaded_generation = 0;
             return false;
         }
 
@@ -1124,14 +1336,14 @@ namespace termin
     void RemoteFrameGraphDebuggerSource::set_mode(FrameGraphDebuggerMode mode)
     {
         impl_->mutate([mode](auto& next) { next.mode = mode; });
-        impl_->request_exact_capture();
+        impl_->request_selected_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_selected_symbol(
         const std::string& symbol)
     {
         impl_->mutate([&symbol](auto& next) { next.selected_symbol = symbol; });
-        impl_->request_exact_capture();
+        impl_->request_selected_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_selected_resource(
@@ -1139,7 +1351,7 @@ namespace termin
     {
         impl_->mutate([&resource](auto& next)
                       { next.selected_resource = resource; });
-        impl_->request_exact_capture();
+        impl_->request_selected_capture();
     }
 
     void RemoteFrameGraphDebuggerSource::set_channel_mode(int mode)
@@ -1159,6 +1371,22 @@ namespace termin
     void RemoteFrameGraphDebuggerSource::set_highlight_hdr(bool enabled)
     {
         impl_->mutate([enabled](auto& next) { next.highlight_hdr = enabled; });
+    }
+
+    bool RemoteFrameGraphDebuggerSource::start_live_preview(
+        std::uint32_t max_millifps, std::uint32_t max_long_edge)
+    {
+        return impl_->start_live_preview(max_millifps, max_long_edge);
+    }
+
+    bool RemoteFrameGraphDebuggerSource::stop_live_preview()
+    {
+        return impl_->stop_live_preview();
+    }
+
+    bool RemoteFrameGraphDebuggerSource::capture_burst(std::uint16_t frames)
+    {
+        return impl_->capture_burst(frames);
     }
 
     std::string RemoteFrameGraphDebuggerSource::analyze_hdr()

@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <thread>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -310,6 +311,88 @@ TEST_CASE(
     target.stop();
 }
 
+TEST_CASE("Remote framegraph target survives render debugger recreation")
+{
+    TargetServiceConfig config;
+    config.authentication_token = "lifecycle-token";
+    config.platform = "test";
+    RemoteFrameGraphTarget target(std::move(config));
+    REQUIRE(target.start());
+    CHECK_FALSE(target.status().debugger_attached);
+    REQUIRE(target.status().graph_revision != 0);
+
+    ClientSession client = handshake(target, "lifecycle-token");
+    REQUIRE(client.socket != invalid_test_socket);
+
+    const auto refresh = [&](std::uint64_t request_id) {
+        Command command;
+        command.request_id = request_id;
+        command.kind = CommandKind::refresh_topology;
+        REQUIRE(send_wire(client.socket, command, 2, client.id));
+        allow_io_and_pump(target);
+        const auto message = receive_wire(client.socket);
+        REQUIRE(message.has_value());
+        REQUIRE(std::holds_alternative<TopologySnapshot>(message->message));
+        const TopologySnapshot topology =
+            std::get<TopologySnapshot>(message->message);
+        const auto status_message = receive_wire(client.socket);
+        REQUIRE(status_message.has_value());
+        REQUIRE(std::holds_alternative<Status>(status_message->message));
+        return topology;
+    };
+    const auto lifecycle_update = [&] {
+        const auto topology_message = receive_wire(client.socket);
+        REQUIRE(topology_message.has_value());
+        REQUIRE(std::holds_alternative<TopologySnapshot>(
+            topology_message->message));
+        const auto status_message = receive_wire(client.socket);
+        REQUIRE(status_message.has_value());
+        REQUIRE(std::holds_alternative<Status>(status_message->message));
+        return std::pair{
+            std::get<TopologySnapshot>(topology_message->message),
+            std::get<Status>(status_message->message)};
+    };
+
+    const TopologySnapshot detached = refresh(1);
+    CHECK(detached.targets.empty());
+    const std::uint64_t detached_revision = detached.graph_revision;
+
+    RenderFixture fixture;
+    REQUIRE(target.attach_debugger(*fixture.debugger));
+    CHECK(target.status().debugger_attached);
+    const auto attached_update = lifecycle_update();
+    CHECK(attached_update.second.state == SessionState::idle);
+    REQUIRE_EQ(attached_update.first.targets.size(), 1u);
+    const TopologySnapshot attached = refresh(2);
+    REQUIRE_EQ(attached.targets.size(), 1u);
+    CHECK(attached.graph_revision > detached_revision);
+    const std::uint64_t attached_revision = attached.graph_revision;
+    target.detach_debugger();
+    const auto detached_update = lifecycle_update();
+    CHECK(detached_update.second.state == SessionState::suspended);
+    CHECK(detached_update.first.targets.empty());
+    CHECK_FALSE(target.status().debugger_attached);
+    const TopologySnapshot suspended = refresh(3);
+    CHECK(suspended.targets.empty());
+    CHECK(suspended.graph_revision > attached_revision);
+
+    fixture.debugger.reset();
+    fixture.debugger.emplace(fixture.manager);
+    REQUIRE(target.attach_debugger(*fixture.debugger));
+    const auto reattached_update = lifecycle_update();
+    CHECK(reattached_update.second.state == SessionState::idle);
+    REQUIRE_EQ(reattached_update.first.targets.size(), 1u);
+    const TopologySnapshot reattached = refresh(4);
+    REQUIRE_EQ(reattached.targets.size(), 1u);
+    CHECK(reattached.graph_revision > suspended.graph_revision);
+    target.detach_debugger();
+    const auto final_update = lifecycle_update();
+    CHECK(final_update.second.state == SessionState::suspended);
+    CHECK(final_update.first.targets.empty());
+    close_test_socket(client.socket);
+    target.stop();
+}
+
 TEST_CASE("Remote framegraph topology smoke covers auth refresh stale "
           "selection and reconnect")
 {
@@ -460,6 +543,101 @@ TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work"
     REQUIRE(cancelled.has_value());
     REQUIRE(std::holds_alternative<Status>(cancelled->message));
     CHECK(std::get<Status>(cancelled->message).code == StatusCode::cancelled);
+
+    close_test_socket(client.socket);
+    target.stop();
+}
+
+TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and idempotent")
+{
+    RenderFixture fixture;
+    TargetServiceConfig config;
+    config.authentication_token = "continuous-token";
+    RemoteFrameGraphTarget target(*fixture.debugger, config);
+    REQUIRE(target.start());
+    ClientSession client = handshake(target, "continuous-token");
+    REQUIRE(client.socket != invalid_test_socket);
+
+    Command refresh;
+    refresh.request_id = 60;
+    refresh.kind = CommandKind::refresh_topology;
+    REQUIRE(send_wire(client.socket, refresh, 2, client.id));
+    allow_io_and_pump(target);
+    const auto topology_message = receive_wire(client.socket);
+    REQUIRE(topology_message.has_value());
+    REQUIRE(std::holds_alternative<TopologySnapshot>(
+        topology_message->message));
+    const TopologySnapshot topology =
+        std::get<TopologySnapshot>(topology_message->message);
+    REQUIRE(receive_wire(client.socket).has_value());
+
+    Command stream;
+    stream.request_id = 61;
+    stream.kind = CommandKind::start_stream;
+    stream.target_id = topology.selected_target_id;
+    stream.graph_revision = topology.graph_revision;
+    stream.selector_kind = CaptureSelectorKind::resource;
+    stream.resource = topology.resources.front();
+    stream.encoding = CaptureEncoding::rgba8;
+    stream.max_preview_millifps = 10'000;
+    stream.max_preview_long_edge = 640;
+    REQUIRE(send_wire(client.socket, stream, 3, client.id));
+    allow_io_and_pump(target);
+    const auto stream_status = receive_wire(client.socket);
+    REQUIRE(stream_status.has_value());
+    REQUIRE(std::holds_alternative<Status>(stream_status->message));
+    CHECK(std::get<Status>(stream_status->message).code ==
+          StatusCode::accepted);
+    CHECK(std::get<Status>(stream_status->message).state ==
+          SessionState::streaming);
+
+    Command stop;
+    stop.request_id = 62;
+    stop.kind = CommandKind::stop_stream;
+    stop.target_id = topology.selected_target_id;
+    stop.graph_revision = topology.graph_revision;
+    REQUIRE(send_wire(client.socket, stop, 4, client.id));
+    allow_io_and_pump(target);
+    const auto stream_completed = receive_wire(client.socket);
+    const auto stop_completed = receive_wire(client.socket);
+    REQUIRE(stream_completed.has_value());
+    REQUIRE(stop_completed.has_value());
+    CHECK(std::get<Status>(stream_completed->message).request_id == 61);
+    CHECK(std::get<Status>(stop_completed->message).request_id == 62);
+
+    stop.request_id = 63;
+    REQUIRE(send_wire(client.socket, stop, 5, client.id));
+    allow_io_and_pump(target);
+    const auto repeated_stop = receive_wire(client.socket);
+    REQUIRE(repeated_stop.has_value());
+    CHECK(std::get<Status>(repeated_stop->message).code ==
+          StatusCode::completed);
+
+    Command burst = stream;
+    burst.request_id = 64;
+    burst.kind = CommandKind::capture_burst;
+    burst.encoding = CaptureEncoding::native_pixels;
+    burst.max_preview_millifps = 0;
+    burst.max_preview_long_edge = 0;
+    burst.burst_frames = 4;
+    REQUIRE(send_wire(client.socket, burst, 6, client.id));
+    allow_io_and_pump(target);
+    const auto burst_status = receive_wire(client.socket);
+    REQUIRE(burst_status.has_value());
+    CHECK(std::get<Status>(burst_status->message).code ==
+          StatusCode::accepted);
+
+    Command cancel;
+    cancel.request_id = 65;
+    cancel.kind = CommandKind::cancel;
+    REQUIRE(send_wire(client.socket, cancel, 7, client.id));
+    allow_io_and_pump(target);
+    const auto burst_cancelled = receive_wire(client.socket);
+    const auto cancel_ack = receive_wire(client.socket);
+    REQUIRE(burst_cancelled.has_value());
+    REQUIRE(cancel_ack.has_value());
+    CHECK(std::get<Status>(burst_cancelled->message).request_id == 64);
+    CHECK(std::get<Status>(cancel_ack->message).request_id == 65);
 
     close_test_socket(client.socket);
     target.stop();

@@ -1,7 +1,7 @@
 site_name: Termin
-site_description: Documentation Hub — монорепозиторий 3D-движка Termin
-repo_url: https://github.com/mirmik/termin-monorepo
-repo_name: mirmik/termin-monorepo
+site_description: 3D-движок и редактор для интерактивных приложений и физического моделирования
+repo_url: https://github.com/mirmik/termin
+repo_name: mirmik/termin
 docs_dir: docs
 theme:
   name: material
@@ -19,3 +19,16 @@ markdown_extensions:
   - attr_list
 nav:
   - Главная: index.md
+  - Первые шаги: getting-started.md
+  - Разработка:
+      - Система сборки: build-system.md
+      - Smoke-проверки: smoke-checks.md
+      - Карта модулей: modules.md
+      - Система документации: documentation-system.md
+      - Linting: linting.md
+      - Python linting: python-linting.md
+      - C++ style: cpp-style.md
+  - Архитектура:
+      - Обзор: architecture/index.md
+      - Планы и миграции: plans/index.md
+      - Architecture Council: architecture-council/index.md
