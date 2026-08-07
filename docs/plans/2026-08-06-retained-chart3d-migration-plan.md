@@ -165,7 +165,10 @@ chart-owned chrome renderer; public handles и C# API при этом не из�
 
 ## Этап 2. Complete series model
 
-- [ ] Добавить `LineSeriesItem3D`.
+- [x] Добавить retained line item со stable handle, transactional data/style
+  mutation и generic line-list encoder. Толщина пока входит в typed style и
+  revisions, но backend-neutral wide-line rendering остаётся частью доведения
+  line series.
 - [ ] Дополнить готовые `SetData`/style mutations append API для line/scatter.
 - [ ] Добавить bounded streaming/ring-buffer policy.
 - [ ] Реализовать visibility/order/removal without global mesh rebuild.
@@ -189,7 +192,12 @@ chart-owned chrome renderer; public handles и C# API при этом не из�
 ## Этап 5. Compatibility cutover
 
 - [ ] Перевести `PlotView3D` на `RetainedChart3D` compatibility facade.
-- [ ] Перевести Python and C# examples.
+- [x] Перевести Python `Plot3D` и `tcplot/examples/demo_3d_*` на detached
+  `RetainedChart3D`: данные принимаются до появления GPU, а canonical
+  `GraphicsHost` и font atlas присоединяются лениво при первом render.
+- [x] Добавить отдельный C# `RetainedChart3DWpfExample`.
+- [ ] Перевести оставшиеся C# `PlotDemoApp` 3D examples вместе с legacy
+  `PlotView3D` facade.
 - [ ] Сопоставить surface colormap, grid, shading, marker and axis scaling.
 - [ ] Удалить legacy global dirty mesh state and index-based surface mutation.
 

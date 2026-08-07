@@ -385,8 +385,14 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
   а не только canonical resource name. Поэтому pass chain вида
   `ChartGeometry -> OUTPUT` использует caller-owned target и доступен обычному
   framegraph capture path без скрытого внутреннего FBO.
-- Ввести line item encoder при добавлении retained line series. World-text
-  item encoder остаётся отдельным общим направлением и не требуется для
+- Python `Plot3D` и оба `tcplot/examples/demo_3d_*` теперь используют
+  detached retained scene. Line/scatter/surface payload попадает в CPU scene
+  сразу при вызове widget API; GPU host и существующий font atlas заимствуются
+  у `UIRenderer` только при первом render. Для безопасного offscreen execution
+  UI pass явно сегментируется и затем продолжается с load semantics.
+- Retained line item и generic line-list encoder добавлены. Backend-neutral
+  применение line thickness, append/streaming policy и world-text item encoder
+  остаются отдельными направлениями; world text не требуется для текущего
   chart-owned chrome.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
