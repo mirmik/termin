@@ -577,20 +577,28 @@ public sealed class RetainedChart3D : IDisposable
     public void SetSurfaceShading(bool enabled, float strength = 0.38f)
     {
         ThrowIfDisposed();
-        RetainedChart3DNative.SetSurfaceShading(
-            _native, enabled ? 1 : 0, strength);
+        if (RetainedChart3DNative.SetSurfaceShading(
+                _native, enabled ? 1 : 0, strength) == 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(strength),
+                "Shading strength must be finite.");
     }
 
     public void SetLightDirection(float x, float y, float z)
     {
         ThrowIfDisposed();
-        RetainedChart3DNative.SetLightDirection(_native, x, y, z);
+        if (RetainedChart3DNative.SetLightDirection(_native, x, y, z) == 0)
+            throw new ArgumentException(
+                "Light direction must be finite and non-zero.");
     }
 
     public void SetAxisScale(float x, float y, float z)
     {
         ThrowIfDisposed();
-        RetainedChart3DNative.SetAxisScale(_native, x, y, z);
+        if (RetainedChart3DNative.SetAxisScale(_native, x, y, z) == 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(x),
+                "Axis scales must be finite and positive.");
     }
 
     public uint RenderToTextureHandleId(int width, int height)
@@ -761,15 +769,15 @@ internal static class RetainedChart3DNative
         [MarshalAs(UnmanagedType.LPUTF8Str)] string z);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_surface_shading")]
-    internal static extern void SetSurfaceShading(
+    internal static extern int SetSurfaceShading(
         IntPtr chart, int enabled, float strength);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_light_direction")]
-    internal static extern void SetLightDirection(
+    internal static extern int SetLightDirection(
         IntPtr chart, float x, float y, float z);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_axis_scale")]
-    internal static extern void SetAxisScale(
+    internal static extern int SetAxisScale(
         IntPtr chart, float x, float y, float z);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_get_camera")]
