@@ -6,9 +6,9 @@
 <pre id="host-status">idle</pre>
 <pre id="result">TERMIN_WEB_CORE_SMOKE_RUNNING</pre>
 <script type="module">
-import { createTerminCore } from "./termin-web-core.mjs?v=20260802-gate1";
-import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs?v=20260802-gate1";
-import { createTerminWebInputAdapter } from "./termin-web-input.mjs?v=20260802-gate1";
+import { createTerminCore } from "./termin-web-core.mjs?v=20260807-lifecycle1";
+import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs?v=20260807-lifecycle1";
+import { createTerminWebInputAdapter } from "./termin-web-input.mjs?v=20260807-lifecycle1";
 
 const result = document.querySelector("#result");
 globalThis.__terminSmokeAsyncError = "";
@@ -87,6 +87,9 @@ try {
     canvas.width = 800;
     canvas.height = 450;
     core.resize(800, 450);
+    core.shutdown();
+    core.lifecycleSmoke();
+    core.shutdown();
     result.textContent = "TERMIN_WEB_CORE_SMOKE_PASSED";
 } catch (error) {
     const details = error instanceof Error

@@ -1,6 +1,6 @@
-import createTerminWebCore from "./termin_web_core.mjs?v=20260802-gate1";
+import createTerminWebCore from "./termin_web_core.mjs?v=20260807-lifecycle1";
 
-export const TERMIN_WEB_ASSET_REVISION = "20260802-gate1";
+export const TERMIN_WEB_ASSET_REVISION = "20260807-lifecycle1";
 
 export async function createTerminCore(options = {}) {
     const module = await createTerminWebCore({
@@ -16,6 +16,18 @@ export async function createTerminCore(options = {}) {
                 throw new Error(`Termin Web core smoke failed with code ${result}`);
             }
             return result;
+        },
+        lifecycleSmoke() {
+            const result = module._termin_web_core_lifecycle_smoke();
+            if (result !== 0x5743) {
+                throw new Error(`Termin Web lifecycle smoke failed with code ${result}`);
+            }
+            return result;
+        },
+        shutdown() {
+            if (!module._termin_web_core_shutdown()) {
+                throw new Error("Termin Web core shutdown failed");
+            }
         },
         async renderSmoke() {
             module._termin_web_render_smoke_start();

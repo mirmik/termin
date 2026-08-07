@@ -14,7 +14,10 @@
 
 #include <core/tc_scene.h>
 #include <core/tc_component.h>
+#include <core/tc_scene_extension.h>
+#include <core/tc_scene_extension_ids.h>
 #include <inspect/tc_kind.h>
+#include <render/tc_pass.h>
 #include <tcbase/tc_version.h>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
@@ -362,6 +365,64 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     tc_scene_free(scene);
     termin::bootstrap::shutdown_runtime();
     return 0x5443;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
+    termin::bootstrap::shutdown_runtime();
+    size_t component_type_count = 0;
+    size_t pass_type_count = 0;
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        termin::bootstrap::bootstrap_runtime(
+            termin::bootstrap::RuntimeBootstrapProfile::Render);
+        const size_t current_component_type_count =
+            tc_component_registry_type_count();
+        const size_t current_pass_type_count = tc_pass_registry_type_count();
+        const bool registry_complete =
+            tc_component_registry_has("MeshComponent") &&
+            tc_component_registry_has("MeshRenderer") &&
+            tc_pass_registry_has("ColorPass") &&
+            tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) &&
+            tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE);
+        const bool registry_counts_stable = cycle == 0 ||
+            (current_component_type_count == component_type_count &&
+             current_pass_type_count == pass_type_count);
+        if (!registry_complete || !registry_counts_stable) {
+            tc_log_error(
+                "TerminWebCore lifecycle smoke: incomplete or duplicate Render registry on cycle %d",
+                cycle + 1);
+            termin::bootstrap::shutdown_runtime();
+            return 1 + cycle;
+        }
+        component_type_count = current_component_type_count;
+        pass_type_count = current_pass_type_count;
+        termin::bootstrap::shutdown_runtime();
+        if (tc_component_registry_type_count() != 0 ||
+                tc_pass_registry_type_count() != 0 ||
+                tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) ||
+                tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE)) {
+            tc_log_error(
+                "TerminWebCore lifecycle smoke: Render registry survived shutdown on cycle %d",
+                cycle + 1);
+            return 3 + cycle;
+        }
+    }
+    return 0x5743;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_shutdown() {
+    if (web_player_graphics_status == 1 || web_render_status == 1) {
+        tc_log_error(
+            "TerminWebCore shutdown refused while WebGPU initialization is pending");
+        return 0;
+    }
+    unload_web_host_package();
+    web_render_state.reset();
+    web_render_status = 0;
+    web_render_error.clear();
+    web_player_graphics_error.clear();
+    web_host_error.clear();
+    termin::bootstrap::shutdown_runtime();
+    return 1;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) {
