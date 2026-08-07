@@ -1,20 +1,13 @@
 #include <termin/render/line_renderer.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cstring>
-#include <limits>
-#include <unordered_map>
 
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
-#include <tgfx2/line_mesh_builder.hpp>
 #include <tgfx2/render_context.hpp>
-#include <tgfx2/screen_space_line_renderer.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
-#include <tgfx2/world_space_line_renderer.hpp>
 #include <tgfx2/world_tube_line_renderer.hpp>
 
 extern "C" {
@@ -62,14 +55,6 @@ namespace termin {
             return value;
         }
 
-        tgfx::LinePoint3 to_line_point(const tc_vec3& point) {
-            return {
-                static_cast<float>(point.x),
-                static_cast<float>(point.y),
-                static_cast<float>(point.z),
-            };
-        }
-
         tgfx::LinePoint3 transform_line_point(const Mat44f& model, const tc_vec3& point) {
             Vec3 world = model.transform_point(Vec3{point.x, point.y, point.z});
             return {
@@ -77,21 +62,6 @@ namespace termin {
                 static_cast<float>(world.y),
                 static_cast<float>(world.z),
             };
-        }
-
-        std::array<float, 16> to_tgfx_matrix(const Mat44f& matrix) {
-            std::array<float, 16> result{};
-            std::memcpy(result.data(), matrix.data, sizeof(matrix.data));
-            return result;
-        }
-
-        std::array<float, 4> phase_color(const tc_material_phase* phase) {
-            std::array<float, 4> color{1.0f, 1.0f, 1.0f, 1.0f};
-            if (!phase) {
-                return color;
-            }
-            tc_material_phase_get_color(phase, &color[0], &color[1], &color[2], &color[3]);
-            return color;
         }
 
         tc_material_phase* find_phase(tc_material* material, tc_phase_mask requested_phase) {
@@ -106,41 +76,6 @@ namespace termin {
             return nullptr;
         }
 
-        bool is_direct_line_mode(LineRenderMode mode) {
-            return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::ScreenSpace ||
-                   mode == LineRenderMode::WorldTube;
-        }
-
-        bool decode_line_render_mode(int value, LineRenderMode& mode) {
-            switch (value) {
-            case static_cast<int>(LineRenderMode::WorldBillboard):
-            case static_cast<int>(LineRenderMode::ScreenSpace):
-            case static_cast<int>(LineRenderMode::WorldMesh):
-            case static_cast<int>(LineRenderMode::RawLines):
-            case static_cast<int>(LineRenderMode::WorldTube):
-                mode = static_cast<LineRenderMode>(value);
-                return true;
-            }
-            return false;
-        }
-
-        bool decode_line_render_mode(uint32_t value, LineRenderMode& mode) {
-            if (value > static_cast<uint32_t>(LineRenderMode::WorldTube)) {
-                return false;
-            }
-            return decode_line_render_mode(static_cast<int>(value), mode);
-        }
-
-        bool uses_final_color_fragment_variant_for_pass(LineRenderMode mode,
-                                                        const MaterialPipelinePassContract& pass_contract) {
-            if ((pass_contract.fragment_composition != MaterialFragmentComposition::FinalColor &&
-                 pass_contract.fragment_composition != MaterialFragmentComposition::SurfaceConsumerOrFinalColor) ||
-                pass_contract.required_material_fragment_input.semantics.empty()) {
-                return false;
-            }
-            return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
-        }
-
         bool accepts_phase(tc_phase_mask phase, bool cast_shadow) {
             if (phase == TC_PHASE_SHADOW) {
                 return cast_shadow;
@@ -148,25 +83,64 @@ namespace termin {
             return true;
         }
 
-        TcShader get_line_material_fragment_shader(TcShader original_shader);
-        TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_variant);
+        MaterialPipelineSemantic line_semantic(std::string name, MaterialPipelineValueType type) {
+            return {std::move(name), type};
+        }
 
-        struct TcShaderHash {
-            size_t operator()(const TcShader& shader) const {
-                return std::hash<uint32_t>()(shader.handle.index) ^
-                       (std::hash<uint32_t>()(shader.handle.generation) << 1);
-            }
-        };
+        bool consumes_only_world_position(const VertexOutputAdapter& adapter) {
+            const auto& semantics = adapter.consumed_world_semantics.semantics;
+            return semantics.size() == 1 && semantics[0].name == "world_pos" &&
+                   semantics[0].type == MaterialPipelineValueType::Float3;
+        }
 
-        struct TcShaderEqual {
-            bool operator()(const TcShader& a, const TcShader& b) const {
-                return a.handle.index == b.handle.index && a.handle.generation == b.handle.generation;
+        VertexTransformProvider world_tube_vertex_transform_provider(
+            const MaterialPipelinePassContract& pass_contract) {
+            VertexTransformProvider provider;
+            // Render-item transform kinds are coarse pass compatibility metadata.
+            // The explicit provider below is the authoritative line geometry ABI.
+            provider.kind = VertexTransformKind::StaticMesh;
+            provider.debug_name = "world_tube_line";
+            provider.vertex_entry = "vs_main";
+            provider.vertex_inputs.mesh_attributes = {
+                line_semantic("corner", MaterialPipelineValueType::Float3),
+                line_semantic("p0", MaterialPipelineValueType::Float3),
+                line_semantic("width", MaterialPipelineValueType::Float),
+                line_semantic("p1", MaterialPipelineValueType::Float3),
+            };
+            provider.produced_fragment_input = material_pipeline_standard_material_fragment_interface();
+            provider.produced_world_semantics = material_pipeline_standard_material_fragment_interface();
+            provider.source_module = {"termin_world_tube_line_transform",
+                                      "builtin_shaders/termin_world_tube_line_transform.slang"};
+            provider.entry_input_declaration = R"(
+struct VertexInput {
+    float3 corner : TEXCOORD0;
+    float3 p0 : POSITION0;
+    float width : TEXCOORD1;
+    float3 p1 : POSITION1;
+};)";
+            provider.adapter_input_expression =
+                "termin_world_tube_vertex(input.corner, input.p0, input.width, input.p1)";
+            if (pass_contract.vertex_output_adapter &&
+                consumes_only_world_position(*pass_contract.vertex_output_adapter)) {
+                provider.adapter_input_expression += ".position";
             }
-        };
+            return provider;
+        }
+
+        TcShader assemble_world_tube_material_shader(TcShader original_shader,
+                                                     const MaterialPipelinePassContract& pass_contract,
+                                                     const char* debug_context) {
+            MaterialShaderOverrideRequest override_request{};
+            override_request.original_shader = std::move(original_shader);
+            override_request.vertex_transform_kind = VertexTransformKind::StaticMesh;
+            override_request.vertex_transform_contract = world_tube_vertex_transform_provider(pass_contract);
+            override_request.pass_contract = pass_contract;
+            override_request.shader_variant_op = TC_SHADER_VARIANT_LINE_TUBE;
+            override_request.debug_context = debug_context ? debug_context : "LineRenderer/WorldTube";
+            return assemble_material_shader_override(override_request);
+        }
 
         struct LineBatchEncoderState {
-            std::unique_ptr<tgfx::ScreenSpaceLineRenderer> screen_space_renderer;
-            std::unique_ptr<tgfx::WorldSpaceLineRenderer> world_space_renderer;
             std::unique_ptr<tgfx::WorldTubeLineRenderer> world_tube_renderer;
         };
 
@@ -192,15 +166,6 @@ namespace termin {
             const tc_phase_mask requested_phase =
                 request.phase != TC_PHASE_NONE ? request.phase : (phase ? phase->phase : TC_PHASE_NONE);
 
-            LineRenderMode mode = LineRenderMode::WorldBillboard;
-            if (!decode_line_render_mode(item.payload.line_batch.render_mode, mode)) {
-                tc::Log::error("[LineRenderer] cannot encode line batch with invalid render mode %u",
-                               item.payload.line_batch.render_mode);
-                return false;
-            }
-            if (!is_direct_line_mode(mode)) {
-                return false;
-            }
             if (!accepts_phase(requested_phase, true)) {
                 return false;
             }
@@ -215,141 +180,36 @@ namespace termin {
                 world_points.push_back(transform_line_point(context.model, tc_vec3{point.x, point.y, point.z}));
             }
 
-            Mat44f view_projection = context.projection * context.view;
-            std::array<float, 4> color = phase_color(phase);
-            const bool has_item_override_color = (item.flags & TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR) != 0u;
-            if (context.has_override_color) {
-                color = {
-                    static_cast<float>(context.override_color.x),
-                    static_cast<float>(context.override_color.y),
-                    static_cast<float>(context.override_color.z),
-                    static_cast<float>(context.override_color.w),
-                };
-            } else if (has_item_override_color) {
-                color = {
-                    static_cast<float>(item.override_color.x),
-                    static_cast<float>(item.override_color.y),
-                    static_cast<float>(item.override_color.z),
-                    static_cast<float>(item.override_color.w),
-                };
+            if (!request.device || tc_shader_handle_is_invalid(request.shader_handle)) {
+                tc::Log::error("[LineRenderer] planned WorldTube draw has no final shader/device");
+                return false;
             }
-            const bool has_override_color = context.has_override_color || has_item_override_color;
-
-            tgfx::ShaderHandle material_fragment_shader{};
-            MaterialPipelineShaderBinding tube_body_shader{};
-            MaterialPipelineShaderBinding tube_cap_shader{};
-            const bool use_material_fragment = uses_final_color_fragment_variant_for_pass(mode, context.pass_contract);
-            if (!has_override_color && mode == LineRenderMode::WorldTube && use_material_fragment) {
-                TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
-                TcShader body_variant = get_line_tube_material_shader(material_shader, false);
-                TcShader cap_variant = get_line_tube_material_shader(material_shader, true);
-                if (!body_variant.is_valid() || !cap_variant.is_valid()) {
-                    tc::Log::error("[LineRenderer] failed to create line tube material shader variants");
-                    return false;
-                }
-
-                if (!ensure_material_pipeline_shader(
-                        ctx, ctx.device(), body_variant.handle, "LineRenderer/WorldTubeBody", tube_body_shader) ||
-                    !ensure_material_pipeline_shader(
-                        ctx, ctx.device(), cap_variant.handle, "LineRenderer/WorldTubeCap", tube_cap_shader)) {
-                    tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
-                    return false;
-                }
-            } else if (!has_override_color && use_material_fragment) {
-                tc_shader* shader = context.current_tc_shader.get();
-                if (!shader) {
-                    tc::Log::error("[LineRenderer] cannot draw line with material fragment: current shader is invalid");
-                    return false;
-                }
-                if (!tc_shader_ensure_tgfx2(shader, &ctx.device(), nullptr, &material_fragment_shader) ||
-                    !material_fragment_shader) {
-                    tc::Log::error("[LineRenderer] failed to compile material fragment shader variant for '%s'",
-                                   shader->name ? shader->name : shader->uuid);
-                    return false;
-                }
+            MaterialPipelineShaderBinding shader_binding{};
+            if (!ensure_material_pipeline_shader(
+                    ctx, *request.device, request.shader_handle, "LineRenderer/WorldTube", shader_binding)) {
+                tc::Log::error("[LineRenderer] failed to prepare planned WorldTube shader");
+                return false;
             }
 
-            if (mode == LineRenderMode::WorldTube) {
-                if (!state.world_tube_renderer) {
-                    state.world_tube_renderer = std::make_unique<tgfx::WorldTubeLineRenderer>();
-                }
-                tgfx::WorldTubeLineStyle style;
-                style.width = std::max(item.payload.line_batch.width, 0.0f);
-                style.color = color;
-                style.up_hint = to_line_point(tc_vec3{
-                    item.payload.line_batch.up_hint.x,
-                    item.payload.line_batch.up_hint.y,
-                    item.payload.line_batch.up_hint.z,
-                });
-                style.sides = std::clamp(item.payload.line_batch.tube_sides, 3, 32);
-
-                tgfx::WorldTubeLineParams params;
-                params.view_projection = to_tgfx_matrix(view_projection);
-                params.lighting_enabled = !has_override_color;
-                params.fragment_shader = material_fragment_shader;
-                if (tube_body_shader.shader && tube_cap_shader.shader) {
-                    params.body_vertex_shader = tube_body_shader.vertex;
-                    params.body_fragment_shader = tube_body_shader.fragment;
-                    params.body_shader_layout = tube_body_shader.shader;
-                    params.cap_vertex_shader = tube_cap_shader.vertex;
-                    params.cap_fragment_shader = tube_cap_shader.fragment;
-                    params.cap_shader_layout = tube_cap_shader.shader;
-                    params.bind_resources = [&request, phase](tgfx::RenderContext2& line_ctx,
-                                                              const tc_shader* shader_layout) {
-                        RenderItemDrawSubmitRequest line_request = request;
-                        line_request.material_phase = phase;
-                        bind_render_item_common_resources(line_ctx, shader_layout, line_request);
-                    };
-                }
-
-                state.world_tube_renderer->draw_polyline(ctx, world_points, style, params);
-                return true;
+            if (!state.world_tube_renderer) {
+                state.world_tube_renderer = std::make_unique<tgfx::WorldTubeLineRenderer>();
             }
+            tgfx::WorldTubeLineStyle style;
+            style.width = std::max(item.payload.line_batch.width, 0.0f);
+            style.sides = std::clamp(item.payload.line_batch.tube_sides, 3, 32);
 
-            if (mode == LineRenderMode::WorldBillboard) {
-                if (!state.world_space_renderer) {
-                    state.world_space_renderer = std::make_unique<tgfx::WorldSpaceLineRenderer>();
-                }
-                tgfx::WorldSpaceLineStyle style;
-                style.width = std::max(item.payload.line_batch.width, 0.0f);
-                style.color = color;
-                style.cap = tgfx::LineCapStyle::Round;
-                style.join = tgfx::LineJoinStyle::Round;
-                style.round_segments = 12;
+            tgfx::WorldTubeLineParams params;
+            params.vertex_shader = shader_binding.vertex;
+            params.fragment_shader = shader_binding.fragment;
+            params.shader_layout = shader_binding.shader;
+            params.bind_resources = [&request, phase](tgfx::RenderContext2& line_ctx,
+                                                      const tc_shader* shader_layout) -> bool {
+                RenderItemDrawSubmitRequest line_request = request;
+                line_request.material_phase = phase;
+                return bind_render_item_common_resources(line_ctx, shader_layout, line_request);
+            };
 
-                tgfx::WorldSpaceLineParams params;
-                params.view_projection = to_tgfx_matrix(view_projection);
-                params.camera_position = {
-                    static_cast<float>(context.camera_position.x),
-                    static_cast<float>(context.camera_position.y),
-                    static_cast<float>(context.camera_position.z),
-                };
-                params.lighting_enabled = !has_override_color;
-                params.fragment_shader = material_fragment_shader;
-
-                ctx.set_cull(tgfx::CullMode::None);
-                state.world_space_renderer->draw_polyline(ctx, world_points, style, params);
-                return true;
-            }
-
-            if (!state.screen_space_renderer) {
-                state.screen_space_renderer = std::make_unique<tgfx::ScreenSpaceLineRenderer>();
-            }
-            tgfx::ScreenSpaceLineStyle style;
-            style.width_px = std::max(item.payload.line_batch.width, 0.0f);
-            style.color = color;
-            style.cap = tgfx::LineCapStyle::Round;
-            style.join = tgfx::LineJoinStyle::Round;
-            style.round_segments = 12;
-
-            tgfx::ScreenSpaceLineParams params;
-            params.view_projection = to_tgfx_matrix(view_projection);
-            params.viewport_width = static_cast<float>(std::max(context.viewport_width, 1));
-            params.viewport_height = static_cast<float>(std::max(context.viewport_height, 1));
-
-            ctx.set_cull(tgfx::CullMode::None);
-            state.screen_space_renderer->draw_polyline(ctx, world_points, style, params);
-            return true;
+            return state.world_tube_renderer->draw_polyline(ctx, world_points, style, params);
         }
 
         bool line_render_item_draw_encoder(tgfx::RenderContext2& ctx,
@@ -382,6 +242,8 @@ namespace termin {
             desc.user_data = &state;
             desc.debug_name = "LineRenderer";
             desc.capabilities.phase_mask = TC_PHASE_ALL & ~TC_PHASE_NORMAL;
+            desc.capabilities.vertex_transform_kind_mask =
+                render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh);
             desc.capabilities.supported_task_input_mask =
                 render_item_task_input_bit(RenderItemTaskInput::DrawContext) |
                 render_item_task_input_bit(RenderItemTaskInput::ModelMatrix) |
@@ -390,184 +252,6 @@ namespace termin {
             desc.capabilities.requires_draw_context = true;
             desc.capabilities.consumes_common_resources = true;
             registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_LINE_BATCH, desc);
-        }
-
-        std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_fragment_shader_cache() {
-            static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
-            return cache;
-        }
-
-        std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_body_shader_cache() {
-            static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
-            return cache;
-        }
-
-        std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_cap_shader_cache() {
-            static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
-            return cache;
-        }
-
-        TcShader get_line_material_fragment_shader(TcShader original_shader) {
-            if (!original_shader.is_valid()) {
-                return TcShader();
-            }
-            if (original_shader.variant_op() == TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT) {
-                return original_shader;
-            }
-
-            auto& cache = line_fragment_shader_cache();
-            auto it = cache.find(original_shader);
-            if (it != cache.end()) {
-                TcShader& cached = it->second;
-                if (!cached.variant_is_stale()) {
-                    return cached;
-                }
-                cache.erase(it);
-            }
-
-            const char* fragment_source = original_shader.fragment_source();
-            if (!fragment_source || fragment_source[0] == '\0') {
-                tc::Log::error(
-                    "[LineRenderer] cannot create line material shader variant for '%s': fragment source is empty",
-                    original_shader.name());
-                return TcShader();
-            }
-
-            tc_shader* original_raw = original_shader.get();
-            if (!original_raw) {
-                tc::Log::error("[LineRenderer] cannot create line material shader variant: source shader became stale");
-                return TcShader();
-            }
-            const tc_shader_language language = tc_shader_get_language(original_raw);
-            const tc_shader_artifact_policy artifact_policy = tc_shader_get_artifact_policy(original_raw);
-            const char* fragment_entry = original_raw->fragment_entry;
-            if (!fragment_entry || fragment_entry[0] == '\0') {
-                tc::Log::error("[LineRenderer] cannot create line material shader variant for '%s': "
-                               "fragment entry point is empty",
-                               original_shader.name());
-                return TcShader();
-            }
-
-            std::string variant_name = std::string(original_shader.name()) + "_LineFragment";
-            char variant_uuid[TC_UUID_SIZE];
-            tc_shader_make_variant_uuid(
-                variant_uuid, sizeof(variant_uuid), original_shader.uuid(), TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
-
-            const tc_shader_create_desc shader_desc = {{nullptr,
-                                                        fragment_source,
-                                                        nullptr,
-                                                        variant_name.c_str(),
-                                                        original_shader.source_path(),
-                                                        nullptr,
-                                                        fragment_entry,
-                                                        nullptr},
-                                                       variant_uuid,
-                                                       language,
-                                                       artifact_policy};
-            tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
-            if (tc_shader_handle_is_invalid(handle)) {
-                tc::Log::error("[LineRenderer] failed to create line material shader variant for '%s'",
-                               original_shader.name());
-                return TcShader();
-            }
-
-            TcShader variant(handle);
-            variant.set_features(original_shader.features());
-
-            tc_shader* variant_raw = variant.get();
-            if (original_raw && variant_raw) {
-                tc_shader_set_material_ubo_layout(variant_raw,
-                                                  original_raw->material_ubo_entries,
-                                                  original_raw->material_ubo_entry_count,
-                                                  original_raw->material_ubo_block_size);
-            }
-
-            variant.set_variant_info(original_shader, TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
-            cache[original_shader] = variant;
-            return variant;
-        }
-
-        TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_variant) {
-            if (!original_shader.is_valid()) {
-                return TcShader();
-            }
-            const tc_shader_variant_op variant_op =
-                cap_variant ? TC_SHADER_VARIANT_LINE_TUBE_CAP : TC_SHADER_VARIANT_LINE_TUBE_BODY;
-            if (original_shader.variant_op() == variant_op) {
-                return original_shader;
-            }
-
-            auto& cache = cap_variant ? line_tube_cap_shader_cache() : line_tube_body_shader_cache();
-            auto it = cache.find(original_shader);
-            if (it != cache.end()) {
-                TcShader& cached = it->second;
-                if (!cached.variant_is_stale()) {
-                    return cached;
-                }
-                cache.erase(it);
-            }
-
-            const char* fragment_source = original_shader.fragment_source();
-            if (!fragment_source || fragment_source[0] == '\0') {
-                tc::Log::error(
-                    "[LineRenderer] cannot create line tube material shader variant for '%s': fragment source is empty",
-                    original_shader.name());
-                return TcShader();
-            }
-
-            const char* vertex_uuid =
-                cap_variant ? "termin-engine-world-tube-line-cap" : "termin-engine-world-tube-line";
-            std::string vertex_source = tgfx::load_builtin_shader_stage_source_from_catalog(vertex_uuid, "vertex");
-            if (vertex_source.empty()) {
-                tc::Log::error("[LineRenderer] failed to load line tube vertex shader template '%s'", vertex_uuid);
-                return TcShader();
-            }
-
-            std::string variant_name =
-                std::string(original_shader.name()) + (cap_variant ? "_LineTubeCap" : "_LineTubeBody");
-            char variant_uuid[TC_UUID_SIZE];
-            tc_shader_make_variant_uuid(variant_uuid, sizeof(variant_uuid), original_shader.uuid(), variant_op);
-
-            tc_shader* original_raw = original_shader.get();
-            const char* fragment_entry = original_raw ? original_raw->fragment_entry : nullptr;
-            if (!fragment_entry || fragment_entry[0] == '\0') {
-                fragment_entry = "main";
-            }
-
-            const tc_shader_create_desc shader_desc = {{vertex_source.c_str(),
-                                                        fragment_source,
-                                                        nullptr,
-                                                        variant_name.c_str(),
-                                                        original_shader.source_path(),
-                                                        cap_variant ? "vs_cap_main" : "vs_main",
-                                                        fragment_entry,
-                                                        nullptr},
-                                                       variant_uuid,
-                                                       TC_SHADER_LANGUAGE_SLANG,
-                                                       TC_SHADER_ARTIFACT_REQUIRED};
-            tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
-            if (tc_shader_handle_is_invalid(handle)) {
-                tc::Log::error("[LineRenderer] failed to create line tube material shader variant for '%s'",
-                               original_shader.name());
-                return TcShader();
-            }
-
-            TcShader variant(handle);
-            variant.set_features(original_shader.features());
-            variant.set_language(TC_SHADER_LANGUAGE_SLANG);
-            variant.set_artifact_policy(TC_SHADER_ARTIFACT_REQUIRED);
-
-            tc_shader* variant_raw = variant.get();
-            if (original_raw && variant_raw) {
-                // Slang line-tube variants get material field layout from their
-                // shaderc sidecar after compilation. Do not copy parser-authored
-                // legacy material_ubo_entries from the source material shader.
-                tc_shader_set_material_ubo_layout(variant_raw, nullptr, 0, 0);
-            }
-
-            variant.set_variant_info(original_shader, variant_op);
-            cache[original_shader] = variant;
-            return variant;
         }
 
     } // namespace
@@ -591,18 +275,6 @@ namespace termin {
         const bool collect_all_phases = context.phase == TC_PHASE_NONE;
         if (!collect_all_phases && !accepts_phase(context.phase, desc.cast_shadow)) {
             return true;
-        }
-
-        LineRenderMode mode = LineRenderMode::WorldBillboard;
-        if (!decode_line_render_mode(static_cast<int>(desc.render_mode), mode)) {
-            tc::Log::error("[LineBatchRenderItem] cannot emit line batch with invalid render mode %d",
-                           static_cast<int>(desc.render_mode));
-            return false;
-        }
-        if (!is_direct_line_mode(mode)) {
-            tc::Log::error("[LineBatchRenderItem] render mode %d is not a direct line batch mode",
-                           static_cast<int>(mode));
-            return false;
         }
 
         tc_material* raw = desc.material.get();
@@ -629,12 +301,6 @@ namespace termin {
             item.payload.line_batch.points = reinterpret_cast<const tc_render_item_vec3*>(desc.points);
             item.payload.line_batch.point_count = desc.point_count;
             item.payload.line_batch.width = desc.width;
-            item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
-            item.payload.line_batch.up_hint = {
-                desc.up_hint.x,
-                desc.up_hint.y,
-                desc.up_hint.z,
-            };
             item.payload.line_batch.tube_sides = desc.tube_sides;
 
             if (phase) {
@@ -692,38 +358,25 @@ namespace termin {
                 out_detail = "line planner received an invalid request";
                 return RenderItemTaskRejection::ShaderPlanningRejected;
             }
-            LineRenderMode mode = LineRenderMode::WorldBillboard;
-            if (!decode_line_render_mode(request.item->payload.line_batch.render_mode, mode)) {
-                out_detail = "line planner received an invalid render mode";
-                return RenderItemTaskRejection::ShaderPlanningRejected;
+            out_plan.has_vertex_transform_kind = true;
+            out_plan.vertex_transform_kind = VertexTransformKind::StaticMesh;
+            const uint64_t transform_bit =
+                render_item_vertex_transform_kind_bit(out_plan.vertex_transform_kind);
+            if ((request.contract->accepted_vertex_transform_kind_mask & transform_bit) == 0u) {
+                out_detail = "pass contract does not accept the WorldTube vertex transform";
+                return RenderItemTaskRejection::PassVertexTransformUnsupported;
             }
-            TcShader original_shader(request.candidate_shader);
-            out_plan.final_shader = request.candidate_shader;
-            if (!uses_final_color_fragment_variant_for_pass(mode, *request.contract->shader_contract)) {
-                out_detail = nullptr;
-                return RenderItemTaskRejection::None;
-            }
-            if (mode == LineRenderMode::WorldTube) {
-                TcShader body = get_line_tube_material_shader(original_shader, false);
-                TcShader cap = get_line_tube_material_shader(original_shader, true);
-                if (!body.is_valid() || !cap.is_valid()) {
-                    out_detail = "failed to create line tube material shader variants";
-                    return RenderItemTaskRejection::ShaderPlanningRejected;
-                }
-                if (!out_plan.set_final_shader(std::move(body)) || !out_plan.add_shader_usage(std::move(cap))) {
-                    out_detail = "line tube shader usage packet is full";
-                    return RenderItemTaskRejection::ShaderPlanningRejected;
-                }
-                out_detail = nullptr;
-                return RenderItemTaskRejection::None;
-            }
-            TcShader variant = get_line_material_fragment_shader(original_shader);
+
+            TcShader variant = assemble_world_tube_material_shader(
+                TcShader(request.candidate_shader),
+                *request.contract->shader_contract,
+                request.contract->debug_pass_name);
             if (!variant.is_valid()) {
-                out_detail = "failed to create line material fragment shader variant";
+                out_detail = "failed to assemble the WorldTube material shader";
                 return RenderItemTaskRejection::ShaderPlanningRejected;
             }
             if (!out_plan.set_final_shader(std::move(variant))) {
-                out_detail = "line material shader usage packet is full";
+                out_detail = "WorldTube shader usage packet is full";
                 return RenderItemTaskRejection::ShaderPlanningRejected;
             }
             out_detail = nullptr;
@@ -760,27 +413,6 @@ namespace termin {
             0.001,
             10.0,
             0.01);
-        inspect.add_with_accessor_choices<LineRenderer, int>(
-            "LineRenderer",
-            "render_mode",
-            "Render Mode",
-            "enum",
-            [](LineRenderer* self) -> int { return static_cast<int>(self->render_mode); },
-            [](LineRenderer* self, int value) { self->set_render_mode(static_cast<LineRenderMode>(value)); },
-            {
-                {"0", "World Billboard"},
-                {"1", "Screen Space"},
-                {"2", "World Mesh"},
-                {"3", "Raw Lines"},
-                {"4", "World Tube"},
-            });
-        inspect.add_with_callbacks<LineRenderer, bool>(
-            "LineRenderer",
-            "raw_lines",
-            "Raw Lines",
-            "bool",
-            [](LineRenderer* self) -> bool& { return self->raw_lines; },
-            [](LineRenderer* self, const bool& value) { self->set_raw_lines(value); });
         inspect.add_with_callbacks<LineRenderer, bool>(
             "LineRenderer",
             "cast_shadow",
@@ -788,13 +420,6 @@ namespace termin {
             "bool",
             [](LineRenderer* self) -> bool& { return self->cast_shadow; },
             [](LineRenderer* self, const bool& value) { self->set_cast_shadow(value); });
-        inspect.add_with_callbacks<LineRenderer, tc_vec3>(
-            "LineRenderer",
-            "up_hint",
-            "Up Hint",
-            "vec3",
-            [](LineRenderer* self) -> tc_vec3& { return self->up_hint; },
-            [](LineRenderer* self, const tc_vec3& value) { self->set_up_hint(value); });
         inspect.add_with_callbacks<LineRenderer, int>(
             "LineRenderer",
             "tube_sides",
@@ -871,36 +496,20 @@ namespace termin {
         return default_material();
     }
 
-    bool LineRenderer::effective_render_mode(LineRenderMode& mode) const {
-        if (raw_lines) {
-            mode = LineRenderMode::RawLines;
-            return true;
-        }
-        if (decode_line_render_mode(static_cast<int>(render_mode), mode)) {
-            return true;
-        }
-        tc::Log::error("[LineRenderer] invalid render mode %d", static_cast<int>(render_mode));
-        return false;
-    }
-
     void LineRenderer::set_points(const std::vector<tc_vec3>& points) {
         points_ = points;
-        dirty_ = true;
     }
 
     void LineRenderer::set_points(std::vector<tc_vec3>&& points) {
         points_ = std::move(points);
-        dirty_ = true;
     }
 
     void LineRenderer::clear_points() {
         points_.clear();
-        dirty_ = true;
     }
 
     void LineRenderer::add_point(const tc_vec3& point) {
         points_.push_back(point);
-        dirty_ = true;
     }
 
     void LineRenderer::set_segment(const tc_vec3& start, const tc_vec3& end) {
@@ -909,41 +518,18 @@ namespace termin {
         }
         points_[0] = start;
         points_[1] = end;
-        dirty_ = true;
     }
 
     void LineRenderer::set_width(float value) {
         width = value;
-        dirty_ = true;
-    }
-
-    void LineRenderer::set_render_mode(LineRenderMode value) {
-        LineRenderMode decoded = LineRenderMode::WorldBillboard;
-        if (!decode_line_render_mode(static_cast<int>(value), decoded)) {
-            tc::Log::error("[LineRenderer] rejected invalid render mode %d", static_cast<int>(value));
-            return;
-        }
-        render_mode = value;
-        dirty_ = true;
-    }
-
-    void LineRenderer::set_raw_lines(bool value) {
-        raw_lines = value;
-        dirty_ = true;
     }
 
     void LineRenderer::set_cast_shadow(bool value) {
         cast_shadow = value;
     }
 
-    void LineRenderer::set_up_hint(const tc_vec3& value) {
-        up_hint = value;
-        dirty_ = true;
-    }
-
     void LineRenderer::set_tube_sides(int value) {
         tube_sides = std::clamp(value, 3, 32);
-        dirty_ = true;
     }
 
     void LineRenderer::set_material(const TcMaterial& value) {
@@ -958,146 +544,6 @@ namespace termin {
             return;
         }
         material = TcMaterial(handle);
-    }
-
-    void LineRenderer::rebuild_geometry() {
-        mesh_ = TcMesh();
-        if (points_.size() < 2) {
-            dirty_ = false;
-            return;
-        }
-
-        tc_vertex_layout layout = tc_vertex_layout_pos();
-        LineRenderMode mode = LineRenderMode::WorldBillboard;
-        if (!effective_render_mode(mode)) {
-            dirty_ = false;
-            return;
-        }
-
-        if (is_direct_line_mode(mode)) {
-            dirty_ = false;
-            return;
-        }
-
-        if (mode == LineRenderMode::RawLines) {
-            std::vector<float> vertices;
-            vertices.reserve(points_.size() * 3);
-            for (const tc_vec3& point : points_) {
-                vertices.push_back(static_cast<float>(point.x));
-                vertices.push_back(static_cast<float>(point.y));
-                vertices.push_back(static_cast<float>(point.z));
-            }
-
-            std::vector<uint32_t> indices;
-            indices.reserve((points_.size() - 1) * 2);
-            for (uint32_t i = 1; i < static_cast<uint32_t>(points_.size()); ++i) {
-                indices.push_back(i - 1);
-                indices.push_back(i);
-            }
-
-            TcMeshCreateInfo create_info;
-            create_info.data =
-                TcMeshInterleavedDataView{vertices.data(), points_.size(), indices.data(), indices.size(), &layout};
-            create_info.name = "line_renderer_raw";
-            create_info.draw_mode = TC_DRAW_LINES;
-            mesh_ = TcMesh::from_interleaved(create_info);
-        } else {
-            std::vector<tgfx::LinePoint3> line_points;
-            line_points.reserve(points_.size());
-            for (const tc_vec3& point : points_) {
-                line_points.push_back(to_line_point(point));
-            }
-
-            tgfx::LineStyle style;
-            style.width = std::max(width, 0.0f);
-            style.up_hint = to_line_point(up_hint);
-            style.cap = tgfx::LineCapStyle::Round;
-            style.join = tgfx::LineJoinStyle::Round;
-            style.round_segments = 8;
-            tgfx::LineMesh line_mesh = tgfx::build_line_mesh(line_points, style);
-            if (line_mesh.empty()) {
-                dirty_ = false;
-                return;
-            }
-
-            layout = tc_vertex_layout_pos_normal_uv_tangent();
-            std::vector<tgfx::LinePoint3> normals(line_mesh.vertices.size(), tgfx::LinePoint3{0.0f, 0.0f, 1.0f});
-            std::vector<tgfx::LinePoint3> tangents(line_mesh.vertices.size(), tgfx::LinePoint3{1.0f, 0.0f, 0.0f});
-            for (size_t i = 0; i + 2 < line_mesh.indices.size(); i += 3) {
-                const uint32_t ia = line_mesh.indices[i];
-                const uint32_t ib = line_mesh.indices[i + 1];
-                const uint32_t ic = line_mesh.indices[i + 2];
-                const tgfx::LinePoint3& a = line_mesh.vertices[ia].position;
-                const tgfx::LinePoint3& b = line_mesh.vertices[ib].position;
-                const tgfx::LinePoint3& c = line_mesh.vertices[ic].position;
-                tgfx::LinePoint3 normal = (b - a).cross(c - a);
-                const float length = normal.norm();
-                if (length > 1.0e-6f) {
-                    normal /= length;
-                } else {
-                    normal = tgfx::LinePoint3{0.0f, 0.0f, 1.0f};
-                }
-                normals[ia] = normal;
-                normals[ib] = normal;
-                normals[ic] = normal;
-                tgfx::LinePoint3 tangent = b - a;
-                const float tangent_length = tangent.norm();
-                if (tangent_length > 1.0e-6f) {
-                    tangent /= tangent_length;
-                } else {
-                    tangent = tgfx::LinePoint3{1.0f, 0.0f, 0.0f};
-                }
-                tangents[ia] = tangent;
-                tangents[ib] = tangent;
-                tangents[ic] = tangent;
-            }
-
-            std::vector<float> vertices;
-            vertices.reserve(line_mesh.vertices.size() * 12);
-            for (size_t i = 0; i < line_mesh.vertices.size(); ++i) {
-                const tgfx::LinePoint3& position = line_mesh.vertices[i].position;
-                const tgfx::LinePoint3& normal = normals[i];
-                const tgfx::LinePoint3& tangent = tangents[i];
-                vertices.push_back(position.x);
-                vertices.push_back(position.y);
-                vertices.push_back(position.z);
-                vertices.push_back(normal.x);
-                vertices.push_back(normal.y);
-                vertices.push_back(normal.z);
-                vertices.push_back(0.0f);
-                vertices.push_back(0.0f);
-                vertices.push_back(tangent.x);
-                vertices.push_back(tangent.y);
-                vertices.push_back(tangent.z);
-                vertices.push_back(1.0f);
-            }
-
-            TcMeshCreateInfo create_info;
-            create_info.data = TcMeshInterleavedDataView{vertices.data(),
-                                                         line_mesh.vertices.size(),
-                                                         line_mesh.indices.data(),
-                                                         line_mesh.indices.size(),
-                                                         &layout};
-            create_info.name = "line_renderer";
-            create_info.draw_mode = TC_DRAW_TRIANGLES;
-            mesh_ = TcMesh::from_interleaved(create_info);
-        }
-
-        if (!mesh_.is_valid()) {
-            tc::Log::error("[LineRenderer] failed to rebuild line mesh");
-        }
-        dirty_ = false;
-    }
-
-    void LineRenderer::ensure_geometry() {
-        if (dirty_) {
-            rebuild_geometry();
-        }
-    }
-
-    tc_mesh* LineRenderer::current_mesh_ptr() const {
-        const_cast<LineRenderer*>(this)->ensure_geometry();
-        return mesh_.get();
     }
 
     tc_value LineRenderer::serialize_points() const {
@@ -1131,7 +577,6 @@ namespace termin {
 
     void LineRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene) {
         Component::deserialize_data(data, scene);
-        dirty_ = true;
     }
 
     tc_phase_mask LineRenderer::get_phase_mask() const {
@@ -1161,91 +606,8 @@ namespace termin {
             return true;
         }
 
-        LineRenderMode mode = LineRenderMode::WorldBillboard;
-        if (!effective_render_mode(mode)) {
-            return true;
-        }
         TcMaterial mat = effective_material();
-        tc_material* raw = mat.get();
-        if (!raw) {
-            return true;
-        }
-
-        const bool allow_missing_material_phase =
-            (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
-        bool emitted = false;
-
-        if (!is_direct_line_mode(mode)) {
-            tc_mesh* mesh = current_mesh_ptr();
-            if (!mesh) {
-                return true;
-            }
-            if (mesh->submesh_count == 0 && !tc_mesh_ensure_default_submesh(mesh)) {
-                tc::Log::error("[LineRenderer] cannot emit mesh RenderItem: failed to create default submesh");
-                return false;
-            }
-            const tc_submesh* submesh = tc_mesh_get_submesh(mesh, 0);
-            if (!submesh || submesh->index_count == 0) {
-                return true;
-            }
-
-            auto emit_mesh_phase = [&](tc_material_phase* phase, tc_material_handle material_handle) -> bool {
-                if (!phase && !allow_missing_material_phase) {
-                    return true;
-                }
-
-                tc_render_item item{};
-                item.kind = TC_RENDER_ITEM_KIND_MESH;
-                item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-                item.geometry_id = 0;
-                item.material_phase = phase;
-                item.material = material_handle;
-                item.material_phase_index = SIZE_MAX;
-                if (phase) {
-                    item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                    tc_material* owner = tc_material_get(material_handle);
-                    item.material_phase_index = owner ? static_cast<size_t>(phase - owner->phases) : SIZE_MAX;
-                }
-                Mat44f model = get_model_matrix(entity());
-                std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-                item.payload.mesh.mesh_handle = mesh_.handle;
-                if (tc_mesh_handle_is_invalid(item.payload.mesh.mesh_handle)) {
-                    item.payload.mesh.mesh_handle = tc_mesh_find(mesh->header.uuid);
-                }
-                if (tc_mesh_handle_is_invalid(item.payload.mesh.mesh_handle)) {
-                    tc::Log::error("[LineRenderer] cannot emit mesh RenderItem: mesh has no stable registry handle");
-                    return false;
-                }
-                item.payload.mesh.submesh_index = 0;
-                emitted = true;
-                return sink.emit(&item, sink.user_data);
-            };
-
-            bool found_shadow_phase = false;
-            for (size_t i = 0; i < raw->phase_count; ++i) {
-                tc_material_phase* phase = &raw->phases[i];
-                if (!accepts_phase(phase->phase, cast_shadow)) {
-                    continue;
-                }
-                if (phase->phase == TC_PHASE_SHADOW) {
-                    found_shadow_phase = true;
-                }
-                if ((collect_all_phases || context.phase == phase->phase) && !emit_mesh_phase(phase, mat.handle)) {
-                    return false;
-                }
-            }
-
-            if (cast_shadow && (collect_all_phases || context.phase == TC_PHASE_SHADOW) && !found_shadow_phase) {
-                TcMaterial fallback = default_material();
-                if (!emit_mesh_phase(find_phase(fallback.get(), TC_PHASE_SHADOW), fallback.handle)) {
-                    return false;
-                }
-            }
-
-            if (!emitted && allow_missing_material_phase) {
-                return emit_mesh_phase(nullptr, mat.handle);
-            }
-
+        if (!mat.is_valid()) {
             return true;
         }
 
@@ -1255,9 +617,7 @@ namespace termin {
         desc.material = mat;
         desc.shadow_fallback_material = default_material();
         desc.width = width;
-        desc.render_mode = mode;
         desc.cast_shadow = cast_shadow;
-        desc.up_hint = up_hint;
         desc.tube_sides = tube_sides;
         desc.geometry_id = 0;
         desc.model_matrix = get_model_matrix(entity());
@@ -1269,11 +629,6 @@ namespace termin {
                                                 const RenderItemDrawSubmitRequest& request) {
         static LineBatchEncoderState state;
         return encode_line_batch_render_item_tgfx2(ctx2, item, request, state);
-    }
-
-    TcMesh LineRenderer::get_mesh() {
-        ensure_geometry();
-        return mesh_;
     }
 
 } // namespace termin

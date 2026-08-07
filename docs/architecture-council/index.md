@@ -8,6 +8,9 @@
 
 ## Протоколы
 
+- [Canonical LineRenderer Contract](2026-08-07-line-renderer-contract.md)
+  — один production world-space tube contract, pass-owned mono/multiview
+  projection и удаление renderer modes из scene-level API.
 - [Display Render Surface Boundary](2026-07-19-display-render-surface-boundary.md)
   — `tc_render_surface` как узкий texture output для `tc_display`, display-owned
   input routing и независимый `BackendWindow` presenter.

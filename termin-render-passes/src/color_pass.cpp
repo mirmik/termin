@@ -275,6 +275,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         MaterialPipelinePassContract build_color_material_pass_contract() {
             MaterialPipelinePassContract contract;
             contract.debug_name = "color";
+            contract.allows_authored_vertex_stage = true;
             contract.fragment_composition = MaterialFragmentComposition::SurfaceConsumerOrFinalColor;
             contract.required_material_fragment_input = material_pipeline_standard_material_fragment_interface();
             contract.vertex_output_adapter = material_pipeline_standard_material_vertex_output_adapter();
@@ -383,6 +384,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     MaterialPipelinePassContract multiview_color_material_pass_contract() {
         MaterialPipelinePassContract contract = build_color_material_pass_contract();
         contract.debug_name = "multiview_color";
+        contract.allows_authored_vertex_stage = false;
         contract.vertex_output_adapter = material_pipeline_multiview_material_vertex_output_adapter();
         return contract;
     }

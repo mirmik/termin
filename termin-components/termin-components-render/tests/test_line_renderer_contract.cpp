@@ -76,6 +76,7 @@ FragmentOutput fs_main(FragmentInput input)
         termin::MaterialPipelinePassContract contract;
         contract.debug_name = "custom_line_material_fragment";
         contract.required_material_fragment_input = termin::material_pipeline_standard_material_fragment_interface();
+        contract.vertex_output_adapter = termin::material_pipeline_standard_material_vertex_output_adapter();
         return contract;
     }
 
@@ -83,6 +84,7 @@ FragmentOutput fs_main(FragmentInput input)
         termin::MaterialPipelinePassContract contract;
         contract.debug_name = "custom_line_auxiliary";
         contract.required_material_fragment_input = termin::MaterialFragmentInterface{};
+        contract.vertex_output_adapter = termin::material_pipeline_standard_material_vertex_output_adapter();
         return contract;
     }
 
@@ -100,7 +102,6 @@ FragmentOutput fs_main(FragmentInput input)
         termin::LineRenderer::register_type();
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-        item.payload.line_batch.render_mode = static_cast<uint32_t>(termin::LineRenderMode::WorldTube);
 
         termin::RenderItemTaskPlanningContract contract{};
         contract.phase = TC_PHASE_OPAQUE;
@@ -127,14 +128,12 @@ FragmentOutput fs_main(FragmentInput input)
     }
 
     const termin::RenderTask& plan_line_shader_task(termin::TcShader candidate,
-                                                    termin::LineRenderMode mode,
                                                     const termin::MaterialPipelinePassContract& shader_contract,
                                                     tc_render_item& item,
                                                     termin::RenderTaskList& tasks) {
         termin::LineRenderer::register_type();
         item = {};
         item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-        item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
 
         termin::RenderItemTaskPlanningContract contract{};
         contract.phase = TC_PHASE_OPAQUE;
@@ -217,32 +216,26 @@ TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
 
     std::vector<termin::TcShader> emitted = plan_line_shader_usages(material_shader, line_material_fragment_contract());
 
-    CHECK(emitted.size() >= 3u);
-    CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
-    CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+    CHECK(emitted.size() >= 2u);
+    CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE));
 
     std::vector<termin::TcShader> auxiliary_emitted =
         plan_line_shader_usages(material_shader, line_auxiliary_contract());
 
-    CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
-    CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+    CHECK(has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE));
 
     std::vector<termin::TcShader> material_emitted =
         plan_line_shader_usages(material_shader, line_material_fragment_contract());
 
-    CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
-    CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+    CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE));
 
     tc_render_item owned_item{};
     termin::RenderTaskList owned_tasks;
-    const termin::RenderTask& owned_task = plan_line_shader_task(
-        material_shader, termin::LineRenderMode::WorldTube, line_material_fragment_contract(), owned_item, owned_tasks);
-    const termin::TcShader* body_variant = find_owned_variant(owned_task, TC_SHADER_VARIANT_LINE_TUBE_BODY);
-    const termin::TcShader* cap_variant = find_owned_variant(owned_task, TC_SHADER_VARIANT_LINE_TUBE_CAP);
+    const termin::RenderTask& owned_task =
+        plan_line_shader_task(material_shader, line_material_fragment_contract(), owned_item, owned_tasks);
+    const termin::TcShader* body_variant = find_owned_variant(owned_task, TC_SHADER_VARIANT_LINE_TUBE);
     REQUIRE(body_variant != nullptr);
-    REQUIRE(cap_variant != nullptr);
     CHECK(body_variant->is_valid());
-    CHECK(cap_variant->is_valid());
     CHECK(tc_shader_handle_eq(owned_task.final_shader, body_variant->handle));
 
     emitted.clear();
@@ -250,36 +243,39 @@ TEST_CASE("typed LineBatch task planning enumerates pass-owned shader usages") {
     material_emitted.clear();
     material_shader = termin::TcShader();
     CHECK(body_variant->is_valid());
-    CHECK(cap_variant->is_valid());
 
     tc_shader_shutdown();
 }
 
-TEST_CASE("LineRenderer task owns Slang variants and preserves fragment contract") {
+TEST_CASE("LineRenderer composes WorldTube with the multiview pass adapter") {
     tc_shader_init();
 
     termin::TcShader material_shader = make_test_material_shader("line-contract-owned-slang-material");
     REQUIRE(material_shader.is_valid());
 
-    const termin::MaterialPipelinePassContract shader_contract = line_material_fragment_contract();
-    tc_render_item billboard_item{};
-    termin::RenderTaskList billboard_tasks;
-    const termin::RenderTask& billboard_task = plan_line_shader_task(
-        material_shader, termin::LineRenderMode::WorldBillboard, shader_contract, billboard_item, billboard_tasks);
+    termin::MaterialPipelinePassContract shader_contract = line_material_fragment_contract();
+    shader_contract.debug_name = "multiview_line_material_fragment";
+    shader_contract.vertex_output_adapter = termin::material_pipeline_multiview_material_vertex_output_adapter();
+    tc_render_item item{};
+    termin::RenderTaskList tasks;
+    const termin::RenderTask& task = plan_line_shader_task(material_shader, shader_contract, item, tasks);
 
-    const termin::TcShader* fragment_variant =
-        find_owned_variant(billboard_task, TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
-    REQUIRE(fragment_variant != nullptr);
-    REQUIRE(fragment_variant->is_valid());
-    CHECK(tc_shader_handle_eq(billboard_task.final_shader, fragment_variant->handle));
-    CHECK(fragment_variant->language() == TC_SHADER_LANGUAGE_SLANG);
-    CHECK(fragment_variant->artifact_policy() == TC_SHADER_ARTIFACT_REQUIRED);
-    CHECK(std::strcmp(fragment_variant->source_path(), "/virtual/line_renderer_contract.shader") == 0);
-    REQUIRE(fragment_variant->get() != nullptr);
-    CHECK(std::strcmp(fragment_variant->get()->fragment_entry, "fs_main") == 0);
+    const termin::TcShader* variant = find_owned_variant(task, TC_SHADER_VARIANT_LINE_TUBE);
+    REQUIRE(variant != nullptr);
+    REQUIRE(variant->is_valid());
+    CHECK(tc_shader_handle_eq(task.final_shader, variant->handle));
+    CHECK(variant->language() == TC_SHADER_LANGUAGE_SLANG);
+    CHECK(variant->artifact_policy() == TC_SHADER_ARTIFACT_REQUIRED);
+    REQUIRE(variant->get() != nullptr);
+    CHECK(std::strcmp(variant->get()->fragment_entry, "fs_main") == 0);
+    REQUIRE(variant->vertex_source() != nullptr);
+    CHECK(std::string(variant->vertex_source()).find("import termin_world_tube_line_transform;") != std::string::npos);
+    CHECK(std::string(variant->vertex_source()).find("import termin_multiview_material_vertex_output_adapter;") !=
+          std::string::npos);
+    CHECK(std::string(variant->vertex_source()).find("SV_ViewID") != std::string::npos);
 
     material_shader = termin::TcShader();
-    CHECK(fragment_variant->is_valid());
+    CHECK(variant->is_valid());
 
     tc_shader_shutdown();
 }
@@ -482,7 +478,7 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     tc_material_shutdown();
 }
 
-TEST_CASE("LineRenderer emits direct modes as line batch render items") {
+TEST_CASE("LineRenderer emits canonical world tube as a line batch render item") {
     tc_material_init();
     tc_shader_init();
 
@@ -491,7 +487,6 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
 
     auto* renderer = new termin::LineRenderer();
     renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
-    renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
     renderer->set_width(0.25f);
     entity.add_component(renderer);
 
@@ -510,7 +505,7 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     CHECK(items[0].payload.line_batch.points != nullptr);
     CHECK(items[0].payload.line_batch.point_count == 2u);
     CHECK(items[0].payload.line_batch.width == 0.25f);
-    CHECK(items[0].payload.line_batch.render_mode == static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
+    CHECK(items[0].payload.line_batch.tube_sides == 6);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
 
@@ -545,7 +540,6 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
 
     auto* renderer = new termin::LineRenderer();
     renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
-    renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
     tc_material_handle material_handle =
         tc_material_create("line-renderer-render-item-pick-opaque-only", "line-renderer-render-item-pick-opaque-only");
     REQUIRE(tc_material_is_valid(material_handle));
@@ -570,44 +564,6 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
 
-    tc_shader_shutdown();
-    tc_material_shutdown();
-}
-
-TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
-    tc_material_init();
-    tc_shader_init();
-    tc_mesh_init();
-
-    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-mesh-render-items");
-    termin::Entity entity = scene.create_entity("line");
-
-    auto* renderer = new termin::LineRenderer();
-    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
-    renderer->set_render_mode(termin::LineRenderMode::WorldMesh);
-    tc_material_handle material_handle =
-        tc_material_create("line-renderer-mesh-render-item-material", "line-renderer-mesh-render-item-material");
-    REQUIRE(tc_material_is_valid(material_handle));
-    tc_material* material = tc_material_get(material_handle);
-    REQUIRE(material != nullptr);
-    REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0) != nullptr);
-    renderer->set_material(termin::TcMaterial(material_handle));
-    entity.add_component(renderer);
-
-    tc_render_item_collect_context collect_context{};
-    collect_context.phase = TC_PHASE_OPAQUE;
-    collect_context.debug_pass_name = "test";
-
-    termin::RenderItemCollection collection;
-    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, collection));
-
-    const std::vector<tc_render_item>& items = collection.items;
-    REQUIRE(items.size() == 1u);
-    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
-    CHECK(termin::render_scene_item_component(items[0]) == renderer->tc_component_ptr());
-    CHECK(!tc_mesh_handle_is_invalid(items[0].payload.mesh.mesh_handle));
-
-    tc_mesh_shutdown();
     tc_shader_shutdown();
     tc_material_shutdown();
 }
