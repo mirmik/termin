@@ -328,10 +328,7 @@
                   "fixed_update_priority": 0.0,
                   "late_update_priority": 0.0,
                   "width": 0.02,
-                  "render_mode": 2.0,
-                  "raw_lines": false,
                   "cast_shadow": false,
-                  "up_hint": [0.0, 0.0, 1.0],
                   "tube_sides": 6.0,
                   "points": [
                     [0.0, 0.0, 0.0],

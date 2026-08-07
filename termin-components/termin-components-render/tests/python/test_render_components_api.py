@@ -18,7 +18,6 @@ from termin.render_components import (
     DepthOnlyPass,
     DepthPass,
     LineRenderer,
-    LineRenderMode,
     MaterialPass,
     MeshRenderer,
     NormalPass,
@@ -335,19 +334,11 @@ def test_depth_and_normal_passes_deserialize_legacy_material_phase_mark():
     assert normal.phase_mark == "custom_normals"
 
 
-def test_line_renderer_defaults_to_world_billboard_mode():
+def test_line_renderer_defaults_to_canonical_world_tube():
     renderer = LineRenderer(points=_line_points())
 
-    assert renderer.render_mode == LineRenderMode.WorldBillboard
-    assert renderer.raw_lines is False
+    assert renderer.tube_sides == 6
     assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
-
-
-def test_line_renderer_world_mesh_fallback_builds_cpu_mesh():
-    renderer = LineRenderer(points=_line_points(), render_mode=LineRenderMode.WorldMesh)
-
-    assert renderer.render_mode == LineRenderMode.WorldMesh
-    assert bool(renderer.get_mesh()) is True
 
 
 def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
@@ -361,12 +352,7 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
     empty_phase_pipeline = RenderPipeline("pipeline-shader-usage-empty-phase-test")
     try:
         entity = scene.create_entity("line")
-        entity.add_component(
-            LineRenderer(
-                points=_line_points(),
-                render_mode=LineRenderMode.WorldTube,
-            )
-        )
+        entity.add_component(LineRenderer(points=_line_points()))
 
         pipeline.add_pass(ColorPass(phase_mark="opaque"))
         shaders = collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline)
@@ -375,8 +361,7 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
         assert "termin-engine-line-default" in shader_uuids
         assert len(shader_uuids) == len(shaders)
         variant_ops = {shader.variant_op for shader in shaders}
-        assert ShaderVariantOp.LINE_TUBE_BODY in variant_ops
-        assert ShaderVariantOp.LINE_TUBE_CAP in variant_ops
+        assert ShaderVariantOp.LINE_TUBE in variant_ops
 
         empty_phase_pipeline.add_pass(ColorPass(phase_mark=""))
         assert len(collect_shader_usages_for_pipeline(scene.scene_handle(), empty_phase_pipeline)) == 0
@@ -386,7 +371,7 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
         scene.destroy()
 
 
-def test_line_renderer_direct_modes_skip_shadow_material_phase():
+def test_line_renderer_skips_shadow_material_phase_by_default():
     material = create_line_test_material()
 
     renderer = LineRenderer(points=_line_points(), material=material)
@@ -400,7 +385,6 @@ def test_line_renderer_includes_builtin_id_phase():
     renderer = LineRenderer(
         points=_line_points(),
         material=material,
-        render_mode=LineRenderMode.WorldTube,
     )
 
     assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
@@ -409,20 +393,12 @@ def test_line_renderer_includes_builtin_id_phase():
 def test_line_renderer_cast_shadow_enables_shadow_material_phase():
     material = create_line_test_material()
 
-    billboard = LineRenderer(
+    renderer = LineRenderer(
         points=_line_points(),
         material=material,
         cast_shadow=True,
     )
     expected = RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID | RENDER_PHASE_SHADOW
-    assert billboard.phase_mask == expected
-
-    renderer = LineRenderer(
-        points=_line_points(),
-        material=material,
-        render_mode=LineRenderMode.WorldMesh,
-        cast_shadow=True,
-    )
     assert renderer.phase_mask == expected
 
 
@@ -570,35 +546,29 @@ def test_mesh_renderer_legacy_single_material_data_clears_material_slots():
     assert renderer.get_material_for_slot(0).uuid == legacy_material.uuid
 
 
-def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
+def test_line_renderer_skips_shadow_when_cast_shadow_is_disabled():
     material = create_line_test_material()
 
     renderer = LineRenderer(
         points=_line_points(),
         material=material,
-        render_mode=LineRenderMode.WorldMesh,
     )
 
     assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
 
 
-def test_line_renderer_world_tube_is_gpu_direct_mode():
+def test_line_renderer_exposes_world_tube_quality():
     renderer = LineRenderer(
         points=_line_points(),
-        render_mode=LineRenderMode.WorldTube,
         tube_sides=6,
     )
 
-    assert renderer.render_mode == LineRenderMode.WorldTube
     assert renderer.tube_sides == 6
-    assert renderer.get_mesh().is_valid is False
 
 
-def test_line_renderer_keeps_legacy_raw_lines_constructor_position():
-    renderer = LineRenderer(_line_points(), 0.25, True)
-
-    assert renderer.raw_lines is True
-    assert bool(renderer.get_mesh()) is True
+def test_line_renderer_rejects_removed_legacy_raw_lines_constructor_position():
+    with pytest.raises(TypeError, match="material"):
+        LineRenderer(_line_points(), 0.25, True)
 
 
 def test_line_renderer_points_are_inspectable():
@@ -614,26 +584,17 @@ def test_line_renderer_points_are_inspectable():
     assert fields["cast_shadow"].kind == "bool"
     assert fields["tube_sides"].label == "Tube Sides"
     assert fields["tube_sides"].kind == "int"
-    assert fields["render_mode"].label == "Render Mode"
-    assert fields["render_mode"].kind == "enum"
-    assert [(choice.value, choice.label) for choice in fields["render_mode"].choices] == [
-        ("0", "World Billboard"),
-        ("1", "Screen Space"),
-        ("2", "World Mesh"),
-        ("3", "Raw Lines"),
-        ("4", "World Tube"),
-    ]
+    assert "render_mode" not in fields
+    assert "raw_lines" not in fields
+    assert "up_hint" not in fields
 
     entity = Entity(name="line")
     component = entity.add_component_by_name("LineRenderer")
     component.set_field("points", [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-    component.set_field("render_mode", "4")
 
     assert component.get_field("points") == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
-    assert component.get_field("render_mode") == 4
     points = component.to_python().points
     assert [(p.x, p.y, p.z) for p in points] == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
-    assert component.to_python().render_mode == LineRenderMode.WorldTube
 
 
 def test_world_text_component_defaults_to_transparent_direct_draw():
