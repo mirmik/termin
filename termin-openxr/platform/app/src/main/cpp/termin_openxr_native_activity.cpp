@@ -30,6 +30,10 @@ namespace {
         std::atomic<bool> focused{false};
         std::atomic<bool> native_running{false};
         std::atomic<uint32_t> start_generation{0};
+        std::thread start_thread;
+        bool remote_profiler_enabled = false;
+        uint16_t remote_profiler_port = 0;
+        std::string remote_profiler_token;
         std::atomic<bool> input_running{false};
         std::atomic<ALooper*> input_looper{nullptr};
         std::thread input_thread;
@@ -48,6 +52,118 @@ namespace {
             return nullptr;
         }
         return env;
+    }
+
+    bool jni_call_succeeded(JNIEnv* env, const char* operation) {
+        if (!env->ExceptionCheck()) {
+            return true;
+        }
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "JNI call failed: %s", operation);
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+        return false;
+    }
+
+    struct RemoteProfilerLaunchConfig {
+        bool enabled = false;
+        uint16_t port = 0;
+        std::string token;
+    };
+
+    RemoteProfilerLaunchConfig read_remote_profiler_launch_config(ANativeActivity* activity, JNIEnv* env) {
+        RemoteProfilerLaunchConfig config;
+        jclass activity_class = env->GetObjectClass(activity->clazz);
+        if (!activity_class || !jni_call_succeeded(env, "GetObjectClass(NativeActivity)")) {
+            return config;
+        }
+
+        const jmethodID get_application_info =
+            env->GetMethodID(activity_class, "getApplicationInfo", "()Landroid/content/pm/ApplicationInfo;");
+        const jmethodID get_intent = env->GetMethodID(activity_class, "getIntent", "()Landroid/content/Intent;");
+        if (!get_application_info || !get_intent || !jni_call_succeeded(env, "resolve Activity methods")) {
+            env->DeleteLocalRef(activity_class);
+            return config;
+        }
+
+        jobject application_info = env->CallObjectMethod(activity->clazz, get_application_info);
+        jobject intent = env->CallObjectMethod(activity->clazz, get_intent);
+        if (!application_info || !intent || !jni_call_succeeded(env, "read Activity state")) {
+            if (application_info) {
+                env->DeleteLocalRef(application_info);
+            }
+            if (intent) {
+                env->DeleteLocalRef(intent);
+            }
+            env->DeleteLocalRef(activity_class);
+            return config;
+        }
+
+        jclass application_info_class = env->GetObjectClass(application_info);
+        const jfieldID flags_field =
+            application_info_class ? env->GetFieldID(application_info_class, "flags", "I") : nullptr;
+        const jint application_flags = flags_field ? env->GetIntField(application_info, flags_field) : 0;
+        constexpr jint application_flag_debuggable = 0x2;
+        const bool debuggable = flags_field && (application_flags & application_flag_debuggable) != 0;
+
+        jclass intent_class = env->GetObjectClass(intent);
+        const jmethodID get_boolean_extra =
+            intent_class ? env->GetMethodID(intent_class, "getBooleanExtra", "(Ljava/lang/String;Z)Z") : nullptr;
+        const jmethodID get_int_extra =
+            intent_class ? env->GetMethodID(intent_class, "getIntExtra", "(Ljava/lang/String;I)I") : nullptr;
+        const jmethodID get_string_extra =
+            intent_class ? env->GetMethodID(intent_class, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;")
+                         : nullptr;
+        if (!flags_field || !intent_class || !get_boolean_extra || !get_int_extra || !get_string_extra ||
+            !jni_call_succeeded(env, "resolve diagnostics Intent methods")) {
+            if (intent_class) {
+                env->DeleteLocalRef(intent_class);
+            }
+            if (application_info_class) {
+                env->DeleteLocalRef(application_info_class);
+            }
+            env->DeleteLocalRef(intent);
+            env->DeleteLocalRef(application_info);
+            env->DeleteLocalRef(activity_class);
+            return config;
+        }
+
+        jstring remote_key = env->NewStringUTF("termin.profiler.remote");
+        jstring port_key = env->NewStringUTF("termin.profiler.port");
+        jstring token_key = env->NewStringUTF("termin.profiler.token");
+        const bool requested = env->CallBooleanMethod(intent, get_boolean_extra, remote_key, JNI_FALSE) == JNI_TRUE;
+        const jint requested_port = env->CallIntMethod(intent, get_int_extra, port_key, 46051);
+        jstring token_value = static_cast<jstring>(env->CallObjectMethod(intent, get_string_extra, token_key));
+        if (jni_call_succeeded(env, "read remote profiler Intent extras") && token_value) {
+            const char* token_chars = env->GetStringUTFChars(token_value, nullptr);
+            if (token_chars) {
+                config.token = token_chars;
+                env->ReleaseStringUTFChars(token_value, token_chars);
+            } else {
+                jni_call_succeeded(env, "copy remote profiler token");
+            }
+        }
+
+        const bool valid_port = requested_port > 0 && requested_port <= 65535;
+        config.enabled = requested && debuggable && valid_port && !config.token.empty();
+        config.port = valid_port ? static_cast<uint16_t>(requested_port) : 0;
+        if (requested && !config.enabled) {
+            __android_log_print(
+                ANDROID_LOG_ERROR, kLogTag, "remote profiler requires a debuggable APK, port 1..65535, and token");
+            config.token.clear();
+        }
+
+        if (token_value) {
+            env->DeleteLocalRef(token_value);
+        }
+        env->DeleteLocalRef(token_key);
+        env->DeleteLocalRef(port_key);
+        env->DeleteLocalRef(remote_key);
+        env->DeleteLocalRef(intent_class);
+        env->DeleteLocalRef(application_info_class);
+        env->DeleteLocalRef(intent);
+        env->DeleteLocalRef(application_info);
+        env->DeleteLocalRef(activity_class);
+        return config;
     }
 
     bool ensure_directory(const std::string& path) {
@@ -240,6 +356,13 @@ namespace {
         termin::openxr::stop_android_color_smoke();
     }
 
+    void cancel_scheduled_start() {
+        ++g_state.start_generation;
+        if (g_state.start_thread.joinable()) {
+            g_state.start_thread.join();
+        }
+    }
+
     void schedule_start_if_ready() {
         if (!g_state.activity || !g_state.activity_ref || g_state.native_running.load()) {
             return;
@@ -249,17 +372,37 @@ namespace {
         }
 
         const uint32_t generation = ++g_state.start_generation;
+        ANativeActivity* activity = g_state.activity;
+        jobject activity_ref = g_state.activity_ref;
+        const std::string asset_root = g_state.asset_root;
+        const bool remote_profiler_enabled = g_state.remote_profiler_enabled;
+        const uint16_t remote_profiler_port = g_state.remote_profiler_port;
+        const std::string remote_profiler_token = g_state.remote_profiler_token;
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "schedule OpenXR smoke start generation=%u", generation);
-        std::thread([generation]() {
+        if (g_state.start_thread.joinable()) {
+            g_state.start_thread.join();
+        }
+        g_state.start_thread = std::thread([generation,
+                                            activity,
+                                            activity_ref,
+                                            asset_root,
+                                            remote_profiler_enabled,
+                                            remote_profiler_port,
+                                            remote_profiler_token]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            if (generation != g_state.start_generation.load() || !g_state.activity || !g_state.activity_ref ||
+            if (generation != g_state.start_generation.load() || !activity || !activity_ref ||
                 !g_state.resumed.load() || !g_state.focused.load() || g_state.native_running.load()) {
                 __android_log_print(ANDROID_LOG_INFO, kLogTag, "skip OpenXR smoke start generation=%u", generation);
                 return;
             }
 
-            termin::openxr::OpenXRAndroidStartResult result = termin::openxr::start_android_scene_smoke(
-                g_state.activity->vm, g_state.activity_ref, g_state.asset_root.c_str());
+            termin::openxr::OpenXRAndroidStartConfig start_config;
+            start_config.asset_root = asset_root.c_str();
+            start_config.remote_profiler.enabled = remote_profiler_enabled;
+            start_config.remote_profiler.port = remote_profiler_port;
+            start_config.remote_profiler.authentication_token = remote_profiler_token.c_str();
+            termin::openxr::OpenXRAndroidStartResult result =
+                termin::openxr::start_android_scene_smoke(activity->vm, activity_ref, start_config);
             g_state.native_running.store(result.started);
             __android_log_print(result.started ? ANDROID_LOG_INFO : ANDROID_LOG_ERROR,
                                 kLogTag,
@@ -267,7 +410,7 @@ namespace {
                                 result.started ? 1 : 0,
                                 result.stage ? result.stage : "",
                                 result.detail ? result.detail : "");
-        }).detach();
+        });
     }
 
     void on_start(ANativeActivity*) {
@@ -283,7 +426,7 @@ namespace {
     void on_pause(ANativeActivity*) {
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "onPause");
         g_state.resumed.store(false);
-        ++g_state.start_generation;
+        cancel_scheduled_start();
         stop_native();
     }
 
@@ -293,7 +436,7 @@ namespace {
 
     void on_destroy(ANativeActivity* activity) {
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "onDestroy");
-        ++g_state.start_generation;
+        cancel_scheduled_start();
         stop_native();
         stop_input();
 
@@ -312,6 +455,9 @@ namespace {
         g_state.input_running.store(false);
         g_state.input_looper.store(nullptr);
         g_state.start_generation.store(0);
+        g_state.remote_profiler_enabled = false;
+        g_state.remote_profiler_port = 0;
+        g_state.remote_profiler_token.clear();
     }
 
     void on_window_focus_changed(ANativeActivity*, int has_focus) {
@@ -369,6 +515,15 @@ extern "C" void ANativeActivity_onCreate(ANativeActivity* activity, void*, size_
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "NewGlobalRef(activity) failed");
         return;
     }
+    const RemoteProfilerLaunchConfig profiler_config = read_remote_profiler_launch_config(activity, env);
+    g_state.remote_profiler_enabled = profiler_config.enabled;
+    g_state.remote_profiler_port = profiler_config.port;
+    g_state.remote_profiler_token = profiler_config.token;
+    __android_log_print(ANDROID_LOG_INFO,
+                        kLogTag,
+                        "remote profiler enabled=%d port=%u",
+                        g_state.remote_profiler_enabled ? 1 : 0,
+                        static_cast<unsigned>(g_state.remote_profiler_port));
     g_state.asset_root = activity->internalDataPath ? std::string(activity->internalDataPath) + "/assets" : "";
     if (g_state.asset_root.empty()) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "internalDataPath is empty");

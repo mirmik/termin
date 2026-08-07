@@ -65,6 +65,29 @@ TEST_CASE("Host frame scope completes external cadence and section data") {
     CHECK_EQ(std::string(completed->sections[0].name), std::string("Android Host"));
 }
 
+TEST_CASE("Host cadence tracker resets lifecycle gaps and follows target changes") {
+    termin::EngineHostFrameCadenceTracker tracker;
+
+    const auto first = tracker.observe(100.0, 1000.0 / 72.0);
+    CHECK_EQ(first.interval_ms, 0.0);
+    CHECK_EQ(first.deadline_lateness_ms, 0.0);
+
+    const auto next = tracker.observe(100.0 + 1000.0 / 72.0, 1000.0 / 72.0);
+    CHECK(next.interval_ms > 13.8);
+    CHECK(next.interval_ms < 13.9);
+    CHECK_EQ(next.missed_intervals, 0);
+
+    const auto slower_refresh = tracker.observe(100.0 + 1000.0 / 72.0 + 1000.0 / 60.0, 1000.0 / 60.0);
+    CHECK(slower_refresh.deadline_lateness_ms < 1e-9);
+    CHECK_EQ(slower_refresh.missed_intervals, 0);
+
+    tracker.reset();
+    const auto resumed = tracker.observe(5'000.0, 1000.0 / 72.0);
+    CHECK_EQ(resumed.interval_ms, 0.0);
+    CHECK_EQ(resumed.deadline_lateness_ms, 0.0);
+    CHECK_EQ(resumed.missed_intervals, 0);
+}
+
 TEST_CASE("Host frame scope transfers ownership when moved") {
     CaptureFixture fixture(false);
 

@@ -1,8 +1,8 @@
 #include "guard_main.h"
 
-#include "termin/editor/frame_profiler_controller.hpp"
-#include "termin/editor/frame_profiler_source.hpp"
-#include "termin/editor/remote_frame_profiler_source.hpp"
+#include <termin/frame_profiler/frame_profiler_controller.hpp>
+#include <termin/frame_profiler/frame_profiler_source.hpp>
+#include <termin/frame_profiler/remote_frame_profiler_source.hpp>
 
 #include <memory>
 #include <tc_profiler.h>
@@ -115,7 +115,7 @@ namespace {
 
 TEST_CASE("Frame profiler controller keeps capture data and projections native") {
     termin::EngineCore engine;
-    termin::FrameProfilerController controller(engine, 3, 1.25);
+    termin::FrameProfilerController controller(termin::make_local_frame_profiler_source(engine, 3), 1.25);
     controller.start_capture();
     CHECK(controller.capturing());
     CHECK(tc_profiler_frame_capture_enabled());
@@ -346,7 +346,7 @@ TEST_CASE("Live remote source controls target and inspects an exact frame") {
 
 TEST_CASE("Native capture and legacy profiler enable requests compose") {
     termin::EngineCore engine;
-    termin::FrameProfilerController controller(engine, 4, 1.25);
+    termin::FrameProfilerController controller(termin::make_local_frame_profiler_source(engine, 4), 1.25);
     tc_profiler_set_enabled(true);
     controller.start_capture();
     CHECK(controller.summary_model()->text().find("profiling external") != std::string::npos);

@@ -6,6 +6,22 @@
 #include <string>
 #include <vector>
 
+#if defined(_WIN32) && defined(TERMIN_FRAME_PROFILER_EXPORTS)
+#define TERMIN_FRAME_PROFILER_API __declspec(dllexport)
+#elif defined(_WIN32)
+#define TERMIN_FRAME_PROFILER_API __declspec(dllimport)
+#else
+#define TERMIN_FRAME_PROFILER_API
+#endif
+
+#if defined(_WIN32) && defined(TERMIN_FRAME_PROFILER_LOCAL_EXPORTS)
+#define TERMIN_FRAME_PROFILER_LOCAL_API __declspec(dllexport)
+#elif defined(_WIN32)
+#define TERMIN_FRAME_PROFILER_LOCAL_API __declspec(dllimport)
+#else
+#define TERMIN_FRAME_PROFILER_LOCAL_API
+#endif
+
 namespace termin {
 
     class EngineCore;
@@ -38,13 +54,13 @@ namespace termin {
         Disconnect,
     };
 
-    struct FrameProfilerSourceIdentity {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerSourceIdentity {
         std::string source_id;
         std::string session_id;
         std::string display_name;
     };
 
-    struct FrameProfilerSourceStatus {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerSourceStatus {
         bool connected = true;
         bool capturing = false;
         bool profiling_sections = false;
@@ -55,7 +71,7 @@ namespace termin {
         std::string detail;
     };
 
-    struct FrameProfilerSection {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerSection {
         std::string name;
         double cpu_ms = 0.0;
         double children_ms = 0.0;
@@ -65,7 +81,7 @@ namespace termin {
         std::int32_t next_sibling = -1;
     };
 
-    struct FrameProfilerFrame {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerFrame {
         std::int64_t frame_number = 0;
         double start_time_ms = 0.0;
         double interval_ms = 0.0;
@@ -78,7 +94,7 @@ namespace termin {
         std::vector<FrameProfilerSection> sections;
     };
 
-    struct FrameProfilerGap {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerGap {
         FrameProfilerGapKind kind = FrameProfilerGapKind::Source;
         std::int64_t first_missing_frame = 0;
         std::int64_t last_missing_frame = 0;
@@ -88,7 +104,7 @@ namespace termin {
 
     // One immutable, self-contained source state. A disconnected remote source can
     // publish a new status/gap while retaining the last bounded frame vector.
-    struct FrameProfilerSnapshot {
+    struct TERMIN_FRAME_PROFILER_API FrameProfilerSnapshot {
         std::uint64_t revision = 0;
         std::size_t capacity = 0;
         FrameProfilerSourceIdentity identity;
@@ -100,7 +116,7 @@ namespace termin {
         const FrameProfilerFrame* find(std::int64_t frame_number) const;
     };
 
-    class IFrameProfilerSource {
+    class TERMIN_FRAME_PROFILER_API IFrameProfilerSource {
     public:
         virtual ~IFrameProfilerSource() = default;
 
@@ -114,6 +130,7 @@ namespace termin {
         virtual void close() = 0;
     };
 
-    std::unique_ptr<IFrameProfilerSource> make_local_frame_profiler_source(EngineCore& engine, int capacity);
+    TERMIN_FRAME_PROFILER_LOCAL_API std::unique_ptr<IFrameProfilerSource>
+    make_local_frame_profiler_source(EngineCore& engine, int capacity);
 
 } // namespace termin

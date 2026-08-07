@@ -1,5 +1,5 @@
-#include "termin/editor/frame_profiler_controller.hpp"
-#include "termin/editor/remote_frame_profiler_source.hpp"
+#include "termin/frame_profiler/frame_profiler_controller.hpp"
+#include "termin/frame_profiler/remote_frame_profiler_source.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -7,8 +7,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#include <termin/engine/engine_core.hpp>
 
 namespace termin {
 
@@ -92,9 +90,6 @@ namespace termin {
         }
 
     } // namespace
-
-    FrameProfilerController::FrameProfilerController(EngineCore& engine, int capacity, double hitch_ratio)
-        : FrameProfilerController(make_local_frame_profiler_source(engine, capacity), hitch_ratio) {}
 
     FrameProfilerController::FrameProfilerController(std::unique_ptr<IFrameProfilerSource> source, double hitch_ratio)
         : source_(std::move(source)),

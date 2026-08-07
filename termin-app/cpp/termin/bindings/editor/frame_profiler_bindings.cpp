@@ -2,8 +2,10 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 
-#include "termin/editor/frame_profiler_controller.hpp"
+#include <new>
+
 #include <termin/engine/engine_core.hpp>
+#include <termin/frame_profiler/frame_profiler_controller.hpp>
 
 namespace nb = nanobind;
 
@@ -15,11 +17,15 @@ namespace termin {
         // no Python dependency.
         nb::module_::import_("termin.gui_native");
         nb::class_<FrameProfilerController>(m, "FrameProfilerController")
-            .def(nb::init<EngineCore&, int, double>(),
-                 nb::arg("engine"),
-                 nb::arg("capacity") = 3600,
-                 nb::arg("hitch_ratio") = 1.25,
-                 nb::keep_alive<1, 2>())
+            .def(
+                "__init__",
+                [](FrameProfilerController* self, EngineCore& engine, int capacity, double hitch_ratio) {
+                    new (self) FrameProfilerController(make_local_frame_profiler_source(engine, capacity), hitch_ratio);
+                },
+                nb::arg("engine"),
+                nb::arg("capacity") = 3600,
+                nb::arg("hitch_ratio") = 1.25,
+                nb::keep_alive<1, 2>())
             .def_prop_ro("command_model", &FrameProfilerController::command_model)
             .def_prop_ro("timeline_model", &FrameProfilerController::timeline_model)
             .def_prop_ro("section_model", &FrameProfilerController::section_model)

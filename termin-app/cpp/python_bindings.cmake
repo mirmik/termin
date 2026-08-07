@@ -22,9 +22,6 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/frame_graph_debugger_view.cpp
     termin/editor/frame_graph_debugger_source.cpp
     termin/editor/remote_frame_graph_debugger_source.cpp
-    termin/editor/frame_profiler_controller.cpp
-    termin/editor/frame_profiler_source.cpp
-    termin/editor/remote_frame_profiler_source.cpp
     termin/editor/selection_manager.cpp
     termin/render/solid_primitive_renderer.cpp
 )
@@ -49,6 +46,8 @@ target_link_libraries(_editor_native PRIVATE
     termin_render::termin_render
     termin_display::termin_display
     termin_engine::termin_engine
+    termin_frame_profiler::termin_frame_profiler
+    termin_frame_profiler::local
     termin_profiler_remote::termin_profiler_remote
     termin_framegraph_remote_client::termin_framegraph_remote_client
     termin_gui_native::termin_gui_native

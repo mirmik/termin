@@ -17,6 +17,37 @@ extern "C" {
 
 namespace termin {
 
+    EngineHostFrameCadence EngineHostFrameCadenceTracker::observe(double start_time_ms,
+                                                                  double target_interval_ms) noexcept {
+        if (_has_previous && std::abs(target_interval_ms - _target_interval_ms) > 1e-9) {
+            _scheduled_start_time_ms = _previous_start_time_ms + target_interval_ms;
+        }
+        const engine_detail::FrameCadenceObservation observation =
+            engine_detail::observe_frame_start(start_time_ms,
+                                               _previous_start_time_ms,
+                                               _has_previous ? _scheduled_start_time_ms : start_time_ms,
+                                               target_interval_ms,
+                                               _has_previous);
+        _previous_start_time_ms = start_time_ms;
+        _scheduled_start_time_ms = observation.next_scheduled_start_ms;
+        _target_interval_ms = target_interval_ms;
+        _has_previous = true;
+        return EngineHostFrameCadence{
+            observation.start_time_ms,
+            observation.interval_ms,
+            observation.target_interval_ms,
+            observation.deadline_lateness_ms,
+            observation.missed_intervals,
+        };
+    }
+
+    void EngineHostFrameCadenceTracker::reset() noexcept {
+        _previous_start_time_ms = 0.0;
+        _scheduled_start_time_ms = 0.0;
+        _target_interval_ms = 0.0;
+        _has_previous = false;
+    }
+
     EngineHostFrameScope::EngineHostFrameScope(const EngineHostFrameCadence& cadence) noexcept {
         if (!tc_profiler_frame_capture_enabled()) {
             return;

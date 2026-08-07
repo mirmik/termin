@@ -32,6 +32,34 @@ Install and launch on a connected headset:
 Quest proximity sensor still has to keep the headset active; otherwise Android
 will pause/stop the activity immediately after launch.
 
+The APK entry point is Android's `android.app.NativeActivity`, not the editor's
+`org.termin.android.TerminActivity`. When starting it directly with ADB, use the
+fully-qualified NativeActivity component:
+
+```bash
+adb shell am force-stop org.example.openxr
+adb shell am start -n org.example.openxr/android.app.NativeActivity
+```
+
+The shared Android diagnostics helpers default to `TerminActivity` for the editor
+APK. To route a profiler connection to this NativeActivity, pass the Quest package
+and activity explicitly:
+
+```bash
+scripts/android-profiler-forward --serial QUEST_SERIAL \
+  --package org.example.openxr --activity android.app.NativeActivity
+```
+
+The profiler helper prints the host port and generated token. Enter both in the
+editor Frame Profiler and connect; Start/Pause and section capture then control
+the complete OpenXR host frames. Pausing the NativeActivity stops its OpenXR
+frame thread and listener. Resuming starts a new target session on the same
+forwarded port, so the editor may reconnect without recreating the ADB forward.
+
+The OpenXR manifest requests `android.permission.INTERNET` because the native
+runtime may use the loopback ADB-forwarded diagnostics endpoint. The endpoint is
+still loopback-only and must be enabled with the appropriate diagnostics intent.
+
 The smoke app is an Android `NativeActivity` that starts an OpenXR session with Vulkan
 (`XR_KHR_vulkan_enable`), lets tgfx2 create the runtime-compatible Vulkan device,
 wraps OpenXR swapchain `VkImage`s as non-owning tgfx2 textures, creates a

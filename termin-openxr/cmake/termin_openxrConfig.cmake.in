@@ -13,6 +13,7 @@ find_dependency(termin_render CONFIG REQUIRED)
 find_dependency(termin_render_passes CONFIG REQUIRED)
 find_dependency(termin_engine CONFIG REQUIRED)
 find_dependency(termin_runtime CONFIG REQUIRED)
+find_dependency(termin_profiler_remote CONFIG REQUIRED)
 find_dependency(termin_collision CONFIG REQUIRED)
 find_dependency(termin_input CONFIG REQUIRED)
 

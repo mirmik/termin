@@ -1,6 +1,6 @@
 #pragma once
 
-#include "termin/editor/frame_profiler_source.hpp"
+#include "termin/frame_profiler/frame_profiler_source.hpp"
 
 #include <functional>
 #include <memory>
@@ -13,7 +13,7 @@ namespace termin {
     // Editor-thread adapter shared by recorded replay and the live TCP receiver.
     // ingest() commits a complete new immutable snapshot or leaves the prior state
     // untouched on error. A live receiver supplies a bounded command sender.
-    class RemoteFrameProfilerSource final : public IFrameProfilerSource {
+    class TERMIN_FRAME_PROFILER_API RemoteFrameProfilerSource final : public IFrameProfilerSource {
     public:
         using CommandSender = std::function<bool(const profiler_remote::Control& control)>;
 
