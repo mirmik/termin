@@ -273,10 +273,8 @@ int run_smoke(const char* argv0)
     termin::IdPass pass("empty", "id", "IdPassLinePixelSmoke");
 
     termin::RenderItemSnapshot render_item_snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(
-            render_item_snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(render_item_snapshot, {})) {
         return false;
     }
     termin::ExecuteContext exec_ctx;
@@ -391,10 +389,8 @@ int run_world_text_smoke(const char* argv0)
     tgfx::RenderContext2 render_ctx(*device, cache);
     termin::IdPass pass("empty", "id", "IdPassWorldTextPixelSmoke");
     termin::RenderItemSnapshot render_item_snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(
-            render_item_snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(render_item_snapshot, {})) {
         return false;
     }
     termin::ExecuteContext exec_ctx;

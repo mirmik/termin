@@ -227,9 +227,8 @@ bool run_id_pass(
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
     termin::RenderItemSnapshot snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
         return false;
     }
     const termin::SceneRenderServices scene_services(scene);
@@ -278,9 +277,8 @@ bool run_depth_pass(
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
     termin::RenderItemSnapshot snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
         return false;
     }
     const termin::SceneRenderServices scene_services(scene);
@@ -327,9 +325,8 @@ bool run_depth_only_pass(
     const tgfx::TextureHandle depth = create_depth(device);
     if (!depth) return false;
     termin::RenderItemSnapshot snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
         return false;
     }
     const termin::SceneRenderServices scene_services(scene);
@@ -369,9 +366,8 @@ bool run_normal_pass(
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
     termin::RenderItemSnapshot snapshot;
-    termin::RenderSceneItemCollectRequest collect_request{};
-    collect_request.scene = scene.handle();
-    if (!termin::collect_scene_render_item_snapshot(snapshot, collect_request)) {
+    termin::TcSceneRenderItemSource item_source(scene.handle());
+    if (!item_source.publish(snapshot, {})) {
         return false;
     }
     const termin::SceneRenderServices scene_services(scene);
