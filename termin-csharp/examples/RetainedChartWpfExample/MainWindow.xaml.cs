@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly Chart2D _chart;
     private readonly RectItemRef2D _buttonAnchor;
     private readonly Button _themeButton;
+    private Chart2DWpfInteraction? _interaction;
     private bool _alternateTheme;
     private bool _closed;
 
@@ -62,10 +63,14 @@ public partial class MainWindow : Window
             SceneHost.FramebufferChanged += OnFramebufferChanged;
             SceneHost.RenderFailed += OnRenderFailed;
             SceneHost.Attach(_gpuHost, _chart.Scene);
+            _interaction = new Chart2DWpfInteraction(SceneHost, _chart);
+            _interaction.Navigated += OnChartNavigated;
             SceneHost.AddPortal(_buttonAnchor, _themeButton);
         }
         catch
         {
+            _interaction?.Dispose();
+            _interaction = null;
             SceneHost.Dispose();
             chart?.Dispose();
             Tgfx2Host.Release();
@@ -137,6 +142,15 @@ public partial class MainWindow : Window
             $"scene {_chart.Scene.Id} has {_chart.Scene.Count} native items.";
     }
 
+    private void OnChartNavigated(
+        object? sender,
+        ChartNavigatedEventArgs2D e)
+    {
+        StatusText.Text =
+            $"{e.Kind}: middle-drag pans, wheel zooms, " +
+            $"Ctrl+wheel zooms X only.";
+    }
+
     private void OnRenderFailed(
         object? sender,
         RetainedSceneRenderFailedEventArgs e)
@@ -151,6 +165,12 @@ public partial class MainWindow : Window
             return;
         _closed = true;
         _themeButton.Click -= OnThemeButtonClick;
+        if (_interaction is not null)
+        {
+            _interaction.Navigated -= OnChartNavigated;
+            _interaction.Dispose();
+            _interaction = null;
+        }
         SceneHost.FramebufferChanged -= OnFramebufferChanged;
         SceneHost.RenderFailed -= OnRenderFailed;
         try

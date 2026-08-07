@@ -1,5 +1,11 @@
 # C# Retained Chart Composition
 
+> Superseded on 2026-08-06 by
+> [Open retained chart composer](../plans/2026-08-06-open-retained-chart-composer-plan.md).
+> This document records the retained-primitives vertical slice. The standard
+> single/multi-panel composer and layout now belong to native `tcplot`; C# is a
+> thin projection over the same public `TcVisualScene2D` parts.
+
 ## Status
 
 Intent accepted. The projection contract, retained native grid and
