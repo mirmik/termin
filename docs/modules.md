@@ -69,6 +69,16 @@ Snapshot/Live Preview/Burst, hard limits и chunked capture blobs. Codec не
 зависит от editor, Python, sockets, RenderingManager или graphics backend;
 target/client services подключаются отдельными слоями.
 
+### termin-framegraph-remote-target
+
+Source of truth: [remote Framegraph target service](../termin-framegraph-remote-target/docs/index.md)
+
+Опциональный native target-side слой над `termin-framegraph-remote` и
+`termin-engine`. Сетевой поток владеет loopback TCP transport и handshake, а
+render-thread pump — единственный код сервиса, который обращается к
+`FrameGraphDebugger`. Между ними находятся bounded очереди команд и immutable
+topology/status сообщений.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)
