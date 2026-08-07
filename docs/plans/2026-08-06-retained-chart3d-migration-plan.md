@@ -104,11 +104,10 @@ Consumers must not receive raw native pointers or index-based identities.
   wireframe/shading/reset-camera portal buttons with C# callbacks.
 
 Первый slice первоначально использовал отдельный `PlotEngine3D` как временный
-renderer-side body каждого retained item. Surface и scatter bodies уже
-удалены: immutable payload кэширует общий item-local CPU draw stream по
-revisions, а RenderItem encoders загружают его через transient vertex ring.
-Grid пока сохраняет временный body до следующего encoder slice; public handles
-и C# API при этом не меняются.
+renderer-side body каждого retained item. Surface, scatter и grid bodies уже
+удалены: immutable payload кэширует CPU draw stream по revisions, а RenderItem
+encoders загружают его через transient vertex ring. Grid labels отделены в
+chart-owned chrome renderer; public handles и C# API при этом не изменились.
 
 ### Интеграция с scene-neutral render core
 
@@ -130,8 +129,10 @@ Grid пока сохраняет временный body до следующег
 - [x] Scatter planner/encoder сохраняет legacy three-axis cross semantics,
   планируется тем же retained task loop и больше не использует per-item
   `PlotEngine3D` body.
-- [ ] Добавить grid encoder и framegraph output поверх этих kinds, после чего
-  удалить последний временный per-item `PlotEngine3D` body.
+- [x] Grid planner/encoder строит bounds-aware line stream; tick/axis labels
+  использует отдельный chart-owned chrome renderer, последний per-item
+  `PlotEngine3D` body удалён.
+- [ ] Добавить chart framegraph output поверх этих kinds.
 
 ### Hardening первого slice
 
