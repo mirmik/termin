@@ -66,9 +66,12 @@ readback, then hands an immutable CPU blob to the network thread for chunking
 and transmission; graphics handles never cross that boundary. The remote
 source assembles chunks in order under a memory budget and publishes a shared
 immutable CPU capture. Incomplete, duplicate or out-of-order transfers are
-rejected visibly rather than exposed as partial images. Uploading that CPU
-capture into the debugger window's local graphics domain is a separate
-frontend step.
+rejected visibly rather than exposed as partial images. The source lazily
+uploads completed bytes into the debugger window's own graphics domain and
+uses the existing `FrameGraphPresenter`, so Canvas fit/zoom, channel selection,
+HDR highlighting and depth inspection follow the local path. Selection starts
+one exact request, Pause cancels pending work, and disconnect/source switch
+release both the CPU blob and source-owned local texture deterministically.
 
 ## Capture lifecycle
 
