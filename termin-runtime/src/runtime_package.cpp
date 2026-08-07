@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <any>
 #include <array>
 #include <sstream>
@@ -46,6 +45,7 @@ extern "C" {
 namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive {
+    std::shared_ptr<RuntimePackageReader> reader;
     std::vector<TcShader> shaders;
     std::vector<TcShaderProgram> shader_programs;
     std::vector<TcTexture> textures;
@@ -65,37 +65,18 @@ struct RuntimePackageResourceKeepalive {
 
 namespace {
 
-std::string read_text_file(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        throw std::runtime_error("failed to open file: " + path.string());
-    }
-    std::ostringstream out;
-    out << in.rdbuf();
-    if (!in.good() && !in.eof()) {
-        throw std::runtime_error("failed to read file: " + path.string());
-    }
-    return out.str();
+std::string read_text_file(
+    const RuntimePackageReader& reader,
+    const std::string& path) {
+    const RuntimePackageBytes bytes = reader.read(path);
+    return std::string(
+        reinterpret_cast<const char*>(bytes.data), bytes.size);
 }
 
-std::vector<std::uint8_t> read_binary_file(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if (!in) {
-        throw std::runtime_error("failed to open file: " + path.string());
-    }
-    const std::streampos end = in.tellg();
-    if (end < 0) {
-        throw std::runtime_error("failed to determine file size: " + path.string());
-    }
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(end));
-    in.seekg(0, std::ios::beg);
-    if (!bytes.empty()) {
-        in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    }
-    if (!in) {
-        throw std::runtime_error("failed to read file: " + path.string());
-    }
-    return bytes;
+RuntimePackageBytes read_binary_file(
+    const RuntimePackageReader& reader,
+    const std::string& path) {
+    return reader.read(path);
 }
 
 const nos::trent* dict_get(const nos::trent& t, const char* key) {
@@ -167,60 +148,6 @@ bool shader_language_from_spec(
     }
     error = "shader resource has unsupported language '" + language + "'";
     return false;
-}
-
-bool is_contained_path(
-    const std::filesystem::path& root,
-    const std::filesystem::path& candidate
-) {
-    auto root_it = root.begin();
-    auto candidate_it = candidate.begin();
-    for (; root_it != root.end(); ++root_it, ++candidate_it) {
-        if (candidate_it == candidate.end() || *root_it != *candidate_it) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::filesystem::path package_path(const std::filesystem::path& root, const std::string& rel) {
-    if (rel.empty()) {
-        throw std::runtime_error("runtime package path must not be empty");
-    }
-    // A package manifest uses portable '/' separators. Reject '\\' even on POSIX,
-    // where it would otherwise be treated as part of a filename and make a package
-    // behave differently after being moved to Windows.
-    if (rel.find('\\') != std::string::npos) {
-        throw std::runtime_error("runtime package path must not contain backslashes: " + rel);
-    }
-
-    const std::filesystem::path relative_path(rel);
-    if (relative_path.is_absolute() || relative_path.has_root_name() || relative_path.has_root_directory()) {
-        throw std::runtime_error("runtime package path must be relative: " + rel);
-    }
-    if (rel == "." || rel == "..") {
-        throw std::runtime_error("runtime package path must not contain dot segments: " + rel);
-    }
-    for (const std::filesystem::path& component : relative_path) {
-        if (component == "." || component == "..") {
-            throw std::runtime_error("runtime package path must not contain dot segments: " + rel);
-        }
-    }
-
-    std::error_code error;
-    const std::filesystem::path candidate = std::filesystem::weakly_canonical(
-        root / relative_path,
-        error
-    );
-    if (error) {
-        throw std::runtime_error(
-            "failed to canonicalize runtime package path '" + rel + "': " + error.message()
-        );
-    }
-    if (!is_contained_path(root, candidate)) {
-        throw std::runtime_error("runtime package path escapes bundle root: " + rel);
-    }
-    return candidate;
 }
 
 void validate_scene_identity(const std::string& identity) {
@@ -819,8 +746,8 @@ bool restore_shader_surface_producer(
 }
 
 bool load_shader_resource(
-    const std::filesystem::path& root,
-    const std::filesystem::path& spec_path,
+    const RuntimePackageReader& reader,
+    const std::string& spec_path,
     const nos::trent& spec,
     RuntimePackageResourceKeepalive& keepalive,
     std::string& error
@@ -849,12 +776,12 @@ bool load_shader_resource(
 
     const std::string vertex_source = vertex_rel.empty()
         ? std::string()
-        : read_text_file(package_path(root, vertex_rel));
-    const std::string fragment_source = read_text_file(package_path(root, fragment_rel));
+        : read_text_file(reader, vertex_rel);
+    const std::string fragment_source = read_text_file(reader, fragment_rel);
     const std::string geometry_rel = string_field(spec, "geometry_source_path");
     const std::string geometry_source = geometry_rel.empty()
         ? std::string()
-        : read_text_file(package_path(root, geometry_rel));
+        : read_text_file(reader, geometry_rel);
 
     TcShader shader = TcShader::get_or_create(uuid);
     if (!shader.is_valid()) {
@@ -864,7 +791,7 @@ bool load_shader_resource(
     }
 
     const std::string name = string_field(spec, "name", uuid);
-    const std::string source_path = spec_path.string();
+    const std::string source_path = reader.describe(spec_path);
     const std::string vertex_entry = string_field(spec, "vertex_entry");
     const std::string fragment_entry = string_field(spec, "fragment_entry");
     const std::string geometry_entry = string_field(spec, "geometry_entry");
@@ -1247,9 +1174,9 @@ bool required_string_field(
 }
 
 bool load_texture_resource(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const nos::trent& entry,
-    const std::filesystem::path& spec_path,
+    const std::string& spec_path,
     const nos::trent& spec,
     RuntimePackageResourceKeepalive& keepalive,
     std::string& error
@@ -1306,14 +1233,15 @@ bool load_texture_resource(
     }
 
     try {
-        const std::filesystem::path source_path = package_path(root, source_rel_path);
-        if (!std::filesystem::is_regular_file(source_path)) {
-            error = "texture '" + uuid + "' source file not found: " + source_path.string();
+        if (!reader.contains(source_rel_path)) {
+            error = "texture '" + uuid + "' source file not found: " +
+                reader.describe(source_rel_path);
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
-        const std::vector<std::uint8_t> encoded = read_binary_file(source_path);
-        const image::DecodedImage decoded = image::decode_rgba8(encoded, source_path.string());
+        const RuntimePackageBytes encoded = read_binary_file(reader, source_rel_path);
+        const std::string source_path = reader.describe(source_rel_path);
+        const image::DecodedImage decoded = image::decode_rgba8(encoded.view(), source_path);
         if (decoded.width <= 0 || decoded.height <= 0 || decoded.channels != 4) {
             error = "texture '" + uuid + "' decoder returned an invalid RGBA8 image";
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -1329,12 +1257,13 @@ bool load_texture_resource(
             },
             transform,
             name,
-            source_path.string(),
+            source_path,
             uuid,
             encoding,
         });
         if (!texture.is_valid()) {
-            error = "failed to create texture '" + uuid + "' from " + spec_path.string();
+            error = "failed to create texture '" + uuid + "' from " +
+                reader.describe(spec_path);
             tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
@@ -1511,7 +1440,7 @@ bool load_mesh_resource(
 
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
 bool load_foliage_data_resource(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const nos::trent& entry,
     RuntimePackageResourceKeepalive& keepalive,
     std::string& error
@@ -1525,8 +1454,13 @@ bool load_foliage_data_resource(
         return false;
     }
 
-    const std::filesystem::path asset_path = package_path(root, rel_path);
-    TcFoliageData foliage = TcFoliageData::declare(uuid, name, asset_path.string());
+    const std::string asset_path = reader.materialized_path(rel_path);
+    if (asset_path.empty()) {
+        error = "foliage_data resource requires a materialized package provider";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    TcFoliageData foliage = TcFoliageData::declare(uuid, name, asset_path);
     if (!foliage.is_valid()) {
         error = "failed to declare foliage asset '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -1629,7 +1563,7 @@ bool load_sprite_asset_resource(
 #endif
 
 bool load_pipeline_resource(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const nos::trent& entry,
     RuntimePackageResourceKeepalive& keepalive,
     std::string& error
@@ -1642,14 +1576,14 @@ bool load_pipeline_resource(
         return false;
     }
 
-    const std::vector<std::uint8_t> payload = read_binary_file(package_path(root, rel_path));
-    if (payload.empty()) {
+    const RuntimePackageBytes payload = read_binary_file(reader, rel_path);
+    if (payload.size == 0) {
         error = "pipeline template descriptor is empty for '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
     const tc_pipeline_template_handle handle = tc_pipeline_template_deserialize(
-        uuid.c_str(), payload.data(), payload.size());
+        uuid.c_str(), payload.data, payload.size);
     if (tc_pipeline_template_handle_is_invalid(handle)) {
         error = "failed to deserialize pipeline template '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -1679,7 +1613,7 @@ bool load_pipeline_resource(
 }
 
 bool load_resource(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const nos::trent& entry,
     RuntimePackageResourceKeepalive& keepalive,
     std::string& error
@@ -1693,7 +1627,7 @@ bool load_resource(
     }
 
     if (type == "pipeline") {
-        return load_pipeline_resource(root, entry, keepalive, error);
+        return load_pipeline_resource(reader, entry, keepalive, error);
     }
     if (type == "foliage_data") {
 #ifdef TERMIN_RUNTIME_RENDER_ONLY
@@ -1701,15 +1635,15 @@ bool load_resource(
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
 #else
-        return load_foliage_data_resource(root, entry, keepalive, error);
+        return load_foliage_data_resource(reader, entry, keepalive, error);
 #endif
     }
 
-    const std::filesystem::path spec_path = package_path(root, rel_path);
-    const std::string spec_text = read_text_file(spec_path);
+    const std::string spec_path = rel_path;
+    const std::string spec_text = read_text_file(reader, spec_path);
     const nos::trent spec = nos::json::parse(spec_text);
     if (type == "shader") {
-        return load_shader_resource(root, spec_path, spec, keepalive, error);
+        return load_shader_resource(reader, spec_path, spec, keepalive, error);
     }
     if (type == "shader_program") {
         return load_shader_program_resource(entry, spec, keepalive, error);
@@ -1718,7 +1652,7 @@ bool load_resource(
         return load_material_resource(spec, keepalive, error);
     }
     if (type == "texture") {
-        return load_texture_resource(root, entry, spec_path, spec, keepalive, error);
+        return load_texture_resource(reader, entry, spec_path, spec, keepalive, error);
     }
     if (type == "mesh") {
         return load_mesh_resource(spec, keepalive, error);
@@ -1811,12 +1745,11 @@ void validate_minimal_scene(const nos::trent& scene, const std::string& scene_pa
 }
 
 TcSceneRef load_runtime_scene(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const std::string& rel_path,
     const RuntimePackageLoadOptions& options
 ) {
-    const std::filesystem::path scene_path = package_path(root, rel_path);
-    const std::string scene_json = read_text_file(scene_path);
+    const std::string scene_json = read_text_file(reader, rel_path);
     nos::trent scene_data;
     try {
         scene_data = nos::json::parse(scene_json);
@@ -1847,7 +1780,7 @@ TcSceneRef load_runtime_scene(
                 );
             }
         }
-        scene.set_source_path(scene_path.string());
+        scene.set_source_path(reader.describe(rel_path));
         scene.load_from_data(scene_data);
     } catch (...) {
         scene.destroy();
@@ -1880,43 +1813,49 @@ void RuntimePackageLoadResult::destroy() {
 }
 
 RuntimePackageLoadResult RuntimePackageLoader::load(
-    const std::string& root_path,
+    std::shared_ptr<RuntimePackageReader> reader,
     const RuntimePackageLoadOptions& options
 ) {
     RuntimePackageLoadResult result;
     try {
-        std::error_code root_error;
-        const std::filesystem::path root = std::filesystem::canonical(root_path, root_error);
-        if (root_error || !std::filesystem::is_directory(root)) {
-            result.message = "runtime package root is not a directory: " + root_path;
-            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
-            return result;
-        }
+        if (!reader) throw std::runtime_error("runtime package reader is null");
         termin::bootstrap::bootstrap_runtime(options.bootstrap_profile);
-        const std::filesystem::path manifest_path = package_path(root, "manifest.json");
-        if (!std::filesystem::is_regular_file(manifest_path)) {
-            result.message = "manifest.json not found in " + root.string();
+        if (!reader->contains("manifest.json")) {
+            result.message = "manifest.json not found in " + reader->describe("manifest.json");
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
 
-        const nos::trent manifest = nos::json::parse(read_text_file(manifest_path));
+        const nos::trent manifest = nos::json::parse(read_text_file(*reader, "manifest.json"));
         if (number_field(manifest, "version", 0.0) != 2.0) {
             result.message = "runtime package manifest requires version 2";
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
         const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
-        std::filesystem::path shader_root = root;
+        std::string shader_root;
         if (artifact_root_field) {
             if (!artifact_root_field->is_string() || artifact_root_field->as_string().empty()) {
                 result.message = "shader_artifact_root must be a non-empty relative path when provided";
                 tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
                 return result;
             }
-            shader_root = package_path(root, artifact_root_field->as_string());
+            shader_root = artifact_root_field->as_string();
+            reader->describe(shader_root + "/.path-check");
         }
-        result.shader_runtime.artifact_root = shader_root.string();
+        const std::string materialized_manifest = reader->materialized_path("manifest.json");
+        if (!materialized_manifest.empty()) {
+            std::filesystem::path materialized_root =
+                std::filesystem::path(materialized_manifest).parent_path();
+            if (!shader_root.empty()) materialized_root /= shader_root;
+            result.shader_runtime.artifact_root = materialized_root.string();
+            result.shader_runtime.cache_root =
+                (std::filesystem::path(materialized_manifest).parent_path() /
+                    ".shader-cache").string();
+        } else {
+            result.shader_runtime.artifact_root = shader_root;
+            result.shader_runtime.resource_provider = reader;
+        }
         const nos::trent* builtin_contract = dict_get(manifest, "builtin_shader_contract");
         if (builtin_contract) {
             if (!builtin_contract->is_dict()) {
@@ -1946,18 +1885,17 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
                 tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
                 return result;
             }
-            const std::filesystem::path catalog =
-                package_path(root, catalog_path);
-            if (!std::filesystem::is_regular_file(catalog)) {
+            if (!reader->contains(catalog_path)) {
                 result.message =
-                    "builtin shader catalog not found: " + catalog.string();
+                    "builtin shader catalog not found: " + reader->describe(catalog_path);
                 tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
                 return result;
             }
-            result.shader_runtime.builtin_shader_root =
-                catalog.parent_path().string();
+            const std::string materialized_catalog = reader->materialized_path(catalog_path);
+            result.shader_runtime.builtin_shader_root = materialized_catalog.empty()
+                ? std::filesystem::path(catalog_path).parent_path().generic_string()
+                : std::filesystem::path(materialized_catalog).parent_path().string();
         }
-        result.shader_runtime.cache_root = (root / ".shader-cache").string();
         result.shader_runtime.dev_compile_enabled = false;
 
         const nos::trent* resources = dict_get(manifest, "resources");
@@ -1975,6 +1913,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             return result;
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
+        keepalive->reader = reader;
         if (options.bootstrap_profile != bootstrap::RuntimeBootstrapProfile::Minimal) {
             ensure_runtime_builtin_textures();
         }
@@ -1985,7 +1924,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         const auto& resource_list = resources->as_list();
         auto load_entry = [&](const nos::trent& resource) -> bool {
             std::string resource_error;
-            if (load_resource(root, resource, *keepalive, resource_error)) {
+            if (load_resource(*reader, resource, *keepalive, resource_error)) {
                 return true;
             }
             result.message = "failed to load resource " + resource_label(resource);
@@ -2048,7 +1987,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             result.scenes.push_back(RuntimePackageScene{
                 identity,
                 scene_path,
-                load_runtime_scene(root, scene_path, options),
+                load_runtime_scene(*reader, scene_path, options),
             });
         }
         result.scene = result.find_scene(result.entry_scene_identity);
@@ -2063,7 +2002,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             result.resources = std::move(keepalive);
             tc_log_info(
                 "RuntimePackageLoader: loaded package '%s' entities=%zu",
-                root.string().c_str(),
+                reader->describe("manifest.json").c_str(),
                 result.scene.entity_count()
             );
         }
@@ -2073,6 +2012,20 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
     }
     return result;
+}
+
+RuntimePackageLoadResult RuntimePackageLoader::load(
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options
+) {
+    RuntimePackageLoadResult result;
+    try {
+        return load(open_runtime_package_directory(root_path), options);
+    } catch (const std::exception& ex) {
+        result.message = ex.what();
+        tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+        return result;
+    }
 }
 
 RuntimePackageLoadResult load_runtime_package(

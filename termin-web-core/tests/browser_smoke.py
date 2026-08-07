@@ -48,8 +48,12 @@ def artifact_measurements(output_directory: str) -> dict:
     )
     primary = [measure(root / name) for name in primary_names]
     package_root = root / "fixtures" / "render-package"
-    package_files = sorted(path for path in package_root.rglob("*") if path.is_file())
+    package_files = sorted(
+        path for path in package_root.rglob("*")
+        if path.is_file() and path.name != "package.trpkg"
+    )
     package = [measure(path) for path in package_files]
+    package_blob = measure(package_root / "package.trpkg")
     return {
         "artifacts": primary,
         "artifact_bytes": sum(item["bytes"] for item in primary),
@@ -57,6 +61,7 @@ def artifact_measurements(output_directory: str) -> dict:
         "package_files": len(package),
         "package_bytes": sum(item["bytes"] for item in package),
         "package_gzip_bytes": sum(item["gzip_bytes"] for item in package),
+        "package_blob": package_blob,
     }
 
 
@@ -553,6 +558,14 @@ def main() -> int:
                 "expression": "JSON.stringify({frame:globalThis.__terminSmokeFrame,inputMetrics:globalThis.__terminSmokeInput?.metrics ?? null})",
                 "returnByValue": True,
             }).get("result", {}).get("value", "{}"))
+            package_metrics = (smoke_state.get("frame") or {}).get("metrics") or {}
+            if package_metrics.get("packageProvider") != "blob" or \
+                    package_metrics.get("packageRequests") != 1 or \
+                    package_metrics.get("packageBytes", 0) <= 0:
+                raise RuntimeError(
+                    "browser host did not use the single-blob package provider: "
+                    f"{package_metrics}"
+                )
             report["smoke"] = {
                 "frame": smoke_state.get("frame"),
                 "input_metrics": smoke_state.get("inputMetrics"),

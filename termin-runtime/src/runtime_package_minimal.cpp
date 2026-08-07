@@ -1,10 +1,8 @@
 #include <termin/runtime/runtime_package.hpp>
 
 #include <filesystem>
-#include <fstream>
 #include <algorithm>
 #include <cctype>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -19,7 +17,9 @@ extern "C" {
 
 namespace termin::runtime {
 
-struct RuntimePackageResourceKeepalive {};
+struct RuntimePackageResourceKeepalive {
+    std::shared_ptr<RuntimePackageReader> reader;
+};
 
 namespace {
 
@@ -43,39 +43,11 @@ double number_field(const nos::trent& value, const char* key, double fallback = 
         : fallback;
 }
 
-std::string read_text_file(const std::filesystem::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("failed to open file: " + path.string());
-    }
-    std::ostringstream text;
-    text << stream.rdbuf();
-    if (!stream.good() && !stream.eof()) {
-        throw std::runtime_error("failed to read file: " + path.string());
-    }
-    return text.str();
-}
-
-void validate_relative_path(const std::string& relative) {
-    if (relative.empty()) {
-        throw std::runtime_error("runtime package path must not be empty");
-    }
-    if (relative.find('\\') != std::string::npos) {
-        throw std::runtime_error(
-            "runtime package path must not contain backslashes: " + relative
-        );
-    }
-    const std::filesystem::path path(relative);
-    if (path.is_absolute() || path.has_root_name() || path.has_root_directory()) {
-        throw std::runtime_error("runtime package path must be relative: " + relative);
-    }
-    for (const std::filesystem::path& segment : path) {
-        if (segment == "." || segment == "..") {
-            throw std::runtime_error(
-                "runtime package path must not contain dot segments: " + relative
-            );
-        }
-    }
+std::string read_text_file(
+    const RuntimePackageReader& reader,
+    const std::string& path) {
+    const RuntimePackageBytes bytes = reader.read(path);
+    return std::string(reinterpret_cast<const char*>(bytes.data), bytes.size);
 }
 
 std::string lowercase_copy(std::string value) {
@@ -103,40 +75,6 @@ void validate_scene_identity(const std::string& identity) {
     }
 }
 
-bool is_contained_path(
-    const std::filesystem::path& root,
-    const std::filesystem::path& candidate
-) {
-    auto root_it = root.begin();
-    auto candidate_it = candidate.begin();
-    for (; root_it != root.end(); ++root_it, ++candidate_it) {
-        if (candidate_it == candidate.end() || *root_it != *candidate_it) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::filesystem::path package_path(
-    const std::filesystem::path& root,
-    const std::string& relative
-) {
-    validate_relative_path(relative);
-    std::error_code error;
-    const std::filesystem::path candidate =
-        std::filesystem::weakly_canonical(root / relative, error);
-    if (error) {
-        throw std::runtime_error(
-            "failed to resolve runtime package path '" + relative + "': " +
-            error.message()
-        );
-    }
-    if (!is_contained_path(root, candidate)) {
-        throw std::runtime_error("runtime package path escapes bundle root: " + relative);
-    }
-    return candidate;
-}
-
 void validate_entity_types(const nos::trent& entity, const std::string& scene_path) {
     const nos::trent* components = dict_get(entity, "components");
     if (components && components->is_list()) {
@@ -159,11 +97,11 @@ void validate_entity_types(const nos::trent& entity, const std::string& scene_pa
 }
 
 TcSceneRef load_scene(
-    const std::filesystem::path& root,
+    const RuntimePackageReader& reader,
     const std::string& relative,
     const RuntimePackageLoadOptions& options
 ) {
-    const std::string source = read_text_file(package_path(root, relative));
+    const std::string source = read_text_file(reader, relative);
     nos::trent data;
     try {
         data = nos::json::parse(source);
@@ -199,7 +137,7 @@ TcSceneRef load_scene(
                 std::string(name ? name : "<unregistered>") + "'"
             );
         }
-        scene.set_source_path(package_path(root, relative).string());
+        scene.set_source_path(reader.describe(relative));
         scene.load_from_data(data);
     } catch (...) {
         scene.destroy();
@@ -232,7 +170,7 @@ void RuntimePackageLoadResult::destroy() {
 }
 
 RuntimePackageLoadResult RuntimePackageLoader::load(
-    const std::string& root_path,
+    std::shared_ptr<RuntimePackageReader> reader,
     const RuntimePackageLoadOptions& options
 ) {
     RuntimePackageLoadResult result;
@@ -244,19 +182,13 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         }
         bootstrap::bootstrap_runtime(bootstrap::RuntimeBootstrapProfile::Minimal);
 
-        std::error_code root_error;
-        const std::filesystem::path root =
-            std::filesystem::canonical(root_path, root_error);
-        if (root_error || !std::filesystem::is_directory(root)) {
+        if (!reader) throw std::runtime_error("runtime package reader is null");
+        if (!reader->contains("manifest.json")) {
             throw std::runtime_error(
-                "runtime package root is not a directory: " + root_path
-            );
+                "manifest.json not found in " + reader->describe("manifest.json"));
         }
-        const std::filesystem::path manifest_path = package_path(root, "manifest.json");
-        if (!std::filesystem::is_regular_file(manifest_path)) {
-            throw std::runtime_error("manifest.json not found in " + root.string());
-        }
-        const nos::trent manifest = nos::json::parse(read_text_file(manifest_path));
+        const nos::trent manifest = nos::json::parse(
+            read_text_file(*reader, "manifest.json"));
         if (number_field(manifest, "version") != 2.0) {
             throw std::runtime_error("runtime package manifest requires version 2");
         }
@@ -299,7 +231,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             if (!paths.insert(path).second) {
                 throw std::runtime_error("duplicate runtime scene path '" + path + "'");
             }
-            result.scenes.push_back({identity, path, load_scene(root, path, options)});
+            result.scenes.push_back({identity, path, load_scene(*reader, path, options)});
         }
         result.scene = result.find_scene(result.entry_scene_identity);
         if (!result.scene.valid()) {
@@ -309,11 +241,12 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             );
         }
         result.resources = std::make_shared<RuntimePackageResourceKeepalive>();
+        result.resources->reader = reader;
         result.ok = true;
         result.message = "ok";
         tc_log_info(
             "RuntimePackageLoader(minimal): loaded package '%s' entities=%zu",
-            root.string().c_str(),
+            reader->describe("manifest.json").c_str(),
             result.scene.entity_count()
         );
     } catch (const std::exception& exception) {
@@ -323,6 +256,20 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         tc_log_error("RuntimePackageLoader(minimal): %s", result.message.c_str());
     }
     return result;
+}
+
+RuntimePackageLoadResult RuntimePackageLoader::load(
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options
+) {
+    RuntimePackageLoadResult result;
+    try {
+        return load(open_runtime_package_directory(root_path), options);
+    } catch (const std::exception& exception) {
+        result.message = exception.what();
+        tc_log_error("RuntimePackageLoader(minimal): %s", result.message.c_str());
+        return result;
+    }
 }
 
 RuntimePackageLoadResult load_runtime_package(

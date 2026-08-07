@@ -196,6 +196,9 @@ const host = createTerminWebHost(core, {
     logger: {error() {}},
 });
 await host.load(new URL("core-package/", fixtures));
+assert.equal(host.metrics.packageRequests, 1);
+assert.equal(host.metrics.packageProvider, "blob");
+assert.equal(core.module.FS.analyzePath("/termin-runtime").exists, false);
 await host.waitForFrames(3);
 if (host.state !== TerminWebHostState.Running || host.entityCount() !== 1) {
     throw new Error("runtime host did not run the packaged entry scene");
@@ -226,6 +229,27 @@ for (const [fixture, expected] of [
     }
 }
 await host.teardown();
+const corruptingHost = createTerminWebHost(core, {
+    headless: true,
+    async fetch(url) {
+        const response = await fetchFile(url);
+        if (!response.ok) return response;
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        bytes[bytes.length - 1] ^= 0xff;
+        return {
+            ok: true,
+            status: 200,
+            async arrayBuffer() { return bytes.buffer; },
+        };
+    },
+    requestAnimationFrame: requestFrame,
+    cancelAnimationFrame: cancelFrame,
+    logger: {error() {}},
+});
+await assert.rejects(
+    corruptingHost.load(new URL("core-package/", fixtures)),
+    /hash mismatch/);
+await corruptingHost.teardown();
 core.shutdown();
 core.lifecycleSmoke();
 core.shutdown();

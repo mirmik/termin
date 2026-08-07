@@ -84,6 +84,8 @@ _LAZY_EXPORTS = {
     "RuntimePackageExportDiagnostic": "termin.project_build.runtime_package_exporter",
     "RuntimePackageExportResult": "termin.project_build.runtime_package_exporter",
     "export_runtime_package": "termin.project_build.runtime_package_exporter",
+    "build_runtime_package_blob": "termin.project_build.runtime_package_blob",
+    "write_runtime_package_blob": "termin.project_build.runtime_package_blob",
     "validate_runtime_package": "termin.project_build.runtime_package_validator",
 }
 
@@ -139,6 +141,7 @@ __all__ = [
     "build_desktop_project",
     "build_quest_openxr_project",
     "build_profile_result",
+    "build_runtime_package_blob",
     "compile_profile_build_request",
     "create_build_context",
     "default_quest_openxr_apk_path",
@@ -166,4 +169,5 @@ __all__ = [
     "validate_runtime_package",
     "validate_build_profile",
     "validate_resolved_profile_request",
+    "write_runtime_package_blob",
 ]

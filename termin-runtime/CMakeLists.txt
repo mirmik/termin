@@ -85,10 +85,13 @@ include(TerminRpath)
 
 set(TERMIN_RUNTIME_SOURCES
     src/runtime_package.cpp
+    src/runtime_package_reader.cpp
     src/runtime_shader_inference.cpp
 )
 if(TERMIN_RUNTIME_MINIMAL_ONLY)
-    set(TERMIN_RUNTIME_SOURCES src/runtime_package_minimal.cpp)
+    set(TERMIN_RUNTIME_SOURCES
+        src/runtime_package_minimal.cpp
+        src/runtime_package_reader.cpp)
 endif()
 set(TERMIN_RUNTIME_LIBRARY_TYPE SHARED)
 if(EMSCRIPTEN)
@@ -160,6 +163,30 @@ if(TERMIN_RUNTIME_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     add_executable(termin_runtime_package_loader_test
         tests/test_runtime_package_loader.cpp
     )
+    find_program(TERMIN_RUNTIME_TEST_PYTHON NAMES python3 python REQUIRED)
+    set(TERMIN_RUNTIME_READER_FIXTURE_ROOT
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/reader-package")
+    set(TERMIN_RUNTIME_READER_FIXTURE_BLOB
+        "${CMAKE_CURRENT_BINARY_DIR}/reader-package.trpkg")
+    add_custom_command(
+        OUTPUT "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
+        COMMAND "${TERMIN_RUNTIME_TEST_PYTHON}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../termin-project-build/python/termin/project_build/runtime_package_blob.py"
+            "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}"
+            "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
+        DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/../termin-project-build/python/termin/project_build/runtime_package_blob.py"
+            "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}/manifest.json"
+            "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}/scenes/Main.scene.json"
+        VERBATIM)
+    add_custom_target(termin_runtime_reader_fixture
+        DEPENDS "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}")
+    add_dependencies(
+        termin_runtime_package_loader_test
+        termin_runtime_reader_fixture)
+    target_compile_definitions(termin_runtime_package_loader_test PRIVATE
+        TERMIN_RUNTIME_READER_FIXTURE_ROOT="${TERMIN_RUNTIME_READER_FIXTURE_ROOT}"
+        TERMIN_RUNTIME_READER_FIXTURE_BLOB="${TERMIN_RUNTIME_READER_FIXTURE_BLOB}")
     target_include_directories(termin_runtime_package_loader_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
     )

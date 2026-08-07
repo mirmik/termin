@@ -82,6 +82,7 @@ termin::runtime::RuntimePackageLoadResult web_headless_package;
 int web_player_graphics_status = 0;
 std::string web_player_graphics_error;
 std::string web_host_error;
+std::shared_ptr<termin::runtime::RuntimePackageReader> web_pending_package_reader;
 std::uint32_t web_host_frame_count = 0;
 bool web_host_loop_running = false;
 double web_host_loop_last_timestamp = -1.0;
@@ -479,6 +480,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_shutdown() {
         return 0;
     }
     unload_web_host_package();
+    web_pending_package_reader.reset();
     web_render_state.reset();
     web_render_status = 0;
     web_render_error.clear();
@@ -496,7 +498,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
     }
-    if (root_path == nullptr || root_path[0] == '\0') {
+    if (!web_pending_package_reader &&
+            (root_path == nullptr || root_path[0] == '\0')) {
         web_host_error = "runtime package root must not be empty";
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
@@ -507,7 +510,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
     options.scene_extensions = termin::default_scene_extension_ids();
     try {
         termin::runtime::RuntimePackageLoader loader;
-        web_player->package = loader.load(root_path, options);
+        if (web_pending_package_reader) {
+            web_player->package = loader.load(
+                std::move(web_pending_package_reader), options);
+        } else {
+            web_player->package = loader.load(root_path, options);
+        }
     } catch (const std::exception& exception) {
         web_host_error = exception.what();
         tc_log_error(
@@ -525,11 +533,32 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         termin::RenderEngine* render_engine =
             web_player->engine->rendering_manager.render_engine();
         render_engine->set_graphics_host(*web_player->graphics_host);
+        termin::ShaderArtifactResolver::ReadCallback read_artifact;
+        if (web_player->package.shader_runtime.resource_provider) {
+            read_artifact =
+                [provider = web_player->package.shader_runtime.resource_provider](
+                    std::string_view path,
+                    std::vector<std::uint8_t>& output) {
+                    if (!provider->contains(path)) return false;
+                    try {
+                        const termin::runtime::RuntimePackageBytes bytes =
+                            provider->read(path);
+                        output.assign(bytes.view().begin(), bytes.view().end());
+                        return true;
+                    } catch (const std::exception& exception) {
+                        tc_log_error(
+                            "TerminWebHost shader artifact read failed for '%.*s': %s",
+                            static_cast<int>(path.size()), path.data(), exception.what());
+                        return false;
+                    }
+                };
+        }
         render_engine->configure_shader_artifacts(
             web_player->package.shader_runtime.artifact_root,
             web_player->package.shader_runtime.cache_root,
             web_player->package.shader_runtime.compiler_path,
-            false);
+            false,
+            std::move(read_artifact));
 
         termin::SceneManager& scene_manager = web_player->engine->scene_manager;
         for (const termin::runtime::RuntimePackageScene& packaged
@@ -600,7 +629,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load_headless(
     const char* root_path) {
     unload_web_host_package();
     web_host_error.clear();
-    if (root_path == nullptr || root_path[0] == '\0') {
+    if (!web_pending_package_reader &&
+            (root_path == nullptr || root_path[0] == '\0')) {
         web_host_error = "runtime package root must not be empty";
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
@@ -608,7 +638,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load_headless(
     termin::runtime::RuntimePackageLoadOptions options;
     options.bootstrap_profile = termin::bootstrap::RuntimeBootstrapProfile::Minimal;
     termin::runtime::RuntimePackageLoader loader;
-    web_headless_package = loader.load(root_path, options);
+    if (web_pending_package_reader) {
+        web_headless_package = loader.load(
+            std::move(web_pending_package_reader), options);
+    } else {
+        web_headless_package = loader.load(root_path, options);
+    }
     if (!web_headless_package.ok) {
         web_host_error = web_headless_package.message;
         unload_web_host_package();
@@ -616,6 +651,28 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load_headless(
         return 0;
     }
     return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_set_package_blob(
+    const std::uint8_t* data,
+    std::size_t size) {
+    web_pending_package_reader.reset();
+    web_host_error.clear();
+    if (!data || size == 0) {
+        web_host_error = "runtime package blob must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    try {
+        auto blob = std::make_shared<const std::vector<std::uint8_t>>(data, data + size);
+        web_pending_package_reader = termin::runtime::open_runtime_package_blob(
+            std::move(blob), "browser-runtime-package");
+        return 1;
+    } catch (const std::exception& exception) {
+        web_host_error = exception.what();
+        tc_log_error("TerminWebHost package blob rejected: %s", web_host_error.c_str());
+        return 0;
+    }
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
