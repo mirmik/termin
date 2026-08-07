@@ -5,13 +5,14 @@ set -euo pipefail
 service=""
 serial=""
 package="org.termin.android"
+activity="org.termin.android.TerminActivity"
 host_port=""
 device_port=""
 token=""
 launch=1
 
 usage() {
-    echo "Usage: $0 --service profiler|framegraph [--serial SERIAL] [--package ID] [--host-port PORT] [--device-port PORT] [--token TOKEN] [--no-launch]"
+    echo "Usage: $0 --service profiler|framegraph [--serial SERIAL] [--package ID] [--activity CLASS] [--host-port PORT] [--device-port PORT] [--token TOKEN] [--no-launch]"
     echo
     echo "Creates an adb TCP forward to a loopback-only Termin diagnostic service."
     echo "When launching, the APK must be debuggable. A random token is generated"
@@ -35,6 +36,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --package=*) package="${1#--package=}" ;;
+        --activity)
+            activity="$2"
+            shift
+            ;;
+        --activity=*) activity="${1#--activity=}" ;;
         --host-port)
             host_port="$2"
             shift
@@ -105,6 +111,11 @@ if [[ -z "$serial" ]]; then
     serial="${devices[0]}"
 fi
 
+if [[ -z "$activity" ]]; then
+    echo "--activity must not be empty" >&2
+    exit 2
+fi
+
 adb -s "$serial" get-state >/dev/null
 adb -s "$serial" forward "tcp:$host_port" "tcp:$device_port"
 
@@ -115,7 +126,7 @@ fi
 if (( launch )); then
     adb -s "$serial" shell am force-stop "$package"
     adb -s "$serial" shell am start \
-        -n "$package/org.termin.android.TerminActivity" \
+        -n "$package/$activity" \
         --ez "$extra_prefix.remote" true \
         --ei "$extra_prefix.port" "$device_port" \
         --es "$extra_prefix.token" "$token"

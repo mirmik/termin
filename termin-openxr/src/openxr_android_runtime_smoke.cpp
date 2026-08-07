@@ -28,6 +28,7 @@
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/lighting/light_component.hpp>
+#include <termin/profiler_remote/target_service.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_engine.hpp>
@@ -70,6 +71,7 @@ void tc_inspect_kind_core_init(void);
 
 #if defined(__ANDROID__)
 #include <android/log.h>
+#include <unistd.h>
 #endif
 
 namespace termin::openxr {
@@ -86,6 +88,91 @@ namespace termin::openxr {
         };
 
         SmokeControl g_smoke;
+
+        struct OpenXRRemoteProfilerOwnedConfig {
+            bool enabled = false;
+            uint16_t port = 0;
+            std::string authentication_token;
+            std::string build_id;
+        };
+
+        struct OpenXRSmokeStartConfig {
+            std::string asset_root;
+            OpenXRRemoteProfilerOwnedConfig remote_profiler;
+        };
+
+        class OpenXRRemoteProfilerSession {
+        public:
+            ~OpenXRRemoteProfilerSession() {
+                stop();
+            }
+
+            bool start(const OpenXRRemoteProfilerOwnedConfig& config) {
+                if (!config.enabled) {
+                    return true;
+                }
+                if (config.port == 0 || config.authentication_token.empty()) {
+                    tc_log_error("[OpenXR profiler] remote profiler requires a port and token");
+                    return false;
+                }
+
+                termin::profiler_remote::TargetServiceConfig target_config;
+                target_config.port = config.port;
+                target_config.authentication_token = config.authentication_token;
+                target_config.platform = "Android/OpenXR";
+                target_config.abi = TERMIN_OPENXR_ANDROID_ABI;
+                target_config.build_type = TERMIN_OPENXR_BUILD_TYPE;
+                target_config.build_id = config.build_id;
+                target_config.process_id = static_cast<uint32_t>(getpid());
+                try {
+                    target = std::make_unique<termin::profiler_remote::RemoteProfilerTarget>(std::move(target_config));
+                    if (!target->start()) {
+                        target.reset();
+                        tc_log_error("[OpenXR profiler] failed to start loopback listener on port %u",
+                                     static_cast<unsigned>(config.port));
+                        return false;
+                    }
+                } catch (const std::exception& error) {
+                    target.reset();
+                    tc_log_error("[OpenXR profiler] target start failed: %s", error.what());
+                    return false;
+                }
+                tc_log_info("[OpenXR profiler] listening on device loopback port=%u",
+                            static_cast<unsigned>(config.port));
+                return true;
+            }
+
+            void pump(uint64_t frame_index) {
+                if (!target) {
+                    return;
+                }
+                target->pump_frame_thread();
+                if ((frame_index <= 2 || frame_index % 120 == 0) && frame_index != last_status_frame) {
+                    last_status_frame = frame_index;
+                    const auto status = target->status();
+                    tc_log_info("[OpenXR profiler] connected=%d capture=%d sections=%d completed=%llu "
+                                "dropped_frames=%llu tx_bytes=%llu",
+                                status.client_connected ? 1 : 0,
+                                status.capturing ? 1 : 0,
+                                status.profiling_sections ? 1 : 0,
+                                static_cast<unsigned long long>(status.completed_frames),
+                                static_cast<unsigned long long>(status.dropped_frames),
+                                static_cast<unsigned long long>(status.transmitted_bytes));
+                }
+            }
+
+            void stop() {
+                if (!target) {
+                    return;
+                }
+                target->stop();
+                target.reset();
+            }
+
+        private:
+            std::unique_ptr<termin::profiler_remote::RemoteProfilerTarget> target;
+            uint64_t last_status_frame = UINT64_MAX;
+        };
 
         struct ScenePrimitiveSmoke {
             termin::TcSceneRef scene;
@@ -844,9 +931,12 @@ namespace termin::openxr {
                 ready = false;
             }
         };
-        void smoke_thread_main(void* java_vm, void* activity_or_context, std::string asset_root) {
+        void smoke_thread_main(void* java_vm, void* activity_or_context, OpenXRSmokeStartConfig start_config) {
             install_android_tc_log_callback_once();
             log_info("OpenXR color smoke thread start");
+
+            const std::string& asset_root = start_config.asset_root;
+            OpenXRRemoteProfilerSession remote_profiler;
 
             OpenXRDispatch xr{};
             void* loader = dlopen("libopenxr_loader.so", RTLD_NOW | RTLD_LOCAL);
@@ -1361,12 +1451,17 @@ namespace termin::openxr {
             double fps_window_predicted_delta_max_ms = 0.0;
             uint64_t fps_window_predicted_delta_count = 0;
             XrTime last_predicted_display_time = 0;
+            termin::EngineHostFrameCadenceTracker profiler_cadence_tracker;
             auto millis_between = [](FrameClock::time_point begin, FrameClock::time_point end) {
                 return std::chrono::duration<double, std::milli>(end - begin).count();
             };
             auto xr_duration_to_ms = [](XrDuration duration) {
                 return static_cast<double>(duration) * 1e-6;
             };
+
+            if (!remote_profiler.start(start_config.remote_profiler)) {
+                tc_log_error("[OpenXR profiler] remote capture was requested but could not be started");
+            }
 
             log_info("OpenXR color smoke loop ready");
             while (g_smoke.running.load()) {
@@ -1396,6 +1491,7 @@ namespace termin::openxr {
                                 xr.end_session(session);
                             }
                             session_running = false;
+                            profiler_cadence_tracker.reset();
                         } else if (state_event->state == XR_SESSION_STATE_EXITING ||
                                    state_event->state == XR_SESSION_STATE_LOSS_PENDING) {
                             g_smoke.running.store(false);
@@ -1406,9 +1502,15 @@ namespace termin::openxr {
                 }
 
                 if (!session_running || app_space == XR_NULL_HANDLE) {
+                    profiler_cadence_tracker.reset();
+                    remote_profiler.pump(frame_index);
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
                 }
+
+                // Apply controls and publish the preceding completed XR frame
+                // before opening the next host-owned profiler frame.
+                remote_profiler.pump(frame_index);
 
                 XrFrameWaitInfo wait_info{};
                 wait_info.type = XR_TYPE_FRAME_WAIT_INFO;
@@ -1425,8 +1527,14 @@ namespace termin::openxr {
                 }
                 if (XR_FAILED(result)) {
                     __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitFrame failed: %d", result);
+                    profiler_cadence_tracker.reset();
                     continue;
                 }
+
+                const termin::EngineHostFrameCadence profiler_cadence = profiler_cadence_tracker.observe(
+                    static_cast<double>(frame_state.predictedDisplayTime) * 1e-6,
+                    std::max(0.0, static_cast<double>(frame_state.predictedDisplayPeriod) * 1e-6));
+                termin::EngineHostFrameScope profiler_frame(profiler_cadence);
 
                 fps_window_predicted_period_ms += xr_duration_to_ms(frame_state.predictedDisplayPeriod);
                 if (last_predicted_display_time != 0 &&
@@ -1703,6 +1811,8 @@ namespace termin::openxr {
             if (session_running) {
                 xr.end_session(session);
             }
+            remote_profiler.pump(frame_index);
+            remote_profiler.stop();
             runtime_scene.destroy();
             for (tgfx::TextureHandle texture : swapchain_textures) {
                 if (texture) {
@@ -1728,8 +1838,9 @@ namespace termin::openxr {
 
     namespace detail {
 
-        OpenXRAndroidStartResult
-        start_android_scene_smoke_internal(void* java_vm, void* activity_or_context, const char* asset_root) {
+        OpenXRAndroidStartResult start_android_scene_smoke_internal(void* java_vm,
+                                                                    void* activity_or_context,
+                                                                    const OpenXRAndroidStartConfig& config) {
             OpenXRAndroidStartResult result{};
             result.stage = "unsupported";
             result.detail = "OpenXR color smoke is only available in Android builds with "
@@ -1743,6 +1854,14 @@ namespace termin::openxr {
                 log_error(result.stage, result.detail);
                 return result;
             }
+            if (config.remote_profiler.enabled &&
+                (config.remote_profiler.port == 0 || !config.remote_profiler.authentication_token ||
+                 config.remote_profiler.authentication_token[0] == '\0')) {
+                result.stage = "remote-profiler-config";
+                result.detail = "remote profiler requires a port and authentication token";
+                log_error(result.stage, result.detail);
+                return result;
+            }
             if (g_smoke.running.exchange(true)) {
                 result.started = true;
                 result.stage = "already-running";
@@ -1753,8 +1872,15 @@ namespace termin::openxr {
                 g_smoke.thread.join();
             }
             try {
-                g_smoke.thread = std::thread(
-                    smoke_thread_main, java_vm, activity_or_context, std::string(asset_root ? asset_root : ""));
+                OpenXRSmokeStartConfig owned_config;
+                owned_config.asset_root = config.asset_root ? config.asset_root : "";
+                owned_config.remote_profiler.enabled = config.remote_profiler.enabled;
+                owned_config.remote_profiler.port = config.remote_profiler.port;
+                owned_config.remote_profiler.authentication_token =
+                    config.remote_profiler.authentication_token ? config.remote_profiler.authentication_token : "";
+                owned_config.remote_profiler.build_id =
+                    config.remote_profiler.build_id ? config.remote_profiler.build_id : "";
+                g_smoke.thread = std::thread(smoke_thread_main, java_vm, activity_or_context, std::move(owned_config));
             } catch (...) {
                 g_smoke.running.store(false);
                 result.stage = "thread";
@@ -1768,7 +1894,7 @@ namespace termin::openxr {
 #else
             (void)java_vm;
             (void)activity_or_context;
-            (void)asset_root;
+            (void)config;
 #endif
 
             return result;

@@ -41,6 +41,21 @@ namespace termin {
         int missed_intervals = 0;
     };
 
+    // Stateful cadence observer for externally-driven hosts such as Android
+    // Choreographer and OpenXR. reset() makes the next frame neutral after a
+    // lifecycle/session gap instead of reporting the pause as a hitch.
+    class TERMIN_ENGINE_API EngineHostFrameCadenceTracker {
+    public:
+        EngineHostFrameCadence observe(double start_time_ms, double target_interval_ms = 0.0) noexcept;
+        void reset() noexcept;
+
+    private:
+        double _previous_start_time_ms = 0.0;
+        double _scheduled_start_time_ms = 0.0;
+        double _target_interval_ms = 0.0;
+        bool _has_previous = false;
+    };
+
     // Move-only owner of one native profiler frame. Externally-driven frontends
     // use this around all host work that belongs to a frame, including input and
     // presentation. EngineCore::run() uses the same primitive internally.

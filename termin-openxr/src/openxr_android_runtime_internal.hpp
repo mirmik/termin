@@ -19,9 +19,13 @@
 #define XR_USE_PLATFORM_ANDROID
 #endif
 #define XR_USE_GRAPHICS_API_VULKAN
+// Vulkan declarations must be visible before openxr_platform.h expands the
+// XR_USE_GRAPHICS_API_VULKAN section.
+// clang-format off
 #include <vulkan/vulkan.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+// clang-format on
 #endif
 
 namespace termin::openxr::detail {
@@ -155,8 +159,9 @@ namespace termin::openxr::detail {
 
 #endif
 
-    OpenXRAndroidStartResult
-    start_android_scene_smoke_internal(void* java_vm, void* activity_or_context, const char* asset_root);
+    OpenXRAndroidStartResult start_android_scene_smoke_internal(void* java_vm,
+                                                                void* activity_or_context,
+                                                                const OpenXRAndroidStartConfig& config);
     void stop_android_color_smoke_internal();
 
 } // namespace termin::openxr::detail

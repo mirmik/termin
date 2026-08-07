@@ -67,6 +67,11 @@ else()
     find_package(termin_runtime REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_profiler_remote termin_profiler_remote::termin_profiler_remote)
+else()
+    find_package(termin_profiler_remote REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_collision termin_collision::termin_collision)
 else()
     find_package(termin_collision REQUIRED)
@@ -165,7 +170,11 @@ endif()
 
 target_compile_definitions(termin_openxr PRIVATE TERMIN_OPENXR_EXPORTS)
 if(ANDROID)
-    target_compile_definitions(termin_openxr PRIVATE TGFX2_HAS_VULKAN)
+    target_compile_definitions(termin_openxr PRIVATE
+        TGFX2_HAS_VULKAN
+        TERMIN_OPENXR_ANDROID_ABI="${ANDROID_ABI}"
+        TERMIN_OPENXR_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
+    )
 endif()
 target_compile_features(termin_openxr PUBLIC cxx_std_20)
 
@@ -183,6 +192,7 @@ target_link_libraries(termin_openxr
         termin_render_passes::termin_render_passes
         termin_engine::termin_engine
         termin_runtime::termin_runtime
+        termin_profiler_remote::termin_profiler_remote
         termin_collision::termin_collision
         termin_input::termin_input
 )

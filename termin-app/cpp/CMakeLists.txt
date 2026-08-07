@@ -149,6 +149,11 @@ else()
     find_package(termin_engine REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_frame_profiler termin_frame_profiler::local)
+else()
+    find_package(termin_frame_profiler REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_framegraph_remote_client termin_framegraph_remote_client::termin_framegraph_remote_client)
 else()
     find_package(termin_framegraph_remote_client REQUIRED)
@@ -330,9 +335,6 @@ if(BUILD_TESTS)
         termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_graph_debugger_source.cpp
         termin/editor/remote_frame_graph_debugger_source.cpp
-        termin/editor/frame_profiler_controller.cpp
-        termin/editor/frame_profiler_source.cpp
-        termin/editor/remote_frame_profiler_source.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
@@ -363,6 +365,8 @@ if(BUILD_TESTS)
         termin_scene::termin_scene
         termin_input::termin_input
         termin_engine::termin_engine
+        termin_frame_profiler::termin_frame_profiler
+        termin_frame_profiler::local
         termin_profiler_remote::termin_profiler_remote
         termin_framegraph_remote_client::termin_framegraph_remote_client
         termin_framegraph_remote_target::termin_framegraph_remote_target

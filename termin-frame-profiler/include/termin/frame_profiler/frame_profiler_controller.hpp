@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "termin/editor/frame_profiler_source.hpp"
+#include "termin/frame_profiler/frame_profiler_source.hpp"
 
 #include <termin/gui_native/command_model.hpp>
 #include <termin/gui_native/frame_timeline.hpp>
@@ -14,11 +14,8 @@
 
 namespace termin {
 
-    class EngineCore;
-
-    class FrameProfilerController {
+    class TERMIN_FRAME_PROFILER_API FrameProfilerController {
     public:
-        FrameProfilerController(EngineCore& engine, int capacity = 3600, double hitch_ratio = 1.25);
         FrameProfilerController(std::unique_ptr<IFrameProfilerSource> source, double hitch_ratio = 1.25);
         ~FrameProfilerController();
 

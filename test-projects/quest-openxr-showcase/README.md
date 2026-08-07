@@ -110,6 +110,26 @@ adb logcat -s TerminOpenXR:I
 Keep the proximity sensor active while launching; otherwise Quest pauses the
 NativeActivity before the OpenXR session reaches the focused state.
 
+## Remote profiler
+
+The debug APK accepts the standard authenticated profiler Intent extras. The
+helper creates a loopback-only ADB forward, force-stops the old NativeActivity
+instance, and launches a fresh one with the generated token:
+
+```bash
+scripts/android-profiler-forward --serial QUEST_SERIAL \
+  --package org.termin.testprojects.questopenxrshowcase \
+  --activity android.app.NativeActivity
+```
+
+Use the printed host port and token in the editor Frame Profiler. Start/Pause
+capture and section profiling apply at OpenXR frame boundaries. Keep the
+headset active while connecting. Pausing the app closes the target session;
+after resume the editor reconnects through the existing ADB forward.
+
+Release APKs reject these extras because the runtime verifies Android's actual
+`FLAG_DEBUGGABLE` before opening the listener.
+
 ## Device acceptance checklist
 
 Record the headset model, Quest OS/runtime version, device serial, APK SHA-256

@@ -33,6 +33,18 @@ namespace termin::openxr {
         const char* detail = "";
     };
 
+    struct OpenXRRemoteProfilerConfig {
+        bool enabled = false;
+        uint16_t port = 0;
+        const char* authentication_token = "";
+        const char* build_id = "";
+    };
+
+    struct OpenXRAndroidStartConfig {
+        const char* asset_root = "";
+        OpenXRRemoteProfilerConfig remote_profiler;
+    };
+
     TERMIN_OPENXR_API OpenXRBuildInfo build_info();
     TERMIN_OPENXR_API const char* runtime_intent();
     TERMIN_OPENXR_API OpenXRAndroidProbeResult probe_android_runtime(void* java_vm, void* activity_or_context);
@@ -40,6 +52,9 @@ namespace termin::openxr {
     TERMIN_OPENXR_API OpenXRAndroidStartResult start_android_scene_smoke(void* java_vm,
                                                                          void* activity_or_context,
                                                                          const char* asset_root);
+    TERMIN_OPENXR_API OpenXRAndroidStartResult start_android_scene_smoke(void* java_vm,
+                                                                         void* activity_or_context,
+                                                                         const OpenXRAndroidStartConfig& config);
     TERMIN_OPENXR_API void stop_android_color_smoke();
 
 } // namespace termin::openxr

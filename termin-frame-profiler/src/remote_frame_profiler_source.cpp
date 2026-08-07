@@ -1,4 +1,4 @@
-#include "termin/editor/remote_frame_profiler_source.hpp"
+#include "termin/frame_profiler/remote_frame_profiler_source.hpp"
 
 #include <algorithm>
 #include <mutex>
@@ -107,6 +107,7 @@ namespace termin {
 
         bool connect(profiler_remote::ClientConfig config) {
             disconnect_live();
+            disconnected("connecting to remote target");
             auto next_client = std::make_unique<profiler_remote::RemoteProfilerClient>(
                 std::move(config),
                 [this](const profiler_remote::DecodedMessage& message) { ingest(message); },
