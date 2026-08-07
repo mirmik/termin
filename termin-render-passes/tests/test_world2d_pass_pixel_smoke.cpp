@@ -161,11 +161,12 @@ int run_smoke(const char* argv0) {
     renderer->set_sprite_uuid(sprite.uuid());
     entity.add_component(renderer);
 
-    termin::RenderSceneItemSnapshot snapshot;
+    termin::RenderItemSnapshot snapshot;
     termin::RenderSceneItemCollectRequest request;
     request.scene = scene.handle();
     request.debug_pass_name = "World2DPassPixelSmoke";
-    if (!snapshot.collect(request) || snapshot.item_count() != 1) {
+    if (!collect_scene_render_item_snapshot(snapshot, request) ||
+        snapshot.item_count() != 1) {
         std::fprintf(stderr, "Failed to collect World2D smoke render item\n");
         scene.destroy();
         return 1;

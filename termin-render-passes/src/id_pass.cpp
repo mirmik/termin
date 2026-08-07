@@ -184,7 +184,7 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "IdPass");
+    RenderItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "IdPass");
     if (!snapshot) {
         return;
     }

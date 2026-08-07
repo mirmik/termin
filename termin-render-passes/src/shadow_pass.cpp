@@ -466,7 +466,7 @@ void ShadowPass::collect_shadow_casters(
     tc_scene_handle scene,
     uint64_t layer_mask,
     uint64_t render_category_mask,
-    const RenderSceneItemSnapshot& snapshot
+    const RenderItemSnapshot& snapshot
 ) {
     cached_draw_calls_.clear();
 
@@ -487,7 +487,7 @@ void ShadowPass::collect_shadow_casters(
     cached_draw_calls_.reserve(routed_items.size());
     for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
-        tc_component* tc = item.component;
+        tc_component* tc = render_scene_item_component(item);
         if (!tc) {
             tc::Log::error(
                 "[ShadowPass] collect_shadow_casters: collected item %zu has null component",
@@ -614,7 +614,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    RenderSceneItemSnapshot* scene_items =
+    RenderItemSnapshot* scene_items =
         ensure_render_item_snapshot(ctx, "ShadowPass");
     if (!scene_items) {
         return results;

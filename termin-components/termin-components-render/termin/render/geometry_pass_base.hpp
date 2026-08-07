@@ -120,7 +120,7 @@ protected:
         uint64_t layer_mask,
         uint64_t render_category_mask,
         tc_shader_handle base_shader,
-        const RenderSceneItemSnapshot& snapshot
+        const RenderItemSnapshot& snapshot
     ) const;
     void sort_draw_calls_by_shader() const;
     std::vector<ResourceSpec> make_resource_specs() const;
