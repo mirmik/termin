@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1366 и item encoder slices #1368, #1371, #1372
+#1359–#1366, item encoder slices #1368, #1371, #1372 и chart pipeline #1375
 
 ## Контекст
 
@@ -375,14 +375,25 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
 - В #1372 grid получил bounds-aware immutable line stream и общий
   planner/encoder. Tick/axis labels отделены в chart-owned chrome renderer;
   последний retained slot с `PlotEngine3D` удалён.
+- В #1375 ручной frame/pass lifecycle удалён из `RetainedChart3D::render()`.
+  Tcplot-owned geometry и chrome passes исполняются через
+  `RenderEngine::execute_pipeline()`: первый планирует и отправляет immutable
+  surface/grid/scatter snapshot, второй in-place продолжает тот же output и
+  рисует labels через явную `PlotScene3DRenderServices` capability. Внешние
+  color/depth/MSAA attachments передаются через `RenderTargetContext`.
+- Runtime external-output resolution теперь учитывает всю inplace alias group,
+  а не только canonical resource name. Поэтому pass chain вида
+  `ChartGeometry -> OUTPUT` использует caller-owned target и доступен обычному
+  framegraph capture path без скрытого внутреннего FBO.
 - Ввести line item encoder при добавлении retained line series. World-text
   item encoder остаётся отдельным общим направлением и не требуется для
   chart-owned chrome.
 - Переиспользовать существующие shader/material/resource-binding paths.
 - Сохранить per-item GPU cache and revision invalidation.
-- Добавить chart-specific passes только там, где generic material pass
-  недостаточен.
-- Подключить color/depth/MSAA и framegraph capture через общий executor.
+- Выполнено в #1375: chart-specific geometry/chrome passes добавлены только
+  поверх generic planner/submission contracts.
+- Выполнено в #1375: color/depth/MSAA outputs и framegraph capture path
+  подключены через общий executor.
 
 ### Этап 5. Удалить временную архитектуру
 
