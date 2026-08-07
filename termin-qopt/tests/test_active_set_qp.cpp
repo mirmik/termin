@@ -205,6 +205,52 @@ void test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set() {
   TERMIN_QOPT_CHECK(result.inequality_linf == 0.0);
 }
 
+void test_dependent_tight_rows_do_not_enter_zero_step_cycle() {
+  const std::vector<double> hessian{2.0, 0.0, 0.0, 2.0};
+  const std::vector<double> gradient{0.0, -2.0};
+  const std::vector<double> equality{1.0, 0.0};
+  const std::vector<double> target{0.0};
+  const std::vector<double> inequalities{
+      1.0,  0.0, // Equality duplicate.
+      -1.0, 0.0, // Opposing equality duplicate.
+      0.0,  1.0,
+      0.0,  2.0, // Parallel inequality.
+      0.0,  -1.0,
+      0.0,  0.0, // Structurally empty row.
+  };
+  const std::vector<double> limits(6, 0.0);
+  const std::vector<double> no_values;
+  std::vector<double> primal(2);
+  std::vector<double> equality_dual(1);
+  std::vector<double> inequality_dual(6);
+
+  const QpSolveResult result = solve_active_set_qp(
+      {
+          row_major(hessian, 2, 2),
+          const_vector(gradient),
+          row_major(equality, 1, 2),
+          const_vector(target),
+          row_major(inequalities, 6, 2),
+          const_vector(limits),
+          const_vector(no_values),
+          const_vector(no_values),
+      },
+      {
+          vector(primal),
+          vector(equality_dual),
+          vector(inequality_dual),
+          {nullptr, 0, 1},
+          {nullptr, 0, 1},
+      });
+
+  TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+  TERMIN_QOPT_CHECK(std::abs(primal[0]) <= 1e-12);
+  TERMIN_QOPT_CHECK(std::abs(primal[1]) <= 1e-12);
+  TERMIN_QOPT_CHECK(result.active_set_size == 1);
+  TERMIN_QOPT_CHECK(result.constraint_rank == 2);
+  TERMIN_QOPT_CHECK(result.iterations < 128);
+}
+
 void test_linear_recession_is_blocked_or_reported_unbounded() {
   const std::vector<double> hessian{0.0};
   const std::vector<double> gradient{-1.0};
@@ -746,6 +792,7 @@ int main() {
   test_bounds_and_full_duals();
   test_warm_start_can_drop_an_incorrect_constraint();
   test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set();
+  test_dependent_tight_rows_do_not_enter_zero_step_cycle();
   test_linear_recession_is_blocked_or_reported_unbounded();
   test_recession_nullspace_is_invariant_to_constraint_row_scale();
   test_tiny_resolvable_recession_direction_reaches_a_blocker();

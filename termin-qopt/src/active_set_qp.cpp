@@ -7,6 +7,7 @@
 #include <Eigen/Eigenvalues>
 #include <Eigen/SVD>
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -58,6 +59,12 @@ struct DirectionResult {
   QpStatus status = QpStatus::NumericalFailure;
   QpDiagnostic diagnostic = QpDiagnostic::DecompositionFailure;
   Vector direction;
+};
+
+struct PivotEvent {
+  bool added = false;
+  std::size_t constraint = 0;
+  double value = 0.0;
 };
 
 [[nodiscard]] bool
@@ -244,12 +251,85 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   return std::find(indices.begin(), indices.end(), index) != indices.end();
 }
 
+using RowBasis = std::vector<Vector>;
+
+[[nodiscard]] double structural_rank_tolerance(Eigen::Index variables) {
+  return std::numeric_limits<double>::epsilon() * 128.0 *
+         static_cast<double>(std::max<Eigen::Index>(1, variables));
+}
+
+[[nodiscard]] std::optional<Vector>
+independent_row_direction(const Vector &input, const RowBasis &basis) {
+  const double scale = linf(input);
+  if (scale == 0.0) {
+    return std::nullopt;
+  }
+  Vector residual = input / scale;
+  for (int pass = 0; pass < 2; ++pass) {
+    for (const Vector &direction : basis) {
+      residual -= direction.dot(residual) * direction;
+    }
+  }
+  if (residual.norm() <= structural_rank_tolerance(input.size())) {
+    return std::nullopt;
+  }
+  return residual.normalized();
+}
+
+[[nodiscard]] bool append_independent_row(const Vector &input,
+                                          RowBasis &basis) {
+  std::optional<Vector> direction = independent_row_direction(input, basis);
+  if (!direction.has_value()) {
+    return false;
+  }
+  basis.push_back(std::move(*direction));
+  return true;
+}
+
+[[nodiscard]] RowBasis row_basis(const Matrix &rows) {
+  RowBasis basis;
+  basis.reserve(static_cast<std::size_t>(rows.cols()));
+  for (Eigen::Index row = 0;
+       row < rows.rows() &&
+       basis.size() < static_cast<std::size_t>(rows.cols());
+       ++row) {
+    (void)append_independent_row(rows.row(row).transpose(), basis);
+  }
+  return basis;
+}
+
+[[nodiscard]] std::vector<std::size_t> independent_active_set(
+    const Matrix &equalities, const Matrix &inequalities,
+    const std::vector<std::size_t> &candidates) {
+  RowBasis basis = row_basis(equalities);
+  std::vector<std::size_t> independent;
+  independent.reserve(candidates.size());
+  for (const std::size_t candidate : candidates) {
+    if (basis.size() == static_cast<std::size_t>(inequalities.cols())) {
+      break;
+    }
+    if (append_independent_row(
+            inequalities.row(static_cast<Eigen::Index>(candidate)).transpose(),
+            basis)) {
+      independent.push_back(candidate);
+    }
+  }
+  return independent;
+}
+
 [[nodiscard]] CoreResult solve_feasible_core(
     const Matrix &hessian, const Vector &gradient, const Matrix &equalities,
     const Vector &targets, const Matrix &inequalities, const Vector &limits,
     Vector primal, std::vector<std::size_t> active,
     const ActiveSetQpOptions &options, std::size_t &iterations) {
   const Eigen::Index equality_count = equalities.rows();
+  active = independent_active_set(equalities, inequalities, active);
+  std::array<PivotEvent, 16> pivot_trace{};
+  std::size_t pivot_event_count = 0;
+  const auto record_pivot = [&](PivotEvent event) {
+    pivot_trace[pivot_event_count % pivot_trace.size()] = event;
+    ++pivot_event_count;
+  };
   // Every inequality row is normalized before it reaches the core. Direction
   // tests can therefore use one dimensionless threshold without allowing an
   // unrelated, large row to hide a blocker.
@@ -306,6 +386,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
 
     double step = finite_target ? 1.0 : std::numeric_limits<double>::infinity();
     std::optional<std::size_t> blocker;
+    const RowBasis working_basis = row_basis(working);
     for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
       const std::size_t index = static_cast<std::size_t>(row);
       if (contains(active, index)) {
@@ -313,6 +394,11 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       }
       const double rate = inequalities.row(row).dot(direction);
       if (rate <= direction_tolerance) {
+        continue;
+      }
+      if (!independent_row_direction(inequalities.row(row).transpose(),
+                                     working_basis)
+               .has_value()) {
         continue;
       }
       const double slack = limits[row] - inequalities.row(row).dot(primal);
@@ -336,6 +422,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
     if (blocked_before_target) {
       primal += step * direction;
       active.push_back(*blocker);
+      record_pivot({true, *blocker, step});
       continue;
     }
 
@@ -350,7 +437,8 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
 
     primal = subproblem.primal;
     std::optional<std::size_t> removal_offset;
-    double most_negative = -scaled_tolerance(options.tolerance, 1.0);
+    double most_negative =
+        -scaled_tolerance(options.tolerance, 1.0);
     for (std::size_t offset = 0; offset < active.size(); ++offset) {
       const double multiplier =
           subproblem.dual[equality_count + static_cast<Eigen::Index>(offset)];
@@ -360,6 +448,12 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       }
     }
     if (removal_offset.has_value()) {
+      record_pivot({
+          false,
+          active[*removal_offset],
+          subproblem.dual[equality_count +
+                          static_cast<Eigen::Index>(*removal_offset)],
+      });
       active.erase(active.begin() +
                    static_cast<std::ptrdiff_t>(*removal_offset));
       continue;
@@ -381,6 +475,21 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   }
 
   CoreResult result;
+  if (pivot_event_count != 0) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set pivot trace at iteration limit: "
+                 "constraints=%zu events=%zu\n",
+                 active.size(), pivot_event_count);
+    const std::size_t trace_begin = pivot_event_count > pivot_trace.size()
+                                        ? pivot_event_count - pivot_trace.size()
+                                        : 0;
+    for (std::size_t index = trace_begin; index < pivot_event_count; ++index) {
+      const PivotEvent &event = pivot_trace[index % pivot_trace.size()];
+      std::fprintf(stderr, "  pivot[%zu]=%s constraint=%zu value=%.17g\n",
+                   index, event.added ? "add" : "drop", event.constraint,
+                   event.value);
+    }
+  }
   result.result = failure(QpStatus::NumericalFailure,
                           QpDiagnostic::IterationLimit, iterations);
   result.result.active_set_size = active.size();
@@ -770,7 +879,16 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
                                          primal, options.tolerance);
     }
   } else {
-    primal = equality_feasible.primal;
+    // Start Phase I from the equality-constrained objective minimizer when it
+    // exists. The old minimum-norm origin can force a feasible active-set walk
+    // through every intermediate facet of a fine polygon before reaching the
+    // relevant face. Phase I retains feasibility guarantees while this seed
+    // preserves the objective's useful directional information.
+    const EqualityResult objective_seed = solve_equalities(
+        hessian, gradient, equalities, equality_targets, options.tolerance);
+    primal = objective_seed.result.status == QpStatus::Optimal
+                 ? objective_seed.primal
+                 : equality_feasible.primal;
     if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0,
                               options.tolerance)) {
       CoreResult phase =
@@ -808,8 +926,10 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
 
   Vector normalized_dual = Vector::Zero(normalized.matrix.rows());
   for (std::size_t offset = 0; offset < solved.active.size(); ++offset) {
-    normalized_dual[static_cast<Eigen::Index>(solved.active[offset])] =
+    const double multiplier =
         solved.active_dual[static_cast<Eigen::Index>(offset)];
+    normalized_dual[static_cast<Eigen::Index>(solved.active[offset])] =
+        multiplier;
   }
   Vector inequality_dual = Vector::Zero(inequalities.rows());
   Vector lower_dual = Vector::Zero(lower.size());
