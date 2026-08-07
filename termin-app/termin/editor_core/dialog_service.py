@@ -22,6 +22,19 @@ class DialogService(ABC):
     ) -> None:
         """Show a modal error message."""
 
+    def show_warning(
+        self,
+        title: str,
+        message: str,
+        on_close: Callable[[], None] | None = None,
+    ) -> None:
+        """Show a modal warning message.
+
+        Frontends without a distinct warning presentation may reuse their
+        error-message path.
+        """
+        self.show_error(title, message, on_close)
+
     @abstractmethod
     def show_input(
         self,

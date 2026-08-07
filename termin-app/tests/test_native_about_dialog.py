@@ -10,13 +10,22 @@ def test_native_about_dialog_escapes_info_reopens_and_releases():
     renders = []
     dialog = build_native_about_dialog(
         document,
-        EditorAboutInfo("1<2", "vulkan<debug>", "vulkan"),
+        EditorAboutInfo(
+            "1<2",
+            "vulkan<debug>",
+            "vulkan",
+            "llvmpipe<cpu>",
+            "Mesa&LLVM",
+            "cpu",
+        ),
         viewport=lambda: Rect(0.0, 0.0, 800.0, 600.0),
         request_render=lambda: renders.append(True),
     )
 
     assert "1<2" in dialog.content_model.text
     assert "vulkan<debug>" in dialog.content_model.text
+    assert "llvmpipe<cpu>" in dialog.content_model.text
+    assert "Mesa&LLVM" in dialog.content_model.text
     assert dialog.show()
     content = dialog.root.children[0]
     assert content.bounds.x - dialog.root.bounds.x == EDITOR_UI_METRICS.dialog_padding

@@ -29,7 +29,10 @@ from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebug
 from termin.editor_core.python_console_model import PythonConsoleController
 from termin.editor_core.scene_edit_service import EditorSceneEditService
 from termin.editor_core.settings_model import EditorSettingsController
-from termin.editor_core.about_model import build_editor_about_info
+from termin.editor_core.about_model import (
+    build_editor_about_info,
+    build_software_renderer_warning,
+)
 from termin.editor_core.profiler_model import ProfilerController
 from termin.editor_core.profiler_capture import ProfilerCaptureCoordinator
 from termin.editor_core.project_browser_model import ProjectBrowserController
@@ -532,17 +535,29 @@ def _compose_native_editor(
         shell.settings_command,
         settings_dialog,
     )
+    about_info = build_editor_about_info(
+        backend_name=window.backend,
+        adapter_name=host.device.adapter_name,
+        adapter_driver=host.device.adapter_driver,
+        adapter_class=host.device.adapter_class,
+    )
     about_dialog = workspace_stage.own(
         "about dialog",
         build_native_about_dialog(
             host.document,
-            build_editor_about_info(backend_name=window.backend),
+            about_info,
             viewport=editor_viewport,
             request_render=request_editor_render,
         ),
         cleanup=lambda: about_dialog.close(),
     )
     connect_about_command(help_menu, shell.about_command, about_dialog)
+    software_renderer_warning = build_software_renderer_warning(about_info)
+    if composition.windowed and software_renderer_warning is not None:
+        dialog_service.show_warning(
+            "CPU Vulkan Renderer",
+            software_renderer_warning,
+        )
     selected_entity = None
     display_workspace: NativeDisplayWorkspace | None = None
     native_viewport: NativeEditorViewport | None = None

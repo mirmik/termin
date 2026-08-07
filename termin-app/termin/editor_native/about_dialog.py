@@ -53,7 +53,7 @@ def build_native_about_dialog(
 ) -> NativeAboutDialog:
     root = document.create_vstack("native-about-dialog")
     root.stable_id = "editor.about"
-    root.preferred_size = Size(520.0, 280.0)
+    root.preferred_size = Size(600.0, 320.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     model = RichTextModel()
     model.set_html(
@@ -61,7 +61,10 @@ def build_native_about_dialog(
         "A suspiciously practical editor for projects that keep moving.<br><br>"
         f"<b>Version:</b> {escape(info.version)}<br>"
         f"<b>TERMIN_BACKEND:</b> {escape(info.configured_backend)}<br>"
-        f"<b>Active backend:</b> {escape(info.active_backend)}"
+        f"<b>Active backend:</b> {escape(info.active_backend)}<br>"
+        f"<b>Adapter:</b> {escape(info.adapter_name)}<br>"
+        f"<b>Driver:</b> {escape(info.adapter_driver)}<br>"
+        f"<b>Hardware class:</b> {escape(info.adapter_class)}"
     )
     view = document.create_rich_text_view(model)
     root.add_stretch_child(document.ref(view.handle))
