@@ -88,6 +88,12 @@ series APIs stay identical. `MultiChart2DWpfInteraction` maps middle drag,
 wheel scrolling and Ctrl+wheel shared-X zoom without moving chart layout into
 WPF. A non-owning `MultiChart2DGroup` coordinates shared X, panel count/layout,
 theme and clamped scroll across separate time/frequency chart columns.
+`examples/AllianceStreamingChartsExample` exercises that contract with two
+15-panel columns, 60 streaming native series, synchronized navigation and a
+shared external scrollbar. `RetainedChartComposition` additionally renders
+the top and bottom of both 15-panel scenes through the installed-SDK D3D11
+offscreen path, so the multi-chart acceptance reaches GPU execution rather
+than stopping at scene construction.
 
 `RetainedChart3D` exposes a plot-specific retained scene with generation-
 checked surface, scatter and grid references. Surface/scatter `SetData`

@@ -355,8 +355,10 @@ chartHost.AttachPortal(anchor, resetZoomButton);
   новым wrapper после migration window.
 - [x] Удалить вторую C# реализацию layout/ticks/panel composition.
 - [x] Добавить C# example с заменой part и custom overlay
-  (`RetainedChartWpfExample`; installed-SDK packaging ещё проверить после
-  стабилизации native composer ABI).
+  (`RetainedChartWpfExample`).
+- [x] Проверить installed-SDK D3D11 runtime: thin C# wrapper загружает
+  packaged native DLL/shaders, а `RetainedSceneRenderer2D` выполняет реальный
+  offscreen render single- и multi-chart scene.
 
 ### Этап 5. Generic WPF retained-scene host and portals
 
@@ -373,13 +375,19 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 6. Native multi-panel composer
 
-Native vertical slice готов в `AllianceStreamingChartsExample`: четыре панели
-`MultiChart2D` используют один public scene и renderer/texture, stable panel
-handles, общий moving X, независимые Y, virtual scroll, внешний WPF scrollbar
-и portals. Hidden panels не перестраиваются на shared-X update; при появлении
-панель получает deferred X и viewport одной frame mutation. Перед production
-streaming остаются bounded native ring-buffer policy и profiling на реальных
-двух колонках по 15 панелей.
+Native vertical slice в `AllianceStreamingChartsExample` расширен до двух
+колонок по 15 панелей. Каждая колонка использует собственные public scene и
+renderer/texture, а `MultiChart2DGroup` синхронизирует moving X, panel layout и
+virtual scroll без product-side projection math. В сумме пример обновляет 60
+native series, сохраняет независимые Y, использует общий внешний WPF scrollbar
+и portal-кнопки. Hidden panels не перестраиваются на shared-X update; при
+появлении панель получает deferred X и viewport одной frame mutation.
+Headless D3D11 acceptance рендерит верх и низ обеих 15-panel scenes.
+
+Это topology/load vertical slice, а не завершённый performance baseline.
+Текущий пример ограничивает managed history периодическим `SetData`; перед
+production streaming остаются bounded native ring-buffer policy, измерение
+render/append cost и проверка на реальных данных Alliance.
 
 - [x] Ввести `RetainedMultiChart2D` поверх общего panel composer.
 - [x] Реализовать stable panel handles и safe dynamic reconfiguration.
