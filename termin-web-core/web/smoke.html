@@ -6,9 +6,9 @@
 <pre id="host-status">idle</pre>
 <pre id="result">TERMIN_WEB_CORE_SMOKE_RUNNING</pre>
 <script type="module">
-import { createTerminCore } from "./termin-web-core.mjs?v=20260807-lifecycle1";
-import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs?v=20260807-lifecycle1";
-import { createTerminWebInputAdapter } from "./termin-web-input.mjs?v=20260807-lifecycle1";
+import { createTerminCore } from "./termin-web-core.mjs?v=20260807-textureops1";
+import { createTerminWebHost, TerminWebHostState } from "./termin-web-host.mjs?v=20260807-textureops1";
+import { createTerminWebInputAdapter } from "./termin-web-input.mjs?v=20260807-textureops1";
 
 const result = document.querySelector("#result");
 globalThis.__terminSmokeAsyncError = "";
@@ -84,6 +84,10 @@ try {
     await host.teardown();
     input.detach();
     await core.renderSmoke();
+    result.textContent = "TERMIN_WEB_CORE_TEXTURE_OPS_READY";
+    await new Promise((resolve) => {
+        globalThis.__terminTextureOpsContinue = resolve;
+    });
     canvas.width = 800;
     canvas.height = 450;
     core.resize(800, 450);
