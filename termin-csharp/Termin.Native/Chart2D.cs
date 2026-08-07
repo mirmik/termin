@@ -113,6 +113,39 @@ public sealed class ChartPart2D<T> where T : GraphicItemRef2D
 }
 
 /// <summary>
+/// Thin managed view of tcplot's frontend-neutral chart navigation state.
+/// Coordinates are framebuffer pixels. Middle-button drag pans and wheel
+/// steps zoom around the cursor.
+/// </summary>
+public sealed class ChartInteraction2D
+{
+    private readonly Chart2D _chart;
+
+    internal ChartInteraction2D(Chart2D chart)
+    {
+        _chart = chart;
+    }
+
+    public bool PointerDown(float x, float y, int button) =>
+        _chart.PointerDown(x, y, button);
+
+    public bool PointerMove(float x, float y) =>
+        _chart.PointerMove(x, y);
+
+    public bool PointerUp(float x, float y, int button) =>
+        _chart.PointerUp(x, y, button);
+
+    public bool Wheel(
+        float x,
+        float y,
+        float steps,
+        bool xOnly = false) =>
+        _chart.Wheel(x, y, steps, xOnly);
+
+    public void Cancel() => _chart.CancelInteraction();
+}
+
+/// <summary>
 /// Thin managed projection of tcplot's native open retained chart composer.
 /// Layout, ticks, text measurement, projection synchronization and standard
 /// part topology live in tcplot. Scene items remain directly customizable.
@@ -224,6 +257,7 @@ public sealed class Chart2D : IDisposable
             _disposeSceneView = borrowedScene is null;
             Projection = PlotProjectionRef2D.Borrow(
                 Chart2DNative.Projection(_native));
+            Interaction = new ChartInteraction2D(this);
             FontUri = fontUri;
 
             Root = GetGroup(ChartPartKind2D.Root);
@@ -265,6 +299,7 @@ public sealed class Chart2D : IDisposable
 
     public TcVisualScene2D Scene { get; }
     public PlotProjectionRef2D Projection { get; }
+    public ChartInteraction2D Interaction { get; }
     public GroupItemRef2D Root { get; }
     public GroupItemRef2D PlotArea { get; }
     public GroupItemRef2D Series { get; }
@@ -521,6 +556,36 @@ public sealed class Chart2D : IDisposable
         Require(Chart2DNative.RemovePart(_native, kind));
     }
 
+    internal bool PointerDown(float x, float y, int button)
+    {
+        ThrowIfDisposed();
+        return Chart2DNative.PointerDown(_native, x, y, button);
+    }
+
+    internal bool PointerMove(float x, float y)
+    {
+        ThrowIfDisposed();
+        return Chart2DNative.PointerMove(_native, x, y);
+    }
+
+    internal bool PointerUp(float x, float y, int button)
+    {
+        ThrowIfDisposed();
+        return Chart2DNative.PointerUp(_native, x, y, button);
+    }
+
+    internal bool Wheel(float x, float y, float steps, bool xOnly)
+    {
+        ThrowIfDisposed();
+        return Chart2DNative.Wheel(_native, x, y, steps, xOnly);
+    }
+
+    internal void CancelInteraction()
+    {
+        ThrowIfDisposed();
+        Chart2DNative.CancelInteraction(_native);
+    }
+
     private GroupItemRef2D GetGroup(ChartPartKind2D kind) =>
         GroupItemRef2D.Cast(new GraphicItemRef2D(
             Scene.NativeHandle,
@@ -676,6 +741,41 @@ internal static class Chart2DNative
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_fit_y")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool FitY(IntPtr chart, double paddingFraction);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_pointer_down")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool PointerDown(
+        IntPtr chart,
+        float x,
+        float y,
+        int button);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_pointer_move")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool PointerMove(
+        IntPtr chart,
+        float x,
+        float y);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_pointer_up")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool PointerUp(
+        IntPtr chart,
+        float x,
+        float y,
+        int button);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_wheel")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool Wheel(
+        IntPtr chart,
+        float x,
+        float y,
+        float steps,
+        [MarshalAs(UnmanagedType.I1)] bool xOnly);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_cancel_interaction")]
+    internal static extern void CancelInteraction(IntPtr chart);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_theme")]
     [return: MarshalAs(UnmanagedType.I1)]

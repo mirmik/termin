@@ -26,6 +26,6 @@
                    Margin="2,10,2,0"
                    Foreground="#D9DCE3"
                    FontSize="13"
-                   Text="The button below is a WPF control anchored by a native scene item." />
+                   Text="Middle-drag pans; wheel zooms; Ctrl+wheel zooms X only." />
     </Grid>
 </Window>

@@ -337,13 +337,14 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 
 ### Этап 3. Interaction and annotations
 
-- [ ] Отделить reusable `ChartInteraction2D` от WPF/SDL event classes.
-- [ ] Реализовать pan, anchored zoom, fit/reset и nearest selection через
-  compact chart mutations.
+- [x] Отделить reusable `ChartInteraction2D` от WPF/SDL event classes.
+- [x] Реализовать pan, anchored zoom и fit/reset через compact chart
+  mutations.
+- [ ] Реализовать nearest selection через compact chart mutations.
 - [ ] Подключить существующие retained annotations к public
   `AnnotationsRoot`.
 - [ ] Добавить overlay anchor helpers на основе generic hit-region/group items.
-- [ ] Гарантировать portal-first input routing в frontend hosts.
+- [x] Гарантировать portal-first input routing в WPF host.
 
 ### Этап 4. Thin C# projection
 
@@ -362,7 +363,9 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 - [x] Добавить в `Termin.Wpf` control для произвольной retained scene.
 - [x] Переиспользовать `Tgfx2Host` и `Tgfx2D3D11ImageHost` presentation path.
 - [x] Реализовать resize/DPI и deterministic GPU teardown.
-- [ ] Маршрутизировать pointer/wheel/key events в chart interaction controller.
+- [x] Маршрутизировать pointer/wheel events в chart interaction controller.
+- [ ] Добавить chart-level keyboard shortcuts после определения общего
+  frontend-neutral command contract.
 - [x] Добавить overlay layer и portal mapping
   `GraphicItemRef2D -> FrameworkElement`.
 - [x] Обновлять portal bounds из world bounds после layout/camera changes.
@@ -373,7 +376,9 @@ chartHost.AttachPortal(anchor, resetZoomButton);
 Managed vertical prototype готов в `AllianceStreamingChartsExample`: четыре
 компонуемых `Chart2D` используют borrowed shared scene, один renderer/texture,
 общий moving X window, независимые Y ranges и WPF portals. Он доказывает
-контракт, но не заменяет перечисленный ниже native composer. Перед Alliance
+контракт, включая middle-drag pan, cursor-anchored zoom, shared X и
+отключаемый follow-latest mode, но не заменяет перечисленный ниже native
+composer. Перед Alliance
 нужно также отделить дешёвое обновление projection от полного layout/tick-label
 rebuild и добавить bounded native streaming/ring-buffer policy.
 

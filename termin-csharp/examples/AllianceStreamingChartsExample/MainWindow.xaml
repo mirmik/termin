@@ -26,6 +26,6 @@
                    Margin="2,8,2,0"
                    Foreground="#D9DCE3"
                    FontSize="13"
-                   Text="Streaming: one retained scene, one texture, four chart panels." />
+                   Text="Middle-drag pans; wheel zooms; Ctrl+wheel zooms shared X only." />
     </Grid>
 </Window>

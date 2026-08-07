@@ -63,7 +63,10 @@ and projection through non-owning wrappers, and must be disposed before the
 host. `Annotations` and `Overlay` are ordinary public groups into which callers
 can insert built-in retained items. `Fit()`, `FitX()` and `FitY()` scan the
 effective-visible native series without copying their data into the composer or
-C#. See
+C#. `ChartInteraction2D` owns frontend-neutral middle-drag pan and
+cursor-anchored wheel zoom state. `Chart2DWpfInteraction` only adapts WPF
+framebuffer events; Ctrl+wheel selects X-only zoom and real WPF portals retain
+input priority over the rendered scene. See
 `examples/RetainedChartComposition` for replacement of a standard plot
 background without extending the native ABI.
 
