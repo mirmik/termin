@@ -148,6 +148,15 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
             request.contexts,
             request.default_context_name
         );
+        if (ok) {
+            for (const auto& [name, context] : request.contexts) {
+                (void)context;
+                if (!existing_contexts.contains(name)) {
+                    request.internal_entities_by_context[name] =
+                        request.internal_entities;
+                }
+            }
+        }
         if (ok && request.engine) {
             request.engine->ensure_tgfx2();
             tgfx::IRenderDevice* device = request.engine->tgfx2_device();
@@ -232,7 +241,6 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
     ctx.name = context_name;
     ctx.view.primary = render_camera;
     ctx.render_rect = {0, 0, request.render_width, request.render_height};
-    ctx.internal_entities = request.internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.render_category_mask = camera_render_category_mask;
     ctx.output_color_tex = out_color;
@@ -248,6 +256,8 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
         *device,
         request.managed_render_targets);
     request.contexts[context_name] = std::move(ctx);
+    request.internal_entities_by_context[context_name] =
+        request.internal_entities;
 
     if (request.default_context_name.empty()) {
         request.default_context_name = context_name;

@@ -653,7 +653,6 @@ struct OpenXRRuntimeScene {
         termin::RenderTargetContext target;
         target.name = name;
         target.render_rect = termin::Rect2i{0, 0, static_cast<int>(frame.width), static_cast<int>(frame.height)};
-        target.internal_entities = internal_entities;
         target.output_color_tex = frame.color_texture;
         target.output_color_format = frame.color_format;
         target.external_textures["XR_MULTIVIEW_TARGET"] = frame.color_texture;

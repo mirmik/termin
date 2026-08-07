@@ -16,6 +16,7 @@ struct RenderTargetContextBuildRequest {
     std::unordered_map<int, RenderTargetContextProvider>& providers;
     std::unordered_set<uint64_t>& missing_provider_warnings;
     std::unordered_map<std::string, RenderTargetContext>& contexts;
+    std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context;
     std::string& default_context_name;
 };
 

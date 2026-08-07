@@ -215,8 +215,10 @@ int run_smoke(const char* argv0) {
     termin::ExecuteContext context;
     context.ctx2 = &render_context;
     context.view.primary = camera;
-    const termin::SceneRenderServices scene_services{.scene = scene};
-    context.scene_services = &scene_services;
+    const termin::SceneRenderServices scene_services(scene);
+    termin::RenderExecutionCapabilities capabilities;
+    capabilities.add(scene_services);
+    context.capabilities = &capabilities;
     context.render_item_snapshot = &snapshot;
     context.tex2_writes.emplace("world2d", color);
     context.tex2_depth_writes.emplace("world2d", depth);

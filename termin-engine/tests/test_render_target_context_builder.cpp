@@ -107,6 +107,7 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
         });
     std::unordered_set<uint64_t> warnings;
     std::unordered_map<std::string, termin::RenderTargetContext> contexts;
+    std::unordered_map<std::string, tc_entity_handle> internal_entities_by_context;
     std::string default_context;
     const std::string base_context;
 
@@ -122,6 +123,7 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
         providers,
         warnings,
         contexts,
+        internal_entities_by_context,
         default_context,
     };
     REQUIRE(termin::rendering_manager_detail::build_render_target_contexts(request));

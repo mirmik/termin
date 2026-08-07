@@ -272,7 +272,7 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as the base shader key for RenderItem
     // shader overrides. The old source-based GeometryPassBase shader path has
     // been removed.
-    RenderItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "DepthPass");
+    const RenderItemSnapshot* snapshot = require_render_item_snapshot(ctx, "DepthPass");
     if (!snapshot) {
         return;
     }
@@ -797,8 +797,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
-    RenderItemSnapshot* snapshot =
-        ensure_render_item_snapshot(ctx, "DepthOnlyPass");
+    const RenderItemSnapshot* snapshot =
+        require_render_item_snapshot(ctx, "DepthOnlyPass");
     if (!snapshot) {
         return;
     }
