@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string_view>
+#include <vector>
 
 #include <termin/physics_qopt/termin_physics_qopt_api.hpp>
 #include <termin/qopt/active_set_qp.hpp>
@@ -121,7 +122,9 @@ namespace termin::physics_qopt
     {
     public:
         [[nodiscard]] DynamicsRegistrationResult<DynamicsFrictionContactHandle>
-        register_contact(std::string_view diagnostic_name) noexcept;
+        register_contact(
+            DynamicsUnilateralConstraintHandle normal_constraint,
+            std::string_view diagnostic_name) noexcept;
         [[nodiscard]] AssemblyDiagnostic finalize() noexcept;
 
         [[nodiscard]] bool finalized() const noexcept;
@@ -131,10 +134,13 @@ namespace termin::physics_qopt
         contact_topology() const noexcept;
         [[nodiscard]] const DenseBlockTopology&
         tangent_topology() const noexcept;
+        [[nodiscard]] DynamicsUnilateralConstraintHandle
+        normal_constraint(std::size_t contact_index) const noexcept;
 
     private:
         DenseBlockTopology contacts_;
         DenseBlockTopology tangents_;
+        std::vector<DynamicsUnilateralConstraintHandle> normal_constraints_;
         bool finalized_ = false;
     };
 

@@ -7,6 +7,7 @@
 #include <Eigen/Eigenvalues>
 #include <Eigen/SVD>
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -36,6 +37,7 @@ struct ConstraintOrigin {
 struct NormalizedInequalities {
   Matrix matrix;
   Vector limits;
+  Vector row_scales;
   std::vector<ConstraintOrigin> origins;
 };
 
@@ -57,6 +59,12 @@ struct DirectionResult {
   QpStatus status = QpStatus::NumericalFailure;
   QpDiagnostic diagnostic = QpDiagnostic::DecompositionFailure;
   Vector direction;
+};
+
+struct PivotEvent {
+  bool added = false;
+  std::size_t constraint = 0;
+  double value = 0.0;
 };
 
 [[nodiscard]] bool
@@ -243,14 +251,95 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   return std::find(indices.begin(), indices.end(), index) != indices.end();
 }
 
+using RowBasis = std::vector<Vector>;
+
+[[nodiscard]] double structural_rank_tolerance(Eigen::Index variables) {
+  return std::numeric_limits<double>::epsilon() * 128.0 *
+         static_cast<double>(std::max<Eigen::Index>(1, variables));
+}
+
+[[nodiscard]] std::optional<Vector>
+independent_row_direction(const Vector &input, const RowBasis &basis) {
+  const double scale = linf(input);
+  if (scale == 0.0) {
+    return std::nullopt;
+  }
+  Vector residual = input / scale;
+  for (int pass = 0; pass < 2; ++pass) {
+    for (const Vector &direction : basis) {
+      residual -= direction.dot(residual) * direction;
+    }
+  }
+  if (residual.norm() <= structural_rank_tolerance(input.size())) {
+    return std::nullopt;
+  }
+  return residual.normalized();
+}
+
+[[nodiscard]] bool append_independent_row(const Vector &input,
+                                          RowBasis &basis) {
+  std::optional<Vector> direction = independent_row_direction(input, basis);
+  if (!direction.has_value()) {
+    return false;
+  }
+  basis.push_back(std::move(*direction));
+  return true;
+}
+
+[[nodiscard]] RowBasis row_basis(const Matrix &rows) {
+  RowBasis basis;
+  basis.reserve(static_cast<std::size_t>(rows.cols()));
+  for (Eigen::Index row = 0;
+       row < rows.rows() &&
+       basis.size() < static_cast<std::size_t>(rows.cols());
+       ++row) {
+    (void)append_independent_row(rows.row(row).transpose(), basis);
+  }
+  return basis;
+}
+
+[[nodiscard]] std::vector<std::size_t> independent_active_set(
+    const Matrix &equalities, const Matrix &inequalities,
+    const std::vector<std::size_t> &candidates) {
+  RowBasis basis = row_basis(equalities);
+  std::vector<std::size_t> independent;
+  independent.reserve(candidates.size());
+  for (const std::size_t candidate : candidates) {
+    if (basis.size() == static_cast<std::size_t>(inequalities.cols())) {
+      break;
+    }
+    if (append_independent_row(
+            inequalities.row(static_cast<Eigen::Index>(candidate)).transpose(),
+            basis)) {
+      independent.push_back(candidate);
+    }
+  }
+  return independent;
+}
+
 [[nodiscard]] CoreResult solve_feasible_core(
     const Matrix &hessian, const Vector &gradient, const Matrix &equalities,
     const Vector &targets, const Matrix &inequalities, const Vector &limits,
     Vector primal, std::vector<std::size_t> active,
     const ActiveSetQpOptions &options, std::size_t &iterations) {
   const Eigen::Index equality_count = equalities.rows();
-  const double direction_tolerance =
-      scaled_tolerance(options.tolerance, matrix_linf(inequalities));
+  active = independent_active_set(equalities, inequalities, active);
+  std::array<PivotEvent, 16> pivot_trace{};
+  std::size_t pivot_event_count = 0;
+  std::optional<std::size_t> last_dropped_constraint;
+  std::vector<std::uint8_t> zero_step_readded(
+      static_cast<std::size_t>(inequalities.rows()), 0);
+  std::vector<std::size_t> zero_step_readd_counts(
+      static_cast<std::size_t>(inequalities.rows()), 0);
+  Vector limit_perturbations = Vector::Zero(inequalities.rows());
+  const auto record_pivot = [&](PivotEvent event) {
+    pivot_trace[pivot_event_count % pivot_trace.size()] = event;
+    ++pivot_event_count;
+  };
+  // Every inequality row is normalized before it reaches the core. Direction
+  // tests can therefore use one dimensionless threshold without allowing an
+  // unrelated, large row to hide a blocker.
+  const double direction_tolerance = scaled_tolerance(options.tolerance, 1.0);
 
   while (iterations < options.max_iterations) {
     ++iterations;
@@ -267,7 +356,8 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       working.row(equality_count + static_cast<Eigen::Index>(offset)) =
           inequalities.row(static_cast<Eigen::Index>(active[offset]));
       working_targets[equality_count + static_cast<Eigen::Index>(offset)] =
-          limits[static_cast<Eigen::Index>(active[offset])];
+          limits[static_cast<Eigen::Index>(active[offset])] +
+          limit_perturbations[static_cast<Eigen::Index>(active[offset])];
     }
 
     const EqualityResult subproblem = solve_equalities(
@@ -303,6 +393,7 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
 
     double step = finite_target ? 1.0 : std::numeric_limits<double>::infinity();
     std::optional<std::size_t> blocker;
+    const RowBasis working_basis = row_basis(working);
     for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
       const std::size_t index = static_cast<std::size_t>(row);
       if (contains(active, index)) {
@@ -312,7 +403,13 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       if (rate <= direction_tolerance) {
         continue;
       }
-      const double slack = limits[row] - inequalities.row(row).dot(primal);
+      if (!independent_row_direction(inequalities.row(row).transpose(),
+                                     working_basis)
+               .has_value()) {
+        continue;
+      }
+      const double perturbed_limit = limits[row] + limit_perturbations[row];
+      const double slack = perturbed_limit - inequalities.row(row).dot(primal);
       const double candidate = std::max(0.0, slack / rate);
       const double tie_tolerance =
           scaled_tolerance(options.tolerance, std::max(step, candidate));
@@ -325,7 +422,6 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
         blocker = index;
       }
     }
-
     const double step_tolerance =
         scaled_tolerance(options.tolerance, std::max(1.0, std::abs(step)));
     const bool blocked_before_target =
@@ -333,6 +429,11 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
     if (blocked_before_target) {
       primal += step * direction;
       active.push_back(*blocker);
+      record_pivot({true, *blocker, step});
+      const bool repeats_last_drop = last_dropped_constraint == blocker &&
+                                     step <= step_tolerance;
+      zero_step_readded[*blocker] = repeats_last_drop ? 1 : 0;
+      last_dropped_constraint.reset();
       continue;
     }
 
@@ -347,7 +448,8 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
 
     primal = subproblem.primal;
     std::optional<std::size_t> removal_offset;
-    double most_negative = -scaled_tolerance(options.tolerance, 1.0);
+    double most_negative =
+        -scaled_tolerance(options.tolerance, 1.0);
     for (std::size_t offset = 0; offset < active.size(); ++offset) {
       const double multiplier =
           subproblem.dual[equality_count + static_cast<Eigen::Index>(offset)];
@@ -357,6 +459,31 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
       }
     }
     if (removal_offset.has_value()) {
+      const std::size_t removed_constraint = active[*removal_offset];
+      record_pivot({
+          false,
+          removed_constraint,
+          subproblem.dual[equality_count +
+                          static_cast<Eigen::Index>(*removal_offset)],
+      });
+      if (zero_step_readded[removed_constraint] != 0) {
+        std::size_t &repeat_count =
+            zero_step_readd_counts[removed_constraint];
+        ++repeat_count;
+        if (repeat_count >= 2) {
+          // Distinct row-specific perturbations break a repeated degenerate
+          // drop/add tie. The largest shift remains strictly below
+          // active_tolerance, and the final solution is still validated
+          // against the original, unperturbed constraints.
+          const double lexicographic_fraction =
+              static_cast<double>(removed_constraint + 1) /
+              static_cast<double>(zero_step_readd_counts.size() + 1);
+          limit_perturbations[static_cast<Eigen::Index>(removed_constraint)] =
+              options.active_tolerance * lexicographic_fraction;
+        }
+      }
+      zero_step_readded[removed_constraint] = 0;
+      last_dropped_constraint = removed_constraint;
       active.erase(active.begin() +
                    static_cast<std::ptrdiff_t>(*removal_offset));
       continue;
@@ -378,6 +505,21 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
   }
 
   CoreResult result;
+  if (pivot_event_count != 0) {
+    std::fprintf(stderr,
+                 "[termin-qopt] active-set pivot trace at iteration limit: "
+                 "constraints=%zu events=%zu\n",
+                 active.size(), pivot_event_count);
+    const std::size_t trace_begin = pivot_event_count > pivot_trace.size()
+                                        ? pivot_event_count - pivot_trace.size()
+                                        : 0;
+    for (std::size_t index = trace_begin; index < pivot_event_count; ++index) {
+      const PivotEvent &event = pivot_trace[index % pivot_trace.size()];
+      std::fprintf(stderr, "  pivot[%zu]=%s constraint=%zu value=%.17g\n",
+                   index, event.added ? "add" : "drop", event.constraint,
+                   event.value);
+    }
+  }
   result.result = failure(QpStatus::NumericalFailure,
                           QpDiagnostic::IterationLimit, iterations);
   result.result.active_set_size = active.size();
@@ -402,12 +544,26 @@ normalize_inequalities(const Matrix &inequalities, const Vector &limits,
   NormalizedInequalities normalized;
   normalized.matrix = Matrix::Zero(rows, inequalities.cols());
   normalized.limits.resize(rows);
+  normalized.row_scales = Vector::Ones(rows);
   normalized.origins.reserve(static_cast<std::size_t>(rows));
 
   Eigen::Index row = 0;
   for (Eigen::Index index = 0; index < inequalities.rows(); ++index, ++row) {
     normalized.matrix.row(row) = inequalities.row(index);
     normalized.limits[row] = limits[index];
+    const double coefficient_scale =
+        normalized.matrix.row(row).cwiseAbs().maxCoeff();
+    if (coefficient_scale > 0.0) {
+      normalized.row_scales[row] = coefficient_scale;
+      normalized.matrix.row(row) /= coefficient_scale;
+      normalized.limits[row] /= coefficient_scale;
+    } else if (normalized.limits[row] != 0.0) {
+      // A constant constraint has no coefficient scale. Canonicalizing
+      // its nonzero limit still makes 0 <= d invariant to positive row
+      // scaling.
+      normalized.row_scales[row] = std::abs(normalized.limits[row]);
+      normalized.limits[row] /= normalized.row_scales[row];
+    }
     normalized.origins.push_back(
         {ConstraintFamily::Inequality, static_cast<std::size_t>(index)});
   }
@@ -458,17 +614,53 @@ normalize_inequalities(const Matrix &inequalities, const Vector &limits,
   return true;
 }
 
+struct ConstraintResidual {
+  double value = 0.0;
+  double residual = 0.0;
+  double tolerance = 0.0;
+};
+
+[[nodiscard]] ConstraintResidual constraint_residual(const Matrix &inequalities,
+                                                     const Vector &limits,
+                                                     const Vector &primal,
+                                                     Eigen::Index row,
+                                                     QpTolerance tolerance) {
+  const double value = inequalities.row(row).dot(primal);
+  return {
+      value,
+      value - limits[row],
+      scaled_tolerance(tolerance,
+                       std::max(std::abs(value), std::abs(limits[row]))),
+  };
+}
+
 [[nodiscard]] std::vector<std::size_t>
 tight_constraints(const Matrix &inequalities, const Vector &limits,
-                  const Vector &primal, double active_tolerance) {
+                  const Vector &primal, QpTolerance tolerance) {
   std::vector<std::size_t> active;
   for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
-    if (std::abs(inequalities.row(row).dot(primal) - limits[row]) <=
-        active_tolerance) {
+    const ConstraintResidual checked =
+        constraint_residual(inequalities, limits, primal, row, tolerance);
+    if (std::abs(checked.residual) <= checked.tolerance) {
       active.push_back(static_cast<std::size_t>(row));
     }
   }
   return active;
+}
+
+[[nodiscard]] bool constraints_feasible(const Matrix &inequalities,
+                                        const Vector &limits,
+                                        const Vector &primal,
+                                        double active_tolerance,
+                                        QpTolerance tolerance) {
+  for (Eigen::Index row = 0; row < inequalities.rows(); ++row) {
+    const ConstraintResidual checked =
+        constraint_residual(inequalities, limits, primal, row, tolerance);
+    if (checked.residual > std::max(active_tolerance, checked.tolerance)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 [[nodiscard]] CoreResult
@@ -509,11 +701,8 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   phase_start.head(variables) = seed;
   phase_start[variables] = maximum_violation + margin;
 
-  const double working_set_tolerance = scaled_tolerance(
-      options.tolerance,
-      std::max(matrix_linf(phase_inequalities), linf(phase_limits)));
   std::vector<std::size_t> active = tight_constraints(
-      phase_inequalities, phase_limits, phase_start, working_set_tolerance);
+      phase_inequalities, phase_limits, phase_start, options.tolerance);
   return solve_feasible_core(phase_hessian, phase_gradient, phase_equalities,
                              targets, phase_inequalities, phase_limits,
                              std::move(phase_start), std::move(active), options,
@@ -660,9 +849,6 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
 
   const NormalizedInequalities normalized =
       normalize_inequalities(inequalities, inequality_limits, lower, upper);
-  const double working_set_tolerance = scaled_tolerance(
-      options.tolerance,
-      std::max(matrix_linf(normalized.matrix), linf(normalized.limits)));
 
   Matrix feasibility_hessian =
       Matrix::Identity(static_cast<Eigen::Index>(variables),
@@ -692,14 +878,9 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
   if (!warm_start.primal.empty()) {
     primal = warm_primal;
     const double equality_error = linf(equalities * primal - equality_targets);
-    const double inequality_error =
-        normalized.matrix.rows() == 0
-            ? 0.0
-            : std::max(
-                  0.0,
-                  (normalized.matrix * primal - normalized.limits).maxCoeff());
     if (equality_error > options.active_tolerance ||
-        inequality_error > options.active_tolerance) {
+        !constraints_feasible(normalized.matrix, normalized.limits, primal,
+                              options.active_tolerance, options.tolerance)) {
       return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
     }
 
@@ -711,32 +892,35 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
                                 warm_start.active_upper_bounds)) {
           continue;
         }
-        const double residual = std::abs(
-            normalized.matrix.row(static_cast<Eigen::Index>(row)).dot(primal) -
-            normalized.limits[static_cast<Eigen::Index>(row)]);
-        if (residual > options.active_tolerance) {
+        const ConstraintResidual checked = constraint_residual(
+            normalized.matrix, normalized.limits, primal,
+            static_cast<Eigen::Index>(row), options.tolerance);
+        if (std::abs(checked.residual) >
+            std::max(options.active_tolerance, checked.tolerance)) {
           return failure(QpStatus::InvalidInput,
                          QpDiagnostic::InvalidWarmStart);
         }
-        if (residual <= working_set_tolerance) {
+        if (std::abs(checked.residual) <= checked.tolerance) {
           initial_active.push_back(row);
         }
       }
     } else {
       initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                         primal, working_set_tolerance);
+                                         primal, options.tolerance);
     }
   } else {
-    primal = equality_feasible.primal;
-    const double seed_violation =
-        normalized.matrix.rows() == 0
-            ? 0.0
-            : std::max(
-                  0.0,
-                  (normalized.matrix * primal - normalized.limits).maxCoeff());
-    const double seed_tolerance =
-        scaled_tolerance(options.tolerance, std::max(1.0, seed_violation));
-    if (seed_violation > seed_tolerance) {
+    // Start Phase I from the equality-constrained objective minimizer when it
+    // exists. The old minimum-norm origin can force a feasible active-set walk
+    // through every intermediate facet of a fine polygon before reaching the
+    // relevant face. Phase I retains feasibility guarantees while this seed
+    // preserves the objective's useful directional information.
+    const EqualityResult objective_seed = solve_equalities(
+        hessian, gradient, equalities, equality_targets, options.tolerance);
+    primal = objective_seed.result.status == QpStatus::Optimal
+                 ? objective_seed.primal
+                 : equality_feasible.primal;
+    if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0,
+                              options.tolerance)) {
       CoreResult phase =
           find_feasible_point(equalities, equality_targets, normalized.matrix,
                               normalized.limits, primal, options, iterations);
@@ -758,7 +942,7 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
       }
     }
     initial_active = tight_constraints(normalized.matrix, normalized.limits,
-                                       primal, working_set_tolerance);
+                                       primal, options.tolerance);
   }
 
   CoreResult solved = solve_feasible_core(
@@ -772,14 +956,18 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
 
   Vector normalized_dual = Vector::Zero(normalized.matrix.rows());
   for (std::size_t offset = 0; offset < solved.active.size(); ++offset) {
-    normalized_dual[static_cast<Eigen::Index>(solved.active[offset])] =
+    const double multiplier =
         solved.active_dual[static_cast<Eigen::Index>(offset)];
+    normalized_dual[static_cast<Eigen::Index>(solved.active[offset])] =
+        multiplier;
   }
   Vector inequality_dual = Vector::Zero(inequalities.rows());
   Vector lower_dual = Vector::Zero(lower.size());
   Vector upper_dual = Vector::Zero(upper.size());
   for (std::size_t row = 0; row < normalized.origins.size(); ++row) {
-    const double multiplier = normalized_dual[static_cast<Eigen::Index>(row)];
+    const double multiplier =
+        normalized_dual[static_cast<Eigen::Index>(row)] /
+        normalized.row_scales[static_cast<Eigen::Index>(row)];
     const ConstraintOrigin origin = normalized.origins[row];
     switch (origin.family) {
     case ConstraintFamily::Inequality:
@@ -798,18 +986,38 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
                               equalities.transpose() * solved.equality_dual +
                               normalized.matrix.transpose() * normalized_dual;
   const Vector equality_error = equalities * solved.primal - equality_targets;
-  const Vector inequality_slack =
+  const Vector normalized_inequality_slack =
       normalized.matrix * solved.primal - normalized.limits;
-  const Vector complementarity = normalized_dual.cwiseProduct(inequality_slack);
+  const Vector complementarity =
+      normalized_dual.cwiseProduct(normalized_inequality_slack);
+
+  double original_inequality_violation = 0.0;
+  if (inequalities.rows() > 0) {
+    original_inequality_violation = std::max(
+        0.0, (inequalities * solved.primal - inequality_limits).maxCoeff());
+  }
+  for (Eigen::Index index = 0; index < lower.size(); ++index) {
+    if (std::isfinite(lower[index])) {
+      original_inequality_violation = std::max(
+          original_inequality_violation, lower[index] - solved.primal[index]);
+    }
+  }
+  for (Eigen::Index index = 0; index < upper.size(); ++index) {
+    if (std::isfinite(upper[index])) {
+      original_inequality_violation = std::max(
+          original_inequality_violation, solved.primal[index] - upper[index]);
+    }
+  }
 
   solved.result.stationarity_linf = linf(stationarity);
   solved.result.equality_linf = linf(equality_error);
-  solved.result.inequality_linf =
-      inequality_slack.size() == 0 ? 0.0
-                                   : std::max(0.0, inequality_slack.maxCoeff());
-  solved.result.dual_linf = normalized_dual.size() == 0
-                                ? 0.0
-                                : std::max(0.0, -normalized_dual.minCoeff());
+  solved.result.inequality_linf = original_inequality_violation;
+  solved.result.dual_linf = std::max({
+      inequality_dual.size() == 0 ? 0.0
+                                  : std::max(0.0, -inequality_dual.minCoeff()),
+      lower_dual.size() == 0 ? 0.0 : std::max(0.0, -lower_dual.minCoeff()),
+      upper_dual.size() == 0 ? 0.0 : std::max(0.0, -upper_dual.minCoeff()),
+  });
   solved.result.complementarity_linf = linf(complementarity);
   solved.result.iterations = iterations;
 
@@ -824,10 +1032,14 @@ find_feasible_point(const Matrix &equalities, const Vector &targets,
       scaled_tolerance(options.tolerance, residual_scale);
   const double feasibility_tolerance =
       std::max(options.active_tolerance, residual_tolerance);
+  const double normalized_dual_violation =
+      normalized_dual.size() == 0 ? 0.0
+                                  : std::max(0.0, -normalized_dual.minCoeff());
   if (solved.result.stationarity_linf > residual_tolerance ||
       solved.result.equality_linf > feasibility_tolerance ||
-      solved.result.inequality_linf > feasibility_tolerance ||
-      solved.result.dual_linf > residual_tolerance ||
+      !constraints_feasible(normalized.matrix, normalized.limits, solved.primal,
+                            options.active_tolerance, options.tolerance) ||
+      normalized_dual_violation > residual_tolerance ||
       solved.result.complementarity_linf > feasibility_tolerance) {
     solved.result.status = QpStatus::NumericalFailure;
     solved.result.diagnostic = QpDiagnostic::ResidualTooLarge;

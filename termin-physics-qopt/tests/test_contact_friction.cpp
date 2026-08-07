@@ -40,6 +40,7 @@ namespace
         std::array<double, 3> velocity{1.0, 0.0, 0.0};
         std::array<double, 3> normal{0.0, 0.0, 1.0};
         std::array<double, 1> minimum_normal_velocity{0.0};
+        std::array<std::size_t, 1> normal_rows{0};
         std::array<double, 6> tangents{
             1.0,
             0.0,
@@ -64,6 +65,7 @@ namespace
                 ConstDenseMatrixView::row_major(normal.data(), 1, 3),
                 {minimum_normal_velocity.data(), 1, 1},
                 ConstDenseMatrixView::row_major(normal.data(), 1, 3),
+                {normal_rows.data(), normal_rows.size()},
                 ConstDenseMatrixView::row_major(tangents.data(), 2, 3),
                 {normal_impulse.data(), 1, 1},
                 {coefficient.data(), 1, 1},
@@ -176,6 +178,7 @@ namespace
         std::vector<double> targets(contacts, 0.0);
         std::vector<double> normal_impulses(contacts, 1.0);
         std::vector<double> coefficients(contacts, 0.7);
+        std::array<std::size_t, contacts> normal_rows{};
         for (std::size_t dof = 0; dof < dofs; ++dof)
         {
             mass[dof * dofs + dof] = 1.0;
@@ -189,9 +192,10 @@ namespace
             normals[contact * dofs + base + 2] = 1.0;
             tangents[(contact * 2) * dofs + base] = 1.0;
             tangents[(contact * 2 + 1) * dofs + base + 1] = 1.0;
+            normal_rows[contact] = contact;
         }
 
-        for (const std::size_t facets : {6U, 8U, 16U})
+        for (const std::size_t facets : {6U, 8U, 16U, 32U})
         {
             std::vector<double> solved_velocity(dofs, 0.0);
             std::vector<double> tangent_impulses(contacts * 2, 0.0);
@@ -207,6 +211,7 @@ namespace
                     {targets.data(), targets.size(), 1},
                     ConstDenseMatrixView::row_major(
                         normals.data(), contacts, dofs),
+                    {normal_rows.data(), normal_rows.size()},
                     ConstDenseMatrixView::row_major(
                         tangents.data(), contacts * 2, dofs),
                     {normal_impulses.data(), normal_impulses.size(), 1},
@@ -224,6 +229,9 @@ namespace
                 {.cone_facets = facets});
             TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
             TERMIN_QOPT_CHECK(result.iterations < 128);
+            TERMIN_QOPT_CHECK(result.active_set_size <= contacts * 2);
+            TERMIN_QOPT_CHECK(result.constraint_rank ==
+                              contacts + result.active_set_size);
             for (std::size_t contact = 0; contact < contacts; ++contact)
             {
                 const std::size_t base = contact * 3;
@@ -309,6 +317,7 @@ namespace
         const std::array<double, 2> targets{};
         const std::array<double, 2> normal_impulses{0.5, 0.5};
         const std::array<double, 2> coefficients{0.5, 0.5};
+        const std::array<std::size_t, 2> normal_rows{0, 1};
         std::array<double, 3> solved_velocity{};
         std::array<double, 4> tangent_impulses{};
         std::array<double, 2> solved_normal_impulses{};
@@ -322,6 +331,7 @@ namespace
                 ConstDenseMatrixView::row_major(normals.data(), 2, 3),
                 {targets.data(), targets.size(), 1},
                 ConstDenseMatrixView::row_major(normals.data(), 2, 3),
+                {normal_rows.data(), normal_rows.size()},
                 ConstDenseMatrixView::row_major(tangents.data(), 4, 3),
                 {normal_impulses.data(), normal_impulses.size(), 1},
                 {coefficients.data(), coefficients.size(), 1},
@@ -345,6 +355,80 @@ namespace
         TERMIN_QOPT_CHECK(solved_velocity[1] - solved_velocity[2] >= -1e-10);
         TERMIN_QOPT_CHECK(solved_velocity[1] + solved_velocity[2] >= -1e-10);
         TERMIN_QOPT_CHECK(work[0] + work[1] <= 1e-10);
+    }
+
+    void test_mixed_support_has_rank_safe_constraints()
+    {
+        constexpr std::size_t contacts = 2;
+        constexpr std::size_t dofs = 6;
+        std::array<double, dofs * dofs> mass{};
+        for (std::size_t dof = 0; dof < dofs; ++dof)
+        {
+            mass[dof * dofs + dof] = 1.0;
+        }
+        const std::array<double, dofs> velocity{1.0, 0.0, 0.0,
+                                                0.5, 0.0, 0.0};
+        // Global unilateral order intentionally differs from friction-contact
+        // order. Contact 0 supports; contact 1 begins with zero impulse.
+        const std::array<double, contacts * dofs> normals{
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+            0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+        };
+        const std::array<double, contacts * dofs> contact_normals{
+            0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        };
+        const std::array<std::size_t, contacts> normal_rows{1, 0};
+        const std::array<double, contacts * 2 * dofs> tangents{
+            1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        };
+        const std::array<double, contacts> targets{};
+        const std::array<double, contacts> normal_impulses{1.0, 0.0};
+        const std::array<double, contacts> coefficients{0.7, 0.7};
+        std::array<double, dofs> solved_velocity{};
+        std::array<double, contacts * 2> tangent_impulses{};
+        std::array<double, contacts> solved_normal_impulses{};
+        std::array<double, contacts> work{};
+
+        const QpSolveResult result = solve_contact_friction(
+            {
+                ConstDenseMatrixView::row_major(mass.data(), dofs, dofs),
+                ConstDenseMatrixView::row_major(nullptr, 0, dofs),
+                {velocity.data(), velocity.size(), 1},
+                ConstDenseMatrixView::row_major(
+                    normals.data(), contacts, dofs),
+                {targets.data(), targets.size(), 1},
+                ConstDenseMatrixView::row_major(
+                    contact_normals.data(), contacts, dofs),
+                {normal_rows.data(), normal_rows.size()},
+                ConstDenseMatrixView::row_major(
+                    tangents.data(), contacts * 2, dofs),
+                {normal_impulses.data(), normal_impulses.size(), 1},
+                {coefficients.data(), coefficients.size(), 1},
+            },
+            {
+                {solved_velocity.data(), solved_velocity.size(), 1},
+                {tangent_impulses.data(), tangent_impulses.size(), 1},
+                {solved_normal_impulses.data(),
+                 solved_normal_impulses.size(),
+                 1},
+                {work.data(), work.size(), 1},
+                {},
+            });
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(result.iterations < 128);
+        TERMIN_QOPT_CHECK(result.constraint_rank ==
+                          1 + result.active_set_size);
+        TERMIN_QOPT_CHECK(result.constraint_rank <= contacts * 3);
+        TERMIN_QOPT_CHECK(std::abs(solved_velocity[2]) < 1e-10);
+        TERMIN_QOPT_CHECK(solved_velocity[5] >= -1e-10);
+        TERMIN_QOPT_CHECK(solved_normal_impulses[0] >= -1e-10);
+        TERMIN_QOPT_CHECK(solved_normal_impulses[1] >= -1e-10);
+        TERMIN_QOPT_CHECK(work[0] <= 1e-10);
+        TERMIN_QOPT_CHECK(work[1] <= 1e-10);
     }
 
     void test_invalid_normal_state_is_rejected_transactionally()
@@ -390,6 +474,7 @@ int main()
     test_friction_preserves_normal_nonpenetration();
     test_kinematically_locked_tangents_are_noop();
     test_multi_contact_support_redistributes_normal_impulse();
+    test_mixed_support_has_rank_safe_constraints();
     test_invalid_normal_state_is_rejected_transactionally();
     test_roundoff_negative_normal_impulse_is_clamped();
     return 0;

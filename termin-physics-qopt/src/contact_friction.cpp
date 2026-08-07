@@ -84,6 +84,7 @@ namespace termin::physics_qopt
             problem.normal_jacobian.columns != dofs ||
             problem.contact_normal_jacobian.rows != contacts ||
             problem.contact_normal_jacobian.columns != dofs ||
+            problem.contact_normal_rows.size() != contacts ||
             problem.tangent_jacobian.rows != tangents ||
             problem.tangent_jacobian.columns != dofs ||
             problem.friction_coefficient.size != contacts ||
@@ -103,6 +104,7 @@ namespace termin::physics_qopt
             !valid(problem.normal_jacobian) ||
             !valid(problem.minimum_normal_velocity) ||
             !valid(problem.contact_normal_jacobian) ||
+            (contacts != 0 && problem.contact_normal_rows.data() == nullptr) ||
             !valid(problem.tangent_jacobian) ||
             !valid(problem.normal_impulse) ||
             !valid(problem.friction_coefficient) || !valid(solution.velocity) ||
@@ -128,8 +130,33 @@ namespace termin::physics_qopt
             return invalid_result(QpDiagnostic::NonFiniteInput);
         }
         std::vector<double> base_normal_impulse(contacts);
+        std::vector<bool> normal_row_claimed(normal_constraints, false);
         for (std::size_t contact = 0; contact < contacts; ++contact)
         {
+            const std::size_t normal_row =
+                problem.contact_normal_rows[contact];
+            if (normal_row >= normal_constraints ||
+                normal_row_claimed[normal_row])
+            {
+                return invalid_result(QpDiagnostic::DimensionMismatch);
+            }
+            normal_row_claimed[normal_row] = true;
+            for (std::size_t dof = 0; dof < dofs; ++dof)
+            {
+                const double contact_coefficient =
+                    problem.contact_normal_jacobian(contact, dof);
+                const double global_coefficient =
+                    problem.normal_jacobian(normal_row, dof);
+                const double scale = std::max(
+                    {1.0,
+                     std::abs(contact_coefficient),
+                     std::abs(global_coefficient)});
+                if (std::abs(contact_coefficient - global_coefficient) >
+                    options.qp.active_tolerance * scale)
+                {
+                    return invalid_result(QpDiagnostic::DimensionMismatch);
+                }
+            }
             if (problem.normal_impulse[contact] <
                     -options.qp.active_tolerance ||
                 problem.friction_coefficient[contact] < 0.0)
@@ -224,8 +251,8 @@ namespace termin::physics_qopt
                 return result;
             }
 
-            // K maps tangent impulses to bilateral-compatible velocity
-            // corrections: delta_v = K * p_t.
+            // K maps variable impulses to bilateral-compatible velocity
+            // corrections: delta_v = K * p.
             std::vector<double> response(dofs * variables, 0.0);
             std::vector<double> bilateral_response(bilateral * variables, 0.0);
             std::vector<double> load(dofs, 0.0);
@@ -316,53 +343,81 @@ namespace termin::physics_qopt
                 }
             }
 
+            std::vector<bool> supporting_contact(contacts, false);
+            std::vector<bool> supporting_normal_row(normal_constraints, false);
+            std::size_t equality_rows = 0;
+            for (std::size_t contact = 0; contact < contacts; ++contact)
+            {
+                supporting_contact[contact] =
+                    base_normal_impulse[contact] >
+                    options.qp.active_tolerance;
+                if (supporting_contact[contact])
+                {
+                    supporting_normal_row
+                        [problem.contact_normal_rows[contact]] = true;
+                    ++equality_rows;
+                }
+            }
+
+            std::vector<double> equalities(equality_rows * variables, 0.0);
+            std::vector<double> equality_targets(equality_rows, 0.0);
+            std::size_t equality_row = 0;
+            for (std::size_t contact = 0; contact < contacts; ++contact)
+            {
+                if (!supporting_contact[contact])
+                {
+                    continue;
+                }
+                for (std::size_t variable = 0; variable < variables;
+                     ++variable)
+                {
+                    for (std::size_t dof = 0; dof < dofs; ++dof)
+                    {
+                        equalities[equality_row * variables + variable] +=
+                            problem.contact_normal_jacobian(contact, dof) *
+                            response[dof * variables + variable];
+                    }
+                }
+                ++equality_row;
+            }
+
             const std::size_t polygon_rows = contacts * options.cone_facets;
             const std::size_t inequality_rows =
-                normal_constraints + contacts * 2 + polygon_rows;
+                normal_constraints - equality_rows + contacts + polygon_rows;
             std::vector<double> inequalities(inequality_rows * variables, 0.0);
             std::vector<double> limits(inequality_rows, 0.0);
+            std::size_t inequality_row = 0;
             for (std::size_t row = 0; row < normal_constraints; ++row)
             {
+                if (supporting_normal_row[row])
+                {
+                    continue;
+                }
                 double normal_velocity = 0.0;
                 for (std::size_t dof = 0; dof < dofs; ++dof)
                 {
                     normal_velocity += problem.normal_jacobian(row, dof) *
                                        problem.normal_projected_velocity[dof];
                 }
-                limits[row] =
+                limits[inequality_row] =
                     normal_velocity - problem.minimum_normal_velocity[row];
                 for (std::size_t variable = 0; variable < variables; ++variable)
                 {
                     for (std::size_t dof = 0; dof < dofs; ++dof)
                     {
-                        inequalities[row * variables + variable] -=
+                        inequalities[inequality_row * variables + variable] -=
                             problem.normal_jacobian(row, dof) *
                             response[dof * variables + variable];
                     }
                 }
+                ++inequality_row;
             }
 
             for (std::size_t contact = 0; contact < contacts; ++contact)
             {
-                const std::size_t lower_row = normal_constraints + contact;
+                const std::size_t lower_row = inequality_row++;
                 inequalities[lower_row * variables + contact * 3] = -1.0;
                 limits[lower_row] = base_normal_impulse[contact];
-                const std::size_t active_normal_row =
-                    normal_constraints + contacts + contact;
-                if (base_normal_impulse[contact] > options.qp.active_tolerance)
-                {
-                    for (std::size_t variable = 0; variable < variables;
-                         ++variable)
-                    {
-                        for (std::size_t dof = 0; dof < dofs; ++dof)
-                        {
-                            inequalities[active_normal_row * variables +
-                                         variable] +=
-                                problem.contact_normal_jacobian(contact, dof) *
-                                response[dof * variables + variable];
-                        }
-                    }
-                }
                 const double radius = problem.friction_coefficient[contact] *
                                       base_normal_impulse[contact];
                 const double polygon_limit =
@@ -371,9 +426,7 @@ namespace termin::physics_qopt
                 for (std::size_t facet = 0; facet < options.cone_facets;
                      ++facet)
                 {
-                    const std::size_t row = normal_constraints + contacts * 2 +
-                                            contact * options.cone_facets +
-                                            facet;
+                    const std::size_t row = inequality_row++;
                     const double angle =
                         (static_cast<double>(facet) + 0.5) * 2.0 *
                         std::numbers::pi /
@@ -390,14 +443,16 @@ namespace termin::physics_qopt
                 }
             }
 
+            std::vector<double> equality_dual(equality_rows, 0.0);
             std::vector<double> inequality_dual(inequality_rows, 0.0);
             const QpSolveResult result = solve_active_set_qp(
                 {
                     ConstDenseMatrixView::row_major(
                         hessian.data(), variables, variables),
                     {gradient.data(), gradient.size(), 1},
-                    ConstDenseMatrixView::row_major(nullptr, 0, variables),
-                    {},
+                    ConstDenseMatrixView::row_major(
+                        equalities.data(), equality_rows, variables),
+                    {equality_targets.data(), equality_targets.size(), 1},
                     ConstDenseMatrixView::row_major(
                         inequalities.data(), inequality_rows, variables),
                     {limits.data(), limits.size(), 1},
@@ -406,7 +461,7 @@ namespace termin::physics_qopt
                 },
                 {
                     {variable_impulse.data(), variable_impulse.size(), 1},
-                    {},
+                    {equality_dual.data(), equality_dual.size(), 1},
                     {inequality_dual.data(), inequality_dual.size(), 1},
                     {},
                     {},
