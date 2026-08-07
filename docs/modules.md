@@ -260,7 +260,12 @@ UI нет. Headless composition использует document/rendering primitiv
 
 Source of truth: [tcplot docs](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md)
 
-Plotting library поверх tgfx/tcgui. Должен переиспользовать renderer/runtime abstractions из [termin-graphics](#termin-graphics) и host/window infrastructure из [termin-display](#termin-display), не заводя собственный низкоуровневый GPU слой.
+Plotting library поверх tgfx/tcgui. Переиспользует GPU abstractions из
+[termin-graphics](#termin-graphics), scene-neutral framegraph/execution из
+`termin_render_core` и host/window infrastructure из
+[termin-display](#termin-display), не заводя собственный низкоуровневый GPU
+слой. `PlotScene3DRenderItemSource` публикует retained 3D identities в общий
+render core без зависимости на `termin_scene` или `termin_lighting`.
 
 Маркеры, подписи, callouts, legends и интерактивные handles графиков должны жить как retained plot annotation model внутри `tcplot`, а не как виджеты `termin-gui`; см. [UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
 
