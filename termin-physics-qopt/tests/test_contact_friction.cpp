@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 #include <termin/physics_qopt/contact_friction.hpp>
 
@@ -125,35 +126,113 @@ namespace
     void test_rotated_tangent_basis()
     {
         constexpr double rotation = 0.37;
-        OneContactFixture reference;
-        reference.velocity = {std::cos(0.21), std::sin(0.21), 0.0};
-        reference.coefficient[0] = 0.45;
-        TERMIN_QOPT_CHECK(
-            solve_contact_friction(reference.problem(), reference.solution())
-                .status == QpStatus::Optimal);
+        for (const std::size_t facets : {6U, 8U, 16U, 32U})
+        {
+            OneContactFixture reference;
+            reference.velocity = {std::cos(0.21), std::sin(0.21), 0.0};
+            reference.coefficient[0] = 0.45;
+            TERMIN_QOPT_CHECK(
+                solve_contact_friction(reference.problem(),
+                                       reference.solution(),
+                                       {.cone_facets = facets})
+                    .status == QpStatus::Optimal);
 
-        OneContactFixture rotated = reference;
-        rotated.tangents = {
-            std::cos(rotation),
-            std::sin(rotation),
-            0.0,
-            -std::sin(rotation),
-            std::cos(rotation),
-            0.0,
-        };
-        TERMIN_QOPT_CHECK(
-            solve_contact_friction(rotated.problem(), rotated.solution())
-                .status == QpStatus::Optimal);
-        const double physical_difference = std::hypot(
-            rotated.solved_velocity[0] - reference.solved_velocity[0],
-            rotated.solved_velocity[1] - reference.solved_velocity[1]);
-        // Two arbitrarily rotated regular N-gons can quantize the opposing
-        // impulse directions by at most one facet angle relative to each
-        // other. Both impulses remain inside the true Coulomb disk.
-        const double polygon_bound =
-            2.0 * 0.45 * std::sin(std::numbers::pi / 32.0);
-        TERMIN_QOPT_CHECK(physical_difference <= polygon_bound + 1e-10);
-        TERMIN_QOPT_CHECK(rotated.work[0] <= 1e-12);
+            OneContactFixture rotated = reference;
+            rotated.tangents = {
+                std::cos(rotation),
+                std::sin(rotation),
+                0.0,
+                -std::sin(rotation),
+                std::cos(rotation),
+                0.0,
+            };
+            TERMIN_QOPT_CHECK(
+                solve_contact_friction(rotated.problem(),
+                                       rotated.solution(),
+                                       {.cone_facets = facets})
+                    .status == QpStatus::Optimal);
+            const double physical_difference = std::hypot(
+                rotated.solved_velocity[0] - reference.solved_velocity[0],
+                rotated.solved_velocity[1] - reference.solved_velocity[1]);
+            // Two arbitrarily rotated regular N-gons can quantize the
+            // opposing impulse directions by at most one facet angle relative
+            // to each other. Both impulses remain inside the true disk.
+            const double polygon_bound =
+                2.0 * 0.45 * std::sin(std::numbers::pi /
+                                      static_cast<double>(facets));
+            TERMIN_QOPT_CHECK(physical_difference <= polygon_bound + 1e-10);
+            TERMIN_QOPT_CHECK(rotated.work[0] <= 1e-12);
+        }
+    }
+
+    void test_six_contact_support_across_facet_counts()
+    {
+        constexpr std::size_t contacts = 6;
+        constexpr std::size_t dofs = contacts * 3;
+        std::vector<double> mass(dofs * dofs, 0.0);
+        std::vector<double> velocity(dofs, 0.0);
+        std::vector<double> normals(contacts * dofs, 0.0);
+        std::vector<double> tangents(contacts * 2 * dofs, 0.0);
+        std::vector<double> targets(contacts, 0.0);
+        std::vector<double> normal_impulses(contacts, 1.0);
+        std::vector<double> coefficients(contacts, 0.7);
+        for (std::size_t dof = 0; dof < dofs; ++dof)
+        {
+            mass[dof * dofs + dof] = 1.0;
+        }
+        for (std::size_t contact = 0; contact < contacts; ++contact)
+        {
+            const std::size_t base = contact * 3;
+            const double angle = 0.17 + 0.31 * static_cast<double>(contact);
+            velocity[base] = std::cos(angle);
+            velocity[base + 1] = std::sin(angle);
+            normals[contact * dofs + base + 2] = 1.0;
+            tangents[(contact * 2) * dofs + base] = 1.0;
+            tangents[(contact * 2 + 1) * dofs + base + 1] = 1.0;
+        }
+
+        for (const std::size_t facets : {6U, 8U, 16U})
+        {
+            std::vector<double> solved_velocity(dofs, 0.0);
+            std::vector<double> tangent_impulses(contacts * 2, 0.0);
+            std::vector<double> solved_normal_impulses(contacts, 0.0);
+            std::vector<double> work(contacts, 0.0);
+            const QpSolveResult result = solve_contact_friction(
+                {
+                    ConstDenseMatrixView::row_major(mass.data(), dofs, dofs),
+                    ConstDenseMatrixView::row_major(nullptr, 0, dofs),
+                    {velocity.data(), velocity.size(), 1},
+                    ConstDenseMatrixView::row_major(
+                        normals.data(), contacts, dofs),
+                    {targets.data(), targets.size(), 1},
+                    ConstDenseMatrixView::row_major(
+                        normals.data(), contacts, dofs),
+                    ConstDenseMatrixView::row_major(
+                        tangents.data(), contacts * 2, dofs),
+                    {normal_impulses.data(), normal_impulses.size(), 1},
+                    {coefficients.data(), coefficients.size(), 1},
+                },
+                {
+                    {solved_velocity.data(), solved_velocity.size(), 1},
+                    {tangent_impulses.data(), tangent_impulses.size(), 1},
+                    {solved_normal_impulses.data(),
+                     solved_normal_impulses.size(),
+                     1},
+                    {work.data(), work.size(), 1},
+                    {},
+                },
+                {.cone_facets = facets});
+            TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+            TERMIN_QOPT_CHECK(result.iterations < 128);
+            for (std::size_t contact = 0; contact < contacts; ++contact)
+            {
+                const std::size_t base = contact * 3;
+                TERMIN_QOPT_CHECK(std::hypot(solved_velocity[base],
+                                             solved_velocity[base + 1]) < 1.0);
+                TERMIN_QOPT_CHECK(solved_normal_impulses[contact] >= -1e-10);
+                TERMIN_QOPT_CHECK(work[contact] <= 1e-12);
+            }
+        }
     }
 
     void test_friction_preserves_normal_nonpenetration()
@@ -303,9 +382,11 @@ namespace
 
 int main()
 {
+    TERMIN_QOPT_CHECK(ContactFrictionOptions{}.cone_facets == 6);
     test_zero_friction_is_exact_noop();
     test_static_and_sliding_regimes();
     test_rotated_tangent_basis();
+    test_six_contact_support_across_facet_counts();
     test_friction_preserves_normal_nonpenetration();
     test_kinematically_locked_tangents_are_noop();
     test_multi_contact_support_redistributes_normal_impulse();

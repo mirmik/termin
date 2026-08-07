@@ -464,6 +464,7 @@ namespace termin::physics_qopt
         DynamicsFailure,
         PositionProjectionFailure,
         VelocityProjectionFailure,
+        FrictionProjectionFailure,
         InternalFailure,
     };
 
@@ -477,6 +478,10 @@ namespace termin::physics_qopt
         double position_tolerance = 1e-9;
         double velocity_tolerance = 1e-9;
         std::size_t max_position_iterations = 6;
+        // Even-sided inscribed approximation of the Coulomb friction disk.
+        // Six facets is the realtime default; callers may request a finer
+        // approximation when the additional inequalities are justified.
+        std::size_t friction_cone_facets = 6;
         QpTolerance qp_tolerance;
     };
 
@@ -487,10 +492,13 @@ namespace termin::physics_qopt
             DynamicsSystemDiagnostic::ModelNotFinalized;
         QpSolveResult dynamics;
         QpSolveResult velocity_projection;
+        QpSolveResult friction_projection;
         double position_constraint_linf = 0.0;
         double velocity_constraint_linf = 0.0;
         std::size_t position_iterations = 0;
         std::size_t unilateral_constraint_count = 0;
+        std::size_t friction_contact_count = 0;
+        std::size_t friction_cone_facets = 0;
         std::size_t endpoint_equality_factorizations = 0;
         std::size_t endpoint_equality_factorization_reuses = 0;
 
