@@ -3,6 +3,19 @@ using System.Runtime.InteropServices;
 
 namespace Termin.Native;
 
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct RetainedSceneRenderTimings2D
+{
+    public readonly double PaintMilliseconds;
+    public readonly double FreezeMilliseconds;
+    /// <summary>
+    /// CPU time spent recording and submitting draw commands. This is not a
+    /// GPU timestamp measurement.
+    /// </summary>
+    public readonly double GpuSubmitMilliseconds;
+    public readonly double TotalMilliseconds;
+}
+
 /// <summary>
 /// Renders a borrowed retained visual scene into a tgfx offscreen texture.
 /// The GPU host and scene must outlive this object.
@@ -29,6 +42,19 @@ public sealed class RetainedSceneRenderer2D : IDisposable
     }
 
     public TcVisualScene2D Scene => _scene;
+
+    public RetainedSceneRenderTimings2D LastTimings
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (RetainedSceneRendererNative.LastTimings(
+                    _native, out RetainedSceneRenderTimings2D timings) == 0)
+                throw new InvalidOperationException(
+                    "Failed to read retained scene render timings.");
+            return timings;
+        }
+    }
 
     public int MsaaSamples
     {
@@ -134,6 +160,13 @@ internal static class RetainedSceneRendererNative
         IntPtr renderer,
         int width,
         int height);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_scene_renderer2d_last_timings")]
+    internal static extern int LastTimings(
+        IntPtr renderer,
+        out RetainedSceneRenderTimings2D timings);
 
     [DllImport(Dll, EntryPoint = "tc_retained_scene_renderer2d_release_gpu")]
     internal static extern void ReleaseGpu(IntPtr renderer);

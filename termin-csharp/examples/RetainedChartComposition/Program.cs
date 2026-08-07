@@ -170,6 +170,8 @@ for (int index = 0; index < multiPanelCount; ++index)
 multiGroup.SetSharedX(41, 51);
 uint multiAppendedTexture = multiRenderer.RenderToTextureHandleId(640, 480);
 uint peerAppendedTexture = peerMultiRenderer.RenderToTextureHandleId(640, 480);
+RetainedSceneRenderTimings2D multiTimings = multiRenderer.LastTimings;
+RetainedSceneRenderTimings2D peerTimings = peerMultiRenderer.LastTimings;
 multiGroup.ScrollOffset = multiGroup.MaximumScrollOffset;
 uint multiBottomTexture = multiRenderer.RenderToTextureHandleId(640, 480);
 uint peerBottomTexture = peerMultiRenderer.RenderToTextureHandleId(640, 480);
@@ -178,6 +180,16 @@ if (multiTopTexture == 0 || peerTopTexture == 0 ||
     multiBottomTexture == 0 || peerBottomTexture == 0)
     throw new InvalidOperationException(
         "Native 2x15 multi-chart retained render smoke check failed.");
+if (multiTimings.PaintMilliseconds < 0 ||
+    multiTimings.FreezeMilliseconds < 0 ||
+    multiTimings.GpuSubmitMilliseconds < 0 ||
+    multiTimings.TotalMilliseconds <= 0 ||
+    peerTimings.PaintMilliseconds < 0 ||
+    peerTimings.FreezeMilliseconds < 0 ||
+    peerTimings.GpuSubmitMilliseconds < 0 ||
+    peerTimings.TotalMilliseconds <= 0)
+    throw new InvalidOperationException(
+        "Native retained render telemetry smoke check failed.");
 
 Console.WriteLine(FormattableString.Invariant(
-    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK. Multi scenes {multi.Scene.Id}/{peerMulti.Scene.Id}: 2x{multiPanelCount} stable panels, coordinated reconfigure, virtual scroll, deferred shared X, styled append, and top/bottom retained D3D render OK."));
+    $"Scene {chart.Scene.Id}: {chart.Scene.Count} native items, {sine.Item.Snapshot.PointCount} native line points, semantic series and legend OK, fitted range x=[{fitted.XMin:F3}, {fitted.XMax:F3}], y=[{fitted.YMin:F3}, {fitted.YMax:F3}]; pan/zoom OK. Multi scenes {multi.Scene.Id}/{peerMulti.Scene.Id}: 2x{multiPanelCount} stable panels, coordinated reconfigure, virtual scroll, deferred shared X, styled append, render telemetry (cached paint {multiTimings.PaintMilliseconds:F3}/{peerTimings.PaintMilliseconds:F3} ms), and top/bottom retained D3D render OK."));
