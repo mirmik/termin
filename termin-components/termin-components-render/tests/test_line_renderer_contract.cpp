@@ -6,9 +6,11 @@ GUARD_TEST_MAIN();
 #include <vector>
 
 #include <components/mesh_component.hpp>
+#include <termin/render/depth_pass.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/normal_pass.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/render_task.hpp>
@@ -161,6 +163,35 @@ FragmentOutput fs_main(FragmentInput input)
         return nullptr;
     }
 
+    bool resource_decls_contain(const std::vector<termin::MaterialPipelineResourceDecl>& resources,
+                                const char* name) {
+        for (const auto& resource : resources) {
+            if (resource.requirement.name == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool shader_contract_contains(const tc_shader_contract_view& contract, const char* name) {
+        for (uint32_t i = 0; i < contract.resource_count; ++i) {
+            if (std::strcmp(contract.resources[i].name, name) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    class ExposedDepthPass : public termin::DepthPass {
+    public:
+        using termin::DepthPass::shader_pass_contract;
+    };
+
+    class ExposedNormalPass : public termin::NormalPass {
+    public:
+        using termin::NormalPass::shader_pass_contract;
+    };
+
     termin::TcMesh make_two_submesh_mesh() {
         const float vertices[] = {
             0.0f,
@@ -276,6 +307,54 @@ TEST_CASE("LineRenderer composes WorldTube with the multiview pass adapter") {
 
     material_shader = termin::TcShader();
     CHECK(variant->is_valid());
+
+    tc_shader_shutdown();
+}
+
+TEST_CASE("Auxiliary pass model resources belong to mesh transforms and are absent from WorldTube") {
+    tc_shader_init();
+
+    ExposedDepthPass depth_pass;
+    termin::MaterialPipelinePassContract contract = depth_pass.shader_pass_contract();
+    REQUIRE(contract.vertex_output_adapter.has_value());
+    REQUIRE(contract.static_vertex_transform.has_value());
+    REQUIRE(contract.skinned_vertex_transform.has_value());
+    CHECK_FALSE(resource_decls_contain(contract.vertex_output_adapter->resources, "depth_draw"));
+    CHECK(resource_decls_contain(contract.static_vertex_transform->resources, "depth_draw"));
+    CHECK(resource_decls_contain(contract.skinned_vertex_transform->resources, "depth_draw"));
+
+    termin::TcShader material_shader = make_test_material_shader("line-contract-depth-resource-ownership");
+    REQUIRE(material_shader.is_valid());
+    tc_render_item item{};
+    termin::RenderTaskList tasks;
+    const termin::RenderTask& task = plan_line_shader_task(material_shader, contract, item, tasks);
+    const termin::TcShader* variant = find_owned_variant(task, TC_SHADER_VARIANT_LINE_TUBE);
+    REQUIRE(variant != nullptr);
+
+    tc_shader_contract_view shader_contract{};
+    REQUIRE(tc_shader_get_contract_view(variant->get(), &shader_contract));
+    CHECK(shader_contract_contains(shader_contract, TC_SHADER_RESOURCE_PER_FRAME));
+    CHECK_FALSE(shader_contract_contains(shader_contract, "depth_draw"));
+
+    ExposedNormalPass normal_pass;
+    contract = normal_pass.shader_pass_contract();
+    REQUIRE(contract.vertex_output_adapter.has_value());
+    REQUIRE(contract.static_vertex_transform.has_value());
+    REQUIRE(contract.skinned_vertex_transform.has_value());
+    CHECK_FALSE(resource_decls_contain(contract.vertex_output_adapter->resources, "normal_draw"));
+    CHECK(resource_decls_contain(contract.static_vertex_transform->resources, "normal_draw"));
+    CHECK(resource_decls_contain(contract.skinned_vertex_transform->resources, "normal_draw"));
+
+    tc_render_item normal_item{};
+    termin::RenderTaskList normal_tasks;
+    const termin::RenderTask& normal_task =
+        plan_line_shader_task(material_shader, contract, normal_item, normal_tasks);
+    variant = find_owned_variant(normal_task, TC_SHADER_VARIANT_LINE_TUBE);
+    REQUIRE(variant != nullptr);
+    shader_contract = {};
+    REQUIRE(tc_shader_get_contract_view(variant->get(), &shader_contract));
+    CHECK(shader_contract_contains(shader_contract, TC_SHADER_RESOURCE_PER_FRAME));
+    CHECK_FALSE(shader_contract_contains(shader_contract, "normal_draw"));
 
     tc_shader_shutdown();
 }
