@@ -117,6 +117,7 @@ public sealed class Chart2DWpfInteraction : IDisposable
 
     private void RaiseNavigated(ChartNavigationKind2D kind)
     {
+        _host.RequestRender();
         Navigated?.Invoke(
             this,
             new ChartNavigatedEventArgs2D(kind, _chart.Range));

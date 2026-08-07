@@ -13,11 +13,18 @@ Projects:
   customizes native chart parts from C#, and anchors a real WPF button to a
   retained scene item. The button callback stays in C#; middle-drag and wheel
   exercise the native chart interaction controller.
-- `AllianceStreamingChartsExample` - uses native `MultiChart2D` for four
-  independently scaled streaming panels in one retained scene and one
-  offscreen texture. It exercises generation-safe reconfiguration, virtual
-  panel layout, wheel and external WPF scrollbar control, shared X with
-  per-panel Y, and pause/reset/follow portals whose handlers stay in C#.
+- `AllianceStreamingChartsExample` - uses two native `MultiChart2D` instances
+  for an Alliance-scale 2x15 streaming layout: 30 independently scaled panels,
+  60 native series, two public retained scenes and two offscreen textures.
+  `MultiChart2DGroup` coordinates shared X, panel geometry and virtual scroll;
+  wheel input in either column and the external WPF scrollbar move both.
+  Pause/reset/follow controls remain real WPF portals with C# callbacks. The
+  hosts render on demand at the data/interaction cadence and use 2x MSAA;
+  styled line appends update only the affected GPU tail. The
+  status line separates managed append/shared-X cost from native scene paint,
+  draw-list freeze, CPU command submission, D3DImage present and portal update
+  averages. Command submission is intentionally labelled as CPU time rather
+  than a GPU timestamp.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable
   handles, transactional data mutation, an independently replaceable grid,
   axis-scale-aware camera fit, MSAA, and WPF portals whose callbacks stay in

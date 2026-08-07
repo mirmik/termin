@@ -35,6 +35,28 @@ public sealed class RetainedSceneRenderFailedEventArgs : EventArgs
     public Exception Error { get; }
 }
 
+public sealed class RetainedSceneFrameRenderedEventArgs : EventArgs
+{
+    public RetainedSceneFrameRenderedEventArgs(
+        RetainedSceneRenderTimings2D native,
+        double nativeCallMilliseconds,
+        double presentMilliseconds,
+        double portalMilliseconds)
+    {
+        Native = native;
+        NativeCallMilliseconds = nativeCallMilliseconds;
+        PresentMilliseconds = presentMilliseconds;
+        PortalMilliseconds = portalMilliseconds;
+    }
+
+    public RetainedSceneRenderTimings2D Native { get; }
+    public double NativeCallMilliseconds { get; }
+    public double PresentMilliseconds { get; }
+    public double PortalMilliseconds { get; }
+    public double TotalMilliseconds =>
+        NativeCallMilliseconds + PresentMilliseconds + PortalMilliseconds;
+}
+
 /// <summary>
 /// WPF presentation host for any retained TcVisualScene2D. Native scene
 /// items may also serve as layout anchors for ordinary WPF controls.
@@ -59,6 +81,8 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
     private RetainedSceneRenderer2D? _renderer;
     private TcVisualScene2D? _scene;
     private bool _renderingSubscribed;
+    private bool _renderRequested = true;
+    private bool _continuousRendering = true;
     private bool _disposed;
     private int _lastWidth;
     private int _lastHeight;
@@ -79,6 +103,19 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     public TcVisualScene2D? Scene => _scene;
     public Tgfx2D3D11ImageHost RenderHost => _renderHost;
+    public bool ContinuousRendering
+    {
+        get => _continuousRendering;
+        set
+        {
+            ThrowIfDisposed();
+            if (_continuousRendering == value)
+                return;
+            _continuousRendering = value;
+            RequestRender();
+        }
+    }
+
     public int MsaaSamples
     {
         get => _msaaSamples;
@@ -92,6 +129,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
             _msaaSamples = value;
             if (_renderer is not null)
                 _renderer.MsaaSamples = value;
+            RequestRender();
         }
     }
 
@@ -99,6 +137,8 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         FramebufferChanged;
     public event EventHandler<RetainedSceneRenderFailedEventArgs>?
         RenderFailed;
+    public event EventHandler<RetainedSceneFrameRenderedEventArgs>?
+        FrameRendered;
 
     public void Attach(GpuHost host, TcVisualScene2D scene)
     {
@@ -115,6 +155,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
+        _renderRequested = true;
         SubscribeRendering();
     }
 
@@ -128,6 +169,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
+        _renderRequested = false;
     }
 
     public void AddPortal(
@@ -199,11 +241,39 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
                     width, height, pixelScale));
         }
 
+        long nativeStarted = Stopwatch.GetTimestamp();
         uint texture = _renderer.RenderToTextureHandleId(width, height);
+        long nativeFinished = Stopwatch.GetTimestamp();
+        RetainedSceneRenderTimings2D nativeTimings = _renderer.LastTimings;
+
+        long presentStarted = Stopwatch.GetTimestamp();
         if (!_renderHost.Present(texture, width, height))
             throw new InvalidOperationException(
                 "Failed to present retained scene through the WPF D3DImage bridge.");
+        long presentFinished = Stopwatch.GetTimestamp();
+
+        long portalStarted = Stopwatch.GetTimestamp();
         UpdatePortals();
+        long portalFinished = Stopwatch.GetTimestamp();
+        _renderRequested = false;
+        FrameRendered?.Invoke(
+            this,
+            new RetainedSceneFrameRenderedEventArgs(
+                nativeTimings,
+                ElapsedMilliseconds(nativeStarted, nativeFinished),
+                ElapsedMilliseconds(presentStarted, presentFinished),
+                ElapsedMilliseconds(portalStarted, portalFinished)));
+    }
+
+    /// <summary>
+    /// Schedules one composition render when ContinuousRendering is false.
+    /// Call this after mutating the attached native scene.
+    /// </summary>
+    public void RequestRender()
+    {
+        ThrowIfDisposed();
+        _renderRequested = true;
+        SubscribeRendering();
     }
 
     public void Dispose()
@@ -225,6 +295,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -233,12 +304,15 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         UnsubscribeRendering();
         _renderHost.ReleaseNativeResources();
         _renderer?.ReleaseGpuResources();
+        _renderRequested = true;
     }
 
     private void OnIsVisibleChanged(
         object sender,
         DependencyPropertyChangedEventArgs e)
     {
+        if (IsVisible)
+            _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -268,6 +342,9 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        if (!_continuousRendering && !_renderRequested &&
+            !FramebufferStateChanged())
+            return;
         try
         {
             RenderFrame();
@@ -280,6 +357,16 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
             RenderFailed?.Invoke(
                 this, new RetainedSceneRenderFailedEventArgs(error));
         }
+    }
+
+    private bool FramebufferStateChanged()
+    {
+        int width = Math.Max(1, _renderHost.FramebufferWidth);
+        int height = Math.Max(1, _renderHost.FramebufferHeight);
+        float pixelScale =
+            (float)VisualTreeHelper.GetDpi(this).DpiScaleX;
+        return width != _lastWidth || height != _lastHeight ||
+            Math.Abs(pixelScale - _lastPixelScale) > 0.0001f;
     }
 
     private void UpdatePortals()
@@ -312,4 +399,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(RetainedScene2DHost));
     }
+
+    private static double ElapsedMilliseconds(long started, long finished) =>
+        (finished - started) * 1000.0 / Stopwatch.Frequency;
 }
