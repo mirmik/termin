@@ -110,6 +110,12 @@ suspension for composed 2D scenes. It renders continuously by default for
 backward compatibility. Consumers with explicitly scheduled scene mutations
 can set `ContinuousRendering = false` and call `RequestRender()` after each
 mutation; resize, DPI and visibility changes still invalidate automatically.
+`FrameRendered` reports native paint/freeze/CPU-submit, D3DImage present and
+portal-update durations without forcing GPU synchronization; submit duration
+is not presented as GPU wall time.
+The native host reuses draw-command storage across frames. Visual-scene order
+is cached independently from mutable item content, and retained plot series
+reuse their batch objects instead of allocating one during every paint.
 The WPF interaction adapters request a frame after navigation. The Alliance
 streaming example uses this mode for both coordinated scenes and 2x MSAA.
 

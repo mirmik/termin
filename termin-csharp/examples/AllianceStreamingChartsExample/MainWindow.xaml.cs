@@ -127,8 +127,17 @@ public partial class MainWindow : Window
     private bool _synchronizingScrollBar;
     private bool _closed;
     private double _time;
-    private long _updateDurationTicks;
+    private long _appendDurationTicks;
+    private long _rangeDurationTicks;
     private int _updateSamples;
+    private double _renderPaintMilliseconds;
+    private double _renderFreezeMilliseconds;
+    private double _renderSubmitMilliseconds;
+    private double _renderNativeOtherMilliseconds;
+    private double _renderPresentMilliseconds;
+    private double _renderPortalMilliseconds;
+    private double _renderTotalMilliseconds;
+    private int _renderSamples;
 
     public MainWindow()
     {
@@ -189,6 +198,8 @@ public partial class MainWindow : Window
             RightSceneHost.FramebufferChanged += OnFramebufferChanged;
             LeftSceneHost.RenderFailed += OnRenderFailed;
             RightSceneHost.RenderFailed += OnRenderFailed;
+            LeftSceneHost.FrameRendered += OnFrameRendered;
+            RightSceneHost.FrameRendered += OnFrameRendered;
             LeftSceneHost.MsaaSamples = 2;
             RightSceneHost.MsaaSamples = 2;
             LeftSceneHost.ContinuousRendering = false;
@@ -417,30 +428,79 @@ public partial class MainWindow : Window
         if (_paused)
             return;
 
-        long started = Stopwatch.GetTimestamp();
         _time += 0.04;
+        long appendStarted = Stopwatch.GetTimestamp();
         foreach (StreamPanel panel in _panels)
             panel.Append(_time);
+        _appendDurationTicks +=
+            Stopwatch.GetTimestamp() - appendStarted;
 
+        long rangeStarted = Stopwatch.GetTimestamp();
         if (_followLatest)
             SnapToLatest();
+        _rangeDurationTicks += Stopwatch.GetTimestamp() - rangeStarted;
         RequestBothRenders();
 
-        _updateDurationTicks += Stopwatch.GetTimestamp() - started;
         ++_updateSamples;
         if (_updateSamples >= 25)
         {
-            double averageUpdateMs = _updateDurationTicks * 1000.0 /
+            double averageAppendMs = _appendDurationTicks * 1000.0 /
                 Stopwatch.Frequency / _updateSamples;
+            double averageRangeMs = _rangeDurationTicks * 1000.0 /
+                Stopwatch.Frequency / _updateSamples;
+            int renderSamples = Math.Max(1, _renderSamples);
+            double averageRenderTotal =
+                _renderTotalMilliseconds / renderSamples;
             StatusText.Text =
                 $"2×{PanelsPerColumn}, {_panels.Length * 2} native series, " +
                 $"{_panels[0].PointCount} points/series; " +
-                $"C# append+range {averageUpdateMs:F2} ms/tick; " +
+                $"append {averageAppendMs:F2} + X {averageRangeMs:F2} ms/tick; " +
                 $"t = {_time:F1} s, " +
-                $"{(_followLatest ? "following latest" : "manual navigation")}.";
-            _updateDurationTicks = 0;
+                $"{(_followLatest ? "following latest" : "manual navigation")}.\n" +
+                $"render/host avg ({_renderSamples}): " +
+                $"paint {_renderPaintMilliseconds / renderSamples:F2}, " +
+                $"freeze {_renderFreezeMilliseconds / renderSamples:F2}, " +
+                $"submit* {_renderSubmitMilliseconds / renderSamples:F2}, " +
+                $"native-other {_renderNativeOtherMilliseconds / renderSamples:F2}, " +
+                $"present {_renderPresentMilliseconds / renderSamples:F2}, " +
+                $"portals {_renderPortalMilliseconds / renderSamples:F2}, " +
+                $"total {averageRenderTotal:F2} ms; " +
+                $"pair≈{averageRenderTotal * 2:F2} ms. " +
+                $"*CPU command submission, not GPU timestamp.";
+            _appendDurationTicks = 0;
+            _rangeDurationTicks = 0;
             _updateSamples = 0;
+            ResetRenderTelemetry();
         }
+    }
+
+    private void OnFrameRendered(
+        object? sender,
+        RetainedSceneFrameRenderedEventArgs e)
+    {
+        _renderPaintMilliseconds += e.Native.PaintMilliseconds;
+        _renderFreezeMilliseconds += e.Native.FreezeMilliseconds;
+        _renderSubmitMilliseconds += e.Native.GpuSubmitMilliseconds;
+        _renderNativeOtherMilliseconds += Math.Max(
+            0,
+            e.NativeCallMilliseconds - e.Native.PaintMilliseconds -
+            e.Native.FreezeMilliseconds - e.Native.GpuSubmitMilliseconds);
+        _renderPresentMilliseconds += e.PresentMilliseconds;
+        _renderPortalMilliseconds += e.PortalMilliseconds;
+        _renderTotalMilliseconds += e.TotalMilliseconds;
+        ++_renderSamples;
+    }
+
+    private void ResetRenderTelemetry()
+    {
+        _renderPaintMilliseconds = 0;
+        _renderFreezeMilliseconds = 0;
+        _renderSubmitMilliseconds = 0;
+        _renderNativeOtherMilliseconds = 0;
+        _renderPresentMilliseconds = 0;
+        _renderPortalMilliseconds = 0;
+        _renderTotalMilliseconds = 0;
+        _renderSamples = 0;
     }
 
     private void OnPauseClick(object sender, RoutedEventArgs e)
@@ -575,6 +635,8 @@ public partial class MainWindow : Window
         RightSceneHost.FramebufferChanged -= OnFramebufferChanged;
         LeftSceneHost.RenderFailed -= OnRenderFailed;
         RightSceneHost.RenderFailed -= OnRenderFailed;
+        LeftSceneHost.FrameRendered -= OnFrameRendered;
+        RightSceneHost.FrameRendered -= OnFrameRendered;
         try
         {
             try

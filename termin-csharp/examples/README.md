@@ -21,8 +21,10 @@ Projects:
   Pause/reset/follow controls remain real WPF portals with C# callbacks. The
   hosts render on demand at the data/interaction cadence and use 2x MSAA;
   styled line appends update only the affected GPU tail. The
-  status line reports average managed append/range-update cost per tick; it is
-  a load indicator, not a GPU profiling result.
+  status line separates managed append/shared-X cost from native scene paint,
+  draw-list freeze, CPU command submission, D3DImage present and portal update
+  averages. Command submission is intentionally labelled as CPU time rather
+  than a GPU timestamp.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable
   handles, transactional data mutation, an independently replaceable grid,
   axis-scale-aware camera fit, MSAA, and WPF portals whose callbacks stay in

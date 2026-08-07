@@ -35,6 +35,28 @@ public sealed class RetainedSceneRenderFailedEventArgs : EventArgs
     public Exception Error { get; }
 }
 
+public sealed class RetainedSceneFrameRenderedEventArgs : EventArgs
+{
+    public RetainedSceneFrameRenderedEventArgs(
+        RetainedSceneRenderTimings2D native,
+        double nativeCallMilliseconds,
+        double presentMilliseconds,
+        double portalMilliseconds)
+    {
+        Native = native;
+        NativeCallMilliseconds = nativeCallMilliseconds;
+        PresentMilliseconds = presentMilliseconds;
+        PortalMilliseconds = portalMilliseconds;
+    }
+
+    public RetainedSceneRenderTimings2D Native { get; }
+    public double NativeCallMilliseconds { get; }
+    public double PresentMilliseconds { get; }
+    public double PortalMilliseconds { get; }
+    public double TotalMilliseconds =>
+        NativeCallMilliseconds + PresentMilliseconds + PortalMilliseconds;
+}
+
 /// <summary>
 /// WPF presentation host for any retained TcVisualScene2D. Native scene
 /// items may also serve as layout anchors for ordinary WPF controls.
@@ -115,6 +137,8 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         FramebufferChanged;
     public event EventHandler<RetainedSceneRenderFailedEventArgs>?
         RenderFailed;
+    public event EventHandler<RetainedSceneFrameRenderedEventArgs>?
+        FrameRendered;
 
     public void Attach(GpuHost host, TcVisualScene2D scene)
     {
@@ -217,12 +241,28 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
                     width, height, pixelScale));
         }
 
+        long nativeStarted = Stopwatch.GetTimestamp();
         uint texture = _renderer.RenderToTextureHandleId(width, height);
+        long nativeFinished = Stopwatch.GetTimestamp();
+        RetainedSceneRenderTimings2D nativeTimings = _renderer.LastTimings;
+
+        long presentStarted = Stopwatch.GetTimestamp();
         if (!_renderHost.Present(texture, width, height))
             throw new InvalidOperationException(
                 "Failed to present retained scene through the WPF D3DImage bridge.");
+        long presentFinished = Stopwatch.GetTimestamp();
+
+        long portalStarted = Stopwatch.GetTimestamp();
         UpdatePortals();
+        long portalFinished = Stopwatch.GetTimestamp();
         _renderRequested = false;
+        FrameRendered?.Invoke(
+            this,
+            new RetainedSceneFrameRenderedEventArgs(
+                nativeTimings,
+                ElapsedMilliseconds(nativeStarted, nativeFinished),
+                ElapsedMilliseconds(presentStarted, presentFinished),
+                ElapsedMilliseconds(portalStarted, portalFinished)));
     }
 
     /// <summary>
@@ -359,4 +399,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(RetainedScene2DHost));
     }
+
+    private static double ElapsedMilliseconds(long started, long finished) =>
+        (finished - started) * 1000.0 / Stopwatch.Frequency;
 }

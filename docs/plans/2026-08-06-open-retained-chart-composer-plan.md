@@ -391,6 +391,13 @@ Headless D3D11 acceptance рендерит верх и низ обеих 15-pane
 точка, потому что у неё меняется `next`). WPF hosts работают в opt-in on-demand
 режиме: кадр запрашивается после data/input/layout mutation; resize/DPI всё ещё
 инвалидируют кадр автоматически. Пример использует MSAA x2.
+В status telemetry отдельно агрегируются append, shared-X, native scene paint,
+draw-list freeze, CPU command submission, D3DImage present и portal update;
+submit не выдаётся за GPU timestamp.
+Scene traversal кэширует упорядоченную topology до следующего
+adopt/replace/destroy/reparent/z-order mutation, не испускает identity
+transform/unit-opacity commands; renderer переиспользует command storage, а
+series items — постоянные retained batch objects.
 
 Это topology/load vertical slice, а не завершённый performance baseline.
 Текущий пример использует дешёвый `Append`, но ограничивает managed history
