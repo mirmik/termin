@@ -569,16 +569,14 @@ void RenderingManager::unmount_scene(
     }
 }
 
-std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_handle scene) {
-    std::vector<tc_viewport_handle> viewports;
-
+bool RenderingManager::attach_scene_render_targets(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) {
-        tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_full: invalid scene handle");
-        return viewports;
+        tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_render_targets: invalid scene handle");
+        return false;
     }
     if (topology_.is_attached(scene)) {
-        tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_full: scene is already attached");
-        return viewports;
+        tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_render_targets: scene is already attached");
+        return false;
     }
 
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
@@ -600,7 +598,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
                 rt_name.c_str()
             );
             detach_scene_full(scene);
-            return {};
+            return false;
         }
         tc_render_target_set_scene(rt, scene);
         if (rtc->kind && rtc->kind[0] != '\0') {
@@ -704,9 +702,20 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             );
             tc_render_target_free(rt);
             detach_scene_full(scene);
-            return {};
+            return false;
         }
     }
+
+    return true;
+}
+
+std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_handle scene) {
+    std::vector<tc_viewport_handle> viewports;
+    if (!attach_scene_render_targets(scene)) {
+        return viewports;
+    }
+
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
 
     // 2. Create viewports from viewport_configs
     size_t vp_count = mount ? mount->viewport_config_count : 0;
@@ -990,10 +999,20 @@ void RenderingManager::render_display(tc_display_handle display) {
     present_display(display);
 }
 
-void RenderingManager::render_planned_offscreen(tc_display_handle only_display) {
+void RenderingManager::render_planned_offscreen(
+    tc_display_handle only_display,
+    tc_render_target_handle requested_target
+) {
     std::vector<RenderExecutionTargetId> requested_targets;
     for (const RenderExecutionObserver* observer : render_execution_observers_) {
         if (observer) observer->collect_render_demands(requested_targets);
+    }
+    if (tc_render_target_handle_valid(requested_target)) {
+        requested_targets.push_back({
+            RenderExecutionTargetKind::RenderTarget,
+            TC_VIEWPORT_HANDLE_INVALID,
+            requested_target,
+        });
     }
     std::vector<rendering_manager_detail::OffscreenRenderDemand> demands;
     demands.reserve(requested_targets.size());
@@ -1044,6 +1063,16 @@ void RenderingManager::render_planned_offscreen(tc_display_handle only_display) 
         nullptr,
         demands.data(),
         demands.size());
+}
+
+void RenderingManager::render_render_target_tree_offscreen(tc_render_target_handle rt) {
+    if (!tc_render_target_alive(rt) || !tc_render_target_get_enabled(rt)) {
+        tc_log(TC_LOG_ERROR,
+               "[RenderingManager] render_render_target_tree_offscreen: invalid or disabled target");
+        return;
+    }
+
+    render_planned_offscreen(TC_DISPLAY_HANDLE_INVALID, rt);
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(

@@ -162,6 +162,7 @@ TcPipelineTemplate make_empty_pipeline_template(const std::string& name)
     TcPipelineTemplate resource = TcPipelineTemplate::declare(name + "-uuid", name);
     tc_pipeline_template_payload_desc payload = {};
     payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     payload.name = name.c_str();
     REQUIRE(tc_pipeline_template_set_payload(resource.get(), &payload));
     return resource;
@@ -732,6 +733,78 @@ TEST_CASE("Graph compiler rejects direct resource type conversion without split 
         threw = true;
     }
     REQUIRE(threw);
+}
+
+TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered resources")
+{
+    const char* json = R"JSON(
+{
+  "name": "xr_pipeline",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {
+      "type": "Multiview FBO",
+      "node_type": "resource",
+      "name": "stereo_color",
+      "params": {
+        "resource_type": "multiview_fbo",
+        "format": "rgba16f",
+        "samples": 4,
+        "array_layers": 2
+      }
+    }
+  ],
+  "connections": [],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    CHECK(graph.execution_model == "xr_multiview");
+
+    TcPipelineTemplate published = make_empty_pipeline_template("xr-multiview-graph");
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph, published);
+    REQUIRE(pipeline != nullptr);
+    const tc_pipeline_template* pipeline_template =
+        tc_pipeline_template_get(pipeline->template_handle());
+    REQUIRE(pipeline_template != nullptr);
+    CHECK(pipeline_template->execution_model == TC_PIPELINE_EXECUTION_XR_MULTIVIEW);
+
+    bool found = false;
+    for (const auto& spec : pipeline->specs()) {
+        if (spec.resource != "stereo_color") continue;
+        found = true;
+        CHECK(spec.resource_type == "multiview_fbo");
+        CHECK(spec.samples == 4);
+        CHECK(spec.array_layers == 2);
+    }
+    CHECK(found);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing")
+{
+    const char* json = R"JSON(
+{
+  "name": "mixed_pipeline",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {"type": "XR Multiview Target", "node_type": "external_xr_multiview_fbo"},
+    {"type": "PipelineOutput", "node_type": "pipeline_output"}
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "color"}
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    CHECK_THROWS_AS(tc::compile_graph(graph), tc::GraphCompileError);
 }
 
 TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
@@ -1403,6 +1476,7 @@ TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fai
         "rollback-template-duplicate-uuid", "rollback-template");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     duplicate_payload.name = "rollback-template";
     REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
     REQUIRE(tc_scene_add_pipeline_template(scene, first.handle));
@@ -1434,6 +1508,7 @@ TEST_CASE("RenderTopology preserves live pipelines when replacement instantiatio
         "failed-replacement-uuid", "stable-pipeline");
     tc_pipeline_template_payload_desc duplicate_payload = {};
     duplicate_payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    duplicate_payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
     duplicate_payload.name = "stable-pipeline";
     REQUIRE(tc_pipeline_template_set_payload(duplicate.get(), &duplicate_payload));
     REQUIRE(tc_scene_add_pipeline_template(scene, duplicate.handle));
@@ -1519,6 +1594,57 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     manager.remove_display(display);
     tc_display_free(display);
     CHECK_EQ(tc_display_pool_count(), baseline_displays);
+    tc_scene_free(scene);
+}
+
+TEST_CASE("RenderingManager restores scene render targets for headless hosts")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_render_mount_extension_init();
+
+    const size_t baseline_targets = tc_render_target_pool_count();
+    const size_t baseline_pipelines = tc_pipeline_pool_count();
+    const size_t baseline_displays = tc_display_pool_count();
+    const size_t baseline_viewports = tc_viewport_pool_count();
+
+    manager.set_pipeline_factory([](const std::string& name) {
+        return tc_pipeline_create(name.c_str());
+    });
+
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_scene_set_name(scene, "headless-render-target-scene");
+
+    tc_render_target_config config;
+    tc_render_target_config_init(&config);
+    config.name = "HeadlessTexture";
+    config.kind = "texture_2d";
+    config.width = 768;
+    config.height = 512;
+    config.dynamic_resolution = false;
+    config.pipeline_uuid = "headless-pipeline";
+    tc_scene_add_render_target_config(scene, &config);
+
+    REQUIRE(manager.attach_scene_render_targets(scene));
+    CHECK(!topology.is_attached(scene));
+    CHECK_EQ(tc_display_pool_count(), baseline_displays);
+    CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
+    REQUIRE_EQ(manager.managed_render_targets().size(), 1u);
+
+    const tc_render_target_handle target =
+        topology.find_render_target(scene, "HeadlessTexture");
+    REQUIRE(tc_render_target_handle_valid(target));
+    CHECK_EQ(tc_render_target_get_width(target), 768);
+    CHECK_EQ(tc_render_target_get_height(target), 512);
+    CHECK(!tc_render_target_get_dynamic_resolution(target));
+    CHECK(tc_pipeline_handle_valid(tc_render_target_get_pipeline(target)));
+
+    manager.detach_scene_full(scene);
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
+    CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
+    CHECK(manager.managed_render_targets().empty());
+
     tc_scene_free(scene);
 }
 

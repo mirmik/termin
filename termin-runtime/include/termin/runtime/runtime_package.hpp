@@ -51,6 +51,10 @@ struct RuntimePackageLoadResult {
     ShaderRuntimeConfiguration shader_runtime;
 
     TERMIN_RUNTIME_API TcSceneRef find_scene(const std::string& identity) const;
+    // Destroy every scene loaded by this package, then release its canonical
+    // resources. Runtime hosts must first destroy execution objects (for
+    // example RenderPipeline instances) that retain package resources.
+    TERMIN_RUNTIME_API void destroy();
 };
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {

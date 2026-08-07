@@ -18,6 +18,7 @@ GUARD_C_TEST(test_scene_slot_reuse_resets_metadata_and_pool_generation) {
     tc_scene_set_uuid(first, "scene-generation-one");
     tc_scene_set_source_path(first, "/tmp/generation-one.scene");
     tc_scene_set_fixed_timestep(first, 0.25);
+    tc_scene_set_time_scale(first, 0.25);
     for (int index = 0; index < 64; index++) {
         tc_scene_set_layer_name(first, index, "occupied-layer");
         tc_scene_set_flag_name(first, index, "occupied-flag");
@@ -44,6 +45,7 @@ GUARD_C_TEST(test_scene_slot_reuse_resets_metadata_and_pool_generation) {
     GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_uuid(second));
     GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_source_path(second));
     GUARD_C_CHECK(tc_scene_fixed_timestep(second) == 1.0 / 60.0);
+    GUARD_C_CHECK(tc_scene_time_scale(second) == 1.0);
     for (int index = 0; index < 64; index++) {
         GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_layer_name(second, index));
         GUARD_C_CHECK_PTR_EQ(NULL, tc_scene_get_flag_name(second, index));

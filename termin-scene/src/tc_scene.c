@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 // ============================================================================
 // Dynamic array for components
@@ -136,6 +137,7 @@ typedef struct tc_scene_slot {
     ComponentList fixed_update_list;
     ComponentList late_update_list;
     double fixed_timestep;
+    double time_scale;
     double accumulated_time;
     bool render_requested;
     tc_resource_map* type_heads;
@@ -181,6 +183,7 @@ static void scene_slot_reset(tc_scene_slot* slot, uint32_t generation) {
     slot->pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
     slot->mode = TC_SCENE_MODE_INACTIVE;
     slot->fixed_timestep = 1.0 / 60.0;
+    slot->time_scale = 1.0;
 }
 
 static tc_entity_pool* scene_slot_entity_pool(const tc_scene_slot* slot) {
@@ -988,6 +991,7 @@ void tc_scene_update(tc_scene_handle h, double dt) {
 
     uint32_t idx = h.index;
     const bool profile = tc_profiler_enabled();
+    const double scaled_dt = dt * g_pool->slots[idx].time_scale;
 
     // 1. Process pending start
     if (profile) tc_profiler_begin_section("Start");
@@ -996,7 +1000,7 @@ void tc_scene_update(tc_scene_handle h, double dt) {
 
     // 2. Fixed update loop
     if (profile) tc_profiler_begin_section("Fixed Update");
-    g_pool->slots[idx].accumulated_time += dt;
+    g_pool->slots[idx].accumulated_time += scaled_dt;
     double fixed_dt = g_pool->slots[idx].fixed_timestep;
     ComponentList* fixed_list = &g_pool->slots[idx].fixed_update_list;
 
@@ -1020,7 +1024,7 @@ void tc_scene_update(tc_scene_handle h, double dt) {
         tc_component* c = update_list->items[i];
         if (c->enabled && component_entity_enabled(c)) {
             if (profile) profile_component_begin(c);
-            tc_component_update(c, (float)dt);
+            tc_component_update(c, (float)scaled_dt);
             if (profile) tc_profiler_end_section();
         }
     }
@@ -1028,7 +1032,7 @@ void tc_scene_update(tc_scene_handle h, double dt) {
 
     // Extension update hooks
     if (profile) tc_profiler_begin_section("Extensions");
-    tc_scene_ext_on_scene_update(h, dt);
+    tc_scene_ext_on_scene_update(h, scaled_dt);
     if (profile) tc_profiler_end_section();
 
     // 4. Late update runs after all regular component and extension updates.
@@ -1038,7 +1042,7 @@ void tc_scene_update(tc_scene_handle h, double dt) {
         tc_component* c = late_update_list->items[i];
         if (c->enabled && component_entity_enabled(c)) {
             if (profile) profile_component_begin(c);
-            tc_component_late_update(c, (float)dt);
+            tc_component_late_update(c, (float)scaled_dt);
             if (profile) tc_profiler_end_section();
         }
     }
@@ -1266,6 +1270,20 @@ double tc_scene_fixed_timestep(tc_scene_handle h) {
 void tc_scene_set_fixed_timestep(tc_scene_handle h, double dt) {
     if (!handle_alive(h) || dt <= 0) return;
     g_pool->slots[h.index].fixed_timestep = dt;
+}
+
+double tc_scene_time_scale(tc_scene_handle h) {
+    if (!handle_alive(h)) return 1.0;
+    return g_pool->slots[h.index].time_scale;
+}
+
+void tc_scene_set_time_scale(tc_scene_handle h, double scale) {
+    if (!handle_alive(h)) return;
+    if (!isfinite(scale) || scale < 0.0) {
+        tc_log_error("[tc_scene] time scale must be finite and non-negative");
+        return;
+    }
+    g_pool->slots[h.index].time_scale = scale;
 }
 
 double tc_scene_accumulated_time(tc_scene_handle h) {

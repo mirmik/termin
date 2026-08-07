@@ -8,6 +8,34 @@ The scene also exercises the native game-physics component path: the floor and
 table are static colliders, while the three colored blocks are dynamic rigid
 bodies that settle on the tabletop under gravity.
 
+## Quest rendering budget
+
+This showcase targets Quest-class standalone hardware. Dynamic shadows and
+bloom are currently too expensive for its normal acceptance configuration and
+should remain disabled. Enable either feature only for an explicit profiling or
+quality experiment, and record GPU/frame timing before treating that setting as
+a new project default.
+
+The headset target uses the explicit `QuestMultiview` graph in
+`Pipelines/QuestMultiview.pipeline`: layered opaque and transparent passes,
+4x MSAA resolve, and direct layered tonemapping into one two-layer OpenXR
+swapchain. The ordinary `Default` pipeline remains attached to the editor
+target. Do not substitute it for the headset target; `xr_stereo` deliberately
+rejects `single_view` pipelines.
+
+The opaque multiview pass enables the explicit
+`attachment_barrier_between_draws` compatibility option. It keeps one render
+pass active while ordering framebuffer-local color/depth accesses between
+draws, preventing the square tile corruption observed on the tested Quest 2
+Adreno driver. Do not remove it without a headset A/B test; do not enable it
+globally without evidence that another graph or device needs it.
+
+The floating VR panel is rendered once by `UIWidgetPass` into the ordinary
+`VR Panel Texture` target. The headset target exposes that color result to the
+multiview graph as the named `PANEL_COLOR` texture, and the panel mesh samples
+it like any other material texture. This keeps the UI graph and XR graph
+literal: there is no hidden per-eye execution of the mono UI pass.
+
 The cyan and magenta controller proxies follow the left and right grip poses.
 Squeeze either index trigger while its proxy is close to a colored block to
 grab it. The original hand-to-object offset is preserved; release the trigger
@@ -97,6 +125,17 @@ and filtered logcat together with the result.
    no missing component/resource/shader, OpenXR action, Vulkan or render-pipeline
    errors. It should report controller action-set initialization/attachment and
    grab/release events.
+7. `multiview-contract`: startup logs identify `QuestMultiview`; one layered
+   color swapchain is created, both eyes remain distinct and stable, and no
+   multiview capability, external texture state, or mono-pipeline rejection is
+   reported.
+8. `tile-integrity`: with 4x MSAA enabled, move the head and controllers around
+   high-contrast object edges for at least one minute. No screen-aligned square
+   or stair-step regions containing nearby object colors may appear in either
+   eye.
+9. `vr-panel`: the floating panel is visible in both eyes and shows its text,
+   blue button and checkbox. It must not appear as a flat white/black surface or
+   sample the headset swapchain in place of the panel texture.
 
 ## Editor view
 

@@ -36,6 +36,8 @@ namespace termin {
 
 TERMIN_RENDER_PASSES_API
 MaterialPipelinePassContract color_material_pass_contract();
+TERMIN_RENDER_PASSES_API
+MaterialPipelinePassContract multiview_color_material_pass_contract();
 
 struct ColorPassConfig {
     std::string input_res = "empty";
@@ -46,6 +48,7 @@ struct ColorPassConfig {
     std::string sort_mode = "none";
     std::string camera_name;
     bool clear_depth = false;
+    bool attachment_barrier_between_draws = false;
 };
 
 struct ColorPassExecuteData {
@@ -82,6 +85,10 @@ public:
     std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
     std::string camera_name;  // Override camera by entity name (empty = use context camera)
     bool clear_depth = false;
+    // Explicit compatibility ordering for tiled renderers. Keeps one render
+    // pass open but inserts a framebuffer-local attachment barrier between
+    // adjacent render items.
+    bool attachment_barrier_between_draws = false;
     bool wireframe = false;  // Render as wireframe (override polygon mode)
     bool use_ubo = false;    // Use UBO for lighting (faster, requires LIGHTING_USE_UBO in shaders)
 
@@ -98,6 +105,11 @@ public:
 private:
     // Last GPU time in ms (from detailed profiling mode)
     double last_gpu_time_ms_ = 0.0;
+
+protected:
+    bool multiview_mode_ = false;
+
+private:
 
     // Lighting UBO for efficient uniform uploads
     LightingUBO lighting_ubo_;
@@ -123,6 +135,9 @@ public:
 
     static void register_type();
 
+    tc_value serialize_extra_textures() const;
+    void deserialize_extra_textures(const tc_value* value);
+
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
 
@@ -134,6 +149,8 @@ public:
     INSPECT_FIELD_CHOICES(ColorPass, sort_mode, "Sort Mode", "string",
         {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
     INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
+    INSPECT_FIELD(ColorPass, attachment_barrier_between_draws,
+                  "Attachment Barrier Between Draws", "bool")
     INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
     INSPECT_TYPE_METADATA(ColorPass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}, {"shadow_res", "shadow"}},
@@ -184,6 +201,11 @@ public:
     // Compute write resources dynamically.
     std::set<const char*> compute_writes() const override;
 
+    bool set_graph_resource_input(
+        const std::string& socket_name,
+        const std::string& resource_name
+    ) override;
+
     /**
      * Get inplace aliases (input->output pairs that share the same FBO).
      */
@@ -230,6 +252,25 @@ private:
     // Sort draw calls by sort_keys_
     void sort_draw_calls();
 
+};
+
+SERIALIZABLE_FIELD(
+    ColorPass,
+    extra_textures,
+    serialize_extra_textures(),
+    deserialize_extra_textures(val))
+
+class TERMIN_RENDER_PASSES_API MultiviewColorPass final : public ColorPass {
+public:
+    static void register_type();
+
+    INSPECT_TYPE_METADATA(MultiviewColorPass, graph, make_pass_graph_metadata(
+        {{"input_res", "multiview_fbo"}},
+        {{"output_res", "multiview_fbo"}},
+        {{"input_res", "output_res"}}
+    ))
+
+    explicit MultiviewColorPass(const ColorPassConfig& config = {});
 };
 
 } // namespace termin

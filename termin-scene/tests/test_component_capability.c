@@ -6,6 +6,7 @@
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
 #include <tc_profiler.h>
+#include <math.h>
 
 static bool count_components(tc_component* c, void* user_data) {
     (void)c;
@@ -63,6 +64,9 @@ typedef struct {
     int update_count;
     int fixed_update_count;
     int late_update_count;
+    float last_update_dt;
+    float last_fixed_update_dt;
+    float last_late_update_dt;
     int* order_counter;
     int late_update_order;
     component_order* update_log;
@@ -75,23 +79,23 @@ static void scheduler_probe_start(tc_component* component) {
 }
 
 static void scheduler_probe_update(tc_component* component, float dt) {
-    (void)dt;
     scheduler_probe_component* probe = (scheduler_probe_component*)component;
     probe->update_count++;
+    probe->last_update_dt = dt;
     append_component_order(probe->update_log, component);
 }
 
 static void scheduler_probe_fixed_update(tc_component* component, float dt) {
-    (void)dt;
     scheduler_probe_component* probe = (scheduler_probe_component*)component;
     probe->fixed_update_count++;
+    probe->last_fixed_update_dt = dt;
     append_component_order(probe->fixed_update_log, component);
 }
 
 static void scheduler_probe_late_update(tc_component* component, float dt) {
-    (void)dt;
     scheduler_probe_component* probe = (scheduler_probe_component*)component;
     probe->late_update_count++;
+    probe->last_late_update_dt = dt;
     append_component_order(probe->late_update_log, component);
     if (probe->order_counter) {
         probe->late_update_order = ++(*probe->order_counter);
@@ -473,6 +477,57 @@ GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
     return 0;
 }
 
+GUARD_C_TEST(test_runtime_time_scale_controls_simulation_progress) {
+    tc_scene_handle scene = tc_scene_new_named("runtime-time-scale");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_scene_set_fixed_timestep(scene, 0.25);
+
+    scheduler_probe_component probe;
+    scheduler_probe_init(&probe);
+    probe.component.active_in_editor = true;
+    tc_scene_register_component(scene, &probe.component);
+    tc_component_set_lifecycle_capabilities(
+        &probe.component, true, true, true);
+
+    GUARD_C_CHECK(fabs(tc_scene_time_scale(scene) - 1.0) < 1e-12);
+    tc_scene_set_time_scale(scene, 0.5);
+    tc_scene_update(scene, 0.25);
+    GUARD_C_CHECK_EQ_INT(1, probe.update_count);
+    GUARD_C_CHECK_EQ_INT(0, probe.fixed_update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.late_update_count);
+    GUARD_C_CHECK(fabs(probe.last_update_dt - 0.125f) < 1e-6f);
+    GUARD_C_CHECK(fabs(probe.last_late_update_dt - 0.125f) < 1e-6f);
+    GUARD_C_CHECK(fabs(tc_scene_accumulated_time(scene) - 0.125) < 1e-12);
+
+    tc_scene_update(scene, 0.25);
+    GUARD_C_CHECK_EQ_INT(1, probe.fixed_update_count);
+    GUARD_C_CHECK(fabs(probe.last_fixed_update_dt - 0.25f) < 1e-6f);
+    GUARD_C_CHECK(fabs(tc_scene_accumulated_time(scene)) < 1e-12);
+
+    tc_scene_set_time_scale(scene, 0.0);
+    tc_scene_update(scene, 1.0);
+    GUARD_C_CHECK_EQ_INT(3, probe.update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.fixed_update_count);
+    GUARD_C_CHECK(fabs(probe.last_update_dt) < 1e-6f);
+    GUARD_C_CHECK(fabs(probe.last_late_update_dt) < 1e-6f);
+    GUARD_C_CHECK(fabs(tc_scene_accumulated_time(scene)) < 1e-12);
+
+    tc_scene_set_time_scale(scene, -1.0);
+    tc_scene_set_time_scale(scene, NAN);
+    GUARD_C_CHECK(fabs(tc_scene_time_scale(scene)) < 1e-12);
+
+    tc_scene_reset_accumulated_time(scene);
+    tc_scene_editor_update(scene, 0.25);
+    GUARD_C_CHECK_EQ_INT(2, probe.fixed_update_count);
+    GUARD_C_CHECK(fabs(probe.last_update_dt - 0.25f) < 1e-6f);
+    GUARD_C_CHECK(fabs(probe.last_fixed_update_dt - 0.25f) < 1e-6f);
+    GUARD_C_CHECK(fabs(probe.last_late_update_dt - 0.25f) < 1e-6f);
+
+    tc_scene_unregister_component(scene, &probe.component);
+    tc_scene_free(scene);
+    return 0;
+}
+
 GUARD_C_TEST(test_lifecycle_priorities_are_per_component_and_per_stage) {
     tc_scene_handle scene = tc_scene_new_named("lifecycle-priority-scene");
     GUARD_C_REQUIRE(tc_scene_alive(scene));
@@ -816,6 +871,7 @@ int main(int argc, char** argv) {
     GUARD_C_RUN(test_scene_capability_priority_iteration);
     GUARD_C_RUN(test_component_removal_lifecycle_runs_once_in_order);
     GUARD_C_RUN(test_attached_lifecycle_capabilities_reindex_scene_scheduler);
+    GUARD_C_RUN(test_runtime_time_scale_controls_simulation_progress);
     GUARD_C_RUN(test_lifecycle_priorities_are_per_component_and_per_stage);
     GUARD_C_RUN(test_scene_update_profiles_lifecycle_phase_and_component_instance);
     GUARD_C_RUN(test_component_reorder_preserves_attachment_and_lifecycle);

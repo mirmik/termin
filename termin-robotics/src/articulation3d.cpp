@@ -57,6 +57,25 @@ namespace termin::robotics
             destination[offset + 5] = value.ang.z;
         }
 
+        termin::Screw3 basis_screw_vw(std::size_t column) noexcept
+        {
+            switch (column)
+            {
+            case 0:
+                return {termin::Vec3::zero(), termin::Vec3::unit_x()};
+            case 1:
+                return {termin::Vec3::zero(), termin::Vec3::unit_y()};
+            case 2:
+                return {termin::Vec3::zero(), termin::Vec3::unit_z()};
+            case 3:
+                return {termin::Vec3::unit_x(), termin::Vec3::zero()};
+            case 4:
+                return {termin::Vec3::unit_y(), termin::Vec3::zero()};
+            default:
+                return {termin::Vec3::unit_z(), termin::Vec3::zero()};
+            }
+        }
+
     } // namespace
 
     std::string_view
@@ -576,16 +595,34 @@ namespace termin::robotics
                     .velocity_at_offset(point_local)
                     .rotated_by(unit_poses_world_[unit_index].ang)
                     .lin;
-            std::vector<termin::Screw3> bias_local;
-            if (!bias_accelerations_local(bias_local))
+            std::vector<std::size_t> ancestry;
+            for (std::size_t current = unit_index;;)
             {
-                return {{}, Articulation3DDiagnostic::InvalidModel};
+                ancestry.push_back(current);
+                const std::size_t parent = units_[current].parent_unit;
+                if (parent == articulation_root_frame)
+                {
+                    break;
+                }
+                current = parent;
+            }
+            std::reverse(ancestry.begin(), ancestry.end());
+
+            termin::Screw3 bias_local = termin::Screw3::zero();
+            for (const std::size_t current : ancestry)
+            {
+                const termin::Screw3 unit_velocity =
+                    motion_twists_at_unit_[current] *
+                    state_.velocities[current];
+                bias_local =
+                    bias_local.adjoint_inv(parent_to_unit_[current]) +
+                    unit_velocities_local_[current].cross_motion(unit_velocity);
             }
             const termin::Screw3 point_velocity_local =
                 unit_velocities_local_[unit_index].velocity_at_offset(
                     point_local);
             const termin::Screw3 point_acceleration_local =
-                bias_local[unit_index].velocity_at_offset(point_local);
+                bias_local.velocity_at_offset(point_local);
             value.bias_acceleration_world =
                 unit_poses_world_[unit_index].transform_vector(
                     point_acceleration_local.lin +
@@ -596,41 +633,49 @@ namespace termin::robotics
             value.linear_jacobian_world_storage.assign(3 * generalized_count,
                                                        0.0);
 
-            std::vector<termin::Screw3> unit_velocities(unit_index + 1);
-            for (std::size_t column = 0; column < generalized_count; ++column)
+            const auto write_response = [&](std::size_t column,
+                                            termin::Screw3 response_twist)
             {
-                termin::Screw3 base_velocity = termin::Screw3::zero();
-                if (floating_base_.has_value() && column < 6)
-                {
-                    std::vector<double> unit_base(6, 0.0);
-                    unit_base[column] = 1.0;
-                    base_velocity = read_screw_vw(unit_base);
-                }
-                for (std::size_t index = 0; index <= unit_index; ++index)
-                {
-                    const std::size_t parent = units_[index].parent_unit;
-                    const termin::Screw3 parent_velocity =
-                        parent == articulation_root_frame
-                            ? base_velocity
-                            : unit_velocities[parent];
-                    unit_velocities[index] =
-                        parent_velocity.adjoint_inv(parent_to_unit_[index]);
-                    if (column >= unit_offset && index == column - unit_offset)
-                    {
-                        unit_velocities[index] += motion_twists_at_unit_[index];
-                    }
-                }
-                const termin::Vec3 response =
-                    unit_velocities[unit_index]
+                const termin::Vec3 linear_response =
+                    response_twist
                         .velocity_at_offset(point_local)
                         .rotated_by(unit_poses_world_[unit_index].ang)
                         .lin;
-                value.linear_jacobian_world_storage[column] = response.x;
+                value.linear_jacobian_world_storage[column] =
+                    linear_response.x;
                 value
                     .linear_jacobian_world_storage[generalized_count + column] =
-                    response.y;
+                    linear_response.y;
                 value.linear_jacobian_world_storage[2 * generalized_count +
-                                                    column] = response.z;
+                                                    column] = linear_response.z;
+            };
+
+            if (floating_base_.has_value())
+            {
+                for (std::size_t column = 0; column < 6; ++column)
+                {
+                    termin::Screw3 response = basis_screw_vw(column);
+                    for (const std::size_t current : ancestry)
+                    {
+                        response = response.adjoint_inv(
+                            parent_to_unit_[current]);
+                    }
+                    write_response(column, response);
+                }
+            }
+            for (std::size_t ancestor = 0; ancestor < ancestry.size();
+                 ++ancestor)
+            {
+                const std::size_t joint = ancestry[ancestor];
+                termin::Screw3 response = motion_twists_at_unit_[joint];
+                for (std::size_t descendant = ancestor + 1;
+                     descendant < ancestry.size();
+                     ++descendant)
+                {
+                    response = response.adjoint_inv(
+                        parent_to_unit_[ancestry[descendant]]);
+                }
+                write_response(unit_offset + joint, response);
             }
             if (!value.position_world.is_finite() ||
                 !value.velocity_world.is_finite())

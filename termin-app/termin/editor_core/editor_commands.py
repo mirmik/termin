@@ -36,6 +36,7 @@ _SCENE_PROPERTIES = {
     "skybox_bottom_color",
     "skybox_type",
     "fixed_timestep",
+    "time_scale",
 }
 
 
@@ -67,6 +68,9 @@ def _clone_value(value: Any) -> Any:
 def _set_scene_property(scene, property_name: str, value: Any) -> None:
     if property_name == "fixed_timestep":
         scene.fixed_timestep = float(value)
+        return
+    if property_name == "time_scale":
+        scene.time_scale = float(value)
         return
     rs = scene_render_state(scene)
     if property_name == "background_color":

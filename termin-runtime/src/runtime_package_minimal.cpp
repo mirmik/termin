@@ -208,16 +208,6 @@ TcSceneRef load_scene(
     return scene;
 }
 
-void destroy_loaded_scenes(RuntimePackageLoadResult& result) {
-    for (RuntimePackageScene& packaged : result.scenes) {
-        if (packaged.scene.valid()) {
-            packaged.scene.destroy();
-        }
-    }
-    result.scenes.clear();
-    result.scene = {};
-}
-
 } // namespace
 
 TcSceneRef RuntimePackageLoadResult::find_scene(const std::string& identity) const {
@@ -227,6 +217,18 @@ TcSceneRef RuntimePackageLoadResult::find_scene(const std::string& identity) con
         }
     }
     return {};
+}
+
+void RuntimePackageLoadResult::destroy() {
+    for (RuntimePackageScene& packaged : scenes) {
+        if (packaged.scene.valid()) {
+            packaged.scene.destroy();
+        }
+    }
+    scenes.clear();
+    scene = {};
+    resources.reset();
+    ok = false;
 }
 
 RuntimePackageLoadResult RuntimePackageLoader::load(
@@ -315,8 +317,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             result.scene.entity_count()
         );
     } catch (const std::exception& exception) {
-        destroy_loaded_scenes(result);
-        result.resources.reset();
+        result.destroy();
         result.ok = false;
         result.message = exception.what();
         tc_log_error("RuntimePackageLoader(minimal): %s", result.message.c_str());

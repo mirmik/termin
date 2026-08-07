@@ -80,13 +80,18 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
                                               const Vector &gradient,
                                               const Matrix &equalities,
                                               const Vector &targets,
-                                              QpTolerance tolerance) {
+                                              QpTolerance tolerance,
+                                              bool prefer_spd = false) {
   EqualityResult solved;
   solved.primal = Vector::Zero(hessian.rows());
   solved.dual = Vector::Zero(equalities.rows());
-  solved.result = solve_equality_qp(
-      {view(hessian), view(gradient), view(equalities), view(targets)},
-      {view(solved.primal), view(solved.dual)}, tolerance);
+  const EqualityQpProblemView problem = {
+      view(hessian), view(gradient), view(equalities), view(targets)};
+  const EqualityQpSolutionView solution = {view(solved.primal),
+                                           view(solved.dual)};
+  solved.result =
+      prefer_spd ? solve_equality_qp_spd_first(problem, solution, tolerance)
+                 : solve_equality_qp(problem, solution, tolerance);
   return solved;
 }
 
@@ -266,7 +271,8 @@ any_outputs_overlap(ActiveSetQpSolutionView solution) noexcept {
     }
 
     const EqualityResult subproblem = solve_equalities(
-        hessian, gradient, working, working_targets, options.tolerance);
+        hessian, gradient, working, working_targets, options.tolerance,
+        !active.empty());
     Vector direction;
     bool finite_target = false;
     if (subproblem.result.status == QpStatus::Optimal) {

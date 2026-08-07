@@ -245,6 +245,7 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
     graph_data = {
         "uuid": "graph-equivalence-uuid",
         "name": "Equivalent",
+        "execution_model": "xr_multiview",
         "nodes": [
             {"type": "RenderTargetInput", "node_type": "render_target_input", "x": 10, "y": 10},
             {"type": "FBO Split", "node_type": "fbo_split", "x": 160, "y": 10},
@@ -284,6 +285,7 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
     lowered_pipeline = compile_graph_from_json(json.dumps(graph_data))
     try:
         pass_list_data = lowered_pipeline.serialize()
+        pass_list_data["execution_model"] = graph_data["execution_model"]
     finally:
         lowered_pipeline.destroy()
     pass_list_data["uuid"] = "pass-list-equivalence-uuid"
@@ -302,6 +304,8 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
             manager.register_file(result)
         graph_resource = manager.get_pipeline_asset("graph").canonical_resource
         pass_list_resource = manager.get_pipeline_asset("pass-list").canonical_resource
+        assert graph_resource.execution_model == "xr_multiview"
+        assert pass_list_resource.execution_model == "xr_multiview"
         assert graph_resource.passes == pass_list_resource.passes
         assert graph_resource.resources == pass_list_resource.resources
         def dependency_key(item):

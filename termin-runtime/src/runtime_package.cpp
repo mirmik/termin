@@ -1783,6 +1783,18 @@ TcSceneRef RuntimePackageLoadResult::find_scene(const std::string& identity) con
     return TcSceneRef();
 }
 
+void RuntimePackageLoadResult::destroy() {
+    for (RuntimePackageScene& packaged_scene : scenes) {
+        if (packaged_scene.scene.valid()) {
+            packaged_scene.scene.destroy();
+        }
+    }
+    scenes.clear();
+    scene = TcSceneRef();
+    resources.reset();
+    ok = false;
+}
+
 RuntimePackageLoadResult RuntimePackageLoader::load(
     const std::string& root_path,
     const RuntimePackageLoadOptions& options
@@ -1972,14 +1984,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             );
         }
     } catch (const std::exception& ex) {
-        for (RuntimePackageScene& packaged_scene : result.scenes) {
-            if (packaged_scene.scene.valid()) {
-                packaged_scene.scene.destroy();
-            }
-        }
-        result.scenes.clear();
-        result.scene = TcSceneRef();
-        result.ok = false;
+        result.destroy();
         result.message = ex.what();
         tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
     }

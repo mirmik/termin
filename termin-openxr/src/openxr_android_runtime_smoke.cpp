@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -230,147 +231,6 @@ struct ScenePrimitiveSmoke {
     }
 };
 
-tc_pass *create_scene_pass(const char *type_name, const char *pass_name,
-                           std::initializer_list<std::pair<const char *, const char *>> fields) {
-    if (!tc_pass_registry_has(type_name)) {
-        tc_log_error("[OpenXR scene] pass type is not registered: '%s'", type_name);
-        return nullptr;
-    }
-    tc_pass *pass = tc_pass_registry_create(type_name);
-    if (!pass) {
-        tc_log_error("[OpenXR scene] failed to create pass '%s'", type_name);
-        return nullptr;
-    }
-    tc_pass_set_name(pass, pass_name);
-    for (const auto &[field, value] : fields) {
-        tc_value field_value = tc_value_string(value);
-        tc_pass_inspect_set(pass, field, field_value, nullptr);
-        tc_value_free(&field_value);
-    }
-    return pass;
-}
-
-void adopt_scene_pass(tc_pipeline_handle pipeline, tc_pass *pass) {
-    if (!tc_pipeline_adopt_pass(pipeline, pass, pass ? pass->deleter : nullptr)) {
-        tc_log_error("[OpenXR scene] failed to adopt configured pass");
-        tc_pass_delete_unowned(pass);
-    }
-}
-
-void set_pass_float(tc_pass *pass, const char *field, float value) {
-    if (!pass || !field) {
-        return;
-    }
-    tc_value field_value = tc_value_float(value);
-    tc_pass_inspect_set(pass, field, field_value, nullptr);
-    tc_value_free(&field_value);
-}
-
-void set_pass_int(tc_pass *pass, const char *field, int value) {
-    if (!pass || !field) {
-        return;
-    }
-    tc_value field_value = tc_value_int(value);
-    tc_pass_inspect_set(pass, field, field_value, nullptr);
-    tc_value_free(&field_value);
-}
-
-termin::RenderPipeline make_openxr_scene_pipeline() {
-    tc_pipeline_handle ph = tc_pipeline_create("OpenXRScene");
-    termin::RenderPipeline pipeline(ph);
-
-    if (tc_pass *p = create_scene_pass(
-            "ColorPass", "Color",
-            {{"input_res", "empty"}, {"output_res", "color_opaque"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
-        adopt_scene_pass(ph, p);
-    }
-    if (tc_pass *p = create_scene_pass("ColorPass", "Transparent",
-                                       {{"input_res", "color_opaque"},
-                                        {"output_res", "color"},
-                                        {"shadow_res", ""},
-                                        {"phase_mark", "transparent"},
-                                        {"sort_mode", "far_to_near"}})) {
-        adopt_scene_pass(ph, p);
-    }
-    if (tc_pass *p = create_scene_pass("TonemapPass", "Tonemap",
-                                       {
-                                           {"input_res", "color"},
-                                           {"output_res", "color_ldr"},
-                                       })) {
-        set_pass_float(p, "exposure", 1.0f);
-        set_pass_int(p, "method", 0);
-        adopt_scene_pass(ph, p);
-    }
-    if (tc_pass *p = create_scene_pass(
-            "UIWidgetPass", "UIWidgets",
-            {{"input_res", "color_ldr"}, {"output_res", "color+widgets"}})) {
-        adopt_scene_pass(ph, p);
-    }
-    if (tc_pass *p = create_scene_pass("PresentToScreenPass", "Present",
-                                       {{"input_res", "color+widgets"}, {"output_res", "OUTPUT"}})) {
-        adopt_scene_pass(ph, p);
-    }
-
-    const char *color_resources[] = {
-        "empty",
-        "color_opaque",
-        "color",
-        "color_ldr",
-        "color+widgets",
-    };
-    for (const char *resource : color_resources) {
-        termin::ResourceSpec spec;
-        spec.resource = resource;
-        spec.format =
-            (std::strcmp(resource, "color_ldr") == 0 ||
-             std::strcmp(resource, "color+widgets") == 0)
-            ? "render_target"
-            : "rgba16f";
-        if (std::strcmp(resource, "empty") == 0) {
-            spec.clear_color = std::array<double, 4>{0.015, 0.018, 0.024, 1.0};
-            spec.clear_depth = 1.0f;
-        }
-        pipeline.add_spec(spec);
-    }
-    return pipeline;
-}
-
-termin::RenderPipeline make_pipeline_for_xr_render_target(termin::EngineCore &engine,
-                                                          const tc_render_target_config *config) {
-    if (config && cstr_nonempty(config->pipeline_uuid)) {
-        const std::string pipeline_uuid = config->pipeline_uuid;
-        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_uuid);
-        if (tc_pipeline_handle_valid(handle)) {
-            termin::RenderPipeline pipeline(handle);
-            tc_log_info("[OpenXR scene] using render target pipeline uuid='%s' "
-                        "name='%s' passes=%zu",
-                        pipeline_uuid.c_str(), cstr_nonempty(config->pipeline_name) ? config->pipeline_name : "",
-                        pipeline.pass_count());
-            return pipeline;
-        }
-
-        tc_log_warn("[OpenXR scene] failed to create render target pipeline "
-                    "uuid='%s'; trying pipeline_name",
-                    pipeline_uuid.c_str());
-    }
-
-    if (config && cstr_nonempty(config->pipeline_name)) {
-        const std::string pipeline_name = normalized_pipeline_name(config->pipeline_name);
-        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_name);
-        if (tc_pipeline_handle_valid(handle)) {
-            termin::RenderPipeline pipeline(handle);
-            tc_log_info("[OpenXR scene] using render target pipeline '%s' passes=%zu", pipeline_name.c_str(),
-                        pipeline.pass_count());
-            return pipeline;
-        }
-
-        tc_log_error("[OpenXR scene] failed to create render target pipeline '%s'", pipeline_name.c_str());
-    }
-
-    tc_log_warn("[OpenXR scene] using built-in OpenXRScene fallback pipeline");
-    return make_openxr_scene_pipeline();
-}
-
 const tc_render_target_config *find_xr_render_target_config(termin::TcSceneRef scene) {
     tc_scene_render_mount *mount = tc_scene_render_mount_get(scene.handle());
     if (!mount) {
@@ -452,14 +312,12 @@ void register_openxr_scene_runtime() {
 }
 
 struct OpenXRRuntimeScene {
-    struct EyeFrame {
+    struct MultiviewFrame {
         tgfx::TextureHandle color_texture;
-        tgfx::TextureHandle depth_texture;
         uint32_t width = 0;
         uint32_t height = 0;
         tgfx::PixelFormat color_format = tgfx::PixelFormat::Undefined;
-        XrView view{};
-        uint32_t eye_index = 0;
+        std::array<XrView, 2> views{};
         bool valid = false;
     };
 
@@ -470,8 +328,9 @@ struct OpenXRRuntimeScene {
     tc_render_target_handle xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     termin::XrOriginComponent *xr_origin = nullptr;
     termin::Mat44 origin_from_xr_reference = termin::Mat44::identity();
-    EyeFrame active_eye_frame;
+    MultiviewFrame active_multiview_frame;
     bool reference_alignment_initialized = false;
+    bool stereo_contract_logged = false;
     bool ready = false;
 
     void reset_reference_alignment() {
@@ -523,7 +382,7 @@ struct OpenXRRuntimeScene {
     }
 
     void install_runtime_pipeline_factory() {
-        engine->rendering_manager.set_pipeline_factory([this](const std::string &key) -> tc_pipeline_handle {
+        engine->rendering_manager.set_pipeline_factory([](const std::string &key) -> tc_pipeline_handle {
             const tc_pipeline_template_handle template_handle =
                 tc_pipeline_template_find(key.c_str());
             if (tc_pipeline_template_handle_is_invalid(template_handle)) {
@@ -535,6 +394,13 @@ struct OpenXRRuntimeScene {
 
             try {
                 termin::TcPipelineTemplate pipeline_template(template_handle);
+                const tc_pipeline_template* definition = pipeline_template.get();
+                tc_log_info(
+                    "[OpenXR scene] runtime pipeline template '%s' model=%d handle=(%u,%u)",
+                    key.c_str(),
+                    definition ? static_cast<int>(definition->execution_model) : -1,
+                    template_handle.index,
+                    template_handle.generation);
                 termin::RenderPipeline compiled(pipeline_template);
                 if (!compiled.is_valid()) {
                     tc_log_error("[OpenXR scene] failed to instantiate runtime pipeline '%s'", key.c_str());
@@ -542,9 +408,19 @@ struct OpenXRRuntimeScene {
                 }
                 compiled.set_name(key);
                 const tc_pipeline_handle handle = compiled.handle();
+                const tc_pipeline_template_handle instance_template =
+                    tc_pipeline_get_template(handle);
+                const tc_pipeline_template* instance_definition =
+                    tc_pipeline_template_get(instance_template);
                 tc_log_info(
-                    "[OpenXR scene] instantiated compiled runtime pipeline '%s' passes=%zu",
-                    key.c_str(), compiled.pass_count());
+                    "[OpenXR scene] instantiated compiled runtime pipeline '%s' passes=%zu "
+                    "model=%d template=(%u,%u)",
+                    key.c_str(), compiled.pass_count(),
+                    instance_definition
+                        ? static_cast<int>(instance_definition->execution_model)
+                        : -1,
+                    instance_template.index,
+                    instance_template.generation);
                 return handle;
             } catch (const std::exception &e) {
                 tc_log_error(
@@ -589,6 +465,21 @@ struct OpenXRRuntimeScene {
             return false;
         }
 
+        const std::filesystem::path ui_font_path =
+            std::filesystem::path(asset_root) / "fonts" / "DroidSans.ttf";
+        if (!std::filesystem::is_regular_file(ui_font_path)) {
+            log_error("OpenXR scene", "packaged native UI font is missing");
+            tc_log_error("[OpenXR scene] packaged native UI font not found at '%s'",
+                         ui_font_path.c_str());
+            return false;
+        }
+        if (setenv("TERMIN_UI_FONT", ui_font_path.c_str(), 1) != 0) {
+            log_error("OpenXR scene", "failed to configure native UI font");
+            tc_log_error("[OpenXR scene] failed to set TERMIN_UI_FONT='%s'",
+                         ui_font_path.c_str());
+            return false;
+        }
+
         tgfx::set_builtin_shader_root(nullptr);
         engine = std::make_unique<termin::EngineCore>();
         termin::RenderEngine *render_engine =
@@ -614,7 +505,7 @@ struct OpenXRRuntimeScene {
         if (!package.ok || !package.scene.valid()) {
             log_error("OpenXR scene", (std::string("runtime package load failed: ") + package.message).c_str());
             tc_log_error("[OpenXR scene] runtime package load failed: %s", package.message.c_str());
-            package = termin::runtime::RuntimePackageLoadResult();
+            package.destroy();
             engine.reset();
             return false;
         }
@@ -632,25 +523,67 @@ struct OpenXRRuntimeScene {
         if (!xr_origin) {
             log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");
             tc_log_error("[OpenXR scene] runtime package loaded but has no XR camera origin");
-            package.scene.destroy();
-            package = termin::runtime::RuntimePackageLoadResult();
+            package.destroy();
             engine.reset();
             return false;
         }
         reset_reference_alignment();
 
-        pipeline = make_pipeline_for_xr_render_target(*engine, xr_config);
-        if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
-            log_error("OpenXR scene", "failed to create render pipeline");
-            tc_log_error("[OpenXR scene] failed to create render pipeline");
-            package.scene.destroy();
-            package = termin::runtime::RuntimePackageLoadResult();
+        scene = package.scene;
+        if (!engine->rendering_manager.attach_scene_render_targets(scene.handle())) {
+            log_error("OpenXR scene", "failed to restore scene render targets");
+            tc_log_error("[OpenXR scene] failed to restore scene render targets");
+            package.destroy();
             engine.reset();
             return false;
         }
 
-        scene = package.scene;
-        create_xr_render_target();
+        const std::string xr_target_name = choose_xr_render_target_name(xr_config);
+        xr_render_target = engine->rendering_manager.topology().find_render_target(
+            scene.handle(), xr_target_name);
+        if (!tc_render_target_handle_valid(xr_render_target)) {
+            log_error("OpenXR scene", "scene has no restored XR render target");
+            tc_log_error("[OpenXR scene] restored XR render target '%s' was not found",
+                         xr_target_name.c_str());
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            package.destroy();
+            engine.reset();
+            return false;
+        }
+        pipeline = termin::RenderPipeline(tc_render_target_get_pipeline(xr_render_target));
+        if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
+            log_error("OpenXR scene", "failed to create render pipeline");
+            tc_log_error("[OpenXR scene] failed to create render pipeline");
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            pipeline = {};
+            xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+            package.destroy();
+            engine.reset();
+            return false;
+        }
+        const tc_pipeline_template* pipeline_template =
+            tc_pipeline_template_get(pipeline.template_handle());
+        if (!pipeline_template ||
+            pipeline_template->execution_model != TC_PIPELINE_EXECUTION_XR_MULTIVIEW) {
+            tc_log_error(
+                "[OpenXR scene] xr_stereo pipeline model mismatch: model=%d "
+                "template=(%u,%u)",
+                pipeline_template
+                    ? static_cast<int>(pipeline_template->execution_model)
+                    : -1,
+                pipeline.template_handle().index,
+                pipeline.template_handle().generation);
+            log_error("OpenXR scene", "xr_stereo requires an xr_multiview pipeline");
+            tc_log_error(
+                "[OpenXR scene] xr_stereo target rejected non-xr_multiview pipeline");
+            engine->rendering_manager.detach_scene_full(scene.handle());
+            pipeline = {};
+            xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+            package.destroy();
+            engine.reset();
+            return false;
+        }
+
         register_context_provider();
         ready = true;
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "OpenXR runtime scene loaded root='%s' entities=%zu passes=%zu",
@@ -709,21 +642,21 @@ struct OpenXRRuntimeScene {
         if (!tc_render_target_handle_eq(render_target, xr_render_target)) {
             return false;
         }
-        if (!active_eye_frame.valid || !xr_origin) {
+        if (!active_multiview_frame.valid || !xr_origin) {
             return false;
         }
 
-        const EyeFrame &eye = active_eye_frame;
-        const std::string name = (base_context_name.empty() ? "XRStereoTarget" : base_context_name) +
-                                 (eye.eye_index == 0 ? ".left" : ".right");
+        const MultiviewFrame &frame = active_multiview_frame;
+        const std::string name = base_context_name.empty()
+            ? "XRStereoTarget" : base_context_name;
 
         termin::RenderTargetContext target;
         target.name = name;
-        target.render_rect = termin::Rect2i{0, 0, static_cast<int>(eye.width), static_cast<int>(eye.height)};
+        target.render_rect = termin::Rect2i{0, 0, static_cast<int>(frame.width), static_cast<int>(frame.height)};
         target.internal_entities = internal_entities;
-        target.output_color_tex = eye.color_texture;
-        target.output_depth_tex = eye.depth_texture;
-        target.output_color_format = eye.color_format;
+        target.output_color_tex = frame.color_texture;
+        target.output_color_format = frame.color_format;
+        target.external_textures["XR_MULTIVIEW_TARGET"] = frame.color_texture;
         target.output_depth_format = tgfx::PixelFormat::D32F;
         target.clear_color_enabled = tc_render_target_get_clear_color_enabled(render_target);
         tc_render_target_get_clear_color_value(render_target, target.clear_color);
@@ -741,17 +674,55 @@ struct OpenXRRuntimeScene {
         termin::Mat44 scene_to_origin = origin_pose3.inverse().as_mat44();
         termin::Mat44 scene_from_origin = scene_to_origin.inverse();
         termin::Mat44 reference_to_origin = origin_from_xr_reference.inverse();
-        termin::Vec3 eye_position_in_reference = xr_position_to_scene_position(eye.view.pose.position);
-        termin::Vec3 eye_position_in_origin = origin_from_xr_reference.transform_point(eye_position_in_reference);
-
-        target.camera.view = make_xr_to_scene_matrix() *
-                             mat44_from_float_array(make_view_matrix_from_xr_pose(eye.view.pose)) *
-                             make_scene_to_xr_matrix() * reference_to_origin * scene_to_origin;
-        target.camera.projection = make_engine_projection_from_xr_fov(
-            eye.view.fov, static_cast<float>(xr_origin->near_clip), static_cast<float>(xr_origin->far_clip));
-        target.camera.position = scene_from_origin.transform_point(eye_position_in_origin);
-        target.camera.near_clip = xr_origin->near_clip;
-        target.camera.far_clip = xr_origin->far_clip;
+        termin::StereoRenderViews stereo;
+        termin::RenderCamera* cameras[2] = {&stereo.left, &stereo.right};
+        for (uint32_t eye = 0; eye < 2; ++eye) {
+            const XrView& xr_view = frame.views[eye];
+            termin::RenderCamera& camera = *cameras[eye];
+            termin::Vec3 eye_position_in_reference =
+                xr_position_to_scene_position(xr_view.pose.position);
+            termin::Vec3 eye_position_in_origin =
+                origin_from_xr_reference.transform_point(eye_position_in_reference);
+            camera.view = make_xr_to_scene_matrix() *
+                          mat44_from_float_array(make_view_matrix_from_xr_pose(xr_view.pose)) *
+                          make_scene_to_xr_matrix() * reference_to_origin * scene_to_origin;
+            camera.projection = make_engine_projection_from_xr_fov(
+                xr_view.fov, static_cast<float>(xr_origin->near_clip),
+                static_cast<float>(xr_origin->far_clip));
+            camera.position = scene_from_origin.transform_point(eye_position_in_origin);
+            camera.near_clip = xr_origin->near_clip;
+            camera.far_clip = xr_origin->far_clip;
+        }
+        if (!stereo_contract_logged) {
+            const termin::Vec3 baseline = stereo.right.position - stereo.left.position;
+            tc_log_info(
+                "[OpenXR scene] stereo views: left_pos=(%.6f,%.6f,%.6f) "
+                "right_pos=(%.6f,%.6f,%.6f) baseline=%.6f",
+                stereo.left.position.x, stereo.left.position.y, stereo.left.position.z,
+                stereo.right.position.x, stereo.right.position.y, stereo.right.position.z,
+                baseline.norm());
+            for (uint32_t eye = 0; eye < 2; ++eye) {
+                const XrView& xr_view = frame.views[eye];
+                const termin::RenderCamera& camera = *cameras[eye];
+                tc_log_info(
+                    "[OpenXR scene] eye[%u]: xr_pose=(%.6f,%.6f,%.6f) "
+                    "fov=(%.6f,%.6f,%.6f,%.6f) "
+                    "projection=(%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f)",
+                    eye,
+                    xr_view.pose.position.x, xr_view.pose.position.y,
+                    xr_view.pose.position.z,
+                    xr_view.fov.angleLeft, xr_view.fov.angleRight,
+                    xr_view.fov.angleDown, xr_view.fov.angleUp,
+                    camera.projection(0, 0), camera.projection(1, 0),
+                    camera.projection(2, 1), camera.projection(1, 1),
+                    camera.projection(1, 2), camera.projection(3, 2),
+                    camera.projection(1, 3));
+            }
+            stereo_contract_logged = true;
+        }
+        target.stereo_views = stereo;
+        target.camera = stereo.left;
+        target.camera.position = (stereo.left.position + stereo.right.position) * 0.5;
         target.layer_mask = xr_origin->layer_mask & tc_render_target_get_layer_mask(render_target);
 
         contexts.emplace(name, std::move(target));
@@ -759,8 +730,12 @@ struct OpenXRRuntimeScene {
         return true;
     }
 
-    void render_eye(tgfx::TextureHandle color_texture, tgfx::TextureHandle depth_texture, uint32_t width,
-                    uint32_t height, tgfx::PixelFormat color_format, const XrView &view, uint32_t eye_index) {
+    void render_multiview(
+        tgfx::TextureHandle color_texture,
+        uint32_t width,
+        uint32_t height,
+        tgfx::PixelFormat color_format,
+        const std::vector<XrView>& views) {
         if (!ready || !engine || !xr_origin) {
             return;
         }
@@ -769,16 +744,19 @@ struct OpenXRRuntimeScene {
             return;
         }
 
-        active_eye_frame.color_texture = color_texture;
-        active_eye_frame.depth_texture = depth_texture;
-        active_eye_frame.width = width;
-        active_eye_frame.height = height;
-        active_eye_frame.color_format = color_format;
-        active_eye_frame.view = view;
-        active_eye_frame.eye_index = eye_index;
-        active_eye_frame.valid = true;
-        engine->rendering_manager.render_render_target_offscreen(xr_render_target);
-        active_eye_frame.valid = false;
+        if (views.size() != 2) {
+            tc_log_error("[OpenXR scene] multiview rendering requires exactly two views");
+            return;
+        }
+        active_multiview_frame.color_texture = color_texture;
+        active_multiview_frame.width = width;
+        active_multiview_frame.height = height;
+        active_multiview_frame.color_format = color_format;
+        active_multiview_frame.views[0] = views[0];
+        active_multiview_frame.views[1] = views[1];
+        active_multiview_frame.valid = true;
+        engine->rendering_manager.render_render_target_tree_offscreen(xr_render_target);
+        active_multiview_frame.valid = false;
     }
 
     void update(double dt) {
@@ -833,22 +811,20 @@ struct OpenXRRuntimeScene {
     }
 
     void destroy() {
-        active_eye_frame = {};
+        active_multiview_frame = {};
         if (engine) {
             engine->rendering_manager.clear_render_target_context_provider(TC_RENDER_TARGET_XR_STEREO);
-            if (tc_render_target_handle_valid(xr_render_target)) {
-                engine->rendering_manager.unregister_managed_render_target(xr_render_target);
-                tc_render_target_free(xr_render_target);
+            if (scene.valid()) {
+                engine->rendering_manager.detach_scene_full(scene.handle());
             }
         }
         xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+        // Scene render targets own their pipeline instances and detach_scene_full
+        // destroyed them above. RenderPipeline is only the non-owning XR view.
         pipeline = {};
         xr_origin = nullptr;
-        if (scene.valid()) {
-            scene.destroy();
-        }
+        package.destroy();
         scene = {};
-        package = termin::runtime::RuntimePackageLoadResult();
         tgfx::set_builtin_shader_root(nullptr);
         engine.reset();
         ready = false;
@@ -1050,6 +1026,19 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     try {
         tgfx::VulkanDeviceCreateInfo device_info{};
         device_info.enable_validation = false;
+        XrVersion requested_vulkan_version = XR_MAKE_VERSION(1, 1, 0);
+        if (vulkan_requirements.maxApiVersionSupported < requested_vulkan_version) {
+            throw std::runtime_error(
+                "OpenXR runtime does not support Vulkan 1.1 required for multiview");
+        }
+        if (vulkan_requirements.minApiVersionSupported > requested_vulkan_version) {
+            requested_vulkan_version = vulkan_requirements.minApiVersionSupported;
+        }
+        device_info.api_version = VK_MAKE_API_VERSION(
+            0,
+            XR_VERSION_MAJOR(requested_vulkan_version),
+            XR_VERSION_MINOR(requested_vulkan_version),
+            XR_VERSION_PATCH(requested_vulkan_version));
         device_info.instance_extensions = instance_extensions;
         device_info.device_extensions = device_extensions;
         device_info.physical_device_selector = [&](VkInstance vk_instance) -> VkPhysicalDevice {
@@ -1063,6 +1052,13 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
             return physical_device;
         };
         auto owned_device = std::make_unique<tgfx::VulkanRenderDevice>(device_info);
+        const tgfx::BackendCapabilities capabilities = owned_device->capabilities();
+        if (!capabilities.supports_texture_arrays ||
+            !capabilities.supports_multiview ||
+            capabilities.max_multiview_views < 2) {
+            throw std::runtime_error(
+                "Vulkan device does not satisfy the two-view multiview contract");
+        }
         render_device = owned_device.get();
         graphics_host = tgfx::GraphicsHost::adopt_application_device(
             std::move(owned_device));
@@ -1133,8 +1129,8 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     }
     xr.enumerate_view_configuration_views(instance, system_id, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, view_count,
                                           &view_count, view_configs.data());
-    if (view_count == 0) {
-        log_error("OpenXR", "runtime returned zero primary stereo views");
+    if (view_count != 2) {
+        log_error("OpenXR", "explicit multiview path requires exactly two primary stereo views");
         runtime_scene.destroy();
         if (app_space != XR_NULL_HANDLE) {
             xr.destroy_space(app_space);
@@ -1180,11 +1176,13 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     swapchain_create_info.type = XR_TYPE_SWAPCHAIN_CREATE_INFO;
     swapchain_create_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
     swapchain_create_info.format = color_format;
-    swapchain_create_info.sampleCount = view_configs[0].recommendedSwapchainSampleCount;
+    // MSAA belongs to the explicit internal graph resources. The XR image is
+    // the single-sample, two-layer tonemap destination.
+    swapchain_create_info.sampleCount = 1;
     swapchain_create_info.width = view_configs[0].recommendedImageRectWidth;
     swapchain_create_info.height = view_configs[0].recommendedImageRectHeight;
     swapchain_create_info.faceCount = 1;
-    swapchain_create_info.arraySize = 1;
+    swapchain_create_info.arraySize = 2;
     swapchain_create_info.mipCount = 1;
     __android_log_print(ANDROID_LOG_INFO, kLogTag,
                         "OpenXR swapchain: views=%u size=%ux%u samples=%u "
@@ -1193,26 +1191,22 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
                         swapchain_create_info.sampleCount, view_configs[0].recommendedSwapchainSampleCount,
                         view_configs[0].maxSwapchainSampleCount);
 
-    std::vector<XrSwapchain> color_swapchains(view_count, XR_NULL_HANDLE);
-    std::vector<std::vector<XrSwapchainImageVulkanKHR>> swapchain_images(view_count);
-    std::vector<std::vector<tgfx::TextureHandle>> swapchain_textures(view_count);
+    XrSwapchain color_swapchain = XR_NULL_HANDLE;
+    std::vector<XrSwapchainImageVulkanKHR> swapchain_images;
+    std::vector<tgfx::TextureHandle> swapchain_textures;
     tgfx::TextureDesc color_desc{};
     color_desc.width = swapchain_create_info.width;
     color_desc.height = swapchain_create_info.height;
     color_desc.mip_levels = 1;
     color_desc.sample_count = swapchain_create_info.sampleCount;
+    color_desc.array_layers = 2;
     color_desc.format = tgfx_color_format;
     color_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
-    for (uint32_t eye = 0; eye < view_count; ++eye) {
-        result = xr.create_swapchain(session, &swapchain_create_info, &color_swapchains[eye]);
-        if (XR_FAILED(result) || color_swapchains[eye] == XR_NULL_HANDLE) {
-            __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSwapchain[%u] failed: %d", eye, result);
+    {
+        result = xr.create_swapchain(session, &swapchain_create_info, &color_swapchain);
+        if (XR_FAILED(result) || color_swapchain == XR_NULL_HANDLE) {
+            __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSwapchain failed: %d", result);
             runtime_scene.destroy();
-            for (XrSwapchain swapchain : color_swapchains) {
-                if (swapchain != XR_NULL_HANDLE) {
-                    xr.destroy_swapchain(swapchain);
-                }
-            }
             if (app_space != XR_NULL_HANDLE) {
                 xr.destroy_space(app_space);
             }
@@ -1224,34 +1218,20 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
         }
 
         uint32_t image_count = 0;
-        xr.enumerate_swapchain_images(color_swapchains[eye], 0, &image_count, nullptr);
-        swapchain_images[eye].resize(image_count);
-        for (XrSwapchainImageVulkanKHR &image : swapchain_images[eye]) {
+        xr.enumerate_swapchain_images(color_swapchain, 0, &image_count, nullptr);
+        swapchain_images.resize(image_count);
+        for (XrSwapchainImageVulkanKHR &image : swapchain_images) {
             image.type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
         }
-        xr.enumerate_swapchain_images(color_swapchains[eye], image_count, &image_count,
-                                      reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images[eye].data()));
-        swapchain_textures[eye].reserve(image_count);
-        for (const XrSwapchainImageVulkanKHR &image : swapchain_images[eye]) {
-            swapchain_textures[eye].push_back(
+        xr.enumerate_swapchain_images(color_swapchain, image_count, &image_count,
+                                      reinterpret_cast<XrSwapchainImageBaseHeader *>(swapchain_images.data()));
+        swapchain_textures.reserve(image_count);
+        for (const XrSwapchainImageVulkanKHR &image : swapchain_images) {
+            swapchain_textures.push_back(
                 render_device->register_external_texture(reinterpret_cast<uintptr_t>(image.image), color_desc));
         }
     }
 
-    tgfx::TextureDesc depth_desc{};
-    depth_desc.width = swapchain_create_info.width;
-    depth_desc.height = swapchain_create_info.height;
-    depth_desc.mip_levels = 1;
-    depth_desc.sample_count = swapchain_create_info.sampleCount;
-    depth_desc.format = tgfx::PixelFormat::D32F;
-    depth_desc.usage =
-        tgfx::TextureUsage::DepthStencilAttachment | tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::Sampled;
-    tgfx::TextureHandle depth_texture = render_device->create_texture(depth_desc);
-
-    ScenePrimitiveSmoke scene_primitive;
-    const bool scene_primitive_ready =
-        !runtime_scene_requested &&
-        scene_primitive.init(*render_device, tgfx_color_format, swapchain_create_info.sampleCount);
     if (runtime_scene_requested && !runtime_scene_ready) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag,
                             "OpenXR runtime scene is not ready; rendering clear frames only");
@@ -1422,94 +1402,87 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
                     runtime_scene.update(frame_dt);
                 }
 
-                std::vector<XrSwapchain> swapchains_to_release;
-                swapchains_to_release.reserve(view_count);
                 const bool runtime_scene_frame_open = runtime_scene_ready && runtime_scene.begin_render_frame();
-                for (uint32_t eye = 0; eye < view_count; ++eye) {
-                    uint32_t image_index = 0;
-                    XrSwapchainImageAcquireInfo acquire_info{};
-                    acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
-                    result = xr.acquire_swapchain_image(color_swapchains[eye], &acquire_info, &image_index);
-                    if (XR_FAILED(result)) {
-                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrAcquireSwapchainImage[%u] failed: %d", eye,
-                                            result);
-                        continue;
-                    }
+                uint32_t image_index = 0;
+                XrSwapchainImageAcquireInfo acquire_info{};
+                acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
+                result = xr.acquire_swapchain_image(color_swapchain, &acquire_info, &image_index);
+                bool image_acquired = XR_SUCCEEDED(result);
+                bool image_ready = image_acquired;
+                if (!image_acquired) {
+                    __android_log_print(ANDROID_LOG_ERROR, kLogTag,
+                                        "xrAcquireSwapchainImage failed: %d", result);
+                }
 
+                if (image_acquired) {
                     XrSwapchainImageWaitInfo wait_swapchain_info{};
                     wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
                     wait_swapchain_info.timeout = XR_INFINITE_DURATION;
                     const auto wait_swapchain_begin = FrameClock::now();
-                    result = xr.wait_swapchain_image(color_swapchains[eye], &wait_swapchain_info);
-                    frame_swapchain_wait_ms += millis_between(wait_swapchain_begin, FrameClock::now());
+                    result = xr.wait_swapchain_image(color_swapchain, &wait_swapchain_info);
+                    frame_swapchain_wait_ms +=
+                        millis_between(wait_swapchain_begin, FrameClock::now());
                     if (XR_FAILED(result)) {
-                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitSwapchainImage[%u] failed: %d", eye,
-                                            result);
-                        continue;
+                        __android_log_print(ANDROID_LOG_ERROR, kLogTag,
+                                            "xrWaitSwapchainImage failed: %d", result);
+                        image_ready = false;
                     }
-                    swapchains_to_release.push_back(color_swapchains[eye]);
+                }
 
-                    const tgfx::TextureHandle color_texture = swapchain_textures[eye][image_index];
-                    if (auto *color_resource = render_device->get_texture(color_texture)) {
-                        color_resource->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-                    }
-                    if (auto *depth_resource = render_device->get_texture(depth_texture)) {
-                        depth_resource->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-                    }
+                tgfx::TextureHandle color_texture{};
+                if (image_ready) {
+                    color_texture = swapchain_textures[image_index];
+                    tgfx::ExternalTextureAccessDesc access;
+                    access.state_after_wait =
+                        tgfx::ExternalTextureState::ColorAttachment;
+                    access.required_before_release =
+                        tgfx::ExternalTextureState::ColorAttachment;
+                    image_ready = render_device->begin_external_texture_access(
+                        color_texture, access);
+                }
 
-                    const auto render_begin = FrameClock::now();
+                const auto render_begin = FrameClock::now();
+                if (image_ready && runtime_scene_ready && runtime_scene_frame_open) {
+                    runtime_scene.render_multiview(
+                        color_texture, swapchain_create_info.width,
+                        swapchain_create_info.height, tgfx_color_format, views);
+                } else if (image_ready) {
                     if (runtime_scene_ready) {
-                        runtime_scene.render_eye(color_texture, depth_texture, swapchain_create_info.width,
-                                                 swapchain_create_info.height, tgfx_color_format, views[eye], eye);
-                    } else {
-                        auto cmd = render_device->create_command_list();
-                        cmd->begin();
-                        tgfx::RenderPassDesc pass{};
-                        tgfx::ColorAttachmentDesc color_attachment{};
-                        color_attachment.texture = color_texture;
-                        color_attachment.load = tgfx::LoadOp::Clear;
-                        color_attachment.store = tgfx::StoreOp::Store;
-                        color_attachment.clear_color[0] = 0.015f;
-                        color_attachment.clear_color[1] = 0.018f;
-                        color_attachment.clear_color[2] = 0.024f;
-                        color_attachment.clear_color[3] = 1.0f;
-                        pass.colors.push_back(color_attachment);
-                        pass.has_depth = true;
-                        pass.depth.texture = depth_texture;
-                        pass.depth.load = tgfx::LoadOp::Clear;
-                        pass.depth.store = tgfx::StoreOp::DontCare;
-                        pass.depth.clear_depth = 1.0f;
-                        cmd->begin_render_pass(pass);
-                        cmd->set_viewport(0, 0, static_cast<int>(swapchain_create_info.width),
-                                          static_cast<int>(swapchain_create_info.height));
-                        cmd->set_scissor(0, 0, static_cast<int>(swapchain_create_info.width),
-                                         static_cast<int>(swapchain_create_info.height));
-                        if (scene_primitive_ready) {
-                            const auto projection = make_xr_projection_matrix_vulkan(views[eye].fov, 0.05f, 100.0f);
-                            const auto view = make_view_matrix_from_xr_pose(views[eye].pose);
-                            const auto model =
-                                make_scene_primitive_model_matrix(scene_primitive.primitive, frame_index);
-                            const std::array<float, 16> push =
-                                multiply_matrix(projection, multiply_matrix(view, model));
-                            cmd->bind_pipeline(scene_primitive.pipeline);
-                            cmd->set_push_constants(push.data(), static_cast<uint32_t>(push.size() * sizeof(float)));
-                            cmd->bind_vertex_buffer(0, scene_primitive.vbo);
-                            cmd->bind_index_buffer(scene_primitive.ebo, tgfx::IndexType::Uint32);
-                            cmd->draw_indexed(scene_primitive.index_count);
-                        }
-                        cmd->end_render_pass();
-                        cmd->end();
-                        render_device->submit(*cmd);
+                        tc_log_error("[OpenXR scene] render frame did not open; clearing XR target");
                     }
-                    frame_render_ms += millis_between(render_begin, FrameClock::now());
+                    auto cmd = render_device->create_command_list();
+                    cmd->begin();
+                    tgfx::MultiviewRenderPassDesc pass{};
+                    tgfx::ColorAttachmentDesc color_attachment{};
+                    color_attachment.texture = color_texture;
+                    color_attachment.load = tgfx::LoadOp::Clear;
+                    color_attachment.store = tgfx::StoreOp::Store;
+                    color_attachment.clear_color[0] = 0.015f;
+                    color_attachment.clear_color[1] = 0.018f;
+                    color_attachment.clear_color[2] = 0.024f;
+                    color_attachment.clear_color[3] = 1.0f;
+                    pass.colors.push_back(color_attachment);
+                    pass.view_count = 2;
+                    cmd->begin_multiview_render_pass(pass);
+                    cmd->set_viewport(0, 0, static_cast<int>(swapchain_create_info.width),
+                                      static_cast<int>(swapchain_create_info.height));
+                    cmd->set_scissor(0, 0, static_cast<int>(swapchain_create_info.width),
+                                     static_cast<int>(swapchain_create_info.height));
+                    cmd->end_render_pass();
+                    cmd->end();
+                    render_device->submit(*cmd);
+                }
+                frame_render_ms += millis_between(render_begin, FrameClock::now());
 
+                for (uint32_t eye = 0; eye < view_count; ++eye) {
                     layer_views[eye].pose = views[eye].pose;
                     layer_views[eye].fov = views[eye].fov;
-                    layer_views[eye].subImage.swapchain = color_swapchains[eye];
+                    layer_views[eye].subImage.swapchain = color_swapchain;
                     layer_views[eye].subImage.imageRect.offset = {0, 0};
-                    layer_views[eye].subImage.imageRect.extent = {static_cast<int32_t>(swapchain_create_info.width),
-                                                                  static_cast<int32_t>(swapchain_create_info.height)};
-                    layer_views[eye].subImage.imageArrayIndex = 0;
+                    layer_views[eye].subImage.imageRect.extent = {
+                        static_cast<int32_t>(swapchain_create_info.width),
+                        static_cast<int32_t>(swapchain_create_info.height)};
+                    layer_views[eye].subImage.imageArrayIndex = eye;
                 }
 
                 if (runtime_scene_frame_open) {
@@ -1518,19 +1491,26 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
                     frame_render_ms += millis_between(render_submit_begin, FrameClock::now());
                 }
 
-                for (XrSwapchain swapchain : swapchains_to_release) {
+                if (image_acquired) {
+                    if (image_ready &&
+                        !render_device->end_external_texture_access(color_texture)) {
+                        tc_log_error("[OpenXR] external color texture failed release contract");
+                        image_ready = false;
+                    }
                     XrSwapchainImageReleaseInfo release_info{};
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
-                    result = xr.release_swapchain_image(swapchain, &release_info);
+                    result = xr.release_swapchain_image(color_swapchain, &release_info);
                     if (XR_FAILED(result)) {
                         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrReleaseSwapchainImage failed: %d", result);
                     }
                 }
 
-                layers[0] = reinterpret_cast<XrCompositionLayerBaseHeader *>(&projection_layer);
-                layer_count = 1;
+                if (image_ready) {
+                    layers[0] = reinterpret_cast<XrCompositionLayerBaseHeader *>(&projection_layer);
+                    layer_count = 1;
+                }
                 ++frame_index;
-                frame_rendered = true;
+                frame_rendered = image_ready;
             }
         } else {
             ++fps_window_should_skip_frames;
@@ -1618,22 +1598,14 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
         xr.end_session(session);
     }
     runtime_scene.destroy();
-    scene_primitive.destroy(render_device);
-    if (depth_texture) {
-        render_device->destroy(depth_texture);
-    }
-    for (const std::vector<tgfx::TextureHandle> &eye_textures : swapchain_textures) {
-        for (tgfx::TextureHandle texture : eye_textures) {
-            if (texture) {
-                render_device->destroy(texture);
-            }
+    for (tgfx::TextureHandle texture : swapchain_textures) {
+        if (texture) {
+            render_device->destroy(texture);
         }
     }
     render_device->wait_idle();
-    for (XrSwapchain swapchain : color_swapchains) {
-        if (swapchain != XR_NULL_HANDLE) {
-            xr.destroy_swapchain(swapchain);
-        }
+    if (color_swapchain != XR_NULL_HANDLE) {
+        xr.destroy_swapchain(color_swapchain);
     }
     if (app_space != XR_NULL_HANDLE) {
         xr.destroy_space(app_space);

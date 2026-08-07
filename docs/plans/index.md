@@ -4,6 +4,11 @@
 
 Если план завершен, итоговое состояние надо перенести в живую документацию модуля или в [Architecture Notes](../architecture/index.md).
 
+## 2026-08
+
+- [Retained Chart3D migration](2026-08-06-retained-chart3d-migration-plan.md)
+- [Open retained chart composer](2026-08-06-open-retained-chart-composer-plan.md)
+
 ## 2026-05
 
 - [external render target graph output](2026-05-09-external-render-target-graph-output.md)
