@@ -465,6 +465,101 @@ TEST_CASE("Remote framegraph exact capture accepts and cancels frame-local work"
     target.stop();
 }
 
+TEST_CASE("Remote framegraph live preview and burst lifecycle is bounded and idempotent")
+{
+    RenderFixture fixture;
+    TargetServiceConfig config;
+    config.authentication_token = "continuous-token";
+    RemoteFrameGraphTarget target(*fixture.debugger, config);
+    REQUIRE(target.start());
+    ClientSession client = handshake(target, "continuous-token");
+    REQUIRE(client.socket != invalid_test_socket);
+
+    Command refresh;
+    refresh.request_id = 60;
+    refresh.kind = CommandKind::refresh_topology;
+    REQUIRE(send_wire(client.socket, refresh, 2, client.id));
+    allow_io_and_pump(target);
+    const auto topology_message = receive_wire(client.socket);
+    REQUIRE(topology_message.has_value());
+    REQUIRE(std::holds_alternative<TopologySnapshot>(
+        topology_message->message));
+    const TopologySnapshot topology =
+        std::get<TopologySnapshot>(topology_message->message);
+    REQUIRE(receive_wire(client.socket).has_value());
+
+    Command stream;
+    stream.request_id = 61;
+    stream.kind = CommandKind::start_stream;
+    stream.target_id = topology.selected_target_id;
+    stream.graph_revision = topology.graph_revision;
+    stream.selector_kind = CaptureSelectorKind::resource;
+    stream.resource = topology.resources.front();
+    stream.encoding = CaptureEncoding::rgba8;
+    stream.max_preview_millifps = 10'000;
+    stream.max_preview_long_edge = 640;
+    REQUIRE(send_wire(client.socket, stream, 3, client.id));
+    allow_io_and_pump(target);
+    const auto stream_status = receive_wire(client.socket);
+    REQUIRE(stream_status.has_value());
+    REQUIRE(std::holds_alternative<Status>(stream_status->message));
+    CHECK(std::get<Status>(stream_status->message).code ==
+          StatusCode::accepted);
+    CHECK(std::get<Status>(stream_status->message).state ==
+          SessionState::streaming);
+
+    Command stop;
+    stop.request_id = 62;
+    stop.kind = CommandKind::stop_stream;
+    stop.target_id = topology.selected_target_id;
+    stop.graph_revision = topology.graph_revision;
+    REQUIRE(send_wire(client.socket, stop, 4, client.id));
+    allow_io_and_pump(target);
+    const auto stream_completed = receive_wire(client.socket);
+    const auto stop_completed = receive_wire(client.socket);
+    REQUIRE(stream_completed.has_value());
+    REQUIRE(stop_completed.has_value());
+    CHECK(std::get<Status>(stream_completed->message).request_id == 61);
+    CHECK(std::get<Status>(stop_completed->message).request_id == 62);
+
+    stop.request_id = 63;
+    REQUIRE(send_wire(client.socket, stop, 5, client.id));
+    allow_io_and_pump(target);
+    const auto repeated_stop = receive_wire(client.socket);
+    REQUIRE(repeated_stop.has_value());
+    CHECK(std::get<Status>(repeated_stop->message).code ==
+          StatusCode::completed);
+
+    Command burst = stream;
+    burst.request_id = 64;
+    burst.kind = CommandKind::capture_burst;
+    burst.encoding = CaptureEncoding::native_pixels;
+    burst.max_preview_millifps = 0;
+    burst.max_preview_long_edge = 0;
+    burst.burst_frames = 4;
+    REQUIRE(send_wire(client.socket, burst, 6, client.id));
+    allow_io_and_pump(target);
+    const auto burst_status = receive_wire(client.socket);
+    REQUIRE(burst_status.has_value());
+    CHECK(std::get<Status>(burst_status->message).code ==
+          StatusCode::accepted);
+
+    Command cancel;
+    cancel.request_id = 65;
+    cancel.kind = CommandKind::cancel;
+    REQUIRE(send_wire(client.socket, cancel, 7, client.id));
+    allow_io_and_pump(target);
+    const auto burst_cancelled = receive_wire(client.socket);
+    const auto cancel_ack = receive_wire(client.socket);
+    REQUIRE(burst_cancelled.has_value());
+    REQUIRE(cancel_ack.has_value());
+    CHECK(std::get<Status>(burst_cancelled->message).request_id == 64);
+    CHECK(std::get<Status>(cancel_ack->message).request_id == 65);
+
+    close_test_socket(client.socket);
+    target.stop();
+}
+
 TEST_CASE("Remote framegraph command queue rejects the newest command")
 {
     RenderFixture fixture;

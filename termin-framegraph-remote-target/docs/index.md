@@ -26,3 +26,19 @@ Only the immutable bounded CPU blob crosses to the I/O thread, which frames it
 as metadata plus ordered chunks. Completion reports capture/readback/transfer
 latency and bytes; cancellation, topology changes, unavailable resources,
 readback failures and budget violations produce terminal statuses and logs.
+
+Live preview reuses the same frame-local request with a non-zero long-edge
+limit. The capture texture is downscaled on the GPU before bounded readback
+and converted to RGBA8 for transport. Scheduling is capped by the requested
+FPS. One capture may execute while `LatestValueSlot` retains at most one ready
+frame; a slow receiver replaces that slot with the newest frame and the next
+delivery carries an explicit receiver `DropEvent`. Network transfer never runs
+on the render thread. Start/update/stop/cancel are safe to repeat, and topology
+revision changes terminate the operation visibly.
+
+Burst capture schedules 2--16 exact frame-local captures in order. Metadata
+carries the common request/revision plus `burst_index`/`burst_count`; the
+target rejects a burst whose cumulative retained payload would exceed the
+negotiated memory budget. Capture, readback, RGBA conversion, transfer time,
+effective preview FPS, bytes and dropped frames are exported by service status
+and terminal status details.
