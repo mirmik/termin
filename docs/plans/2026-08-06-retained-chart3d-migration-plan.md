@@ -132,7 +132,10 @@ chart-owned chrome renderer; public handles и C# API при этом не из�
 - [x] Grid planner/encoder строит bounds-aware line stream; tick/axis labels
   использует отдельный chart-owned chrome renderer, последний per-item
   `PlotEngine3D` body удалён.
-- [ ] Добавить chart framegraph output поверх этих kinds.
+- [x] Добавить chart framegraph output поверх этих kinds: tcplot-owned geometry
+  и chrome passes исполняются общим `RenderEngine`, используют external
+  color/depth/MSAA target и публикуют pass/resource boundaries для framegraph
+  diagnostics/capture.
 
 ### Hardening первого slice
 
