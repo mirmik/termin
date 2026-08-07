@@ -30,6 +30,24 @@ public sealed class RetainedSceneRenderer2D : IDisposable
 
     public TcVisualScene2D Scene => _scene;
 
+    public int MsaaSamples
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return RetainedSceneRendererNative.MsaaSamples(_native);
+        }
+        set
+        {
+            ThrowIfDisposed();
+            if (RetainedSceneRendererNative.SetMsaaSamples(
+                    _native, value) == 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(value),
+                    "MSAA samples must be a power of two between 1 and 16.");
+        }
+    }
+
     public void SetClearColor(VisualColor4f color)
     {
         ThrowIfDisposed();
@@ -100,6 +118,16 @@ internal static class RetainedSceneRendererNative
         float g,
         float b,
         float a);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_scene_renderer2d_set_msaa_samples")]
+    internal static extern int SetMsaaSamples(IntPtr renderer, int samples);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_scene_renderer2d_msaa_samples")]
+    internal static extern int MsaaSamples(IntPtr renderer);
 
     [DllImport(Dll, EntryPoint = "tc_retained_scene_renderer2d_render")]
     internal static extern uint Render(

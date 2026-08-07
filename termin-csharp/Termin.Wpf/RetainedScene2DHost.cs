@@ -63,6 +63,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
     private int _lastWidth;
     private int _lastHeight;
     private float _lastPixelScale;
+    private int _msaaSamples = 4;
 
     public RetainedScene2DHost()
     {
@@ -73,10 +74,26 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     public TcVisualScene2D? Scene => _scene;
     public Tgfx2D3D11ImageHost RenderHost => _renderHost;
+    public int MsaaSamples
+    {
+        get => _msaaSamples;
+        set
+        {
+            if (value < 1 || value > 16 ||
+                (value & (value - 1)) != 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(value),
+                    "MSAA samples must be a power of two between 1 and 16.");
+            _msaaSamples = value;
+            if (_renderer is not null)
+                _renderer.MsaaSamples = value;
+        }
+    }
 
     public event EventHandler<RetainedSceneFramebufferChangedEventArgs>?
         FramebufferChanged;
@@ -93,6 +110,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
         Detach();
         _renderer = new RetainedSceneRenderer2D(host, scene);
+        _renderer.MsaaSamples = _msaaSamples;
         _scene = scene;
         _lastWidth = 0;
         _lastHeight = 0;
@@ -192,6 +210,9 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
     {
         if (_disposed)
             return;
+        Loaded -= OnLoaded;
+        Unloaded -= OnUnloaded;
+        IsVisibleChanged -= OnIsVisibleChanged;
         UnsubscribeRendering();
         ClearPortals();
         _renderHost.ReleaseNativeResources();
@@ -204,7 +225,7 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        SubscribeRendering();
+        UpdateRenderingSubscription();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -214,9 +235,24 @@ public sealed class RetainedScene2DHost : Grid, IDisposable
         _renderer?.ReleaseGpuResources();
     }
 
+    private void OnIsVisibleChanged(
+        object sender,
+        DependencyPropertyChangedEventArgs e)
+    {
+        UpdateRenderingSubscription();
+    }
+
+    private void UpdateRenderingSubscription()
+    {
+        if (IsLoaded && IsVisible)
+            SubscribeRendering();
+        else
+            UnsubscribeRendering();
+    }
+
     private void SubscribeRendering()
     {
-        if (_renderingSubscribed || !IsLoaded || _renderer is null)
+        if (_renderingSubscribed || !IsLoaded || !IsVisible || _renderer is null)
             return;
         CompositionTarget.Rendering += OnRendering;
         _renderingSubscribed = true;

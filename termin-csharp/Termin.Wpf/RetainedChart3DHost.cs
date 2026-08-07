@@ -37,6 +37,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         _renderHost.FramebufferMouseWheel += OnMouseWheel;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     public RetainedChart3D? Chart => _chart;
@@ -131,6 +132,13 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     {
         if (_disposed)
             return;
+        Loaded -= OnLoaded;
+        Unloaded -= OnUnloaded;
+        IsVisibleChanged -= OnIsVisibleChanged;
+        _renderHost.FramebufferMouseDown -= OnMouseDown;
+        _renderHost.FramebufferMouseMove -= OnMouseMove;
+        _renderHost.FramebufferMouseUp -= OnMouseUp;
+        _renderHost.FramebufferMouseWheel -= OnMouseWheel;
         UnsubscribeRendering();
         _renderHost.ReleaseNativeResources();
         _portals.Clear();
@@ -142,7 +150,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        SubscribeRendering();
+        UpdateRenderingSubscription();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -152,9 +160,24 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         _chart?.ReleaseGpuResources();
     }
 
+    private void OnIsVisibleChanged(
+        object sender,
+        DependencyPropertyChangedEventArgs e)
+    {
+        UpdateRenderingSubscription();
+    }
+
+    private void UpdateRenderingSubscription()
+    {
+        if (IsLoaded && IsVisible)
+            SubscribeRendering();
+        else
+            UnsubscribeRendering();
+    }
+
     private void SubscribeRendering()
     {
-        if (_renderingSubscribed || !IsLoaded || _chart is null)
+        if (_renderingSubscribed || !IsLoaded || !IsVisible || _chart is null)
             return;
         CompositionTarget.Rendering += OnRendering;
         _renderingSubscribed = true;
