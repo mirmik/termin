@@ -3,6 +3,7 @@
 #include "termin/editor/frame_graph_debugger_view.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/frame_graph_debugger.hpp"
+#include "termin/render/frame_graph_capture.hpp"
 #include "termin/render/render_attachment_context.hpp"
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/tc_scene_render_ext.hpp"
@@ -38,6 +39,7 @@ extern "C" {
 
 #include <termin/gui_native/combo_box.hpp>
 #include <termin/gui_native/box_layout.hpp>
+
 #include <termin/gui_native/canvas.hpp>
 #include <termin/gui_native/status_bar.hpp>
 #include <termin/gui_native/tc_document.hpp>
@@ -52,6 +54,18 @@ using termin::FrameGraphDebuggerView;
 using termin::FrameGraphDebuggerMode;
 using termin::FrameGraphDebuggerState;
 using termin::FrameGraphDebuggerSuspendReason;
+
+TEST_CASE("Framegraph preview dimensions preserve aspect ratio under a long-edge bound")
+{
+    CHECK(termin::bounded_frame_graph_capture_dimensions(3840, 2160, 960) ==
+          std::make_pair(960, 540));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(800, 1200, 600) ==
+          std::make_pair(400, 600));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(320, 200, 960) ==
+          std::make_pair(320, 200));
+    CHECK(termin::bounded_frame_graph_capture_dimensions(1, 4096, 1) ==
+          std::make_pair(1, 1));
+}
 
 namespace {
 

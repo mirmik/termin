@@ -69,6 +69,7 @@ public:
     void clear_selection();
     void request_resource(const std::string& resource);
     bool request_internal(size_t pass_index, const std::string& symbol);
+    void set_capture_max_long_edge(std::uint32_t max_long_edge);
     void set_paused(bool paused);
     void cancel_request();
     void connect();
@@ -93,6 +94,9 @@ public:
     tgfx::TextureHandle depth_capture_tex() const { return depth_capture_.capture_tex(); }
     const std::string& requested_resource() const { return capture_request_.resource; }
     bool paused() const { return capture_request_.paused; }
+    std::uint32_t capture_max_long_edge() const {
+        return capture_request_.max_long_edge;
+    }
     FrameGraphCaptureRequestStatus capture_status() const {
         return capture_request_.status;
     }

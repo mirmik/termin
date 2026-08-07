@@ -83,6 +83,7 @@ enum class FrameGraphDebuggerPixelFormat {
 
 struct FrameGraphDebuggerCpuCaptureSnapshot {
     std::uint64_t request_id = 0;
+    std::uint64_t generation = 0;
     std::uint64_t graph_revision = 0;
     std::int64_t frame_number = 0;
     FrameGraphDebuggerPixelFormat pixel_format =
@@ -91,6 +92,8 @@ struct FrameGraphDebuggerCpuCaptureSnapshot {
     std::uint32_t height = 0;
     bool is_depth = false;
     bool exact = false;
+    std::uint16_t burst_index = 0;
+    std::uint16_t burst_count = 0;
     std::shared_ptr<const std::vector<std::uint8_t>> bytes;
 };
 
@@ -122,6 +125,9 @@ struct FrameGraphDebuggerSnapshot {
     int channel_mode = 0;
     bool paused = false;
     bool highlight_hdr = false;
+    bool live_preview_supported = false;
+    bool burst_capture_supported = false;
+    bool live_preview_active = false;
 
     std::string capture_info;
     std::string pipeline_info;
@@ -152,6 +158,17 @@ public:
     virtual void set_channel_mode(int mode) = 0;
     virtual void set_paused(bool paused) = 0;
     virtual void set_highlight_hdr(bool enabled) = 0;
+    virtual bool start_live_preview(std::uint32_t max_millifps,
+                                    std::uint32_t max_long_edge) {
+        (void)max_millifps;
+        (void)max_long_edge;
+        return false;
+    }
+    virtual bool stop_live_preview() { return false; }
+    virtual bool capture_burst(std::uint16_t frames) {
+        (void)frames;
+        return false;
+    }
     virtual std::string analyze_hdr() = 0;
 
     virtual bool render_image(

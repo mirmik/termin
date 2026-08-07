@@ -411,6 +411,121 @@ TEST_CASE("RemoteFrameGraphDebuggerSource assembles exact color HDR and depth bl
     CHECK_FALSE(source.snapshot()->main_image.available);
 }
 
+TEST_CASE("RemoteFrameGraphDebuggerSource tracks live preview and burst gaps") {
+    using namespace termin::framegraph_remote;
+    std::vector<Command> commands;
+    termin::RemoteFrameGraphDebuggerSource source(
+        8, [&commands](const Command& command) {
+            commands.push_back(command);
+            return true;
+        });
+    std::uint64_t sequence = 1;
+    const auto ingest = [&](Message message) {
+        DecodedMessage decoded;
+        decoded.envelope.session_id = 23;
+        decoded.envelope.sequence = sequence++;
+        decoded.message = std::move(message);
+        return source.ingest(decoded);
+    };
+
+    TargetHello hello;
+    hello.capabilities =
+        static_cast<std::uint64_t>(Capability::topology) |
+        static_cast<std::uint64_t>(Capability::exact_snapshot) |
+        static_cast<std::uint64_t>(Capability::live_preview) |
+        static_cast<std::uint64_t>(Capability::burst_capture);
+    REQUIRE(ingest(hello));
+    TopologySnapshot topology;
+    topology.graph_revision = 8;
+    topology.selected_target_id = 3;
+    topology.targets.push_back({3, "stream fixture", true});
+    topology.resources.push_back("color");
+    REQUIRE(ingest(topology));
+    source.set_mode(termin::FrameGraphDebuggerMode::BetweenPasses);
+    source.set_selected_resource("color");
+    REQUIRE_FALSE(commands.empty());
+    const std::uint64_t exact_request = commands.back().request_id;
+    REQUIRE(ingest(Status{exact_request, 8, SessionState::idle,
+                          StatusCode::cancelled, 0, 0, 0, 0,
+                          "superseded by live preview"}));
+
+    REQUIRE(source.start_live_preview(12'000, 720));
+    REQUIRE(commands.back().kind == CommandKind::start_stream);
+    CHECK_EQ(commands.back().max_preview_millifps, 12'000u);
+    CHECK_EQ(commands.back().max_preview_long_edge, 720u);
+    const std::uint64_t stream_request = commands.back().request_id;
+    REQUIRE(ingest(Status{stream_request, 8, SessionState::streaming,
+                          StatusCode::accepted, 0, 0, 0, 0,
+                          "live preview started"}));
+    CHECK(source.snapshot()->live_preview_active);
+
+    const auto frame = [&](std::uint64_t blob_id,
+                           std::int64_t frame_number,
+                           CaptureKind kind,
+                           std::uint16_t burst_index,
+                           std::uint16_t burst_count,
+                           std::uint64_t request_id) {
+        CaptureMetadata metadata;
+        metadata.request_id = request_id;
+        metadata.graph_revision = 8;
+        metadata.blob_id = blob_id;
+        metadata.frame_number = frame_number;
+        metadata.kind = kind;
+        metadata.encoding = kind == CaptureKind::preview
+            ? CaptureEncoding::rgba8 : CaptureEncoding::native_pixels;
+        metadata.pixel_format = PixelFormat::rgba8_unorm;
+        metadata.width = 1;
+        metadata.height = 1;
+        metadata.exact = kind != CaptureKind::preview;
+        metadata.byte_count = 4;
+        metadata.chunk_count = 1;
+        metadata.burst_index = burst_index;
+        metadata.burst_count = burst_count;
+        REQUIRE(ingest(metadata));
+        BlobChunk chunk;
+        chunk.blob_id = blob_id;
+        chunk.chunk_count = 1;
+        chunk.total_bytes = 4;
+        chunk.bytes = {static_cast<std::uint8_t>(frame_number), 2, 3, 255};
+        REQUIRE(ingest(std::move(chunk)));
+    };
+
+    frame(101, 10, CaptureKind::preview, 0, 0, stream_request);
+    frame(102, 11, CaptureKind::preview, 0, 0, stream_request);
+    REQUIRE(source.snapshot()->cpu_capture.has_value());
+    CHECK_EQ(source.snapshot()->cpu_capture->generation, 102u);
+    CHECK_EQ(source.snapshot()->cpu_capture->frame_number, 11);
+    CHECK_FALSE(source.snapshot()->cpu_capture->exact);
+
+    REQUIRE(source.stop_live_preview());
+    REQUIRE(commands.back().kind == CommandKind::stop_stream);
+    const std::uint64_t stop_request = commands.back().request_id;
+    REQUIRE(ingest(Status{stream_request, 8, SessionState::idle,
+                          StatusCode::completed, 0, 2, 0, 0,
+                          "live preview stopped"}));
+    REQUIRE(ingest(Status{stop_request, 8, SessionState::idle,
+                          StatusCode::completed, 0, 2, 0, 0,
+                          "stop processed"}));
+    CHECK_FALSE(source.snapshot()->live_preview_active);
+
+    REQUIRE(source.capture_burst(3));
+    REQUIRE(commands.back().kind == CommandKind::capture_burst);
+    const std::uint64_t burst_request = commands.back().request_id;
+    REQUIRE(ingest(Status{burst_request, 8, SessionState::waiting_capture,
+                          StatusCode::accepted, 0, 2, 0, 0,
+                          "burst accepted"}));
+    frame(201, 20, CaptureKind::burst, 0, 3, burst_request);
+    frame(203, 22, CaptureKind::burst, 2, 3, burst_request);
+    REQUIRE(ingest(Status{burst_request, 8, SessionState::idle,
+                          StatusCode::completed, 0, 4, 1, 0,
+                          "burst completed"}));
+    REQUIRE(source.snapshot()->cpu_capture.has_value());
+    CHECK_EQ(source.snapshot()->cpu_capture->burst_index, 2u);
+    CHECK_EQ(source.snapshot()->cpu_capture->burst_count, 3u);
+    CHECK(source.snapshot()->dropped_messages >= 1);
+    CHECK_FALSE(source.snapshot()->gaps.empty());
+}
+
 TEST_CASE("FrameGraphDebuggerView switches local remote stale and local in one tree") {
     using namespace std::chrono_literals;
     RemoteViewFixture fixture;
@@ -465,6 +580,34 @@ TEST_CASE("FrameGraphDebuggerView switches local remote stale and local in one t
     CHECK(view.source_snapshot()->source_kind ==
           termin::FrameGraphDebuggerSourceKind::Remote);
     CHECK(view.state_status()->text().find("Remote /") != std::string::npos);
+
+    REQUIRE_FALSE(view.source_snapshot()->resources.empty());
+    REQUIRE(view.show_resource(view.source_snapshot()->resources.front()));
+    REQUIRE(view.start_live_preview(5'000, 320));
+    bool preview_started = false;
+    for (int attempt = 0; attempt < 200; ++attempt) {
+        target_service.pump_render_thread();
+        view.update();
+        if (view.source_snapshot()->live_preview_active) {
+            preview_started = true;
+            break;
+        }
+        std::this_thread::sleep_for(5ms);
+    }
+    REQUIRE(preview_started);
+    CHECK(view.state_status()->text().find("[LIVE]") != std::string::npos);
+    REQUIRE(view.stop_live_preview());
+    bool preview_stopped = false;
+    for (int attempt = 0; attempt < 200; ++attempt) {
+        target_service.pump_render_thread();
+        view.update();
+        if (!view.source_snapshot()->live_preview_active) {
+            preview_stopped = true;
+            break;
+        }
+        std::this_thread::sleep_for(5ms);
+    }
+    REQUIRE(preview_stopped);
 
     view.disconnect_remote();
     CHECK(view.source_snapshot()->stale);

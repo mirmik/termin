@@ -271,6 +271,12 @@ bool FrameGraphDebugger::request_internal(
     return true;
 }
 
+void FrameGraphDebugger::set_capture_max_long_edge(
+    std::uint32_t max_long_edge
+) {
+    capture_request_.max_long_edge = max_long_edge;
+}
+
 void FrameGraphDebugger::set_paused(bool paused) {
     if (capture_request_.paused == paused) return;
     capture_request_.paused = paused;
