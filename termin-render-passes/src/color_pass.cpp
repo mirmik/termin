@@ -39,6 +39,37 @@ namespace termin {
 
 namespace {
 
+tc_value string_map_to_tc_value(
+    const std::unordered_map<std::string, std::string>& values
+) {
+    tc_value result = tc_value_dict_new();
+    for (const auto& [key, value] : values) {
+        tc_value_dict_set(
+            &result, key.c_str(), tc_value_string(value.c_str()));
+    }
+    return result;
+}
+
+void tc_value_to_string_map(
+    const tc_value* value,
+    std::unordered_map<std::string, std::string>& out
+) {
+    out.clear();
+    if (!value || value->type != TC_VALUE_DICT) {
+        return;
+    }
+    for (size_t index = 0; index < tc_value_dict_size(value); ++index) {
+        const char* key = nullptr;
+        tc_value* item = tc_value_dict_get_at(
+            const_cast<tc_value*>(value), index, &key);
+        if (!key || !item || item->type != TC_VALUE_STRING ||
+            !item->data.s) {
+            continue;
+        }
+        out[key] = item->data.s;
+    }
+}
+
 constexpr const char* STANDARD_PBR_FORWARD_CONSUMER = R"slang(
 import termin_lighting;
 import termin_shadows;
@@ -367,6 +398,15 @@ MaterialPipelinePassContract color_material_pass_contract()
     return build_color_material_pass_contract();
 }
 
+MaterialPipelinePassContract multiview_color_material_pass_contract()
+{
+    MaterialPipelinePassContract contract = build_color_material_pass_contract();
+    contract.debug_name = "multiview_color";
+    contract.vertex_output_adapter =
+        material_pipeline_multiview_material_vertex_output_adapter();
+    return contract;
+}
+
 ColorPass::ColorPass(const ColorPassConfig& config)
     : input_res(config.input_res),
       output_res(config.output_res),
@@ -374,9 +414,18 @@ ColorPass::ColorPass(const ColorPassConfig& config)
       phase_mark(config.phase_mark),
       sort_mode(config.sort_mode),
       camera_name(config.camera_name),
-      clear_depth(config.clear_depth)
+      clear_depth(config.clear_depth),
+      attachment_barrier_between_draws(config.attachment_barrier_between_draws)
 {
     set_pass_name(config.pass_name);
+}
+
+tc_value ColorPass::serialize_extra_textures() const {
+    return string_map_to_tc_value(extra_textures);
+}
+
+void ColorPass::deserialize_extra_textures(const tc_value* value) {
+    tc_value_to_string_map(value, extra_textures);
 }
 
 std::set<const char*> ColorPass::compute_reads() const {
@@ -394,6 +443,22 @@ std::set<const char*> ColorPass::compute_reads() const {
 
 std::set<const char*> ColorPass::compute_writes() const {
     return {output_res.c_str()};
+}
+
+bool ColorPass::set_graph_resource_input(
+    const std::string& socket_name,
+    const std::string& resource_name
+) {
+    if (socket_name.empty() || resource_name.empty()) {
+        return false;
+    }
+    if (socket_name == "input_res" ||
+        socket_name == "output_res" ||
+        socket_name == "shadow_res") {
+        return false;
+    }
+    add_extra_texture(socket_name, resource_name);
+    return true;
 }
 
 std::vector<std::pair<std::string, std::string>> ColorPass::get_inplace_aliases() const {
@@ -584,7 +649,9 @@ void ColorPass::collect_shader_usages(
             get_pass_name().c_str(), phase_mark.c_str());
         return;
     }
-    data.pass_contract = color_material_pass_contract();
+    data.pass_contract = multiview_mode_
+        ? multiview_color_material_pass_contract()
+        : color_material_pass_contract();
     data.emit = &emit;
 
     tc_scene_foreach_drawable(
@@ -717,6 +784,17 @@ void ColorPass::execute_with_data(
         static_cast<float>(data.rect.height),
         ctx.camera ? static_cast<float>(ctx.camera->near_clip) : 0.1f,
         ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
+    StereoPerFrameStd140 stereo_pf{};
+    if (multiview_mode_) {
+        if (!ctx.stereo_views) {
+            tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
+            return;
+        }
+        stereo_pf = make_stereo_per_frame_uniforms(
+            *ctx.stereo_views,
+            static_cast<float>(data.rect.width),
+            static_cast<float>(data.rect.height));
+    }
 
     // --- Shadow metadata UBO (binding 3) ------------------------------
     // Packs shadow metadata (u_shadow_map_count, u_light_space_matrix[N], ...)
@@ -772,10 +850,29 @@ void ColorPass::execute_with_data(
         }
     }
 
-    ctx2->begin_pass(color_tex2, depth_tex2,
-                     /*clear_color=*/nullptr,
-                     /*clear_depth=*/1.0f,
-                     /*clear_depth_enabled=*/clear_depth);
+    auto begin_output_pass = [&](bool clear_depth_now) -> bool {
+        if (!multiview_mode_) {
+            ctx2->begin_pass(color_tex2, depth_tex2,
+                             nullptr, 1.0f, clear_depth_now);
+            return true;
+        }
+        tgfx::MultiviewRenderPassDesc pass;
+        tgfx::ColorAttachmentDesc color;
+        color.texture = color_tex2;
+        color.load = tgfx::LoadOp::Load;
+        pass.colors.push_back(color);
+        if (depth_tex2) {
+            pass.has_depth = true;
+            pass.depth.texture = depth_tex2;
+            pass.depth.load = clear_depth_now
+                ? tgfx::LoadOp::Clear : tgfx::LoadOp::Load;
+        }
+        pass.view_count = 2;
+        return ctx2->begin_multiview_pass(pass);
+    };
+    if (!begin_output_pass(clear_depth)) {
+        return;
+    }
     ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
     ctx2->set_depth_bias(false);
 
@@ -784,7 +881,9 @@ void ColorPass::execute_with_data(
     collect_context.view = data.view;
     collect_context.projection = data.projection;
     collect_context.phase = tc_phase_find(phase_mark.c_str());
-    collect_context.pass_contract = color_material_pass_contract();
+    collect_context.pass_contract = multiview_mode_
+        ? multiview_color_material_pass_contract()
+        : color_material_pass_contract();
     collect_context.layer_mask = data.layer_mask;
     collect_context.render_category_mask = data.render_category_mask;
     collect_context.camera_position = data.camera_position;
@@ -802,8 +901,9 @@ void ColorPass::execute_with_data(
 
     const std::string debug_pass_name = get_pass_name();
     const char* debug_pass_name_c = debug_pass_name.c_str();
-    const MaterialPipelinePassContract task_shader_contract =
-        color_material_pass_contract();
+    const MaterialPipelinePassContract task_shader_contract = multiview_mode_
+        ? multiview_color_material_pass_contract()
+        : color_material_pass_contract();
     RenderItemTaskPlanningContract task_planning_contract =
         color_task_planning_contract(tc_phase_find(phase_mark.c_str()),
                                      task_shader_contract, debug_pass_name_c);
@@ -962,16 +1062,21 @@ void ColorPass::execute_with_data(
         selected_symbol_timing = {};
         selected_symbol_timing.name = debug_symbol;
 
-        ctx2->begin_pass(color_tex2, depth_tex2,
-                         /*clear_color=*/nullptr,
-                         /*clear_depth=*/1.0f,
-                         /*clear_depth_enabled=*/false);
+        if (!begin_output_pass(false)) {
+            tc::Log::error("[ColorPass] failed to resume render pass after capture");
+            return;
+        }
         ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
         ctx2->set_depth_bias(false);
     };
 
     MaterialPipelineResourceView material_resources{};
-    material_resources.per_frame = &pf;
+    material_resources.per_frame = multiview_mode_
+        ? static_cast<const void*>(&stereo_pf)
+        : static_cast<const void*>(&pf);
+    material_resources.per_frame_size = multiview_mode_
+        ? static_cast<uint32_t>(sizeof(stereo_pf))
+        : static_cast<uint32_t>(sizeof(pf));
     material_resources.shadow_block = &sb;
     material_resources.shadow_block_size = static_cast<uint32_t>(sizeof(sb));
     material_resources.lighting_ubo = lighting_ubo_tgfx2;
@@ -993,7 +1098,8 @@ void ColorPass::execute_with_data(
         extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
             uniform_name.c_str(),
             it->second,
-            tgfx::SamplerHandle{}});
+            tgfx::SamplerHandle{},
+            true});
     }
 
     for (const RenderTask* task : sorted_render_tasks) {
@@ -1027,7 +1133,10 @@ void ColorPass::execute_with_data(
         task.set_resources(&material_resources, uniforms, extra_texture_bindings);
     }
 
-    for (const RenderTask* task_ptr : sorted_render_tasks) {
+    for (size_t sorted_task_index = 0;
+         sorted_task_index < sorted_render_tasks.size();
+         ++sorted_task_index) {
+        const RenderTask* task_ptr = sorted_render_tasks[sorted_task_index];
         const RenderTask& task = *task_ptr;
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
@@ -1068,6 +1177,10 @@ void ColorPass::execute_with_data(
             continue;
         }
         capture_debug_symbol(task.entity_name.c_str());
+        if (attachment_barrier_between_draws &&
+            sorted_task_index + 1 < sorted_render_tasks.size()) {
+            ctx2->framebuffer_local_barrier();
+        }
     }
 
     ctx2->end_pass();
@@ -1079,6 +1192,24 @@ void ColorPass::execute(ExecuteContext& ctx) {
 
     // Use camera from context, or find by name if camera_name is set
     const RenderCamera* camera = ctx.camera;
+    RenderCamera stereo_sort_camera;
+    if (multiview_mode_) {
+        if (!ctx.stereo_views) {
+            tc::Log::error("[MultiviewColorPass] StereoRenderViews are missing");
+            if (profile) tc_profiler_end_section();
+            return;
+        }
+        if (!camera_name.empty()) {
+            tc::Log::error(
+                "[MultiviewColorPass] camera_name override is incompatible with frame-local StereoRenderViews");
+            if (profile) tc_profiler_end_section();
+            return;
+        }
+        stereo_sort_camera = ctx.stereo_views->left;
+        stereo_sort_camera.position =
+            (ctx.stereo_views->left.position + ctx.stereo_views->right.position) * 0.5;
+        camera = &stereo_sort_camera;
+    }
     tc_scene_handle scene = ctx.scene.handle();
     if (!tc_scene_handle_valid(scene)) {
         tc::Log::error("[ColorPass] scene is invalid");
@@ -1211,8 +1342,29 @@ void ColorPass::register_type() {
     _register_inspect_phase_mark(inspect);
     _register_inspect_sort_mode(inspect);
     _register_inspect_clear_depth(inspect);
+    _register_inspect_attachment_barrier_between_draws(inspect);
     _register_inspect_camera_name(inspect);
     _register_inspect_metadata_graph(inspect);
+    register_serialize_ColorPass_extra_textures(inspect);
+    (void)descriptor.commit();
+}
+
+MultiviewColorPass::MultiviewColorPass(const ColorPassConfig& config)
+    : ColorPass(config)
+{
+    multiview_mode_ = true;
+    shadow_res.clear();
+    if (get_pass_name() == "Color") {
+        pass_name_set("MultiviewColor");
+    }
+    link_to_type_registry("MultiviewColorPass");
+}
+
+void MultiviewColorPass::register_type() {
+    auto descriptor = FramePassTypeDescriptorBuilder::native<MultiviewColorPass>(
+        "MultiviewColorPass", "termin-render-passes", "ColorPass");
+    auto& inspect = descriptor.inspect();
+    MultiviewColorPass::_register_inspect_metadata_graph(inspect);
     (void)descriptor.commit();
 }
 

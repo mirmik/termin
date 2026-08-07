@@ -469,6 +469,60 @@ namespace
         check_near(system.load[1], gravity_load_1 - coriolis_1, 1e-11);
     }
 
+    void test_mass_matrix_cache_tracks_configuration()
+    {
+        Articulation3D model(double_pendulum_units(),
+                             {{0.4, -0.3}, {1.2, -0.7}},
+                             "mass-cache");
+        Articulation3DDynamicsContribution contribution(model,
+                                                        {0.0, 0.0, -kGravity});
+        contribution.reset_assembly_counters();
+
+        const AssembledSystem first = assemble(contribution);
+        const AssembledSystem repeated = assemble(contribution);
+        TERMIN_QOPT_CHECK(first.mass == repeated.mass);
+        ArticulationDynamicsAssemblyCounters counters =
+            contribution.assembly_counters();
+        TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 1);
+        TERMIN_QOPT_CHECK(counters.bias_evaluations == 2);
+
+        Articulation3DState changed_state = contribution.state();
+        changed_state.coordinates[1] += 0.2;
+        TERMIN_QOPT_CHECK(contribution.set_state(std::move(changed_state)) ==
+                          Articulation3DDiagnostic::None);
+        const AssembledSystem changed = assemble(contribution);
+        TERMIN_QOPT_CHECK(changed.mass != repeated.mass);
+        counters = contribution.assembly_counters();
+        TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 2);
+        TERMIN_QOPT_CHECK(counters.bias_evaluations == 3);
+    }
+
+    void test_endpoint_iterations_reuse_mass_matrix()
+    {
+        Articulation3D model(double_pendulum_units(),
+                             {{0.4, -0.3}, {1.2, -0.7}},
+                             "endpoint-mass-cache");
+        Multibody3DSystem system;
+        auto contribution =
+            std::make_unique<Articulation3DDynamicsContribution>(
+                model, Vec3{0.0, 0.0, -kGravity}, "endpoint-mass-cache");
+        Articulation3DDynamicsContribution* state = contribution.get();
+        TERMIN_QOPT_CHECK(system.add_contribution(std::move(contribution)) ==
+                          DynamicsSystemDiagnostic::None);
+        TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+        state->reset_assembly_counters();
+
+        const DynamicsSystemStepResult step = system.step(options(0.002));
+        TERMIN_QOPT_CHECK(step.ok());
+        TERMIN_QOPT_CHECK(step.endpoint_equality_factorizations == 1);
+        TERMIN_QOPT_CHECK(step.endpoint_equality_factorization_reuses > 0);
+        const ArticulationDynamicsAssemblyCounters counters =
+            state->assembly_counters();
+        TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 2);
+        TERMIN_QOPT_CHECK(counters.bias_evaluations >
+                          counters.mass_matrix_evaluations);
+    }
+
     void test_prismatic_joint_equations()
     {
         Articulation3D model(
@@ -800,6 +854,8 @@ int main()
     test_floating_base_free_motion_conserves_energy_and_momentum();
     test_double_pendulum_equations();
     test_velocity_bias();
+    test_mass_matrix_cache_tracks_configuration();
+    test_endpoint_iterations_reuse_mass_matrix();
     test_prismatic_joint_equations();
     test_joint_limits();
     test_branching_forward_kinematics();

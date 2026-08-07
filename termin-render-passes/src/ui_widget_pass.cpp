@@ -267,29 +267,30 @@ UIWidgetPass::UIWidgetPass(
 ) : input_res(input),
     output_res(output),
     painter_(std::make_unique<gui_native::NativeDocumentPainter>()) {
-    font_path = default_ui_font_path();
     configure_font();
     pass_name_set("UIWidgets");
     link_to_type_registry("UIWidgetPass");
 }
 
 void UIWidgetPass::configure_font() {
+    const std::string effective_font_path =
+        font_path.empty() ? default_ui_font_path() : font_path;
     if (font_configuration_attempted_ &&
-        font_path == configured_font_path_) {
+        effective_font_path == configured_font_path_) {
         return;
     }
     font_configuration_attempted_ = true;
-    configured_font_path_ = font_path;
-    if (font_path.empty()) {
+    configured_font_path_ = effective_font_path;
+    if (effective_font_path.empty()) {
         tc::Log::error(
             "[UIWidgetPass] native UI font is not configured; set "
             "TERMIN_UI_FONT or TERMIN_SDK");
         return;
     }
-    if (!painter_->set_default_font_path(font_path, 14)) {
+    if (!painter_->set_default_font_path(effective_font_path, 14)) {
         tc::Log::error(
             "[UIWidgetPass] failed to configure native UI font '%s'",
-            font_path.c_str());
+            effective_font_path.c_str());
     }
 }
 

@@ -43,4 +43,30 @@ public:
     void destroy() override;
 };
 
+class TERMIN_RENDER_PASSES_API MultiviewResolvePass final : public CxxFramePass {
+public:
+    std::string input_res = "color";
+    std::string output_res = "resolved";
+    std::string output_res_target;
+
+    static void register_type();
+    INSPECT_FIELD(MultiviewResolvePass, input_res, "Input Resource", "string")
+    INSPECT_FIELD(MultiviewResolvePass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(MultiviewResolvePass, output_res_target, "Output Target", "string")
+    INSPECT_TYPE_METADATA(MultiviewResolvePass, graph, make_pass_graph_metadata(
+        {{"input_res", "multiview_fbo"}, {"output_res_target", "multiview_fbo"}},
+        {{"output_res", "multiview_fbo"}},
+        {{"output_res_target", "output_res"}}
+    ))
+
+    MultiviewResolvePass(
+        const std::string& input = "color",
+        const std::string& output = "resolved");
+
+    std::set<const char*> compute_reads() const override;
+    std::set<const char*> compute_writes() const override;
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
+    void execute(ExecuteContext& ctx) override;
+};
+
 } // namespace termin

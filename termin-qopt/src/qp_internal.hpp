@@ -1,6 +1,7 @@
 #pragma once
 
 #include <termin/qopt/dense_views.hpp>
+#include <termin/qopt/equality_qp.hpp>
 #include <termin/qopt/qp_types.hpp>
 
 #include <Eigen/Core>
@@ -14,6 +15,10 @@ namespace termin::qopt::detail {
 
 using Matrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
 using Vector = Eigen::Matrix<double, Eigen::Dynamic, 1>;
+
+[[nodiscard]] QpSolveResult solve_equality_qp_spd_first(
+    EqualityQpProblemView problem, EqualityQpSolutionView solution,
+    QpTolerance tolerance) noexcept;
 
 [[nodiscard]] inline QpSolveResult
 failure(QpStatus status, QpDiagnostic diagnostic,

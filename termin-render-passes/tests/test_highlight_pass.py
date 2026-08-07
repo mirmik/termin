@@ -44,3 +44,35 @@ def test_ui_widget_pass_is_exported_from_render_passes() -> None:
     assert pass_obj.compute_writes() == {"color+widgets"}
     assert pass_obj.get_inplace_aliases() == [("color+ui", "color+widgets")]
     assert pass_obj.include_internal_entities is False
+
+
+def test_color_pass_accepts_dynamic_graph_texture_inputs() -> None:
+    from termin.render_passes import ColorPass
+
+    pass_obj = ColorPass()
+
+    assert pass_obj.set_graph_resource_input("panel_texture", "PANEL_COLOR")
+    assert pass_obj.extra_textures == {"u_panel_texture": "PANEL_COLOR"}
+    assert "PANEL_COLOR" in pass_obj.compute_reads()
+    assert not pass_obj.set_graph_resource_input("input_res", "OTHER_COLOR")
+
+
+def test_color_pass_dynamic_texture_inputs_survive_serialization() -> None:
+    from termin.bootstrap import bootstrap_player
+    from termin.render_passes import ColorPass
+
+    bootstrap_player()
+    original = ColorPass()
+    original.set_graph_resource_input("panel_texture", "PANEL_COLOR")
+
+    serialized = original._tc_pass.serialize_data()
+    assert serialized["extra_textures"] == {
+        "u_panel_texture": "PANEL_COLOR",
+    }
+
+    restored = ColorPass()
+    restored._tc_pass.deserialize_data(serialized)
+    assert restored.extra_textures == {
+        "u_panel_texture": "PANEL_COLOR",
+    }
+    assert "PANEL_COLOR" in restored.compute_reads()

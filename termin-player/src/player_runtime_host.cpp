@@ -1512,12 +1512,7 @@ print(json.dumps({
         }
         registered_scene_names.clear();
         scene = TcSceneRef();
-        for (termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
-            if (packaged_scene.scene.valid()) {
-                packaged_scene.scene.destroy();
-            }
-        }
-        package = termin::runtime::RuntimePackageLoadResult();
+        package.destroy();
         tgfx::set_builtin_shader_root(nullptr);
 
         if (engine) {

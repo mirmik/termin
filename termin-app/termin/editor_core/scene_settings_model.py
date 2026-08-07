@@ -131,6 +131,7 @@ class DebugGeometrySettingSnapshot:
 @dataclass(frozen=True)
 class ScenePropertiesSnapshot:
     fixed_update_frequency: float
+    time_scale: float
     background_color: tuple[float, float, float, float]
     ambient_color: tuple[float, float, float]
     ambient_intensity: float
@@ -181,6 +182,7 @@ class ScenePropertiesController:
         )
         return ScenePropertiesSnapshot(
             fixed_update_frequency=1.0 / float(self._scene.fixed_timestep),
+            time_scale=float(self._scene.time_scale),
             background_color=_color(state.background_color, alpha=True),
             ambient_color=_color(state.ambient_color, alpha=False),
             ambient_intensity=float(state.ambient_intensity),
@@ -218,6 +220,25 @@ class ScenePropertiesController:
 
         def apply_direct() -> None:
             self._scene.fixed_timestep = new_timestep
+
+        self._apply_command(command, apply_direct, True)
+        return self._published()
+
+    def set_time_scale(self, value: float) -> ScenePropertiesSnapshot:
+        scale = float(value)
+        if not math.isfinite(scale) or scale < 0.0:
+            raise ValueError("time scale must be finite and non-negative")
+        old_scale = float(self._scene.time_scale)
+        command = ScenePropertyEditCommand(
+            self._scene,
+            "time_scale",
+            old_scale,
+            scale,
+            "Edit simulation time scale",
+        )
+
+        def apply_direct() -> None:
+            self._scene.time_scale = scale
 
         self._apply_command(command, apply_direct, True)
         return self._published()

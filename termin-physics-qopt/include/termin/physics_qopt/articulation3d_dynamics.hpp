@@ -26,6 +26,12 @@ namespace termin::physics_qopt
         }
     };
 
+    struct ArticulationDynamicsAssemblyCounters
+    {
+        std::size_t mass_matrix_evaluations = 0;
+        std::size_t bias_evaluations = 0;
+    };
+
     // Dynamic adapter for a reduced fixed- or floating-base robotics tree.
     // Internal joints are satisfied by construction. The adapter borrows the
     // Articulation3D and adds only physical-solver state and equations.
@@ -61,6 +67,9 @@ namespace termin::physics_qopt
         unit_limit_states() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
+        [[nodiscard]] ArticulationDynamicsAssemblyCounters
+        assembly_counters() const noexcept;
+        void reset_assembly_counters() noexcept;
         [[nodiscard]] PointKinematics3DResult
         point_kinematics(std::size_t unit_index,
                          termin::Vec3 point_local) const noexcept;
@@ -133,6 +142,15 @@ namespace termin::physics_qopt
         std::vector<ArticulationUnitLimitState3D> unit_limit_states_;
         double unilateral_time_step_ = 0.0;
 
+        std::vector<double> mass_matrix_cache_;
+        std::vector<double> bias_work_;
+        std::vector<double> load_work_;
+        std::vector<double> generalized_velocity_work_;
+        std::vector<double> limit_row_work_;
+        std::vector<double> zero_acceleration_work_;
+        ArticulationDynamicsAssemblyCounters assembly_counters_;
+        bool mass_matrix_cache_valid_ = false;
+
         robotics::Articulation3DState state_snapshot_;
         std::optional<robotics::ArticulationFloatingBase3D>
             floating_base_snapshot_;
@@ -140,9 +158,9 @@ namespace termin::physics_qopt
         std::vector<ArticulationUnitLimitState3D> unit_limit_state_snapshot_;
         bool snapshot_ready_ = false;
 
-        [[nodiscard]] bool
-        assemble_mass_and_bias(std::vector<double>& mass,
-                               std::vector<double>& bias) const;
+        void invalidate_mass_matrix_cache() noexcept;
+        [[nodiscard]] bool prepare_mass_matrix();
+        [[nodiscard]] bool prepare_bias();
     };
 
 } // namespace termin::physics_qopt

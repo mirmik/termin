@@ -1,0 +1,34 @@
+{
+  "uuid": "quest-showcase-vr-panel-pipeline",
+  "name": "VrUiPanel",
+  "execution_model": "single_view",
+  "nodes": [
+    {
+      "type": "RenderTargetInput",
+      "node_type": "render_target_input",
+      "name": "Panel Target",
+      "x": 20,
+      "y": 40
+    },
+    {
+      "type": "UIWidgetPass",
+      "name": "Panel UI",
+      "x": 300,
+      "y": 40,
+      "params": {
+        "include_internal_entities": false
+      }
+    },
+    {
+      "type": "PipelineOutput",
+      "node_type": "pipeline_output",
+      "name": "Panel Output",
+      "x": 580,
+      "y": 40
+    }
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "input_res"},
+    {"from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "color"}
+  ]
+}

@@ -38,6 +38,11 @@ termin::UIComponent* make_component(
 
 } // namespace
 
+TEST_CASE("UIWidgetPass keeps the runtime font default portable") {
+    termin::UIWidgetPass pass;
+    CHECK(pass.font_path.empty());
+}
+
 TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     using namespace termin;
     using namespace termin::gui_native;

@@ -241,6 +241,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(ctx);
     MaterialPipelineResourceView material_resources{};
     material_resources.per_frame = &per_frame;
+    material_resources.per_frame_size = static_cast<uint32_t>(sizeof(per_frame));
     prepare_material_pipeline_resources(
         *ctx2,
         device,

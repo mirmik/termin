@@ -1,0 +1,31 @@
+<Window x:Class="RetainedChartWpfExample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:termin="clr-namespace:Termin.Wpf;assembly=Termin.Wpf"
+        Title="Retained chart from C#"
+        Width="1000"
+        Height="650"
+        MinWidth="640"
+        MinHeight="420"
+        Background="#17191E">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border BorderBrush="#4C5362"
+                BorderThickness="1"
+                CornerRadius="4"
+                ClipToBounds="True">
+            <termin:RetainedScene2DHost x:Name="SceneHost" />
+        </Border>
+
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="1"
+                   Margin="2,10,2,0"
+                   Foreground="#D9DCE3"
+                   FontSize="13"
+                   Text="The button below is a WPF control anchored by a native scene item." />
+    </Grid>
+</Window>

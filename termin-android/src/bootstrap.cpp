@@ -347,13 +347,7 @@ void destroy_player_session_locked() {
     }
     g_state.registered_scene_names.clear();
     g_state.player_scene = termin::TcSceneRef();
-
-    for (termin::runtime::RuntimePackageScene& packaged_scene : g_state.player_package.scenes) {
-        if (packaged_scene.scene.valid()) {
-            packaged_scene.scene.destroy();
-        }
-    }
-    g_state.player_package = termin::runtime::RuntimePackageLoadResult();
+    g_state.player_package.destroy();
 
     if (g_state.player_engine) {
         if (!g_state.player_engine->shutdown()) {
