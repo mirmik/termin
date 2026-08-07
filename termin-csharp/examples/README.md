@@ -13,11 +13,11 @@ Projects:
   customizes native chart parts from C#, and anchors a real WPF button to a
   retained scene item. The button callback stays in C#; middle-drag and wheel
   exercise the native chart interaction controller.
-- `AllianceStreamingChartsExample` - composes four independently scaled
-  streaming chart panels in one retained scene and one offscreen texture.
-  Pan/zoom synchronizes X while retaining per-panel Y, manual navigation stops
-  follow-latest mode, and pause/reset/follow are WPF portals whose handlers and
-  streaming timer live in C#.
+- `AllianceStreamingChartsExample` - uses native `MultiChart2D` for four
+  independently scaled streaming panels in one retained scene and one
+  offscreen texture. It exercises generation-safe reconfiguration, virtual
+  panel layout, wheel and external WPF scrollbar control, shared X with
+  per-panel Y, and pause/reset/follow portals whose handlers stay in C#.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable
   handles, transactional data mutation, an independently replaceable grid,
   axis-scale-aware camera fit, MSAA, and WPF portals whose callbacks stay in
