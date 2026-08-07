@@ -17,6 +17,7 @@
 #include <termin/gui_native/widgets.hpp>
 #include <termin/gui_native/window_adapter.hpp>
 #include <termin/platform/backend_window.hpp>
+#include <termin/profiler_app/android_bridge.hpp>
 #include <termin/profiler_app/session.hpp>
 #include <termin/window/window_manager.hpp>
 
@@ -94,7 +95,7 @@ namespace {
         explicit ProfilerApplication(const char* executable)
             : graphics_(termin::create_native_windowed_graphics()),
               windows_(std::make_unique<termin::WindowManager>(*graphics_)),
-              window_(windows_->create_window(termin::WindowConfig{"Termin Remote Profiler", 1180, 760})),
+              window_(windows_->create_window(termin::WindowConfig{"Termin Remote Profiler", 1180, 860})),
               document_handle_(tc_ui_document_create()),
               document_(document_handle_) {
             if (!tgfx::configure_default_standalone_shader_runtime(graphics_->graphics(), "termin-profiler")) {
@@ -107,10 +108,12 @@ namespace {
             adapter_ = std::make_unique<ui::GuiWindowAdapter>(
                 graphics_->graphics(), document_, renderer, windows_->window(window_));
             build_interface();
+            android_bridge_.refresh_devices();
         }
 
         ~ProfilerApplication() {
             profiler_.close();
+            android_bridge_.close();
             if (adapter_) {
                 adapter_->wait_idle();
                 adapter_->close();
@@ -133,6 +136,7 @@ namespace {
                    (!frame_limit || adapter_->renderer().rendered_frame_count() < *frame_limit)) {
                 windows_->pump_events();
                 adapter_->consume_events(windows_->take_events(window_));
+                sync_android_bridge();
                 if (profiler_.update()) {
                     sync_selection();
                 }
@@ -150,9 +154,42 @@ namespace {
             auto& root = builder.make_root<ui::VStack>("standalone-profiler-root");
             root.set_padding({8.0f, 8.0f, 8.0f, 8.0f}).set_spacing(6.0f).set_background({0.025f, 0.03f, 0.04f, 1.0f});
 
+            auto& android_target = builder.make<ui::HStack>("android-profiler-target");
+            android_target.set_spacing(5.0f);
+            auto& android_label = builder.make<ui::Label>("Android / Quest");
+            device_combo_ = &builder.make<ui::ComboBox>();
+            auto& refresh_devices = builder.make<ui::Button>("Refresh Devices");
+            package_input_ = &builder.make<ui::TextInput>("org.termin.openxr");
+            package_input_->set_placeholder("application id");
+            activity_input_ = &builder.make<ui::TextInput>("android.app.NativeActivity");
+            activity_input_->set_placeholder("activity class");
+            android_target.add_fixed_child(android_label, 118.0f);
+            android_target.add_stretch_child(*device_combo_);
+            android_target.add_fixed_child(refresh_devices, 126.0f);
+            android_target.add_stretch_child(*package_input_);
+            android_target.add_stretch_child(*activity_input_);
+            root.add_fixed_child(android_target, 34.0f);
+
+            auto& android_actions = builder.make<ui::HStack>("android-profiler-actions");
+            android_actions.set_spacing(5.0f);
+            auto& android_hint = builder.make<ui::Label>(
+                "Launches the app with profiling and creates a private ADB route automatically.");
+            auto& connect_android = builder.make<ui::Button>("Connect Quest");
+            auto& disconnect_android = builder.make<ui::Button>("Disconnect Quest");
+            android_actions.add_stretch_child(android_hint);
+            android_actions.add_fixed_child(connect_android, 112.0f);
+            android_actions.add_fixed_child(disconnect_android, 128.0f);
+            root.add_fixed_child(android_actions, 34.0f);
+
+            android_status_model_ = std::make_shared<ui::RichTextModel>();
+            android_status_model_->set_text(android_bridge_.snapshot().status);
+            auto& android_status = builder.make<ui::RichTextView>(android_status_model_);
+            android_status.set_show_scrollbar(false);
+            root.add_fixed_child(android_status, 26.0f);
+
             auto& connection = builder.make<ui::HStack>("profiler-connection");
             connection.set_spacing(5.0f);
-            auto& route_label = builder.make<ui::Label>("ADB/SSH forward");
+            auto& route_label = builder.make<ui::Label>("Manual (advanced)");
             auto& host_label = builder.make<ui::Label>("127.0.0.1");
             port_input_ = &builder.make<ui::TextInput>("46051");
             token_input_ = &builder.make<ui::TextInput>();
@@ -182,7 +219,7 @@ namespace {
             timeline_ = &builder.make<ui::FrameTimelineWidget>(controller.timeline_model());
             timeline_->set_window_size(180);
             timeline_->set_warning_ratio(static_cast<float>(controller.hitch_ratio()));
-            root.add_fixed_child(*timeline_, 220.0f);
+            root.add_fixed_child(*timeline_, 190.0f);
 
             columns_ = std::make_shared<ui::TableColumnModel>();
             columns_->set_columns({
@@ -218,6 +255,23 @@ namespace {
                 [connect_action](ui::TextInput&, const std::string&) { connect_action(); });
             token_input_->submitted().connect(
                 [connect_action](ui::TextInput&, const std::string&) { connect_action(); });
+            refresh_devices.clicked().connect([this](ui::Button&) { android_bridge_.refresh_devices(); });
+            connect_android.clicked().connect([this](ui::Button&) {
+                const int selected = device_combo_->selected_index();
+                if (selected < 0 || static_cast<std::size_t>(selected) >= android_devices_.size()) {
+                    android_status_model_->set_text("Select a ready Android device first.");
+                    return;
+                }
+                termin::profiler_app::AndroidConnectRequest request;
+                request.serial = android_devices_[static_cast<std::size_t>(selected)].serial;
+                request.package_name = package_input_->text();
+                request.activity_name = activity_input_->text();
+                android_bridge_.connect(std::move(request));
+            });
+            disconnect_android.clicked().connect([this](ui::Button&) {
+                profiler_.disconnect();
+                android_bridge_.disconnect();
+            });
             toolbar.activated().connect(
                 [this](ui::ToolBar&, std::size_t, ui::CommandId command, const ui::CommandData&) {
                     if (profiler_.profiler().activate(command)) {
@@ -232,6 +286,58 @@ namespace {
             section_table_->selection_changed().connect([this](ui::TreeTableWidget&, ui::TreeTableNodeId node) {
                 profiler_.profiler().show_section_details(node);
             });
+        }
+
+        void sync_android_bridge() {
+            const termin::profiler_app::AndroidBridgeSnapshot snapshot = android_bridge_.snapshot();
+            if (snapshot.revision != android_revision_) {
+                android_revision_ = snapshot.revision;
+                android_status_model_->set_text(snapshot.status);
+
+                bool devices_changed = snapshot.devices.size() != android_devices_.size();
+                if (!devices_changed) {
+                    for (std::size_t index = 0; index < snapshot.devices.size(); ++index) {
+                        if (snapshot.devices[index].serial != android_devices_[index].serial ||
+                            snapshot.devices[index].state != android_devices_[index].state) {
+                            devices_changed = true;
+                            break;
+                        }
+                    }
+                }
+                if (devices_changed) {
+                    std::string previous_serial;
+                    const int previous = device_combo_->selected_index();
+                    if (previous >= 0 && static_cast<std::size_t>(previous) < android_devices_.size()) {
+                        previous_serial = android_devices_[static_cast<std::size_t>(previous)].serial;
+                    }
+                    android_devices_ = snapshot.devices;
+                    device_combo_->clear_items();
+                    int selected = -1;
+                    for (std::size_t index = 0; index < android_devices_.size(); ++index) {
+                        const auto& device = android_devices_[index];
+                        std::string label = device.serial + "  [" + device.state + "]";
+                        if (!device.description.empty()) {
+                            label += "  " + device.description;
+                        }
+                        device_combo_->add_item(std::move(label));
+                        if (device.serial == previous_serial || (selected < 0 && device.ready())) {
+                            selected = static_cast<int>(index);
+                        }
+                    }
+                    if (selected >= 0) {
+                        device_combo_->set_selected_index(selected);
+                    }
+                }
+            }
+
+            if (auto pending = android_bridge_.take_pending_connection()) {
+                profiler_.disconnect();
+                if (!profiler_.connect(std::to_string(pending->host_port), std::move(pending->authentication_token))) {
+                    android_status_model_->set_text(
+                        "The Android route was created, but the profiler client could not start.");
+                    android_bridge_.disconnect();
+                }
+            }
         }
 
         void sync_selection() {
@@ -251,6 +357,13 @@ namespace {
         ui::TcDocument document_;
         std::unique_ptr<ui::GuiWindowAdapter> adapter_;
         termin::profiler_app::RemoteProfilerSession profiler_;
+        termin::profiler_app::AndroidProfilerBridge android_bridge_;
+        ui::ComboBox* device_combo_ = nullptr;
+        ui::TextInput* package_input_ = nullptr;
+        ui::TextInput* activity_input_ = nullptr;
+        std::shared_ptr<ui::RichTextModel> android_status_model_;
+        std::vector<termin::profiler_app::AndroidDevice> android_devices_;
+        std::uint64_t android_revision_ = 0;
         ui::TextInput* port_input_ = nullptr;
         ui::TextInput* token_input_ = nullptr;
         ui::FrameTimelineWidget* timeline_ = nullptr;
