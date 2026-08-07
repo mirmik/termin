@@ -34,6 +34,10 @@ void bind_frame_graph_debugger(nb::module_& m) {
         .def("update", &FrameGraphDebuggerView::update)
         .def("show_resource", &FrameGraphDebuggerView::show_resource,
              nb::arg("resource"))
+        .def("connect_remote", &FrameGraphDebuggerView::connect_remote,
+             nb::arg("port"), nb::arg("authentication_token"))
+        .def("disconnect_remote", &FrameGraphDebuggerView::disconnect_remote)
+        .def("use_local", &FrameGraphDebuggerView::use_local)
         .def("render_previews", &FrameGraphDebuggerView::render_previews,
              nb::arg("context"))
         .def("refresh_depth", &FrameGraphDebuggerView::refresh_depth,
@@ -41,6 +45,7 @@ void bind_frame_graph_debugger(nb::module_& m) {
         .def("close", &FrameGraphDebuggerView::close)
         .def_prop_ro("active", &FrameGraphDebuggerView::active)
         .def_prop_ro("closed", &FrameGraphDebuggerView::closed)
+        .def_prop_ro("using_remote", &FrameGraphDebuggerView::using_remote)
         .def_prop_ro("document", &FrameGraphDebuggerView::document)
         .def_prop_ro("pass_indices", &FrameGraphDebuggerView::pass_indices)
         .def_prop_ro("state_status_text", [](const FrameGraphDebuggerView& self) {

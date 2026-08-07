@@ -43,6 +43,23 @@ enum class FrameGraphDebuggerImageKind {
     Depth,
 };
 
+enum class FrameGraphDebuggerSourceKind {
+    Local,
+    Remote,
+};
+
+enum class FrameGraphDebuggerGapKind {
+    TransportDrop,
+    Disconnect,
+};
+
+struct FrameGraphDebuggerGapSnapshot {
+    FrameGraphDebuggerGapKind kind =
+        FrameGraphDebuggerGapKind::TransportDrop;
+    std::uint64_t dropped_items = 0;
+    std::string detail;
+};
+
 // The image descriptor deliberately contains no transport identity or remote
 // GPU handle. A source may use an in-process capture or a locally uploaded
 // network image, but it must make that distinction invisible to the view.
@@ -57,6 +74,15 @@ struct FrameGraphDebuggerImageSnapshot {
 
 struct FrameGraphDebuggerSnapshot {
     std::uint64_t revision = 0;
+    std::uint64_t graph_revision = 0;
+    std::uint64_t session_id = 0;
+    FrameGraphDebuggerSourceKind source_kind =
+        FrameGraphDebuggerSourceKind::Local;
+    std::string source_label = "Local";
+    bool connected = true;
+    bool stale = false;
+    std::uint64_t dropped_messages = 0;
+    std::vector<FrameGraphDebuggerGapSnapshot> gaps;
     FrameGraphDebuggerState state = FrameGraphDebuggerState::Unbound;
     FrameGraphDebuggerSuspendReason suspend_reason =
         FrameGraphDebuggerSuspendReason::None;

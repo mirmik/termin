@@ -79,6 +79,15 @@ render-thread pump — единственный код сервиса, кото�
 `FrameGraphDebugger`. Между ними находятся bounded очереди команд и immutable
 topology/status сообщений.
 
+### termin-framegraph-remote-client
+
+Source of truth: [remote Framegraph client](../termin-framegraph-remote-client/docs/index.md)
+
+Опциональный desktop transport над `termin-framegraph-remote`, не зависящий от
+editor, Python, engine или GPU. Network thread обслуживает loopback TCP,
+handshake и reconnect, а bounded SPSC очередь принимает session-scoped команды
+с editor thread и отбрасывает их при разрыве соединения.
+
 ### termin-mesh / tmesh
 
 Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)

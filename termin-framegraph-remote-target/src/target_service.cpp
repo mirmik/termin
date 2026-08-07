@@ -1,5 +1,6 @@
 #include <termin/framegraph_remote_target/target_service.hpp>
 
+#include <termin/framegraph_remote/bounded_spsc_queue.hpp>
 #include <termin/framegraph_remote/wire_codec.hpp>
 #include <termin/render/frame_graph_debugger.hpp>
 
@@ -293,65 +294,6 @@ namespace termin::framegraph_remote_target
             }
             return difference == 0;
         }
-
-        template <typename T> class BoundedSpscQueue
-        {
-        public:
-            explicit BoundedSpscQueue(std::size_t capacity)
-                : slots_(checked_size(capacity))
-            {
-            }
-
-            bool try_push(T value)
-            {
-                const std::size_t tail = tail_.load(std::memory_order_relaxed);
-                const std::size_t next = increment(tail);
-                if (next == head_.load(std::memory_order_acquire))
-                    return false;
-                slots_[tail].emplace(std::move(value));
-                tail_.store(next, std::memory_order_release);
-                return true;
-            }
-
-            bool try_pop(T& value)
-            {
-                const std::size_t head = head_.load(std::memory_order_relaxed);
-                if (head == tail_.load(std::memory_order_acquire))
-                    return false;
-                value = std::move(*slots_[head]);
-                slots_[head].reset();
-                head_.store(increment(head), std::memory_order_release);
-                return true;
-            }
-
-            std::size_t size_approximate() const
-            {
-                const std::size_t head = head_.load(std::memory_order_acquire);
-                const std::size_t tail = tail_.load(std::memory_order_acquire);
-                return tail >= head ? tail - head : slots_.size() - head + tail;
-            }
-
-        private:
-            static std::size_t checked_size(std::size_t capacity)
-            {
-                if (capacity == 0 ||
-                    capacity == std::numeric_limits<std::size_t>::max())
-                {
-                    throw std::invalid_argument(
-                        "framegraph target queue capacity is invalid");
-                }
-                return capacity + 1;
-            }
-
-            std::size_t increment(std::size_t value) const
-            {
-                return value + 1 == slots_.size() ? 0 : value + 1;
-            }
-
-            std::vector<std::optional<T>> slots_;
-            alignas(64) std::atomic<std::size_t> head_{0};
-            alignas(64) std::atomic<std::size_t> tail_{0};
-        };
 
         struct QueuedCommand
         {

@@ -192,7 +192,7 @@ def test_framegraph_debugger_python_module_contains_no_widget_projection():
     assert "NativeFramegraphPreviewSurface" not in source
 
 
-def test_native_framegraph_view_depends_on_source_contract_only():
+def test_native_framegraph_view_keeps_wire_and_socket_handling_in_source_layer():
     repo_root = Path(__file__).resolve().parents[2]
     view_header = (
         repo_root / "termin-app/cpp/termin/editor/frame_graph_debugger_view.hpp"
@@ -204,8 +204,11 @@ def test_native_framegraph_view_depends_on_source_contract_only():
     assert "std::shared_ptr<IFrameGraphDebuggerSource> source_" in view_header
     assert "FrameGraphDebugger* debugger_" not in view_header
     assert "debugger_->" not in view_source
-    assert "remote_" not in view_header
-    assert "remote_" not in view_source
+    assert "wire_codec" not in view_header
+    assert "wire_codec" not in view_source
+    assert "RemoteFrameGraphClient" not in view_header
+    assert "RemoteFrameGraphClient" not in view_source
+    assert "socket(" not in view_source
 
 
 def test_native_framegraph_view_binding_builds_into_tc_document():
