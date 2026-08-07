@@ -1244,6 +1244,8 @@ namespace termin::physics_qopt
             return "position_projection_failure";
         case DynamicsSystemDiagnostic::VelocityProjectionFailure:
             return "velocity_projection_failure";
+        case DynamicsSystemDiagnostic::FrictionProjectionFailure:
+            return "friction_projection_failure";
         case DynamicsSystemDiagnostic::InternalFailure:
             return "internal_failure";
         }
@@ -1396,7 +1398,9 @@ namespace termin::physics_qopt
             options.position_tolerance < 0.0 ||
             options.velocity_tolerance < 0.0 ||
             (impl_->topology.constraint_count() != 0 &&
-             options.max_position_iterations == 0))
+             options.max_position_iterations == 0) ||
+            options.friction_cone_facets < 4 ||
+            options.friction_cone_facets % 2 != 0)
         {
             return dynamics_system_failure(
                 QpStatus::InvalidInput,
@@ -1547,6 +1551,7 @@ namespace termin::physics_qopt
             result.diagnostic = DynamicsSystemDiagnostic::None;
             result.dynamics = first_dynamics;
             result.unilateral_constraint_count = unilateral_constraint_count;
+            result.friction_cone_facets = options.friction_cone_facets;
             QpSolveResult second_dynamics;
 
             // The first pass predicts the endpoint configuration and solves
@@ -1875,6 +1880,7 @@ namespace termin::physics_qopt
 
                 const std::size_t friction_contact_count =
                     impl_->friction_topology.contact_count();
+                result.friction_contact_count = friction_contact_count;
                 if (friction_contact_count != 0)
                 {
                     impl_->pre_friction_velocity = impl_->dof_solution;
@@ -1985,33 +1991,62 @@ namespace termin::physics_qopt
                                  impl_->friction_bilateral_impulse.size(),
                                  1},
                             },
-                            {.qp = {.tolerance = friction_tolerance}});
+                            {
+                                .cone_facets = options.friction_cone_facets,
+                                .qp = {.tolerance = friction_tolerance},
+                            });
+                    result.friction_projection = friction_result;
                     if (friction_result.status != QpStatus::Optimal)
                     {
-                        std::fprintf(
-                            stderr,
-                            "[termin-qopt] contact friction solve failed: "
-                            "%s stationarity=%g equality=%g inequality=%g "
-                            "dual=%g complementarity=%g iterations=%zu "
-                            "active=%zu\n",
-                            qp_diagnostic_name(friction_result.diagnostic)
-                                .data(),
-                            friction_result.stationarity_linf,
-                            friction_result.equality_linf,
-                            friction_result.inequality_linf,
-                            friction_result.dual_linf,
-                            friction_result.complementarity_linf,
-                            friction_result.iterations,
-                            friction_result.active_set_size);
+                        if (friction_result.diagnostic ==
+                            QpDiagnostic::IterationLimit)
+                        {
+                            std::fprintf(
+                                stderr,
+                                "[termin-qopt] contact friction solve failed: "
+                                "iteration_limit residuals=unavailable "
+                                "contacts=%zu facets=%zu inequalities=%zu "
+                                "iterations=%zu active=%zu\n",
+                                friction_contact_count,
+                                options.friction_cone_facets,
+                                unilateral_constraint_count +
+                                    friction_contact_count *
+                                        (options.friction_cone_facets + 2),
+                                friction_result.iterations,
+                                friction_result.active_set_size);
+                        }
+                        else
+                        {
+                            std::fprintf(
+                                stderr,
+                                "[termin-qopt] contact friction solve failed: "
+                                "%s stationarity=%g equality=%g inequality=%g "
+                                "dual=%g complementarity=%g contacts=%zu "
+                                "facets=%zu iterations=%zu active=%zu\n",
+                                qp_diagnostic_name(friction_result.diagnostic)
+                                    .data(),
+                                friction_result.stationarity_linf,
+                                friction_result.equality_linf,
+                                friction_result.inequality_linf,
+                                friction_result.dual_linf,
+                                friction_result.complementarity_linf,
+                                friction_contact_count,
+                                options.friction_cone_facets,
+                                friction_result.iterations,
+                                friction_result.active_set_size);
+                        }
                         rollback();
                         DynamicsSystemStepResult failure =
                             dynamics_system_failure(
                                 friction_result.status,
                                 DynamicsSystemDiagnostic::
-                                    VelocityProjectionFailure,
+                                    FrictionProjectionFailure,
                                 second_dynamics,
                                 unilateral_constraint_count);
-                        failure.velocity_projection = friction_result;
+                        failure.friction_projection = friction_result;
+                        failure.friction_contact_count = friction_contact_count;
+                        failure.friction_cone_facets =
+                            options.friction_cone_facets;
                         return failure;
                     }
                     impl_->post_friction_velocity = impl_->dof_solution;
@@ -2055,6 +2090,9 @@ namespace termin::physics_qopt
                     second_dynamics,
                     unilateral_constraint_count);
                 failure.velocity_projection = result.velocity_projection;
+                failure.friction_projection = result.friction_projection;
+                failure.friction_contact_count = result.friction_contact_count;
+                failure.friction_cone_facets = result.friction_cone_facets;
                 return failure;
             }
 

@@ -51,7 +51,7 @@ namespace termin::physics_qopt
     {
         // Number of sides in the inscribed regular polygon approximating the
         // circular Coulomb disk. Must be even and at least four.
-        std::size_t cone_facets = 32;
+        std::size_t cone_facets = 6;
         ActiveSetQpOptions qp;
     };
 

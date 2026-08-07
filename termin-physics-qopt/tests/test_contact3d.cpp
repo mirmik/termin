@@ -322,7 +322,13 @@ namespace
         add(system, std::move(contacts));
         TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
 
-        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        const DynamicsSystemStepResult sliding_result =
+            system.step(step_options());
+        TERMIN_QOPT_CHECK(sliding_result.ok());
+        TERMIN_QOPT_CHECK(sliding_result.friction_projection.status ==
+                          QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(sliding_result.friction_contact_count == 1);
+        TERMIN_QOPT_CHECK(sliding_result.friction_cone_facets == 6);
         const double normal_impulse = 9.81 * 0.01;
         check_near(
             contact_set->states()[0].normal_impulse, normal_impulse, 2e-8);
@@ -338,7 +344,15 @@ namespace
         RigidBody3DState slow = body->state();
         slow.velocity_local.lin = {0.01, 0.0, 0.0};
         TERMIN_QOPT_CHECK(body->set_state(slow) == Multibody3DDiagnostic::None);
-        TERMIN_QOPT_CHECK(system.step(step_options()).ok());
+        DynamicsSystemStepOptions fine_options = step_options();
+        fine_options.friction_cone_facets = 8;
+        const DynamicsSystemStepResult sticking_result =
+            system.step(fine_options);
+        TERMIN_QOPT_CHECK(sticking_result.ok());
+        TERMIN_QOPT_CHECK(sticking_result.friction_projection.status ==
+                          QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(sticking_result.friction_contact_count == 1);
+        TERMIN_QOPT_CHECK(sticking_result.friction_cone_facets == 8);
         check_near(body->state().velocity_local.lin.x, 0.0, 2e-8);
         check_near(
             contact_set->states()[0].tangent_impulse_world.x, -0.01, 2e-8);

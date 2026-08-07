@@ -877,6 +877,16 @@ namespace termin
                      0.0,
                      10.0,
                      0.01);
+        tc::stage_inspect_field(
+            inspect,
+            &FEMPhysicsWorldComponent::contact_friction_cone_facets,
+            "FEMPhysicsWorldComponent",
+            "contact_friction_cone_facets",
+            "Friction Cone Facets",
+            "int",
+            4.0,
+            64.0,
+            2.0);
         register_collision_layer_mask_field(inspect);
         tc::stage_inspect_field(
             inspect,
@@ -975,6 +985,15 @@ namespace termin
                 "[FEMPhysicsWorldComponent] invalid contact friction "
                 "coefficient=%g",
                 contact_friction_coefficient);
+            return false;
+        }
+        if (contact_friction_cone_facets < 4 ||
+            contact_friction_cone_facets % 2 != 0)
+        {
+            tc::Log::error(
+                "[FEMPhysicsWorldComponent] invalid friction cone facet "
+                "count %d; expected an even value >= 4",
+                contact_friction_cone_facets);
             return false;
         }
 
@@ -1815,6 +1834,8 @@ namespace termin
         options.position_tolerance = 1.0e-8;
         options.velocity_tolerance = 1.0e-8;
         options.max_position_iterations = 8;
+        options.friction_cone_facets =
+            static_cast<std::size_t>(contact_friction_cone_facets);
         const physics_qopt::Multibody3DStepResult result =
             system_.step(options);
         if (result.status != physics_qopt::QpStatus::Optimal ||
