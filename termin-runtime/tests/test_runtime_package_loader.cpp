@@ -132,6 +132,10 @@ std::string shader_spec() {
         << "  \"language\": \"glsl\",\n"
         << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
         << "  \"features\": 1,\n"
+        << "  \"shader_contract\": {\"schema_version\": 1, "
+           "\"debug_name\": \"RuntimeLoaderTestShader\", \"vertex_inputs\": ["
+           "{\"semantic\": \"position\", \"type\": 3, \"required\": true}, "
+           "{\"semantic\": \"color\", \"type\": 3, \"required\": true}]},\n"
         << "  \"surface_producer\": {\n"
         << "    \"schema_version\": 1,\n"
         << "    \"contract_id\": \"termin.surface.standard-pbr\",\n"
@@ -673,6 +677,17 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     termin::TcShader shader = termin::TcShader::from_uuid(kShaderUuid);
     REQUIRE(shader.is_valid());
     CHECK(shader.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO));
+    REQUIRE(tc_shader_has_contract(shader.get()));
+    tc_shader_contract_view shader_contract{};
+    REQUIRE(tc_shader_get_contract_view(shader.get(), &shader_contract));
+    CHECK_EQ(shader_contract.source_kind, TC_SHADER_CONTRACT_SOURCE_DECLARED);
+    REQUIRE_EQ(shader_contract.vertex_input_count, 2u);
+    CHECK_EQ(
+        std::string(shader_contract.vertex_inputs[0].semantic),
+        std::string("position"));
+    CHECK_EQ(
+        std::string(shader_contract.vertex_inputs[1].semantic),
+        std::string("color"));
     REQUIRE(shader.has_surface_producer());
     tc_shader_surface_producer_view producer{};
     REQUIRE(tc_shader_get_surface_producer_view(shader.get(), &producer));

@@ -26,6 +26,7 @@ class ProjectSessionController:
         resolve_slangc: Callable[[], Path | None],
         get_render_engine: Callable[[], object],
         show_error: Callable[[str, str], None] | None = None,
+        show_warning: Callable[[str, str], None] | None = None,
         run_module_operation: Callable[[object, Path, Callable[[bool], None]], None]
         | None = None,
     ) -> None:
@@ -37,6 +38,7 @@ class ProjectSessionController:
         self._resolve_slangc = resolve_slangc
         self._get_render_engine = get_render_engine
         self._show_error = show_error
+        self._show_warning = show_warning
         self._run_module_operation = run_module_operation
         self._project_file: Path | None = None
         self._initializing = False
@@ -128,6 +130,7 @@ class ProjectSessionController:
                 resolve_termin_shaderc=self._resolve_termin_shaderc,
                 resolve_slangc=self._resolve_slangc,
                 render_engine=self._get_render_engine(),
+                show_warning=self._show_warning,
             )
 
             from termin.project.settings import ProjectSettingsManager
@@ -224,7 +227,10 @@ class ProjectSessionController:
         resolve_termin_shaderc: Callable[[], Path | None],
         resolve_slangc: Callable[[], Path | None],
         render_engine,
+        show_warning: Callable[[str, str], None] | None = None,
     ) -> None:
+        from termin.shader_runtime import slangc_unavailable_message
+
         artifact_root = project_root / ".termin" / "shader-artifacts"
         cache_root = project_root / ".termin" / "shader-cache"
         compiler = resolve_termin_shaderc()
@@ -236,12 +242,10 @@ class ProjectSessionController:
             return
         slangc = resolve_slangc()
         if slangc is None:
-            log.error(
-                "[ShaderRuntime] slangc not found; Slang runtime shader "
-                "compilation is unavailable. Set TERMIN_SLANGC, add slangc to PATH, "
-                "install it under TERMIN_SDK/bin, or configure Shader/slangCompiler "
-                "in editor settings."
-            )
+            message = slangc_unavailable_message("Editor project", editor=True)
+            log.warning(f"[ShaderRuntime] {message}")
+            if show_warning is not None:
+                show_warning("Slang Compiler Unavailable", message)
             return
 
         artifact_root.mkdir(parents=True, exist_ok=True)

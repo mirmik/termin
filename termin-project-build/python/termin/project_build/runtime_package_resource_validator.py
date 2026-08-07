@@ -460,6 +460,67 @@ def _validate_shader_resource(
             )
         )
 
+    shader_contract = shader_spec.get("shader_contract")
+    if shader_contract is not None:
+        contract_context = f"{resource_path}:shader_contract"
+        if not isinstance(shader_contract, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error", contract_context, "Shader contract must be an object"
+                )
+            )
+        else:
+            schema_version = shader_contract.get("schema_version", 1)
+            if schema_version != 1:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        contract_context,
+                        "Shader contract requires schema_version 1",
+                    )
+                )
+            vertex_inputs = shader_contract.get("vertex_inputs")
+            if not isinstance(vertex_inputs, list):
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        contract_context,
+                        "Shader contract vertex_inputs must be a list",
+                    )
+                )
+            else:
+                seen_semantics: set[str] = set()
+                for index, vertex_input in enumerate(vertex_inputs):
+                    input_context = f"{contract_context}.vertex_inputs[{index}]"
+                    valid = (
+                        isinstance(vertex_input, dict)
+                        and isinstance(vertex_input.get("semantic"), str)
+                        and vertex_input.get("semantic") != ""
+                        and isinstance(vertex_input.get("type"), int)
+                        and not isinstance(vertex_input.get("type"), bool)
+                        and 1 <= vertex_input.get("type") <= 5
+                        and isinstance(vertex_input.get("required", True), bool)
+                    )
+                    if not valid:
+                        diagnostics.append(
+                            RuntimePackageExportDiagnostic(
+                                "error",
+                                input_context,
+                                "Shader contract vertex input is incomplete or invalid",
+                            )
+                        )
+                        continue
+                    semantic = vertex_input["semantic"]
+                    if semantic in seen_semantics:
+                        diagnostics.append(
+                            RuntimePackageExportDiagnostic(
+                                "error",
+                                input_context,
+                                f"Duplicate shader contract vertex semantic '{semantic}'",
+                            )
+                        )
+                    seen_semantics.add(semantic)
+
     artifacts = shader_spec.get("artifacts")
     if artifact_role == "surface_producer":
         if artifacts not in (None, {}):

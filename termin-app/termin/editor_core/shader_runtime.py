@@ -10,6 +10,7 @@ from tcbase import log
 from termin.shader_runtime import (
     resolve_slangc as resolve_shared_slangc,
     resolve_termin_shaderc as resolve_shared_termin_shaderc,
+    slangc_unavailable_message,
 )
 
 
@@ -60,7 +61,7 @@ def configure_shader_runtime(
 
     slangc = resolve_slangc()
     if slangc is None:
-        log.error(f"[ShaderRuntime] slangc not found; {label} Slang shaders cannot compile")
+        log.warning(f"[ShaderRuntime] {slangc_unavailable_message(label)}")
         return
 
     try:

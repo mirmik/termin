@@ -327,6 +327,13 @@ switches the window to borderless desktop fullscreen after creating it;
 `--width` and `--height` define the normal-window size used when `--windowed`
 is passed and the initial size before the OS applies fullscreen mode.
 
+Backend selection is explicit after device creation. In particular, a Vulkan
+device reported as a CPU renderer (for example Mesa Lavapipe) is not silently
+replaced with OpenGL or another backend. Native editor startup logs the Vulkan
+device and driver and shows a warning dialog; the same information is available
+from **Help → About Termin**. Select an alternative explicitly with
+`TERMIN_BACKEND=<name>` and restart the editor.
+
 By default `run` does not rebuild implicitly and expects a packaged desktop
 bundle. Pass `--build-if-missing` to build when packaged output is absent, or
 `--rebuild` to rebuild before every launch. Pass `--dry-run` to inspect the
