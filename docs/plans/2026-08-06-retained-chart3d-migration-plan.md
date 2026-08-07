@@ -109,6 +109,18 @@ body каждого retained item. Это обеспечивает незави�
 миграции body будет сужен до специализированного renderer item без изменения
 public handles или C# API.
 
+### Интеграция с scene-neutral render core
+
+- [x] `RetainedChart3D` владеет production `PlotScene3DRenderItemSource`.
+- [x] Surface/scatter/grid публикуются как tcplot-owned render-item kinds со
+  стабильной identity без fake entities/components.
+- [x] Empty, multi-view и destroy/reuse snapshots проходят через общий
+  `RenderItemSource::publish()` lifecycle.
+- [x] Chart snapshot исполняется generic probe pipeline через общий
+  `RenderEngine`.
+- [ ] Добавить surface/scatter/grid encoders и framegraph output поверх этих
+  kinds, после чего удалить временные per-item `PlotEngine3D` bodies.
+
 ### Hardening первого slice
 
 - [x] Style mutation обновляет существующий renderer body без повторного

@@ -2,7 +2,7 @@
 
 Дата: 2026-08-07  
 Статус: принято к поэтапной реализации; umbrella #1358, завершены slices
-#1359–#1363
+#1359–#1365
 
 ## Контекст
 
@@ -346,9 +346,14 @@ services/execution и graph authoring policy. Заодно из `RenderContext` 
 ### Этап 3. Подключить два item source
 
 - `TcSceneRenderItemSource` поверх текущего collector реализован в #1362.
-- Реализовать `PlotScene3DRenderItemSource` без `tc_scene` и components.
-- Проверить, что один generic pipeline может исполняться для обоих sources.
-- Добавить lifecycle, empty source, stale handle и multi-view tests.
+- В #1365 `RetainedChart3D` получил принадлежащий ему
+  `PlotScene3DRenderItemSource` без `tc_scene`, entities и components. Source
+  публикует tcplot-owned item kinds и value identity из scene id, slot index и
+  generation; mutable slot pointers в snapshot не попадают.
+- Generic probe pipeline исполняется тем же `RenderEngine::execute_pipeline()`
+  над chart snapshot. GPU encoders остаются отдельным этапом 4.
+- Lifecycle coverage включает empty source, populated source, slot
+  destroy/reuse и два независимо живущих view snapshots.
 
 ### Этап 4. Перенести Chart3D rendering
 
