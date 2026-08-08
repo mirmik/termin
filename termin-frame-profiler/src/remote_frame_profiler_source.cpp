@@ -213,28 +213,33 @@ namespace termin {
                                               section.first_child,
                                               section.next_sibling});
                 }
-                if (pending_gap_before ||
-                    (!next.frames.empty() && frame.frame_number != next.frames.back().frame_number + 1) ||
-                    (!converted.empty() && frame.frame_number != converted.back().frame_number + 1))
-                    frame.gap_before = true;
                 converted.push_back(std::move(frame));
             }
-            if (!converted.empty())
-                pending_gap_before = false;
             for (auto& frame : converted) {
                 const auto existing =
                     std::find_if(next.frames.begin(), next.frames.end(), [&frame](const FrameProfilerFrame& candidate) {
                         return candidate.frame_number == frame.frame_number;
                     });
                 if (existing != next.frames.end()) {
+                    // Late GPU timing arrives as a replacement for a frame
+                    // that was already projected. It is not a transport gap,
+                    // and must not consume a real pending gap intended for the
+                    // next newly appended frame.
+                    const bool gap_before = existing->gap_before;
                     *existing = std::move(frame);
+                    existing->gap_before = gap_before;
                 } else {
                     if (!next.frames.empty() && frame.frame_number <= next.frames.back().frame_number) {
                         tc_log_error("remote frame profiler: out-of-order frame update %lld",
                                      static_cast<long long>(frame.frame_number));
                         return false;
                     }
+                    if (pending_gap_before ||
+                        (!next.frames.empty() && frame.frame_number != next.frames.back().frame_number + 1)) {
+                        frame.gap_before = true;
+                    }
                     next.frames.push_back(std::move(frame));
+                    pending_gap_before = false;
                 }
             }
             if (next.frames.size() > capacity) {
