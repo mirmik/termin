@@ -216,6 +216,58 @@ TEST_CASE("Controller projects source gaps and disables unsupported controls") {
     CHECK(commands->command(clear).data.enabled);
 }
 
+TEST_CASE("Late remote GPU updates preserve real frame gap semantics") {
+    using namespace termin::profiler_remote;
+    termin::RemoteFrameProfilerSource source(8, [](const Control&) { return true; });
+
+    TargetHello hello;
+    hello.process_id = 42;
+    hello.platform = "Android";
+    hello.abi = "arm64-v8a";
+    hello.build_type = "Profile";
+    REQUIRE(source.ingest(remote_message(1, 77, hello)));
+
+    FrameBatch initial;
+    initial.frames = {
+        {.frame_number = 10, .interval_ms = 16.0, .active_ms = 4.0, .target_interval_ms = 16.0},
+        {.frame_number = 11, .interval_ms = 16.0, .active_ms = 4.0, .target_interval_ms = 16.0},
+    };
+    REQUIRE(source.ingest(remote_message(2, 77, initial)));
+
+    FrameBatch first_gpu_update;
+    first_gpu_update.frames = {{.frame_number = 10,
+                                .interval_ms = 16.0,
+                                .active_ms = 4.0,
+                                .target_interval_ms = 16.0,
+                                .has_gpu_duration = true,
+                                .gpu_duration_ms = 7.5}};
+    REQUIRE(source.ingest(remote_message(3, 77, first_gpu_update)));
+    auto snapshot = source.snapshot();
+    REQUIRE(snapshot->find(10) != nullptr);
+    CHECK(snapshot->find(10)->has_gpu_duration);
+    CHECK_FALSE(snapshot->find(10)->gap_before);
+    CHECK_FALSE(snapshot->find(11)->gap_before);
+
+    REQUIRE(source.ingest(remote_message(4, 77, DropEvent{DropKind::producer_queue, 1, 1, 1})));
+    FrameBatch second_gpu_update;
+    second_gpu_update.frames = {{.frame_number = 11,
+                                 .interval_ms = 16.0,
+                                 .active_ms = 4.0,
+                                 .target_interval_ms = 16.0,
+                                 .has_gpu_duration = true,
+                                 .gpu_duration_ms = 8.0}};
+    REQUIRE(source.ingest(remote_message(5, 77, second_gpu_update)));
+    snapshot = source.snapshot();
+    CHECK_FALSE(snapshot->find(11)->gap_before);
+
+    FrameBatch after_gap;
+    after_gap.frames = {{.frame_number = 13, .interval_ms = 32.0, .active_ms = 4.0, .target_interval_ms = 16.0}};
+    REQUIRE(source.ingest(remote_message(6, 77, after_gap)));
+    snapshot = source.snapshot();
+    REQUIRE(snapshot->find(13) != nullptr);
+    CHECK(snapshot->find(13)->gap_before);
+}
+
 TEST_CASE("Recorded remote protocol replay projects frames and acknowledged "
           "controls") {
     using namespace termin::profiler_remote;
