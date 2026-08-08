@@ -1,4 +1,4 @@
-// tonemap_pass.cpp - HDR to LDR tonemapping post-processing pass.
+// tonemap_pass.cpp - linear HDR tone-curve post-processing pass.
 //
 // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ,
 // std140 UBO for parameters via bind_uniform_buffer, input texture

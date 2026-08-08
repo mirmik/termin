@@ -21,6 +21,7 @@ extern "C" {
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/id_pass.hpp>
+#include <termin/render/output_transform_pass.hpp>
 #include <termin/render/present_pass.hpp>
 #include <termin/render/resolve_pass.hpp>
 #include <termin/render/shadow_camera.hpp>
@@ -29,6 +30,7 @@ extern "C" {
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/render/world2d_pass.hpp>
+#include <termin/lighting/environment_lighting.hpp>
 
 namespace nb = nanobind;
 
@@ -413,6 +415,31 @@ namespace termin {
                 nb::keep_alive<0, 1>())
             .def("get_by_light_index", &ShadowMapArrayResource::get_by_light_index, nb::rv_policy::reference);
 
+        nb::class_<EnvironmentLightingResource, FrameGraphResource>(m, "EnvironmentLightingResource")
+            .def(nb::init<>())
+            .def("resource_type", &EnvironmentLightingResource::resource_type)
+            .def("ready", &EnvironmentLightingResource::ready)
+            .def_ro("specular_mip_count", &EnvironmentLightingResource::specular_mip_count);
+
+        auto environment_lighting_pass =
+            nb::class_<EnvironmentLightingPass, CxxFramePass>(m, "EnvironmentLightingPass")
+                .def("__init__",
+                     [](EnvironmentLightingPass* self, std::string output_res, std::string pass_name) {
+                         new (self) EnvironmentLightingPass(output_res, pass_name);
+                         init_pass_from_python(self, "EnvironmentLightingPass");
+                     },
+                     nb::arg("output_res") = "environment_lighting",
+                     nb::arg("pass_name") = "EnvironmentLighting")
+                .def_rw("output_res", &EnvironmentLightingPass::output_res)
+                .def_prop_ro("reads", &EnvironmentLightingPass::compute_reads)
+                .def_prop_ro("writes", &EnvironmentLightingPass::compute_writes)
+                .def("get_resource_specs", &EnvironmentLightingPass::get_resource_specs)
+                .def("destroy", &EnvironmentLightingPass::destroy);
+        environment_lighting_pass.attr("category") = "Lighting";
+        environment_lighting_pass.attr("node_inputs") = nb::make_tuple();
+        environment_lighting_pass.attr("node_outputs") =
+            nb::make_tuple(nb::make_tuple("output_res", "environment_lighting"));
+
         auto color_pass = nb::class_<ColorPass, CxxFramePass>(m, "ColorPass")
                               .def(
                                   "__init__",
@@ -420,6 +447,7 @@ namespace termin {
                                      std::string input_res,
                                      std::string output_res,
                                      nb::object shadow_res_obj,
+                                     nb::object environment_res_obj,
                                      std::string phase_mark,
                                      std::string pass_name,
                                      std::string sort_mode,
@@ -436,6 +464,9 @@ namespace termin {
                                       config.input_res = std::move(input_res);
                                       config.output_res = std::move(output_res);
                                       config.shadow_res = std::move(shadow_res);
+                                      config.environment_res = environment_res_obj.is_none()
+                                                                   ? std::string{}
+                                                                   : nb::cast<std::string>(environment_res_obj);
                                       config.phase_mark = std::move(phase_mark);
                                       config.pass_name = std::move(pass_name);
                                       config.sort_mode = std::move(sort_mode);
@@ -448,6 +479,7 @@ namespace termin {
                                   nb::arg("input_res") = "empty",
                                   nb::arg("output_res") = "color",
                                   nb::arg("shadow_res").none() = nb::none(),
+                                  nb::arg("environment_res").none() = "environment_lighting",
                                   nb::arg("phase_mark") = "opaque",
                                   nb::arg("pass_name") = "Color",
                                   nb::arg("sort_mode") = "none",
@@ -457,6 +489,7 @@ namespace termin {
                               .def_rw("input_res", &ColorPass::input_res)
                               .def_rw("output_res", &ColorPass::output_res)
                               .def_rw("shadow_res", &ColorPass::shadow_res)
+                              .def_rw("environment_res", &ColorPass::environment_res)
                               .def_rw("phase_mark", &ColorPass::phase_mark)
                               .def_rw("sort_mode", &ColorPass::sort_mode)
                               .def_rw("clear_depth", &ColorPass::clear_depth)
@@ -488,7 +521,9 @@ namespace termin {
         color_pass.attr("category") = "Render";
         color_pass.attr("has_dynamic_inputs") = true;
         color_pass.attr("node_inputs") =
-            nb::make_tuple(nb::make_tuple("input_res", "fbo"), nb::make_tuple("shadow_res", "shadow"));
+            nb::make_tuple(nb::make_tuple("input_res", "fbo"),
+                           nb::make_tuple("shadow_res", "shadow"),
+                           nb::make_tuple("environment_res", "environment_lighting"));
         color_pass.attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
         color_pass.attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
         {
@@ -748,6 +783,36 @@ namespace termin {
         m.attr("TONEMAP_ACES") = 0;
         m.attr("TONEMAP_REINHARD") = 1;
         m.attr("TONEMAP_NONE") = 2;
+
+        nb::class_<OutputTransformPass, CxxFramePass>(m, "OutputTransformPass")
+            .def(
+                "__init__",
+                [](OutputTransformPass* self,
+                   const std::string& input_res,
+                   const std::string& output_res,
+                   const std::string& pass_name) {
+                    new (self) OutputTransformPass(input_res, output_res);
+                    if (!pass_name.empty()) {
+                        self->set_pass_name(pass_name);
+                    }
+                    init_pass_from_python(self, "OutputTransformPass");
+                },
+                nb::arg("input_res") = "color",
+                nb::arg("output_res") = "OUTPUT",
+                nb::arg("pass_name") = "OutputTransform")
+            .def_rw("input_res", &OutputTransformPass::input_res)
+            .def_rw("output_res", &OutputTransformPass::output_res)
+            .def("compute_reads", &OutputTransformPass::compute_reads)
+            .def("compute_writes", &OutputTransformPass::compute_writes)
+            .def("get_inplace_aliases", &OutputTransformPass::get_inplace_aliases)
+            .def_prop_ro("reads", &OutputTransformPass::compute_reads)
+            .def_prop_ro("writes", &OutputTransformPass::compute_writes)
+            .def("destroy", &OutputTransformPass::destroy);
+
+        m.attr("OutputTransformPass").attr("category") = "Output";
+        m.attr("OutputTransformPass").attr("node_inputs") =
+            nb::make_tuple(nb::make_tuple("input_res", "fbo"));
+        m.attr("OutputTransformPass").attr("node_outputs") = nb::make_tuple();
 
         m.def(
             "tc_picking_id_to_rgb",

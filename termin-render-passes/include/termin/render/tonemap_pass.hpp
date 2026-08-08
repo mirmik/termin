@@ -1,4 +1,4 @@
-// tonemap_pass.hpp - HDR to LDR tonemapping post-processing pass
+// tonemap_pass.hpp - linear HDR tone-curve post-processing pass
 #pragma once
 
 #include "tc_inspect_cpp.hpp"
@@ -22,7 +22,8 @@ namespace termin {
         NONE = 2
     };
 
-    // TonemapPass - converts HDR to displayable LDR range.
+    // TonemapPass compresses linear HDR into linear display-referred color.
+    // It deliberately does not apply an output transfer function.
     //
     // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
     // UBO for parameters via bind_uniform_buffer, input texture via

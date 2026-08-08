@@ -8,6 +8,53 @@ consume these passes through the public C++ headers under `<termin/render/...>`
 or Python package `termin.render_passes`, not compile pass sources from
 `termin-app`.
 
+## Color pipeline contract
+
+The built-in default and editor pipelines keep every internal scene and
+post-processing color resource in linear `RGBA16F`. Their terminal path is:
+
+```text
+linear HDR scene -> bloom -> TonemapPass -> linear UI -> OutputTransformPass -> OUTPUT
+```
+
+`TonemapPass` owns exposure and the selected tone curve (ACES by default). Its
+result is still linear; it never performs gamma or sRGB encoding.
+`OutputTransformPass` is the single display boundary. It applies the IEC sRGB
+optical-electrical transfer function to RGB, preserves alpha as a linear
+coverage value, clamps to the display range, and writes the caller-owned UNORM
+output. `PresentToScreenPass` remains a color-preserving copy for custom
+pipelines that explicitly need no display transform.
+
+UI is composited before the output transform so scene and UI receive exactly
+one encoding step. UI color literals therefore participate in the linear
+compositing contract; wide-gamut and HDR-display transforms remain separate
+future work.
+
+## Image-based lighting
+
+The standard Cook--Torrance surface consumer uses split-sum image-based
+lighting in addition to explicit scene lights. `EnvironmentLightingPass`
+publishes one typed `environment_lighting` framegraph resource containing:
+
+- a cosine-convolved diffuse irradiance map;
+- a GGX-prefiltered specular map whose mip level represents perceptual
+  roughness;
+- the two-channel integrated BRDF lookup table.
+
+Directional maps use octahedral projection into ordinary 2D `RGBA32F`
+textures. This is intentional: tgfx2 cubemaps and layered textures are not yet
+a portable contract across Vulkan, OpenGL, D3D11, and WebGPU. The BRDF table is
+`RG32F`. All three textures are pass-owned shader ABI resources declared by
+the built-in `termin_ibl` Slang module.
+
+At present the pass prefilters the scene's solid or vertical-gradient sky on
+the CPU and uploads it only when sky or ambient settings change. Ambient color
+and intensity act as the environment tint and exposure. `TC_SKYBOX_NONE`
+hides the visual background but retains solid ambient illumination. An HDR or
+EXR image source should be added through the same typed resource after the
+texture asset pipeline supports float source data; it must not introduce a
+second PBR lighting path.
+
 `DebugGeometryPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
 debug/editor render passes. Debug-producing components publish backend-neutral
 primitives through the scene render lifecycle; the pass library does not depend

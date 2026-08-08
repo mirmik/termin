@@ -5,7 +5,12 @@ bootstrap_player()
 import pytest
 
 from termin.engine import EngineCore
-from termin.render_passes import ResolvePass, UIWidgetPass
+from termin.render_passes import (
+    EnvironmentLightingPass,
+    OutputTransformPass,
+    ResolvePass,
+    UIWidgetPass,
+)
 
 
 @pytest.fixture
@@ -17,20 +22,23 @@ def rendering_manager():
         del engine
 
 
-def test_builtin_default_pipeline_color_fbos_follow_output_render_target(rendering_manager):
+def test_builtin_default_pipeline_keeps_internal_color_fbos_in_linear_hdr(rendering_manager):
     pipeline = rendering_manager.create_pipeline("Default")
 
     formats = {spec.resource: spec.format for spec in pipeline.pipeline_specs}
     samples = {spec.resource: spec.samples for spec in pipeline.pipeline_specs}
 
-    assert formats["empty"] == "render_target"
-    assert formats["skybox"] == "render_target"
-    assert formats["color_opaque"] == "render_target"
-    assert formats["color"] == "render_target"
-    assert formats["color_world2d"] == "render_target"
-    assert formats["color_resolved"] == "render_target"
-    assert formats["color_bloom"] == "render_target"
-    assert formats["color+widgets"] == "render_target"
+    assert formats == {
+        "empty": "rgba16f",
+        "skybox": "rgba16f",
+        "color_opaque": "rgba16f",
+        "color": "rgba16f",
+        "color_world2d": "rgba16f",
+        "color_resolved": "rgba16f",
+        "color_bloom": "rgba16f",
+        "color_tonemapped": "rgba16f",
+        "color+widgets": "rgba16f",
+    }
 
     assert samples["empty"] == 4
     assert samples["skybox"] == 4
@@ -48,10 +56,26 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager)
 
     assert "ResolvePass" in pass_types
     assert "World2DPass" in pass_types
-    assert "TonemapPass" not in pass_types
+    assert "TonemapPass" in pass_types
+    assert "OutputTransformPass" in pass_types
+    assert "EnvironmentLightingPass" in pass_types
+    assert pass_names.index("EnvironmentLighting") < pass_names.index("Color")
     assert pass_names.index("World2D") < pass_names.index("Resolve")
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
-    assert pass_names.index("Bloom") < pass_names.index("UIWidgets")
+    assert pass_names.index("Bloom") < pass_names.index("Tonemap")
+    assert pass_names.index("Tonemap") < pass_names.index("UIWidgets")
+    assert pass_names.index("UIWidgets") < pass_names.index("OutputTransform")
+
+    output_transform = next(
+        frame_pass for frame_pass in pipeline.passes
+        if frame_pass.type_name == "OutputTransformPass"
+    )
+    assert isinstance(output_transform.to_python(), OutputTransformPass)
+    environment = next(
+        frame_pass for frame_pass in pipeline.passes
+        if frame_pass.type_name == "EnvironmentLightingPass"
+    )
+    assert isinstance(environment.to_python(), EnvironmentLightingPass)
 
 
 def test_builtin_default_pipeline_uses_native_ui_widget_pass_projection(rendering_manager):

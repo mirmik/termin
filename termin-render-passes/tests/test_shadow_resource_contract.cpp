@@ -5,6 +5,7 @@ GUARD_TEST_MAIN();
 #include <memory>
 
 #include <termin/lighting/shadow.hpp>
+#include <termin/lighting/environment_lighting.hpp>
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_resource_registry.hpp>
@@ -53,6 +54,36 @@ TEST_CASE("shadow resource is a registered generic non-texture resource") {
 
     resource.reset();
     CHECK(termin::unregister_frame_graph_resource_type("shadow_map_array"));
+}
+
+TEST_CASE("environment lighting is a registered typed framegraph resource") {
+    if (termin::has_frame_graph_resource_type("environment_lighting")) {
+        REQUIRE(termin::unregister_frame_graph_resource_type("environment_lighting"));
+    }
+    REQUIRE(termin::register_environment_lighting_resource_type());
+    CHECK(termin::register_environment_lighting_resource_type());
+
+    termin::ResourceSpec spec{"environment", "environment_lighting"};
+    std::unique_ptr<termin::FrameGraphResource> resource(termin::create_frame_graph_resource(spec));
+    REQUIRE(resource != nullptr);
+    auto* environment = dynamic_cast<termin::EnvironmentLightingResource*>(resource.get());
+    REQUIRE(environment != nullptr);
+    CHECK_FALSE(environment->ready());
+
+    environment->diffuse_irradiance = tgfx::TextureHandle{41};
+    environment->prefiltered_specular = tgfx::TextureHandle{42};
+    environment->brdf_lut = tgfx::TextureHandle{43};
+    environment->sampler = tgfx::SamplerHandle{44};
+    environment->specular_mip_count = 7;
+    CHECK(environment->ready());
+
+    const termin::FrameGraphResourceSampledTexture sampled =
+        termin::frame_graph_resource_sampled_texture(*resource);
+    CHECK(sampled.texture == environment->prefiltered_specular);
+    CHECK(sampled.kind == termin::FrameGraphResourceSampledTextureKind::Color);
+
+    resource.reset();
+    CHECK(termin::unregister_frame_graph_resource_type("environment_lighting"));
 }
 
 TEST_CASE("ShadowPass receives and reuses its registered generic resource") {
