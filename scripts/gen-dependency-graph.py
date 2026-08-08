@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Generate library dependency graph from CMakeLists.txt and setup.py files.
+"""Generate the repository library dependency graph.
 
 Parses:
-- C/C++ deps from target_link_libraries() in CMakeLists.txt
+- C/C++ deps from termin_require_package(), find_package(), and
+  target_link_libraries() in CMakeLists.txt
 - Python deps from install_requires in setup.py
+- Python deps from imports for selected namespace packages
 
-Outputs docs/library-dependencies.dot, .png, .svg
+Outputs docs/library-dependencies.dot, .png, .svg, and standalone .html
 """
 
+import argparse
+import json
 import os
 import re
 import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HTML_TEMPLATE = os.path.join(ROOT, "scripts", "dependency-graph-template.html")
 
 # Map CMake target namespaces to directory names
 CMAKE_TARGET_TO_DIR = {
@@ -206,47 +211,159 @@ MANUAL_DEPS = {
 }
 
 
-def parse_cmake_deps(cmake_path):
-    """Extract dependencies from target_link_libraries() and find_package().
+def resolve_cmake_dependency(name):
+    """Resolve a CMake package/target name to a repository module.
 
-    For target_link_libraries: skip _test and _native targets (bindings/tests).
-    For find_package: only count those outside TERMIN_BUILD_PYTHON blocks.
+    Most package names follow the mechanical ``termin_foo`` -> ``termin-foo``
+    convention.  CMAKE_TARGET_TO_DIR only contains the historical aliases that
+    cannot be inferred that way (tcbase, tgfx, tmesh, ...).
+    """
+    explicit = CMAKE_TARGET_TO_DIR.get(name)
+    if explicit:
+        return explicit
+
+    candidate = name.replace("_", "-")
+    if os.path.isdir(os.path.join(ROOT, candidate)):
+        return candidate
+    if os.path.isdir(os.path.join(ROOT, "termin-components", candidate)):
+        return candidate
+    return None
+
+
+def strip_cmake_comments(content):
+    """Remove line comments without treating ``#`` inside strings as syntax."""
+    result = []
+    index = 0
+    quote = None
+    while index < len(content):
+        char = content[index]
+        if quote:
+            result.append(char)
+            if char == "\\" and index + 1 < len(content):
+                index += 1
+                result.append(content[index])
+            elif char == quote:
+                quote = None
+        elif char in ('"', "'"):
+            quote = char
+            result.append(char)
+        elif char == "#":
+            newline = content.find("\n", index)
+            if newline == -1:
+                break
+            result.append("\n")
+            index = newline
+        else:
+            result.append(char)
+        index += 1
+    return "".join(result)
+
+
+def iter_cmake_commands(content, command_names):
+    """Yield ``(command_name, body)`` for balanced CMake command calls.
+
+    A non-greedy regular expression stops at the first parenthesis and breaks
+    on generator expressions and nested conditions.  This small scanner is not
+    a complete CMake parser, but it does preserve balanced calls and quoted
+    text while ignoring comments.
+    """
+    content = strip_cmake_comments(content)
+    names = set(command_names)
+    command_re = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+    position = 0
+
+    while True:
+        match = command_re.search(content, position)
+        if match is None:
+            return
+        position = match.end()
+        command = match.group(1)
+        depth = 1
+        index = position
+        quote = None
+
+        while index < len(content) and depth:
+            char = content[index]
+            if quote:
+                if char == "\\":
+                    index += 2
+                    continue
+                if char == quote:
+                    quote = None
+                index += 1
+                continue
+            if char in ('"', "'"):
+                quote = char
+                index += 1
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+            index += 1
+
+        if depth:
+            return
+        if command in names:
+            yield command, content[position:index - 1]
+            position = index
+        else:
+            # Search inside control-flow commands such as if()/foreach().
+            position = match.end()
+
+
+def first_cmake_argument(body):
+    """Return the first plain argument from a CMake command body."""
+    match = re.search(r'[^\s"\']+|"([^"]*)"|\'([^\']*)\'', body)
+    if match is None:
+        return None
+    return next((group for group in match.groups() if group is not None), match.group(0))
+
+
+def parse_cmake_deps(cmake_path):
+    """Extract declared module dependencies from a CMakeLists.txt.
+
+    Package declarations are authoritative even when a dependency is selected
+    only by one build profile.  Link declarations complement them for local or
+    otherwise implicit dependencies.  Test and binding targets are omitted
+    because this is a graph of repository modules, not build-only targets.
     """
     with open(cmake_path) as f:
         content = f.read()
 
     deps = set()
 
-    # 1. Parse target_link_libraries blocks (skip bindings and tests)
-    for match in re.finditer(
-        r'target_link_libraries\s*\(\s*(\w+)(.*?)\)',
-        content, re.DOTALL
-    ):
-        target_name = match.group(1)
-        body = match.group(2)
+    package_commands = {"termin_require_package", "termin_csharp_require_package"}
+    for _, body in iter_cmake_commands(content, package_commands):
+        package = first_cmake_argument(body)
+        if package:
+            dir_name = resolve_cmake_dependency(package)
+            if dir_name:
+                deps.add(dir_name)
 
-        if "_test" in target_name or "_native" in target_name:
+    for _, body in iter_cmake_commands(content, {"target_link_libraries"}):
+        target_name = first_cmake_argument(body) or ""
+        build_only_markers = (
+            "_test", "_smoke", "_example", "_benchmark", "_bench", "_validator",
+        )
+        if "_native" in target_name or any(
+            marker in target_name for marker in build_only_markers
+        ):
             continue
 
         for dep_match in re.finditer(r'(\w+)::(\w+)', body):
             ns = dep_match.group(1)
             tgt = dep_match.group(2)
-            dir_name = CMAKE_TARGET_TO_DIR.get(ns) or CMAKE_TARGET_TO_DIR.get(tgt)
+            dir_name = resolve_cmake_dependency(ns) or resolve_cmake_dependency(tgt)
             if dir_name:
                 deps.add(dir_name)
 
-    # 2. Parse find_package() only in the non-Python section.
-    #    Split content at if(TERMIN_BUILD_PYTHON) — only parse before it.
-    python_block_start = re.search(
-        r'if\s*\(\s*TERMIN_BUILD_PYTHON\s*\)', content)
-    core_content = content[:python_block_start.start()] if python_block_start else content
-
-    for match in re.finditer(r'find_package\s*\(\s*(\w+)', core_content):
-        pkg = match.group(1)
+    for _, body in iter_cmake_commands(content, {"find_package"}):
+        pkg = first_cmake_argument(body)
         if pkg in ("Python", "nanobind", "GTest", "Threads", "OpenGL",
                     "SDL2", "PkgConfig", "Qt5", "Qt6"):
             continue
-        dir_name = CMAKE_TARGET_TO_DIR.get(pkg)
+        dir_name = resolve_cmake_dependency(pkg) if pkg else None
         if dir_name:
             deps.add(dir_name)
 
@@ -312,8 +429,50 @@ def parse_python_imports(python_dir):
     return deps
 
 
+def render_interactive_html(all_nodes, direct_edges, node_to_group):
+    """Render a standalone focused-graph document with embedded direct edges."""
+    html_data = {
+        "nodes": [
+            {"id": node, "group": node_to_group.get(node, "Other")}
+            for node in sorted(all_nodes)
+        ],
+        "edges": [
+            {"source": source, "target": dependency}
+            for source, dependency in sorted(direct_edges)
+        ],
+    }
+    with open(HTML_TEMPLATE) as f:
+        html = f.read()
+    encoded_data = json.dumps(html_data, ensure_ascii=False, separators=(",", ":"))
+    return html.replace(
+        "__DEPENDENCY_GRAPH_DATA__",
+        encoded_data.replace("<", "\\u003c"),
+    )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--show-namespace",
+        action="store_true",
+        help="include the structural 'termin' Python namespace node",
+    )
+    parser.add_argument(
+        "--all-direct",
+        action="store_true",
+        help="show every declared direct edge instead of the reduced overview",
+    )
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="skip Graphviz PNG/SVG rendering (DOT and HTML are still written)",
+    )
+    return parser.parse_args()
+
+
 def main():
-    # Collect all edges: (from_dir, to_dir) meaning to_dir depends on from_dir
+    args = parse_args()
+    # Collect edges as (consumer, dependency), matching the rendered arrow.
     edges = set()
     all_nodes = set()
 
@@ -322,7 +481,7 @@ def main():
         cmake_deps = parse_cmake_deps(cmake_path)
         for dep in cmake_deps:
             if dep != dir_name:  # no self-loops
-                edges.add((dep, dir_name))
+                edges.add((dir_name, dep))
                 all_nodes.add(dep)
 
     # Python deps from setup.py — auto-discover all directories with setup.py
@@ -346,14 +505,14 @@ def main():
         py_deps = parse_python_deps(setup_path)
         for dep in py_deps:
             if dep != dir_name:
-                edges.add((dep, dir_name))
+                edges.add((dir_name, dep))
                 all_nodes.add(dep)
 
     # Python import scanning for packages that have no CMake/setup.py deps,
     # plus termin/termin/ itself (top-level package depends on everything).
     dirs_with_edges = set()
-    for _, dst in edges:
-        dirs_with_edges.add(dst)
+    for consumer, _ in edges:
+        dirs_with_edges.add(consumer)
 
     scan_targets = []
 
@@ -384,7 +543,7 @@ def main():
         import_deps = parse_python_imports(py_dir)
         for dep in import_deps:
             if dep != dir_name:
-                edges.add((dep, dir_name))
+                edges.add((dir_name, dep))
                 all_nodes.add(dep)
 
     manual_edges = set()
@@ -392,12 +551,21 @@ def main():
         all_nodes.add(dst)
         for dep in deps:
             if dep != dst:
-                edge = (dep, dst)
+                edge = (dst, dep)
                 edges.add(edge)
                 manual_edges.add(edge)
                 all_nodes.add(dep)
 
-    # Transitive reduction: remove edge A→B if there's a path A→...→B of length >= 2
+    if not args.show_namespace:
+        all_nodes.discard("termin")
+        edges = {edge for edge in edges if "termin" not in edge}
+
+    # The interactive document always needs the truthful direct graph.  Its UI
+    # applies depth and direction filters without regenerating the artifact.
+    direct_edges = set(edges)
+
+    # Default presentation-only transitive reduction.  --all-direct retains
+    # every declaration in the static overview for architectural audits.
     def reachable_without_direct(src, dst, edges_set):
         """Check if dst is reachable from src without using the direct edge."""
         visited = set()
@@ -418,14 +586,15 @@ def main():
                     stack.append(b)
         return False
 
-    reduced_edges = set()
-    for edge in edges:
-        src, dst = edge
-        if edge in manual_edges or not reachable_without_direct(src, dst, edges):
-            reduced_edges.add(edge)
+    if not args.all_direct:
+        reduced_edges = set()
+        for edge in edges:
+            src, dst = edge
+            if edge in manual_edges or not reachable_without_direct(src, dst, edges):
+                reduced_edges.add(edge)
 
-    print(f"  Transitive reduction: {len(edges)} -> {len(reduced_edges)} edges")
-    edges = reduced_edges
+        print(f"  Transitive reduction: {len(edges)} -> {len(reduced_edges)} edges")
+        edges = reduced_edges
 
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
@@ -466,6 +635,7 @@ def main():
     lines = []
     lines.append('digraph termin_dependencies {')
     lines.append('\tgraph [bgcolor=white,')
+    lines.append('\t\tconcentrate=true,')
     lines.append('\t\tnodesep=0.45,')
     lines.append('\t\toverlap=false,')
     lines.append('\t\tpad=0.2,')
@@ -489,15 +659,17 @@ def main():
 
     # Grouped nodes (inside subgraph clusters)
     for group_name, members in sorted(GROUPS.items()):
+        visible_members = sorted(node for node in members if node in all_nodes)
+        if not visible_members:
+            continue
         lines.append(f'\tsubgraph cluster_{group_name.lower().replace(" ", "_")} {{')
         lines.append(f'\t\tlabel="{group_name}";')
         lines.append('\t\tstyle=dashed;')
         lines.append('\t\tcolor="#999999";')
         lines.append('\t\tfontname="DejaVu Sans";')
         lines.append('\t\tfontsize=12;')
-        for node in sorted(members):
-            if node in all_nodes:
-                lines.append(f'\t\t"{node}";')
+        for node in visible_members:
+            lines.append(f'\t\t"{node}";')
         lines.append('\t}')
         lines.append('')
 
@@ -520,6 +692,14 @@ def main():
 
     print(f"Written {dot_path}")
     print(f"  {len(all_nodes)} nodes, {len(edges)} edges")
+
+    html_path = os.path.join(ROOT, "docs", "library-dependencies.html")
+    with open(html_path, "w") as f:
+        f.write(render_interactive_html(all_nodes, direct_edges, node_to_group))
+    print(f"Written {html_path}")
+
+    if args.no_render:
+        return
 
     # Render if dot is available
     try:
