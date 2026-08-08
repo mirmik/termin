@@ -92,6 +92,8 @@ namespace termin {
         bool sections_profiled = false;
         bool gap_before = false;
         std::vector<FrameProfilerSection> sections;
+        double gpu_duration_ms = 0.0;
+        bool has_gpu_duration = false;
     };
 
     struct TERMIN_FRAME_PROFILER_API FrameProfilerGap {

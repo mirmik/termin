@@ -284,6 +284,7 @@ namespace termin::profiler_remote {
 
         void run() {
             bool reported_unavailable = false;
+            std::string reported_handshake_failure;
             while (running.load(std::memory_order_acquire)) {
                 const Socket socket = connect_once();
                 if (socket == invalid_socket) {
@@ -315,18 +316,33 @@ namespace termin::profiler_remote {
                 auto response = receive_message(socket, running);
                 if (!response || !std::holds_alternative<TargetHello>(response.value->message)) {
                     std::string detail = response.detail;
-                    if (response && std::holds_alternative<ErrorEvent>(response.value->message))
+                    const bool target_rejected =
+                        response && std::holds_alternative<ErrorEvent>(response.value->message);
+                    if (target_rejected)
                         detail = std::get<ErrorEvent>(response.value->message).detail;
                     if (detail.empty())
                         detail = "unexpected handshake response";
-                    tc_log_error("remote profiler client: target handshake failed: %s", detail.c_str());
+                    if (detail == "connection closed while receiving envelope")
+                        detail = "target closed before hello; diagnostics may be disabled or the target application "
+                                 "may be paused/stopped";
                     release(socket);
-                    notify_disconnect("target handshake failed: " + detail);
-                    if (!config.reconnect)
+                    if (reported_handshake_failure != detail) {
+                        if (config.reconnect && !target_rejected)
+                            tc_log_warn("remote profiler client: target handshake pending: %s", detail.c_str());
+                        else
+                            tc_log_error("remote profiler client: target handshake failed: %s", detail.c_str());
+                        notify_disconnect("target handshake failed: " + detail);
+                        reported_handshake_failure = detail;
+                    }
+                    // An authenticated target rejection cannot heal without a new client
+                    // configuration. Network closure before TargetHello remains retryable:
+                    // Android targets legitimately disappear while their Activity is paused.
+                    if (!config.reconnect || target_rejected)
                         break;
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                     continue;
                 }
+                reported_handshake_failure.clear();
                 connected.store(true, std::memory_order_release);
                 sessions.fetch_add(1, std::memory_order_relaxed);
                 tc_log_info("remote profiler client: connected to 127.0.0.1:%u", static_cast<unsigned>(config.port));

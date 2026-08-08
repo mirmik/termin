@@ -9,6 +9,10 @@ using termin::profiler_app::RemoteProfilerSession;
 TEST_CASE("Standalone profiler validates endpoint without exposing token") {
     RemoteProfilerSession session(32);
 
+    CHECK(session.gpu_summary_model()->text().find("GPU: unavailable") != std::string::npos);
+    CHECK(session.gpu_summary_model()->text().find("GPU: 0.000") == std::string::npos);
+    CHECK(session.gpu_detail_model()->text().find("GPU: unavailable") != std::string::npos);
+
     CHECK(!session.connect("", "secret-token"));
     CHECK(session.connection_model()->text().find("Port") != std::string::npos);
     CHECK(session.connection_model()->text().find("secret-token") == std::string::npos);

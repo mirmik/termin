@@ -96,6 +96,8 @@ TEST_CASE("Remote profiler codec round-trips every message type") {
     frame.start_time_ms = 1200.5;
     frame.interval_ms = 16.7;
     frame.active_ms = 4.25;
+    frame.has_gpu_duration = true;
+    frame.gpu_duration_ms = 1.75;
     frame.target_interval_ms = 16.666;
     frame.deadline_lateness_ms = 0.25;
     frame.missed_intervals = 1;
@@ -134,44 +136,44 @@ TEST_CASE("Envelope can be validated before a stream reads its payload") {
     CHECK_EQ(envelope.value->payload_length, bytes.size() - envelope_size);
 }
 
-TEST_CASE("Version-one golden bytes cover every message type") {
+TEST_CASE("Version-two golden bytes cover every message type") {
     const std::vector<std::pair<Message, std::string>> cases = {
         {ClientHello{},
-         "54505246 0001 0000 0001 0000 0000001a 0000000000000001 "
+         "54505246 0002 0000 0001 0000 0000001a 0000000000000001 "
          "0000000000000002 "
-         "0001 0000 0000000000000000 00100000 00000100 00000100 0000"},
+         "0002 0000 0000000000000000 00100000 00000100 00000100 0000"},
         {TargetHello{},
-         "54505246 0001 0000 0002 0000 0000002e 0000000000000001 "
+         "54505246 0002 0000 0002 0000 0000002e 0000000000000001 "
          "0000000000000002 "
-         "0001 0000 0000000000000000 000000003b9aca00 00000000 00100000 00000100 "
+         "0002 0000 0000000000000000 000000003b9aca00 00000000 00100000 00000100 "
          "00000100 00 00 0000 0000 0000 0000"},
         {Control{},
-         "54505246 0001 0000 0003 0000 00000012 0000000000000001 "
+         "54505246 0002 0000 0003 0000 00000012 0000000000000001 "
          "0000000000000002 "
          "0000000000000000 05 00 0000000000000000"},
         {Status{},
-         "54505246 0001 0000 0004 0000 00000028 0000000000000001 "
+         "54505246 0002 0000 0004 0000 00000028 0000000000000001 "
          "0000000000000002 "
          "0000000000000000 00 00 0000000000000000 0000000000000000 00000000 "
          "0000000000000000 0000"},
         {DictionaryAdd{},
-         "54505246 0001 0000 0005 0000 00000004 "
+         "54505246 0002 0000 0005 0000 00000004 "
          "0000000000000001 0000000000000002 "
          "00000000"},
         {FrameBatch{},
-         "54505246 0001 0000 0006 0000 00000004 0000000000000001 "
+         "54505246 0002 0000 0006 0000 00000004 0000000000000001 "
          "0000000000000002 "
          "00000000"},
         {GapEvent{},
-         "54505246 0001 0000 0007 0000 00000019 0000000000000001 "
+         "54505246 0002 0000 0007 0000 00000019 0000000000000001 "
          "0000000000000002 "
          "02 0000000000000000 0000000000000000 0000000000000000"},
         {DropEvent{DropKind::producer_queue, 1, 1, 0},
-         "54505246 0001 0000 0008 0000 00000019 0000000000000001 "
+         "54505246 0002 0000 0008 0000 00000019 0000000000000001 "
          "0000000000000002 "
          "01 0000000000000001 0000000000000001 0000000000000000"},
         {ErrorEvent{1, 0, "x"},
-         "54505246 0001 0000 0009 0000 0000000f "
+         "54505246 0002 0000 0009 0000 0000000f "
          "0000000000000001 0000000000000002 "
          "00000001 0000000000000000 0001 78"},
     };
@@ -245,8 +247,8 @@ TEST_CASE("Invalid section structure and boolean values are rejected") {
     frame.sections = {{1, 1.0, 0.0, 1, -1, -1, -1}};
     auto bytes = encoded(FrameBatch{{frame}});
 
-    // Frame payload: count(4), frame fields(8 + 5*8 + 4), boolean at byte 56.
-    bytes[envelope_size + 56] = 2;
+    // Frame payload: count(4), frame fields, GPU presence/value, sections boolean at byte 57.
+    bytes[envelope_size + 57] = 2;
     CHECK(decode_message(bytes).error == CodecError::invalid_value);
 
     frame.sections[0].parent_index = 5;

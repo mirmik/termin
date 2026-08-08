@@ -298,6 +298,7 @@ namespace termin::profiler_remote {
                             if (!valid_finite_nonnegative(frame.start_time_ms) ||
                                 !valid_finite_nonnegative(frame.interval_ms) ||
                                 !valid_finite_nonnegative(frame.active_ms) ||
+                                (frame.has_gpu_duration && !valid_finite_nonnegative(frame.gpu_duration_ms)) ||
                                 !valid_finite_nonnegative(frame.target_interval_ms) ||
                                 !valid_finite_nonnegative(frame.deadline_lateness_ms))
                                 return invalid_value("FrameBatch contains a non-finite or negative timing");
@@ -309,6 +310,9 @@ namespace termin::profiler_remote {
                             out.f64(frame.start_time_ms);
                             out.f64(frame.interval_ms);
                             out.f64(frame.active_ms);
+                            out.u8(frame.has_gpu_duration ? 1 : 0);
+                            if (frame.has_gpu_duration)
+                                out.f64(frame.gpu_duration_ms);
                             out.f64(frame.target_interval_ms);
                             out.f64(frame.deadline_lateness_ms);
                             out.u32(frame.missed_intervals);
@@ -454,13 +458,16 @@ namespace termin::profiler_remote {
                     WireFrame frame;
                     std::uint32_t section_count = 0;
                     ok = in.i64(frame.frame_number) && in.f64(frame.start_time_ms) && in.f64(frame.interval_ms) &&
-                         in.f64(frame.active_ms) && in.f64(frame.target_interval_ms) &&
+                         in.f64(frame.active_ms) && in.boolean(frame.has_gpu_duration) &&
+                         (!frame.has_gpu_duration || in.f64(frame.gpu_duration_ms)) &&
+                         in.f64(frame.target_interval_ms) &&
                          in.f64(frame.deadline_lateness_ms) && in.u32(frame.missed_intervals) &&
                          in.boolean(frame.sections_profiled) &&
                          in.count(section_count, WireLimits::max_sections_per_frame, "frame section");
                     if (ok &&
                         (!valid_finite_nonnegative(frame.start_time_ms) ||
                          !valid_finite_nonnegative(frame.interval_ms) || !valid_finite_nonnegative(frame.active_ms) ||
+                         (frame.has_gpu_duration && !valid_finite_nonnegative(frame.gpu_duration_ms)) ||
                          !valid_finite_nonnegative(frame.target_interval_ms) ||
                          !valid_finite_nonnegative(frame.deadline_lateness_ms) ||
                          (!frame.sections_profiled && section_count != 0)))

@@ -158,6 +158,7 @@ TEST_CASE("Local profiler source publishes immutable bounded history and gaps") 
 
     complete_frame(0);
     complete_frame(1);
+    REQUIRE(tc_profiler_publish_gpu_frame_timing(tc_profiler_frame_count() - 1, 2.25));
     complete_frame(2);
     const auto bounded = source->snapshot();
     CHECK(empty->frames.empty());
@@ -167,6 +168,10 @@ TEST_CASE("Local profiler source publishes immutable bounded history and gaps") 
     REQUIRE_EQ(bounded->gaps.size(), 1);
     CHECK(bounded->gaps.front().kind == termin::FrameProfilerGapKind::CaptureOverwrite);
     CHECK_EQ(bounded->gaps.front().missing_count, 1);
+    const auto* gpu_frame = bounded->find(tc_profiler_frame_count() - 2);
+    REQUIRE(gpu_frame != nullptr);
+    CHECK(gpu_frame->has_gpu_duration);
+    CHECK(gpu_frame->gpu_duration_ms == 2.25);
     source->close();
 }
 

@@ -25,6 +25,15 @@ connects only to `127.0.0.1`.
 After connecting, use the toolbar to start or pause capture and to enable
 detailed section profiling.
 
+The timeline keeps frame cadence and GPU work visually distinct. Blue bars are
+frame intervals, red bars are cadence hitches (not GPU stalls), and green bars
+are CPU-active time. The separate purple strip shows resolved GPU duration for
+the same visible frames. A gray tick and the word **unavailable** mean that the
+target did not report a resolved GPU timing result; missing timing is never
+presented as a zero-millisecond GPU frame. The GPU summary is calculated only
+from frames that carry resolved timing, and the selected-frame detail reports
+the exact GPU duration or explicitly says that it is unavailable.
+
 For deterministic window smoke tests the executable accepts `--render-count N` (or
 the `TERMIN_PROFILER_RENDER_COUNT` environment variable) and
 closes after rendering `N` frames.

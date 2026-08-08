@@ -34,6 +34,14 @@ namespace termin::profiler_app {
         std::shared_ptr<gui_native::RichTextModel> connection_model() const {
             return connection_model_;
         }
+        std::shared_ptr<gui_native::RichTextModel> gpu_summary_model() const {
+            return gpu_summary_model_;
+        }
+        std::shared_ptr<gui_native::RichTextModel> gpu_detail_model() const {
+            return gpu_detail_model_;
+        }
+        std::shared_ptr<const FrameProfilerSnapshot> snapshot() const;
+        void refresh_gpu_presentation();
         bool connection_requested() const {
             return connection_requested_;
         }
@@ -49,6 +57,8 @@ namespace termin::profiler_app {
         RemoteFrameProfilerSource* remote_source_ = nullptr;
         std::unique_ptr<FrameProfilerController> profiler_;
         std::shared_ptr<gui_native::RichTextModel> connection_model_;
+        std::shared_ptr<gui_native::RichTextModel> gpu_summary_model_;
+        std::shared_ptr<gui_native::RichTextModel> gpu_detail_model_;
         std::uint64_t observed_source_revision_ = 0;
         std::uint16_t port_ = 0;
         bool connection_requested_ = false;

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
@@ -216,10 +217,46 @@ namespace {
             summary.set_show_scrollbar(false);
             root.add_fixed_child(summary, 26.0f);
 
+            gpu_summary_ = &builder.make<ui::RichTextView>(profiler_.gpu_summary_model());
+            gpu_summary_->set_show_scrollbar(false);
+            root.add_fixed_child(*gpu_summary_, 26.0f);
+
+            timeline_legend_model_ = std::make_shared<ui::RichTextModel>();
+            const auto legend_segment = [](std::string text, tc_ui_color color, bool bold, bool italic) {
+                ui::RichTextStyle style;
+                style.color = color;
+                style.bold = bold;
+                style.italic = italic;
+                return ui::RichTextSegment{std::move(text), std::move(style)};
+            };
+            ui::RichTextLine timeline_legend_line;
+            timeline_legend_line.push_back(
+                legend_segment("Cadence interval", {0.35f, 0.67f, 0.83f, 1.0f}, true, false));
+            timeline_legend_line.push_back(
+                legend_segment("  |  Cadence hitch (not GPU)", {0.82f, 0.27f, 0.24f, 1.0f}, true, false));
+            timeline_legend_line.push_back(legend_segment("  |  CPU active", {0.34f, 0.78f, 0.38f, 1.0f}, true, false));
+            timeline_legend_line.push_back(
+                legend_segment("  |  GPU duration", {0.72f, 0.42f, 0.95f, 1.0f}, true, false));
+            timeline_legend_line.push_back(
+                legend_segment("  |  GPU unavailable", {0.58f, 0.60f, 0.66f, 1.0f}, false, true));
+            timeline_legend_model_->set_lines({std::move(timeline_legend_line)});
+            auto& timeline_legend = builder.make<ui::RichTextView>(timeline_legend_model_);
+            timeline_legend.set_show_scrollbar(false);
+            root.add_fixed_child(timeline_legend, 26.0f);
+
             timeline_ = &builder.make<ui::FrameTimelineWidget>(controller.timeline_model());
             timeline_->set_window_size(180);
             timeline_->set_warning_ratio(static_cast<float>(controller.hitch_ratio()));
             root.add_fixed_child(*timeline_, 190.0f);
+
+            gpu_timeline_ = &builder.make<ui::Canvas>();
+            gpu_timeline_->set_paint_callback(
+                [this](ui::Canvas& canvas, tc_ui_paint_context* context) { paint_gpu_timeline(canvas, context); });
+            root.add_fixed_child(*gpu_timeline_, 92.0f);
+
+            gpu_detail_ = &builder.make<ui::RichTextView>(profiler_.gpu_detail_model());
+            gpu_detail_->set_show_scrollbar(false);
+            root.add_fixed_child(*gpu_detail_, 26.0f);
 
             columns_ = std::make_shared<ui::TableColumnModel>();
             columns_->set_columns({
@@ -276,11 +313,13 @@ namespace {
                 [this](ui::ToolBar&, std::size_t, ui::CommandId command, const ui::CommandData&) {
                     if (profiler_.profiler().activate(command)) {
                         sync_selection();
+                        profiler_.refresh_gpu_presentation();
                     }
                 });
             timeline_->selection_changed().connect([this](ui::FrameTimelineWidget&, std::int64_t frame) {
                 if (!syncing_selection_) {
                     profiler_.profiler().select_frame(frame);
+                    profiler_.refresh_gpu_presentation();
                 }
             });
             section_table_->selection_changed().connect([this](ui::TreeTableWidget&, ui::TreeTableNodeId node) {
@@ -350,6 +389,88 @@ namespace {
             syncing_selection_ = false;
         }
 
+        void paint_gpu_timeline(ui::Canvas& canvas, tc_ui_paint_context* context) const {
+            const tc_ui_rect rect = canvas.bounds();
+            const float header_height = 24.0f;
+            const tc_ui_rect graph{
+                rect.x, rect.y + header_height, rect.width, std::max(0.0f, rect.height - header_height)};
+            const auto [begin, end] = timeline_->visible_range();
+            const auto& samples = timeline_->model()->samples();
+            const auto snapshot = profiler_.snapshot();
+            const auto frame_for = [&snapshot](std::int64_t frame_number) -> const termin::FrameProfilerFrame* {
+                const auto found = std::lower_bound(snapshot->frames.begin(),
+                                                    snapshot->frames.end(),
+                                                    frame_number,
+                                                    [](const termin::FrameProfilerFrame& frame, std::int64_t number) {
+                                                        return frame.frame_number < number;
+                                                    });
+                return found != snapshot->frames.end() && found->frame_number == frame_number ? &*found : nullptr;
+            };
+            if (begin >= end || end > samples.size()) {
+                tc_ui_painter_draw_text(context,
+                                        "GPU duration: unavailable — no captured frames",
+                                        {rect.x + 6.0f, rect.y + 18.0f},
+                                        13.0f,
+                                        {0.72f, 0.74f, 0.79f, 1.0f});
+                tc_ui_painter_stroke_rect(context, rect, {0.22f, 0.24f, 0.29f, 1.0f}, 1.0f);
+                return;
+            }
+
+            double largest_gpu = 0.0;
+            double target = 0.0;
+            for (std::size_t index = begin; index < end; ++index) {
+                const auto* frame = frame_for(samples[index].stable_id);
+                if (frame && frame->has_gpu_duration) {
+                    largest_gpu = std::max(largest_gpu, frame->gpu_duration_ms);
+                }
+                target = std::max(target, static_cast<double>(samples[index].target_ms));
+            }
+            if (target <= 0.0) {
+                target = 1000.0 / 60.0;
+            }
+            const double scale = std::max({largest_gpu, target, 0.001});
+            const float slot_width = graph.width / static_cast<float>(end - begin);
+            const float bar_width = std::max(0.5f, slot_width - std::min(1.0f, slot_width * 0.15f));
+            const auto y_for = [&](double value) {
+                return graph.y + graph.height -
+                       static_cast<float>(std::min(value / scale, 1.0) * static_cast<double>(graph.height));
+            };
+
+            char label[160]{};
+            std::snprintf(
+                label, sizeof(label), "GPU duration (purple) | gray tick = unavailable | scale %.2f ms", scale);
+            tc_ui_painter_draw_text(
+                context, label, {rect.x + 6.0f, rect.y + 18.0f}, 13.0f, {0.84f, 0.85f, 0.89f, 1.0f});
+            tc_ui_painter_draw_line(context,
+                                    {graph.x, y_for(target)},
+                                    {graph.x + graph.width, y_for(target)},
+                                    {0.72f, 0.74f, 0.79f, 0.45f},
+                                    1.0f);
+
+            const std::optional<std::int64_t> selected = timeline_->selected_id();
+            for (std::size_t index = begin; index < end; ++index) {
+                const float x = graph.x + static_cast<float>(index - begin) * slot_width;
+                const auto* frame = frame_for(samples[index].stable_id);
+                if (frame && frame->has_gpu_duration) {
+                    const float height = std::min(
+                        graph.height,
+                        static_cast<float>(frame->gpu_duration_ms / scale * static_cast<double>(graph.height)));
+                    tc_ui_painter_fill_rect(
+                        context, {x, graph.y + graph.height - height, bar_width, height}, {0.72f, 0.42f, 0.95f, 1.0f});
+                } else {
+                    const float y = graph.y + graph.height - 2.0f;
+                    tc_ui_painter_draw_line(context, {x, y}, {x + bar_width, y}, {0.58f, 0.60f, 0.66f, 0.9f}, 2.0f);
+                }
+                if (selected && samples[index].stable_id == *selected) {
+                    tc_ui_painter_stroke_rect(context,
+                                              {x, graph.y, std::max(slot_width, 2.0f), graph.height},
+                                              {0.95f, 0.78f, 0.30f, 1.0f},
+                                              2.0f);
+                }
+            }
+            tc_ui_painter_stroke_rect(context, rect, {0.22f, 0.24f, 0.29f, 1.0f}, 1.0f);
+        }
+
         std::unique_ptr<termin::WindowedGraphicsSession> graphics_;
         std::unique_ptr<termin::WindowManager> windows_;
         termin::WindowHandle window_;
@@ -367,6 +488,10 @@ namespace {
         ui::TextInput* port_input_ = nullptr;
         ui::TextInput* token_input_ = nullptr;
         ui::FrameTimelineWidget* timeline_ = nullptr;
+        ui::Canvas* gpu_timeline_ = nullptr;
+        ui::RichTextView* gpu_summary_ = nullptr;
+        ui::RichTextView* gpu_detail_ = nullptr;
+        std::shared_ptr<ui::RichTextModel> timeline_legend_model_;
         ui::TreeTableWidget* section_table_ = nullptr;
         std::shared_ptr<ui::TableColumnModel> columns_;
         std::shared_ptr<ui::TreeExpansionModel> expansion_;
