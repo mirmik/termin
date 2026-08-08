@@ -113,7 +113,6 @@ def test_provider_precedence_is_per_field_and_derivation_uses_final_roots(
     env_sdk = tmp_path / "env-sdk"
     user_sdk = tmp_path / "user-sdk"
     invocation_shaderc = _write_tool(tmp_path / "invocation/termin_shaderc")
-    user_fxc = _write_tool(user_sdk / "bin/fxc")
     user_gradle = _write_tool(tmp_path / "user/gradle")
 
     context = create_local_toolchain_context(
@@ -124,11 +123,11 @@ def test_provider_precedence_is_per_field_and_derivation_uses_final_roots(
         path_search=lambda _name: None,
     )
 
-    assert context.sdk_root == user_sdk.resolve()
+    assert context.sdk_root == env_sdk.resolve()
     assert context.shader_compiler == invocation_shaderc.resolve()
-    assert context.fxc == user_fxc.resolve()
-    assert context.gradle == user_gradle.resolve()
-    assert context.android_sdk_root == (user_sdk / "android").resolve()
+    assert context.fxc is None
+    assert context.gradle == (tmp_path / "env/gradle").resolve()
+    assert context.android_sdk_root == (env_sdk / "android").resolve()
 
 
 def test_user_toolchain_settings_persist_complete_context(tmp_path: Path) -> None:
@@ -138,6 +137,9 @@ def test_user_toolchain_settings_persist_complete_context(tmp_path: Path) -> Non
         sdk_root=tmp_path / "sdk",
         termin_root=tmp_path / "termin",
         android_sdk_root=tmp_path / "android",
+        android_home=tmp_path / "google-android-sdk",
+        android_ndk_root=tmp_path / "android-ndk",
+        java_home=tmp_path / "jdk",
         shader_compiler=tmp_path / "termin_shaderc",
         fxc=tmp_path / "fxc",
         android_build_script=tmp_path / "build-android-apk.sh",
@@ -161,7 +163,7 @@ def test_default_user_toolchain_settings_use_lowercase_termin_directory(
     assert UserToolchainSettings().path == tmp_path / "termin/settings.json"
 
 
-def test_default_user_settings_override_environment_but_not_invocation(
+def test_environment_overrides_user_settings_but_not_invocation(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -187,7 +189,7 @@ def test_default_user_settings_override_environment_but_not_invocation(
         path_search=lambda _name: None,
     )
 
-    assert from_user.gradle == user_gradle.resolve()
+    assert from_user.gradle == environment_gradle.resolve()
     assert from_invocation.gradle == invocation_gradle.resolve()
 
 
@@ -234,7 +236,7 @@ def test_supplied_environment_path_drives_tool_discovery(tmp_path: Path) -> None
     assert context.gradle == gradle.resolve()
 
 
-def test_system_android_environment_does_not_override_termin_android_sdk(
+def test_system_android_environment_is_separate_from_termin_android_sdk(
     tmp_path: Path,
 ) -> None:
     termin_sdk = tmp_path / "termin-sdk"
@@ -251,6 +253,23 @@ def test_system_android_environment_does_not_override_termin_android_sdk(
     )
 
     assert context.android_sdk_root == (termin_sdk / "android").resolve()
+    assert context.android_home == system_android_sdk.resolve()
+
+
+def test_adb_is_derived_from_google_android_sdk_not_termin_sdk(tmp_path: Path) -> None:
+    termin_sdk = tmp_path / "termin-sdk"
+    android_home = tmp_path / "google-android-sdk"
+    adb = _write_tool(android_home / "platform-tools/adb")
+
+    context = create_local_toolchain_context(
+        installation_defaults=ToolchainContext(sdk_root=termin_sdk),
+        user_settings=ToolchainContext(android_home=android_home),
+        environ={},
+        path_search=lambda _name: None,
+    )
+
+    assert context.android_sdk_root == (termin_sdk / "android").resolve()
+    assert context.adb == adb.resolve()
 
 
 def test_desktop_report_is_stable_and_does_not_mutate_profile(tmp_path: Path) -> None:

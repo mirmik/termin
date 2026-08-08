@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 
@@ -35,13 +34,9 @@ def resolve_termin_root(
 def resolve_gradle(gradle: str | Path | None) -> Path | None:
     if gradle is not None:
         return Path(gradle).expanduser().resolve()
+    from termin.project_build.toolchains import create_local_toolchain_context
 
-    env_gradle = os.environ.get("GRADLE_BIN")
-    if env_gradle:
-        return Path(env_gradle).expanduser().resolve()
-
-    path_gradle = shutil.which("gradle")
-    return Path(path_gradle).resolve() if path_gradle else None
+    return create_local_toolchain_context().gradle
 
 
 def read_log_tail(log_path: Path, max_lines: int = 40) -> str:

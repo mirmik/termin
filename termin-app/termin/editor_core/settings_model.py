@@ -16,6 +16,9 @@ class EditorSettingsSnapshot:
     build_sdk_root: str
     build_termin_root: str
     build_android_sdk_root: str
+    build_android_home: str
+    build_android_ndk_root: str
+    build_java_home: str
     build_shader_compiler: str
     build_fxc: str
     build_android_script: str
@@ -41,6 +44,9 @@ class EditorSettingsController:
             build_sdk_root=self._settings.get_build_sdk_root() or "",
             build_termin_root=self._settings.get_build_termin_root() or "",
             build_android_sdk_root=self._settings.get_build_android_sdk_root() or "",
+            build_android_home=self._settings.get_build_android_home() or "",
+            build_android_ndk_root=self._settings.get_build_android_ndk_root() or "",
+            build_java_home=self._settings.get_build_java_home() or "",
             build_shader_compiler=self._settings.get_build_shader_compiler() or "",
             build_fxc=self._settings.get_build_fxc() or "",
             build_android_script=self._settings.get_build_android_script() or "",
@@ -62,6 +68,9 @@ class EditorSettingsController:
         self._settings.set_build_sdk_root(validated.build_sdk_root or None)
         self._settings.set_build_termin_root(validated.build_termin_root or None)
         self._settings.set_build_android_sdk_root(validated.build_android_sdk_root or None)
+        self._settings.set_build_android_home(validated.build_android_home or None)
+        self._settings.set_build_android_ndk_root(validated.build_android_ndk_root or None)
+        self._settings.set_build_java_home(validated.build_java_home or None)
         self._settings.set_build_shader_compiler(validated.build_shader_compiler or None)
         self._settings.set_build_fxc(validated.build_fxc or None)
         self._settings.set_build_android_script(validated.build_android_script or None)
@@ -92,6 +101,9 @@ class EditorSettingsController:
             sdk_root=path(snapshot.build_sdk_root),
             termin_root=path(snapshot.build_termin_root),
             android_sdk_root=path(snapshot.build_android_sdk_root),
+            android_home=path(snapshot.build_android_home),
+            android_ndk_root=path(snapshot.build_android_ndk_root),
+            java_home=path(snapshot.build_java_home),
             shader_compiler=path(snapshot.build_shader_compiler),
             fxc=path(snapshot.build_fxc),
             android_build_script=path(snapshot.build_android_script),
@@ -118,6 +130,9 @@ class EditorSettingsController:
             build_sdk_root=snapshot.build_sdk_root.strip(),
             build_termin_root=snapshot.build_termin_root.strip(),
             build_android_sdk_root=snapshot.build_android_sdk_root.strip(),
+            build_android_home=snapshot.build_android_home.strip(),
+            build_android_ndk_root=snapshot.build_android_ndk_root.strip(),
+            build_java_home=snapshot.build_java_home.strip(),
             build_shader_compiler=snapshot.build_shader_compiler.strip(),
             build_fxc=snapshot.build_fxc.strip(),
             build_android_script=snapshot.build_android_script.strip(),

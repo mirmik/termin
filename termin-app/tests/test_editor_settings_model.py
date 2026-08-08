@@ -17,6 +17,9 @@ class _Settings:
         self.build_sdk_root = ""
         self.build_termin_root = ""
         self.build_android_sdk_root = ""
+        self.build_android_home = ""
+        self.build_android_ndk_root = ""
+        self.build_java_home = ""
         self.build_shader_compiler = ""
         self.build_fxc = ""
         self.build_android_script = ""
@@ -60,6 +63,24 @@ class _Settings:
 
     def set_build_android_sdk_root(self, value):
         self.build_android_sdk_root = value or ""
+
+    def get_build_android_home(self):
+        return self.build_android_home
+
+    def set_build_android_home(self, value):
+        self.build_android_home = value or ""
+
+    def get_build_android_ndk_root(self):
+        return self.build_android_ndk_root
+
+    def set_build_android_ndk_root(self, value):
+        self.build_android_ndk_root = value or ""
+
+    def get_build_java_home(self):
+        return self.build_java_home
+
+    def set_build_java_home(self, value):
+        self.build_java_home = value or ""
 
     def get_build_shader_compiler(self):
         return self.build_shader_compiler
@@ -190,6 +211,9 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
             build_sdk_root=" /opt/termin/sdk ",
             build_termin_root=" /src/termin ",
             build_android_sdk_root=" /opt/termin/sdk/android ",
+            build_android_home=" /opt/android/sdk ",
+            build_android_ndk_root=" /opt/android/ndk/27.2.12479018 ",
+            build_java_home=" /opt/jdk-17 ",
             build_shader_compiler=" /opt/termin/sdk/bin/termin_shaderc ",
             build_fxc="",
             build_android_script=" /src/termin/build-android-apk.sh ",
@@ -209,6 +233,9 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert settings.text_editor == "/opt/code"
     assert settings.slang_compiler == "/opt/slangc"
     assert settings.build_sdk_root == "/opt/termin/sdk"
+    assert settings.build_android_home == "/opt/android/sdk"
+    assert settings.build_android_ndk_root == "/opt/android/ndk/27.2.12479018"
+    assert settings.build_java_home == "/opt/jdk-17"
     assert settings.build_gradle == "/opt/gradle-8/bin/gradle"
     assert settings.build_adb == "/opt/android/platform-tools/adb"
     assert settings.font_size == 18.0
@@ -222,6 +249,9 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
         sdk_root=Path("/opt/termin/sdk"),
         termin_root=Path("/src/termin"),
         android_sdk_root=Path("/opt/termin/sdk/android"),
+        android_home=Path("/opt/android/sdk"),
+        android_ndk_root=Path("/opt/android/ndk/27.2.12479018"),
+        java_home=Path("/opt/jdk-17"),
         shader_compiler=Path("/opt/termin/sdk/bin/termin_shaderc"),
         android_build_script=Path("/src/termin/build-android-apk.sh"),
         gradle=Path("/opt/gradle-8/bin/gradle"),
