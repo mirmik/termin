@@ -107,6 +107,7 @@ Status values:
 | reviewed | cpp | `termin-base/tests/test_orbit_camera.cpp` | Covers orbit camera defaults, fit_bounds clip/target update, and center-ray direction with concrete values. |
 | reviewed | c | `termin-base/tests/test_tc_value.c` | Removed self-evident struct-literal field echo test; remaining dlist and tc_value tests exercise real container/value behavior. |
 | reviewed | python | `termin-build-tools/tests/test_sdk_orchestrator.py` | Build-tool regression coverage for SDK orchestration, package installs, artifact manifests, and duplicate-library checks. |
+| reviewed | python | `scripts/tests/test_gen_dependency_graph.py` | Repository-tool regression coverage for CMake dependency parsing and self-contained interactive graph generation; owned by the `repository-scripts-tests` pytest suite. |
 | reviewed | cpp | `termin-collision/tests/main.cpp` | Guard test entrypoint only. |
 | reviewed | cpp | `termin-collision/tests/tests_colliders.cpp` | Covers collider centers, ray hits/misses, analytic distances, scale effects, and cross-type collision dispatch with concrete expected values. |
 | reviewed | cpp | `termin-collision/tests/tests_collision.cpp` | Broad BVH/world/manifold/AttachedCollider coverage; assertions check current collider state, query results, ray ordering, and manifold pairs rather than smoke-only behavior. |
