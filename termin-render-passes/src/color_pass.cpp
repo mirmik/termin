@@ -1192,6 +1192,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         out_contract.has_color = color != ctx.tex2_writes.end() && static_cast<bool>(color->second);
         const auto depth = ctx.tex2_depth_writes.find(output_res);
         out_contract.has_depth = depth != ctx.tex2_depth_writes.end() && static_cast<bool>(depth->second);
+        out_contract.attachment_barrier_after = attachment_barrier_between_draws;
         out_contract.fusion_eligible = ctx.debug_internal_capture_requests.empty();
         return !output_res.empty() && out_contract.has_color;
     }
