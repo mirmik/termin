@@ -192,6 +192,8 @@ namespace termin {
                 frame.start_time_ms = wire.start_time_ms;
                 frame.interval_ms = wire.interval_ms;
                 frame.active_ms = wire.active_ms;
+                frame.has_gpu_duration = wire.has_gpu_duration;
+                frame.gpu_duration_ms = wire.gpu_duration_ms;
                 frame.target_interval_ms = wire.target_interval_ms;
                 frame.deadline_lateness_ms = wire.deadline_lateness_ms;
                 frame.missed_intervals = wire.missed_intervals;
@@ -219,8 +221,22 @@ namespace termin {
             }
             if (!converted.empty())
                 pending_gap_before = false;
-            for (auto& frame : converted)
-                next.frames.push_back(std::move(frame));
+            for (auto& frame : converted) {
+                const auto existing =
+                    std::find_if(next.frames.begin(), next.frames.end(), [&frame](const FrameProfilerFrame& candidate) {
+                        return candidate.frame_number == frame.frame_number;
+                    });
+                if (existing != next.frames.end()) {
+                    *existing = std::move(frame);
+                } else {
+                    if (!next.frames.empty() && frame.frame_number <= next.frames.back().frame_number) {
+                        tc_log_error("remote frame profiler: out-of-order frame update %lld",
+                                     static_cast<long long>(frame.frame_number));
+                        return false;
+                    }
+                    next.frames.push_back(std::move(frame));
+                }
+            }
             if (next.frames.size() > capacity) {
                 const std::size_t overflow = next.frames.size() - capacity;
                 const auto first = next.frames.front().frame_number;

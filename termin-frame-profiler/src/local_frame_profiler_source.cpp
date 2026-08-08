@@ -135,6 +135,8 @@ namespace termin {
                     frame.start_time_ms = source->start_time_ms;
                     frame.interval_ms = source->interval_ms;
                     frame.active_ms = source->active_ms;
+                    frame.gpu_duration_ms = source->gpu_duration_ms;
+                    frame.has_gpu_duration = source->has_gpu_duration;
                     frame.target_interval_ms = source->target_interval_ms;
                     frame.deadline_lateness_ms = source->deadline_lateness_ms;
                     frame.missed_intervals =

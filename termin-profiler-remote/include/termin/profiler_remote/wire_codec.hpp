@@ -19,7 +19,10 @@
 namespace termin::profiler_remote {
 
     inline constexpr std::uint32_t wire_magic = 0x54505246U; // "TPRF"
-    inline constexpr std::uint16_t protocol_major = 1;
+    // v2 adds an explicit optional GPU-duration field to every WireFrame.
+    // Frame payloads are not self-describing, so this is intentionally a
+    // major break rather than silently mis-decoding v1 traffic.
+    inline constexpr std::uint16_t protocol_major = 2;
     inline constexpr std::uint16_t protocol_minor = 0;
     inline constexpr std::size_t envelope_size = 32;
 
@@ -179,6 +182,8 @@ namespace termin::profiler_remote {
         std::uint32_t missed_intervals = 0;
         bool sections_profiled = false;
         std::vector<WireSection> sections;
+        bool has_gpu_duration = false;
+        double gpu_duration_ms = 0.0;
         bool operator==(const WireFrame&) const = default;
     };
 

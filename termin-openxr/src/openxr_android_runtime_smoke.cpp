@@ -64,6 +64,7 @@ void tc_inspect_kind_core_init(void);
 #include <render/tc_pass.h>
 #include <render/tc_pipeline.h>
 #include <render/tc_render_target.h>
+#include <tc_profiler.h>
 #include <termin_scene/termin_scene.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_primitive_mesh.h>
@@ -81,6 +82,20 @@ namespace termin::openxr {
 #if defined(TERMIN_OPENXR_HAS_HEADERS) && defined(__ANDROID__)
 
         using namespace detail;
+
+        class ProfilerSectionScope {
+        public:
+            explicit ProfilerSectionScope(const char* name) noexcept {
+                tc_profiler_begin_section(name);
+            }
+
+            ~ProfilerSectionScope() {
+                tc_profiler_end_section();
+            }
+
+            ProfilerSectionScope(const ProfilerSectionScope&) = delete;
+            ProfilerSectionScope& operator=(const ProfilerSectionScope&) = delete;
+        };
 
         struct SmokeControl {
             std::atomic<bool> running{false};
@@ -1555,7 +1570,10 @@ namespace termin::openxr {
 
                 XrFrameBeginInfo begin_frame_info{};
                 begin_frame_info.type = XR_TYPE_FRAME_BEGIN_INFO;
-                result = xr.begin_frame(session, &begin_frame_info);
+                {
+                    ProfilerSectionScope section("OpenXR Begin Frame");
+                    result = xr.begin_frame(session, &begin_frame_info);
+                }
                 if (XR_FAILED(result)) {
                     __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrBeginFrame failed: %d", result);
                     continue;
@@ -1578,38 +1596,52 @@ namespace termin::openxr {
                     XrViewState view_state{};
                     view_state.type = XR_TYPE_VIEW_STATE;
                     uint32_t located_view_count = 0;
-                    result = xr.locate_views(
-                        session, &locate_info, &view_state, view_count, &located_view_count, views.data());
+                    {
+                        ProfilerSectionScope section("OpenXR Locate Views");
+                        result = xr.locate_views(
+                            session, &locate_info, &view_state, view_count, &located_view_count, views.data());
+                    }
                     if (XR_SUCCEEDED(result) && located_view_count == view_count) {
-                        const bool head_orientation_valid =
-                            (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0;
-                        if (located_view_count > 0) {
-                            if (runtime_scene_ready) {
-                                runtime_scene.update_reference_alignment(views[0], view_state.viewStateFlags);
+                        {
+                            ProfilerSectionScope section("OpenXR Input");
+                            const bool head_orientation_valid =
+                                (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0;
+                            if (located_view_count > 0) {
+                                if (runtime_scene_ready) {
+                                    runtime_scene.update_reference_alignment(views[0], view_state.viewStateFlags);
+                                }
+                                controller_actions.update_head_axes(views[0],
+                                                                    runtime_scene_ready
+                                                                        ? runtime_scene.origin_from_xr_reference
+                                                                        : termin::Mat44::identity(),
+                                                                    head_orientation_valid);
                             }
-                            controller_actions.update_head_axes(views[0],
-                                                                runtime_scene_ready
-                                                                    ? runtime_scene.origin_from_xr_reference
-                                                                    : termin::Mat44::identity(),
-                                                                head_orientation_valid);
+                            controller_actions.sync(session,
+                                                    app_space,
+                                                    frame_state.predictedDisplayTime,
+                                                    runtime_scene_ready ? runtime_scene.origin_from_xr_reference
+                                                                        : termin::Mat44::identity(),
+                                                    frame_index);
                         }
-                        controller_actions.sync(session,
-                                                app_space,
-                                                frame_state.predictedDisplayTime,
-                                                runtime_scene_ready ? runtime_scene.origin_from_xr_reference
-                                                                    : termin::Mat44::identity(),
-                                                frame_index);
                         if (runtime_scene_ready) {
+                            ProfilerSectionScope section("Scene Update");
                             const double frame_dt =
                                 std::max(1e-6, static_cast<double>(frame_state.predictedDisplayPeriod) * 1e-9);
                             runtime_scene.update(frame_dt);
                         }
 
-                        const bool runtime_scene_frame_open = runtime_scene_ready && runtime_scene.begin_render_frame();
+                        bool runtime_scene_frame_open = false;
+                        if (runtime_scene_ready) {
+                            ProfilerSectionScope section("Render Begin Frame");
+                            runtime_scene_frame_open = runtime_scene.begin_render_frame();
+                        }
                         uint32_t image_index = 0;
                         XrSwapchainImageAcquireInfo acquire_info{};
                         acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
-                        result = xr.acquire_swapchain_image(color_swapchain, &acquire_info, &image_index);
+                        {
+                            ProfilerSectionScope section("OpenXR Acquire Swapchain");
+                            result = xr.acquire_swapchain_image(color_swapchain, &acquire_info, &image_index);
+                        }
                         bool image_acquired = XR_SUCCEEDED(result);
                         bool image_ready = image_acquired;
                         if (!image_acquired) {
@@ -1622,7 +1654,10 @@ namespace termin::openxr {
                             wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
                             wait_swapchain_info.timeout = XR_INFINITE_DURATION;
                             const auto wait_swapchain_begin = FrameClock::now();
-                            result = xr.wait_swapchain_image(color_swapchain, &wait_swapchain_info);
+                            {
+                                ProfilerSectionScope section("OpenXR Wait Swapchain");
+                                result = xr.wait_swapchain_image(color_swapchain, &wait_swapchain_info);
+                            }
                             frame_swapchain_wait_ms += millis_between(wait_swapchain_begin, FrameClock::now());
                             if (XR_FAILED(result)) {
                                 __android_log_print(
@@ -1637,45 +1672,49 @@ namespace termin::openxr {
                             tgfx::ExternalTextureAccessDesc access;
                             access.state_after_wait = tgfx::ExternalTextureState::ColorAttachment;
                             access.required_before_release = tgfx::ExternalTextureState::ColorAttachment;
+                            ProfilerSectionScope section("Render Acquire Texture");
                             image_ready = render_device->begin_external_texture_access(color_texture, access);
                         }
 
                         const auto render_begin = FrameClock::now();
-                        if (image_ready && runtime_scene_ready && runtime_scene_frame_open) {
-                            runtime_scene.render_multiview(color_texture,
-                                                           swapchain_create_info.width,
-                                                           swapchain_create_info.height,
-                                                           tgfx_color_format,
-                                                           views);
-                        } else if (image_ready) {
-                            if (runtime_scene_ready) {
-                                tc_log_error("[OpenXR scene] render frame did not open; clearing XR target");
+                        {
+                            ProfilerSectionScope section("Scene Render");
+                            if (image_ready && runtime_scene_ready && runtime_scene_frame_open) {
+                                runtime_scene.render_multiview(color_texture,
+                                                               swapchain_create_info.width,
+                                                               swapchain_create_info.height,
+                                                               tgfx_color_format,
+                                                               views);
+                            } else if (image_ready) {
+                                if (runtime_scene_ready) {
+                                    tc_log_error("[OpenXR scene] render frame did not open; clearing XR target");
+                                }
+                                auto cmd = render_device->create_command_list();
+                                cmd->begin();
+                                tgfx::MultiviewRenderPassDesc pass{};
+                                tgfx::ColorAttachmentDesc color_attachment{};
+                                color_attachment.texture = color_texture;
+                                color_attachment.load = tgfx::LoadOp::Clear;
+                                color_attachment.store = tgfx::StoreOp::Store;
+                                color_attachment.clear_color[0] = 0.015f;
+                                color_attachment.clear_color[1] = 0.018f;
+                                color_attachment.clear_color[2] = 0.024f;
+                                color_attachment.clear_color[3] = 1.0f;
+                                pass.colors.push_back(color_attachment);
+                                pass.view_count = 2;
+                                cmd->begin_multiview_render_pass(pass);
+                                cmd->set_viewport(0,
+                                                  0,
+                                                  static_cast<int>(swapchain_create_info.width),
+                                                  static_cast<int>(swapchain_create_info.height));
+                                cmd->set_scissor(0,
+                                                 0,
+                                                 static_cast<int>(swapchain_create_info.width),
+                                                 static_cast<int>(swapchain_create_info.height));
+                                cmd->end_render_pass();
+                                cmd->end();
+                                render_device->submit(*cmd);
                             }
-                            auto cmd = render_device->create_command_list();
-                            cmd->begin();
-                            tgfx::MultiviewRenderPassDesc pass{};
-                            tgfx::ColorAttachmentDesc color_attachment{};
-                            color_attachment.texture = color_texture;
-                            color_attachment.load = tgfx::LoadOp::Clear;
-                            color_attachment.store = tgfx::StoreOp::Store;
-                            color_attachment.clear_color[0] = 0.015f;
-                            color_attachment.clear_color[1] = 0.018f;
-                            color_attachment.clear_color[2] = 0.024f;
-                            color_attachment.clear_color[3] = 1.0f;
-                            pass.colors.push_back(color_attachment);
-                            pass.view_count = 2;
-                            cmd->begin_multiview_render_pass(pass);
-                            cmd->set_viewport(0,
-                                              0,
-                                              static_cast<int>(swapchain_create_info.width),
-                                              static_cast<int>(swapchain_create_info.height));
-                            cmd->set_scissor(0,
-                                             0,
-                                             static_cast<int>(swapchain_create_info.width),
-                                             static_cast<int>(swapchain_create_info.height));
-                            cmd->end_render_pass();
-                            cmd->end();
-                            render_device->submit(*cmd);
                         }
                         frame_render_ms += millis_between(render_begin, FrameClock::now());
 
@@ -1692,18 +1731,27 @@ namespace termin::openxr {
 
                         if (runtime_scene_frame_open) {
                             const auto render_submit_begin = FrameClock::now();
-                            runtime_scene.end_render_frame();
+                            {
+                                ProfilerSectionScope section("Render End Frame");
+                                runtime_scene.end_render_frame();
+                            }
                             frame_render_ms += millis_between(render_submit_begin, FrameClock::now());
                         }
 
                         if (image_acquired) {
-                            if (image_ready && !render_device->end_external_texture_access(color_texture)) {
-                                tc_log_error("[OpenXR] external color texture failed release contract");
-                                image_ready = false;
+                            {
+                                ProfilerSectionScope section("Render Release Texture");
+                                if (image_ready && !render_device->end_external_texture_access(color_texture)) {
+                                    tc_log_error("[OpenXR] external color texture failed release contract");
+                                    image_ready = false;
+                                }
                             }
                             XrSwapchainImageReleaseInfo release_info{};
                             release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
-                            result = xr.release_swapchain_image(color_swapchain, &release_info);
+                            {
+                                ProfilerSectionScope section("OpenXR Release Swapchain");
+                                result = xr.release_swapchain_image(color_swapchain, &release_info);
+                            }
                             if (XR_FAILED(result)) {
                                 __android_log_print(
                                     ANDROID_LOG_ERROR, kLogTag, "xrReleaseSwapchainImage failed: %d", result);
@@ -1727,7 +1775,10 @@ namespace termin::openxr {
                 end_info.environmentBlendMode = blend_mode;
                 end_info.layerCount = layer_count;
                 end_info.layers = layer_count ? layers : nullptr;
-                result = xr.end_frame(session, &end_info);
+                {
+                    ProfilerSectionScope section("OpenXR End Frame");
+                    result = xr.end_frame(session, &end_info);
+                }
                 if (XR_FAILED(result)) {
                     __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrEndFrame failed: %d", result);
                 }

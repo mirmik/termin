@@ -257,6 +257,8 @@ namespace termin::profiler_remote {
             result.start_time_ms = source.start_time_ms;
             result.interval_ms = source.interval_ms;
             result.active_ms = source.active_ms;
+            result.has_gpu_duration = source.has_gpu_duration;
+            result.gpu_duration_ms = source.gpu_duration_ms;
             result.target_interval_ms = source.target_interval_ms;
             result.deadline_lateness_ms = source.deadline_lateness_ms;
             result.missed_intervals = static_cast<std::uint32_t>(source.missed_intervals);
@@ -380,6 +382,7 @@ namespace termin::profiler_remote {
             capturing.store(false, std::memory_order_release);
             profiling_sections.store(false, std::memory_order_release);
             last_frame_number = -1;
+            sent_gpu_durations.clear();
             pending_dropped_batches = 0;
             pending_dropped_frames = 0;
             tc_log_info("remote profiler target: stopped");
@@ -424,27 +427,8 @@ namespace termin::profiler_remote {
                         tc_log_error("remote profiler target: capture returned a null frame");
                         continue;
                     }
-                    WireFrame frame = copy_frame(*source);
-                    frame.sections.reserve(static_cast<std::size_t>(source->section_count));
-                    for (int section_index = 0; section_index < source->section_count; ++section_index) {
-                        const tc_section_timing& section = source->sections[section_index];
-                        const std::uint32_t name_id = intern_name(section.name);
-                        frame.sections.push_back(WireSection{
-                            name_id,
-                            section.cpu_ms,
-                            section.children_ms,
-                            static_cast<std::uint32_t>(section.call_count),
-                            section.parent_index,
-                            section.first_child,
-                            section.next_sibling,
-                        });
-                        if (packet_names.insert(name_id).second) {
-                            packet.required_names.push_back(
-                                DictionaryEntry{name_id, names_by_id[static_cast<std::size_t>(name_id - 1)]});
-                        }
-                    }
+                    append_wire_frame(packet, batch, packet_names, *source);
                     last_frame_number = source->frame_number;
-                    batch.frames.push_back(std::move(frame));
                 }
                 offset += count;
                 if (batch.frames.empty()) {
@@ -456,6 +440,7 @@ namespace termin::profiler_remote {
                 enqueue_frame_packet(std::move(packet));
                 completed_frames.fetch_add(completed_count, std::memory_order_relaxed);
             }
+            enqueue_late_gpu_updates();
         }
 
         TargetServiceStatus status() const {
@@ -528,6 +513,72 @@ namespace termin::profiler_remote {
             return id;
         }
 
+        void append_wire_frame(OutboundPacket& packet,
+                               FrameBatch& batch,
+                               std::unordered_set<std::uint32_t>& packet_names,
+                               const tc_frame_profile& source) {
+            WireFrame frame = copy_frame(source);
+            frame.sections.reserve(static_cast<std::size_t>(source.section_count));
+            for (int section_index = 0; section_index < source.section_count; ++section_index) {
+                const tc_section_timing& section = source.sections[section_index];
+                const std::uint32_t name_id = intern_name(section.name);
+                frame.sections.push_back(WireSection{
+                    name_id,
+                    section.cpu_ms,
+                    section.children_ms,
+                    static_cast<std::uint32_t>(section.call_count),
+                    section.parent_index,
+                    section.first_child,
+                    section.next_sibling,
+                });
+                if (packet_names.insert(name_id).second) {
+                    packet.required_names.push_back(
+                        DictionaryEntry{name_id, names_by_id[static_cast<std::size_t>(name_id - 1)]});
+                }
+            }
+            if (source.has_gpu_duration) {
+                sent_gpu_durations[source.frame_number] = source.gpu_duration_ms;
+            }
+            batch.frames.push_back(std::move(frame));
+        }
+
+        void enqueue_late_gpu_updates() {
+            const int count = tc_profiler_capture_count(capture);
+            for (int index = 0; index < count; ++index) {
+                const tc_frame_profile* source = tc_profiler_capture_at(capture, index);
+                if (!source || !source->has_gpu_duration || source->frame_number > last_frame_number) {
+                    continue;
+                }
+                const auto sent = sent_gpu_durations.find(source->frame_number);
+                if (sent != sent_gpu_durations.end() && sent->second == source->gpu_duration_ms) {
+                    continue;
+                }
+                OutboundPacket packet;
+                FrameBatch batch;
+                batch.frames.reserve(1);
+                std::unordered_set<std::uint32_t> packet_names;
+                append_wire_frame(packet, batch, packet_names, *source);
+                packet.frame_count = 1;
+                packet.frames = std::move(batch);
+                enqueue_frame_packet(std::move(packet));
+            }
+
+            // Bound the tracking map to the same lifetime as capture history.
+            if (count > 0) {
+                const tc_frame_profile* oldest = tc_profiler_capture_at(capture, 0);
+                if (oldest) {
+                    for (auto it = sent_gpu_durations.begin(); it != sent_gpu_durations.end();) {
+                        if (it->first < oldest->frame_number)
+                            it = sent_gpu_durations.erase(it);
+                        else
+                            ++it;
+                    }
+                }
+            } else {
+                sent_gpu_durations.clear();
+            }
+        }
+
         Status current_status(std::uint64_t request_id, const std::string& detail) const {
             return Status{
                 request_id,
@@ -562,6 +613,7 @@ namespace termin::profiler_remote {
             case ControlKind::clear_capture:
                 tc_profiler_capture_clear(capture);
                 last_frame_number = -1;
+                sent_gpu_durations.clear();
                 detail = "capture cleared";
                 break;
             case ControlKind::request_status:
@@ -802,6 +854,7 @@ namespace termin::profiler_remote {
         std::uint32_t next_name_id = 1;
         bool reported_name_limit = false;
         int last_frame_number = -1;
+        std::unordered_map<int, double> sent_gpu_durations;
         std::uint64_t pending_dropped_batches = 0;
         std::uint64_t pending_dropped_frames = 0;
 #if defined(_WIN32)

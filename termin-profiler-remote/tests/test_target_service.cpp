@@ -299,6 +299,29 @@ TEST_CASE("Target rejects incompatible handshakes and accepts a reconnect") {
     target.stop();
 }
 
+TEST_CASE("Client treats authenticated target rejection as terminal") {
+    TargetServiceConfig target_config;
+    target_config.authentication_token = "expected-token";
+    RemoteProfilerTarget target(std::move(target_config));
+    REQUIRE(target.start());
+
+    std::atomic<int> disconnects{0};
+    ClientConfig client_config;
+    client_config.port = target.status().listening_port;
+    client_config.authentication_token = "wrong-token";
+    client_config.reconnect = true;
+    RemoteProfilerClient client(
+        std::move(client_config),
+        [](const DecodedMessage&) {},
+        [&](std::string) { disconnects.fetch_add(1, std::memory_order_relaxed); });
+    REQUIRE(client.start());
+    REQUIRE(wait_until([&] { return !client.status().running; }));
+    CHECK_EQ(client.status().connection_attempts, 1);
+    CHECK_EQ(disconnects.load(std::memory_order_relaxed), 1);
+    client.stop();
+    target.stop();
+}
+
 TEST_CASE("Target stop interrupts a stalled partial handshake") {
     TargetServiceConfig config;
     config.authentication_token = "partial-token";
@@ -363,6 +386,35 @@ TEST_CASE("Target streams real profiler frames and acknowledges frame-thread "
     CHECK(saw_dictionary);
     CHECK(saw_frame);
     CHECK(target.status().transmitted_bytes > 0);
+
+    // GPU queries complete after the CPU frame was already streamed. The
+    // target must resend that retained frame so the receiver can replace it,
+    // even while newer CPU frames continue to arrive every pump.
+    const int gpu_frame_number = tc_profiler_frame_count() - 1;
+    complete_profiled_frame(116.0);
+    target.pump_frame_thread();
+    bool saw_newer_frame = false;
+    for (int index = 0; index < 8 && !saw_newer_frame; ++index) {
+        const auto message = receive_wire(client);
+        REQUIRE(message.has_value());
+        if (const auto* batch = std::get_if<FrameBatch>(&message->message)) {
+            saw_newer_frame = !batch->frames.empty() && batch->frames[0].frame_number > gpu_frame_number;
+        }
+    }
+    REQUIRE(saw_newer_frame);
+    REQUIRE(tc_profiler_publish_gpu_frame_timing(gpu_frame_number, 1.75));
+    target.pump_frame_thread();
+    bool saw_gpu_update = false;
+    for (int index = 0; index < 8 && !saw_gpu_update; ++index) {
+        const auto message = receive_wire(client);
+        REQUIRE(message.has_value());
+        if (const auto* batch = std::get_if<FrameBatch>(&message->message)) {
+            REQUIRE_EQ(batch->frames.size(), 1);
+            saw_gpu_update = batch->frames[0].frame_number == gpu_frame_number && batch->frames[0].has_gpu_duration &&
+                             batch->frames[0].gpu_duration_ms == 1.75;
+        }
+    }
+    CHECK(saw_gpu_update);
 
     REQUIRE(send_message(client, Control{12, ControlKind::pause_capture, false, 0}, 4));
     REQUIRE(wait_until([&] {
