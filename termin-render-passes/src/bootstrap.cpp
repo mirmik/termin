@@ -1,4 +1,5 @@
 #include <termin/lighting/shadow.hpp>
+#include <termin/lighting/environment_lighting.hpp>
 #include <termin/render/bloom_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_geometry_pass.hpp>
@@ -20,11 +21,13 @@ namespace termin {
 
     void register_builtin_render_passes() {
         (void)register_shadow_map_array_resource_type();
+        (void)register_environment_lighting_resource_type();
         BloomPass::register_type();
         ColorPass::register_type();
         MultiviewColorPass::register_type();
         DebugTrianglePass::register_type();
         DebugGeometryPass::register_type();
+        EnvironmentLightingPass::register_type();
         GrayscalePass::register_type();
         GroundGridPass::register_type();
         IdPass::register_type();

@@ -78,6 +78,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
     src/debug_geometry_pass.cpp
+    src/environment_lighting.cpp
     src/grayscale_pass.cpp
     src/ground_grid_pass.cpp
     src/id_pass.cpp
@@ -100,6 +101,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/termin_render_passes_version.c
         src/bootstrap_core.cpp
         src/color_pass.cpp
+        src/environment_lighting.cpp
         src/output_transform_pass.cpp
         src/present_pass.cpp
         src/resolve_pass.cpp
@@ -116,6 +118,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render_passes/bootstrap.hpp
     include/termin/lighting/lighting_ubo.hpp
     include/termin/lighting/lighting_upload.hpp
+    include/termin/lighting/environment_lighting.hpp
     include/termin/lighting/shadow.hpp
     include/termin/render/bloom_pass.hpp
     include/termin/render/color_pass.hpp

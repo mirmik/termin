@@ -16,6 +16,7 @@ def make_editor_pipeline() -> RenderPipeline:
     from termin.render_passes import (
         BloomPass,
         DebugGeometryPass,
+        EnvironmentLightingPass,
         ColorPass,
         HighlightPass,
         IdPass,
@@ -153,6 +154,11 @@ def make_editor_pipeline() -> RenderPipeline:
         pass_name="Shadow"
     )
 
+    environment_lighting_pass = EnvironmentLightingPass(
+        output_res="environment_lighting",
+        pass_name="EnvironmentLighting",
+    )
+
     tonemap_pass = TonemapPass(
         input_res="color_bloom",
         output_res="color_tonemapped",
@@ -166,6 +172,7 @@ def make_editor_pipeline() -> RenderPipeline:
     )
 
     passes: list = [
+        environment_lighting_pass,
         shadow_pass,
         skybox_pass,
         color_pass,

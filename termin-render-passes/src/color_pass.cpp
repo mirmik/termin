@@ -66,8 +66,10 @@ namespace termin {
         constexpr const char* STANDARD_PBR_FORWARD_CONSUMER = R"slang(
 import termin_lighting;
 import termin_shadows;
+import termin_ibl;
 
 static const float TERMIN_STANDARD_PBR_PI = 3.14159265359;
+static const float TERMIN_STANDARD_PBR_IBL_MAX_LOD = 6.0;
 
 struct FragmentOutput {
     float4 color : SV_Target0;
@@ -110,6 +112,17 @@ float3 termin_standard_pbr_fresnel_schlick(
         pow(clamp(1.0 - cosine, 0.0, 1.0), 5.0);
 }
 
+float3 termin_standard_pbr_fresnel_schlick_roughness(
+    float cosine,
+    float3 reflectance_zero,
+    float roughness)
+{
+    return reflectance_zero +
+        (max(float3(1.0 - roughness), reflectance_zero) -
+         reflectance_zero) *
+        pow(clamp(1.0 - cosine, 0.0, 1.0), 5.0);
+}
+
 [shader("fragment")]
 FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     TerminStandardSurfaceV1 surface = evaluate_standard_surface(input);
@@ -123,9 +136,28 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     float3 reflectance_zero =
         lerp(float3(0.04, 0.04, 0.04), surface.base_color, metallic);
 
+    float normal_dot_view =
+        max(dot(normal, view_direction), 0.001);
+    float3 ibl_fresnel =
+        termin_standard_pbr_fresnel_schlick_roughness(
+            normal_dot_view,
+            reflectance_zero,
+            roughness);
+    float3 ibl_diffuse_weight =
+        (1.0 - ibl_fresnel) * (1.0 - metallic);
+    float3 irradiance = sample_ibl_diffuse_irradiance(normal);
+    float3 diffuse_ibl =
+        irradiance * surface.base_color / TERMIN_STANDARD_PBR_PI;
+
+    float3 reflection_direction = reflect(-view_direction, normal);
+    float3 prefiltered_radiance = sample_ibl_prefiltered_specular(
+        reflection_direction,
+        roughness * TERMIN_STANDARD_PBR_IBL_MAX_LOD);
+    float2 environment_brdf = sample_ibl_brdf(normal_dot_view, roughness);
+    float3 specular_ibl = prefiltered_radiance *
+        (reflectance_zero * environment_brdf.x + environment_brdf.y);
     float3 ambient =
-        get_ambient_color() * get_ambient_intensity() *
-        surface.base_color * (1.0 - metallic) * occlusion;
+        (ibl_diffuse_weight * diffuse_ibl + specular_ibl) * occlusion;
     float3 direct = float3(0.0, 0.0, 0.0);
 
     for (int light_index = 0;
@@ -310,6 +342,15 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                                                     SHADOW_BLOCK_STD140_SIZE),
                 material_pipeline_abi_resource_decl(
                     ShaderAbiResourceId::ShadowMaps, TC_SHADER_STAGE_FRAGMENT, MaterialPipelineResourceOwner::Pass),
+                material_pipeline_abi_resource_decl(ShaderAbiResourceId::IblDiffuseIrradiance,
+                                                    TC_SHADER_STAGE_FRAGMENT,
+                                                    MaterialPipelineResourceOwner::Pass),
+                material_pipeline_abi_resource_decl(ShaderAbiResourceId::IblPrefilteredSpecular,
+                                                    TC_SHADER_STAGE_FRAGMENT,
+                                                    MaterialPipelineResourceOwner::Pass),
+                material_pipeline_abi_resource_decl(ShaderAbiResourceId::IblBrdfLut,
+                                                    TC_SHADER_STAGE_FRAGMENT,
+                                                    MaterialPipelineResourceOwner::Pass),
             };
             contract.surface_consumer = std::move(consumer);
             return contract;
@@ -393,6 +434,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         : input_res(config.input_res),
           output_res(config.output_res),
           shadow_res(config.shadow_res),
+          environment_res(config.environment_res),
           phase_mark(config.phase_mark),
           sort_mode(config.sort_mode),
           camera_name(config.camera_name),
@@ -415,6 +457,9 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         if (!shadow_res.empty()) {
             result.insert(shadow_res.c_str());
         }
+        if (!environment_res.empty()) {
+            result.insert(environment_res.c_str());
+        }
         // Add extra texture resources
         for (const auto& [uniform_name, resource_name] : extra_textures) {
             result.insert(resource_name.c_str());
@@ -430,7 +475,8 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         if (socket_name.empty() || resource_name.empty()) {
             return false;
         }
-        if (socket_name == "input_res" || socket_name == "output_res" || socket_name == "shadow_res") {
+        if (socket_name == "input_res" || socket_name == "output_res" || socket_name == "shadow_res" ||
+            socket_name == "environment_res") {
             return false;
         }
         add_extra_texture(socket_name, resource_name);
@@ -991,7 +1037,24 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             static_cast<uint32_t>(std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
 
         std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;
-        extra_texture_bindings.reserve(extra_textures.size());
+        extra_texture_bindings.reserve(extra_textures.size() + 3u);
+        if (data.environment_lighting && data.environment_lighting->ready()) {
+            extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
+                "ibl_diffuse_irradiance",
+                data.environment_lighting->diffuse_irradiance,
+                data.environment_lighting->sampler,
+                true});
+            extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
+                "ibl_prefiltered_specular",
+                data.environment_lighting->prefiltered_specular,
+                data.environment_lighting->sampler,
+                true});
+            extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
+                "ibl_brdf_lut", data.environment_lighting->brdf_lut, data.environment_lighting->sampler, true});
+        } else if (!cached_draw_calls_.empty()) {
+            tc::Log::error("[ColorPass:%s] environment lighting resource is missing or incomplete",
+                           get_pass_name().c_str());
+        }
         for (const auto& [uniform_name, resource_name] : extra_textures) {
             auto it = ctx.tex2_reads.find(resource_name);
             if (it == ctx.tex2_reads.end() || !it->second) {
@@ -1207,6 +1270,17 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             }
         }
 
+        const EnvironmentLightingResource* environment_lighting = nullptr;
+        if (!environment_res.empty()) {
+            environment_lighting =
+                ctx.get_frame_graph_resource_as<EnvironmentLightingResource>(environment_res);
+            if (!environment_lighting) {
+                tc::Log::error("[ColorPass:%s] resource '%s' is not an environment_lighting resource",
+                               get_pass_name().c_str(),
+                               environment_res.c_str());
+            }
+        }
+
         if (!ctx.ctx2) {
             tc::Log::error("[ColorPass] ctx.ctx2 is null — ColorPass is tgfx2-only");
             return;
@@ -1222,6 +1296,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         data.ambient_color = ambient_color;
         data.ambient_intensity = ambient_intensity;
         data.shadow_maps = shadow_maps;
+        data.environment_lighting = environment_lighting;
         data.shadow_settings = shadow_settings;
         data.layer_mask = camera_layer_mask;
         data.render_category_mask = camera_render_category_mask;
@@ -1238,6 +1313,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         _register_inspect_input_res(inspect);
         _register_inspect_output_res(inspect);
         _register_inspect_shadow_res(inspect);
+        _register_inspect_environment_res(inspect);
         _register_inspect_phase_mark(inspect);
         _register_inspect_sort_mode(inspect);
         _register_inspect_clear_depth(inspect);
