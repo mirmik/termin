@@ -26,6 +26,7 @@ namespace tgfx {
 #include "tc_inspect_cpp.hpp"
 #include "termin/lighting/lighting_ubo.hpp"
 #include "termin/lighting/lighting_upload.hpp"
+#include "termin/lighting/environment_lighting.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "tgfx/render_state.hpp"
 #include <termin/entity/component.hpp>
@@ -44,6 +45,7 @@ namespace termin {
         std::string input_res = "empty";
         std::string output_res = "color";
         std::string shadow_res = "shadow_maps";
+        std::string environment_res = "environment_lighting";
         std::string phase_mark = "opaque";
         std::string pass_name = "Color";
         std::string sort_mode = "none";
@@ -62,6 +64,7 @@ namespace termin {
         Vec3 ambient_color{1.0, 1.0, 1.0};
         float ambient_intensity = 0.1f;
         std::span<const ShadowMapArrayEntry> shadow_maps;
+        const EnvironmentLightingResource* environment_lighting = nullptr;
         ShadowSettings shadow_settings;
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
         uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
@@ -79,6 +82,7 @@ namespace termin {
         std::string input_res = "empty";
         std::string output_res = "color";
         std::string shadow_res = "shadow_maps"; // Shadow map resource name (empty = no shadows)
+        std::string environment_res = "environment_lighting";
         // Drawable/material representation requested by this pass. This filters
         // drawables and material phases; shader layout comes from the explicit
         // color/material pipeline contract built by the pass.
@@ -146,6 +150,7 @@ namespace termin {
         INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
         INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
         INSPECT_FIELD(ColorPass, shadow_res, "Shadow Resource", "string")
+        INSPECT_FIELD(ColorPass, environment_res, "Environment Lighting", "string")
         INSPECT_FIELD(ColorPass, phase_mark, "Phase Mark", "string")
         INSPECT_FIELD_CHOICES(ColorPass,
                               sort_mode,
@@ -159,7 +164,9 @@ namespace termin {
         INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
         INSPECT_TYPE_METADATA(ColorPass,
                               graph,
-                              make_pass_graph_metadata({{"input_res", "fbo"}, {"shadow_res", "shadow"}},
+                              make_pass_graph_metadata({{"input_res", "fbo"},
+                                                        {"shadow_res", "shadow"},
+                                                        {"environment_res", "environment_lighting"}},
                                                        {{"output_res", "fbo"}},
                                                        {{"input_res", "output_res"}}))
 
