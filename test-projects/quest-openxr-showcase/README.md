@@ -18,10 +18,14 @@ a new project default.
 
 The headset target uses the explicit `QuestMultiview` graph in
 `Pipelines/QuestMultiview.pipeline`: layered opaque and transparent passes,
-4x MSAA resolve, and direct layered tonemapping into one two-layer OpenXR
-swapchain. The ordinary `Default` pipeline remains attached to the editor
-target. Do not substitute it for the headset target; `xr_stereo` deliberately
-rejects `single_view` pipelines.
+4x MSAA, and a direct layered resolve into one two-layer OpenXR swapchain. The
+headset path is deliberately LDR: its multisampled attachment inherits the
+8-bit UNORM format selected for the OpenXR swapchain and it does not run a
+tonemap pass. Lighting and emissive values for this profile must therefore be
+tuned for the display range; values outside it are clipped instead of being
+recovered by an HDR tone curve. The ordinary `Default` pipeline remains
+attached to the editor target. Do not substitute it for the headset target;
+`xr_stereo` deliberately rejects `single_view` pipelines.
 
 The opaque multiview pass enables the explicit
 `attachment_barrier_between_draws` compatibility option. It keeps one render

@@ -50,15 +50,14 @@ resource or pass explicitly.
 The initial Quest graph is deliberately small:
 
 ```text
-layered RGBA16F + depth, 4x MSAA
+layered 8-bit UNORM matching the XR target + depth, 4x MSAA
   -> MultiviewColorPass (opaque)
   -> MultiviewColorPass (transparent)
-  -> MultiviewResolvePass (layered, single-sample)
-  -> MultiviewTonemapPass
-  -> two-layer OpenXR swapchain
+  -> MultiviewResolvePass
+  -> two-layer 8-bit UNORM OpenXR swapchain
 ```
 
-These remain four logical framegraph passes, but they no longer imply four
+These remain three logical framegraph passes, but they no longer imply three
 physical GPU scopes. Adjacent raster passes may publish a
 `tc_raster_pass_contract`; the executor groups compatible passes that target
 the same canonical attachments and records them inside one backend render
@@ -76,10 +75,22 @@ store operation is `DontCare`; the single-sample resolve remains stored. The
 old standalone resolve command remains the ordinary fallback when the graph or
 backend contract is incompatible.
 
-Tonemapping is intentionally a separate scope: it samples the resolved HDR
-texture and writes the external single-sample swapchain image. Folding it into
-the raster scope would require a different shader/input-attachment contract,
-not merely pass grouping.
+Framebuffer clear metadata is also consumed by the first compatible physical
+raster scope. In particular, the Quest MSAA color and depth attachments enter
+that scope with `LoadOp::Clear`; they are not cleared in a preliminary render
+pass and then reopened with `LoadOp::Load`. A resolve target is a complete image
+write, so its external color clear is suppressed when that resolve is the
+target's first graph access. A preceding read or partial write keeps the
+standalone clear. Non-raster resources and incompatible/debug execution paths
+retain the standalone clear fallback.
+
+The Quest profile is intentionally an LDR forward path. It has no HDR
+intermediate and no tonemap pass: the multisampled attachment inherits the
+external target's 8-bit UNORM format, lighting is composed and blended there,
+then resolved directly into the format-compatible OpenXR swapchain image. This
+trades recoverable HDR highlights and HDR post-processing for lower attachment
+storage and memory bandwidth. HDR pipelines remain valid elsewhere and
+continue to use an explicit post-composition tonemap pass.
 
 The Quest opaque pass explicitly enables
 `attachment_barrier_between_draws`. On the tested Quest 2/Adreno driver this

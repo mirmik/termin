@@ -819,6 +819,52 @@ TEST_CASE("Graph compiler rejects mono and XR multiview socket mixing") {
     CHECK_THROWS_AS(tc::compile_graph(graph), tc::GraphCompileError);
 }
 
+TEST_CASE("Graph compiler allows external XR target where a multiview FBO is required") {
+    const char* json = R"JSON(
+{
+  "name": "xr_direct_resolve",
+  "execution_model": "xr_multiview",
+  "nodes": [
+    {
+      "type": "Multiview FBO",
+      "node_type": "resource",
+      "name": "msaa_color",
+      "params": {
+        "resource_type": "multiview_fbo",
+        "format": "render_target",
+        "samples": 4,
+        "array_layers": 2
+      }
+    },
+    {"type": "MultiviewResolvePass", "name": "Resolve"},
+    {"type": "XR Multiview Target", "node_type": "external_xr_multiview_fbo"}
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "input_res"},
+    {"from_node": 2, "from_socket": "fbo", "to_node": 1, "to_socket": "output_res_target"}
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+
+    bool found_external_target = false;
+    for (const auto& spec : pipeline->specs()) {
+        if (spec.resource == "XR_MULTIVIEW_TARGET") {
+            found_external_target = true;
+            CHECK(spec.resource_type == "external_xr_multiview_fbo");
+        }
+    }
+    CHECK(found_external_target);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
 TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint") {
     const char* json = R"JSON(
 {

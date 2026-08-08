@@ -11,7 +11,7 @@
       "y": 60,
       "params": {
         "resource_type": "multiview_fbo",
-        "format": "rgba16f",
+        "format": "render_target",
         "samples": 4,
         "array_layers": 2,
         "size_mode": "viewport",
@@ -35,6 +35,7 @@
       "params": {
         "phase_mark": "opaque",
         "sort_mode": "near_to_far",
+        "environment_res": "",
         "attachment_barrier_between_draws": true
       },
       "dynamic_inputs": [
@@ -48,24 +49,8 @@
       "y": 40,
       "params": {
         "phase_mark": "transparent",
-        "sort_mode": "far_to_near"
-      }
-    },
-    {
-      "type": "Multiview FBO",
-      "node_type": "resource",
-      "name": "xr_resolved_color",
-      "x": 540,
-      "y": 280,
-      "params": {
-        "resource_type": "multiview_fbo",
-        "format": "rgba16f",
-        "samples": 1,
-        "array_layers": 2,
-        "size_mode": "viewport",
-        "scale": 1.0,
-        "has_color": true,
-        "has_depth": false
+        "sort_mode": "far_to_near",
+        "environment_res": ""
       }
     },
     {
@@ -85,16 +70,6 @@
       }
     },
     {
-      "type": "MultiviewTonemapPass",
-      "name": "XR Tonemap",
-      "x": 1060,
-      "y": 40,
-      "params": {
-        "exposure": 1.0,
-        "method": 0
-      }
-    },
-    {
       "type": "External RT",
       "node_type": "external_rt",
       "name": "Panel Color",
@@ -108,10 +83,8 @@
   "connections": [
     {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "input_res"},
     {"from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "input_res"},
-    {"from_node": 2, "from_socket": "output_res", "to_node": 4, "to_socket": "input_res"},
-    {"from_node": 3, "from_socket": "fbo", "to_node": 4, "to_socket": "output_res_target"},
-    {"from_node": 4, "from_socket": "output_res", "to_node": 6, "to_socket": "input_res"},
-    {"from_node": 5, "from_socket": "fbo", "to_node": 6, "to_socket": "output_res_target"},
-    {"from_node": 7, "from_socket": "fbo", "to_node": 1, "to_socket": "u_panel_texture"}
+    {"from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "input_res"},
+    {"from_node": 4, "from_socket": "fbo", "to_node": 3, "to_socket": "output_res_target"},
+    {"from_node": 5, "from_socket": "fbo", "to_node": 1, "to_socket": "u_panel_texture"}
   ]
 }

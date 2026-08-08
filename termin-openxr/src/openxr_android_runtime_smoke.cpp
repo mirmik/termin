@@ -1362,7 +1362,7 @@ namespace termin::openxr {
                 XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
             swapchain_create_info.format = color_format;
             // MSAA belongs to the explicit internal graph resources. The XR image is
-            // the single-sample, two-layer tonemap destination.
+            // the single-sample, two-layer graph output destination.
             swapchain_create_info.sampleCount = 1;
             swapchain_create_info.width = view_configs[0].recommendedImageRectWidth;
             swapchain_create_info.height = view_configs[0].recommendedImageRectHeight;
