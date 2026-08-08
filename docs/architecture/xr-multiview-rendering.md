@@ -58,6 +58,29 @@ layered RGBA16F + depth, 4x MSAA
   -> two-layer OpenXR swapchain
 ```
 
+These remain four logical framegraph passes, but they no longer imply four
+physical GPU scopes. Adjacent raster passes may publish a
+`tc_raster_pass_contract`; the executor groups compatible passes that target
+the same canonical attachments and records them inside one backend render
+scope. The opaque and transparent multiview passes therefore share one scope.
+Their logical order, profiler sections and debugger identities remain intact.
+A capture requested at an interior boundary, explicit per-pass synchronization,
+or an incompatible load/attachment contract disables grouping for that frame.
+
+An immediately following compatible `MultiviewResolvePass` publishes a
+`tc_raster_resolve_contract` and is absorbed as the color attachment's resolve
+target. Vulkan uses `pResolveAttachments`, D3D11 resolves after unbinding the
+scope, OpenGL uses a framebuffer blit at scope end, and WebGPU uses
+`resolveTarget`. If the multisampled color or depth is not read later, its
+store operation is `DontCare`; the single-sample resolve remains stored. The
+old standalone resolve command remains the ordinary fallback when the graph or
+backend contract is incompatible.
+
+Tonemapping is intentionally a separate scope: it samples the resolved HDR
+texture and writes the external single-sample swapchain image. Folding it into
+the raster scope would require a different shader/input-attachment contract,
+not merely pass grouping.
+
 The Quest opaque pass explicitly enables
 `attachment_barrier_between_draws`. On the tested Quest 2/Adreno driver this
 maps to framebuffer-local color/depth ordering inside the same Vulkan render

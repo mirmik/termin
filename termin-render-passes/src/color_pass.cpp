@@ -745,6 +745,12 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     // These each get a log line when they are skipped.
 
     void ColorPass::execute_with_data(ExecuteContext& ctx, const ColorPassExecuteData& data) {
+        execute_with_data_impl(ctx, data, false);
+    }
+
+    void ColorPass::execute_with_data_impl(ExecuteContext& ctx,
+                                           const ColorPassExecuteData& data,
+                                           bool raster_scope_already_open) {
         auto* ctx2 = ctx.ctx2;
         if (!ctx2) {
             tc::Log::error("[ColorPass/tgfx2] ctx2 is null");
@@ -857,8 +863,10 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             pass.view_count = 2;
             return ctx2->begin_multiview_pass(pass);
         };
-        if (!begin_output_pass(clear_depth)) {
-            return;
+        if (!raster_scope_already_open) {
+            if (!begin_output_pass(clear_depth)) {
+                return;
+            }
         }
         ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
         ctx2->set_depth_bias(false);
@@ -1011,6 +1019,11 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                 return;
             }
 
+            if (raster_scope_already_open) {
+                tc::Log::error("[ColorPass] internal capture requires standalone raster execution");
+                return;
+            }
+
             ctx2->end_pass();
             ctx.capture_internal(entity_name, color_tex2, data.rect.width, data.rect.height);
             selected_symbol_timing = {};
@@ -1146,10 +1159,49 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             }
         }
 
-        ctx2->end_pass();
+        if (!raster_scope_already_open) {
+            ctx2->end_pass();
+        }
     }
 
     void ColorPass::execute(ExecuteContext& ctx) {
+        execute_impl(ctx, false);
+    }
+
+    bool ColorPass::get_raster_contract(ExecuteContext& ctx, tc_raster_pass_contract& out_contract) const {
+        out_contract = {};
+        out_contract.struct_size = sizeof(out_contract);
+        out_contract.target_resource = output_res.c_str();
+        out_contract.view_count = multiview_mode_ ? 2u : 1u;
+        out_contract.color_load = TC_RASTER_LOAD;
+        out_contract.depth_load = clear_depth ? TC_RASTER_CLEAR : TC_RASTER_LOAD;
+        const auto color = ctx.tex2_writes.find(output_res);
+        out_contract.has_color = color != ctx.tex2_writes.end() && static_cast<bool>(color->second);
+        const auto depth = ctx.tex2_depth_writes.find(output_res);
+        out_contract.has_depth = depth != ctx.tex2_depth_writes.end() && static_cast<bool>(depth->second);
+        out_contract.fusion_eligible = ctx.debug_internal_capture_requests.empty();
+        return !output_res.empty() && out_contract.has_color;
+    }
+
+    bool ColorPass::record_raster(ExecuteContext& ctx) {
+        if (!ctx.debug_internal_capture_requests.empty()) {
+            tc::Log::error("[ColorPass] record_raster called while an internal capture requires standalone execution");
+            return false;
+        }
+        if (!ctx.ctx2) {
+            tc::Log::error("[ColorPass] record_raster called without a render context");
+            return false;
+        }
+        const auto color = ctx.tex2_writes.find(output_res);
+        if (color == ctx.tex2_writes.end() || !color->second) {
+            tc::Log::error("[ColorPass] record_raster has no color output '%s'", output_res.c_str());
+            return false;
+        }
+        execute_impl(ctx, true);
+        return true;
+    }
+
+    void ColorPass::execute_impl(ExecuteContext& ctx, bool raster_scope_already_open) {
         bool profile = tc_profiler_enabled();
         if (profile)
             tc_profiler_begin_section(("ColorPass:" + get_pass_name()).c_str());
@@ -1300,7 +1352,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         data.shadow_settings = shadow_settings;
         data.layer_mask = camera_layer_mask;
         data.render_category_mask = camera_render_category_mask;
-        execute_with_data(ctx, data);
+        execute_with_data_impl(ctx, data, raster_scope_already_open);
 
         if (profile)
             tc_profiler_end_section();
