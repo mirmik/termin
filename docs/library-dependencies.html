@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termin — зависимости модулей</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --background: #11151b;
+    --panel: #181e27;
+    --panel-raised: #202835;
+    --border: #344052;
+    --text: #edf2f7;
+    --muted: #9aa8b9;
+    --dependency: #69b7ff;
+    --dependent: #ffad66;
+    --selected: #8be28b;
+    --edge: #607087;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid;
+    grid-template-columns: minmax(260px, 330px) 1fr;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  aside {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 18px;
+    padding: 22px;
+    overflow: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+  }
+  h1 { margin: 0; font-size: 19px; }
+  .hint, .counts { color: var(--muted); }
+  label { display: grid; gap: 6px; color: var(--muted); }
+  input, select, button {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--panel-raised);
+    color: var(--text);
+    font: inherit;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--dependency); }
+  fieldset {
+    display: grid;
+    gap: 9px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  legend { padding: 0 6px; color: var(--muted); }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .check input { width: auto; min-height: auto; }
+  .lists { display: grid; gap: 14px; }
+  .lists h2 { margin: 0 0 5px; font-size: 13px; font-weight: 650; }
+  .lists ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .lists button {
+    min-height: 28px;
+    padding: 3px 7px;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-color: transparent;
+    background: transparent;
+  }
+  main { position: relative; min-width: 0; min-height: 0; }
+  svg { display: block; width: 100%; height: 100%; touch-action: none; }
+  .toolbar {
+    position: absolute;
+    z-index: 2;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    gap: 7px;
+  }
+  .toolbar button { width: auto; min-width: 42px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+  .empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 30px;
+    color: var(--muted);
+    text-align: center;
+    pointer-events: none;
+  }
+  .empty[hidden] { display: none; }
+  .edge { fill: none; stroke: var(--edge); stroke-width: 1.6; opacity: .72; }
+  .node rect { fill: var(--panel-raised); stroke: var(--border); stroke-width: 1.4; }
+  .node text { fill: var(--text); font-size: 13px; pointer-events: none; }
+  .node { cursor: pointer; }
+  .node:hover rect { stroke: var(--text); }
+  .node.dependency rect { stroke: var(--dependency); }
+  .node.dependent rect { stroke: var(--dependent); }
+  .node.selected rect { fill: color-mix(in srgb, var(--selected) 18%, var(--panel-raised)); stroke: var(--selected); stroke-width: 2.5; }
+  .column-label { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --background: #f6f8fb; --panel: #ffffff; --panel-raised: #f7f9fc;
+      --border: #cbd5e1; --text: #172033; --muted: #64748b;
+      --dependency: #1877c9; --dependent: #c46213; --selected: #26813a; --edge: #8b9aaf;
+    }
+  }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    aside { max-height: 44vh; border-right: 0; border-bottom: 1px solid var(--border); padding: 14px; }
+    .lists { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <div>
+    <h1>Зависимости модулей</h1>
+    <div class="hint">Стрелка направлена от модуля к его зависимости. Клик по узлу меняет фокус.</div>
+  </div>
+  <label>Модуль
+    <input id="module-input" list="module-list" autocomplete="off" placeholder="Начните вводить имя…">
+    <datalist id="module-list"></datalist>
+  </label>
+  <label>Глубина
+    <select id="depth">
+      <option value="1">Только прямые</option>
+      <option value="2">Два уровня</option>
+      <option value="all">Все транзитивные</option>
+    </select>
+  </label>
+  <fieldset>
+    <legend>Показывать</legend>
+    <label class="check"><input id="dependencies" type="checkbox" checked> зависимости</label>
+    <label class="check"><input id="dependents" type="checkbox" checked> зависимые модули</label>
+  </fieldset>
+  <div id="counts" class="counts"></div>
+  <div class="lists">
+    <section><h2>Прямые зависимости</h2><ul id="dependency-list"></ul></section>
+    <section><h2>Прямые потребители</h2><ul id="dependent-list"></ul></section>
+  </div>
+</aside>
+<main>
+  <div class="toolbar">
+    <button id="fit" title="Вписать граф">Вписать</button>
+  </div>
+  <svg id="graph" role="img" aria-label="Интерактивный граф зависимостей">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
+      </marker>
+    </defs>
+    <g id="viewport"></g>
+  </svg>
+  <div id="empty" class="empty">Выберите модуль слева</div>
+</main>
+<script id="graph-data" type="application/json">{"nodes":[{"id":"tcplot","group":"UI"},{"id":"tcplot-gui-native","group":"Other"},{"id":"termin-android","group":"Other"},{"id":"termin-animation","group":"Foundation"},{"id":"termin-app","group":"Application"},{"id":"termin-assets","group":"Python Support"},{"id":"termin-audio","group":"Other"},{"id":"termin-base","group":"Foundation"},{"id":"termin-bootstrap","group":"Other"},{"id":"termin-cli","group":"Other"},{"id":"termin-collision","group":"Foundation"},{"id":"termin-components-animation","group":"Other Components"},{"id":"termin-components-collision","group":"Other Components"},{"id":"termin-components-foliage","group":"Other"},{"id":"termin-components-kinematic","group":"Other Components"},{"id":"termin-components-mesh","group":"Other Components"},{"id":"termin-components-physics","group":"Other Components"},{"id":"termin-components-physics-fem","group":"Other"},{"id":"termin-components-physics-fem-ui","group":"Other"},{"id":"termin-components-render","group":"Render Stack"},{"id":"termin-components-skeleton","group":"Other Components"},{"id":"termin-components-tween","group":"Other Components"},{"id":"termin-components-ui","group":"Other Components"},{"id":"termin-components-voxels","group":"Other Components"},{"id":"termin-csg","group":"Foundation"},{"id":"termin-csharp","group":"Native Interop"},{"id":"termin-default-assets","group":"Other"},{"id":"termin-dispatch","group":"Other"},{"id":"termin-display","group":"Render Stack"},{"id":"termin-engine","group":"Runtime"},{"id":"termin-frame-profiler","group":"Other"},{"id":"termin-framegraph-remote","group":"Other"},{"id":"termin-framegraph-remote-client","group":"Other"},{"id":"termin-framegraph-remote-target","group":"Other"},{"id":"termin-glb","group":"Other"},{"id":"termin-graphics","group":"Render Stack"},{"id":"termin-gui","group":"UI"},{"id":"termin-gui-native","group":"Other"},{"id":"termin-image","group":"Other"},{"id":"termin-input","group":"Foundation"},{"id":"termin-inspect","group":"Foundation"},{"id":"termin-lighting","group":"Render Stack"},{"id":"termin-materials","group":"Other"},{"id":"termin-mcp","group":"Other"},{"id":"termin-mesh","group":"Foundation"},{"id":"termin-modules","group":"Foundation"},{"id":"termin-nanobind-sdk","group":"Python Support"},{"id":"termin-navmesh","group":"Foundation"},{"id":"termin-nodegraph","group":"UI"},{"id":"termin-openxr","group":"Other"},{"id":"termin-pga","group":"Other"},{"id":"termin-physics","group":"Foundation"},{"id":"termin-physics-fem","group":"Other Components"},{"id":"termin-physics-qopt","group":"Other"},{"id":"termin-player","group":"Other"},{"id":"termin-prefab","group":"Other"},{"id":"termin-profiler","group":"Other"},{"id":"termin-profiler-remote","group":"Other"},{"id":"termin-project","group":"Other"},{"id":"termin-project-build","group":"Other"},{"id":"termin-project-modules","group":"Other"},{"id":"termin-python-host","group":"Other"},{"id":"termin-qopt","group":"Foundation"},{"id":"termin-render","group":"Render Stack"},{"id":"termin-render-passes","group":"Other"},{"id":"termin-robotics","group":"Other"},{"id":"termin-runtime","group":"Other"},{"id":"termin-scene","group":"Foundation"},{"id":"termin-shader-runtime","group":"Other"},{"id":"termin-skeleton","group":"Foundation"},{"id":"termin-stdlib","group":"Other"},{"id":"termin-tween","group":"Foundation"},{"id":"termin-visual-scene","group":"Other"},{"id":"termin-voxels","group":"Foundation"},{"id":"termin-web-core","group":"Other"},{"id":"termin-window","group":"Other"}],"edges":[{"source":"tcplot","target":"termin-base"},{"source":"tcplot","target":"termin-graphics"},{"source":"tcplot","target":"termin-gui"},{"source":"tcplot","target":"termin-mesh"},{"source":"tcplot","target":"termin-nanobind-sdk"},{"source":"termin-android","target":"termin-base"},{"source":"termin-android","target":"termin-bootstrap"},{"source":"termin-android","target":"termin-collision"},{"source":"termin-android","target":"termin-components-mesh"},{"source":"termin-android","target":"termin-components-render"},{"source":"termin-android","target":"termin-components-ui"},{"source":"termin-android","target":"termin-display"},{"source":"termin-android","target":"termin-engine"},{"source":"termin-android","target":"termin-framegraph-remote-target"},{"source":"termin-android","target":"termin-graphics"},{"source":"termin-android","target":"termin-materials"},{"source":"termin-android","target":"termin-mesh"},{"source":"termin-android","target":"termin-profiler-remote"},{"source":"termin-android","target":"termin-render"},{"source":"termin-android","target":"termin-render-passes"},{"source":"termin-android","target":"termin-runtime"},{"source":"termin-android","target":"termin-scene"},{"source":"termin-animation","target":"termin-assets"},{"source":"termin-animation","target":"termin-base"},{"source":"termin-animation","target":"termin-inspect"},{"source":"termin-animation","target":"termin-nanobind-sdk"},{"source":"termin-animation","target":"termin-skeleton"},{"source":"termin-app","target":"termin-animation"},{"source":"termin-app","target":"termin-assets"},{"source":"termin-app","target":"termin-base"},{"source":"termin-app","target":"termin-bootstrap"},{"source":"termin-app","target":"termin-collision"},{"source":"termin-app","target":"termin-components-collision"},{"source":"termin-app","target":"termin-components-kinematic"},{"source":"termin-app","target":"termin-components-render"},{"source":"termin-app","target":"termin-components-skeleton"},{"source":"termin-app","target":"termin-csg"},{"source":"termin-app","target":"termin-display"},{"source":"termin-app","target":"termin-engine"},{"source":"termin-app","target":"termin-frame-profiler"},{"source":"termin-app","target":"termin-framegraph-remote-client"},{"source":"termin-app","target":"termin-framegraph-remote-target"},{"source":"termin-app","target":"termin-glb"},{"source":"termin-app","target":"termin-graphics"},{"source":"termin-app","target":"termin-gui-native"},{"source":"termin-app","target":"termin-input"},{"source":"termin-app","target":"termin-inspect"},{"source":"termin-app","target":"termin-materials"},{"source":"termin-app","target":"termin-mcp"},{"source":"termin-app","target":"termin-mesh"},{"source":"termin-app","target":"termin-modules"},{"source":"termin-app","target":"termin-nanobind-sdk"},{"source":"termin-app","target":"termin-navmesh"},{"source":"termin-app","target":"termin-nodegraph"},{"source":"termin-app","target":"termin-profiler-remote"},{"source":"termin-app","target":"termin-project"},{"source":"termin-app","target":"termin-project-build"},{"source":"termin-app","target":"termin-project-modules"},{"source":"termin-app","target":"termin-python-host"},{"source":"termin-app","target":"termin-render"},{"source":"termin-app","target":"termin-render-passes"},{"source":"termin-app","target":"termin-scene"},{"source":"termin-app","target":"termin-shader-runtime"},{"source":"termin-app","target":"termin-skeleton"},{"source":"termin-app","target":"termin-stdlib"},{"source":"termin-app","target":"termin-voxels"},{"source":"termin-assets","target":"termin-base"},{"source":"termin-audio","target":"termin-base"},{"source":"termin-audio","target":"termin-nanobind-sdk"},{"source":"termin-base","target":"termin-nanobind-sdk"},{"source":"termin-bootstrap","target":"tcplot-gui-native"},{"source":"termin-bootstrap","target":"termin-animation"},{"source":"termin-bootstrap","target":"termin-audio"},{"source":"termin-bootstrap","target":"termin-base"},{"source":"termin-bootstrap","target":"termin-collision"},{"source":"termin-bootstrap","target":"termin-components-animation"},{"source":"termin-bootstrap","target":"termin-components-collision"},{"source":"termin-bootstrap","target":"termin-components-foliage"},{"source":"termin-bootstrap","target":"termin-components-kinematic"},{"source":"termin-bootstrap","target":"termin-components-mesh"},{"source":"termin-bootstrap","target":"termin-components-physics"},{"source":"termin-bootstrap","target":"termin-components-physics-fem"},{"source":"termin-bootstrap","target":"termin-components-physics-fem-ui"},{"source":"termin-bootstrap","target":"termin-components-render"},{"source":"termin-bootstrap","target":"termin-components-skeleton"},{"source":"termin-bootstrap","target":"termin-components-ui"},{"source":"termin-bootstrap","target":"termin-display"},{"source":"termin-bootstrap","target":"termin-graphics"},{"source":"termin-bootstrap","target":"termin-input"},{"source":"termin-bootstrap","target":"termin-inspect"},{"source":"termin-bootstrap","target":"termin-materials"},{"source":"termin-bootstrap","target":"termin-mesh"},{"source":"termin-bootstrap","target":"termin-nanobind-sdk"},{"source":"termin-bootstrap","target":"termin-navmesh"},{"source":"termin-bootstrap","target":"termin-prefab"},{"source":"termin-bootstrap","target":"termin-render"},{"source":"termin-bootstrap","target":"termin-render-passes"},{"source":"termin-bootstrap","target":"termin-scene"},{"source":"termin-bootstrap","target":"termin-skeleton"},{"source":"termin-bootstrap","target":"termin-voxels"},{"source":"termin-cli","target":"termin-base"},{"source":"termin-cli","target":"termin-python-host"},{"source":"termin-collision","target":"termin-base"},{"source":"termin-collision","target":"termin-inspect"},{"source":"termin-collision","target":"termin-nanobind-sdk"},{"source":"termin-collision","target":"termin-scene"},{"source":"termin-components-animation","target":"termin-animation"},{"source":"termin-components-animation","target":"termin-base"},{"source":"termin-components-animation","target":"termin-components-skeleton"},{"source":"termin-components-animation","target":"termin-inspect"},{"source":"termin-components-animation","target":"termin-scene"},{"source":"termin-components-animation","target":"termin-skeleton"},{"source":"termin-components-collision","target":"termin-base"},{"source":"termin-components-collision","target":"termin-collision"},{"source":"termin-components-collision","target":"termin-components-mesh"},{"source":"termin-components-collision","target":"termin-inspect"},{"source":"termin-components-collision","target":"termin-mesh"},{"source":"termin-components-collision","target":"termin-render"},{"source":"termin-components-collision","target":"termin-scene"},{"source":"termin-components-foliage","target":"termin-assets"},{"source":"termin-components-foliage","target":"termin-base"},{"source":"termin-components-foliage","target":"termin-graphics"},{"source":"termin-components-foliage","target":"termin-inspect"},{"source":"termin-components-foliage","target":"termin-mesh"},{"source":"termin-components-foliage","target":"termin-nanobind-sdk"},{"source":"termin-components-foliage","target":"termin-render"},{"source":"termin-components-foliage","target":"termin-scene"},{"source":"termin-components-kinematic","target":"termin-base"},{"source":"termin-components-kinematic","target":"termin-inspect"},{"source":"termin-components-kinematic","target":"termin-nanobind-sdk"},{"source":"termin-components-kinematic","target":"termin-robotics"},{"source":"termin-components-kinematic","target":"termin-scene"},{"source":"termin-components-mesh","target":"termin-base"},{"source":"termin-components-mesh","target":"termin-csg"},{"source":"termin-components-mesh","target":"termin-graphics"},{"source":"termin-components-mesh","target":"termin-inspect"},{"source":"termin-components-mesh","target":"termin-mesh"},{"source":"termin-components-mesh","target":"termin-nanobind-sdk"},{"source":"termin-components-mesh","target":"termin-scene"},{"source":"termin-components-physics","target":"termin-base"},{"source":"termin-components-physics","target":"termin-collision"},{"source":"termin-components-physics","target":"termin-components-collision"},{"source":"termin-components-physics","target":"termin-inspect"},{"source":"termin-components-physics","target":"termin-nanobind-sdk"},{"source":"termin-components-physics","target":"termin-physics"},{"source":"termin-components-physics","target":"termin-scene"},{"source":"termin-components-physics-fem","target":"termin-base"},{"source":"termin-components-physics-fem","target":"termin-collision"},{"source":"termin-components-physics-fem","target":"termin-components-collision"},{"source":"termin-components-physics-fem","target":"termin-components-kinematic"},{"source":"termin-components-physics-fem","target":"termin-inspect"},{"source":"termin-components-physics-fem","target":"termin-physics-qopt"},{"source":"termin-components-physics-fem","target":"termin-qopt"},{"source":"termin-components-physics-fem","target":"termin-render"},{"source":"termin-components-physics-fem","target":"termin-robotics"},{"source":"termin-components-physics-fem","target":"termin-scene"},{"source":"termin-components-physics-fem-ui","target":"tcplot-gui-native"},{"source":"termin-components-physics-fem-ui","target":"termin-base"},{"source":"termin-components-physics-fem-ui","target":"termin-components-physics-fem"},{"source":"termin-components-physics-fem-ui","target":"termin-components-ui"},{"source":"termin-components-physics-fem-ui","target":"termin-gui-native"},{"source":"termin-components-physics-fem-ui","target":"termin-inspect"},{"source":"termin-components-physics-fem-ui","target":"termin-scene"},{"source":"termin-components-render","target":"termin-assets"},{"source":"termin-components-render","target":"termin-base"},{"source":"termin-components-render","target":"termin-components-mesh"},{"source":"termin-components-render","target":"termin-components-skeleton"},{"source":"termin-components-render","target":"termin-display"},{"source":"termin-components-render","target":"termin-graphics"},{"source":"termin-components-render","target":"termin-input"},{"source":"termin-components-render","target":"termin-inspect"},{"source":"termin-components-render","target":"termin-materials"},{"source":"termin-components-render","target":"termin-mesh"},{"source":"termin-components-render","target":"termin-nanobind-sdk"},{"source":"termin-components-render","target":"termin-render"},{"source":"termin-components-render","target":"termin-scene"},{"source":"termin-components-skeleton","target":"termin-base"},{"source":"termin-components-skeleton","target":"termin-inspect"},{"source":"termin-components-skeleton","target":"termin-render"},{"source":"termin-components-skeleton","target":"termin-scene"},{"source":"termin-components-skeleton","target":"termin-skeleton"},{"source":"termin-components-tween","target":"termin-scene"},{"source":"termin-components-tween","target":"termin-tween"},{"source":"termin-components-ui","target":"termin-base"},{"source":"termin-components-ui","target":"termin-display"},{"source":"termin-components-ui","target":"termin-gui-native"},{"source":"termin-components-ui","target":"termin-input"},{"source":"termin-components-ui","target":"termin-inspect"},{"source":"termin-components-ui","target":"termin-nanobind-sdk"},{"source":"termin-components-ui","target":"termin-scene"},{"source":"termin-components-voxels","target":"termin-assets"},{"source":"termin-components-voxels","target":"termin-base"},{"source":"termin-components-voxels","target":"termin-inspect"},{"source":"termin-components-voxels","target":"termin-mesh"},{"source":"termin-components-voxels","target":"termin-navmesh"},{"source":"termin-components-voxels","target":"termin-scene"},{"source":"termin-components-voxels","target":"termin-voxels"},{"source":"termin-csg","target":"termin-base"},{"source":"termin-csg","target":"termin-graphics"},{"source":"termin-csg","target":"termin-gui"},{"source":"termin-csg","target":"termin-mesh"},{"source":"termin-csg","target":"termin-nanobind-sdk"},{"source":"termin-csharp","target":"tcplot"},{"source":"termin-csharp","target":"termin-animation"},{"source":"termin-csharp","target":"termin-bootstrap"},{"source":"termin-csharp","target":"termin-collision"},{"source":"termin-csharp","target":"termin-components-collision"},{"source":"termin-csharp","target":"termin-components-foliage"},{"source":"termin-csharp","target":"termin-components-kinematic"},{"source":"termin-csharp","target":"termin-components-mesh"},{"source":"termin-csharp","target":"termin-components-render"},{"source":"termin-csharp","target":"termin-components-skeleton"},{"source":"termin-csharp","target":"termin-display"},{"source":"termin-csharp","target":"termin-engine"},{"source":"termin-csharp","target":"termin-graphics"},{"source":"termin-csharp","target":"termin-materials"},{"source":"termin-csharp","target":"termin-mesh"},{"source":"termin-csharp","target":"termin-render"},{"source":"termin-csharp","target":"termin-render-passes"},{"source":"termin-csharp","target":"termin-scene"},{"source":"termin-csharp","target":"termin-skeleton"},{"source":"termin-csharp","target":"termin-visual-scene"},{"source":"termin-default-assets","target":"termin-assets"},{"source":"termin-default-assets","target":"termin-components-physics"},{"source":"termin-default-assets","target":"termin-components-ui"},{"source":"termin-default-assets","target":"termin-gui"},{"source":"termin-default-assets","target":"termin-mesh"},{"source":"termin-default-assets","target":"termin-navmesh"},{"source":"termin-default-assets","target":"termin-render-passes"},{"source":"termin-default-assets","target":"termin-scene"},{"source":"termin-default-assets","target":"termin-voxels"},{"source":"termin-dispatch","target":"termin-base"},{"source":"termin-dispatch","target":"termin-nanobind-sdk"},{"source":"termin-display","target":"termin-base"},{"source":"termin-display","target":"termin-graphics"},{"source":"termin-display","target":"termin-input"},{"source":"termin-display","target":"termin-nanobind-sdk"},{"source":"termin-display","target":"termin-render"},{"source":"termin-display","target":"termin-scene"},{"source":"termin-display","target":"termin-window"},{"source":"termin-engine","target":"termin-base"},{"source":"termin-engine","target":"termin-collision"},{"source":"termin-engine","target":"termin-display"},{"source":"termin-engine","target":"termin-graphics"},{"source":"termin-engine","target":"termin-input"},{"source":"termin-engine","target":"termin-modules"},{"source":"termin-engine","target":"termin-nanobind-sdk"},{"source":"termin-engine","target":"termin-render"},{"source":"termin-engine","target":"termin-scene"},{"source":"termin-frame-profiler","target":"termin-engine"},{"source":"termin-frame-profiler","target":"termin-gui-native"},{"source":"termin-frame-profiler","target":"termin-profiler-remote"},{"source":"termin-framegraph-remote","target":"termin-base"},{"source":"termin-framegraph-remote-client","target":"termin-base"},{"source":"termin-framegraph-remote-client","target":"termin-framegraph-remote"},{"source":"termin-framegraph-remote-target","target":"termin-base"},{"source":"termin-framegraph-remote-target","target":"termin-engine"},{"source":"termin-framegraph-remote-target","target":"termin-framegraph-remote"},{"source":"termin-glb","target":"termin-assets"},{"source":"termin-glb","target":"termin-base"},{"source":"termin-glb","target":"termin-graphics"},{"source":"termin-glb","target":"termin-mesh"},{"source":"termin-glb","target":"termin-scene"},{"source":"termin-graphics","target":"termin-base"},{"source":"termin-graphics","target":"termin-mesh"},{"source":"termin-graphics","target":"termin-nanobind-sdk"},{"source":"termin-gui","target":"termin-base"},{"source":"termin-gui","target":"termin-graphics"},{"source":"termin-gui-native","target":"termin-base"},{"source":"termin-gui-native","target":"termin-graphics"},{"source":"termin-gui-native","target":"termin-inspect"},{"source":"termin-gui-native","target":"termin-nanobind-sdk"},{"source":"termin-gui-native","target":"termin-visual-scene"},{"source":"termin-gui-native","target":"termin-window"},{"source":"termin-image","target":"termin-nanobind-sdk"},{"source":"termin-input","target":"termin-base"},{"source":"termin-input","target":"termin-nanobind-sdk"},{"source":"termin-input","target":"termin-scene"},{"source":"termin-inspect","target":"termin-base"},{"source":"termin-inspect","target":"termin-nanobind-sdk"},{"source":"termin-lighting","target":"termin-base"},{"source":"termin-lighting","target":"termin-nanobind-sdk"},{"source":"termin-lighting","target":"termin-scene"},{"source":"termin-materials","target":"termin-base"},{"source":"termin-materials","target":"termin-graphics"},{"source":"termin-materials","target":"termin-inspect"},{"source":"termin-materials","target":"termin-nanobind-sdk"},{"source":"termin-mcp","target":"termin-assets"},{"source":"termin-mcp","target":"termin-base"},{"source":"termin-mcp","target":"termin-scene"},{"source":"termin-mesh","target":"termin-base"},{"source":"termin-mesh","target":"termin-nanobind-sdk"},{"source":"termin-modules","target":"termin-base"},{"source":"termin-modules","target":"termin-nanobind-sdk"},{"source":"termin-modules","target":"termin-python-host"},{"source":"termin-navmesh","target":"termin-assets"},{"source":"termin-navmesh","target":"termin-base"},{"source":"termin-navmesh","target":"termin-components-mesh"},{"source":"termin-navmesh","target":"termin-graphics"},{"source":"termin-navmesh","target":"termin-inspect"},{"source":"termin-navmesh","target":"termin-materials"},{"source":"termin-navmesh","target":"termin-nanobind-sdk"},{"source":"termin-navmesh","target":"termin-render"},{"source":"termin-navmesh","target":"termin-scene"},{"source":"termin-navmesh","target":"termin-voxels"},{"source":"termin-openxr","target":"termin-base"},{"source":"termin-openxr","target":"termin-collision"},{"source":"termin-openxr","target":"termin-components-mesh"},{"source":"termin-openxr","target":"termin-components-render"},{"source":"termin-openxr","target":"termin-components-ui"},{"source":"termin-openxr","target":"termin-engine"},{"source":"termin-openxr","target":"termin-graphics"},{"source":"termin-openxr","target":"termin-input"},{"source":"termin-openxr","target":"termin-inspect"},{"source":"termin-openxr","target":"termin-mesh"},{"source":"termin-openxr","target":"termin-profiler-remote"},{"source":"termin-openxr","target":"termin-render"},{"source":"termin-openxr","target":"termin-render-passes"},{"source":"termin-openxr","target":"termin-runtime"},{"source":"termin-openxr","target":"termin-scene"},{"source":"termin-pga","target":"termin-base"},{"source":"termin-physics","target":"termin-base"},{"source":"termin-physics","target":"termin-collision"},{"source":"termin-physics","target":"termin-nanobind-sdk"},{"source":"termin-physics-fem","target":"termin-base"},{"source":"termin-physics-fem","target":"termin-inspect"},{"source":"termin-physics-fem","target":"termin-nanobind-sdk"},{"source":"termin-physics-fem","target":"termin-qopt"},{"source":"termin-physics-fem","target":"termin-scene"},{"source":"termin-physics-qopt","target":"termin-base"},{"source":"termin-physics-qopt","target":"termin-qopt"},{"source":"termin-physics-qopt","target":"termin-robotics"},{"source":"termin-player","target":"termin-assets"},{"source":"termin-player","target":"termin-base"},{"source":"termin-player","target":"termin-bootstrap"},{"source":"termin-player","target":"termin-collision"},{"source":"termin-player","target":"termin-components-collision"},{"source":"termin-player","target":"termin-components-kinematic"},{"source":"termin-player","target":"termin-components-mesh"},{"source":"termin-player","target":"termin-components-physics"},{"source":"termin-player","target":"termin-components-render"},{"source":"termin-player","target":"termin-components-skeleton"},{"source":"termin-player","target":"termin-components-tween"},{"source":"termin-player","target":"termin-components-ui"},{"source":"termin-player","target":"termin-components-voxels"},{"source":"termin-player","target":"termin-display"},{"source":"termin-player","target":"termin-engine"},{"source":"termin-player","target":"termin-graphics"},{"source":"termin-player","target":"termin-inspect"},{"source":"termin-player","target":"termin-lighting"},{"source":"termin-player","target":"termin-mcp"},{"source":"termin-player","target":"termin-mesh"},{"source":"termin-player","target":"termin-modules"},{"source":"termin-player","target":"termin-nanobind-sdk"},{"source":"termin-player","target":"termin-navmesh"},{"source":"termin-player","target":"termin-profiler-remote"},{"source":"termin-player","target":"termin-project"},{"source":"termin-player","target":"termin-project-modules"},{"source":"termin-player","target":"termin-python-host"},{"source":"termin-player","target":"termin-render"},{"source":"termin-player","target":"termin-render-passes"},{"source":"termin-player","target":"termin-runtime"},{"source":"termin-player","target":"termin-scene"},{"source":"termin-player","target":"termin-shader-runtime"},{"source":"termin-player","target":"termin-stdlib"},{"source":"termin-player","target":"termin-tween"},{"source":"termin-player","target":"termin-voxels"},{"source":"termin-prefab","target":"termin-assets"},{"source":"termin-prefab","target":"termin-base"},{"source":"termin-prefab","target":"termin-inspect"},{"source":"termin-prefab","target":"termin-nanobind-sdk"},{"source":"termin-prefab","target":"termin-scene"},{"source":"termin-profiler","target":"termin-frame-profiler"},{"source":"termin-profiler","target":"termin-graphics"},{"source":"termin-profiler","target":"termin-gui-native"},{"source":"termin-profiler-remote","target":"termin-base"},{"source":"termin-project","target":"termin-base"},{"source":"termin-project-build","target":"termin-base"},{"source":"termin-project-build","target":"termin-gui"},{"source":"termin-project-build","target":"termin-project"},{"source":"termin-project-build","target":"termin-shader-runtime"},{"source":"termin-project-build","target":"termin-stdlib"},{"source":"termin-project-modules","target":"termin-base"},{"source":"termin-project-modules","target":"termin-nanobind-sdk"},{"source":"termin-project-modules","target":"termin-project"},{"source":"termin-project-modules","target":"termin-scene"},{"source":"termin-qopt","target":"termin-base"},{"source":"termin-render","target":"termin-base"},{"source":"termin-render","target":"termin-graphics"},{"source":"termin-render","target":"termin-inspect"},{"source":"termin-render","target":"termin-lighting"},{"source":"termin-render","target":"termin-materials"},{"source":"termin-render","target":"termin-nanobind-sdk"},{"source":"termin-render","target":"termin-scene"},{"source":"termin-render-passes","target":"termin-base"},{"source":"termin-render-passes","target":"termin-components-mesh"},{"source":"termin-render-passes","target":"termin-components-render"},{"source":"termin-render-passes","target":"termin-components-ui"},{"source":"termin-render-passes","target":"termin-graphics"},{"source":"termin-render-passes","target":"termin-gui-native"},{"source":"termin-render-passes","target":"termin-inspect"},{"source":"termin-render-passes","target":"termin-lighting"},{"source":"termin-render-passes","target":"termin-materials"},{"source":"termin-render-passes","target":"termin-nanobind-sdk"},{"source":"termin-render-passes","target":"termin-render"},{"source":"termin-robotics","target":"termin-base"},{"source":"termin-robotics","target":"termin-nanobind-sdk"},{"source":"termin-robotics","target":"termin-qopt"},{"source":"termin-runtime","target":"termin-base"},{"source":"termin-runtime","target":"termin-bootstrap"},{"source":"termin-runtime","target":"termin-components-foliage"},{"source":"termin-runtime","target":"termin-components-mesh"},{"source":"termin-runtime","target":"termin-components-render"},{"source":"termin-runtime","target":"termin-engine"},{"source":"termin-runtime","target":"termin-graphics"},{"source":"termin-runtime","target":"termin-gui-native"},{"source":"termin-runtime","target":"termin-image"},{"source":"termin-runtime","target":"termin-mesh"},{"source":"termin-runtime","target":"termin-render"},{"source":"termin-runtime","target":"termin-scene"},{"source":"termin-scene","target":"termin-base"},{"source":"termin-scene","target":"termin-inspect"},{"source":"termin-scene","target":"termin-nanobind-sdk"},{"source":"termin-shader-runtime","target":"termin-assets"},{"source":"termin-shader-runtime","target":"termin-base"},{"source":"termin-shader-runtime","target":"termin-graphics"},{"source":"termin-skeleton","target":"termin-assets"},{"source":"termin-skeleton","target":"termin-base"},{"source":"termin-skeleton","target":"termin-inspect"},{"source":"termin-skeleton","target":"termin-nanobind-sdk"},{"source":"termin-skeleton","target":"termin-scene"},{"source":"termin-visual-scene","target":"termin-base"},{"source":"termin-visual-scene","target":"termin-graphics"},{"source":"termin-visual-scene","target":"termin-inspect"},{"source":"termin-visual-scene","target":"termin-nanobind-sdk"},{"source":"termin-visual-scene","target":"termin-window"},{"source":"termin-voxels","target":"termin-base"},{"source":"termin-voxels","target":"termin-graphics"},{"source":"termin-voxels","target":"termin-inspect"},{"source":"termin-voxels","target":"termin-mesh"},{"source":"termin-voxels","target":"termin-nanobind-sdk"},{"source":"termin-web-core","target":"termin-base"},{"source":"termin-web-core","target":"termin-bootstrap"},{"source":"termin-web-core","target":"termin-graphics"},{"source":"termin-web-core","target":"termin-inspect"},{"source":"termin-web-core","target":"termin-mesh"},{"source":"termin-web-core","target":"termin-runtime"},{"source":"termin-web-core","target":"termin-scene"},{"source":"termin-window","target":"termin-base"},{"source":"termin-window","target":"termin-graphics"}]}</script>
+<script>
+(() => {
+  "use strict";
+  const data = JSON.parse(document.getElementById("graph-data").textContent);
+  const nodeIds = data.nodes.map(node => node.id);
+  const nodeSet = new Set(nodeIds);
+  const dependencies = new Map(nodeIds.map(id => [id, []]));
+  const dependents = new Map(nodeIds.map(id => [id, []]));
+  for (const edge of data.edges) {
+    dependencies.get(edge.source).push(edge.target);
+    dependents.get(edge.target).push(edge.source);
+  }
+  for (const values of [...dependencies.values(), ...dependents.values()]) values.sort();
+
+  const input = document.getElementById("module-input");
+  const depthInput = document.getElementById("depth");
+  const dependenciesInput = document.getElementById("dependencies");
+  const dependentsInput = document.getElementById("dependents");
+  const viewport = document.getElementById("viewport");
+  const svg = document.getElementById("graph");
+  const empty = document.getElementById("empty");
+  const counts = document.getElementById("counts");
+  const ns = "http://www.w3.org/2000/svg";
+  let selected = "";
+  let viewBox = {x: 0, y: 0, width: 1000, height: 700};
+
+  const list = document.getElementById("module-list");
+  for (const id of nodeIds) {
+    const option = document.createElement("option");
+    option.value = id;
+    list.append(option);
+  }
+
+  function walk(start, adjacency, maxDepth) {
+    const distances = new Map();
+    const queue = [[start, 0]];
+    while (queue.length) {
+      const [current, distance] = queue.shift();
+      if (distance >= maxDepth) continue;
+      for (const next of adjacency.get(current) || []) {
+        if (next === start || distances.has(next)) continue;
+        distances.set(next, distance + 1);
+        queue.push([next, distance + 1]);
+      }
+    }
+    return distances;
+  }
+
+  function svgElement(name, attributes = {}) {
+    const element = document.createElementNS(ns, name);
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+    return element;
+  }
+
+  function setViewBox(box) {
+    viewBox = box;
+    svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.width} ${box.height}`);
+  }
+
+  function renderList(id, items) {
+    const root = document.getElementById(id);
+    root.replaceChildren();
+    if (!items.length) {
+      const item = document.createElement("li");
+      item.className = "hint";
+      item.textContent = "нет";
+      root.append(item);
+      return;
+    }
+    for (const module of items) {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.textContent = module;
+      button.addEventListener("click", () => select(module));
+      item.append(button);
+      root.append(item);
+    }
+  }
+
+  function select(module, updateHash = true) {
+    if (!nodeSet.has(module)) return;
+    selected = module;
+    input.value = module;
+    if (updateHash) history.replaceState(null, "", `#${encodeURIComponent(module)}`);
+    render();
+  }
+
+  function render() {
+    viewport.replaceChildren();
+    if (!selected) return;
+    empty.hidden = true;
+    const maxDepth = depthInput.value === "all" ? Infinity : Number(depthInput.value);
+    const dependencyDistances = dependenciesInput.checked ? walk(selected, dependencies, maxDepth) : new Map();
+    const dependentDistances = dependentsInput.checked ? walk(selected, dependents, maxDepth) : new Map();
+    const visible = new Set([selected, ...dependencyDistances.keys(), ...dependentDistances.keys()]);
+    const columns = new Map([[0, [selected]]]);
+    const rowsPerColumn = 10;
+    function placeSide(distances, direction) {
+      const byDistance = new Map();
+      for (const [id, distance] of distances) {
+        if (!byDistance.has(distance)) byDistance.set(distance, []);
+        byDistance.get(distance).push(id);
+      }
+      let column = direction;
+      for (const distance of [...byDistance.keys()].sort((a, b) => a - b)) {
+        const modules = byDistance.get(distance).sort();
+        for (let offset = 0; offset < modules.length; offset += rowsPerColumn) {
+          columns.set(column, modules.slice(offset, offset + rowsPerColumn));
+          column += direction;
+        }
+      }
+    }
+    placeSide(dependentDistances, -1);
+    const dependencyOnly = new Map(
+      [...dependencyDistances].filter(([id]) => !dependentDistances.has(id))
+    );
+    placeSide(dependencyOnly, 1);
+
+    const columnKeys = [...columns.keys()].sort((a, b) => a - b);
+    const maxRows = Math.max(...[...columns.values()].map(items => items.length));
+    const xGap = 300;
+    const yGap = 66;
+    const nodeWidth = 210;
+    const nodeHeight = 38;
+    const positions = new Map();
+    for (const column of columnKeys) {
+      const modules = columns.get(column);
+      const offset = (maxRows - modules.length) * yGap / 2;
+      modules.forEach((id, index) => positions.set(id, {
+        x: (column - columnKeys[0]) * xGap + 70,
+        y: offset + index * yGap + 75,
+      }));
+    }
+
+    const labels = [[0, "Выбранный модуль"]];
+    if (columnKeys[0] < 0) labels.push([columnKeys[0], "Зависимые модули"]);
+    if (columnKeys.at(-1) > 0) labels.push([columnKeys.at(-1), "Зависимости"]);
+    for (const [column, label] of labels) {
+      const x = (column - columnKeys[0]) * xGap + 70 + nodeWidth / 2;
+      const text = svgElement("text", {x, y: 35, class: "column-label"});
+      text.textContent = label;
+      viewport.append(text);
+    }
+
+    function traversalEdge(edge) {
+      const dependencySource = edge.source === selected ? 0 : dependencyDistances.get(edge.source);
+      const dependencyTarget = edge.target === selected ? 0 : dependencyDistances.get(edge.target);
+      if (dependencySource !== undefined && dependencyTarget === dependencySource + 1) return true;
+      const dependentSource = edge.source === selected ? 0 : dependentDistances.get(edge.source);
+      const dependentTarget = edge.target === selected ? 0 : dependentDistances.get(edge.target);
+      return dependentTarget !== undefined && dependentSource === dependentTarget + 1;
+    }
+
+    for (const edge of data.edges) {
+      if (!visible.has(edge.source) || !visible.has(edge.target) || !traversalEdge(edge)) continue;
+      const source = positions.get(edge.source);
+      const target = positions.get(edge.target);
+      if (!source || !target) continue;
+      const startsRight = target.x >= source.x;
+      const x1 = source.x + (startsRight ? nodeWidth : 0);
+      const x2 = target.x + (startsRight ? 0 : nodeWidth);
+      const y1 = source.y + nodeHeight / 2;
+      const y2 = target.y + nodeHeight / 2;
+      const curve = Math.max(45, Math.abs(x2 - x1) * .42);
+      const path = svgElement("path", {
+        class: "edge",
+        d: `M ${x1} ${y1} C ${x1 + (startsRight ? curve : -curve)} ${y1}, ${x2 + (startsRight ? -curve : curve)} ${y2}, ${x2} ${y2}`,
+        "marker-end": "url(#arrow)",
+      });
+      const title = svgElement("title");
+      title.textContent = `${edge.source} зависит от ${edge.target}`;
+      path.append(title);
+      viewport.append(path);
+    }
+
+    for (const [id, position] of positions) {
+      let kind = "";
+      if (id === selected) kind = "selected";
+      else if (dependencyDistances.has(id)) kind = "dependency";
+      else if (dependentDistances.has(id)) kind = "dependent";
+      const group = svgElement("g", {class: `node ${kind}`, tabindex: "0", role: "button"});
+      group.setAttribute("transform", `translate(${position.x} ${position.y})`);
+      group.append(svgElement("rect", {width: nodeWidth, height: nodeHeight, rx: 8}));
+      const text = svgElement("text", {x: 12, y: 24});
+      text.textContent = id;
+      group.append(text);
+      group.addEventListener("click", () => select(id));
+      group.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") select(id);
+      });
+      viewport.append(group);
+    }
+
+    const width = Math.max(500, columnKeys.length * xGap - (xGap - nodeWidth) + 140);
+    const height = Math.max(320, maxRows * yGap + 130);
+    setViewBox({x: 0, y: 0, width, height});
+    counts.textContent = `${visible.size} модулей, ${[...viewport.querySelectorAll(".edge")].length} связей`;
+    renderList("dependency-list", dependencies.get(selected));
+    renderList("dependent-list", dependents.get(selected));
+  }
+
+  input.addEventListener("change", () => select(input.value.trim()));
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") select(input.value.trim());
+  });
+  for (const control of [depthInput, dependenciesInput, dependentsInput]) control.addEventListener("change", render);
+  document.getElementById("fit").addEventListener("click", render);
+
+  let drag = null;
+  svg.addEventListener("pointerdown", event => {
+    drag = {x: event.clientX, y: event.clientY, box: {...viewBox}};
+    svg.setPointerCapture(event.pointerId);
+  });
+  svg.addEventListener("pointermove", event => {
+    if (!drag) return;
+    const scaleX = drag.box.width / svg.clientWidth;
+    const scaleY = drag.box.height / svg.clientHeight;
+    setViewBox({...drag.box, x: drag.box.x - (event.clientX - drag.x) * scaleX, y: drag.box.y - (event.clientY - drag.y) * scaleY});
+  });
+  svg.addEventListener("pointerup", () => { drag = null; });
+  svg.addEventListener("wheel", event => {
+    event.preventDefault();
+    const factor = event.deltaY > 0 ? 1.12 : .88;
+    const rect = svg.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width;
+    const py = (event.clientY - rect.top) / rect.height;
+    const width = viewBox.width * factor;
+    const height = viewBox.height * factor;
+    setViewBox({x: viewBox.x + (viewBox.width - width) * px, y: viewBox.y + (viewBox.height - height) * py, width, height});
+  }, {passive: false});
+
+  const hashModule = decodeURIComponent(location.hash.slice(1));
+  select(nodeSet.has(hashModule) ? hashModule : (nodeSet.has("termin-app") ? "termin-app" : nodeIds[0]), false);
+})();
+</script>
+</body>
+</html>
