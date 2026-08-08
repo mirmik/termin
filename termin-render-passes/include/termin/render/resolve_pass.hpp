@@ -37,6 +37,8 @@ namespace termin {
         std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
         void execute(ExecuteContext& ctx) override;
+        bool get_raster_resolve_contract(ExecuteContext& ctx,
+                                         tc_raster_resolve_contract& out_contract) const override;
         void destroy() override;
     };
 
@@ -63,6 +65,8 @@ namespace termin {
         std::set<const char*> compute_writes() const override;
         std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
         void execute(ExecuteContext& ctx) override;
+        bool get_raster_resolve_contract(ExecuteContext& ctx,
+                                         tc_raster_resolve_contract& out_contract) const override;
     };
 
 } // namespace termin

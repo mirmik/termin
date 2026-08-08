@@ -197,6 +197,8 @@ namespace termin {
 
         // Override from CxxFramePass
         void execute(ExecuteContext& ctx) override;
+        bool get_raster_contract(ExecuteContext& ctx, tc_raster_pass_contract& out_contract) const override;
+        bool record_raster(ExecuteContext& ctx) override;
         void collect_scene_shader_usages(tc_scene_handle scene,
                                          const std::function<void(TcShader)>& emit) const override;
 
@@ -241,6 +243,11 @@ namespace termin {
         }
 
     private:
+        void execute_with_data_impl(ExecuteContext& ctx,
+                                    const ColorPassExecuteData& data,
+                                    bool raster_scope_already_open);
+        void execute_impl(ExecuteContext& ctx, bool raster_scope_already_open);
+
         // Collect draw calls from scene entities into cached_draw_calls_.
         void collect_draw_calls(tc_scene_handle scene,
                                 const std::string& phase_mark,
