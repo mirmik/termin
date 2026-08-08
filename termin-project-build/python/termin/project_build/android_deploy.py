@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -66,20 +65,17 @@ def resolve_adb(adb: str | Path | None) -> Path:
             return Path(found_adb).resolve()
         raise FileNotFoundError(f"adb executable does not exist: {adb_text}")
 
-    env_adb = os.environ.get("ADB")
-    if env_adb:
-        adb_path = Path(env_adb).expanduser()
-        if adb_path.exists():
-            return adb_path.resolve()
-        found_adb = shutil.which(env_adb)
-        if found_adb is not None:
-            return Path(found_adb).resolve()
-        raise FileNotFoundError(f"ADB points to a missing executable: {env_adb}")
+    from termin.project_build.toolchains import create_local_toolchain_context
 
-    found = shutil.which("adb")
-    if found is None:
-        raise FileNotFoundError("adb executable not found. Set ADB or add adb to PATH.")
-    return Path(found).resolve()
+    resolved = create_local_toolchain_context().adb
+    if resolved is None:
+        raise FileNotFoundError(
+            "adb executable not found. Set ADB, configure Build/adb or Build/androidHome, "
+            "or add adb to PATH."
+        )
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Configured adb executable does not exist: {resolved}")
+    return resolved
 
 
 def run_deploy_command(

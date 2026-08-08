@@ -74,13 +74,14 @@ TEST_CASE("Android profiler bridge owns launch token and exact forward") {
     auto fake = std::make_shared<FakeAdb>();
     AndroidProfilerBridge bridge([fake](const auto& arguments, auto timeout) { return (*fake)(arguments, timeout); });
 
-    CHECK(bridge.refresh_devices());
+    CHECK(bridge.refresh_devices("adb"));
     CHECK(wait_until([&] { return !bridge.snapshot().busy; }));
     const auto discovered = bridge.snapshot();
     CHECK_EQ(discovered.devices.size(), 2U);
     CHECK(discovered.status.find("1 ready device") != std::string::npos);
 
     AndroidConnectRequest request;
+    request.adb_path = "adb";
     request.serial = "quest-ready";
     request.package_name = "org.example.openxr";
     request.activity_name = "android.app.NativeActivity";
@@ -120,6 +121,7 @@ TEST_CASE("Android profiler bridge validates components without invoking adb") {
     auto fake = std::make_shared<FakeAdb>();
     AndroidProfilerBridge bridge([fake](const auto& arguments, auto timeout) { return (*fake)(arguments, timeout); });
     AndroidConnectRequest request;
+    request.adb_path = "adb";
     request.serial = "quest";
     request.package_name = "org.example;bad";
     CHECK(!bridge.connect(request));
