@@ -10,6 +10,7 @@ GUARD_TEST_MAIN();
 #include <vector>
 
 #include <termin/materials/surface_contract_registry.h>
+#include <termin/lighting/lighting_ubo.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
@@ -184,6 +185,7 @@ TEST_CASE("standard forward consumer composes static skinned and foliage variant
         REQUIRE(variant.is_executable());
         CHECK(std::strstr(variant.fragment_source(), "evaluate_standard_surface") != nullptr);
         CHECK(std::strstr(variant.fragment_source(), "termin_standard_pbr_forward") != nullptr);
+        CHECK(std::strstr(variant.fragment_source(), "has_environment_lighting()") != nullptr);
 
         tc_shader_contract_view contract{};
         REQUIRE(tc_shader_get_contract_view(variant.get(), &contract));
@@ -199,4 +201,21 @@ TEST_CASE("standard forward consumer composes static skinned and foliage variant
 
     tc_surface_contract_registry_clear();
     tc_shader_shutdown();
+}
+
+TEST_CASE("lighting UBO explicitly distinguishes ambient fallback from environment lighting") {
+    termin::LightingUBO lighting;
+    const termin::Vec3 ambient{0.2, 0.3, 0.4};
+    const termin::Vec3 camera{1.0, 2.0, 3.0};
+    const termin::ShadowSettings shadows{};
+
+    lighting.update_from_lights({}, ambient, 0.75f, camera, shadows, false);
+    CHECK(lighting.data.environment_lighting_enabled == 0.0f);
+    CHECK(lighting.data.ambient_color.x == guard::Approx(0.2).epsilon(1e-6));
+    CHECK(lighting.data.ambient_color.y == guard::Approx(0.3).epsilon(1e-6));
+    CHECK(lighting.data.ambient_color.z == guard::Approx(0.4).epsilon(1e-6));
+    CHECK(lighting.data.ambient_intensity == guard::Approx(0.75));
+
+    lighting.update_from_lights({}, ambient, 0.75f, camera, shadows, true);
+    CHECK(lighting.data.environment_lighting_enabled == 1.0f);
 }

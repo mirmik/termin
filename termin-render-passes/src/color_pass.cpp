@@ -145,19 +145,26 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             roughness);
     float3 ibl_diffuse_weight =
         (1.0 - ibl_fresnel) * (1.0 - metallic);
-    float3 irradiance = sample_ibl_diffuse_irradiance(normal);
-    float3 diffuse_ibl =
-        irradiance * surface.base_color / TERMIN_STANDARD_PBR_PI;
+    float3 ambient;
+    if (has_environment_lighting()) {
+        float3 irradiance = sample_ibl_diffuse_irradiance(normal);
+        float3 diffuse_ibl =
+            irradiance * surface.base_color / TERMIN_STANDARD_PBR_PI;
 
-    float3 reflection_direction = reflect(-view_direction, normal);
-    float3 prefiltered_radiance = sample_ibl_prefiltered_specular(
-        reflection_direction,
-        roughness * TERMIN_STANDARD_PBR_IBL_MAX_LOD);
-    float2 environment_brdf = sample_ibl_brdf(normal_dot_view, roughness);
-    float3 specular_ibl = prefiltered_radiance *
-        (reflectance_zero * environment_brdf.x + environment_brdf.y);
-    float3 ambient =
-        (ibl_diffuse_weight * diffuse_ibl + specular_ibl) * occlusion;
+        float3 reflection_direction = reflect(-view_direction, normal);
+        float3 prefiltered_radiance = sample_ibl_prefiltered_specular(
+            reflection_direction,
+            roughness * TERMIN_STANDARD_PBR_IBL_MAX_LOD);
+        float2 environment_brdf = sample_ibl_brdf(normal_dot_view, roughness);
+        float3 specular_ibl = prefiltered_radiance *
+            (reflectance_zero * environment_brdf.x + environment_brdf.y);
+        ambient =
+            (ibl_diffuse_weight * diffuse_ibl + specular_ibl) * occlusion;
+    } else {
+        ambient =
+            get_ambient_color() * get_ambient_intensity() *
+            surface.base_color * occlusion;
+    }
     float3 direct = float3(0.0, 0.0, 0.0);
 
     for (int light_index = 0;
@@ -991,10 +998,16 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         // decided by reflected resources during binding, not by legacy feature
         // flags that material-pipeline variants may not own at collection time.
         tgfx::BufferHandle lighting_ubo_tgfx2{};
+        const bool environment_lighting_ready =
+            data.environment_lighting && data.environment_lighting->ready();
         if (!cached_draw_calls_.empty()) {
             lighting_ubo_.create(device);
-            lighting_ubo_.update_from_lights(
-                data.lights, data.ambient_color, data.ambient_intensity, data.camera_position, data.shadow_settings);
+            lighting_ubo_.update_from_lights(data.lights,
+                                             data.ambient_color,
+                                             data.ambient_intensity,
+                                             data.camera_position,
+                                             data.shadow_settings,
+                                             environment_lighting_ready);
             lighting_ubo_.upload();
             lighting_ubo_tgfx2 = lighting_ubo_.buffer;
         }
@@ -1051,7 +1064,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
 
         std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;
         extra_texture_bindings.reserve(extra_textures.size() + 3u);
-        if (data.environment_lighting && data.environment_lighting->ready()) {
+        if (environment_lighting_ready) {
             extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
                 "ibl_diffuse_irradiance",
                 data.environment_lighting->diffuse_irradiance,
@@ -1064,7 +1077,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                 true});
             extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
                 "ibl_brdf_lut", data.environment_lighting->brdf_lut, data.environment_lighting->sampler, true});
-        } else if (!cached_draw_calls_.empty()) {
+        } else if (!environment_res.empty() && !cached_draw_calls_.empty()) {
             tc::Log::error("[ColorPass:%s] environment lighting resource is missing or incomplete",
                            get_pass_name().c_str());
         }

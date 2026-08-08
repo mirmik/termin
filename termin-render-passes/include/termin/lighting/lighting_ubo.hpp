@@ -77,7 +77,7 @@ namespace termin {
         float shadow_method;
         float shadow_softness;
         float shadow_bias;
-        float _pad0;
+        float environment_lighting_enabled;
     };
 
     static_assert(sizeof(LightingUBOData) == 688, "LightingUBOData must be 688 bytes");
@@ -117,7 +117,8 @@ namespace termin {
                                 const Vec3& ambient_color,
                                 float ambient_intensity,
                                 const Vec3& camera_position,
-                                const ShadowSettings& shadow_settings);
+                                const ShadowSettings& shadow_settings,
+                                bool environment_lighting_enabled);
 
         // Upload data to GPU (buffer must be create()'d first).
         void upload();

@@ -33,7 +33,8 @@ namespace termin {
                                          const Vec3& ambient_color,
                                          float ambient_intensity,
                                          const Vec3& camera_position,
-                                         const ShadowSettings& shadow_settings) {
+                                         const ShadowSettings& shadow_settings,
+                                         bool environment_lighting_enabled) {
         int count = static_cast<int>(std::min(lights.size(), static_cast<size_t>(UBO_MAX_LIGHTS)));
         for (int i = 0; i < count; ++i) {
             const Light& light = lights[i];
@@ -61,7 +62,7 @@ namespace termin {
         data.shadow_method = float(shadow_settings.method);
         data.shadow_softness = float(shadow_settings.softness);
         data.shadow_bias = float(shadow_settings.bias);
-        data._pad0 = 0.0f;
+        data.environment_lighting_enabled = environment_lighting_enabled ? 1.0f : 0.0f;
     }
 
     void LightingUBO::upload() {
