@@ -14,6 +14,7 @@ namespace termin {
 
     TERMIN_RENDER_PASSES_API
     std::vector<gui_native::UiDocumentSubmission> collect_ui_document_submissions(const ExecuteContext& ctx,
+                                                                                  bool include_scene_entities,
                                                                                   bool include_internal_entities);
 
     class TERMIN_RENDER_PASSES_API UIWidgetPass : public CxxFramePass {
@@ -22,11 +23,13 @@ namespace termin {
         std::string input_res = "color+ui";
         std::string output_res = "color+widgets";
         std::string font_path;
+        bool include_scene_entities = true;
         bool include_internal_entities = false;
 
         INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
         INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
         INSPECT_FIELD(UIWidgetPass, font_path, "Font Path", "string")
+        INSPECT_FIELD(UIWidgetPass, include_scene_entities, "Include Scene Entities", "bool")
         INSPECT_FIELD(UIWidgetPass, include_internal_entities, "Include Internal Entities", "bool")
         INSPECT_TYPE_METADATA(UIWidgetPass,
                               graph,

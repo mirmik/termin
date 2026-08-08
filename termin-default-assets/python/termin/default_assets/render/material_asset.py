@@ -494,15 +494,14 @@ def _parse_material_content(
         else:
             log.warning(f"[MaterialAsset] Texture asset not found by UUID: {tex_asset_uuid}")
 
-    # Load non-asset texture references (Phase 8): render-target color/depth
-    # bindings serialized as `texture_refs: {uniform: {kind, target, channel}}`.
-    # Resolved by render-target name; ensure_textures() is called on the
-    # target so its color/depth handles exist before we bind them.
+    # Symbolic non-asset texture references are retained by the material and
+    # resolved against the current render context at draw time. In particular,
+    # loading a material must not capture a render target from whichever scene
+    # happened to be alive first.
     texture_refs = data.get("texture_refs", {})
+    normalized_texture_refs = {}
     for uniform_name, ref in texture_refs.items():
-        tc_tex = _resolve_texture_ref(ref)
-        if tc_tex is not None:
-            textures[uniform_name] = tc_tex
+        normalized_texture_refs[uniform_name] = _validate_texture_ref(ref)
 
     # Create TcMaterial
     mat = TcMaterial.create(name or "material", file_uuid or "")
@@ -548,6 +547,14 @@ def _parse_material_content(
                         f"failed to bind texture '{tex_name}' in material "
                         f"'{name or 'material'}'"
                     )
+
+    for uniform_name, ref in normalized_texture_refs.items():
+        mat.set_texture_source(
+            uniform_name,
+            ref["kind"],
+            ref["target"],
+            ref["channel"],
+        )
 
     return mat, file_uuid
 
@@ -637,10 +644,19 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         # Save material-level textures. Two destinations:
         #   - `textures`: uniform → asset UUID (regular TextureAsset).
         #   - `texture_refs`: uniform → {kind, target, channel} for non-asset
-        #     handles (currently render-target color/depth — Phase 8).
+        #     symbolic render-target color/depth sources.
         textures_data: Dict[str, str] = {}
         texture_refs_data: Dict[str, Dict[str, str]] = {}
+        symbolic_sources = dict(material.texture_sources)
+        for name, ref in symbolic_sources.items():
+            texture_refs_data[name] = {
+                "kind": str(ref["kind"]),
+                "target": str(ref["target"]),
+                "channel": str(ref["channel"]),
+            }
         for name, tex in material.textures.items():
+            if name in symbolic_sources:
+                continue
             if tex is None or not tex.is_valid:
                 continue
             tex_name = tex.name
@@ -685,7 +701,7 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         json.dump(result, f, indent=2, ensure_ascii=False)
 
 
-# --- Render-target texture references (Phase 8) ---------------------------
+# --- Render-target texture references --------------------------------------
 #
 # Materials can sample render-target color/depth as textures. RT-owned
 # tc_textures don't have a TextureAsset behind them, so they're persisted
@@ -729,31 +745,18 @@ def _classify_render_target_texture(tc_tex) -> Dict[str, str] | None:
     return None
 
 
-def _resolve_texture_ref(ref: Dict[str, Any]):
-    """Resolve a `texture_refs` entry into a TcTexture instance.
-
-    Returns the TcTexture or None if the target isn't currently in the pool.
-    `ensure_textures()` is called so the channel handles exist before bind.
-    """
+def _validate_texture_ref(ref: Dict[str, Any]) -> Dict[str, str]:
     if not isinstance(ref, dict):
-        return None
+        raise ValueError("material texture_ref must be an object")
     kind = ref.get("kind")
-    if kind != "render_target":
-        log.warning(f"[MaterialAsset] Unknown texture_ref kind: {kind}")
-        return None
-    target_name = ref.get("target", "")
+    target = ref.get("target")
     channel = ref.get("channel", "color")
-    if not target_name:
-        return None
-    for h, name in _iter_render_targets():
-        if name != target_name:
-            continue
-        h.ensure_textures()
-        if channel == "color":
-            return h.color_texture
-        if channel == "depth":
-            return h.depth_texture
-        log.warning(f"[MaterialAsset] Unknown channel '{channel}' for RT '{target_name}'")
-        return None
-    log.warning(f"[MaterialAsset] Render target '{target_name}' not found in pool")
-    return None
+    if kind != "render_target":
+        raise ValueError(f"unsupported material texture_ref kind '{kind}'")
+    if not isinstance(target, str) or not target:
+        raise ValueError("render_target texture_ref requires a non-empty target")
+    if channel not in ("color", "depth"):
+        raise ValueError(
+            f"render_target texture_ref '{target}' has unsupported channel '{channel}'"
+        )
+    return {"kind": kind, "target": target, "channel": channel}

@@ -199,6 +199,7 @@ namespace termin {
             },
         }};
         MaterialPipelineResourceView id_resources{};
+        id_resources.material_texture_sources = ctx.material_texture_sources;
         id_resources.uniforms = per_frame_uniforms.data();
         id_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
         prepare_material_pipeline_resources(*ctx.ctx2, device, id_shader.shader, nullptr, id_resources);
@@ -263,6 +264,7 @@ namespace termin {
             }};
 
             MaterialPipelineResourceView draw_material_resources{};
+            draw_material_resources.material_texture_sources = ctx.material_texture_sources;
             RenderItemResourceBinding resource_binding{};
             resource_binding.material_resources = &draw_material_resources;
             resource_binding.named_uniforms = base_draw_uniforms.data();

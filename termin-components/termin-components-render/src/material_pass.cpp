@@ -231,6 +231,7 @@ namespace termin {
         MaterialPipelineResourceView material_resources{};
         material_resources.per_frame = &per_frame;
         material_resources.per_frame_size = static_cast<uint32_t>(sizeof(per_frame));
+        material_resources.material_texture_sources = ctx.material_texture_sources;
         prepare_material_pipeline_resources(*ctx2, device, shader_binding.shader, phase, material_resources);
 
         auto bind_graph_texture = [&](const std::string& res_name, const std::string& uniform_name) {

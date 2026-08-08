@@ -563,18 +563,22 @@ namespace termin {
                                          std::string input_res,
                                          std::string output_res,
                                          std::string pass_name,
-                                         bool include_internal_entities) {
+                                         bool include_internal_entities,
+                                         bool include_scene_entities) {
                                           new (self) UIWidgetPass(input_res, output_res);
                                           self->pass_name_set(pass_name);
                                           self->include_internal_entities = include_internal_entities;
+                                          self->include_scene_entities = include_scene_entities;
                                           init_pass_from_python(self, "UIWidgetPass");
                                       },
                                       nb::arg("input_res") = "color+ui",
                                       nb::arg("output_res") = "color+widgets",
                                       nb::arg("pass_name") = "UIWidgets",
-                                      nb::arg("include_internal_entities") = false)
+                                      nb::arg("include_internal_entities") = false,
+                                      nb::arg("include_scene_entities") = true)
                                   .def_rw("input_res", &UIWidgetPass::input_res)
                                   .def_rw("output_res", &UIWidgetPass::output_res)
+                                  .def_rw("include_scene_entities", &UIWidgetPass::include_scene_entities)
                                   .def_rw("include_internal_entities", &UIWidgetPass::include_internal_entities)
                                   .def("compute_reads", &UIWidgetPass::compute_reads)
                                   .def("compute_writes", &UIWidgetPass::compute_writes)

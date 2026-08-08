@@ -158,6 +158,7 @@ def player_bootstrap_restores_loaded_passes_after_repeated_shutdown() -> None:
             bootstrap_player()
             assert tc_pass_registry_has("UIWidgetPass")
             fields = {field.path for field in InspectRegistry.instance().fields("UIWidgetPass")}
+            assert "include_scene_entities" in fields
             assert "include_internal_entities" in fields
         finally:
             shutdown_player()

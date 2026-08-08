@@ -54,11 +54,20 @@ class _Material:
             "tint": (1.0, 0.5, 0.25, 1.0),
         }
         self.textures = {"albedo": _Texture()}
+        self.texture_sources = {}
         self.assigned_texture = None
 
     def set_texture(self, name, texture) -> int:
+        self.texture_sources.pop(name, None)
         self.assigned_texture = (name, texture)
         return 1
+
+    def set_texture_source(self, name, kind, source_name, channel) -> None:
+        self.texture_sources[name] = {
+            "kind": kind,
+            "target": source_name,
+            "channel": channel,
+        }
 
 
 class _Program:

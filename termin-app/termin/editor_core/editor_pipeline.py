@@ -194,6 +194,7 @@ def make_editor_pipeline() -> RenderPipeline:
         UIWidgetPass(
             input_res="color_tonemapped",
             output_res="color+widgets",
+            include_scene_entities=False,
             include_internal_entities=True,
         ),
         OutputTransformPass(

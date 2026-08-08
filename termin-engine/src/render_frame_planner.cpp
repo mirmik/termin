@@ -1,6 +1,7 @@
 #include "render_frame_planner.hpp"
 
 #include "pipeline_texture_ref.hpp"
+#include "termin/render/render_scene_item_collector.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -13,6 +14,7 @@
 extern "C" {
 #include "render/tc_pipeline_template_registry.h"
 #include "render/tc_render_surface.h"
+#include "tgfx/resources/tc_material_registry.h"
 #include <tcbase/tc_log.h>
 }
 
@@ -80,6 +82,7 @@ namespace termin::rendering_manager_detail {
         std::vector<uint8_t> states;
         std::vector<uint32_t> stack;
         std::vector<const char*> pass_reads;
+        RenderSceneItemCollector material_dependency_collector;
 
         const RenderTopology* topology = nullptr;
         OffscreenRenderJobCallback job_callback = nullptr;
@@ -202,6 +205,83 @@ namespace termin::rendering_manager_detail {
             return false;
         }
 
+        tc_render_target_handle find_scene_render_target(tc_scene_handle scene, const char* name) const {
+            if (!name || !name[0])
+                return TC_RENDER_TARGET_HANDLE_INVALID;
+            for (size_t i = 0; i < topology->managed_render_target_count(); ++i) {
+                const tc_render_target_handle target = topology->managed_render_target_at(i);
+                if (!tc_render_target_alive(target) ||
+                    !tc_scene_handle_eq(tc_render_target_get_scene(target), scene)) {
+                    continue;
+                }
+                const char* candidate_name = tc_render_target_get_name(target);
+                if (candidate_name && std::strcmp(candidate_name, name) == 0)
+                    return target;
+            }
+            return TC_RENDER_TARGET_HANDLE_INVALID;
+        }
+
+        bool visit_render_target_dependency(tc_render_target_handle dependency,
+                                            uint32_t consumer_index,
+                                            bool& valid) {
+            const uint32_t producer = producer_for(dependency);
+            if (producer == INVALID_JOB_INDEX)
+                return true;
+            if (!tc_render_target_get_enabled(dependency)) {
+                tc_log(TC_LOG_ERROR,
+                       "[RenderingManager] render job depends on disabled target '%s'",
+                       target_name(dependency));
+                emit({OffscreenRenderDiagnosticKind::DisabledDependency, dependency, consumer_index, producer});
+                valid = false;
+                return false;
+            }
+            if (!visit(producer)) {
+                valid = false;
+                return false;
+            }
+            return true;
+        }
+
+        void visit_material_dependencies(tc_render_target_handle output, uint32_t consumer_index, bool& valid) {
+            RenderSceneItemCollectRequest request;
+            request.scene = tc_render_target_get_scene(output);
+            request.phase = TC_PHASE_NONE;
+            request.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+            request.layer_mask = tc_render_target_get_layer_mask(output);
+            request.debug_pass_name = "MaterialTextureDependencyPlanner";
+            if (!material_dependency_collector.collect(request)) {
+                tc_log(TC_LOG_ERROR,
+                       "[RenderingManager] failed to collect material dependencies for target '%s'",
+                       target_name(output));
+                valid = false;
+                return;
+            }
+
+            for (const tc_render_item& item : material_dependency_collector.items()) {
+                const tc_material* material = tc_material_get(item.material);
+                if (!material && item.material_phase)
+                    material = tc_material_get(item.material_phase->owner_material);
+                if (!material)
+                    continue;
+                for (size_t source_index = 0; source_index < material->texture_source_count; ++source_index) {
+                    const tc_material_texture_source& source = material->texture_sources[source_index];
+                    if (std::strcmp(source.kind, "render_target") != 0)
+                        continue;
+                    const tc_render_target_handle dependency =
+                        find_scene_render_target(request.scene, source.source_name);
+                    if (!tc_render_target_handle_valid(dependency)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RenderingManager] material '%s' references missing render target '%s'",
+                               material->header.name ? material->header.name : "<unnamed>",
+                               source.source_name);
+                        valid = false;
+                        continue;
+                    }
+                    visit_render_target_dependency(dependency, consumer_index, valid);
+                }
+            }
+        }
+
         bool visit(uint32_t index) {
             if (states[index] == VISIT_COMPLETE)
                 return true;
@@ -231,9 +311,8 @@ namespace termin::rendering_manager_detail {
                 if (!tc_render_target_handle_valid(output))
                     continue;
                 const tc_value* params = tc_render_target_get_pipeline_params(output);
-                if (!params || params->type != TC_VALUE_DICT)
-                    continue;
-                for (size_t param_index = 0; param_index < params->data.dict.count; ++param_index) {
+                const size_t param_count = params && params->type == TC_VALUE_DICT ? params->data.dict.count : 0;
+                for (size_t param_index = 0; param_index < param_count; ++param_index) {
                     const char* slot = params->data.dict.entries[param_index].key;
                     const tc_value* value = params->data.dict.entries[param_index].value;
                     if (!slot || !value || value->type != TC_VALUE_STRING ||
@@ -247,20 +326,9 @@ namespace termin::rendering_manager_detail {
                                                       topology->managed_render_target_count());
                     if (ref.kind != PipelineTextureRefKind::RenderTarget)
                         continue;
-                    const uint32_t producer = producer_for(ref.render_target);
-                    if (producer == INVALID_JOB_INDEX)
-                        continue;
-                    if (!tc_render_target_get_enabled(ref.render_target)) {
-                        tc_log(TC_LOG_ERROR,
-                               "[RenderingManager] render job depends on disabled target '%s'",
-                               target_name(ref.render_target));
-                        emit({OffscreenRenderDiagnosticKind::DisabledDependency, ref.render_target, index, producer});
-                        valid = false;
-                        continue;
-                    }
-                    if (!visit(producer))
-                        valid = false;
+                    visit_render_target_dependency(ref.render_target, index, valid);
                 }
+                visit_material_dependencies(output, index, valid);
             }
             stack.pop_back();
 

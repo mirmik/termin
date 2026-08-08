@@ -186,6 +186,44 @@ def test_material_load_binds_texture_encoding_mismatch() -> None:
     assert material.textures["u_albedo_texture"].uuid == texture_uuid
 
 
+def test_material_render_target_reference_stays_symbolic_and_round_trips(tmp_path) -> None:
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    _register_stdlib_shader(rm, "CookTorrancePBR")
+
+    material, _uuid = _parse_material_content(
+        json.dumps(
+            {
+                "uuid": "symbolic-render-target-material",
+                "shader": "CookTorrancePBR",
+                "texture_refs": {
+                    "u_albedo_texture": {
+                        "kind": "render_target",
+                        "target": "Panel Texture",
+                        "channel": "color",
+                    }
+                },
+            }
+        ),
+        name="SymbolicRenderTarget",
+    )
+
+    assert material.texture_sources["u_albedo_texture"] == {
+        "kind": "render_target",
+        "target": "Panel Texture",
+        "channel": "color",
+    }
+    # No live render target is required to load or save the material.
+    material_path = tmp_path / "symbolic.material"
+    _save_material_file(material, material_path, uuid="symbolic-render-target-material")
+    saved = json.loads(material_path.read_text(encoding="utf-8"))
+    assert saved["texture_refs"]["u_albedo_texture"] == {
+        "kind": "render_target",
+        "target": "Panel Texture",
+        "channel": "color",
+    }
+
+
 def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
     DefaultResourceManager._reset_for_testing()
     rm = DefaultResourceManager.instance()
