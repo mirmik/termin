@@ -47,6 +47,10 @@ namespace termin::rendering_manager_detail {
 
 #ifdef TERMIN_ENGINE_CORE_RENDER_PIPELINE
         if (tc_pass* p = create_and_configure_pass(
+                "EnvironmentLightingPass", "EnvironmentLighting", {{"output_res", "environment_lighting"}})) {
+            adopt_default_pass(ph, p);
+        }
+        if (tc_pass* p = create_and_configure_pass(
                 "ColorPass",
                 "Color",
                 {{"input_res", "empty"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
@@ -68,6 +72,11 @@ namespace termin::rendering_manager_detail {
         }
         return ph;
 #endif
+
+        if (tc_pass* p = create_and_configure_pass(
+                "EnvironmentLightingPass", "EnvironmentLighting", {{"output_res", "environment_lighting"}})) {
+            adopt_default_pass(ph, p);
+        }
 
         if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {{"output_res", "shadow_maps"}})) {
             adopt_default_pass(ph, p);

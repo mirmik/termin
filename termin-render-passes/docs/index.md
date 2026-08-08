@@ -30,6 +30,31 @@ one encoding step. UI color literals therefore participate in the linear
 compositing contract; wide-gamut and HDR-display transforms remain separate
 future work.
 
+## Image-based lighting
+
+The standard Cook--Torrance surface consumer uses split-sum image-based
+lighting in addition to explicit scene lights. `EnvironmentLightingPass`
+publishes one typed `environment_lighting` framegraph resource containing:
+
+- a cosine-convolved diffuse irradiance map;
+- a GGX-prefiltered specular map whose mip level represents perceptual
+  roughness;
+- the two-channel integrated BRDF lookup table.
+
+Directional maps use octahedral projection into ordinary 2D `RGBA32F`
+textures. This is intentional: tgfx2 cubemaps and layered textures are not yet
+a portable contract across Vulkan, OpenGL, D3D11, and WebGPU. The BRDF table is
+`RG32F`. All three textures are pass-owned shader ABI resources declared by
+the built-in `termin_ibl` Slang module.
+
+At present the pass prefilters the scene's solid or vertical-gradient sky on
+the CPU and uploads it only when sky or ambient settings change. Ambient color
+and intensity act as the environment tint and exposure. `TC_SKYBOX_NONE`
+hides the visual background but retains solid ambient illumination. An HDR or
+EXR image source should be added through the same typed resource after the
+texture asset pipeline supports float source data; it must not introduce a
+second PBR lighting path.
+
 `DebugGeometryPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
 debug/editor render passes. Debug-producing components publish backend-neutral
 primitives through the scene render lifecycle; the pass library does not depend

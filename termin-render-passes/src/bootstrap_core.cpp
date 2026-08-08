@@ -1,4 +1,5 @@
 #include <termin/lighting/shadow.hpp>
+#include <termin/lighting/environment_lighting.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/output_transform_pass.hpp>
 #include <termin/render/present_pass.hpp>
@@ -10,7 +11,9 @@ namespace termin {
 
     void register_builtin_render_passes() {
         (void)register_shadow_map_array_resource_type();
+        (void)register_environment_lighting_resource_type();
         ColorPass::register_type();
+        EnvironmentLightingPass::register_type();
         OutputTransformPass::register_type();
         PresentToScreenPass::register_type();
         BlitPass::register_type();

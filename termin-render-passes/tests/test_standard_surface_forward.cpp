@@ -191,6 +191,9 @@ TEST_CASE("standard forward consumer composes static skinned and foliage variant
         REQUIRE(contract_resource(contract, "lighting") != nullptr);
         REQUIRE(contract_resource(contract, "shadow_block") != nullptr);
         REQUIRE(contract_resource(contract, "shadow_maps") != nullptr);
+        REQUIRE(contract_resource(contract, "ibl_diffuse_irradiance") != nullptr);
+        REQUIRE(contract_resource(contract, "ibl_prefiltered_specular") != nullptr);
+        REQUIRE(contract_resource(contract, "ibl_brdf_lut") != nullptr);
         require_vulkan_compilation(variant);
     }
 
