@@ -5,14 +5,18 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <random>
 #include <sstream>
 #include <stop_token>
 #include <thread>
 #include <utility>
+
+#include <tcbase/settings.h>
 
 #if defined(_WIN32)
 #define NOMINMAX
@@ -31,6 +35,52 @@ namespace termin::profiler_app {
 
         constexpr auto kCommandTimeout = std::chrono::seconds(8);
         constexpr std::size_t kOutputLimit = 64 * 1024;
+
+        std::string resolve_adb_path(std::string configured) {
+            if (!configured.empty()) {
+                return configured;
+            }
+            if (const char* environment = std::getenv("ADB"); environment && environment[0] != '\0') {
+                return environment;
+            }
+            const tc::Settings settings("termin");
+            const nos::trent& adb = settings.get("Build/adb");
+            if (adb.is_string() && !adb.as_string().empty()) {
+                return adb.as_string();
+            }
+            const auto adb_from_android_home = [](const std::string& root) -> std::string {
+                if (root.empty()) {
+                    return {};
+                }
+                std::filesystem::path candidate = std::filesystem::path(root) / "platform-tools";
+#ifdef _WIN32
+                candidate /= "adb.exe";
+#else
+                candidate /= "adb";
+#endif
+                std::error_code error;
+                if (std::filesystem::is_regular_file(candidate, error)) {
+                    return candidate.string();
+                }
+                return {};
+            };
+            const char* environment_android_home = std::getenv("ANDROID_HOME");
+            if (!environment_android_home || environment_android_home[0] == '\0') {
+                environment_android_home = std::getenv("ANDROID_SDK_ROOT");
+            }
+            if (environment_android_home && environment_android_home[0] != '\0') {
+                if (std::string candidate = adb_from_android_home(environment_android_home); !candidate.empty()) {
+                    return candidate;
+                }
+            }
+            const nos::trent& android_home = settings.get("Build/androidHome");
+            if (android_home.is_string()) {
+                if (std::string candidate = adb_from_android_home(android_home.as_string()); !candidate.empty()) {
+                    return candidate;
+                }
+            }
+            return "adb";
+        }
 
         std::string trim(std::string value) {
             while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
@@ -380,6 +430,7 @@ namespace termin::profiler_app {
     }
 
     bool AndroidProfilerBridge::refresh_devices(std::string adb_path) {
+        adb_path = resolve_adb_path(std::move(adb_path));
         if (!impl_->begin_operation(AndroidBridgePhase::Refreshing, "Discovering Android devices...")) {
             return false;
         }
@@ -415,6 +466,7 @@ namespace termin::profiler_app {
     }
 
     bool AndroidProfilerBridge::connect(AndroidConnectRequest request) {
+        request.adb_path = resolve_adb_path(std::move(request.adb_path));
         const AndroidBridgeSnapshot current = snapshot();
         if (current.busy) {
             return false;

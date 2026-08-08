@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -94,6 +95,10 @@ def test_checked_in_windows_wrapper_reaches_gradle(
     assets_dir.mkdir()
     (assets_dir / "manifest.json").write_text("{}\n", encoding="utf-8")
     env = os.environ.copy()
+    android_home = tmp_path / "android-sdk"
+    (android_home / "platforms").mkdir(parents=True)
+    env["ANDROID_HOME"] = str(android_home)
+    env.pop("ANDROID_SDK_ROOT", None)
     env["FAKE_GRADLE_LOG"] = str(log_path)
     env["TERMIN_HOST_PYTHON"] = str(_write_fake_host_python(tmp_path))
 
@@ -145,6 +150,10 @@ def test_windows_release_wrapper_rejects_missing_signing_before_gradle(
     termin_root = _copy_wrappers(tmp_path)
     gradle, log_path = _write_fake_gradle(tmp_path)
     env = os.environ.copy()
+    android_home = tmp_path / "android-sdk"
+    (android_home / "platforms").mkdir(parents=True)
+    env["ANDROID_HOME"] = str(android_home)
+    env.pop("ANDROID_SDK_ROOT", None)
     env["FAKE_GRADLE_LOG"] = str(log_path)
     for name in (
         "TERMIN_ANDROID_SIGNING_KEYSTORE",
@@ -176,3 +185,75 @@ def test_windows_release_wrapper_rejects_missing_signing_before_gradle(
     assert result.returncode != 0
     assert "release builds require signing configuration" in result.stderr
     assert not log_path.exists()
+
+
+def test_windows_wrapper_reads_shared_toolchain_settings(tmp_path: Path) -> None:
+    termin_root = _copy_wrappers(tmp_path)
+    gradle, log_path = _write_fake_gradle(tmp_path)
+    android_home = tmp_path / "android-sdk"
+    (android_home / "platforms").mkdir(parents=True)
+    ndk_root = android_home / "ndk/27.2.12479018"
+    (ndk_root / "build/cmake").mkdir(parents=True)
+    (ndk_root / "build/cmake/android.toolchain.cmake").write_text("# fake\n", encoding="utf-8")
+    java_home = tmp_path / "jdk"
+    java_executable = java_home / "bin/java.exe"
+    java_executable.parent.mkdir(parents=True, exist_ok=True)
+    java_executable.write_text("@exit /b 0\n", encoding="utf-8")
+    sdk_root = termin_root / "sdk/android"
+    sdk_root.mkdir(parents=True)
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "manifest.json").write_text("{}\n", encoding="utf-8")
+    appdata = tmp_path / "appdata"
+    settings = appdata / "termin/settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(
+        json.dumps(
+            {
+                "Build": {
+                    "androidSdkRoot": str(sdk_root),
+                    "androidHome": str(android_home),
+                    "androidNdkRoot": str(ndk_root),
+                    "javaHome": str(java_home),
+                    "gradle": str(gradle),
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    for name in (
+        "ANDROID_HOME",
+        "ANDROID_SDK_ROOT",
+        "ANDROID_NDK_HOME",
+        "ANDROID_NDK_ROOT",
+        "JAVA_HOME",
+        "GRADLE_BIN",
+        "TERMIN_ANDROID_SDK_ROOT",
+    ):
+        env.pop(name, None)
+    env["APPDATA"] = str(appdata)
+    env["FAKE_GRADLE_LOG"] = str(log_path)
+    env["TERMIN_HOST_PYTHON"] = str(_write_fake_host_python(tmp_path))
+
+    result = subprocess.run(
+        [
+            "pwsh",
+            "-NoProfile",
+            "-File",
+            str(termin_root / "build-android-apk.ps1"),
+            "--assets-dir",
+            str(assets_dir),
+        ],
+        cwd=termin_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    arguments = log_path.read_text(encoding="utf-8")
+    assert f"-PterminAndroidSdkRoot={sdk_root}" in arguments
+    assert f"-PterminAndroidNdkRoot={ndk_root}" in arguments

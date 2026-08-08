@@ -17,6 +17,9 @@ class ToolchainContext:
     sdk_root: Path | None = None
     termin_root: Path | None = None
     android_sdk_root: Path | None = None
+    android_home: Path | None = None
+    android_ndk_root: Path | None = None
+    java_home: Path | None = None
     shader_compiler: Path | None = None
     fxc: Path | None = None
     android_build_script: Path | None = None
@@ -58,6 +61,15 @@ class EnvironmentToolchainContextProvider:
                 self.environ,
                 "TERMIN_ANDROID_SDK_ROOT",
             ),
+            android_home=_first_environment_path(
+                self.environ,
+                ("ANDROID_HOME", "ANDROID_SDK_ROOT"),
+            ),
+            android_ndk_root=_first_environment_path(
+                self.environ,
+                ("ANDROID_NDK_HOME", "ANDROID_NDK_ROOT"),
+            ),
+            java_home=_environment_path(self.environ, "JAVA_HOME"),
             shader_compiler=_environment_path(self.environ, "TERMIN_SHADERC"),
             fxc=_environment_path(self.environ, "TERMIN_FXC"),
             android_build_script=_environment_path(
@@ -129,10 +141,7 @@ def create_local_toolchain_context(
     else:
         installation_provider = StaticToolchainContextProvider(installation_defaults)
 
-    providers: list[ToolchainContextProvider] = [
-        installation_provider,
-        EnvironmentToolchainContextProvider(effective_environ),
-    ]
+    providers: list[ToolchainContextProvider] = [installation_provider]
     effective_user_settings = user_settings
     if effective_user_settings is None and load_user_settings:
         from termin.project_build.user_settings import UserToolchainSettings
@@ -140,6 +149,7 @@ def create_local_toolchain_context(
         effective_user_settings = UserToolchainSettings().load()
     if effective_user_settings is not None:
         providers.append(StaticToolchainContextProvider(effective_user_settings))
+    providers.append(EnvironmentToolchainContextProvider(effective_environ))
     if invocation_overrides is not None:
         providers.append(StaticToolchainContextProvider(invocation_overrides))
     executable_search = (
@@ -188,11 +198,11 @@ def _derive_tool_paths(
 
     gradle = context.gradle or _searched_path(path_search, "gradle")
     adb = context.adb
-    if adb is None and android_sdk_root is not None:
+    if adb is None and context.android_home is not None:
         adb = _first_existing(
             (
-                android_sdk_root / "platform-tools" / "adb",
-                android_sdk_root / "platform-tools" / "adb.exe",
+                context.android_home / "platform-tools" / "adb",
+                context.android_home / "platform-tools" / "adb.exe",
             )
         )
     if adb is None:
@@ -202,6 +212,9 @@ def _derive_tool_paths(
         sdk_root=sdk_root,
         termin_root=context.termin_root,
         android_sdk_root=android_sdk_root,
+        android_home=context.android_home,
+        android_ndk_root=context.android_ndk_root,
+        java_home=context.java_home,
         shader_compiler=shader_compiler,
         fxc=fxc,
         android_build_script=android_script,

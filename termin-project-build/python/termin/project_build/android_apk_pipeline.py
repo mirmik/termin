@@ -84,6 +84,10 @@ def build_android_apk(
     android_sdk_root: Path,
     abi: str,
     platform: str,
+    android_home: Path | None = None,
+    android_ndk_root: Path | None = None,
+    java_home: Path | None = None,
+    shader_compiler: Path | None = None,
     product_arguments: Sequence[str] = (),
     log_callback: Callable[[str], None] | None = None,
 ) -> AndroidApkPipelineResult:
@@ -108,6 +112,14 @@ def build_android_apk(
     ]
     if gradle is not None:
         cmd.extend(["--gradle", str(gradle)])
+    if android_home is not None:
+        cmd.extend(["--android-home", str(android_home)])
+    if android_ndk_root is not None:
+        cmd.extend(["--ndk-root", str(android_ndk_root)])
+    if java_home is not None:
+        cmd.extend(["--java-home", str(java_home)])
+    if shader_compiler is not None:
+        cmd.extend(["--shader-compiler", str(shader_compiler)])
 
     metadata_path = _gradle_output_dir(termin_root, product, variant) / "output-metadata.json"
     metadata_path.unlink(missing_ok=True)

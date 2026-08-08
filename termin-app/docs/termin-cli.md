@@ -166,14 +166,16 @@ python -m termin.project_build.profile_build capabilities \
 ```
 
 The JSON is the same `inspect_profile_capabilities()` report available to the
-editor. Tool paths merge per field as installation defaults < environment <
-shared user settings < invocation arguments. Shared settings are stored in
+editor. Tool paths merge per field as installation defaults < shared user
+settings < environment < invocation arguments. Shared settings are stored in
 `~/.config/termin/settings.json` on Linux and
 `%APPDATA%/termin/settings.json` on Windows. Supported environment overrides
-are `TERMIN_SDK`, `TERMIN_ROOT`, `TERMIN_ANDROID_SDK_ROOT` (with
-`ANDROID_SDK_ROOT`/`ANDROID_HOME` aliases), `TERMIN_SHADERC`, `TERMIN_FXC`,
-`TERMIN_ANDROID_BUILD_SCRIPT`, `TERMIN_QUEST_OPENXR_BUILD_SCRIPT`, `GRADLE_BIN`
-and `ADB`. The `build` and `capabilities` subcommands also accept corresponding
+are `TERMIN_SDK`, `TERMIN_ROOT`, `TERMIN_ANDROID_SDK_ROOT`, `ANDROID_HOME`
+(with `ANDROID_SDK_ROOT` as the secondary standard name), `ANDROID_NDK_HOME`
+(with `ANDROID_NDK_ROOT` as the secondary name), `JAVA_HOME`, `TERMIN_SHADERC`,
+`TERMIN_FXC`, `TERMIN_ANDROID_BUILD_SCRIPT`,
+`TERMIN_QUEST_OPENXR_BUILD_SCRIPT`, `GRADLE_BIN` and `ADB`. The `build` and
+`capabilities` subcommands also accept corresponding
 explicit path options; these have highest precedence.
 
 The native editor consumes the same file through **Game > Build Profiles...**.
@@ -185,13 +187,18 @@ the Build Profiles Output tab and the editor console.
 
 Workstation-specific paths are configured under
 **Edit > Settings... > Build Toolchain**, not in `build_profiles.json`. The
-editor stores Termin SDK/source roots, the Termin Android SDK slice,
-`termin_shaderc`, FXC, Android/Quest build scripts, Gradle and ADB in the shared
+editor stores Termin SDK/source roots, the Termin Android SDK slice, Google
+Android SDK, Android NDK, JDK, `termin_shaderc`, FXC, Android/Quest build
+scripts, Gradle and ADB in the shared
 Termin user settings. The rest of the editor preferences use that same
-canonical config file. These values override installation/environment discovery
+canonical config file. Environment variables override these saved fallbacks
 without making the project dirty. Changing the settings refreshes the selected
 profile's action capabilities; the same values are used by a bare `termin build`
 when no matching explicit argument is provided.
+
+`build-sdk-android.sh` resolves the NDK independently in this order: explicit
+`--ndk`, `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, then
+`Build/androidNdkRoot` from the shared settings file.
 
 The v2 model already reserves explicit scene, module, Python-requirement and
 resource roots. Builds currently reject non-trivial roots with a structured

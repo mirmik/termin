@@ -14,6 +14,9 @@ TERMIN_USER_SETTINGS_APP_ID = "termin"
 KEY_BUILD_SDK_ROOT = "Build/sdkRoot"
 KEY_BUILD_TERMIN_ROOT = "Build/terminRoot"
 KEY_BUILD_ANDROID_SDK_ROOT = "Build/androidSdkRoot"
+KEY_BUILD_ANDROID_HOME = "Build/androidHome"
+KEY_BUILD_ANDROID_NDK_ROOT = "Build/androidNdkRoot"
+KEY_BUILD_JAVA_HOME = "Build/javaHome"
 KEY_BUILD_SHADER_COMPILER = "Build/shaderCompiler"
 KEY_BUILD_FXC = "Build/fxc"
 KEY_BUILD_ANDROID_SCRIPT = "Build/androidScript"
@@ -25,6 +28,9 @@ TOOLCHAIN_SETTING_KEYS = (
     KEY_BUILD_SDK_ROOT,
     KEY_BUILD_TERMIN_ROOT,
     KEY_BUILD_ANDROID_SDK_ROOT,
+    KEY_BUILD_ANDROID_HOME,
+    KEY_BUILD_ANDROID_NDK_ROOT,
+    KEY_BUILD_JAVA_HOME,
     KEY_BUILD_SHADER_COMPILER,
     KEY_BUILD_FXC,
     KEY_BUILD_ANDROID_SCRIPT,
@@ -49,6 +55,9 @@ class UserToolchainSettings:
             sdk_root=self._path(KEY_BUILD_SDK_ROOT),
             termin_root=self._path(KEY_BUILD_TERMIN_ROOT),
             android_sdk_root=self._path(KEY_BUILD_ANDROID_SDK_ROOT),
+            android_home=self._path(KEY_BUILD_ANDROID_HOME),
+            android_ndk_root=self._path(KEY_BUILD_ANDROID_NDK_ROOT),
+            java_home=self._path(KEY_BUILD_JAVA_HOME),
             shader_compiler=self._path(KEY_BUILD_SHADER_COMPILER),
             fxc=self._path(KEY_BUILD_FXC),
             android_build_script=self._path(KEY_BUILD_ANDROID_SCRIPT),
@@ -61,6 +70,9 @@ class UserToolchainSettings:
         self._set_path(KEY_BUILD_SDK_ROOT, context.sdk_root)
         self._set_path(KEY_BUILD_TERMIN_ROOT, context.termin_root)
         self._set_path(KEY_BUILD_ANDROID_SDK_ROOT, context.android_sdk_root)
+        self._set_path(KEY_BUILD_ANDROID_HOME, context.android_home)
+        self._set_path(KEY_BUILD_ANDROID_NDK_ROOT, context.android_ndk_root)
+        self._set_path(KEY_BUILD_JAVA_HOME, context.java_home)
         self._set_path(KEY_BUILD_SHADER_COMPILER, context.shader_compiler)
         self._set_path(KEY_BUILD_FXC, context.fxc)
         self._set_path(KEY_BUILD_ANDROID_SCRIPT, context.android_build_script)
@@ -83,9 +95,12 @@ class UserToolchainSettings:
 __all__ = [
     "KEY_BUILD_ADB",
     "KEY_BUILD_ANDROID_SCRIPT",
+    "KEY_BUILD_ANDROID_HOME",
+    "KEY_BUILD_ANDROID_NDK_ROOT",
     "KEY_BUILD_ANDROID_SDK_ROOT",
     "KEY_BUILD_FXC",
     "KEY_BUILD_GRADLE",
+    "KEY_BUILD_JAVA_HOME",
     "KEY_BUILD_QUEST_OPENXR_SCRIPT",
     "KEY_BUILD_SDK_ROOT",
     "KEY_BUILD_SHADER_COMPILER",

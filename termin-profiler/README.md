@@ -66,6 +66,10 @@ goes to `--output`, or to stdout when the output is `-`, so agents can consume
 it without scraping human-oriented logs. Authentication tokens are generated
 per launch and are neither exported nor logged.
 
+The GUI and CLI resolve ADB consistently: explicit `--adb` (CLI), then `ADB`,
+then `Build/adb` in the shared Termin settings, then
+`<Build/androidHome>/platform-tools/adb`, and finally `adb` from `PATH`.
+
 The capture document uses schema `termin.profiler.capture`, version 1. It
 contains request and target identity, final target status, aggregate cadence,
 CPU-active and GPU statistics, every requested frame and section tree, plus

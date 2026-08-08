@@ -17,6 +17,7 @@ def terminAndroidPlatform = providers.gradleProperty("terminAndroidPlatform")
 def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_NDK_VERSION"))
         .orElse("27.2.12479018")
+def terminAndroidNdkRoot = providers.gradleProperty("terminAndroidNdkRoot")
 def terminAndroidAssetsDir = providers.gradleProperty("terminAndroidAssetsDir")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_ASSETS_DIR"))
         .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
@@ -36,7 +37,11 @@ def terminAndroidVersionName = providers.gradleProperty("terminAndroidVersionNam
 android {
     namespace "org.termin.android"
     compileSdk 35
-    ndkVersion terminAndroidNdkVersion.get()
+    if (terminAndroidNdkRoot.isPresent()) {
+        ndkPath terminAndroidNdkRoot.get()
+    } else {
+        ndkVersion terminAndroidNdkVersion.get()
+    }
 
     defaultConfig {
         applicationId terminAndroidApplicationId.get()

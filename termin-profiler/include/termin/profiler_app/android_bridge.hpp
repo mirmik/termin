@@ -54,7 +54,7 @@ namespace termin::profiler_app {
     };
 
     struct AndroidConnectRequest {
-        std::string adb_path = "adb";
+        std::string adb_path;
         std::string serial;
         std::string package_name;
         std::string activity_name = "android.app.NativeActivity";
@@ -74,7 +74,7 @@ namespace termin::profiler_app {
         AndroidProfilerBridge(const AndroidProfilerBridge&) = delete;
         AndroidProfilerBridge& operator=(const AndroidProfilerBridge&) = delete;
 
-        bool refresh_devices(std::string adb_path = "adb");
+        bool refresh_devices(std::string adb_path = {});
         bool connect(AndroidConnectRequest request);
         bool disconnect();
         void close();

@@ -11,10 +11,12 @@ include(TerminTestMetadata)
 include(GNUInstallDirs)
 
 if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
     termin_require_package(termin_frame_profiler termin_frame_profiler::termin_frame_profiler)
     termin_require_package(termin_gui_native termin_gui_native::window_adapter)
     termin_require_package(termin_graphics tgfx::termin_graphics2)
 else()
+    find_package(termin_base CONFIG REQUIRED)
     find_package(termin_frame_profiler CONFIG REQUIRED)
     find_package(termin_gui_native CONFIG REQUIRED COMPONENTS window_adapter)
     find_package(termin_graphics CONFIG REQUIRED)
@@ -31,6 +33,7 @@ target_include_directories(termin_profiler_app_support PUBLIC
 )
 target_link_libraries(termin_profiler_app_support PUBLIC
     termin_frame_profiler::termin_frame_profiler
+    tcbase::termin_base
 )
 
 add_executable(termin_profiler src/main.cpp)

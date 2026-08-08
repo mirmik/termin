@@ -58,6 +58,7 @@ def test_resolve_gradle_falls_back_to_path(tmp_path: Path, monkeypatch) -> None:
     path_gradle.write_text("#!/bin/sh\n", encoding="utf-8")
     path_gradle.chmod(0o755)
     monkeypatch.delenv("GRADLE_BIN", raising=False)
+    monkeypatch.setenv("APPDATA" if os.name == "nt" else "XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("PATH", str(tmp_path))
 
     assert resolve_gradle(None) == path_gradle.resolve()

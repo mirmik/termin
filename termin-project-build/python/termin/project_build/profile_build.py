@@ -254,6 +254,9 @@ def execute_profile_build_request_result(
             sdk_root=request.toolchain.sdk_root,
             termin_root=request.termin_root,
             android_sdk_root=request.toolchain.android_sdk_root,
+            android_home=request.toolchain.android_home,
+            android_ndk_root=request.toolchain.android_ndk_root,
+            java_home=request.toolchain.java_home,
             build_script=request.build_script,
             gradle=request.gradle,
             shader_compiler=request.shader_compiler,
@@ -275,6 +278,9 @@ def execute_profile_build_request_result(
             sdk_root=request.toolchain.sdk_root,
             termin_root=request.termin_root,
             android_sdk_root=request.toolchain.android_sdk_root,
+            android_home=request.toolchain.android_home,
+            android_ndk_root=request.toolchain.android_ndk_root,
+            java_home=request.toolchain.java_home,
             build_script=request.build_script,
             gradle=request.gradle,
             shader_compiler=request.shader_compiler,
@@ -359,6 +365,9 @@ def _add_toolchain_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sdk-root", type=Path, default=None)
     parser.add_argument("--termin-root", type=Path, default=None)
     parser.add_argument("--android-sdk-root", type=Path, default=None)
+    parser.add_argument("--android-home", type=Path, default=None)
+    parser.add_argument("--android-ndk-root", type=Path, default=None)
+    parser.add_argument("--java-home", type=Path, default=None)
     parser.add_argument("--shader-compiler", type=Path, default=None)
     parser.add_argument("--fxc", type=Path, default=None)
     parser.add_argument("--android-build-script", type=Path, default=None)
@@ -372,6 +381,9 @@ def _toolchain_context_from_args(args: argparse.Namespace) -> ToolchainContext:
         sdk_root=args.sdk_root,
         termin_root=args.termin_root,
         android_sdk_root=args.android_sdk_root,
+        android_home=args.android_home,
+        android_ndk_root=args.android_ndk_root,
+        java_home=args.java_home,
         shader_compiler=args.shader_compiler,
         fxc=args.fxc,
         android_build_script=args.android_build_script,
