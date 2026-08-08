@@ -717,6 +717,7 @@ struct VertexInput {
                     },
                 }};
                 MaterialPipelineResourceView shadow_resources{};
+                shadow_resources.material_texture_sources = ctx.material_texture_sources;
                 shadow_resources.uniforms = per_frame_uniforms.data();
                 shadow_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
                 prepare_material_pipeline_resources(*ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
@@ -750,6 +751,7 @@ struct VertexInput {
                         *ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
                 };
                 MaterialPipelineResourceView draw_material_resources{};
+                draw_material_resources.material_texture_sources = ctx.material_texture_sources;
                 for (RenderTask* task_ptr : sorted_render_tasks) {
                     RenderTask& task = *task_ptr;
                     task.draw_context.view = view_matrix;

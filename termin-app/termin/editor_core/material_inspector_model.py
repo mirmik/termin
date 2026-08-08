@@ -232,6 +232,13 @@ class MaterialInspectorController:
         if applied <= 0:
             _logger.error("Material texture property '%s' was not applied to any phase", name)
             raise ValueError(f"texture property '{name}' was not applied")
+        if tag in ("rt_color", "rt_depth"):
+            material.set_texture_source(
+                name,
+                "render_target",
+                texture_name,
+                "depth" if tag == "rt_depth" else "color",
+            )
         self._commit_change()
         return self.refresh()
 
@@ -266,6 +273,14 @@ class MaterialInspectorController:
         expected_encoding: str,
     ) -> MaterialTextureValue:
         material = self._require_material()
+        reference = material.texture_sources.get(name)
+        if reference is not None:
+            return MaterialTextureValue(
+                f"rt_{reference['channel']}",
+                reference["target"],
+                default_kind,
+                expected_encoding,
+            )
         texture = material.textures.get(name)
         if texture is None or not texture.is_valid:
             return MaterialTextureValue(

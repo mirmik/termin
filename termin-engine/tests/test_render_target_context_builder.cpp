@@ -1,6 +1,7 @@
 #include "guard_main.h"
 #include "render_target_context_builder.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <span>
 #include <unordered_map>
@@ -153,6 +154,15 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     tc_texture* panel_texture = tc_texture_get(tc_render_target_get_color_texture(panel));
     REQUIRE(panel_texture != nullptr);
     CHECK(context.external_textures.at("PANEL_COLOR") == tgfx::TextureHandle{panel_texture->header.pool_index + 100u});
+    const auto panel_source = std::find_if(
+        context.material_texture_sources.begin(),
+        context.material_texture_sources.end(),
+        [](const termin::ResolvedMaterialTextureSource& source) {
+            return source.kind == "render_target" && source.source_name == "PanelTexture" &&
+                   source.channel == "color";
+        });
+    REQUIRE(panel_source != context.material_texture_sources.end());
+    CHECK(panel_source->texture == tgfx::TextureHandle{panel_texture->header.pool_index + 100u});
 
     tc_render_target_free(xr);
     tc_render_target_free(panel);

@@ -5,6 +5,10 @@
 #include <cstring>
 
 extern "C" {
+#include "core/tc_drawable_capability.h"
+#include "core/tc_drawable_protocol.h"
+#include "core/tc_entity_pool.h"
+#include "core/tc_render_item.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "render/tc_display.h"
@@ -13,6 +17,7 @@ extern "C" {
 #include "render/tc_render_target.h"
 #include "render/tc_viewport.h"
 #include "termin_scene/internal/tc_scene_extension_registry.h"
+#include "tgfx/resources/tc_material_registry.h"
 }
 
 namespace {
@@ -46,6 +51,26 @@ namespace {
         tc_render_surface surface{};
         int width = 0;
         int height = 0;
+    };
+
+    tc_material_handle g_dependency_material = tc_material_handle_invalid();
+
+    tc_phase_mask dependency_phase_mask(tc_component*) {
+        return TC_PHASE_OPAQUE;
+    }
+
+    bool collect_dependency_item(tc_component*,
+                                 const tc_render_item_collect_context*,
+                                 tc_render_item_sink* sink) {
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_MESH;
+        item.material = g_dependency_material;
+        return sink->emit(&item, sink->user_data);
+    }
+
+    const tc_drawable_vtable DEPENDENCY_DRAWABLE_VTABLE = {
+        &dependency_phase_mask,
+        &collect_dependency_item,
     };
 
     void surface_get_size(tc_render_surface* surface, int* width, int* height) {
@@ -197,10 +222,32 @@ int main() {
     tc_pipeline_template_init();
     tc_scene_ext_registry_init();
     tc_scene_render_mount_extension_init();
+    tc_material_init();
 
     tc_scene_handle scene = tc_scene_new_named("render-frame-planner-test");
     if (!tc_scene_handle_valid(scene))
         return 1;
+    g_dependency_material = tc_material_create("planner-material-source", "PlannerMaterialSource");
+    tc_material* dependency_material = tc_material_get(g_dependency_material);
+    if (!dependency_material)
+        return 1;
+    dependency_material->phase_count = 1;
+    dependency_material->phases[0].owner_material = g_dependency_material;
+    dependency_material->phases[0].owner_phase_index = 0;
+    if (!tc_material_phase_declare_texture_slot(&dependency_material->phases[0], "u_input") ||
+        !tc_material_set_texture_source(
+            dependency_material, "u_input", "render_target", "FovTarget", "color")) {
+        return 1;
+    }
+    tc_entity_pool* scene_pool = tc_scene_entity_pool(scene);
+    tc_entity_id dependency_entity = tc_entity_pool_alloc(scene_pool, "material-source-consumer");
+    tc_component dependency_component{};
+    tc_component_init(&dependency_component, nullptr);
+    tc_entity_pool_add_component(scene_pool, dependency_entity, &dependency_component);
+    if (!tc_drawable_capability_attach(
+            &dependency_component, &DEPENDENCY_DRAWABLE_VTABLE, &dependency_component)) {
+        return 1;
+    }
     const char* consumer_slots[] = {"fov", "file_tex"};
     const char* cycle_slots[] = {"consumer"};
     TestPipeline producer_pipeline = make_pipeline("render-frame-planner-producer", "Producer", nullptr, 0);
@@ -215,6 +262,10 @@ int main() {
     tc_render_target_handle unused = tc_render_target_new("UnusedHiddenTarget");
     tc_render_target_handle consumer = tc_render_target_new("chronosquad");
     tc_render_target_handle unattached = tc_render_target_new("UnattachedTarget");
+    // The producer renders a different layer than the consumer geometry, just
+    // like the panel UI target in the Quest showcase. This prevents a genuine
+    // feedback loop through the material that displays the producer result.
+    tc_render_target_set_layer_mask(producer, 2u);
     const tc_render_target_handle render_targets[] = {producer, unused, consumer, unattached};
     for (tc_render_target_handle target : render_targets) {
         tc_render_target_set_scene(target, scene);
@@ -290,6 +341,19 @@ int main() {
         std::fprintf(stderr, "selected-display plan lost dependency closure\n");
         return 1;
     }
+
+    // Remove the graph slot: the symbolic source on the material is now the
+    // only edge from the consumer to FovTarget.
+    const Param material_only_params[] = {{"file_tex", "file:test-texture"}};
+    set_params(consumer, material_only_params, 1);
+    if (!execute_plan(planner, topology, recorder) || recorder.job_count != 2 ||
+        target_job_index(recorder, producer) >= target_job_index(recorder, consumer)) {
+        std::fprintf(stderr, "material render-target source did not schedule its producer first\n");
+        return 1;
+    }
+    set_params(consumer, consumer_params, 3);
+    tc_component_detach_capability(&dependency_component, tc_drawable_capability_id());
+    tc_entity_pool_remove_component(scene_pool, dependency_entity, &dependency_component);
 
     const OffscreenRenderDemand debugger_demand{unused_viewport, unused};
     if (!execute_plan(planner, topology, recorder, active_display, &debugger_demand, 1) || recorder.job_count != 3 ||
@@ -400,7 +464,9 @@ int main() {
     destroy_pipeline(producer_pipeline);
     destroy_pipeline(consumer_pipeline);
     destroy_pipeline(cycle_pipeline);
+    tc_material_destroy(g_dependency_material);
     tc_scene_free(scene);
+    tc_material_shutdown();
     tc_scene_ext_registry_shutdown();
     tc_pipeline_template_shutdown();
     tc_display_pool_shutdown();

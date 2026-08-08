@@ -291,6 +291,7 @@ namespace termin {
             },
         }};
         MaterialPipelineResourceView depth_resources{};
+        depth_resources.material_texture_sources = ctx.material_texture_sources;
         depth_resources.uniforms = per_frame_uniforms.data();
         depth_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
         prepare_material_pipeline_resources(*ctx.ctx2, device, depth_shader.shader, nullptr, depth_resources);
@@ -339,6 +340,7 @@ namespace termin {
                 {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "depth_draw"},
             }};
             MaterialPipelineResourceView draw_material_resources{};
+            draw_material_resources.material_texture_sources = ctx.material_texture_sources;
             RenderItemResourceBinding resource_binding{};
             resource_binding.material_resources = &draw_material_resources;
             resource_binding.named_uniforms = draw_uniforms.data();
@@ -758,6 +760,7 @@ namespace termin {
             },
         }};
         MaterialPipelineResourceView depth_resources{};
+        depth_resources.material_texture_sources = ctx.material_texture_sources;
         depth_resources.uniforms = per_frame_uniforms.data();
         depth_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
         prepare_material_pipeline_resources(*ctx.ctx2, device, depth_shader.shader, nullptr, depth_resources);
@@ -801,6 +804,7 @@ namespace termin {
                 {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "depth_draw"},
             }};
             MaterialPipelineResourceView draw_material_resources{};
+            draw_material_resources.material_texture_sources = ctx.material_texture_sources;
             RenderItemResourceBinding resource_binding{};
             resource_binding.material_resources = &draw_material_resources;
             resource_binding.named_uniforms = draw_uniforms.data();

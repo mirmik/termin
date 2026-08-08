@@ -37,10 +37,7 @@
         "sort_mode": "near_to_far",
         "environment_res": "",
         "attachment_barrier_between_draws": true
-      },
-      "dynamic_inputs": [
-        ["u_panel_texture", "fbo"]
-      ]
+      }
     },
     {
       "type": "MultiviewColorPass",
@@ -68,23 +65,12 @@
       "params": {
         "slot": "XR_MULTIVIEW_TARGET"
       }
-    },
-    {
-      "type": "External RT",
-      "node_type": "external_rt",
-      "name": "Panel Color",
-      "x": 20,
-      "y": 360,
-      "params": {
-        "slot": "PANEL_COLOR"
-      }
     }
   ],
   "connections": [
     {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "input_res"},
     {"from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "input_res"},
     {"from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "input_res"},
-    {"from_node": 4, "from_socket": "fbo", "to_node": 3, "to_socket": "output_res_target"},
-    {"from_node": 5, "from_socket": "fbo", "to_node": 1, "to_socket": "u_panel_texture"}
+    {"from_node": 4, "from_socket": "fbo", "to_node": 3, "to_socket": "output_res_target"}
   ]
 }

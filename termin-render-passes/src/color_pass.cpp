@@ -1061,6 +1061,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         material_resources.shadow_maps = shadow_tex2s.data();
         material_resources.shadow_map_count =
             static_cast<uint32_t>(std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
+        material_resources.material_texture_sources = ctx.material_texture_sources;
 
         std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;
         extra_texture_bindings.reserve(extra_textures.size() + 3u);

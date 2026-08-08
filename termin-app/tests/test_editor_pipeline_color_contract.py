@@ -18,6 +18,9 @@ pass_names = [frame_pass.pass_name for frame_pass in pipeline.passes]
 assert pass_names.index("EnvironmentLighting") < pass_names.index("Color")
 tonemap = pipeline.get_pass_by_name("Tonemap").to_python()
 assert tonemap.method == 0
+ui_widgets = pipeline.get_pass_by_name("UIWidgets").to_python()
+assert ui_widgets.include_scene_entities is False
+assert ui_widgets.include_internal_entities is True
 output_transform = pipeline.get_pass_by_name("OutputTransform").to_python()
 assert output_transform.input_res == "color+widgets"
 assert all(spec.format == "rgba16f" for spec in pipeline.pipeline_specs)
@@ -25,6 +28,7 @@ assert all(spec.format == "rgba16f" for spec in pipeline.pipeline_specs)
 del output_transform
 del environment
 del tonemap
+del ui_widgets
 pipeline.destroy()
 del pipeline
 shutdown_editor()

@@ -46,11 +46,20 @@ class _Material:
             "tint": (1.5, 0.5, -1.0, 0.75),
         }
         self.textures = {"albedo": _Texture()}
+        self.texture_sources = {}
         self.texture_assignments = []
 
     def set_texture(self, name, texture) -> int:
+        self.texture_sources.pop(name, None)
         self.texture_assignments.append((name, texture))
         return len(self.phases)
+
+    def set_texture_source(self, name, kind, source_name, channel) -> None:
+        self.texture_sources[name] = {
+            "kind": kind,
+            "target": source_name,
+            "channel": channel,
+        }
 
 
 class _Program:
@@ -162,6 +171,29 @@ def test_material_inspector_edits_unconstrained_texture_property():
     controller.set_texture("albedo", "file", "brick")
 
     assert material.texture_assignments == [("albedo", resources.texture)]
+
+
+def test_material_inspector_retains_render_target_source_symbolically():
+    material = _Material()
+    target_texture = _Texture()
+    controller = MaterialInspectorController(
+        _Resources(),
+        render_target_texture=lambda name, channel: target_texture
+        if (name, channel) == ("Panel", "color")
+        else None,
+    )
+    controller.set_target(material)
+
+    snapshot = controller.set_texture("albedo", "rt_color", "Panel")
+
+    assert material.texture_sources["albedo"] == {
+        "kind": "render_target",
+        "target": "Panel",
+        "channel": "color",
+    }
+    assert snapshot.properties[-1].texture == MaterialTextureValue(
+        "rt_color", "Panel", "white", "srgb"
+    )
 
 
 def test_material_vector_padding_and_validation():

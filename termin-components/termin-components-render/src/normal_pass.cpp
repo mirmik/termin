@@ -182,6 +182,7 @@ namespace termin {
             },
         }};
         MaterialPipelineResourceView normal_resources{};
+        normal_resources.material_texture_sources = ctx.material_texture_sources;
         normal_resources.uniforms = per_frame_uniforms.data();
         normal_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
         prepare_material_pipeline_resources(*ctx.ctx2, device, normal_shader.shader, nullptr, normal_resources);
@@ -210,6 +211,7 @@ namespace termin {
                 {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "normal_draw"},
             }};
             MaterialPipelineResourceView draw_material_resources{};
+            draw_material_resources.material_texture_sources = ctx.material_texture_sources;
             RenderItemResourceBinding resource_binding{};
             resource_binding.material_resources = &draw_material_resources;
             resource_binding.named_uniforms = draw_uniforms.data();

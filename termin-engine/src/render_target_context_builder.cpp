@@ -103,6 +103,29 @@ namespace termin::rendering_manager_detail {
         }
     }
 
+    static void fill_material_texture_sources(RenderTargetContext& ctx,
+                                              tc_scene_handle scene,
+                                              tgfx::IRenderDevice& device,
+                                              const std::vector<tc_render_target_handle>& render_targets) {
+        for (tc_render_target_handle target : render_targets) {
+            if (!tc_render_target_alive(target) || !tc_scene_handle_eq(tc_render_target_get_scene(target), scene))
+                continue;
+            const char* name = tc_render_target_get_name(target);
+            if (!name || !name[0])
+                continue;
+            const tgfx::TextureHandle color =
+                wrap_tc_texture_as_tgfx2(device, tc_render_target_get_color_texture(target));
+            if (color) {
+                ctx.material_texture_sources.push_back({"render_target", name, "color", color});
+            }
+            const tgfx::TextureHandle depth =
+                wrap_tc_texture_as_tgfx2(device, tc_render_target_get_depth_texture(target));
+            if (depth) {
+                ctx.material_texture_sources.push_back({"render_target", name, "depth", depth});
+            }
+        }
+    }
+
     bool build_render_target_contexts(const RenderTargetContextBuildRequest& request) {
         tc_render_target_handle rt = request.rt;
         if (!tc_render_target_handle_valid(rt)) {
@@ -162,6 +185,10 @@ namespace termin::rendering_manager_detail {
                         continue;
                     }
                     fill_external_textures_from_render_target(context, rt, *device, request.managed_render_targets);
+                    fill_material_texture_sources(context,
+                                                  tc_render_target_get_scene(rt),
+                                                  *device,
+                                                  request.managed_render_targets);
                 }
             }
             if (ok && request.default_context_name.empty() && !request.contexts.empty()) {
@@ -224,6 +251,8 @@ namespace termin::rendering_manager_detail {
         ctx.output_depth_format = render_target_format_to_tgfx2(tc_render_target_get_depth_format(rt));
         fill_render_target_clear_settings(ctx, rt);
         fill_external_textures_from_render_target(ctx, rt, *device, request.managed_render_targets);
+        fill_material_texture_sources(
+            ctx, tc_render_target_get_scene(rt), *device, request.managed_render_targets);
         request.contexts[context_name] = std::move(ctx);
         request.internal_entities_by_context[context_name] = request.internal_entities;
 

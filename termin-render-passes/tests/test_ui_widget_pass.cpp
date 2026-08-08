@@ -80,7 +80,7 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     RenderExecutionCapabilities capabilities;
     capabilities.add(scene_services);
     ctx.capabilities = &capabilities;
-    auto submissions = collect_ui_document_submissions(ctx, false);
+    auto submissions = collect_ui_document_submissions(ctx, true, false);
     REQUIRE_EQ(submissions.size(), 1u);
     CHECK(submissions[0].document == back->document());
     CHECK_EQ(submissions[0].presentation_metrics.density_scale, 2.0f);
@@ -88,7 +88,7 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     CHECK_EQ(submissions[0].presentation_metrics.physical_safe_insets.top, 24.0f);
 
     scene_services.layer_mask = UINT64_MAX;
-    submissions = collect_ui_document_submissions(ctx, false);
+    submissions = collect_ui_document_submissions(ctx, true, false);
     REQUIRE_EQ(submissions.size(), 2u);
     CHECK_EQ(submissions[0].priority, 5);
     CHECK_EQ(submissions[1].priority, 20);
@@ -97,7 +97,7 @@ TEST_CASE("UIWidgetPass collects ordered enabled layer-filtered documents") {
     CHECK_EQ(submissions[0].presentation_metrics.density_scale, 2.0f);
     CHECK_FALSE(tc_ui_presentation_metrics_is_valid(&submissions[1].presentation_metrics));
 
-    const auto repeated = collect_ui_document_submissions(ctx, false);
+    const auto repeated = collect_ui_document_submissions(ctx, true, false);
     REQUIRE_EQ(repeated.size(), submissions.size());
     CHECK_EQ(repeated[0].stable_identity, submissions[0].stable_identity);
     CHECK_EQ(repeated[1].stable_identity, submissions[1].stable_identity);
@@ -129,22 +129,26 @@ TEST_CASE("UIWidgetPass includes internal hierarchy without duplicates") {
     RenderExecutionCapabilities capabilities;
     capabilities.add(scene_services);
     ctx.capabilities = &capabilities;
-    auto submissions = collect_ui_document_submissions(ctx, false);
+    auto submissions = collect_ui_document_submissions(ctx, true, false);
     REQUIRE_EQ(submissions.size(), 1u);
     CHECK(submissions[0].document == scene_component->document());
 
-    submissions = collect_ui_document_submissions(ctx, true);
+    submissions = collect_ui_document_submissions(ctx, false, true);
+    REQUIRE_EQ(submissions.size(), 1u);
+    CHECK(submissions[0].document == internal_component->document());
+
+    submissions = collect_ui_document_submissions(ctx, true, true);
     REQUIRE_EQ(submissions.size(), 2u);
     CHECK_EQ(submissions[0].priority, 3);
     CHECK(submissions[0].document == internal_component->document());
 
     internal_root.set_enabled(false);
-    submissions = collect_ui_document_submissions(ctx, true);
+    submissions = collect_ui_document_submissions(ctx, true, true);
     REQUIRE_EQ(submissions.size(), 1u);
 
     internal_root.set_enabled(true);
     scene_services.internal_entities = scene_entity.handle();
-    submissions = collect_ui_document_submissions(ctx, true);
+    submissions = collect_ui_document_submissions(ctx, true, true);
     CHECK_EQ(submissions.size(), 1u);
 
     tc_entity_free(internal_child.handle());

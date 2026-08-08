@@ -1,4 +1,11 @@
 {
   "uuid": "quest-showcase-vr-panel-material",
-  "shader": "VrUiPanel"
+  "shader": "VrUiPanel",
+  "texture_refs": {
+    "u_panel_texture": {
+      "kind": "render_target",
+      "target": "VR Panel Texture",
+      "channel": "color"
+    }
+  }
 }

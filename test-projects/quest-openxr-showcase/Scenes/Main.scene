@@ -1577,9 +1577,6 @@
             "pipeline_uuid": "quest-showcase-xr-multiview-pipeline",
             "pipeline_name": "QuestMultiview",
             "layer_mask": 4294967295.0,
-            "pipeline_params": {
-              "PANEL_COLOR": "VR Panel Texture"
-            },
             "enabled": true
           }
         ]

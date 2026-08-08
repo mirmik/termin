@@ -184,17 +184,20 @@ namespace termin {
     } // namespace
 
     std::vector<gui_native::UiDocumentSubmission> collect_ui_document_submissions(const ExecuteContext& ctx,
+                                                                                  bool include_scene_entities,
                                                                                   bool include_internal_entities) {
         SubmissionCollector collector;
         const SceneRenderServices* services = require_scene_render_services(ctx, "UIWidgetPass");
         if (!services)
             return {};
         collector.layer_mask = services->layer_mask;
-        tc_scene_foreach_with_capability(services->scene.handle(),
-                                         tc_scene_ui_document_capability_id(),
-                                         collect_scene_component,
-                                         &collector,
-                                         TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+        if (include_scene_entities) {
+            tc_scene_foreach_with_capability(services->scene.handle(),
+                                             tc_scene_ui_document_capability_id(),
+                                             collect_scene_component,
+                                             &collector,
+                                             TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+        }
         if (include_internal_entities && tc_entity_handle_valid(services->internal_entities)) {
             collect_internal_hierarchy(services->internal_entities, true, collector);
         }
@@ -276,7 +279,8 @@ namespace termin {
             ctx.ctx2->blit(input, output);
         }
 
-        auto submissions = collect_ui_document_submissions(ctx, include_internal_entities);
+        auto submissions =
+            collect_ui_document_submissions(ctx, include_scene_entities, include_internal_entities);
         if (submissions.empty()) {
             return;
         }
@@ -338,6 +342,7 @@ namespace termin {
         _register_inspect_input_res(inspect);
         _register_inspect_output_res(inspect);
         _register_inspect_font_path(inspect);
+        _register_inspect_include_scene_entities(inspect);
         _register_inspect_include_internal_entities(inspect);
         _register_inspect_metadata_graph(inspect);
         (void)descriptor.commit();

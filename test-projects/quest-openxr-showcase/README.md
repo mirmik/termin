@@ -35,10 +35,10 @@ Adreno driver. Do not remove it without a headset A/B test; do not enable it
 globally without evidence that another graph or device needs it.
 
 The floating VR panel is rendered once by `UIWidgetPass` into the ordinary
-`VR Panel Texture` target. The headset target exposes that color result to the
-multiview graph as the named `PANEL_COLOR` texture, and the panel mesh samples
-it like any other material texture. This keeps the UI graph and XR graph
-literal: there is no hidden per-eye execution of the mono UI pass.
+`VR Panel Texture` target. `VrUiPanel.material` references that target's color
+attachment directly through `texture_refs`; the frame planner schedules the
+producer before every target that draws the panel material. The XR graph has no
+panel-specific slot, and there is no hidden per-eye execution of the mono UI pass.
 
 The right controller also owns a separate pointer entity. It currently follows
 the grip pose because the Quest runtime leaves the separate aim action

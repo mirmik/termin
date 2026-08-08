@@ -43,6 +43,7 @@ def test_ui_widget_pass_is_exported_from_render_passes() -> None:
     assert pass_obj.compute_reads() == {"color+ui"}
     assert pass_obj.compute_writes() == {"color+widgets"}
     assert pass_obj.get_inplace_aliases() == [("color+ui", "color+widgets")]
+    assert pass_obj.include_scene_entities is True
     assert pass_obj.include_internal_entities is False
 
 

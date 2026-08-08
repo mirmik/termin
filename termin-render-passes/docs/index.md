@@ -80,6 +80,11 @@ entity, layer, and optional internal-hierarchy filtering, then submits the
 documents in stable `(priority, identity)` order to
 `NativeDocumentPainter`. The pass owns painter GPU resources; UI components
 and their document assets remain CPU-only.
+`include_scene_entities` and `include_internal_entities` independently select
+documents owned by the rendered scene and by the render host's internal entity
+hierarchy. Runtime passes include scene documents by default; editor pipelines
+can therefore suppress runtime overlays without changing scene layers while
+still retaining editor-owned documents.
 
 If a document already carries host-published presentation metrics,
 `UIWidgetPass` preserves its density scale, font scale, and physical safe
