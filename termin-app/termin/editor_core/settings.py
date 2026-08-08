@@ -13,10 +13,13 @@ from typing import Any
 from tcbase import Settings
 from termin.project_build.user_settings import (
     KEY_BUILD_ADB as USER_KEY_BUILD_ADB,
+    KEY_BUILD_ANDROID_HOME as USER_KEY_BUILD_ANDROID_HOME,
     KEY_BUILD_ANDROID_SCRIPT as USER_KEY_BUILD_ANDROID_SCRIPT,
+    KEY_BUILD_ANDROID_NDK_ROOT as USER_KEY_BUILD_ANDROID_NDK_ROOT,
     KEY_BUILD_ANDROID_SDK_ROOT as USER_KEY_BUILD_ANDROID_SDK_ROOT,
     KEY_BUILD_FXC as USER_KEY_BUILD_FXC,
     KEY_BUILD_GRADLE as USER_KEY_BUILD_GRADLE,
+    KEY_BUILD_JAVA_HOME as USER_KEY_BUILD_JAVA_HOME,
     KEY_BUILD_QUEST_OPENXR_SCRIPT as USER_KEY_BUILD_QUEST_OPENXR_SCRIPT,
     KEY_BUILD_SDK_ROOT as USER_KEY_BUILD_SDK_ROOT,
     KEY_BUILD_SHADER_COMPILER as USER_KEY_BUILD_SHADER_COMPILER,
@@ -47,6 +50,9 @@ class EditorSettings:
     KEY_BUILD_SDK_ROOT = USER_KEY_BUILD_SDK_ROOT
     KEY_BUILD_TERMIN_ROOT = USER_KEY_BUILD_TERMIN_ROOT
     KEY_BUILD_ANDROID_SDK_ROOT = USER_KEY_BUILD_ANDROID_SDK_ROOT
+    KEY_BUILD_ANDROID_HOME = USER_KEY_BUILD_ANDROID_HOME
+    KEY_BUILD_ANDROID_NDK_ROOT = USER_KEY_BUILD_ANDROID_NDK_ROOT
+    KEY_BUILD_JAVA_HOME = USER_KEY_BUILD_JAVA_HOME
     KEY_BUILD_SHADER_COMPILER = USER_KEY_BUILD_SHADER_COMPILER
     KEY_BUILD_FXC = USER_KEY_BUILD_FXC
     KEY_BUILD_ANDROID_SCRIPT = USER_KEY_BUILD_ANDROID_SCRIPT
@@ -231,6 +237,24 @@ class EditorSettings:
 
     def set_build_android_sdk_root(self, path: str | None) -> None:
         self.set(self.KEY_BUILD_ANDROID_SDK_ROOT, path or "")
+
+    def get_build_android_home(self) -> str | None:
+        return self.get(self.KEY_BUILD_ANDROID_HOME) or None
+
+    def set_build_android_home(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_ANDROID_HOME, path or "")
+
+    def get_build_android_ndk_root(self) -> str | None:
+        return self.get(self.KEY_BUILD_ANDROID_NDK_ROOT) or None
+
+    def set_build_android_ndk_root(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_ANDROID_NDK_ROOT, path or "")
+
+    def get_build_java_home(self) -> str | None:
+        return self.get(self.KEY_BUILD_JAVA_HOME) or None
+
+    def set_build_java_home(self, path: str | None) -> None:
+        self.set(self.KEY_BUILD_JAVA_HOME, path or "")
 
     def get_build_shader_compiler(self) -> str | None:
         return self.get(self.KEY_BUILD_SHADER_COMPILER) or None

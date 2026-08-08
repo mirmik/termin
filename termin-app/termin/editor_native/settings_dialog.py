@@ -35,6 +35,9 @@ class NativeSettingsDialog:
     build_sdk_root: object
     build_termin_root: object
     build_android_sdk_root: object
+    build_android_home: object
+    build_android_ndk_root: object
+    build_java_home: object
     build_shader_compiler: object
     build_fxc: object
     build_android_script: object
@@ -73,6 +76,9 @@ class NativeSettingsDialog:
             build_sdk_root=self.build_sdk_root.text,
             build_termin_root=self.build_termin_root.text,
             build_android_sdk_root=self.build_android_sdk_root.text,
+            build_android_home=self.build_android_home.text,
+            build_android_ndk_root=self.build_android_ndk_root.text,
+            build_java_home=self.build_java_home.text,
             build_shader_compiler=self.build_shader_compiler.text,
             build_fxc=self.build_fxc.text,
             build_android_script=self.build_android_script.text,
@@ -93,6 +99,9 @@ class NativeSettingsDialog:
         self.build_sdk_root.text = snapshot.build_sdk_root
         self.build_termin_root.text = snapshot.build_termin_root
         self.build_android_sdk_root.text = snapshot.build_android_sdk_root
+        self.build_android_home.text = snapshot.build_android_home
+        self.build_android_ndk_root.text = snapshot.build_android_ndk_root
+        self.build_java_home.text = snapshot.build_java_home
         self.build_shader_compiler.text = snapshot.build_shader_compiler
         self.build_fxc.text = snapshot.build_fxc
         self.build_android_script.text = snapshot.build_android_script
@@ -272,6 +281,9 @@ def build_native_settings_dialog(
         ("Termin SDK Root", False),
         ("Termin Source/Install Root", False),
         ("Termin Android SDK Root", False),
+        ("Google Android SDK Root", False),
+        ("Android NDK Root", False),
+        ("Java/JDK Root", False),
         ("termin_shaderc", True),
         ("FXC", True),
         ("Android Build Script", True),
@@ -290,6 +302,9 @@ def build_native_settings_dialog(
         build_sdk_root,
         build_termin_root,
         build_android_sdk_root,
+        build_android_home,
+        build_android_ndk_root,
+        build_java_home,
         build_shader_compiler,
         build_fxc,
         build_android_script,
@@ -302,6 +317,9 @@ def build_native_settings_dialog(
             "sdk-root",
             "termin-root",
             "android-sdk-root",
+            "android-home",
+            "android-ndk-root",
+            "java-home",
             "shader-compiler",
             "fxc",
             "android-script",
@@ -335,6 +353,9 @@ def build_native_settings_dialog(
         build_sdk_root=build_sdk_root,
         build_termin_root=build_termin_root,
         build_android_sdk_root=build_android_sdk_root,
+        build_android_home=build_android_home,
+        build_android_ndk_root=build_android_ndk_root,
+        build_java_home=build_java_home,
         build_shader_compiler=build_shader_compiler,
         build_fxc=build_fxc,
         build_android_script=build_android_script,
@@ -361,12 +382,12 @@ def build_native_settings_dialog(
 
     editor_browse.connect_clicked(lambda: owner().browse_text_editor() if owner() is not None else None)
     slang_browse.connect_clicked(lambda: owner().browse_slang_compiler() if owner() is not None else None)
-    build_shader_browse = toolchain_browse_buttons[3]
-    build_fxc_browse = toolchain_browse_buttons[4]
-    android_script_browse = toolchain_browse_buttons[5]
-    quest_script_browse = toolchain_browse_buttons[6]
-    gradle_browse = toolchain_browse_buttons[7]
-    adb_browse = toolchain_browse_buttons[8]
+    build_shader_browse = toolchain_browse_buttons[6]
+    build_fxc_browse = toolchain_browse_buttons[7]
+    android_script_browse = toolchain_browse_buttons[8]
+    quest_script_browse = toolchain_browse_buttons[9]
+    gradle_browse = toolchain_browse_buttons[10]
+    adb_browse = toolchain_browse_buttons[11]
     assert build_shader_browse is not None
     assert build_fxc_browse is not None
     assert android_script_browse is not None

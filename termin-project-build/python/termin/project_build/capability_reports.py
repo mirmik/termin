@@ -236,6 +236,45 @@ def _validate_android_family(
         label="Termin Android SDK root",
         diagnostics=diagnostics,
     )
+    _validate_directory(
+        request.toolchain.android_home,
+        code="capability.android_home",
+        path="toolchain.android_home",
+        label="Google Android SDK root",
+        diagnostics=diagnostics,
+    )
+    if (
+        request.toolchain.android_home is not None
+        and request.toolchain.android_home.is_dir()
+        and not (request.toolchain.android_home / "platforms").is_dir()
+    ):
+        diagnostics.append(
+            ProfileDiagnostic(
+                code="capability.android_home.invalid",
+                path="toolchain.android_home",
+                message=(
+                    "Google Android SDK root has no platforms directory: "
+                    f"{request.toolchain.android_home}"
+                ),
+            )
+        )
+    if request.toolchain.android_ndk_root is not None:
+        _validate_file(
+            request.toolchain.android_ndk_root / "build/cmake/android.toolchain.cmake",
+            code="capability.android_ndk",
+            path="toolchain.android_ndk_root",
+            label="Android NDK CMake toolchain",
+            diagnostics=diagnostics,
+        )
+    if request.toolchain.java_home is not None:
+        java_name = "java.exe" if os.name == "nt" else "java"
+        _validate_file(
+            request.toolchain.java_home / "bin" / java_name,
+            code="capability.java_home",
+            path="toolchain.java_home",
+            label="Java executable",
+            diagnostics=diagnostics,
+        )
     _validate_file(
         request.build_script,
         code="capability.build_script",

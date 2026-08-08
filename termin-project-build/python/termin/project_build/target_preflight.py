@@ -60,6 +60,9 @@ class AndroidPreflightResult:
     termin_root: Path
     build_script: Path
     android_sdk_root: Path
+    android_home: Path | None
+    android_ndk_root: Path | None
+    java_home: Path | None
     gradle: Path | None
     capabilities: SDKCapabilities
     diagnostics: list[BuildDiagnostic] = field(default_factory=list)
@@ -70,6 +73,9 @@ class QuestOpenXRPreflightResult:
     termin_root: Path
     build_script: Path
     android_sdk_root: Path
+    android_home: Path | None
+    android_ndk_root: Path | None
+    java_home: Path | None
     gradle: Path | None
     capabilities: SDKCapabilities
     diagnostics: list[BuildDiagnostic] = field(default_factory=list)
@@ -80,6 +86,9 @@ class _AndroidApkPreflightPayload:
     termin_root: Path
     build_script: Path
     android_sdk_root: Path
+    android_home: Path | None
+    android_ndk_root: Path | None
+    java_home: Path | None
     gradle: Path | None
     capabilities: SDKCapabilities
     diagnostics: list[BuildDiagnostic]
@@ -158,6 +167,9 @@ def preflight_android_build(
     platform: str = "android-26",
     sdk_root: str | Path | None = None,
     android_sdk_root: str | Path | None = None,
+    android_home: str | Path | None = None,
+    android_ndk_root: str | Path | None = None,
+    java_home: str | Path | None = None,
 ) -> AndroidPreflightResult:
     payload = _preflight_android_apk_build(
         termin_root=termin_root,
@@ -169,11 +181,17 @@ def preflight_android_build(
         default_build_script=ANDROID_BUILD_SCRIPT,
         sdk_root=sdk_root,
         android_sdk_root=android_sdk_root,
+        android_home=android_home,
+        android_ndk_root=android_ndk_root,
+        java_home=java_home,
     )
     return AndroidPreflightResult(
         termin_root=payload.termin_root,
         build_script=payload.build_script,
         android_sdk_root=payload.android_sdk_root,
+        android_home=payload.android_home,
+        android_ndk_root=payload.android_ndk_root,
+        java_home=payload.java_home,
         gradle=payload.gradle,
         capabilities=payload.capabilities,
         diagnostics=payload.diagnostics,
@@ -188,6 +206,9 @@ def preflight_quest_openxr_build(
     platform: str,
     sdk_root: str | Path | None = None,
     android_sdk_root: str | Path | None = None,
+    android_home: str | Path | None = None,
+    android_ndk_root: str | Path | None = None,
+    java_home: str | Path | None = None,
 ) -> QuestOpenXRPreflightResult:
     payload = _preflight_android_apk_build(
         termin_root=termin_root,
@@ -199,12 +220,18 @@ def preflight_quest_openxr_build(
         default_build_script=QUEST_OPENXR_BUILD_SCRIPT,
         sdk_root=sdk_root,
         android_sdk_root=android_sdk_root,
+        android_home=android_home,
+        android_ndk_root=android_ndk_root,
+        java_home=java_home,
         validate_product_capabilities=_validate_quest_openxr_capabilities,
     )
     return QuestOpenXRPreflightResult(
         termin_root=payload.termin_root,
         build_script=payload.build_script,
         android_sdk_root=payload.android_sdk_root,
+        android_home=payload.android_home,
+        android_ndk_root=payload.android_ndk_root,
+        java_home=payload.java_home,
         gradle=payload.gradle,
         capabilities=payload.capabilities,
         diagnostics=payload.diagnostics,
@@ -222,6 +249,9 @@ def _preflight_android_apk_build(
     default_build_script: str,
     sdk_root: str | Path | None = None,
     android_sdk_root: str | Path | None = None,
+    android_home: str | Path | None = None,
+    android_ndk_root: str | Path | None = None,
+    java_home: str | Path | None = None,
     validate_product_capabilities: Callable[
         [SDKCapabilities, str, str, Path, list[BuildDiagnostic]], None
     ]
@@ -272,12 +302,24 @@ def _preflight_android_apk_build(
             diagnostics,
         )
     resolved_gradle = _resolve_checked_gradle(gradle, target_name, diagnostics)
+    resolved_android_home = Path(android_home).expanduser().resolve() if android_home else None
+    if resolved_android_home is not None and not (resolved_android_home / "platforms").is_dir():
+        diagnostics.append(build_error(str(resolved_android_home), f"{target_name} Google Android SDK has no platforms directory: {resolved_android_home}"))
+    resolved_android_ndk_root = Path(android_ndk_root).expanduser().resolve() if android_ndk_root else None
+    if resolved_android_ndk_root is not None and not (resolved_android_ndk_root / "build/cmake/android.toolchain.cmake").is_file():
+        diagnostics.append(build_error(str(resolved_android_ndk_root), f"{target_name} Android NDK has no CMake toolchain: {resolved_android_ndk_root}"))
+    resolved_java_home = Path(java_home).expanduser().resolve() if java_home else None
+    if resolved_java_home is not None and not (resolved_java_home / ("bin/java.exe" if os.name == "nt" else "bin/java")).is_file():
+        diagnostics.append(build_error(str(resolved_java_home), f"{target_name} Java home has no Java executable: {resolved_java_home}"))
     _raise_if_errors(target_name, diagnostics)
 
     return _AndroidApkPreflightPayload(
         termin_root=resolved_termin_root,
         build_script=resolved_build_script,
         android_sdk_root=capabilities.android.sdk_root,
+        android_home=resolved_android_home,
+        android_ndk_root=resolved_android_ndk_root,
+        java_home=resolved_java_home,
         gradle=resolved_gradle,
         capabilities=capabilities,
         diagnostics=diagnostics,

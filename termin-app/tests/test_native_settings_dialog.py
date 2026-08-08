@@ -38,6 +38,9 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     dialog.tabs.selected_index = 1
     document.layout_roots(viewport())
     assert dialog.build_gradle.widget.stable_id == "editor.settings.build.gradle"
+    assert dialog.build_android_home.widget.stable_id == "editor.settings.build.android-home"
+    assert dialog.build_android_ndk_root.widget.stable_id == "editor.settings.build.android-ndk-root"
+    assert dialog.build_java_home.widget.stable_id == "editor.settings.build.java-home"
     assert dialog.build_gradle.widget.bounds.height > 0
     assert dialog.build_adb.widget.bounds.y > dialog.build_gradle.widget.bounds.y
     assert dialog.text_editor.text == "/usr/bin/editor"
@@ -48,6 +51,9 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     dialog.text_editor.text = " /opt/code "
     dialog.slang_compiler.text = " /opt/slangc "
     dialog.build_sdk_root.text = " /opt/termin/sdk "
+    dialog.build_android_home.text = " /opt/android/sdk "
+    dialog.build_android_ndk_root.text = " /opt/android/ndk/27.2.12479018 "
+    dialog.build_java_home.text = " /opt/jdk-17 "
     dialog.build_gradle.text = " /opt/gradle-8/bin/gradle "
     dialog.build_adb.text = " /opt/android/platform-tools/adb "
     dialog.font_size.value = 18.0
@@ -64,6 +70,9 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert settings.text_editor == "/opt/code"
     assert settings.slang_compiler == "/opt/slangc"
     assert settings.build_sdk_root == "/opt/termin/sdk"
+    assert settings.build_android_home == "/opt/android/sdk"
+    assert settings.build_android_ndk_root == "/opt/android/ndk/27.2.12479018"
+    assert settings.build_java_home == "/opt/jdk-17"
     assert settings.build_gradle == "/opt/gradle-8/bin/gradle"
     assert settings.build_adb == "/opt/android/platform-tools/adb"
     assert settings.mcp_enabled is True
