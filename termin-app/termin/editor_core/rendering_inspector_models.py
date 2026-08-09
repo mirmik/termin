@@ -507,15 +507,18 @@ class RenderTargetInspectorController:
         if choice.value is None:
             params.pop(slot, None)
         else:
-            tag, name = choice.value
+            tag, identifier = choice.value
             if tag == "file":
-                asset = self._resource_manager.get_texture_asset(name)
+                asset = self._resource_manager.get_texture_asset_by_uuid(identifier)
                 if asset is None:
-                    _logger.error("Pipeline parameter texture asset not found: %s", name)
-                    raise ValueError(f"unknown texture asset '{name}'")
+                    _logger.error(
+                        "Pipeline parameter texture asset UUID not found: %s",
+                        identifier,
+                    )
+                    raise ValueError(f"unknown texture asset UUID '{identifier}'")
                 params[slot] = f"file:{asset.uuid}"
             else:
-                params[slot] = name
+                params[slot] = identifier
         target.pipeline_params = params
         return self._commit()
 
@@ -566,7 +569,7 @@ class RenderTargetInspectorController:
             return ()
         choices = [InspectorChoice("Default", None)]
         choices.extend(
-            InspectorChoice(source.label, (source.tag, source.name))
+            InspectorChoice(source.label, (source.tag, source.identifier))
             for source in self._texture_sources.choices()
             if source.tag != "default"
         )
@@ -575,13 +578,19 @@ class RenderTargetInspectorController:
             current = target.pipeline_params.get(slot, "")
             selected = 0
             if current.startswith("file:"):
-                asset_value = self._resource_manager.get_texture_asset_by_uuid(current[5:])
-                if asset_value is not None:
-                    selected = next((index for index, choice in enumerate(choices)
-                                     if choice.value == ("file", asset_value.name)), 0)
+                selected = next(
+                    (index for index, choice in enumerate(choices) if choice.value == ("file", current[5:])),
+                    0,
+                )
             elif current:
-                selected = next((index for index, choice in enumerate(choices)
-                                 if choice.value is not None and choice.value[1] == current), 0)
+                selected = next(
+                    (
+                        index
+                        for index, choice in enumerate(choices)
+                        if choice.value is not None and choice.value[1] == current
+                    ),
+                    0,
+                )
             result.append(PipelineParameterSnapshot(slot, tuple(choices), selected))
         return tuple(result)
 

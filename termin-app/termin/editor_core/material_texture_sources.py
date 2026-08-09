@@ -37,7 +37,7 @@ def resolve_live_render_target_texture(
 class MaterialTextureSource:
     label: str
     tag: str
-    name: str
+    identifier: str
 
 
 class MaterialTextureSourceCatalog:
@@ -65,10 +65,22 @@ class MaterialTextureSourceCatalog:
         # binding them.
         entries = [MaterialTextureSource(f"Default ({default_kind})", "default", "")]
         entries.extend(self._render_target_sources())
+        texture_assets = tuple(self._resource_manager.iter_runtime_assets("texture"))
+        name_counts: dict[str, int] = {}
+        for asset in texture_assets:
+            name_counts[asset.name] = name_counts.get(asset.name, 0) + 1
         entries.extend(
-            MaterialTextureSource(name, "file", name)
-            for name in self._resource_manager.list_texture_names()
-            if name not in (
+            MaterialTextureSource(
+                (
+                    asset.name
+                    if name_counts[asset.name] == 1
+                    else f"{asset.name} [{asset.uuid[:8]}]"
+                ),
+                "file",
+                asset.uuid,
+            )
+            for asset in texture_assets
+            if asset.name not in (
                 "__white_1x1__",
                 "__white_srgb_1x1__",
                 "__normal_1x1__",
@@ -77,7 +89,7 @@ class MaterialTextureSourceCatalog:
         result = []
         seen = set()
         for entry in entries:
-            identity = (entry.tag, entry.name)
+            identity = (entry.tag, entry.identifier)
             if identity in seen:
                 continue
             seen.add(identity)
@@ -116,16 +128,16 @@ class MaterialTextureSourceCatalog:
                 encoding = "linear" if default_kind == "normal" else expected_encoding
                 return prepare_texture_preview_pixels(texture._image_data, encoding)
             if tag == "file":
-                texture = self._resource_manager.get_texture(name)
-                if texture is None:
-                    return None
-                asset = self._resource_manager.get_texture_asset(name)
+                asset = self._resource_manager.get_texture_asset_by_uuid(name)
                 if asset is None:
                     _logger.error(
-                        "Material texture preview has no asset metadata: %s",
+                        "Material texture preview has no asset for UUID: %s",
                         name,
                     )
                     return None
+                from termin.render.texture import Texture
+
+                texture = Texture.from_asset(asset)
                 return prepare_texture_preview_pixels(
                     texture._image_data,
                     asset.encoding,

@@ -157,7 +157,7 @@ class NativeMaterialInspector:
         selected = 0
         for index, choice in enumerate(choices):
             combo.add_item(choice.label)
-            if choice.tag == prop.texture.tag and choice.name == prop.texture.name:
+            if choice.tag == prop.texture.tag and choice.identifier == prop.texture.identifier:
                 selected = index
         combo.selected_index = selected
 
@@ -165,7 +165,7 @@ class NativeMaterialInspector:
             choice = choices[selected]
             pixels = self.texture_sources.preview_pixels(
                 choice.tag,
-                choice.name,
+                choice.identifier,
                 prop.texture.default_kind,
                 prop.texture.expected_encoding,
             )
@@ -183,7 +183,7 @@ class NativeMaterialInspector:
                 lambda: owner.controller.set_texture(
                     prop.name,
                     choice.tag,
-                    choice.name,
+                    choice.identifier,
                     default_kind=prop.texture.default_kind,
                 )
             )
@@ -286,6 +286,11 @@ class NativeMaterialInspector:
         for release in self._preview_releases:
             release()
         self._preview_releases.clear()
+
+    def close(self) -> None:
+        """Release host-owned GPU previews before this projection is destroyed."""
+
+        self._release_previews()
 
 
 def build_native_material_inspector(

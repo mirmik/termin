@@ -32,6 +32,9 @@ class _Phase:
 class _Texture:
     is_valid = True
 
+    def __init__(self, uuid: str = "brick-uuid") -> None:
+        self.uuid = uuid
+
 
 class _Material:
     def __init__(self) -> None:
@@ -85,11 +88,13 @@ class _Resources:
     def get_shader(self, name):
         return _Program() if name == "lit" else None
 
-    def find_texture_name(self, texture):
-        return "brick" if texture is not None else None
+    def get_texture_asset_by_uuid(self, uuid):
+        if uuid != "brick-uuid":
+            return None
+        return type("Asset", (), {"name": "brick", "uuid": "brick-uuid"})()
 
-    def get_texture_handle(self, name):
-        return self.texture if name == "brick" else None
+    def get_handle_by_uuid(self, kind, uuid):
+        return self.texture if kind == "texture" and uuid == "brick-uuid" else None
 
     def find_material_name(self, _material):
         return None
@@ -110,7 +115,7 @@ def test_material_inspector_snapshot_and_property_edits_share_one_controller():
     assert isinstance(snapshot.properties[4].value, SrgbColor)
     assert tuple(snapshot.properties[4].value) == pytest.approx((0.5, 0.25, 0.75, 0.75))
     assert snapshot.properties[5].texture == MaterialTextureValue(
-        "file", "brick", "white", "srgb"
+        "file", "brick-uuid", "white", "srgb"
     )
 
     controller.set_property("roughness", 0.75)
@@ -148,7 +153,7 @@ def test_material_inspector_file_texture_and_name_edits():
     controller.set_target(material)
 
     controller.set_name(" Renamed ")
-    controller.set_texture("albedo", "file", "brick")
+    controller.set_texture("albedo", "file", "brick-uuid")
 
     assert material.name == "Renamed"
     assert material.texture_assignments == [("albedo", resources.texture)]
@@ -171,7 +176,7 @@ def test_material_inspector_edits_unconstrained_texture_property():
     controller = MaterialInspectorController(resources)
     controller.set_target(material)
 
-    controller.set_texture("albedo", "file", "brick")
+    controller.set_texture("albedo", "file", "brick-uuid")
 
     assert material.texture_assignments == [("albedo", resources.texture)]
 

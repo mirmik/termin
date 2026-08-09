@@ -285,6 +285,8 @@ class NativeWidgetContent:
         if preview not in self._image_previews:
             return
         self._image_previews.remove(preview)
+        if self.document.is_alive(preview.image.handle):
+            preview.image.clear_texture()
         if preview.texture is not None:
             self.context.destroy_texture(preview.texture)
             preview.texture = None

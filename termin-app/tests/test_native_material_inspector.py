@@ -37,9 +37,14 @@ class _Phase:
 class _Texture:
     is_valid = True
     encoding = "srgb"
+    uuid = "texture-uuid"
 
     def __init__(self) -> None:
         self._image_data = np.array([[[32, 64, 128, 255]]], dtype=np.uint8)
+        self.data = self._image_data
+
+    def sync_to_cpu(self) -> None:
+        pass
 
 
 class _Material:
@@ -93,6 +98,16 @@ class _Accessors:
 class _Resources:
     def __init__(self) -> None:
         self.texture = _Texture()
+        self.texture_asset = type(
+            "Asset",
+            (),
+            {
+                "name": "brick",
+                "uuid": "texture-uuid",
+                "encoding": "srgb",
+                "texture_data": self.texture,
+            },
+        )()
 
     def list_shader_names(self):
         return ["lit"]
@@ -100,26 +115,14 @@ class _Resources:
     def get_shader(self, name):
         return _Program() if name == "lit" else None
 
-    def find_texture_name(self, _texture):
-        return "brick"
+    def iter_runtime_assets(self, type_id):
+        return (self.texture_asset,) if type_id == "texture" else ()
 
-    def list_texture_names(self):
-        return ["brick"]
+    def get_texture_asset_by_uuid(self, uuid):
+        return self.texture_asset if uuid == "texture-uuid" else None
 
-    def get_texture_handle(self, name):
-        return self.texture if name == "brick" else None
-
-    def get_texture(self, name):
-        return self.texture if name == "brick" else None
-
-    def get_texture_asset(self, name):
-        if name != "brick":
-            return None
-
-        class Asset:
-            encoding = "srgb"
-
-        return Asset()
+    def get_handle_by_uuid(self, kind, uuid):
+        return self.texture if kind == "texture" and uuid == "texture-uuid" else None
 
     def find_material_name(self, _material):
         return None
@@ -259,11 +262,19 @@ def test_inline_material_metadata_uses_native_material_projection():
         metadata_collector=lambda _target: {"fields": {"material": {"widget": "inline_material"}}},
     )
     document = tc_ui_document_create()
+    registered = []
+    released = []
+
+    def register(image, pixels):
+        registered.append((image, pixels))
+        return lambda: released.append(image)
+
     panel = build_native_inspector_fields(
         document,
         controller,
         request_render=lambda: None,
         resource_catalog=InspectorResourceCatalog(resources),
+        show_texture_preview=register,
     )
 
     panel.set_targets([target])
@@ -272,7 +283,12 @@ def test_inline_material_metadata_uses_native_material_projection():
     assert isinstance(inline, NativeMaterialInspector)
     assert inline.controller.material is target.material
     assert inline.controls["roughness"].value == pytest.approx(0.25)
-    inline.controls.clear()
-    panel.field_widgets.clear()
+    assert len(registered) == 1
+
+    panel.set_targets([target])
+
+    assert released == [registered[0][0]]
+    panel._destroy_rows()
+    assert released == [registered[0][0], registered[1][0]]
     assert document.destroy_widget_recursive(panel.root.handle)
     tc_ui_document_destroy(document)
