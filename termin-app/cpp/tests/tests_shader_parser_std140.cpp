@@ -82,8 +82,10 @@ TEST_CASE("std140: scalar and vector sizes/alignments") {
     CHECK_EQ(std140_size_align("Vec4").first, 16u);
     CHECK_EQ(std140_size_align("Vec4").second, 16u);
 
-    CHECK_EQ(std140_size_align("Color").first, 16u);
-    CHECK_EQ(std140_size_align("Color").second, 16u);
+    CHECK_EQ(std140_size_align("SrgbColor").first, 16u);
+    CHECK_EQ(std140_size_align("SrgbColor").second, 16u);
+    CHECK_EQ(std140_size_align("LinearColor").first, 16u);
+    CHECK_EQ(std140_size_align("LinearColor").second, 16u);
 
     // Texture is not a UBO field.
     CHECK_EQ(std140_size_align("Texture").first, 0u);
@@ -134,7 +136,7 @@ TEST_CASE("std140: float vec3 forces vec3 to next 16-byte boundary") {
 
 TEST_CASE("std140: mixed types in realistic material") {
     std::vector<MaterialProperty> props = {
-        mk("u_albedo", "Color"),    // vec4 at 0
+        mk("u_albedo", "SrgbColor"), // float4 at 0
         mk("u_metallic", "Float"),  // float at 16
         mk("u_roughness", "Float"), // float at 20
         mk("u_ao", "Float"),        // float at 24
@@ -156,21 +158,21 @@ TEST_CASE("std140: Texture properties are skipped") {
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
         mk("u_albedo", "Texture"),
-        mk("u_tint", "Color"),
+        mk("u_tint", "LinearColor"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
-    // Only Float + Color end up in the block.
+    // Only Float + LinearColor end up in the block.
     CHECK_EQ(layout.entries.size(), 2u);
     CHECK_EQ(layout.entries[0].name, "u_strength");
     CHECK_EQ(layout.entries[1].name, "u_tint");
-    CHECK_EQ(layout.entries[1].offset, 16u); // Color aligned to 16
+    CHECK_EQ(layout.entries[1].offset, 16u); // LinearColor aligned to 16
     CHECK_EQ(layout.block_size, 32u);
 }
 
 TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and order") {
     std::vector<MaterialProperty> props = {
         mk("u_strength", "Float"),
-        mk("u_tint", "Color"),
+        mk("u_tint", "SrgbColor"),
         mk("u_enabled", "Bool"),
     };
     MaterialUboLayout layout = compute_std140_layout(props);
@@ -211,15 +213,43 @@ TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource 
     tc_shader* shader = tc_shader_get(handle);
     CHECK(shader != nullptr);
 
-    tc_material_ubo_entry entry{};
-    std::strncpy(entry.name, "tint", TC_MATERIAL_UBO_NAME_MAX - 1);
-    std::strncpy(entry.property_type, "Color", TC_MATERIAL_UBO_TYPE_MAX - 1);
-    entry.offset = 0;
-    entry.size = 16;
-    tc_shader_set_material_ubo_layout(shader, &entry, 1, 16);
+    tc_material_ubo_entry entries[3]{};
+    std::strncpy(entries[0].name, "srgb_tint", TC_MATERIAL_UBO_NAME_MAX - 1);
+    std::strncpy(entries[0].property_type, "SrgbColor", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    entries[0].offset = 0;
+    entries[0].size = 16;
+    std::strncpy(entries[1].name, "linear_tint", TC_MATERIAL_UBO_NAME_MAX - 1);
+    std::strncpy(entries[1].property_type, "LinearColor", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    entries[1].offset = 16;
+    entries[1].size = 16;
+    std::strncpy(entries[2].name, "raw_value", TC_MATERIAL_UBO_NAME_MAX - 1);
+    std::strncpy(entries[2].property_type, "Vec4", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    entries[2].offset = 32;
+    entries[2].size = 16;
+    tc_shader_set_material_ubo_layout(shader, entries, 3, 48);
 
-    CHECK_EQ(tc_shader_material_ubo_entry_count(shader), 1u);
-    CHECK_EQ(tc_shader_material_ubo_block_size(shader), 16u);
+    CHECK_EQ(tc_shader_material_ubo_entry_count(shader), 3u);
+    CHECK_EQ(tc_shader_material_ubo_block_size(shader), 48u);
+    const tc_material_ubo_entry* reflected = tc_shader_material_ubo_entries(shader);
+    REQUIRE(reflected != nullptr);
+    CHECK_EQ(std::string(reflected[0].property_type), "SrgbColor");
+    CHECK_EQ(std::string(reflected[1].property_type), "LinearColor");
+    CHECK_EQ(std::string(reflected[2].property_type), "Vec4");
+    CHECK_EQ(reflected[0].size, 16u);
+    CHECK_EQ(reflected[1].size, 16u);
+    CHECK_EQ(reflected[2].size, 16u);
+
+    // C owns the descriptor boundary: legacy/unknown types are rejected
+    // without losing the last valid reflected layout.
+    tc_material_ubo_entry invalid = entries[0];
+    std::strncpy(invalid.property_type, "Color", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    tc_shader_set_material_ubo_layout(shader, &invalid, 1, 16);
+    CHECK_EQ(tc_shader_material_ubo_entry_count(shader), 3u);
+    CHECK_EQ(tc_shader_material_ubo_block_size(shader), 48u);
+    std::strncpy(invalid.property_type, "Unknown", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    tc_shader_set_material_ubo_layout(shader, &invalid, 1, 16);
+    CHECK_EQ(tc_shader_material_ubo_entry_count(shader), 3u);
+
     CHECK_EQ(tc_shader_resource_binding_count(shader), 0u);
     CHECK(tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL) == nullptr);
 
@@ -370,7 +400,7 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL material UBO shader") {
                                     "@features material_ubo\n"
                                     "@phase opaque\n"
                                     "@property Float u_strength = 1.0\n"
-                                    "@property Color u_tint = Color(1.0, 1.0, 1.0, 1.0)\n"
+                                    "@property SrgbColor u_tint = SrgbColor(1.0, 1.0, 1.0, 1.0)\n"
                                     "@property Texture2D u_albedo = \"white\" encoding(srgb)\n"
                                     "@stage vertex\n"
                                     "#version 330 core\n"
@@ -479,7 +509,7 @@ TEST_CASE("parse_shader_text: Slang scalar properties synthesize material consta
     const std::string shader_text = "@program SlangTint\n"
                                     "@language slang\n"
                                     "@phase opaque\n"
-                                    "@property Color tint = Color(1.0, 0.5, 0.25, 1.0)\n"
+                                    "@property LinearColor tint = LinearColor(1.0, 0.5, 0.25, 1.0)\n"
                                     "@stage vertex\n"
                                     "struct VertexInput { float3 position : POSITION; };\n"
                                     "struct VertexOutput { float4 position : SV_Position; };\n"
@@ -618,14 +648,14 @@ TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16") {
     CHECK_EQ(read_float_at(buf, 28), 0.0f); // padding slot
 }
 
-TEST_CASE("std140_pack: Color packs 4 floats at aligned offset") {
+TEST_CASE("std140_pack: explicit color kinds pack 4 floats at aligned offset") {
     std::vector<MaterialProperty> schema = {
         mk("u_strength", "Float"),
-        mk("u_tint", "Color"),
+        mk("u_tint", "SrgbColor"),
     };
     std::vector<MaterialProperty> values = {
         mk_float("u_strength", 2.0),
-        mk_vec("u_tint", "Color", {0.9, 0.8, 0.7, 0.6}),
+        mk_vec("u_tint", "SrgbColor", {0.9, 0.8, 0.7, 0.6}),
     };
     MaterialUboLayout layout = compute_std140_layout(schema);
     CHECK_EQ(layout.block_size, 32u);
@@ -681,7 +711,7 @@ TEST_CASE("std140_pack: Bool accepts Int values as 0 or 1") {
 
 TEST_CASE("std140_pack: realistic PBR material") {
     std::vector<MaterialProperty> schema = {
-        mk("u_albedo", "Color"),
+        mk("u_albedo", "SrgbColor"),
         mk("u_metallic", "Float"),
         mk("u_roughness", "Float"),
         mk("u_ao", "Float"),
@@ -689,7 +719,7 @@ TEST_CASE("std140_pack: realistic PBR material") {
         mk("u_opacity", "Float"),
     };
     std::vector<MaterialProperty> values = {
-        mk_vec("u_albedo", "Color", {0.1, 0.2, 0.3, 1.0}),
+        mk_vec("u_albedo", "SrgbColor", {0.1, 0.2, 0.3, 1.0}),
         mk_float("u_metallic", 0.5),
         mk_float("u_roughness", 0.25),
         mk_float("u_ao", 1.0),
