@@ -777,7 +777,7 @@ NB_MODULE(_components_render_native, m) {
             [](nb::handle self,
                const std::string& text,
                float size,
-               std::optional<Vec4> color,
+               std::optional<SrgbColor> color,
                WorldTextAnchor anchor,
                WorldTextOrientation orientation,
                const std::string& phase_mark,
@@ -822,7 +822,7 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw(
             "color",
             [](WorldTextComponent& self) { return self.color; },
-            [](WorldTextComponent& self, const Vec4& value) { self.set_color(value); })
+            [](WorldTextComponent& self, SrgbColor value) { self.set_color(value); })
         .def_prop_rw(
             "size", [](WorldTextComponent& self) { return self.size; }, &WorldTextComponent::set_size)
         .def_prop_rw(

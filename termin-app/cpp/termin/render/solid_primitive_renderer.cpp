@@ -449,40 +449,41 @@ namespace termin {
         // Nothing needed — caller closes its ctx2 pass.
     }
 
-    void SolidPrimitiveRenderer::_push_and_draw(const Mat44f& model, const Color4& color, const MeshRes& mesh) {
+    void SolidPrimitiveRenderer::_push_and_draw(const Mat44f& model, const SrgbColor& color, const MeshRes& mesh) {
         if (!_ctx2)
             return;
         Mat44f mvp = _vp * model;
         SolidPushData push{};
         std::memcpy(push.u_mvp, mvp.data, sizeof(push.u_mvp));
-        push.u_color[0] = color.r;
-        push.u_color[1] = color.g;
-        push.u_color[2] = color.b;
-        push.u_color[3] = color.a;
+        const LinearColor linear = srgb_to_linear(color);
+        push.u_color[0] = linear.r;
+        push.u_color[1] = linear.g;
+        push.u_color[2] = linear.b;
+        push.u_color[3] = linear.a;
         _ctx2->bind_uniform_data("u_push", &push, static_cast<uint32_t>(sizeof(push)));
         _ctx2->draw(mesh.vbo, mesh.ibo, mesh.index_count);
     }
 
-    void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const Color4& color) {
+    void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const SrgbColor& color) {
         _push_and_draw(model, color, _torus);
     }
 
-    void SolidPrimitiveRenderer::draw_cylinder(const Mat44f& model, const Color4& color) {
+    void SolidPrimitiveRenderer::draw_cylinder(const Mat44f& model, const SrgbColor& color) {
         _push_and_draw(model, color, _cylinder);
     }
 
-    void SolidPrimitiveRenderer::draw_cone(const Mat44f& model, const Color4& color) {
+    void SolidPrimitiveRenderer::draw_cone(const Mat44f& model, const SrgbColor& color) {
         _push_and_draw(model, color, _cone);
     }
 
-    void SolidPrimitiveRenderer::draw_quad(const Mat44f& model, const Color4& color) {
+    void SolidPrimitiveRenderer::draw_quad(const Mat44f& model, const SrgbColor& color) {
         _push_and_draw(model, color, _quad);
     }
 
     void SolidPrimitiveRenderer::draw_arrow(const Vec3f& origin,
                                             const Vec3f& direction,
                                             float length,
-                                            const Color4& color,
+                                            const SrgbColor& color,
                                             float shaft_radius,
                                             float head_radius,
                                             float head_length_ratio) {

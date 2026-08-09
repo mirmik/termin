@@ -13,7 +13,7 @@ namespace termin {
 
     namespace {
 
-        const Color4 collider_debug_color = {0.2f, 0.9f, 0.2f, 1.0f};
+        const SrgbColor collider_debug_color = {0.2f, 0.9f, 0.2f, 1.0f};
 
         DebugGeometryTypeRegistration& collider_debug_geometry_type() {
             static DebugGeometryTypeRegistration registration("physics.colliders", "Colliders", "Physics", false);

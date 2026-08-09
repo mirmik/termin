@@ -1037,7 +1037,7 @@ class PathfindingWorldComponent(PythonComponent):
     def draw(self) -> None:
         """Отрисовка отладочной визуализации."""
         from termin.render import ImmediateRenderer
-        from tgfx import Color4
+        from termin.geombase import SrgbColor
 
         renderer = ImmediateRenderer.instance()
         if renderer is None:
@@ -1051,8 +1051,8 @@ class PathfindingWorldComponent(PythonComponent):
 
         # Рисуем порталы
         if self.show_portals and self._portals:
-            magenta = Color4(1.0, 0.0, 1.0, 1.0)
-            yellow = Color4(1.0, 1.0, 0.0, 1.0)
+            magenta = SrgbColor(1.0, 0.0, 1.0, 1.0)
+            yellow = SrgbColor(1.0, 1.0, 0.0, 1.0)
 
             for portal in self._portals:
                 # Получаем трансформацию entity для региона A
@@ -1132,8 +1132,8 @@ class PathfindingWorldComponent(PythonComponent):
         if not self._navmesh_graph.regions:
             return
 
-        green = Color4(0.0, 1.0, 0.0, 1.0)
-        cyan = Color4(0.0, 0.8, 0.8, 0.5)
+        green = SrgbColor(0.0, 1.0, 0.0, 1.0)
+        cyan = SrgbColor(0.0, 0.8, 0.8, 0.5)
 
         normal_offset = 0.15  # Смещение по нормали для видимости
 

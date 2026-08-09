@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional, List
 import numpy as np
 
 from termin.render import DrawableComponent
+from termin.geombase import SrgbColor
 from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
@@ -210,7 +211,7 @@ class VoxelizerComponent(DrawableComponent):
             self._debug_material = Material(
                 name="VoxelizerDebugMaterial",
                 shader=shader,
-                color=(1.0, 0.5, 0.0, 0.8),  # Оранжевый для отладки
+                color=SrgbColor(1.0, 0.5, 0.0, 0.8),  # Оранжевый для отладки
                 phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,
@@ -231,7 +232,7 @@ class VoxelizerComponent(DrawableComponent):
             self._debug_transparent_material = Material(
                 name="VoxelizerTransparentDebugMaterial",
                 shader=shader,
-                color=(1.0, 0.5, 0.0, 0.5),  # Полупрозрачный
+                color=SrgbColor(1.0, 0.5, 0.0, 0.5),  # Полупрозрачный
                 phase_mark="transparent",
                 render_state=RenderState(
                     depth_test=True,
@@ -255,7 +256,7 @@ class VoxelizerComponent(DrawableComponent):
             self._debug_line_material = Material(
                 name="VoxelizerLineMaterial",
                 shader=shader,
-                color=(1.0, 1.0, 0.0, 1.0),
+                color=SrgbColor(1.0, 1.0, 0.0, 1.0),
                 phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,

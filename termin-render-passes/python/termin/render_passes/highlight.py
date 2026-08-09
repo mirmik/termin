@@ -4,6 +4,7 @@ import struct
 from typing import Any, Callable, Set
 
 from termin.inspect import InspectField
+from termin.geombase import SrgbColor, srgb_to_linear
 from termin.render_framework.python_pass import PythonFramePass
 from tgfx import TcShader
 from tgfx._tgfx_native import CULL_NONE, Tgfx2ShaderHandle, tc_shader_ensure_tgfx2
@@ -17,6 +18,20 @@ _HIGHLIGHT_SHADER_UUID = "termin-engine-highlight"
 def _pick_id_to_rgb_float(pick_id: int) -> tuple[float, float, float]:
     r, g, b = tc_picking_id_to_rgb(pick_id)
     return float(r) / 255.0, float(g) / 255.0, float(b) / 255.0
+
+
+def _authored_outline_to_linear(value: SrgbColor) -> tuple[float, float, float]:
+    """Decode the authored sRGB outline color at the shader boundary."""
+    linear = srgb_to_linear(value)
+    return linear.r, linear.g, linear.b
+
+
+def _outline_color_components(value: SrgbColor) -> tuple[float, float, float, float]:
+    return value.r, value.g, value.b, value.a
+
+
+def _set_outline_color_from_inspector(target: "HighlightPass", value: tuple[float, ...]) -> None:
+    target.color = SrgbColor(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
 
 
 def _pack_uniform_fields(layout: dict[str, Any], values: dict[str, Any]) -> bytes:
@@ -55,7 +70,13 @@ class HighlightPass(PythonFramePass):
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "id_res": InspectField(path="id_res", label="ID Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-        "color": InspectField(path="color", label="Outline Color", kind="color"),
+        "color": InspectField(
+            path="color",
+            label="Outline Color",
+            kind="color",
+            getter=lambda target: _outline_color_components(target.color),
+            setter=_set_outline_color_from_inspector,
+        ),
     }
 
     _shader: TcShader | None = None
@@ -64,7 +85,7 @@ class HighlightPass(PythonFramePass):
     def __init__(
         self,
         selected_id_getter: Callable[[], int | None] | None = None,
-        color=(0.0, 0.0, 0.0, 1.0),
+        color: SrgbColor | None = None,
         input_res: str = "color",
         id_res: str = "id",
         output_res: str = "color_highlight",
@@ -74,8 +95,18 @@ class HighlightPass(PythonFramePass):
         self.input_res = input_res
         self.id_res = id_res
         self.output_res = output_res
-        self.color = color
+        self.color = SrgbColor(0.0, 0.0, 0.0, 1.0) if color is None else color
         self._get_id = selected_id_getter
+
+    @property
+    def color(self) -> SrgbColor:
+        return self._color
+
+    @color.setter
+    def color(self, value: SrgbColor) -> None:
+        if not isinstance(value, SrgbColor):
+            raise TypeError("HighlightPass.color expects SrgbColor")
+        self._color = value
 
     def compute_reads(self) -> Set[str]:
         return {self.input_res, self.id_res}
@@ -158,7 +189,7 @@ class HighlightPass(PythonFramePass):
                 {
                     "selected_color": (sel_r, sel_g, sel_b),
                     "enabled": 1.0 if enabled else 0.0,
-                    "outline_color": (float(outline[0]), float(outline[1]), float(outline[2])),
+                    "outline_color": _authored_outline_to_linear(outline),
                     "texel_size": (texel_x, texel_y),
                 },
             )

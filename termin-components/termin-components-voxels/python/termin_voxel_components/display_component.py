@@ -136,6 +136,13 @@ class VoxelDisplayComponent(DrawableComponent):
         ),
     }
 
+    @staticmethod
+    def _authored_color_to_linear(value: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        from termin.geombase import SrgbColor, srgb_to_linear
+
+        linear = srgb_to_linear(SrgbColor(*value))
+        return linear.r, linear.g, linear.b, linear.a
+
 
     def __init__(self, voxel_grid_name: str = "", grid_name: str = "") -> None:
         super().__init__()
@@ -204,7 +211,7 @@ class VoxelDisplayComponent(DrawableComponent):
             self._material = Material(
                 name="VoxelDisplayMaterial",
                 shader=shader,
-                color=self.color_below,
+                color=self._authored_color_to_linear(self.color_below),
                 phase_mark="transparent",
                 render_state=RenderState(
                     depth_test=True,
@@ -260,8 +267,8 @@ class VoxelDisplayComponent(DrawableComponent):
         # Обновляем uniforms перед возвратом фаз
         # (ColorPass вызовет phase.apply() который загрузит их в GPU)
         # ВАЖНО: используем set_param, т.к. phase.uniforms возвращает копию dict
-        color_below_arr = np.array(self.color_below, dtype=np.float32)
-        color_above_arr = np.array(self.color_above, dtype=np.float32)
+        color_below_arr = np.array(self._authored_color_to_linear(self.color_below), dtype=np.float32)
+        color_above_arr = np.array(self._authored_color_to_linear(self.color_above), dtype=np.float32)
         slice_axis_arr = np.array(self.slice_axis, dtype=np.float32)
         slice_axis_fill = np.array(
             [

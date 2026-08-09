@@ -10,6 +10,7 @@ import numpy as np
 from termin.mesh import MeshComponent, TcMesh
 from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
+from termin.geombase import SrgbColor
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -89,12 +90,12 @@ class VoxelVisualizer:
     """
 
     # Цвета для разных типов вокселей
-    TYPE_COLORS = {
-        1: (0.2, 0.6, 1.0, 0.7),   # Синий — обычный
-        2: (0.2, 1.0, 0.3, 0.7),   # Зелёный — поверхностный
-        3: (1.0, 0.3, 0.2, 0.7),   # Красный — внутренний
+    TYPE_COLORS: dict[int, SrgbColor] = {
+        1: SrgbColor(0.2, 0.6, 1.0, 0.7),   # Синий — обычный
+        2: SrgbColor(0.2, 1.0, 0.3, 0.7),   # Зелёный — поверхностный
+        3: SrgbColor(1.0, 0.3, 0.2, 0.7),   # Красный — внутренний
     }
-    DEFAULT_COLOR = (0.5, 0.5, 0.5, 0.7)
+    DEFAULT_COLOR = SrgbColor(0.5, 0.5, 0.5, 0.7)
 
     def __init__(self, grid: "VoxelGrid", parent_entity: "Entity") -> None:
         self._grid = grid
@@ -104,7 +105,7 @@ class VoxelVisualizer:
         self._renderer: Optional[MeshRenderer] = None
         self._material = Material(
             name="VoxelVisualizerMaterial",
-            color=(0.2, 0.6, 1.0, 0.7),
+            color=SrgbColor(0.2, 0.6, 1.0, 0.7),
             phase_mark="editor",
         )
 
@@ -186,8 +187,10 @@ class VoxelVisualizer:
             self._mesh_component = None
         self._mesh = None
 
-    def set_color(self, color: tuple[float, float, float, float]) -> None:
+    def set_color(self, color: SrgbColor) -> None:
         """Установить цвет визуализации."""
+        if not isinstance(color, SrgbColor):
+            raise TypeError("VoxelVisualizer.set_color expects SrgbColor")
         self._material = Material(
             name="VoxelVisualizerMaterial",
             color=color,

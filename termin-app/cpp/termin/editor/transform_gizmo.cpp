@@ -12,21 +12,21 @@ namespace termin {
     namespace {
 
         // Axis colors
-        const Color4 AXIS_COLOR_X{0.9f, 0.2f, 0.2f, 1.0f};
-        const Color4 AXIS_COLOR_Y{0.2f, 0.9f, 0.2f, 1.0f};
-        const Color4 AXIS_COLOR_Z{0.2f, 0.2f, 0.9f, 1.0f};
+        const SrgbColor AXIS_COLOR_X{0.9f, 0.2f, 0.2f, 1.0f};
+        const SrgbColor AXIS_COLOR_Y{0.2f, 0.9f, 0.2f, 1.0f};
+        const SrgbColor AXIS_COLOR_Z{0.2f, 0.2f, 0.9f, 1.0f};
 
         // Plane colors
-        const Color4 PLANE_COLOR_XY{0.9f, 0.9f, 0.2f, 0.3f};
-        const Color4 PLANE_COLOR_XZ{0.9f, 0.2f, 0.9f, 0.3f};
-        const Color4 PLANE_COLOR_YZ{0.2f, 0.9f, 0.9f, 0.3f};
+        const SrgbColor PLANE_COLOR_XY{0.9f, 0.9f, 0.2f, 0.3f};
+        const SrgbColor PLANE_COLOR_XZ{0.9f, 0.2f, 0.9f, 0.3f};
+        const SrgbColor PLANE_COLOR_YZ{0.2f, 0.9f, 0.9f, 0.3f};
 
-        const Color4 HOVER_COLOR{1.0f, 0.7f, 0.2f, 1.0f};
-        const Color4 ACTIVE_COLOR{1.0f, 1.0f, 1.0f, 1.0f};
+        const SrgbColor HOVER_COLOR{1.0f, 0.7f, 0.2f, 1.0f};
+        const SrgbColor ACTIVE_COLOR{1.0f, 1.0f, 1.0f, 1.0f};
 
         const float PLANE_ALPHA = 0.3f;
 
-        Color4 get_axis_color(const std::string& axis) {
+        SrgbColor get_axis_color(const std::string& axis) {
             if (axis == "x")
                 return AXIS_COLOR_X;
             if (axis == "y")
@@ -36,7 +36,7 @@ namespace termin {
             return AXIS_COLOR_X;
         }
 
-        Color4 get_plane_base_color(const std::string& plane) {
+        SrgbColor get_plane_base_color(const std::string& plane) {
             if (plane == "xy")
                 return PLANE_COLOR_XY;
             if (plane == "xz")
@@ -215,7 +215,7 @@ namespace termin {
         return result;
     }
 
-    Color4 TransformGizmo::_get_color(const std::string& axis, TransformElement element) {
+    SrgbColor TransformGizmo::_get_color(const std::string& axis, TransformElement element) {
         if (_active_element.has_value() && _active_element.value() == element) {
             return ACTIVE_COLOR;
         }
@@ -225,14 +225,14 @@ namespace termin {
         return get_axis_color(axis);
     }
 
-    Color4 TransformGizmo::_get_plane_color(const std::string& plane, TransformElement element) {
-        Color4 base = get_plane_base_color(plane);
+    SrgbColor TransformGizmo::_get_plane_color(const std::string& plane, TransformElement element) {
+        SrgbColor base = get_plane_base_color(plane);
 
         if (_active_element.has_value() && _active_element.value() == element) {
-            return Color4{ACTIVE_COLOR.r, ACTIVE_COLOR.g, ACTIVE_COLOR.b, PLANE_ALPHA};
+            return SrgbColor{ACTIVE_COLOR.r, ACTIVE_COLOR.g, ACTIVE_COLOR.b, PLANE_ALPHA};
         }
         if (_hovered_element.has_value() && _hovered_element.value() == element) {
-            return Color4{HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, PLANE_ALPHA};
+            return SrgbColor{HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, PLANE_ALPHA};
         }
         return base;
     }
@@ -260,7 +260,7 @@ namespace termin {
 
         for (const auto& ax : axes) {
             Vec3f axis_dir = _get_world_axis(ax.name);
-            Color4 color = _get_color(ax.name, ax.element);
+            SrgbColor color = _get_color(ax.name, ax.element);
             renderer->draw_arrow(origin,
                                  axis_dir,
                                  _scaled(_arrow_length),
@@ -280,7 +280,7 @@ namespace termin {
 
             for (const auto& ax : ring_axes) {
                 Vec3f ring_axis = _get_world_axis(ax.name);
-                Color4 color = _get_color(ax.name, ax.element);
+                SrgbColor color = _get_color(ax.name, ax.element);
 
                 // Build model matrix for torus
                 Mat44f rot = rotation_align_z_to(ring_axis);
@@ -319,7 +319,7 @@ namespace termin {
         };
 
         for (const auto& pl : planes) {
-            Color4 color = _get_plane_color(pl.name, pl.element);
+            SrgbColor color = _get_plane_color(pl.name, pl.element);
 
             // Position the quad
             Vec3f p0 = origin + pl.a1 * off + pl.a2 * off;

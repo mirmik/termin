@@ -13,7 +13,6 @@ from tcbase._geom_native import Vec3
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.widget import Widget
 from tgfx import (
-    Color4,
     CULL_NONE,
     ImmediateRenderer,
     PIXEL_D32F,
@@ -22,6 +21,7 @@ from tgfx import (
     Tgfx2ShaderStage,
     draw_tc_mesh,
 )
+from termin.geombase import SrgbColor
 from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
 from termin.csg import to_mesh3
@@ -352,7 +352,7 @@ class ImmediateGeometry:
             renderer.line(
                 _vec3(line.start),
                 _vec3(line.end),
-                _color4(line.color),
+                _srgb_color(line.color),
                 line.depth_test,
             )
         for polyline in self.polylines:
@@ -360,13 +360,13 @@ class ImmediateGeometry:
                 continue
             renderer.polyline(
                 [_vec3(point) for point in polyline.points],
-                _color4(polyline.color),
+                _srgb_color(polyline.color),
                 polyline.closed,
                 polyline.depth_test,
             )
         for point in self.points:
             center = _vec3(point.point)
-            color = _color4(point.color)
+            color = _srgb_color(point.color)
             renderer.circle(center, Vec3(0.0, 0.0, 1.0), point.radius, color, 12, point.depth_test)
             renderer.circle(center, Vec3(0.0, 1.0, 0.0), point.radius, color, 12, point.depth_test)
             renderer.circle(center, Vec3(1.0, 0.0, 0.0), point.radius, color, 12, point.depth_test)
@@ -750,8 +750,8 @@ def _vec3(point: tuple[float, float, float]) -> Vec3:
     return Vec3(float(point[0]), float(point[1]), float(point[2]))
 
 
-def _color4(color: tuple[float, float, float, float]) -> Color4:
-    return Color4(float(color[0]), float(color[1]), float(color[2]), abs(float(color[3])))
+def _srgb_color(color: tuple[float, float, float, float]) -> SrgbColor:
+    return SrgbColor(float(color[0]), float(color[1]), float(color[2]), abs(float(color[3])))
 
 
 __all__ = [

@@ -1,6 +1,5 @@
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <nanobind/nanobind.h>
-#include <nanobind/stl/tuple.h>
 #include <termin/geom/mat44.hpp>
 #include <tgfx2/render_context.hpp>
 
@@ -20,10 +19,6 @@ namespace termin {
 
         Vec3f vec3_to_vec3f(const Vec3& v) {
             return Vec3f{static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z)};
-        }
-
-        Color4 tuple_to_color4(nb::tuple t) {
-            return Color4{nb::cast<float>(t[0]), nb::cast<float>(t[1]), nb::cast<float>(t[2]), nb::cast<float>(t[3])};
         }
 
     } // anonymous namespace
@@ -60,57 +55,57 @@ namespace termin {
             .def("end", &SolidPrimitiveRenderer::end)
             .def(
                 "draw_torus",
-                [](SolidPrimitiveRenderer& self, const Mat44f& model, nb::tuple color_tuple) {
-                    self.draw_torus(model, tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44f& model, const SrgbColor& color) {
+                    self.draw_torus(model, color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_torus",
-                [](SolidPrimitiveRenderer& self, const Mat44& model, nb::tuple color_tuple) {
-                    self.draw_torus(mat44_to_mat44f(model), tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44& model, const SrgbColor& color) {
+                    self.draw_torus(mat44_to_mat44f(model), color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_cylinder",
-                [](SolidPrimitiveRenderer& self, const Mat44f& model, nb::tuple color_tuple) {
-                    self.draw_cylinder(model, tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44f& model, const SrgbColor& color) {
+                    self.draw_cylinder(model, color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_cylinder",
-                [](SolidPrimitiveRenderer& self, const Mat44& model, nb::tuple color_tuple) {
-                    self.draw_cylinder(mat44_to_mat44f(model), tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44& model, const SrgbColor& color) {
+                    self.draw_cylinder(mat44_to_mat44f(model), color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_cone",
-                [](SolidPrimitiveRenderer& self, const Mat44f& model, nb::tuple color_tuple) {
-                    self.draw_cone(model, tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44f& model, const SrgbColor& color) {
+                    self.draw_cone(model, color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_cone",
-                [](SolidPrimitiveRenderer& self, const Mat44& model, nb::tuple color_tuple) {
-                    self.draw_cone(mat44_to_mat44f(model), tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44& model, const SrgbColor& color) {
+                    self.draw_cone(mat44_to_mat44f(model), color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_quad",
-                [](SolidPrimitiveRenderer& self, const Mat44f& model, nb::tuple color_tuple) {
-                    self.draw_quad(model, tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44f& model, const SrgbColor& color) {
+                    self.draw_quad(model, color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
             .def(
                 "draw_quad",
-                [](SolidPrimitiveRenderer& self, const Mat44& model, nb::tuple color_tuple) {
-                    self.draw_quad(mat44_to_mat44f(model), tuple_to_color4(color_tuple));
+                [](SolidPrimitiveRenderer& self, const Mat44& model, const SrgbColor& color) {
+                    self.draw_quad(mat44_to_mat44f(model), color);
                 },
                 nb::arg("model"),
                 nb::arg("color"))
@@ -120,14 +115,14 @@ namespace termin {
                    const Vec3& origin,
                    const Vec3& direction,
                    float length,
-                   nb::tuple color_tuple,
+                   const SrgbColor& color,
                    float shaft_radius,
                    float head_radius,
                    float head_length_ratio) {
                     self.draw_arrow(vec3_to_vec3f(origin),
                                     vec3_to_vec3f(direction),
                                     length,
-                                    tuple_to_color4(color_tuple),
+                                    color,
                                     shaft_radius,
                                     head_radius,
                                     head_length_ratio);

@@ -562,8 +562,8 @@ namespace termin {
             }
             body_position = body_entity.transform().global_position();
         }
-        drawer.line(anchor, body_position, Color4{0.8f, 0.8f, 0.2f, 1.0f}, false);
-        drawer.wire_sphere(anchor, 0.05, Color4{1.0f, 0.5f, 0.0f, 1.0f}, 8, false);
+        drawer.line(anchor, body_position, SrgbColor{0.8f, 0.8f, 0.2f, 1.0f}, false);
+        drawer.wire_sphere(anchor, 0.05, SrgbColor{1.0f, 0.5f, 0.0f, 1.0f}, 8, false);
     }
 
     FEMRevoluteJointComponent::FEMRevoluteJointComponent()
@@ -644,9 +644,9 @@ namespace termin {
             body_b_position = body_b_entity.transform().global_position();
         }
 
-        drawer.line(joint_position, body_a_position, Color4{0.2f, 0.8f, 0.8f, 1.0f}, false);
-        drawer.line(joint_position, body_b_position, Color4{0.8f, 0.2f, 0.8f, 1.0f}, false);
-        drawer.wire_sphere(joint_position, 0.05, Color4{0.2f, 0.8f, 0.2f, 1.0f}, 8, false);
+        drawer.line(joint_position, body_a_position, SrgbColor{0.2f, 0.8f, 0.8f, 1.0f}, false);
+        drawer.line(joint_position, body_b_position, SrgbColor{0.8f, 0.2f, 0.8f, 1.0f}, false);
+        drawer.wire_sphere(joint_position, 0.05, SrgbColor{0.2f, 0.8f, 0.2f, 1.0f}, 8, false);
     }
 
     FEMPhysicsWorldComponent::FEMPhysicsWorldComponent()

@@ -14,7 +14,7 @@ namespace termin {
     namespace {
 
         void
-        draw_edge(ImmediateRenderer* renderer, const CameraFrustumCorners& corners, int a, int b, const Color4& color) {
+        draw_edge(ImmediateRenderer* renderer, const CameraFrustumCorners& corners, int a, int b, const SrgbColor& color) {
             renderer->line(
                 corners.points[static_cast<size_t>(a)], corners.points[static_cast<size_t>(b)], color, false);
         }
@@ -45,9 +45,9 @@ namespace termin {
                 return true;
             }
 
-            const Color4 near_color(1.0f, 0.86f, 0.24f, 1.0f);
-            const Color4 far_color(0.15f, 0.9f, 1.0f, 1.0f);
-            const Color4 edge_color(0.35f, 1.0f, 0.65f, 1.0f);
+            const SrgbColor near_color{1.0f, 0.86f, 0.24f, 1.0f};
+            const SrgbColor far_color{0.15f, 0.9f, 1.0f, 1.0f};
+            const SrgbColor edge_color{0.35f, 1.0f, 0.65f, 1.0f};
 
             draw_edge(ctx->renderer, corners, 0, 1, near_color);
             draw_edge(ctx->renderer, corners, 1, 3, near_color);

@@ -11,6 +11,7 @@
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
+#include <termin/geom/color.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/font_atlas.hpp>
@@ -262,13 +263,20 @@ namespace termin {
             "vec3",
             [](WorldTextComponent* self) { return tc_vec3{self->text_up.x, self->text_up.y, self->text_up.z}; },
             [](WorldTextComponent* self, tc_vec3 value) { self->set_text_up(Vec3{value.x, value.y, value.z}); });
-        inspect.add_with_callbacks<WorldTextComponent, Vec4>(
+        inspect.add_with_accessors<WorldTextComponent, Vec4>(
             "WorldTextComponent",
             "color",
             "Color",
             "color",
-            [](WorldTextComponent* self) -> Vec4& { return self->color; },
-            [](WorldTextComponent* self, const Vec4& value) { self->set_color(value); });
+            [](WorldTextComponent* self) {
+                return Vec4{self->color.r, self->color.g, self->color.b, self->color.a};
+            },
+            [](WorldTextComponent* self, const Vec4& value) {
+                self->set_color(SrgbColor{static_cast<float>(value.x),
+                                          static_cast<float>(value.y),
+                                          static_cast<float>(value.z),
+                                          static_cast<float>(value.w)});
+            });
         inspect.add_with_callbacks<WorldTextComponent, float>(
             "WorldTextComponent",
             "size",
@@ -387,7 +395,7 @@ namespace termin {
         text_up = value;
     }
 
-    void WorldTextComponent::set_color(const Vec4& value) {
+    void WorldTextComponent::set_color(SrgbColor value) {
         color = value;
     }
 
@@ -540,11 +548,12 @@ namespace termin {
         phase->phase_mark[TC_PHASE_MARK_MAX - 1] = '\0';
         phase->priority = priority;
         phase->state = make_text_render_state(*this);
+        const LinearColor linear_color = srgb_to_linear(color);
         tc_material_phase_set_color(phase,
-                                    static_cast<float>(color.x),
-                                    static_cast<float>(color.y),
-                                    static_cast<float>(color.z),
-                                    static_cast<float>(color.w));
+                                    linear_color.r,
+                                    linear_color.g,
+                                    linear_color.b,
+                                    linear_color.a);
         return phase;
     }
 
@@ -618,7 +627,9 @@ namespace termin {
         item.payload.text_batch.local_offset = tc_render_item_vec3{local_offset.x, local_offset.y, local_offset.z};
         item.payload.text_batch.plane_normal = tc_render_item_vec3{plane_normal.x, plane_normal.y, plane_normal.z};
         item.payload.text_batch.text_up = tc_render_item_vec3{text_up.x, text_up.y, text_up.z};
-        item.payload.text_batch.color = tc_render_item_vec4{color.x, color.y, color.z, color.w};
+        const LinearColor linear_color = srgb_to_linear(color);
+        item.payload.text_batch.color = tc_render_item_vec4{
+            linear_color.r, linear_color.g, linear_color.b, linear_color.a};
         item.payload.text_batch.size = size;
         item.payload.text_batch.anchor = static_cast<uint32_t>(anchor);
         item.payload.text_batch.orientation = static_cast<uint32_t>(orientation);
@@ -695,7 +706,7 @@ namespace termin {
                                 static_cast<float>(world_pos.y),
                                 static_cast<float>(world_pos.z),
                             },
-                            Color4{
+                            LinearColor{
                                 static_cast<float>(payload_color.x),
                                 static_cast<float>(payload_color.y),
                                 static_cast<float>(payload_color.z),

@@ -1,4 +1,5 @@
 from termin.inspect import InspectRegistry
+import pytest
 
 
 def test_highlight_pass_is_exported_from_render_passes(capsys) -> None:
@@ -30,6 +31,21 @@ def test_highlight_selected_color_is_normalized() -> None:
 
     assert _pick_id_to_rgb_float(pick_id) == expected
     assert all(0.0 <= channel <= 1.0 for channel in _pick_id_to_rgb_float(pick_id))
+
+
+def test_highlight_outline_color_decodes_authored_srgb_once() -> None:
+    from termin.geombase import SrgbColor
+    from termin.render_passes.highlight import _authored_outline_to_linear
+
+    linear = _authored_outline_to_linear(SrgbColor(0.5, 0.5, 0.5, 0.25))
+    assert linear == pytest.approx((0.21404114, 0.21404114, 0.21404114))
+
+
+def test_highlight_outline_color_rejects_ambiguous_sequences() -> None:
+    from termin.render_passes import HighlightPass
+
+    with pytest.raises(TypeError, match="SrgbColor"):
+        HighlightPass(color=(0.5, 0.5, 0.5, 1.0))
 
 
 def test_ui_widget_pass_is_exported_from_render_passes() -> None:

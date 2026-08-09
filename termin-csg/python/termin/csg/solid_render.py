@@ -8,7 +8,7 @@ from typing import Callable
 import numpy as np
 
 from tcbase._geom_native import Vec3
-from tgfx._tgfx_native import Color4
+from termin.geombase import SrgbColor
 
 from termin.csg import Solid, to_mesh3
 
@@ -18,8 +18,8 @@ PointTransform = Callable[[Vec3Data], Vec3Data]
 
 @dataclass
 class SolidRenderStyle:
-    fill_color: Color4
-    edge_color: Color4
+    fill_color: SrgbColor
+    edge_color: SrgbColor
     depth_test: bool = True
 
 

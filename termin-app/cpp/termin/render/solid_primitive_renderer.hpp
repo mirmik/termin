@@ -6,6 +6,7 @@
 #include "tgfx/types.hpp"
 #include "tgfx2/handles.hpp"
 #include <termin/geom/mat44.hpp>
+#include <termin/geom/color.hpp>
 
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -81,32 +82,32 @@ namespace termin {
         // Draw a torus using model matrix.
         // Unit torus has major_radius=1, minor_radius=TORUS_MINOR_RATIO.
         // Axis is Z. Model matrix should include position and scale.
-        void draw_torus(const Mat44f& model, const Color4& color);
+        void draw_torus(const Mat44f& model, const SrgbColor& color);
 
         // Draw a cylinder using model matrix.
         // Unit cylinder has radius=1, height=1 (Z from 0 to 1).
-        void draw_cylinder(const Mat44f& model, const Color4& color);
+        void draw_cylinder(const Mat44f& model, const SrgbColor& color);
 
         // Draw a cone using model matrix.
         // Unit cone has base_radius=1, height=1 (base at Z=0, tip at Z=1).
-        void draw_cone(const Mat44f& model, const Color4& color);
+        void draw_cone(const Mat44f& model, const SrgbColor& color);
 
         // Draw a quad using model matrix.
         // Unit quad is from (0,0,0) to (1,1,0) in XY plane.
-        void draw_quad(const Mat44f& model, const Color4& color);
+        void draw_quad(const Mat44f& model, const SrgbColor& color);
 
         // Draw a solid arrow (cylinder shaft + cone head).
         void draw_arrow(const Vec3f& origin,
                         const Vec3f& direction,
                         float length,
-                        const Color4& color,
+                        const SrgbColor& color,
                         float shaft_radius = 0.02f,
                         float head_radius = 0.06f,
                         float head_length_ratio = 0.2f);
 
     private:
         bool _ensure_initialized(tgfx::IRenderDevice* device);
-        void _push_and_draw(const Mat44f& model, const Color4& color, const MeshRes& mesh);
+        void _push_and_draw(const Mat44f& model, const SrgbColor& color, const MeshRes& mesh);
     };
 
 } // namespace termin

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from tcbase import MouseButton, log
 from tcbase._geom_native import Vec3
-from tgfx._tgfx_native import Color4
+from termin.geombase import SrgbColor
 
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_visual_model import build_document_visual_model
@@ -336,7 +336,7 @@ class ProceduralMeshViewportInteraction:
         from termin.render import ImmediateRenderer
 
         renderer = ImmediateRenderer.instance()
-        anchor_color = Color4(0.1, 0.9, 1.0, 1.0)
+        anchor_color = SrgbColor(0.1, 0.9, 1.0, 1.0)
         radius = 0.35
         renderer.line(
             Vec3(center.x - radius, center.y, center.z), Vec3(center.x + radius, center.y, center.z), anchor_color, True
@@ -379,7 +379,7 @@ class ProceduralMeshViewportInteraction:
                 renderer,
                 entity_transform,
                 polyline.points,
-                self._color4(polyline.color),
+                self._srgb_color(polyline.color),
                 polyline.closed,
                 polyline.depth_test,
             )
@@ -387,7 +387,7 @@ class ProceduralMeshViewportInteraction:
             renderer.sphere_wireframe(
                 self._world_vec3(entity_transform, point.point),
                 point.radius,
-                self._color4(point.color),
+                self._srgb_color(point.color),
                 8,
                 point.depth_test,
             )
@@ -405,20 +405,20 @@ class ProceduralMeshViewportInteraction:
         return transform
 
     @staticmethod
-    def _color4(color: tuple[float, float, float, float]) -> Color4:
-        return Color4(*color)
+    def _srgb_color(color: tuple[float, float, float, float]) -> SrgbColor:
+        return SrgbColor(*color)
 
     @staticmethod
     def _solid_style(selected: bool) -> SolidRenderStyle:
         if selected:
             return SolidRenderStyle(
-                fill_color=Color4(0.15, 0.85, 1.0, 0.32),
-                edge_color=Color4(0.85, 1.0, 1.0, 1.0),
+                fill_color=SrgbColor(0.15, 0.85, 1.0, 0.32),
+                edge_color=SrgbColor(0.85, 1.0, 1.0, 1.0),
                 depth_test=True,
             )
         return SolidRenderStyle(
-            fill_color=Color4(0.0, 0.65, 0.95, 0.20),
-            edge_color=Color4(0.0, 0.95, 0.95, 0.85),
+            fill_color=SrgbColor(0.0, 0.65, 0.95, 0.20),
+            edge_color=SrgbColor(0.0, 0.95, 0.95, 0.85),
             depth_test=True,
         )
 
@@ -427,7 +427,7 @@ class ProceduralMeshViewportInteraction:
         renderer,
         entity_transform,
         points: list[tuple[float, float, float]],
-        color: Color4,
+        color: SrgbColor,
         closed: bool,
         depth_test: bool = False,
     ) -> None:

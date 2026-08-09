@@ -8,7 +8,7 @@ from termin.bootstrap import bootstrap_player
 
 bootstrap_player()
 
-from termin.geombase import Vec3
+from termin.geombase import SrgbColor, Vec3, Vec4
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,
@@ -598,7 +598,8 @@ def test_line_renderer_points_are_inspectable():
 
 
 def test_world_text_component_defaults_to_transparent_direct_draw():
-    text = WorldTextComponent("e4", size=0.5)
+    authored = SrgbColor(0.5, 0.25, 0.75, 0.6)
+    text = WorldTextComponent("e4", size=0.5, color=authored)
 
     assert text.text == "e4"
     assert text.size == 0.5
@@ -612,6 +613,11 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.depth_write is False
     assert text.blend is True
     assert text.phase_mask == RENDER_PHASE_TRANSPARENT | RENDER_PHASE_ID
+    assert isinstance(text.color, SrgbColor)
+    assert tuple(text.color) == pytest.approx((0.5, 0.25, 0.75, 0.6))
+
+    with pytest.raises(TypeError):
+        text.color = Vec4(0.5, 0.25, 0.75, 0.6)
 
 
 def test_world_text_component_hides_empty_text_from_draw_contract():
