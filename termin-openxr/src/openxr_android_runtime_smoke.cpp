@@ -764,8 +764,7 @@ namespace termin::openxr {
                 target.name = name;
                 target.render_rect =
                     termin::Rect2i{0, 0, static_cast<int>(frame.width), static_cast<int>(frame.height)};
-                target.output_color_tex = frame.color_texture;
-                target.output_color_format = frame.color_format;
+                target.output_color.texture = frame.color_texture;
                 target.external_textures["XR_MULTIVIEW_TARGET"] = frame.color_texture;
                 target.output_depth_format = tgfx::PixelFormat::D32F;
                 target.clear_color_enabled = tc_render_target_get_clear_color_enabled(render_target);

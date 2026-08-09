@@ -28,6 +28,7 @@ hover_highlight = pipeline.get_pass_by_name("HoverHighlight").to_python()
 assert isinstance(hover_highlight.color, SrgbColor)
 assert all(abs(actual - expected) < 1.0e-6 for actual, expected in zip(hover_highlight.color, (0.3, 0.8, 1.0, 1.0), strict=True))
 assert all(spec.format == "rgba16f" for spec in pipeline.pipeline_specs)
+assert pipeline.color_exports == [{"resource": "color+widgets", "viewport_name": "", "color_content": "display_linear"}]
 
 del output_transform
 del hover_highlight

@@ -289,6 +289,7 @@ COLOR_FORMATS = (
     ("rg8", "RG8"), ("r8", "R8"), ("r16f", "R16F"),
     ("r32f", "R32F"), ("rgb16f", "RGB16F"),
 )
+COLOR_ENCODINGS = (("linear", "Linear"), ("srgb", "sRGB"))
 DEPTH_FORMATS = (("depth32f", "Depth 32F"), ("depth24", "Depth 24"))
 
 
@@ -316,6 +317,10 @@ class RenderTargetInspectorSnapshot:
     dynamic_resolution: bool = True
     color_formats: tuple[InspectorChoice, ...] = tuple(InspectorChoice(label, value) for value, label in COLOR_FORMATS)
     color_format_index: int = 0
+    color_encodings: tuple[InspectorChoice, ...] = tuple(
+        InspectorChoice(label, value) for value, label in COLOR_ENCODINGS
+    )
+    color_encoding_index: int = 0
     depth_formats: tuple[InspectorChoice, ...] = tuple(InspectorChoice(label, value) for value, label in DEPTH_FORMATS)
     depth_format_index: int = 0
     clear_color_enabled: bool = False
@@ -380,6 +385,7 @@ class RenderTargetInspectorController:
         pipeline_choices = self._pipeline_choices()
         kind_index = _value_index(TARGET_KINDS, target.kind)
         color_index = _value_index(COLOR_FORMATS, target.color_format)
+        color_encoding_index = _value_index(COLOR_ENCODINGS, target.color_encoding)
         depth_index = _value_index(DEPTH_FORMATS, target.depth_format)
         current_source = target.xr_origin if target.kind == "xr_stereo" else target.camera
         snapshot = RenderTargetInspectorSnapshot(
@@ -398,6 +404,7 @@ class RenderTargetInspectorController:
             pipeline_index=self._pipeline_index(pipeline_choices, target.pipeline),
             dynamic_resolution=bool(target.dynamic_resolution),
             color_format_index=color_index,
+            color_encoding_index=color_encoding_index,
             depth_format_index=depth_index,
             clear_color_enabled=bool(target.clear_color_enabled),
             clear_linear_color=target.clear_linear_color,
@@ -447,6 +454,12 @@ class RenderTargetInspectorController:
 
     def set_color_format(self, index: int):
         self._require_target().color_format = self._choice(self._snapshot.color_formats, index, "color format")
+        return self._commit()
+
+    def set_color_encoding(self, index: int):
+        self._require_target().color_encoding = self._choice(
+            self._snapshot.color_encodings, index, "color encoding"
+        )
         return self._commit()
 
     def set_depth_format(self, index: int):
@@ -620,6 +633,7 @@ def _value_index(entries: tuple[tuple[str, str], ...], value: str) -> int:
 
 
 __all__ = [
+    "COLOR_ENCODINGS",
     "COLOR_FORMATS",
     "DEPTH_FORMATS",
     "TARGET_KINDS",

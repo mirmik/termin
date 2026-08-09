@@ -122,6 +122,7 @@ class _RenderTarget:
         self.pipeline = pipeline
         self.dynamic_resolution = True
         self.color_format = "rgba16f"
+        self.color_encoding = "linear"
         self.depth_format = "depth32f"
         self.clear_color_enabled = False
         self.clear_linear_color = LinearColor(0.0, 0.0, 0.0, 1.0)

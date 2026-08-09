@@ -310,7 +310,7 @@ TEST_CASE("Graph compiler treats render target input as external resources") {
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 3u);
+    REQUIRE(pipeline->pass_count() == 2u);
 
     termin::TcPassRef pass(pipeline->get_pass_at(1));
     CHECK(pass.type_name() == "DepthPass");
@@ -414,7 +414,7 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 3u);
+    REQUIRE(pipeline->pass_count() == 2u);
     REQUIRE(pipeline->spec_count() == 2u);
     bool found_external = false;
     bool found_output = false;
@@ -508,7 +508,7 @@ TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO") {
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    CHECK(pipeline->pass_count() == 4u);
+    CHECK(pipeline->pass_count() == 3u);
     REQUIRE(pipeline->spec_count() == 1u);
     CHECK(pipeline->specs()[0].resource == "RT_COLOR");
     CHECK(pipeline->specs()[0].resource_type == "external_color");
@@ -865,7 +865,7 @@ TEST_CASE("Graph compiler allows external XR target where a multiview FBO is req
     delete pipeline;
 }
 
-TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint") {
+TEST_CASE("Graph compiler publishes PipelineOutput as metadata without an OUTPUT pass") {
     const char* json = R"JSON(
 {
   "name": "graph_pipeline",
@@ -896,13 +896,56 @@ TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint") {
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 1u);
-
-    termin::TcPassRef pass(pipeline->get_pass_at(0));
-    CHECK(pass.type_name() == "GraphAliasPass");
+    CHECK(pipeline->pass_count() == 0u);
+    REQUIRE(pipeline->color_exports().size() == 1u);
+    CHECK(pipeline->color_exports()[0].resource == "fov_input");
+    CHECK(pipeline->color_exports()[0].content == termin::ColorContent::DisplayLinear);
 
     pipeline->destroy();
     delete pipeline;
+
+    TcPipelineTemplate published = make_empty_pipeline_template("color-export-graph");
+    pipeline = tc::compile_graph(graph, published);
+    REQUIRE(pipeline != nullptr);
+    const tc_pipeline_template* definition = tc_pipeline_template_get(pipeline->template_handle());
+    REQUIRE(definition != nullptr);
+    REQUIRE(definition->target_count == 1u);
+    CHECK(std::string(definition->targets[0].export_name) == "fov_input");
+    CHECK(definition->targets[0].color_content == TC_COLOR_CONTENT_DISPLAY_LINEAR);
+    CHECK(pipeline->pass_count() == 0u);
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler rejects missing and ambiguous PipelineOutput exports") {
+    const char* missing_input = R"JSON(
+{
+  "name": "missing_export_input",
+  "nodes": [
+    {"type": "PipelineOutput", "node_type": "pipeline_output"}
+  ],
+  "connections": [],
+  "viewport_frames": []
+}
+)JSON";
+    CHECK_THROWS_AS(tc::compile_graph(nos::json::parse(missing_input)), tc::GraphCompileError);
+
+    const char* ambiguous = R"JSON(
+{
+  "name": "ambiguous_export",
+  "nodes": [
+    {"type": "External RT", "node_type": "external_rt", "params": {"slot": "color"}},
+    {"type": "PipelineOutput", "node_type": "pipeline_output"},
+    {"type": "PipelineOutput", "node_type": "pipeline_output"}
+  ],
+  "connections": [
+    {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "color"},
+    {"from_node": 0, "from_socket": "fbo", "to_node": 2, "to_socket": "color"}
+  ],
+  "viewport_frames": []
+}
+)JSON";
+    CHECK_THROWS_AS(tc::compile_graph(nos::json::parse(ambiguous)), tc::GraphCompileError);
 }
 
 TEST_CASE("Graph compiler prefers External RT slot over display name") {

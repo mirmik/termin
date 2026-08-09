@@ -70,6 +70,7 @@ namespace termin::rendering_manager_detail {
             spec.format = "rgba16f";
             pipeline.add_spec(spec);
         }
+        pipeline.set_color_export("color_tonemapped", ColorContent::DisplayLinear);
         return ph;
 #endif
 
@@ -170,6 +171,8 @@ namespace termin::rendering_manager_detail {
             }
             pipeline.add_spec(spec);
         }
+
+        pipeline.set_color_export("color+widgets", ColorContent::DisplayLinear);
 
         return ph;
     }
