@@ -127,6 +127,9 @@ class _Resources:
     def find_material_name(self, _material):
         return None
 
+    def get_material_asset_by_uuid(self, _uuid):
+        return None
+
     def get_handle_accessors(self, kind):
         return _Accessors() if kind == "tc_texture" else None
 

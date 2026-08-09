@@ -190,16 +190,22 @@ namespace termin {
 
         Vec3f solid_rgb{0, 0, 0};
         Vec3f top_rgb{0, 0, 0};
+        Vec3f horizon_rgb{0, 0, 0};
         Vec3f bot_rgb{0, 0, 0};
         tc_srgb_color solid_color{};
         tc_srgb_color top_color{};
+        tc_srgb_color horizon_color{};
         tc_srgb_color bottom_color{};
         tc_scene_get_skybox_srgb_color(scene, &solid_color);
         tc_scene_get_skybox_top_srgb_color(scene, &top_color);
+        tc_scene_get_skybox_horizon_srgb_color(scene, &horizon_color);
         tc_scene_get_skybox_bottom_srgb_color(scene, &bottom_color);
         solid_rgb = {solid_color.r, solid_color.g, solid_color.b};
         top_rgb = {top_color.r, top_color.g, top_color.b};
+        horizon_rgb = {horizon_color.r, horizon_color.g, horizon_color.b};
         bot_rgb = {bottom_color.r, bottom_color.g, bottom_color.b};
+        const float top_exponent = tc_scene_get_skybox_top_exponent(scene);
+        const float bottom_exponent = tc_scene_get_skybox_bottom_exponent(scene);
 
         Mat44 view64 = primary_view->get_view_matrix();
         Mat44 proj64 = primary_view->get_projection_matrix();
@@ -214,8 +220,13 @@ namespace termin {
             "u_skybox_color", "SrgbColor", std::vector<double>{solid_rgb.x, solid_rgb.y, solid_rgb.z, 1.0});
         values.emplace_back(
             "u_skybox_top_color", "SrgbColor", std::vector<double>{top_rgb.x, top_rgb.y, top_rgb.z, 1.0});
+        values.emplace_back("u_skybox_horizon_color",
+                            "SrgbColor",
+                            std::vector<double>{horizon_rgb.x, horizon_rgb.y, horizon_rgb.z, 1.0});
         values.emplace_back(
             "u_skybox_bottom_color", "SrgbColor", std::vector<double>{bot_rgb.x, bot_rgb.y, bot_rgb.z, 1.0});
+        values.emplace_back("u_skybox_top_exponent", "Float", static_cast<double>(top_exponent));
+        values.emplace_back("u_skybox_bottom_exponent", "Float", static_cast<double>(bottom_exponent));
 
         // Begin pass with LoadOp::Load — inplace alias means input_res already
         // holds whatever the framegraph allocator cleared it to.

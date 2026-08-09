@@ -3,7 +3,10 @@ struct MaterialParams {
     int u_skybox_type;
     float4 u_skybox_color;
     float4 u_skybox_top_color;
+    float4 u_skybox_horizon_color;
     float4 u_skybox_bottom_color;
+    float u_skybox_top_exponent;
+    float u_skybox_bottom_exponent;
 };
 [[TerminScope("material")]]
 ConstantBuffer<MaterialParams> material;

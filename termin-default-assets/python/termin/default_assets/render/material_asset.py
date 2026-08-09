@@ -703,20 +703,12 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
                 "__normal_1x1__",
             ):
                 continue
-            # First try regular TextureAsset lookup.
-            asset_uuid = None
-            for asset_name in rm.list_texture_names():
-                asset = rm.get_texture_asset(asset_name)
-                if asset is None:
-                    continue
-                if asset.uuid and asset.uuid == tex.uuid:
-                    asset_uuid = asset.uuid
-                    break
-                if asset.texture_data is not None and asset.texture_data.uuid == tex.uuid:
-                    asset_uuid = asset.uuid
-                    break
-            if asset_uuid:
-                textures_data[name] = asset_uuid
+            # Texture handles and assets share one canonical UUID. Resolve by
+            # that identity directly: asset names are display metadata and may
+            # legitimately be duplicated within a project.
+            asset = rm.get_texture_asset_by_uuid(str(tex.uuid or ""))
+            if asset is not None:
+                textures_data[name] = asset.uuid
                 continue
             # Fallback: maybe it's an RT-owned texture. Walk live RTs
             # and match on tc_texture uuid.

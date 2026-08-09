@@ -4,6 +4,6 @@
   "target": "webgpu",
   "stage": "fragment",
   "resources": [
-    {"name": "material", "kind": "constant_buffer", "scope": "material", "set": 0, "binding": 8, "stage_mask": 2, "size": 128, "webgpu": {"group": 0, "binding": 8}, "fields": [{"name":"u_inv_view_projection","type":"Mat4","offset":0,"size":64}, {"name":"u_skybox_type","type":"Int","offset":64,"size":4}, {"name":"u_skybox_color","type":"SrgbColor","offset":80,"size":16}, {"name":"u_skybox_top_color","type":"SrgbColor","offset":96,"size":16}, {"name":"u_skybox_bottom_color","type":"SrgbColor","offset":112,"size":16}]}
+    {"name": "material", "kind": "constant_buffer", "scope": "material", "set": 0, "binding": 8, "stage_mask": 2, "size": 160, "webgpu": {"group": 0, "binding": 8}, "fields": [{"name":"u_inv_view_projection","type":"Mat4","offset":0,"size":64}, {"name":"u_skybox_type","type":"Int","offset":64,"size":4}, {"name":"u_skybox_color","type":"Vec4","offset":80,"size":16}, {"name":"u_skybox_top_color","type":"Vec4","offset":96,"size":16}, {"name":"u_skybox_horizon_color","type":"Vec4","offset":112,"size":16}, {"name":"u_skybox_bottom_color","type":"Vec4","offset":128,"size":16}, {"name":"u_skybox_top_exponent","type":"Float","offset":144,"size":4}, {"name":"u_skybox_bottom_exponent","type":"Float","offset":148,"size":4}]}
   ]
 }

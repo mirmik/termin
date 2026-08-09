@@ -56,7 +56,7 @@ namespace termin {
         tgfx::TextureHandle prefiltered_specular_;
         tgfx::TextureHandle brdf_lut_;
         tgfx::SamplerHandle sampler_;
-        std::array<float, 11> cached_signature_{};
+        std::array<float, 16> cached_signature_{};
         bool has_cached_signature_ = false;
 
     public:

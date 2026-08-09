@@ -73,6 +73,12 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
     )
     texture_asset = TextureAsset(texture_data=None, name="SavedTexture", uuid=texture_uuid)
     rm.register_texture_asset("SavedTexture", texture_asset, uuid=texture_uuid)
+    duplicate_asset = TextureAsset(
+        texture_data=None,
+        name="SavedTexture",
+        uuid="texture-save-duplicate-uuid",
+    )
+    rm.register_texture_asset("SavedTexture", duplicate_asset)
 
     material, _uuid = _parse_material_content(
         (stdlib_root() / "materials" / "CookTorrancePBR.material").read_text(encoding="utf-8"),
