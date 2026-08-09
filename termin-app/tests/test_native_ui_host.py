@@ -352,7 +352,7 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.menu_bar.entries[0].stable_id == "file"
     assert shell.tool_bar.model.command_count == 2
     assert shell.tool_bar.widget.bounds.height == pytest.approx(EDITOR_UI_METRICS.toolbar)
-    assert shell.toolbar_model.command(shell.toolbar_play_command).data.icon == ""
+    assert shell.toolbar_model.command(shell.toolbar_play_command).data.icon_id == ""
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
     assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
     assert shell.project_host.bounds.width == pytest.approx(shell.central.bounds.width)

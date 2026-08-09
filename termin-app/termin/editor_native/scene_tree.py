@@ -241,9 +241,9 @@ def build_native_scene_tree(
     toolbar_model = CommandModel()
     toolbar_model.set_commands(
         [
-            CommandData("add-root", "Add"),
-            CommandData("collapse-all", "Collapse"),
-            CommandData("refresh", "Refresh", shortcut="F5"),
+            CommandData("add-root", icon_id="add", tooltip="Add root entity"),
+            CommandData("collapse-all", icon_id="collapse-all", tooltip="Collapse all"),
+            CommandData("refresh", icon_id="refresh", tooltip="Refresh", shortcut="F5"),
         ]
     )
     toolbar = document.create_tool_bar(toolbar_model)
