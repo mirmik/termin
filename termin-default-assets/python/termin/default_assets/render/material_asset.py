@@ -446,7 +446,7 @@ def _parse_material_content(
     """
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin_assets import get_resource_manager
-    from termin.geombase import Vec3, Vec4
+    from termin.geombase import LinearColor, SrgbColor, Vec3, Vec4
     from termin.materials import TcMaterial
 
     data = json.loads(content)
@@ -480,12 +480,28 @@ def _parse_material_content(
             mat.source_path = source_path
         return mat, file_uuid
 
-    # Convert uniforms
+    # Convert uniforms according to the shader schema. A four-component JSON
+    # array is ambiguous on its own: retain the declared color semantic rather
+    # than eagerly turning every such value into Vec4.
+    property_types = {prop["name"]: prop["property_type"] for prop in program.properties}
     uniforms_data = data.get("uniforms", {})
     uniforms: Dict[str, Any] = {}
     for uname, value in uniforms_data.items():
         if isinstance(value, list):
-            if len(value) == 3:
+            property_type = property_types.get(uname)
+            if property_type in ("SrgbColor", "LinearColor"):
+                if len(value) != 4 or not all(
+                    isinstance(component, (int, float)) and not isinstance(component, bool) for component in value
+                ):
+                    log.error(
+                        f"[MaterialAsset] Uniform '{uname}' ({property_type}) requires exactly four numeric components"
+                    )
+                    raise ValueError(f"uniform '{uname}' ({property_type}) requires exactly four numeric components")
+                color_type = SrgbColor if property_type == "SrgbColor" else LinearColor
+                uniforms[uname] = color_type(*value)
+            elif property_type == "Vec4" and len(value) == 4:
+                uniforms[uname] = Vec4(*value)
+            elif len(value) == 3:
                 uniforms[uname] = Vec3(value[0], value[1], value[2])
             elif len(value) == 4:
                 uniforms[uname] = Vec4(value[0], value[1], value[2], value[3])

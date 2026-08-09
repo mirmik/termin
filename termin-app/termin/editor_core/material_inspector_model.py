@@ -61,6 +61,27 @@ def material_vector(value: Any, size: int, *, color: bool = False) -> tuple[floa
     return tuple(values)
 
 
+def _typed_color(value: Any, kind: str, *, allow_components: bool) -> Any:
+    """Validate/construct a color using the declared shader kind only."""
+    from termin.geombase import LinearColor, SrgbColor
+
+    expected = SrgbColor if kind == "SrgbColor" else LinearColor
+    if isinstance(value, expected):
+        return value
+    if not allow_components:
+        _logger.error("Material property of kind '%s' received %r", kind, value)
+        raise ValueError(f"material property of kind '{kind}' expects {kind}")
+    try:
+        components = tuple(float(component) for component in value)
+    except (TypeError, ValueError) as error:
+        _logger.error("Default for material property kind '%s' is not numeric: %r: %s", kind, value, error)
+        raise ValueError(f"default for '{kind}' must have four numeric components") from error
+    if len(components) != 4:
+        _logger.error("Default for material property kind '%s' has %d components", kind, len(components))
+        raise ValueError(f"default for '{kind}' must have four numeric components")
+    return expected(*components)
+
+
 def material_from_inspect_value(value: Any):
     """Resolve the serialized projection returned by native inspect fields."""
     if value is None or not isinstance(value, dict):
@@ -178,12 +199,17 @@ class MaterialInspectorController:
             converted = float(value)
         elif kind == "Vec2":
             converted = list(material_vector(value, 2))
-        elif kind in ("Vec3", "Color", "Vec4"):
+        elif kind in ("Vec3", "Vec4"):
             from termin.geombase import Vec3, Vec4
 
             size = 3 if kind == "Vec3" else 4
-            components = material_vector(value, size, color=kind == "Color")
+            if kind == "Vec4" and not isinstance(value, Vec4):
+                _logger.error("Material property '%s' expects Vec4, got %r", name, value)
+                raise ValueError(f"material property '{name}' expects Vec4")
+            components = material_vector(value, size)
             converted = Vec3(*components) if size == 3 else Vec4(*components)
+        elif kind in ("SrgbColor", "LinearColor"):
+            converted = _typed_color(value, kind, allow_components=False)
         else:
             _logger.error("Material property '%s' has unsupported scalar kind '%s'", name, kind)
             raise ValueError(f"unsupported material property kind '{kind}'")
@@ -253,10 +279,21 @@ class MaterialInspectorController:
             expected_encoding = str(prop.get("expected_encoding") or "")
             texture = self._texture_value(name, default_kind, expected_encoding)
             return MaterialPropertySnapshot(name, label, kind, None, texture=texture)
-        value = material.uniforms.get(name, prop.get("default"))
-        if kind in ("Vec2", "Vec3", "Vec4", "Color"):
-            size = {"Vec2": 2, "Vec3": 3, "Vec4": 4, "Color": 4}[kind]
-            value = material_vector(value, size, color=kind == "Color")
+        has_uniform = name in material.uniforms
+        value = material.uniforms[name] if has_uniform else prop.get("default")
+        if kind in ("Vec2", "Vec3", "Vec4"):
+            if kind == "Vec4":
+                from termin.geombase import Vec4
+
+                if has_uniform and not isinstance(value, Vec4):
+                    _logger.error("Material property '%s' expects stored Vec4, got %r", name, value)
+                    raise ValueError(f"material property '{name}' expects stored Vec4")
+            size = {"Vec2": 2, "Vec3": 3, "Vec4": 4}[kind]
+            value = material_vector(value, size)
+            if kind == "Vec4":
+                value = Vec4(*value)
+        elif kind in ("SrgbColor", "LinearColor"):
+            value = _typed_color(value, kind, allow_components=not has_uniform)
         return MaterialPropertySnapshot(
             name,
             label,

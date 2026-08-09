@@ -8,6 +8,7 @@ from termin.editor_core.material_inspector_model import (
     MaterialTextureValue,
     material_vector,
 )
+from termin.geombase import LinearColor, SrgbColor, Vec4
 
 
 @dataclass
@@ -43,7 +44,7 @@ class _Material:
             "roughness": 0.25,
             "count": 2,
             "direction": (1.0, 2.0, 3.0),
-            "tint": (1.5, 0.5, -1.0, 0.75),
+            "tint": SrgbColor(0.5, 0.25, 0.75, 0.75),
         }
         self.textures = {"albedo": _Texture()}
         self.texture_sources = {}
@@ -69,7 +70,7 @@ class _Program:
         {"name": "roughness", "label": "Roughness", "property_type": "Float", "default": 0.5, "range_min": 0.0, "range_max": 1.0},
         {"name": "count", "label": "Count", "property_type": "Int", "default": 1, "range_min": 0.0, "range_max": 8.0},
         {"name": "direction", "label": "Direction", "property_type": "Vec3", "default": (0.0, 0.0, 1.0), "range_min": None, "range_max": None},
-        {"name": "tint", "label": "Tint", "property_type": "Color", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
+        {"name": "tint", "label": "Tint", "property_type": "SrgbColor", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
         {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "expected_encoding": "srgb", "range_min": None, "range_max": None},
     ]
 
@@ -106,7 +107,8 @@ def test_material_inspector_snapshot_and_property_edits_share_one_controller():
     assert snapshot.phase_count == 2
     assert snapshot.properties[1].minimum == 0.0
     assert snapshot.properties[1].maximum == 1.0
-    assert snapshot.properties[4].value == pytest.approx((1.0, 0.5, 0.0, 0.75))
+    assert isinstance(snapshot.properties[4].value, SrgbColor)
+    assert tuple(snapshot.properties[4].value) == pytest.approx((0.5, 0.25, 0.75, 0.75))
     assert snapshot.properties[5].texture == MaterialTextureValue(
         "file", "brick", "white", "srgb"
     )
@@ -114,12 +116,13 @@ def test_material_inspector_snapshot_and_property_edits_share_one_controller():
     controller.set_property("roughness", 0.75)
     controller.set_property("count", 4.9)
     controller.set_property("direction", (4.0, 5.0, 6.0))
-    controller.set_property("tint", (0.1, 0.2, 0.3))
+    controller.set_property("tint", SrgbColor(0.1, 0.2, 0.3, 1.0))
 
     for phase in material.phases:
         assert phase.params["roughness"] == pytest.approx(0.75)
         assert phase.params["count"] == 4
         assert tuple(phase.params["direction"]) == pytest.approx((4.0, 5.0, 6.0))
+        assert isinstance(phase.params["tint"], SrgbColor)
         assert tuple(phase.params["tint"]) == pytest.approx((0.1, 0.2, 0.3, 1.0))
     assert len(changes) == 4
 
@@ -206,3 +209,44 @@ def test_material_vector_padding_and_validation():
     )
     with pytest.raises(ValueError, match="not iterable"):
         material_vector(object(), 3)
+
+
+def test_material_inspector_keeps_linear_color_hdr_and_vec4_distinct():
+    material = _Material()
+    material.uniforms["radiance"] = LinearColor(4.0, 0.5, -2.0, 0.75)
+    material.uniforms["raw"] = Vec4(0.1, 0.2, 0.3, 0.4)
+    program = _Program()
+    program.properties = [
+        {
+            "name": "radiance",
+            "label": "Radiance",
+            "property_type": "LinearColor",
+            "default": LinearColor(0.0, 0.0, 0.0, 1.0),
+            "range_min": None,
+            "range_max": None,
+        },
+        {
+            "name": "raw",
+            "label": "Raw",
+            "property_type": "Vec4",
+            "default": Vec4(0.0, 0.0, 0.0, 1.0),
+            "range_min": None,
+            "range_max": None,
+        },
+    ]
+    resources = _Resources()
+    resources.get_shader = lambda name: program if name == "lit" else None
+    controller = MaterialInspectorController(resources)
+    snapshot = controller.set_target(material)
+
+    assert isinstance(snapshot.properties[0].value, LinearColor)
+    assert tuple(snapshot.properties[0].value) == pytest.approx((4.0, 0.5, -2.0, 0.75))
+    assert isinstance(snapshot.properties[1].value, Vec4)
+    with pytest.raises(ValueError, match="expects LinearColor"):
+        controller.set_property("radiance", SrgbColor(1.0, 0.0, 0.0, 1.0))
+    with pytest.raises(ValueError, match="expects Vec4"):
+        controller.set_property("raw", SrgbColor(1.0, 0.0, 0.0, 1.0))
+
+    material.uniforms["radiance"] = SrgbColor(1.0, 0.0, 0.0, 1.0)
+    with pytest.raises(ValueError, match="expects LinearColor"):
+        controller.set_target(material)

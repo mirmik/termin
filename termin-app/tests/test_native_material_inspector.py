@@ -12,6 +12,7 @@ from termin.editor_native.material_inspector import (
     NativeMaterialInspector,
     build_native_material_inspector,
 )
+from termin.geombase import SrgbColor
 from termin.inspect import InspectField
 
 
@@ -51,7 +52,7 @@ class _Material:
             "enabled": True,
             "roughness": 0.25,
             "direction": (1.0, 2.0, 3.0),
-            "tint": (1.0, 0.5, 0.25, 1.0),
+            "tint": SrgbColor(1.0, 0.5, 0.25, 1.0),
         }
         self.textures = {"albedo": _Texture()}
         self.texture_sources = {}
@@ -76,7 +77,7 @@ class _Program:
         {"name": "enabled", "label": "Enabled", "property_type": "Bool", "default": False, "range_min": None, "range_max": None},
         {"name": "roughness", "label": "Roughness", "property_type": "Float", "default": 0.5, "range_min": 0.0, "range_max": 1.0},
         {"name": "direction", "label": "Direction", "property_type": "Vec3", "default": (0.0, 0.0, 1.0), "range_min": None, "range_max": None},
-        {"name": "tint", "label": "Tint", "property_type": "Color", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
+        {"name": "tint", "label": "Tint", "property_type": "SrgbColor", "default": (1.0, 1.0, 1.0, 1.0), "range_min": None, "range_max": None},
         {"name": "albedo", "label": "Albedo", "property_type": "Texture", "default": "white", "expected_encoding": "srgb", "range_min": None, "range_max": None},
     ]
 
@@ -156,6 +157,53 @@ def test_native_material_inspector_projects_and_edits_shared_snapshot():
     texture_combo.selected_index = 0
     assert material.assigned_texture is not None
     assert material.assigned_texture[0] == "albedo"
+    inspector.controls.clear()
+    assert document.destroy_widget_recursive(inspector.root.handle)
+    tc_ui_document_destroy(document)
+
+
+def test_native_material_inspector_keeps_linear_color_out_of_sdr_picker():
+    class LinearProgram:
+        phases = _Program.phases
+        properties = [
+            *_Program.properties,
+            {
+                "name": "radiance",
+                "label": "Radiance",
+                "property_type": "LinearColor",
+                "default": (4.0, 2.0, -1.0, 0.75),
+                "range_min": None,
+                "range_max": None,
+            },
+            {
+                "name": "numeric",
+                "label": "Numeric",
+                "property_type": "Vec4",
+                "default": (0.25, 0.5, 0.75, 1.0),
+                "range_min": None,
+                "range_max": None,
+            },
+        ]
+
+    class LinearResources(_Resources):
+        def get_shader(self, name):
+            return LinearProgram() if name == "lit" else None
+
+    document = tc_ui_document_create()
+    inspector = build_native_material_inspector(
+        document,
+        MaterialInspectorController(LinearResources()),
+        request_render=lambda: None,
+        resource_catalog=InspectorResourceCatalog(LinearResources()),
+    )
+    inspector.set_target(_Material())
+
+    # LinearColor is HDR-capable and must use numeric controls; only SrgbColor
+    # is eligible for the SDR color-dialog/picker control.
+    assert isinstance(inspector.controls["radiance"], tuple)
+    assert isinstance(inspector.controls["numeric"], tuple)
+    assert len(inspector.controls["radiance"]) == 4
+    assert len(inspector.controls["numeric"]) == 4
     inspector.controls.clear()
     assert document.destroy_widget_recursive(inspector.root.handle)
     tc_ui_document_destroy(document)
