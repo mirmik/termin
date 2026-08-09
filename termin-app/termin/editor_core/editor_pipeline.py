@@ -1,6 +1,7 @@
 """Editor render pipeline factory."""
 
 from termin.render_framework import RenderPipeline
+from termin.geombase import SrgbColor
 
 
 def make_editor_pipeline() -> RenderPipeline:
@@ -59,7 +60,7 @@ def make_editor_pipeline() -> RenderPipeline:
 
     hover_highlight_pass = HighlightPass(
         get_hovered_pick_id,
-        color=(0.3, 0.8, 1.0, 1.0),
+        color=SrgbColor(0.3, 0.8, 1.0, 1.0),
         input_res="color_resolved",
         id_res="id",
         output_res="color_hover_highlight",
@@ -68,7 +69,7 @@ def make_editor_pipeline() -> RenderPipeline:
 
     selected_highlight_pass = HighlightPass(
         get_selected_pick_id,
-        color=(1.0, 0.9, 0.1, 1.0),
+        color=SrgbColor(1.0, 0.9, 0.1, 1.0),
         input_res="color_hover_highlight",
         id_res="id",
         output_res="color_highlight",

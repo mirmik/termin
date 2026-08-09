@@ -7,6 +7,7 @@
 #include <tc_value.h>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/geom/color.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
 #include <termin/render/drawable.hpp>
@@ -39,7 +40,7 @@ namespace termin {
         Vec3 local_offset{0.0, 0.0, 0.0};
         Vec3 plane_normal{0.0, 0.0, 1.0};
         Vec3 text_up{0.0, 1.0, 0.0};
-        Vec4 color{1.0, 1.0, 1.0, 1.0};
+        SrgbColor color{1.0f, 1.0f, 1.0f, 1.0f};
         float size = 0.35f;
         WorldTextAnchor anchor = WorldTextAnchor::Center;
         WorldTextOrientation orientation = WorldTextOrientation::Billboard;
@@ -71,7 +72,7 @@ namespace termin {
         void set_local_offset(const Vec3& value);
         void set_plane_normal(const Vec3& value);
         void set_text_up(const Vec3& value);
-        void set_color(const Vec4& value);
+        void set_color(SrgbColor value);
         void set_size(float value);
         void set_anchor(WorldTextAnchor value);
         void set_orientation(WorldTextOrientation value);

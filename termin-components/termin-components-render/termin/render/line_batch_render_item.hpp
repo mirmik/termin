@@ -4,6 +4,7 @@
 #include <string>
 
 #include <termin/geom/mat44.hpp>
+#include <termin/geom/color.hpp>
 #include <termin/render/drawable.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 
@@ -25,7 +26,9 @@ namespace termin {
         int geometry_id = 0;
         Mat44f model_matrix = Mat44f::identity();
         bool has_override_color = false;
-        tc_render_item_vec4 override_color{1.0, 1.0, 1.0, 1.0};
+        // Internal render-item override (for example an ID-pass value), already
+        // in the GPU-ready linear domain. This is not an authored color API.
+        LinearColor override_color{1.0f, 1.0f, 1.0f, 1.0f};
     };
 
     ENTITY_API bool emit_line_batch_render_items(tc_component* component,

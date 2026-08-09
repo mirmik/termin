@@ -223,8 +223,8 @@ namespace termin {
         Vec3f _get_position();
         Vec3f _get_world_axis(const std::string& axis);
 
-        Color4 _get_color(const std::string& axis, TransformElement element);
-        Color4 _get_plane_color(const std::string& plane, TransformElement element);
+        SrgbColor _get_color(const std::string& axis, TransformElement element);
+        SrgbColor _get_plane_color(const std::string& plane, TransformElement element);
 
         float _scaled(float value) const {
             return value * size * _screen_scale;

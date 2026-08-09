@@ -8,9 +8,10 @@ NavMeshDisplayComponent — компонент для отображения н�
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+from termin.geombase import SrgbColor
 
 from termin.render import DrawableComponent
 from termin.materials import TcMaterial as Material
@@ -101,7 +102,7 @@ class NavMeshDisplayComponent(DrawableComponent):
         self._needs_rebuild = True
 
         # Цвет с альфа-каналом (RGBA) — полупрозрачный зелёный
-        self.color: Tuple[float, float, float, float] = (0.2, 0.8, 0.3, 0.7)
+        self.color = SrgbColor(0.2, 0.8, 0.3, 0.7)
 
         # Режим отображения
         self.wireframe: bool = False
@@ -129,8 +130,10 @@ class NavMeshDisplayComponent(DrawableComponent):
                 self.navmesh = TcNavMesh()
             self._needs_rebuild = True
 
-    def _set_color(self, value: Tuple[float, float, float, float]) -> None:
+    def _set_color(self, value: SrgbColor) -> None:
         """Установить цвет."""
+        if not isinstance(value, SrgbColor):
+            raise TypeError("NavMeshDisplayComponent.color expects SrgbColor")
         self.color = value
         if self._material is not None:
             self._material.color = value
@@ -185,7 +188,7 @@ class NavMeshDisplayComponent(DrawableComponent):
             shader = navmesh_display_shader()
 
             # Контуры — яркий контрастный цвет (жёлтый)
-            contour_color = (1.0, 1.0, 0.0, 1.0)
+            contour_color = SrgbColor(1.0, 1.0, 0.0, 1.0)
 
             self._contour_material = Material(
                 name="NavMeshDisplayContours",
@@ -248,7 +251,7 @@ class NavMeshDisplayComponent(DrawableComponent):
 
         # Обновляем цвет
         for phase in phases:
-            phase.uniforms["u_color"] = np.array(self.color, dtype=np.float32)
+            phase.uniforms["u_color"] = self.color
 
         phases.sort(key=lambda p: p.priority)
 

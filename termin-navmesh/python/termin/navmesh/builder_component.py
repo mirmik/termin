@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, List
 
 import numpy as np
+from termin.geombase import SrgbColor
 
 from termin.render import DrawableComponent
 from termin.materials import TcMaterial as Material
@@ -472,7 +473,7 @@ class NavMeshBuilderComponent(DrawableComponent):
             shader = voxel_display_shader()
             self._debug_material = Material(
                 shader=shader,
-                color=(1.0, 0.5, 0.0, 0.8),
+                color=SrgbColor(1.0, 0.5, 0.0, 0.8),
                 phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,
@@ -501,7 +502,7 @@ class NavMeshBuilderComponent(DrawableComponent):
 
             self._debug_line_material = Material(
                 shader=shader,
-                color=(1.0, 1.0, 0.0, 1.0),
+                color=SrgbColor(1.0, 1.0, 0.0, 1.0),
                 phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,

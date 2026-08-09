@@ -69,7 +69,7 @@ namespace termin {
                 tc_scene_debug_geometry_primitive_at(services->scene.handle(), index);
             if (!primitive)
                 continue;
-            const Color4 primitive_color = {
+            const SrgbColor primitive_color = {
                 primitive->color[0],
                 primitive->color[1],
                 primitive->color[2],

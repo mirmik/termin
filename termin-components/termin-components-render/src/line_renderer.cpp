@@ -310,7 +310,10 @@ struct VertexInput {
             }
             if (desc.has_override_color) {
                 item.flags |= TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR;
-                item.override_color = desc.override_color;
+                item.override_color = {desc.override_color.r,
+                                       desc.override_color.g,
+                                       desc.override_color.b,
+                                       desc.override_color.a};
             }
 
             std::memcpy(item.model_matrix, desc.model_matrix.data, sizeof(float) * 16);
@@ -469,9 +472,9 @@ struct VertexInput {
             return mat;
         }
         phase->state = state;
-        tc_material_phase_set_color(phase, 1.0f, 1.0f, 1.0f, 1.0f);
         {
-            const float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            const LinearColor linear_white{1.0f, 1.0f, 1.0f, 1.0f};
+            const float color[4] = {linear_white.r, linear_white.g, linear_white.b, linear_white.a};
             tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, color);
         }
 
@@ -481,9 +484,9 @@ struct VertexInput {
             return mat;
         }
         shadow_phase->state = state;
-        tc_material_phase_set_color(shadow_phase, 1.0f, 1.0f, 1.0f, 1.0f);
         {
-            const float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            const LinearColor linear_white{1.0f, 1.0f, 1.0f, 1.0f};
+            const float color[4] = {linear_white.r, linear_white.g, linear_white.b, linear_white.a};
             tc_material_phase_set_uniform(shadow_phase, "u_color", TC_UNIFORM_VEC4, color);
         }
         return mat;

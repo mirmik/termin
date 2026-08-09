@@ -150,11 +150,12 @@ namespace termin {
 
                 Vec3 start = _component->start_world();
                 Vec3 end = _component->end_world();
-                Color4 start_color = _hovered_endpoint == OFF_MESH_LINK_ENDPOINT_START
-                                         ? Color4{1.0f, 0.95f, 0.2f, 1.0f}
-                                         : Color4{1.0f, 0.45f, 0.1f, 0.85f};
-                Color4 end_color = _hovered_endpoint == OFF_MESH_LINK_ENDPOINT_END ? Color4{1.0f, 0.95f, 0.2f, 1.0f}
-                                                                                   : Color4{0.2f, 0.85f, 1.0f, 0.85f};
+                SrgbColor start_color = _hovered_endpoint == OFF_MESH_LINK_ENDPOINT_START
+                                             ? SrgbColor{1.0f, 0.95f, 0.2f, 1.0f}
+                                             : SrgbColor{1.0f, 0.45f, 0.1f, 0.85f};
+                SrgbColor end_color = _hovered_endpoint == OFF_MESH_LINK_ENDPOINT_END
+                                          ? SrgbColor{1.0f, 0.95f, 0.2f, 1.0f}
+                                          : SrgbColor{0.2f, 0.85f, 1.0f, 0.85f};
 
                 renderer->sphere_wireframe(start, 0.18, start_color, 16, true);
                 renderer->sphere_wireframe(end, 0.18, end_color, 16, true);

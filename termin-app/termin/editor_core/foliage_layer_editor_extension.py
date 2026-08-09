@@ -9,7 +9,7 @@ import random
 
 from tcbase import Action, Key, log
 from tcbase._geom_native import Vec3
-from tgfx._tgfx_native import Color4
+from termin.geombase import SrgbColor
 
 from termin.foliage import FoliageInstance, TcFoliageData
 
@@ -343,8 +343,8 @@ class FoliageLayerEditorExtension:
         )
 
 
-def _color(value: tuple[float, float, float, float]) -> Color4:
-    return Color4(value[0], value[1], value[2], value[3])
+def _color(value: tuple[float, float, float, float]) -> SrgbColor:
+    return SrgbColor(value[0], value[1], value[2], value[3])
 
 
 def _normalized(vector: Vec3) -> Vec3:
