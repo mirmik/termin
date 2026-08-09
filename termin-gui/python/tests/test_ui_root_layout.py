@@ -49,3 +49,18 @@ def test_ui_root_falls_back_to_viewport_for_zero_intrinsic_size() -> None:
     ui.layout(800, 600)
 
     assert_rect(root, 0, 0, 800, 600)
+
+
+def test_root_container_releases_gpu_resources_recursively() -> None:
+    root = Panel()
+    first = make_widget(120, 40)
+    second = make_widget(80, 30)
+    released: list[object] = []
+    first.release_gpu = lambda: released.append(first)
+    second.release_gpu = lambda: released.append(second)
+    root.add_child(first)
+    root.add_child(second)
+
+    root.release_gpu()
+
+    assert released == [first, second]

@@ -121,6 +121,15 @@ class Widget:
         if self.clip:
             renderer.end_clip()
 
+    def release_gpu(self) -> None:
+        """Release GPU resources owned by this widget subtree.
+
+        Containers inherit the recursive implementation. Widgets that own
+        native GPU state should release it and then call ``super()``.
+        """
+        for child in self.children:
+            child.release_gpu()
+
     def contains(self, px: float, py: float) -> bool:
         """Check if point (in pixels) is inside this widget."""
         return (self.x <= px < self.x + self.width and
