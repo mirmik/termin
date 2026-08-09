@@ -124,7 +124,7 @@ namespace {
             resources[i] = {external_slots[i], "external", nullptr, nullptr, 0, 0, 1.0f, 1, 1, 0};
         }
         for (size_t i = 0; i < viewport_target_count; ++i) {
-            targets[i] = {viewport_targets[i], nullptr, 0, 0};
+            targets[i] = {viewport_targets[i], nullptr, TC_COLOR_CONTENT_DISPLAY_LINEAR, 0, 0};
         }
         const tc_pipeline_template_payload_desc payload{
             TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION,

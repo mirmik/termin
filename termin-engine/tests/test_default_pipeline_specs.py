@@ -46,6 +46,13 @@ def test_builtin_default_pipeline_keeps_internal_color_fbos_in_linear_hdr(render
     assert samples["color"] == 4
     assert samples["color_world2d"] == 4
     assert samples["color_resolved"] == 1
+    assert pipeline.color_exports == [
+        {
+            "resource": "color+widgets",
+            "viewport_name": "",
+            "color_content": "display_linear",
+        }
+    ]
 
 
 def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager):

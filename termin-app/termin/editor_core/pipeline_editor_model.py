@@ -396,6 +396,7 @@ def _configure_node(controller: GraphController, node: Node, node_type: str, gra
     elif node_type == "render_target_input":
         controller.add_output_socket(node.id, "color", "fbo")
     elif node_type == "pipeline_output":
+        node.params.setdefault("color_content", "display_linear")
         controller.add_input_socket(node.id, "color", "fbo")
     elif node_type == "output":
         controller.add_input_socket(node.id, "color", "fbo")

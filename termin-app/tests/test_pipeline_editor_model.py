@@ -41,6 +41,7 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
     assert controller.file_path == source
     assert controller.file_uuid == "pipeline-uuid"
     assert graph.data["execution_model"] == "xr_multiview"
+    assert graph.nodes["node_1"].params["color_content"] == "display_linear"
     assert graph_events == [graph]
     assert status_events == [f"Loaded: {source}"]
 
@@ -115,6 +116,7 @@ def test_pipeline_editor_controller_mutations_emit_only_for_changes():
     controller.graph_changed.connect(events.append)
     source = controller.create_node("render_target_input", "RenderTargetInput", 0.0, 0.0)
     target = controller.create_node("pipeline_output", "PipelineOutput", 300.0, 0.0)
+    assert target.params["color_content"] == "display_linear"
     edge = controller.graph_controller.connect(source.id, "color", target.id, "color")
     assert edge.ok
 

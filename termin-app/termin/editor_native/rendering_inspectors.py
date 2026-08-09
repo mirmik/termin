@@ -275,6 +275,10 @@ class NativeRenderTargetInspector:
                 snapshot.color_format_index, self.controller.set_color_format,
             )
             self._append_choice(
+                "Color encoding", "color-encoding", snapshot.color_encodings,
+                snapshot.color_encoding_index, self.controller.set_color_encoding,
+            )
+            self._append_choice(
                 "Depth format", "depth-format", snapshot.depth_formats,
                 snapshot.depth_format_index, self.controller.set_depth_format,
             )

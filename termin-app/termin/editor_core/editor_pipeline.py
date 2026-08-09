@@ -282,8 +282,10 @@ def make_editor_pipeline() -> RenderPipeline:
         )
     ]
 
-    return RenderPipeline(
+    pipeline = RenderPipeline(
         name="editor",
         _init_passes=passes,
         _init_specs=pipeline_specs,
     )
+    pipeline.set_color_export("color+widgets", "display_linear")
+    return pipeline

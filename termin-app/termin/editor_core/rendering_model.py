@@ -413,6 +413,7 @@ class RenderingModel:
             config.height = rt.height
             config.dynamic_resolution = bool(rt.dynamic_resolution)
             config.color_format = rt.color_format
+            config.color_encoding = rt.color_encoding
             config.depth_format = rt.depth_format
             config.clear_color = bool(rt.clear_color_enabled)
             config.clear_linear_color = rt.clear_linear_color

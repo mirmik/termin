@@ -247,9 +247,8 @@ namespace termin::rendering_manager_detail {
         ctx.render_rect = {0, 0, request.render_width, request.render_height};
         ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.render_category_mask = camera_render_category_mask;
-        ctx.output_color_tex = out_color;
+        ctx.output_color.texture = out_color;
         ctx.output_depth_tex = out_depth;
-        ctx.output_color_format = render_target_format_to_tgfx2(tc_render_target_get_color_format(rt));
         ctx.output_depth_format = render_target_format_to_tgfx2(tc_render_target_get_depth_format(rt));
         fill_render_target_clear_settings(ctx, rt);
         fill_external_textures_from_render_target(ctx, rt, *device, request.managed_render_targets);

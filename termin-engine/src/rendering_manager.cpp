@@ -599,6 +599,16 @@ namespace termin {
                         TC_LOG_WARN, "[RenderingManager] unknown render target color_format '%s'", rtc->color_format);
                 }
             }
+            if (rtc->color_encoding && rtc->color_encoding[0] != '\0') {
+                tc_texture_encoding encoding;
+                if (tc_render_target_color_encoding_from_string(rtc->color_encoding, &encoding)) {
+                    tc_render_target_set_color_encoding(rt, encoding);
+                } else {
+                    tc_log(TC_LOG_WARN,
+                           "[RenderingManager] unknown render target color_encoding '%s'",
+                           rtc->color_encoding);
+                }
+            }
             if (rtc->depth_format && rtc->depth_format[0] != '\0') {
                 tc_texture_format format;
                 if (tc_render_target_format_from_string(rtc->depth_format, &format)) {
